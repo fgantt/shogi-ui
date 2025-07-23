@@ -250,7 +250,7 @@ export function getAiMove(gameState, difficulty) {
  * @param {object} gameState The current game state.
  * @returns {object} The selected move (from, to, type) or null if no moves.
  */
-function getRandomMove(gameState) {
+function selectRandomMove(gameState) {
   const { board, currentPlayer, capturedPieces } = gameState;
   const possibleMoves = [];
 
@@ -296,7 +296,9 @@ export function getAiMove(gameState, difficulty) {
 
   switch (difficulty) {
     case 'easy':
-      return getRandomMove(gameState);
+      // Easy AI logic: random move
+      const randomIndex = Math.floor(Math.random() * possibleMoves.length);
+      return possibleMoves[randomIndex];
     case 'medium':
       let bestMove = null;
       let bestScore = -Infinity;

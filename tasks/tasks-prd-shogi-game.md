@@ -56,7 +56,7 @@
   - [x] 4.6 Implement a visual indicator to highlight the opponent's last move.
   - [x] 4.7 Create and populate the `MoveLog.jsx` component to display move history.
 
-- [ ] 5.0 Create the AI Opponent
+- [x] 5.0 Create the AI Opponent
   - [x] 5.1 Create the `ai/computerPlayer.js` module.
   - [x] 5.2 Implement the "Easy" difficulty level, which selects a random legal move.
   - [x] 5.3 Implement the "Medium" difficulty level (e.g., using minimax with a shallow search depth).
