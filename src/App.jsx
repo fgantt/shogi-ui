@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getInitialGameState, movePiece, dropPiece, getLegalMoves, completeMove, PLAYER_1, PLAYER_2 } from './game/engine';
+import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
 import PromotionModal from './components/PromotionModal';
@@ -16,27 +17,44 @@ function App() {
   const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
 
+  const handlePlayerMove = (newGameState, from, to) => {
+    setGameState(newGameState);
+    setSelectedPiece(null);
+    setSelectedCapturedPiece(null);
+    setLegalMoves([]);
+    setLastMove({ from, to });
+
+    // AI makes a move after player
+    setTimeout(() => {
+      const aiMove = getAiMove(newGameState, aiDifficulty);
+      if (aiMove) {
+        let finalAiGameState;
+        if (aiMove.from === 'drop') {
+          finalAiGameState = dropPiece(newGameState, aiMove.type, aiMove.to);
+        } else {
+          finalAiGameState = movePiece(newGameState, aiMove.from, aiMove.to);
+        }
+        setGameState(finalAiGameState);
+        setLastMove({ from: aiMove.from, to: aiMove.to });
+      }
+    }, 500); // Delay AI move for better UX
+  };
+
   const handleSquareClick = (row, col) => {
     const pieceAtClick = gameState.board[row][col];
 
     if (selectedCapturedPiece) {
       // A captured piece is selected, attempt to drop it
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
-      setGameState(newGameState);
-      setSelectedCapturedPiece(null); // Deselect after drop attempt
-      setLegalMoves([]); // Clear legal moves
-      setLastMove({ from: 'drop', to: [row, col] });
+      handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
       const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
       if (result.promotionPending) {
         setGameState(result); // Update state to show modal
       } else {
-        setGameState(result);
-        setLastMove({ from: [selectedPiece.row, selectedPiece.col], to: [row, col] });
+        handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
       }
-      setSelectedPiece(null); // Deselect after move attempt
-      setLegalMoves([]); // Clear legal moves
     } else if (pieceAtClick && pieceAtClick.player === gameState.currentPlayer) {
       // No piece selected, select the clicked piece if it belongs to the current player
       setSelectedPiece({ row, col, piece: pieceAtClick });
@@ -56,20 +74,14 @@ function App() {
   const handleDrop = (row, col) => {
     if (selectedCapturedPiece) {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
-      setGameState(newGameState);
-      setSelectedCapturedPiece(null);
-      setLegalMoves([]);
-      setLastMove({ from: 'drop', to: [row, col] });
+      handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
       const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
       if (result.promotionPending) {
         setGameState(result);
       } else {
-        setGameState(result);
-        setLastMove({ from: [selectedPiece.row, selectedPiece.col], to: [row, col] });
+        handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
       }
-      setSelectedPiece(null);
-      setLegalMoves([]);
     }
   };
 
@@ -88,8 +100,7 @@ function App() {
   const handlePromotionChoice = (promote) => {
     const { from, to } = gameState.promotionPending;
     const newGameState = completeMove(gameState, from, to, promote);
-    setGameState(newGameState);
-    setLastMove({ from, to });
+    handlePlayerMove(newGameState, from, to);
   };
 
   const handleNewGame = () => {

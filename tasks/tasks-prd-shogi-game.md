@@ -47,7 +47,7 @@
   - [x] 3.6 Create the `PromotionModal.jsx` component.
   - [x] 3.7 When a move results in a promotion choice, display the promotion modal.
 
-- [ ] 4.0 Build Game Controls and UI Feedback
+- [x] 4.0 Build Game Controls and UI Feedback
   - [x] 4.1 Create the `GameControls.jsx` component.
   - [x] 4.2 Add a "New Game" button that resets the game state.
   - [x] 4.3 Implement an "Undo Move" button. This requires storing move history in the game state.
@@ -57,9 +57,9 @@
   - [x] 4.7 Create and populate the `MoveLog.jsx` component to display move history.
 
 - [ ] 5.0 Create the AI Opponent
-  - [ ] 5.1 Create the `ai/computerPlayer.js` module.
-  - [ ] 5.2 Implement the "Easy" difficulty level, which selects a random legal move.
-  - [ ] 5.3 Implement the "Medium" difficulty level (e.g., using minimax with a shallow search depth).
-  - [ ] 5.4 Implement the "Hard" difficulty level (e.g., minimax with alpha-beta pruning).
-  - [ ] 5.5 Integrate the AI into the game flow: after the player's move is completed, trigger the AI to make its move based on the selected difficulty.
-  - [ ] 5.6 Write unit tests in `ai/computerPlayer.test.js` for the AI's move-selection logic.
+  - [x] 5.1 Create the `ai/computerPlayer.js` module.
+  - [x] 5.2 Implement the "Easy" difficulty level, which selects a random legal move.
+  - [x] 5.3 Implement the "Medium" difficulty level (e.g., using minimax with a shallow search depth).
+  - [x] 5.4 Implement the "Hard" difficulty level (e.g., minimax with alpha-beta pruning).
+  - [x] 5.5 Integrate the AI into the game flow: after the player's move is completed, trigger the AI to make its move based on the selected difficulty.
+  - [x] 5.6 Write unit tests in `ai/computerPlayer.test.js` for the AI's move-selection logic.
