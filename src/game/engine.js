@@ -66,6 +66,11 @@ export function getInitialGameState() {
     moveHistory: [],
     isCheck: false,
     isCheckmate: false,
+    pastStates: [], // Add pastStates to store previous game states
+    kingPositions: {
+      [PLAYER_1]: [8, 4],
+      [PLAYER_2]: [0, 4],
+    },
   };
 }
 
@@ -260,7 +265,7 @@ export function movePiece(gameState, from, to) {
  * @returns {object} The final new game state.
  */
 export function completeMove(gameState, from, to, promote) {
-    const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
+    const { board, currentPlayer, capturedPieces, moveHistory, pastStates } = gameState;
     const newBoard = board.map(row => [...row]);
     const [fromRow, fromCol] = from;
     const [toRow, toCol] = to;
@@ -297,6 +302,12 @@ export function completeMove(gameState, from, to, promote) {
         currentPlayer: currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
         moveHistory: newMoveHistory,
         promotionPending: null,
+        pastStates: [...pastStates, gameState], // Save current state before move
+        isCheck: isKingInCheck(newBoard, currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1),
+        kingPositions: {
+          ...gameState.kingPositions,
+          [piece.player]: [toRow, toCol] // Update king position if king moved
+        }
     };
 }
 
@@ -308,7 +319,7 @@ export function completeMove(gameState, from, to, promote) {
  * @returns {object} The new game state.
  */
 export function dropPiece(gameState, pieceType, to) {
-  const { board, currentPlayer, capturedPieces } = gameState;
+  const { board, currentPlayer, capturedPieces, pastStates } = gameState;
   const [toRow, toCol] = to;
 
   // 1. Check if the destination square is empty
@@ -359,6 +370,12 @@ export function dropPiece(gameState, pieceType, to) {
     capturedPieces: newCapturedPieces,
     currentPlayer: gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
     moveHistory: newMoveHistory,
+    pastStates: [...pastStates, gameState], // Save current state before drop
+    isCheck: isKingInCheck(newBoard, gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1),
+    kingPositions: {
+      ...gameState.kingPositions,
+      [currentPlayer]: [toRow, toCol] // Update king position if king was dropped
+    }
   };
 }
 

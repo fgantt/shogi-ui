@@ -3,6 +3,8 @@ import { getInitialGameState, movePiece, dropPiece, getLegalMoves, completeMove,
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
 import PromotionModal from './components/PromotionModal';
+import GameControls from './components/GameControls';
+import MoveLog from './components/MoveLog';
 import './App.css';
 import './styles/shogi.css';
 
@@ -11,6 +13,8 @@ function App() {
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
+  const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
+  const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
 
   const handleSquareClick = (row, col) => {
     const pieceAtClick = gameState.board[row][col];
@@ -21,6 +25,7 @@ function App() {
       setGameState(newGameState);
       setSelectedCapturedPiece(null); // Deselect after drop attempt
       setLegalMoves([]); // Clear legal moves
+      setLastMove({ from: 'drop', to: [row, col] });
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
       const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
@@ -28,6 +33,7 @@ function App() {
         setGameState(result); // Update state to show modal
       } else {
         setGameState(result);
+        setLastMove({ from: [selectedPiece.row, selectedPiece.col], to: [row, col] });
       }
       setSelectedPiece(null); // Deselect after move attempt
       setLegalMoves([]); // Clear legal moves
@@ -53,12 +59,14 @@ function App() {
       setGameState(newGameState);
       setSelectedCapturedPiece(null);
       setLegalMoves([]);
+      setLastMove({ from: 'drop', to: [row, col] });
     } else if (selectedPiece) {
       const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
       if (result.promotionPending) {
         setGameState(result);
       } else {
         setGameState(result);
+        setLastMove({ from: [selectedPiece.row, selectedPiece.col], to: [row, col] });
       }
       setSelectedPiece(null);
       setLegalMoves([]);
@@ -81,11 +89,37 @@ function App() {
     const { from, to } = gameState.promotionPending;
     const newGameState = completeMove(gameState, from, to, promote);
     setGameState(newGameState);
+    setLastMove({ from, to });
+  };
+
+  const handleNewGame = () => {
+    setGameState(getInitialGameState());
+    setSelectedPiece(null);
+    setSelectedCapturedPiece(null);
+    setLegalMoves([]);
+    setLastMove(null);
+  };
+
+  const handleUndoMove = () => {
+    if (gameState.pastStates.length > 0) {
+      const previousState = gameState.pastStates[gameState.pastStates.length - 1];
+      setGameState(previousState);
+      setSelectedPiece(null);
+      setSelectedCapturedPiece(null);
+      setLegalMoves([]);
+      setLastMove(previousState.moveHistory.length > 0 ? previousState.moveHistory[previousState.moveHistory.length - 1] : null);
+    }
+  };
+
+  const handleDifficultyChange = (difficulty) => {
+    setAiDifficulty(difficulty);
+    // Potentially reset game or AI here if needed
   };
 
   return (
     <div className="app">
       <h1>Shogi Game</h1>
+      <GameControls onNewGame={handleNewGame} onUndoMove={handleUndoMove} onDifficultyChange={handleDifficultyChange} />
       <div className="game-container">
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_2]}
@@ -99,6 +133,9 @@ function App() {
           onDragStart={handleDragStart}
           onDrop={handleDrop}
           legalMoves={legalMoves}
+          isCheck={gameState.isCheck}
+          kingPosition={gameState.kingPositions[gameState.currentPlayer]}
+          lastMove={lastMove}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}
@@ -107,6 +144,8 @@ function App() {
           onPieceDragStart={handleCapturedPieceDragStart}
         />
       </div>
+
+      <MoveLog moves={gameState.moveHistory} />
 
       {gameState.promotionPending && (
         <PromotionModal
@@ -118,4 +157,3 @@ function App() {
 }
 
 export default App;
-

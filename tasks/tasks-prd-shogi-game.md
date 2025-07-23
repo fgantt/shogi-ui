@@ -38,7 +38,7 @@
   - [x] 2.4 Style the board and pieces in `styles/shogi.css` to match the traditional Japanese aesthetic.
   - [x] 2.5 Integrate the components so the board correctly renders the initial game state from the game engine.
 
-- [ ] 3.0 Implement User Interaction for Piece Movement and Drops
+- [x] 3.0 Implement User Interaction for Piece Movement and Drops
   - [x] 3.1 Add state to `App.jsx` to track the currently selected piece.
   - [x] 3.2 Implement click-to-move: on piece click, select it; on square click, attempt to move the selected piece.
   - [x] 3.3 Implement drag-and-drop functionality for moving pieces on the board.
@@ -48,13 +48,13 @@
   - [x] 3.7 When a move results in a promotion choice, display the promotion modal.
 
 - [ ] 4.0 Build Game Controls and UI Feedback
-  - [ ] 4.1 Create the `GameControls.jsx` component.
-  - [ ] 4.2 Add a "New Game" button that resets the game state.
-  - [ ] 4.3 Implement an "Undo Move" button. This requires storing move history in the game state.
-  - [ ] 4.4 Add a dropdown to select AI difficulty (Easy, Medium, Hard).
-  - [ ] 4.5 Implement a visual indicator for when a king is in check.
-  - [ ] 4.6 Implement a visual indicator to highlight the opponent's last move.
-  - [ ] 4.7 Create and populate the `MoveLog.jsx` component to display move history.
+  - [x] 4.1 Create the `GameControls.jsx` component.
+  - [x] 4.2 Add a "New Game" button that resets the game state.
+  - [x] 4.3 Implement an "Undo Move" button. This requires storing move history in the game state.
+  - [x] 4.4 Add a dropdown to select AI difficulty (Easy, Medium, Hard).
+  - [x] 4.5 Implement a visual indicator for when a king is in check.
+  - [x] 4.6 Implement a visual indicator to highlight the opponent's last move.
+  - [x] 4.7 Create and populate the `MoveLog.jsx` component to display move history.
 
 - [ ] 5.0 Create the AI Opponent
   - [ ] 5.1 Create the `ai/computerPlayer.js` module.
