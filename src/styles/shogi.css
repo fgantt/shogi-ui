@@ -33,3 +33,41 @@
   color: #b80000;
   transform: rotate(180deg);
 }
+
+.game-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.captured-pieces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid #555;
+  padding: 10px;
+  min-width: 100px;
+  min-height: 360px; /* Match board height */
+  justify-content: space-between;
+}
+
+.captured-pieces.player2 {
+  transform: rotate(180deg);
+}
+
+.captured-pieces h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.captured-pieces .pieces-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
+}
+
+.legal-move {
+  background-color: #aaffaa;
+}

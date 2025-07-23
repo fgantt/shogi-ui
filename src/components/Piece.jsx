@@ -3,7 +3,10 @@ import '../styles/shogi.css';
 
 const Piece = ({ type, player }) => {
   return (
-    <div className={`piece ${player}`}>
+    <div
+      className={`piece ${player}`}
+      draggable="true"
+    >
       {type}
     </div>
   );
