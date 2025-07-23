@@ -1,0 +1,35 @@
+.board {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  grid-template-rows: repeat(9, 40px);
+  border: 2px solid #333;
+  width: 360px;
+  height: 360px;
+}
+
+.board-row {
+    display: contents;
+}
+
+.board-square {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ccc;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.piece {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.player1 {
+  color: #000;
+}
+
+.player2 {
+  color: #b80000;
+  transform: rotate(180deg);
+}
