@@ -34,7 +34,7 @@ const SvgPiece = ({ type, player }) => {
   const textColor = isPromoted ? '#b80000' : 'black';
 
   return (
-    <svg width="60" height="60" viewBox="0 0 60 60">
+    <svg width="60" height="60" viewBox="-5 -5 60 60">
       <path d={piecePath} fill={fillColor} stroke={strokeColor} strokeWidth="1" />
       <text
         x="25"

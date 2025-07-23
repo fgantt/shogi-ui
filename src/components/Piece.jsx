@@ -1,13 +1,16 @@
 import React from 'react';
+import SvgPiece from './SvgPiece';
 import '../styles/shogi.css';
 
-const Piece = ({ type, player }) => {
+const Piece = ({ type, player, onDragStart, onClick }) => {
   return (
     <div
       className={`piece ${player}`}
       draggable="true"
+      onDragStart={onDragStart}
+      onClick={onClick}
     >
-      {type}
+      <SvgPiece type={type} player={player} />
     </div>
   );
 };

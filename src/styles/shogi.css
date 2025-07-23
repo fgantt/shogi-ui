@@ -5,7 +5,8 @@
   border: 2px solid #333;
   width: 540px;
   height: 540px;
-  background-color: #f0d9b5; /* Light wood-like color */
+  background-color: #8B4513; /* Darker wood brown */
+  background-image: linear-gradient(90deg, #8B4513 0%, #A0522D 20%, #8B4513 40%, #A0522D 60%, #8B4513 80%, #A0522D 100%);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
@@ -16,11 +17,12 @@
 .board-square {
   width: 60px;
   height: 60px;
-  border: 1px solid #ccc;
+  border: 1px solid #222; /* Darker border for grid lines */
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f0d9b5;
+  background-color: #8B4513; /* Match board background */
+  background-image: linear-gradient(90deg, #8B4513 0%, #A0522D 20%, #8B4513 40%, #A0522D 60%, #8B4513 80%, #A0522D 100%);
 }
 
 .piece {
@@ -70,7 +72,7 @@
   align-items: center;
   border: 1px solid #555;
   padding: 10px;
-  min-width: 100px;
+  width: 140px; /* Increased width to allow two pieces side-by-side */
   min-height: 540px; /* Match board height */
   justify-content: space-between;
 }
@@ -82,6 +84,7 @@
 .captured-pieces h3 {
   margin-top: 0;
   margin-bottom: 10px;
+  color: #eee; /* Light color for better contrast */
 }
 
 .captured-pieces .pieces-list {
@@ -89,6 +92,7 @@
   flex-wrap: wrap;
   gap: 5px;
   justify-content: center;
+  width: 100%; /* Ensure the list takes full width of its container */
 }
 
 .legal-move {
@@ -101,4 +105,59 @@
 
 .last-move {
   background-color: #ffffaa;
+}
+
+.move-log {
+  margin-top: 20px;
+  border: 1px solid #555;
+  padding: 10px;
+  width: 360px;
+  height: 200px;
+  overflow-y: scroll;
+}
+
+.move-log h3 {
+  margin-top: 0;
+}
+
+.move-list {
+  list-style: none;
+  padding: 0;
+}
+
+.move-list li {
+  margin-bottom: 5px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.promotion-modal {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  color: #000;
+}
+
+.promotion-modal button {
+  margin: 0 10px;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
 }
