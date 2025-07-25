@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getInitialGameState, movePiece, dropPiece, getLegalMoves, completeMove, PLAYER_1, PLAYER_2 } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
@@ -17,6 +17,29 @@ function App() {
   const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
+
+  const [wallpaperList, setWallpaperList] = useState([]);
+
+  useEffect(() => {
+    const importWallpapers = async () => {
+      const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
+      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
+      setWallpaperList(paths);
+    };
+    importWallpapers();
+  }, []);
+
+  const setRandomWallpaper = () => {
+    if (wallpaperList.length > 0) {
+      const randomIndex = Math.floor(Math.random() * wallpaperList.length);
+      document.body.style.backgroundImage = `url('${wallpaperList[randomIndex]}')`;
+    }
+  };
+
+  useEffect(() => {
+    setRandomWallpaper();
+  }, [wallpaperList]); // Set wallpaper when wallpaperList changes
+
   console.log("App.jsx - pieceLabelType:", pieceLabelType);
 
   const handlePlayerMove = (newGameState, from, to) => {
@@ -114,6 +137,7 @@ function App() {
     setSelectedCapturedPiece(null);
     setLegalMoves([]);
     setLastMove(null);
+    setRandomWallpaper();
   };
 
   const handleUndoMove = () => {
