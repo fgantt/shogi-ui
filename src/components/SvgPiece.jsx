@@ -1,29 +1,10 @@
 import React from 'react';
-import {
-  PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING,
-  PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK
-} from '../game/engine';
+import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
 
-const KANJI_MAP = {
-  [PAWN]: '歩',
-  [LANCE]: '香',
-  [KNIGHT]: '桂',
-  [SILVER]: '銀',
-  [GOLD]: '金',
-  [BISHOP]: '角',
-  [ROOK]: '飛',
-  [KING]: '王',
-  [PROMOTED_PAWN]: 'と',
-  [PROMOTED_LANCE]: '成香',
-  [PROMOTED_KNIGHT]: '成桂',
-  [PROMOTED_SILVER]: '成銀',
-  [PROMOTED_BISHOP]: '竜馬',
-  [PROMOTED_ROOK]: '竜王',
-};
-
-const SvgPiece = ({ type, player }) => {
+const SvgPiece = ({ type, player, pieceLabelType }) => {
+  console.log("SvgPiece received type:", type, "pieceLabelType:", pieceLabelType);
   const isPromoted = type.startsWith('+');
-  const kanji = KANJI_MAP[type];
+  const label = pieceLabelType === 'kanji' ? KANJI_MAP[type] : ENGLISH_MAP[type];
 
   // SVG path for a pentagonal Shogi piece (adjust as needed)
   // This is a simplified representation, actual dimensions might vary
@@ -43,9 +24,9 @@ const SvgPiece = ({ type, player }) => {
         dominantBaseline="middle"
         fontSize="28"
         fill={textColor}
-        fontFamily="'Noto Sans JP', sans-serif"
+        fontFamily={pieceLabelType === 'kanji' ? `'Noto Sans JP', sans-serif` : 'sans-serif'}
       >
-        {kanji}
+        {label}
       </text>
     </svg>
   );

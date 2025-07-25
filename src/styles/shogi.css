@@ -1,3 +1,44 @@
+.shogi-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.board-and-row-numbers {
+  display: flex;
+}
+
+.column-numbers {
+  display: flex;
+  justify-content: space-around;
+  width: 540px; /* Match board width */
+  margin-bottom: 5px;
+  color: #eee;
+  font-weight: bold;
+}
+
+.column-number-cell {
+  width: 60px; /* Match square width */
+  text-align: center;
+}
+
+.row-numbers {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 540px; /* Match board height */
+  margin-right: 5px;
+  color: #eee;
+  font-weight: bold;
+}
+
+.row-number-cell {
+  height: 60px; /* Match square height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(9, 60px);
@@ -54,11 +95,6 @@
   transform: rotate(180deg);
 }
 
-.promoted-piece {
-  /* Handled by SvgPiece text color */
-  color: inherit; /* Reset to default */
-}
-
 .game-container {
   display: flex;
   justify-content: center;
@@ -70,11 +106,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  border: 1px solid #555;
+  border: 3px solid #000;
   padding: 10px;
   width: 140px; /* Increased width to allow two pieces side-by-side */
   min-height: 540px; /* Match board height */
   justify-content: space-between;
+  background-color: #3D8B3D; /* Slightly darker felt green */
+  color: #000; /* Black text */
 }
 
 .captured-pieces.player2 {
@@ -84,7 +122,8 @@
 .captured-pieces h3 {
   margin-top: 0;
   margin-bottom: 10px;
-  color: #eee; /* Light color for better contrast */
+  color: #000; /* Black text */
+  text-align: center;
 }
 
 .captured-pieces .pieces-list {
@@ -95,8 +134,9 @@
   width: 100%; /* Ensure the list takes full width of its container */
 }
 
-.legal-move {
-  background-color: #aaffaa;
+.board-square.legal-move {
+  background-color: #aaffaa; /* Visible green for legal moves */
+  background-image: none; /* Remove wood grain for highlighted squares */
 }
 
 .in-check {
@@ -109,24 +149,71 @@
 
 .move-log {
   margin-top: 20px;
-  border: 1px solid #555;
-  padding: 10px;
-  width: 360px;
-  height: 200px;
-  overflow-y: scroll;
+  border: 3px solid #000;
+  padding: 0;
+  width: 700px; /* Changed width to 700px */
+  height: 220px; /* Set height to 220px */
+  background-color: #3D8B3D;
+  color: #000;
+  box-sizing: border-box;
 }
 
 .move-log h3 {
   margin-top: 0;
+  margin-bottom: 10px;
+  color: #000;
+  text-align: center;
 }
 
-.move-list {
-  list-style: none;
+.move-table-container {
+  max-height: 180px; /* Set a max height for the scrollable area */
+  overflow-y: auto; /* Enable vertical scrolling */
+}
+
+.move-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #000;
+}
+
+.move-table thead {
+  display: table; /* Ensures thead behaves like a table row */
+  width: 100%; /* Changed width to 100% */
+  table-layout: fixed; /* Fixes column widths */
+}
+
+.move-table tbody {
+  display: block; /* Allows tbody to scroll independently */
+  max-height: 150px; /* Set a fixed height for scrolling */
+  overflow-y: auto; /* Enable vertical scrolling */
+  width: 100%;
+}
+
+.move-table tr {
+  display: table; /* Ensures rows within tbody behave like table rows */
+  width: 100%;
+  table-layout: fixed; /* Fixes column widths for rows */
+}
+
+.move-table th,
+.move-table td {
+  border: 1px solid #000;
   padding: 0;
+  text-align: center;
+  white-space: nowrap; /* Prevent headers and cells from wrapping */
 }
 
-.move-list li {
-  margin-bottom: 5px;
+.move-table th {
+  background-color: #2E8B57; /* Slightly darker green for headers */
+  font-weight: bold;
+}
+
+.move-table tbody tr:nth-child(odd) {
+  background-color: #4CAF50; /* Lighter green for odd rows */
+}
+
+.move-table tbody tr:nth-child(even) {
+  background-color: #3D8B3D; /* Darker green for even rows */
 }
 
 .modal-overlay {
@@ -151,13 +238,8 @@
   color: #000;
 }
 
-.promotion-modal button {
-  margin: 0 10px;
-}
-
 .app {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
 }

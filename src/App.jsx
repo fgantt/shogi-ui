@@ -16,6 +16,8 @@ function App() {
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
   const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
+  const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
+  console.log("App.jsx - pieceLabelType:", pieceLabelType);
 
   const handlePlayerMove = (newGameState, from, to) => {
     setGameState(newGameState);
@@ -58,7 +60,9 @@ function App() {
     } else if (pieceAtClick && pieceAtClick.player === gameState.currentPlayer) {
       // No piece selected, select the clicked piece if it belongs to the current player
       setSelectedPiece({ row, col, piece: pieceAtClick });
-      setLegalMoves(getLegalMoves(pieceAtClick, row, col, gameState.board));
+      const moves = getLegalMoves(pieceAtClick, row, col, gameState.board);
+      setLegalMoves(moves);
+      console.log("Legal moves for selected piece:", moves);
     }
   };
 
@@ -68,6 +72,7 @@ function App() {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
       setSelectedCapturedPiece(null); // Clear any selected captured piece
       setLegalMoves(getLegalMoves(pieceAtDragStart, row, col, gameState.board));
+      console.log("Legal moves for dragged piece:", getLegalMoves(pieceAtDragStart, row, col, gameState.board));
     }
   };
 
@@ -130,13 +135,14 @@ function App() {
   return (
     <div className="app">
       <h1>Shogi Game</h1>
-      <GameControls onNewGame={handleNewGame} onUndoMove={handleUndoMove} onDifficultyChange={handleDifficultyChange} />
+      <GameControls onNewGame={handleNewGame} onUndoMove={handleUndoMove} onDifficultyChange={handleDifficultyChange} onPieceLabelTypeChange={setPieceLabelType} pieceLabelType={pieceLabelType} />
       <div className="game-container">
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_2]}
           player={PLAYER_2}
           onPieceClick={handleCapturedPieceClick}
           onPieceDragStart={handleCapturedPieceDragStart}
+          pieceLabelType={pieceLabelType}
         />
         <Board
           board={gameState.board}
@@ -147,16 +153,18 @@ function App() {
           isCheck={gameState.isCheck}
           kingPosition={gameState.kingPositions[gameState.currentPlayer]}
           lastMove={lastMove}
+          pieceLabelType={pieceLabelType}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}
           player={PLAYER_1}
           onPieceClick={handleCapturedPieceClick}
           onPieceDragStart={handleCapturedPieceDragStart}
+          pieceLabelType={pieceLabelType}
         />
       </div>
 
-      <MoveLog moves={gameState.moveHistory} />
+      <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
 
       {gameState.promotionPending && (
         <PromotionModal

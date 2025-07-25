@@ -293,7 +293,7 @@ export function completeMove(gameState, from, to, promote) {
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
 
-    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote }];
+    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedPiece ? capturedPiece.type : null, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }];
 
     return {
         ...gameState,
@@ -362,7 +362,7 @@ export function dropPiece(gameState, pieceType, to) {
   newCapturedPieces[currentPlayer] = [...capturedPieces[currentPlayer]];
   newCapturedPieces[currentPlayer].splice(capturedPieceIndex, 1);
 
-  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType }];
+  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
   return {
     ...gameState,
