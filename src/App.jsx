@@ -47,7 +47,7 @@ function App() {
     setSelectedPiece(null);
     setSelectedCapturedPiece(null);
     setLegalMoves([]);
-    setLastMove({ from, to });
+    setLastMove({ from: from, to: to });
 
     // AI makes a move after player
     setTimeout(() => {
@@ -74,11 +74,16 @@ function App() {
       handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
-      const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
-      if (result.promotionPending) {
-        setGameState(result); // Update state to show modal
-      } else {
-        handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
+      if (legalMoves.some(move => {
+        console.log("handleSquareClick - Checking legal move: ", move, "against clicked: ", [row, col]);
+        return move[0] === row && move[1] === col;
+      })) {
+        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
+        if (result.promotionPending) {
+          setGameState(result); // Update state to show modal
+        } else {
+          handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
+        }
       }
     } else if (pieceAtClick && pieceAtClick.player === gameState.currentPlayer) {
       // No piece selected, select the clicked piece if it belongs to the current player
@@ -104,11 +109,16 @@ function App() {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
       handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
-      const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
-      if (result.promotionPending) {
-        setGameState(result);
-      } else {
-        handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
+      if (legalMoves.some(move => {
+        console.log("handleDrop - Checking legal move: ", move, "against dropped: ", [row, col]);
+        return move[0] === row && move[1] === col;
+      })) {
+        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
+        if (result.promotionPending) {
+          setGameState(result);
+        } else {
+          handlePlayerMove(result, [selectedPiece.row, selectedPiece.col], [row, col]);
+        }
       }
     }
   };
@@ -147,7 +157,7 @@ function App() {
       setSelectedPiece(null);
       setSelectedCapturedPiece(null);
       setLegalMoves([]);
-      setLastMove(previousState.moveHistory.length > 0 ? previousState.moveHistory[previousState.moveHistory.length - 1] : null);
+      setLastMove(previousState.moveHistory.length > 0 ? { from: previousState.moveHistory[previousState.moveHistory.length - 1].from, to: previousState.moveHistory[previousState.moveHistory.length - 1].to } : null);
     }
   };
 
@@ -158,7 +168,7 @@ function App() {
 
   return (
     <div className="app">
-      <h1>Shogi Game</h1>
+      <h1>Shogi Vibe</h1>
       <GameControls onNewGame={handleNewGame} onUndoMove={handleUndoMove} onDifficultyChange={handleDifficultyChange} onPieceLabelTypeChange={setPieceLabelType} pieceLabelType={pieceLabelType} />
       <div className="game-container">
         <CapturedPieces

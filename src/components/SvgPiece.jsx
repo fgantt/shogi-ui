@@ -2,7 +2,7 @@ import React from 'react';
 import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
 
 const SvgPiece = ({ type, player, pieceLabelType }) => {
-  console.log("SvgPiece received type:", type, "pieceLabelType:", pieceLabelType);
+  // console.log("SvgPiece received type:", type, "pieceLabelType:", pieceLabelType);
   const isPromoted = type.startsWith('+');
   const label = pieceLabelType === 'kanji' ? KANJI_MAP[type] : ENGLISH_MAP[type];
 

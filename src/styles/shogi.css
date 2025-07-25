@@ -140,11 +140,13 @@
 }
 
 .in-check {
-  background-color: #ffaaaa;
+  background-color: red;
+  background-image: none;
 }
 
 .last-move {
   background-color: #ffffaa;
+  background-image: none; /* Remove background image to show highlight */
 }
 
 .move-log {

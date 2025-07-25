@@ -253,7 +253,11 @@ export function movePiece(gameState, from, to) {
   }
 
   // If no promotion choice is needed (or it's mandatory), proceed with the move.
-  return completeMove(gameState, from, to, isPromotionMandatory);
+  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory);
+  if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
+    return gameState; // Illegal move: current player moved into check
+  }
+  return simulatedGameState;
 }
 
 /**
@@ -266,6 +270,7 @@ export function movePiece(gameState, from, to) {
  */
 export function completeMove(gameState, from, to, promote) {
     const { board, currentPlayer, capturedPieces, moveHistory, pastStates } = gameState;
+    const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
     const newBoard = board.map(row => [...row]);
     const [fromRow, fromCol] = from;
     const [toRow, toCol] = to;
@@ -293,22 +298,36 @@ export function completeMove(gameState, from, to, promote) {
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
 
-    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedPiece ? capturedPiece.type : null, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }];
+    const isCheckAfterMove = isKingInCheck(newBoard, nextPlayer);
+    let capturedValue = null;
+    if (capturedPiece) {
+        capturedValue = capturedPiece.type;
+        if (isCheckAfterMove) {
+            capturedValue += ' / check';
+        }
+    } else if (isCheckAfterMove) {
+        capturedValue = 'check';
+    }
 
-    return {
+    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }];
+
+    const updatedGameState = {
         ...gameState,
         board: newBoard,
         capturedPieces: newCapturedPieces,
-        currentPlayer: currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+        currentPlayer: nextPlayer,
         moveHistory: newMoveHistory,
         promotionPending: null,
         pastStates: [...pastStates, gameState], // Save current state before move
-        isCheck: isKingInCheck(newBoard, currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1),
+        isCheck: isKingInCheck(newBoard, nextPlayer),
         kingPositions: {
           ...gameState.kingPositions,
-          [piece.player]: [toRow, toCol] // Update king position if king moved
+          [piece.player]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[piece.player] // Update king position if king moved
         }
     };
+    console.log("completeMove - new gameState.isCheck:", updatedGameState.isCheck);
+    console.log("completeMove - new gameState.kingPositions:", updatedGameState.kingPositions);
+    return updatedGameState;
 }
 
 /**
@@ -362,9 +381,15 @@ export function dropPiece(gameState, pieceType, to) {
   newCapturedPieces[currentPlayer] = [...capturedPieces[currentPlayer]];
   newCapturedPieces[currentPlayer].splice(capturedPieceIndex, 1);
 
-  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+  const isCheckAfterDrop = isKingInCheck(newBoard, gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+  let capturedValue = null;
+  if (isCheckAfterDrop) {
+    capturedValue = 'check';
+  }
 
-  return {
+  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+
+  const finalGameState = {
     ...gameState,
     board: newBoard,
     capturedPieces: newCapturedPieces,
@@ -374,9 +399,18 @@ export function dropPiece(gameState, pieceType, to) {
     isCheck: isKingInCheck(newBoard, gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1),
     kingPositions: {
       ...gameState.kingPositions,
-      [currentPlayer]: [toRow, toCol] // Update king position if king was dropped
+      [currentPlayer]: (pieceType === KING || pieceType === PROMOTED_ROOK || pieceType === PROMOTED_BISHOP) ? [toRow, toCol] : gameState.kingPositions[currentPlayer] // Update king position if king was dropped
     }
   };
+
+  console.log("dropPiece - new gameState.isCheck:", finalGameState.isCheck);
+  console.log("dropPiece - new gameState.kingPositions:", finalGameState.kingPositions);
+
+  if (isKingInCheck(finalGameState.board, currentPlayer)) {
+    return gameState; // Illegal drop: current player dropped into check
+  }
+
+  return finalGameState;
 }
 
 /**
@@ -386,6 +420,7 @@ export function dropPiece(gameState, pieceType, to) {
  * @returns {boolean} True if the king is in check, false otherwise.
  */
 export function isKingInCheck(board, player) {
+  console.log(`Checking for check for player: ${player}`);
   const opponent = player === PLAYER_1 ? PLAYER_2 : PLAYER_1;
   let kingPosition = null;
 
@@ -395,13 +430,17 @@ export function isKingInCheck(board, player) {
       const piece = board[r][c];
       if (piece && piece.type === KING && piece.player === player) {
         kingPosition = [r, c];
+        console.log(`King position for ${player}: [${kingPosition[0]}, ${kingPosition[1]}]`);
         break;
       }
     }
     if (kingPosition) break;
   }
 
-  if (!kingPosition) return false; // Should not happen in a real game
+  if (!kingPosition) {
+    console.log(`King not found for player: ${player}`);
+    return false; // Should not happen in a real game
+  }
 
   // Check if any opponent piece can attack the king
   for (let r = 0; r < ROWS; r++) {
@@ -411,6 +450,7 @@ export function isKingInCheck(board, player) {
         const moves = getLegalMoves(piece, r, c, board);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
+            console.log(`King of ${player} is in check by ${piece.type} at [${r}, ${c}]`);
             return true; // King is in check
           }
         }
@@ -418,6 +458,7 @@ export function isKingInCheck(board, player) {
     }
   }
 
+  console.log(`King of ${player} is NOT in check.`);
   return false;
 }
 
