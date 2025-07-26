@@ -12,14 +12,15 @@
   display: flex;
   justify-content: space-around;
   width: 540px; /* Match board width */
-  margin-bottom: 5px;
   color: #eee;
   font-weight: bold;
+  margin-left: 21px;
 }
 
 .column-number-cell {
   width: 60px; /* Match square width */
   text-align: center;
+  background-color: rgba(0, 0, 139, 0.75);
 }
 
 .row-numbers {
@@ -27,9 +28,9 @@
   flex-direction: column;
   justify-content: space-around;
   height: 540px; /* Match board height */
-  margin-right: 5px;
   color: #eee;
   font-weight: bold;
+  margin-top: 5px;
 }
 
 .row-number-cell {
@@ -37,6 +38,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: rgba(0, 0, 139, 0.75);
+  padding: 0 3px;
 }
 
 .board {
