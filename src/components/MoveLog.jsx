@@ -53,9 +53,15 @@ const MoveLog = ({ moves, pieceLabelType }) => {
               <td>{`[${move.to[0] + 1}, ${move.to[1] + 1}]`}</td>
               <td>
                 {move.captured &&
-                  (pieceLabelType === 'kanji'
-                    ? KANJI_MAP[move.captured]
-                    : ENGLISH_MAP[move.captured])}
+                  (move.captured.includes(' / check')
+                    ? `${pieceLabelType === 'kanji'
+                        ? KANJI_MAP[move.captured.split(' / ')[0]]
+                        : ENGLISH_MAP[move.captured.split(' / ')[0]]} / check`
+                    : (move.captured === 'check'
+                      ? 'check'
+                      : (pieceLabelType === 'kanji'
+                        ? KANJI_MAP[move.captured]
+                        : ENGLISH_MAP[move.captured])))}
               </td>
               <td>{move.timestamp}</td>
             </tr>
