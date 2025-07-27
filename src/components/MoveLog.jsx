@@ -26,10 +26,7 @@ const MoveLog = ({ moves, pieceLabelType }) => {
               Move {sortOrder === 'asc' ? '▲' : '▼'}
             </th>
             <th>Player</th>
-            <th>Piece</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Captured</th>
+            <th>Action</th>
             <th>Time</th>
           </tr>
         </thead>
@@ -44,14 +41,11 @@ const MoveLog = ({ moves, pieceLabelType }) => {
                     ? KANJI_MAP[move.piece]
                     : ENGLISH_MAP[move.piece]}
                 </span>
-              </td>
-              <td>
+                {`  `}
                 {move.from === 'drop'
-                  ? `Drop`
-                  : `[${move.from[0] + 1}, ${move.from[1] + 1}]`}
-              </td>
-              <td>{`[${move.to[0] + 1}, ${move.to[1] + 1}]`}</td>
-              <td>
+                  ? `Drop to [${move.to[0] + 1}, ${move.to[1] + 1}]`
+                  : `[${move.from[0] + 1}, ${move.from[1] + 1}] => [${move.to[0] + 1}, ${move.to[1] + 1}]`}
+                {move.captured && `  `}
                 {move.captured &&
                   (move.captured.includes(' / check')
                     ? `${pieceLabelType === 'kanji'
