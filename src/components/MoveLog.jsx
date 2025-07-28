@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
 
+const padToTwoChars = (str) => str.length === 1 ? ` ${str}` : str;
+
 const MoveLog = ({ moves, pieceLabelType }) => {
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -38,8 +40,8 @@ const MoveLog = ({ moves, pieceLabelType }) => {
               <td>
                 <span style={{ color: move.promote ? '#b80000' : 'inherit' }}>
                   {pieceLabelType === 'kanji'
-                    ? KANJI_MAP[move.piece]
-                    : ENGLISH_MAP[move.piece]}
+                    ? padToTwoChars(KANJI_MAP[move.piece])
+                    : padToTwoChars(ENGLISH_MAP[move.piece])}
                 </span>
                 {`  `}
                 {move.from === 'drop'
@@ -49,13 +51,13 @@ const MoveLog = ({ moves, pieceLabelType }) => {
                 {move.captured &&
                   (move.captured.includes(' / check')
                     ? `${pieceLabelType === 'kanji'
-                        ? KANJI_MAP[move.captured.split(' / ')[0]]
-                        : ENGLISH_MAP[move.captured.split(' / ')[0]]} / check`
+                        ? padToTwoChars(KANJI_MAP[move.captured.split(' / ')[0]])
+                        : padToTwoChars(ENGLISH_MAP[move.captured.split(' / ')[0]])} / check`
                     : (move.captured === 'check'
                       ? 'check'
                       : (pieceLabelType === 'kanji'
-                        ? KANJI_MAP[move.captured]
-                        : ENGLISH_MAP[move.captured])))}
+                        ? padToTwoChars(KANJI_MAP[move.captured])
+                        : padToTwoChars(ENGLISH_MAP[move.captured]))))}
               </td>
               <td>{move.timestamp}</td>
             </tr>

@@ -114,7 +114,7 @@
   width: 140px; /* Increased width to allow two pieces side-by-side */
   min-height: 540px; /* Match board height */
   justify-content: space-between;
-  background-color: #3D8B3D; /* Slightly darker felt green */
+  background-color: rgba(61, 139, 61, 0.75); /* Slightly darker felt green with 75% transparency */
   color: #000; /* Black text */
 }
 
@@ -210,12 +210,12 @@
 
 .move-table th:nth-child(1) { width: 10%; } /* Move Number */
 .move-table th:nth-child(2) { width: 15%; } /* Player */
-.move-table th:nth-child(3) { width: 55%; } /* Action */
+.move-table th:nth-child(3) { text-align: left; padding-left: 1rem; } /* Action */
 .move-table th:nth-child(4) { width: 20%; } /* Time */
 
 .move-table td:nth-child(1) { width: 10%; } /* Move Number */
 .move-table td:nth-child(2) { width: 15%; } /* Player */
-.move-table td:nth-child(3) { width: 55%; } /* Action */
+.move-table td:nth-child(3) { text-align: left; padding-left: 1rem; } /* Action */
 .move-table td:nth-child(4) { width: 20%; } /* Time */
 
 .move-table th {
