@@ -70,6 +70,14 @@ function App() {
   const handleSquareClick = (row, col) => {
     const pieceAtClick = gameState.board[row][col];
 
+    // Deselect if the already selected piece is clicked again
+    if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
+      setSelectedPiece(null);
+      setLegalMoves([]);
+      setLegalDropSquares([]);
+      return;
+    }
+
     if (selectedCapturedPiece) {
       // A captured piece is selected, attempt to drop it
       if (legalDropSquares.some(square => square[0] === row && square[1] === col)) {
@@ -94,6 +102,7 @@ function App() {
       setSelectedPiece({ row, col, piece: pieceAtClick });
       const moves = getLegalMoves(pieceAtClick, row, col, gameState.board);
       setLegalMoves(moves);
+      setLegalDropSquares([]); // Clear legal drop squares when a board piece is selected
       console.log("Legal moves for selected piece:", moves);
     }
   };
@@ -128,17 +137,29 @@ function App() {
   };
 
   const handleCapturedPieceClick = (pieceType) => {
-    setSelectedCapturedPiece({ type: pieceType });
-    setSelectedPiece(null); // Clear any selected board piece
-    setLegalMoves([]); // Clear legal moves
-    setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
+    if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
+      // If the same captured piece is clicked again, deselect it
+      setSelectedCapturedPiece(null);
+      setLegalDropSquares([]);
+    } else {
+      setSelectedCapturedPiece({ type: pieceType });
+      setSelectedPiece(null); // Clear any selected board piece
+      setLegalMoves([]); // Clear legal moves
+      setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
+    }
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
-    setSelectedCapturedPiece({ type: pieceType });
-    setSelectedPiece(null); // Clear any selected board piece
-    setLegalMoves([]); // Clear legal moves
-    setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
+    if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
+      // If the same captured piece is dragged again, deselect it
+      setSelectedCapturedPiece(null);
+      setLegalDropSquares([]);
+    } else {
+      setSelectedCapturedPiece({ type: pieceType });
+      setSelectedPiece(null); // Clear any selected board piece
+      setLegalMoves([]); // Clear legal moves
+      setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
+    }
   };
 
   const handlePromotionChoice = (promote) => {
