@@ -463,6 +463,76 @@ export function isKingInCheck(board, player) {
 }
 
 /**
+ * Gets all legal drop squares for a captured piece.
+ * @param {object} gameState The current game state.
+ * @param {string} pieceType The type of piece to drop.
+ * @returns {Array<[number, number]>} An array of [row, col] pairs representing legal drop squares.
+ */
+export function getLegalDrops(gameState, pieceType) {
+  const { board, currentPlayer } = gameState;
+  const legalDrops = [];
+
+  // Check if the player actually has the piece to drop
+  const hasPieceToDrop = gameState.capturedPieces[currentPlayer].some(p => p.type === pieceType);
+  if (!hasPieceToDrop) {
+    return legalDrops;
+  }
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      // 1. Must be an empty square
+      if (board[r][c] !== null) {
+        continue;
+      }
+
+      // 2. Nifu check (two unpromoted pawns in the same file)
+      if (pieceType === PAWN) {
+        let nifu = false;
+        for (let row = 0; row < ROWS; row++) {
+          const piece = board[row][c];
+          if (piece && piece.type === PAWN && piece.player === currentPlayer) {
+            nifu = true;
+            break;
+          }
+        }
+        if (nifu) {
+          continue;
+        }
+      }
+
+      // 3. Cannot drop a piece where it has no legal moves (e.g., Pawn on last rank, Knight on last two ranks, Lance on last rank)
+      const player_mult = currentPlayer === PLAYER_1 ? -1 : 1;
+      if ((pieceType === PAWN || pieceType === LANCE) && (r + player_mult < 0 || r + player_mult >= ROWS)) {
+        continue;
+      }
+      if (pieceType === KNIGHT && (r + (player_mult * 2) < 0 || r + (player_mult * 2) >= ROWS)) {
+        continue;
+      }
+
+      // 4. Cannot drop a pawn to give an immediate checkmate (Uchifu-zume)
+      if (pieceType === PAWN) {
+        const simulatedBoard = board.map(row => [...row]);
+        simulatedBoard[r][c] = { type: pieceType, player: currentPlayer };
+        const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+
+        // Temporarily remove the pawn to check if the king is still in check without it
+        const originalPieceAtDrop = simulatedBoard[r][c];
+        simulatedBoard[r][c] = null; // Remove the dropped pawn temporarily
+        const kingStillInCheckWithoutPawn = isKingInCheck(simulatedBoard, opponent);
+        simulatedBoard[r][c] = originalPieceAtDrop; // Restore the dropped pawn
+
+        if (isKingInCheck(simulatedBoard, opponent) && isCheckmate({ ...gameState, board: simulatedBoard, currentPlayer: opponent }) && !kingStillInCheckWithoutPawn) {
+          continue; // Uchifu-zume rule violation
+        }
+      }
+
+      legalDrops.push([r, c]);
+    }
+  }
+  return legalDrops;
+}
+
+/**
  * Checks if a player is in checkmate.
  * @param {object} gameState The current game state.
  * @returns {boolean} True if the current player is in checkmate.
@@ -493,17 +563,16 @@ export function isCheckmate(gameState) {
 
     // Check if dropping any piece can get the king out of check
     for (const captured of capturedPieces[currentPlayer]) {
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                if (!board[r][c]) { // Can only drop on empty squares
-                    const tempState = dropPiece(gameState, captured.type, [r, c]);
-                     if (tempState !== gameState && !isKingInCheck(tempState.board, currentPlayer)) {
-                        return false; // Found a drop to escape check
-                    }
-                }
+        // Use getLegalDrops to find valid drop squares
+        const possibleDropSquares = getLegalDrops(gameState, captured.type);
+        for (const dropSquare of possibleDropSquares) {
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
+            if (!isKingInCheck(tempBoard, currentPlayer)) {
+                return false; // Found a drop to escape check
             }
         }
     }
 
-    return true; // No legal moves to escape check, so it's checkmate
+    return true; // No legal moves or drops to escape check, so it's checkmate
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, completeMove, PLAYER_1, PLAYER_2 } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, PLAYER_1, PLAYER_2 } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -14,6 +14,7 @@ function App() {
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
+  const [legalDropSquares, setLegalDropSquares] = useState([]); // Array of [row, col] for drops
   const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
@@ -47,6 +48,7 @@ function App() {
     setSelectedPiece(null);
     setSelectedCapturedPiece(null);
     setLegalMoves([]);
+    setLegalDropSquares([]); // Clear legal drop squares after a move
     setLastMove({ from: from, to: to });
 
     // AI makes a move after player
@@ -70,8 +72,10 @@ function App() {
 
     if (selectedCapturedPiece) {
       // A captured piece is selected, attempt to drop it
-      const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
-      handlePlayerMove(newGameState, 'drop', [row, col]);
+      if (legalDropSquares.some(square => square[0] === row && square[1] === col)) {
+        const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
+        handlePlayerMove(newGameState, 'drop', [row, col]);
+      }
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
       if (legalMoves.some(move => {
@@ -127,12 +131,14 @@ function App() {
     setSelectedCapturedPiece({ type: pieceType });
     setSelectedPiece(null); // Clear any selected board piece
     setLegalMoves([]); // Clear legal moves
+    setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
     setSelectedCapturedPiece({ type: pieceType });
     setSelectedPiece(null); // Clear any selected board piece
     setLegalMoves([]); // Clear legal moves
+    setLegalDropSquares(getLegalDrops(gameState, pieceType)); // Set legal drop squares
   };
 
   const handlePromotionChoice = (promote) => {
@@ -184,6 +190,7 @@ function App() {
           onDragStart={handleDragStart}
           onDrop={handleDrop}
           legalMoves={legalMoves}
+          legalDropSquares={legalDropSquares}
           isCheck={gameState.isCheck}
           kingPosition={gameState.kingPositions[gameState.currentPlayer]}
           lastMove={lastMove}

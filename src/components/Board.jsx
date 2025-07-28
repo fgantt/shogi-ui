@@ -2,10 +2,15 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, isCheck, kingPosition, lastMove, pieceLabelType }) => {
+const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType }) => {
   console.log("Board received legalMoves:", legalMoves);
+  console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
     return legalMoves.some(move => move[0] === row && move[1] === col);
+  };
+
+  const isLegalDropSquare = (row, col) => {
+    return legalDropSquares.some(square => square[0] === row && square[1] === col);
   };
 
   const isKingSquare = (row, col) => {
@@ -44,7 +49,7 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, isCheck,
               {row.map((piece, colIndex) => (
                 <div
                   key={colIndex}
-                  className={`board-square ${isLegalMove(rowIndex, colIndex) ? 'legal-move' : ''} ${isKingSquare(rowIndex, colIndex) && isCheck ? 'in-check' : ''} ${isLastMoveSquare(rowIndex, colIndex) ? 'last-move' : ''}`}
+                  className={`board-square ${isLegalMove(rowIndex, colIndex) ? 'legal-move' : ''} ${isLegalDropSquare(rowIndex, colIndex) ? 'legal-move' : ''} ${isKingSquare(rowIndex, colIndex) && isCheck ? 'in-check' : ''} ${isLastMoveSquare(rowIndex, colIndex) ? 'last-move' : ''}`}
                   onClick={() => onSquareClick(rowIndex, colIndex)}
                   onDragOver={(e) => e.preventDefault()} // Allow drop
                   onDrop={() => onDrop(rowIndex, colIndex)}
