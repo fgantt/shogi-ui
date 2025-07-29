@@ -20,6 +20,7 @@ function App() {
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
 
   const [wallpaperList, setWallpaperList] = useState([]);
+  const [boardBackgroundList, setBoardBackgroundList] = useState([]);
 
   useEffect(() => {
     const importWallpapers = async () => {
@@ -27,7 +28,13 @@ function App() {
       const paths = Object.keys(modules).map(path => path.replace('/public', ''));
       setWallpaperList(paths);
     };
+    const importBoardBackgrounds = async () => {
+      const modules = import.meta.glob('/public/boards/*.{jpg,svg}');
+      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
+      setBoardBackgroundList(paths);
+    };
     importWallpapers();
+    importBoardBackgrounds();
   }, []);
 
   const setRandomWallpaper = () => {
@@ -37,9 +44,20 @@ function App() {
     }
   };
 
+  const setRandomBoardBackground = () => {
+    if (boardBackgroundList.length > 0) {
+      const randomIndex = Math.floor(Math.random() * boardBackgroundList.length);
+      document.querySelector('.board').style.backgroundImage = `url('${boardBackgroundList[randomIndex]}')`;
+    }
+  };
+
   useEffect(() => {
     setRandomWallpaper();
   }, [wallpaperList]); // Set wallpaper when wallpaperList changes
+
+  useEffect(() => {
+    setRandomBoardBackground();
+  }, [boardBackgroundList]); // Set board background when boardBackgroundList changes
 
   console.log("App.jsx - pieceLabelType:", pieceLabelType);
 
@@ -175,6 +193,7 @@ function App() {
     setLegalMoves([]);
     setLastMove(null);
     setRandomWallpaper();
+    setRandomBoardBackground();
   };
 
   const handleUndoMove = () => {

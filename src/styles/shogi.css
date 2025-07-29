@@ -65,8 +65,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #8B4513; /* Match board background */
-  background-image: linear-gradient(90deg, #8B4513 0%, #A0522D 20%, #8B4513 40%, #A0522D 60%, #8B4513 80%, #A0522D 100%);
+  position: relative; /* Needed for absolute positioning of overlay */
 }
 
 .piece {
@@ -137,19 +136,16 @@
   width: 100%; /* Ensure the list takes full width of its container */
 }
 
-.board-square.legal-move {
-  background-color: #aaffaa; /* Visible green for legal moves */
-  background-image: none; /* Remove wood grain for highlighted squares */
+.legal-move {
+  background-color: rgba(170, 255, 170, 0.5); /* Light green with 50% transparency */
 }
 
 .in-check {
-  background-color: red;
-  background-image: none;
+  background-color: rgba(255, 0, 0, 0.5); /* Red with 50% transparency */
 }
 
 .last-move {
-  background-color: #ffffaa;
-  background-image: none; /* Remove background image to show highlight */
+  background-color: rgba(255, 255, 170, 0.5); /* Light yellow with 50% transparency */
 }
 
 .move-log {
