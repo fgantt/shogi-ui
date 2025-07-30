@@ -45,8 +45,8 @@ const MoveLog = ({ moves, pieceLabelType }) => {
                 </span>
                 {`  `}
                 {move.from === 'drop'
-                  ? `Drop to [${move.to[0] + 1}, ${move.to[1] + 1}]`
-                  : `[${move.from[0] + 1}, ${move.from[1] + 1}] => [${move.to[0] + 1}, ${move.to[1] + 1}]`}
+                  ? `Drop to [${move.to[0] + 1}, ${9 - move.to[1]}]`
+                  : `[${move.from[0] + 1}, ${9 - move.from[1]}] => [${move.to[0] + 1}, ${9 - move.to[1]}]`}
                 {move.captured && `  `}
                 {move.captured &&
                   (move.captured.includes(' / check')

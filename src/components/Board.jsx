@@ -23,7 +23,7 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
     return (from[0] === row && from[1] === col) || (to[0] === row && to[1] === col);
   };
 
-  const columnNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const rowNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   return (
