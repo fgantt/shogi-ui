@@ -36,13 +36,6 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
         ))}
       </div>
       <div className="board-and-row-numbers">
-        <div className="row-numbers">
-          {rowNumbers.map((num, index) => (
-            <div key={index} className="row-number-cell">
-              {num}
-            </div>
-          ))}
-        </div>
         <div className="board">
           {board.map((row, rowIndex) => (
             <div key={rowIndex} className="board-row">
@@ -64,6 +57,13 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
                   )}
                 </div>
               ))}
+            </div>
+          ))}
+        </div>
+        <div className="row-numbers">
+          {rowNumbers.map((num, index) => (
+            <div key={index} className="row-number-cell">
+              {num}
             </div>
           ))}
         </div>

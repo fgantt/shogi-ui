@@ -11,10 +11,10 @@
 .column-numbers {
   display: flex;
   justify-content: space-around;
-  width: 630px; /* Match board width */
+  width: 635px; /* Match board width */
   color: #eee;
   font-weight: bold;
-  margin-left: 21px;
+  margin-right: 12px;
 }
 
 .column-number-cell {
@@ -27,10 +27,9 @@
   display: flex;
   flex-direction: column;
   justify-content: space-around;
-  height: 684px; /* Match board height */
+  height: 688px; /* Match board height */
   color: #eee;
   font-weight: bold;
-  margin-top: 5px;
 }
 
 .row-number-cell {
