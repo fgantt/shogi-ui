@@ -80,10 +80,27 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative; /* Added for badge positioning */
 }
 
 .piece svg {
   overflow: visible; /* Allow content to overflow if needed */
+}
+
+.badge-counter {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.8em;
+  font-weight: bold;
 }
 
 .player1 {
