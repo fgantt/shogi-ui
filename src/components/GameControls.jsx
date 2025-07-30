@@ -1,7 +1,7 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const GameControls = ({ onNewGame, onUndoMove, onDifficultyChange, onPieceLabelTypeChange, pieceLabelType }) => {
+const GameControls = ({ onNewGame, onUndoMove, onDifficultyChange, onPieceLabelTypeChange, pieceLabelType, onOpenSettings }) => {
   return (
     <div className="game-controls">
       <button onClick={onNewGame}>New Game</button>
@@ -15,6 +15,7 @@ const GameControls = ({ onNewGame, onUndoMove, onDifficultyChange, onPieceLabelT
         <option value="kanji">Kanji Labels</option>
         <option value="english">English Labels</option>
       </select>
+      <button onClick={onOpenSettings}>Settings</button>
     </div>
   );
 };

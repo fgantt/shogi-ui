@@ -5,9 +5,11 @@ import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
 import PromotionModal from './components/PromotionModal';
 import GameControls from './components/GameControls';
+import SettingsPanel from './components/SettingsPanel';
 import MoveLog from './components/MoveLog';
 import './App.css';
 import './styles/shogi.css';
+import './styles/settings.css';
 
 function App() {
   const [gameState, setGameState] = useState(getInitialGameState());
@@ -18,20 +20,33 @@ function App() {
   const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
+  const [currentWallpaper, setCurrentWallpaper] = useState('');
+  const [currentBoardBackground, setCurrentBoardBackground] = useState('');
 
   useEffect(() => {
     const importWallpapers = async () => {
       const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
       const paths = Object.keys(modules).map(path => path.replace('/public', ''));
       setWallpaperList(paths);
+      if (paths.length > 0) {
+        const initialWallpaper = paths[Math.floor(Math.random() * paths.length)];
+        document.body.style.backgroundImage = `url('${initialWallpaper}')`;
+        setCurrentWallpaper(initialWallpaper);
+      }
     };
     const importBoardBackgrounds = async () => {
       const modules = import.meta.glob('/public/boards/*.{jpg,svg}');
       const paths = Object.keys(modules).map(path => path.replace('/public', ''));
       setBoardBackgroundList(paths);
+      if (paths.length > 0) {
+        const initialBoardBackground = paths[Math.floor(Math.random() * paths.length)];
+        document.querySelector('.board').style.backgroundImage = `url('${initialBoardBackground}')`;
+        setCurrentBoardBackground(initialBoardBackground);
+      }
     };
     importWallpapers();
     importBoardBackgrounds();
@@ -40,26 +55,22 @@ function App() {
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
       const randomIndex = Math.floor(Math.random() * wallpaperList.length);
-      document.body.style.backgroundImage = `url('${wallpaperList[randomIndex]}')`;
+      const newWallpaper = wallpaperList[randomIndex];
+      document.body.style.backgroundImage = `url('${newWallpaper}')`;
+      setCurrentWallpaper(newWallpaper);
     }
   };
 
   const setRandomBoardBackground = () => {
     if (boardBackgroundList.length > 0) {
       const randomIndex = Math.floor(Math.random() * boardBackgroundList.length);
-      document.querySelector('.board').style.backgroundImage = `url('${boardBackgroundList[randomIndex]}')`;
+      const newBoardBackground = boardBackgroundList[randomIndex];
+      document.querySelector('.board').style.backgroundImage = `url('${newBoardBackground}')`;
+      setCurrentBoardBackground(newBoardBackground);
     }
   };
 
-  useEffect(() => {
-    setRandomWallpaper();
-  }, [wallpaperList]); // Set wallpaper when wallpaperList changes
-
-  useEffect(() => {
-    setRandomBoardBackground();
-  }, [boardBackgroundList]); // Set board background when boardBackgroundList changes
-
-  console.log("App.jsx - pieceLabelType:", pieceLabelType);
+  
 
   const handlePlayerMove = (newGameState, from, to) => {
     setGameState(newGameState);
@@ -218,13 +229,39 @@ function App() {
 
   const handleDifficultyChange = (difficulty) => {
     setAiDifficulty(difficulty);
-    // Potentially reset game or AI here if needed
+  };
+
+  const handleOpenSettings = () => {
+    setIsSettingsOpen(true);
+  };
+
+  const handleCloseSettings = () => {
+    setIsSettingsOpen(false);
+  };
+
+  
+
+  const handleSelectWallpaper = (wallpaper) => {
+    document.body.style.backgroundImage = `url('${wallpaper}')`;
+    setCurrentWallpaper(wallpaper);
+  };
+
+  const handleSelectBoardBackground = (boardBackground) => {
+    document.querySelector('.board').style.backgroundImage = `url('${boardBackground}')`;
+    setCurrentBoardBackground(boardBackground);
   };
 
   return (
     <div className="app">
       <h1>Shogi Vibe</h1>
-      <GameControls onNewGame={handleNewGame} onUndoMove={handleUndoMove} onDifficultyChange={handleDifficultyChange} onPieceLabelTypeChange={setPieceLabelType} pieceLabelType={pieceLabelType} />
+      <GameControls
+        onNewGame={handleNewGame}
+        onUndoMove={handleUndoMove}
+        onDifficultyChange={handleDifficultyChange}
+        onPieceLabelTypeChange={setPieceLabelType}
+        pieceLabelType={pieceLabelType}
+        onOpenSettings={handleOpenSettings}
+      />
       <div className="game-container">
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_2]}
@@ -260,8 +297,22 @@ function App() {
       <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
 
       {gameState.promotionPending && (
-        <PromotionModal
-          onPromote={handlePromotionChoice}
+        <PromotionModal onPromote={handlePromotionChoice} />
+      )}
+
+      {isSettingsOpen && (
+        <SettingsPanel
+          aiDifficulty={aiDifficulty}
+          onDifficultyChange={setAiDifficulty}
+          pieceLabelType={pieceLabelType}
+          onPieceLabelTypeChange={setPieceLabelType}
+          wallpaperList={wallpaperList}
+          onSelectWallpaper={handleSelectWallpaper}
+          boardBackgroundList={boardBackgroundList}
+          onSelectBoardBackground={handleSelectBoardBackground}
+          onClose={handleCloseSettings}
+          currentWallpaper={currentWallpaper}
+          currentBoardBackground={currentBoardBackground}
         />
       )}
     </div>

@@ -1,0 +1,97 @@
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7); /* Dark overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top of everything */
+}
+
+.settings-panel {
+  background-color: rgba(200, 200, 200, 0.7); /* Light grey with 70% opacity */
+  color: #000; /* Black text */
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+  width: 80%;
+  max-width: 600px;
+  max-height: 80%;
+  overflow-y: auto;
+}
+
+.settings-panel h2 {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.settings-panel section {
+  margin-bottom: 20px;
+  border: 1px solid #00008B; /* Dark blue border */
+  padding: 15px;
+  border-radius: 5px;
+}
+
+.settings-panel h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #00008B; /* Dark blue for section headers */
+}
+
+.settings-panel .setting-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-panel label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.settings-panel input[type="radio"] {
+  accent-color: #00008B; /* Highlight color for radio buttons */
+}
+
+.settings-panel .thumbnail {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s ease-in-out;
+}
+
+.settings-panel .thumbnail:hover {
+  border-color: #00008B;
+}
+
+.settings-panel .selected-thumbnail {
+  border-color: #00008B; /* Dark blue border for selected thumbnail */
+  box-shadow: 0 0 8px rgba(0, 0, 139, 0.8); /* Optional: add a glow effect */
+}
+
+.settings-panel button {
+  display: block;
+  margin: 20px auto 0 auto;
+  padding: 10px 20px;
+  background-color: #00008B; /* Dark blue for button */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.settings-panel button:hover {
+  background-color: #0000CD; /* Even darker blue on hover */
+}
