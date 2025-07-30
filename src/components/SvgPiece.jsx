@@ -35,12 +35,29 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
 
   const piecePath = PIECE_PATHS[type];
 
-  const fillColor = player === "player1" ? "white" : "#e0e0e0";
+  const fillColor = "url(#wood-bambo-pattern)";
   const strokeColor = "#333";
   const textColor = isPromoted ? "#b80000" : "black";
 
   return (
     <svg width="70" height="76" viewBox="0 0 70 76">
+      <defs>
+        <pattern
+          id="wood-bambo-pattern"
+          patternUnits="objectBoundingBox"
+          width="1"
+          height="1"
+        >
+          <image
+            href="/public/boards/wood-bambo.jpg"
+            x="0"
+            y="0"
+            width="70"
+            height="76"
+            preserveAspectRatio="none"
+          ></image>
+        </pattern>
+      </defs>
       <path
         d={piecePath}
         fill={fillColor}
