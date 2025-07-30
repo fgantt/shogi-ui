@@ -232,6 +232,7 @@ function App() {
           onPieceClick={handleCapturedPieceClick}
           onPieceDragStart={handleCapturedPieceDragStart}
           pieceLabelType={pieceLabelType}
+          selectedCapturedPiece={selectedCapturedPiece}
         />
         <Board
           board={gameState.board}
@@ -244,6 +245,7 @@ function App() {
           kingPosition={gameState.kingPositions[gameState.currentPlayer]}
           lastMove={lastMove}
           pieceLabelType={pieceLabelType}
+          selectedPiece={selectedPiece}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}
@@ -251,6 +253,7 @@ function App() {
           onPieceClick={handleCapturedPieceClick}
           onPieceDragStart={handleCapturedPieceDragStart}
           pieceLabelType={pieceLabelType}
+          selectedCapturedPiece={selectedCapturedPiece}
         />
       </div>
 

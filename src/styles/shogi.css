@@ -80,6 +80,13 @@
   justify-content: center;
   align-items: center;
   position: relative; /* Added for badge positioning */
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out; /* Smooth transition for hover/active states */
+}
+
+.piece.selected {
+  transform: translateY(-5px) scale(1.05); /* Lift and slightly enlarge */
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+  z-index: 10; /* Ensure it's above other pieces */
 }
 
 .piece svg {

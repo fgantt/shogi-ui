@@ -2,7 +2,7 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType }) => {
+const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece }) => {
   console.log("Board received legalMoves:", legalMoves);
   console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
@@ -53,6 +53,7 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
                       player={piece.player}
                       onDragStart={() => onDragStart(rowIndex, colIndex)}
                       pieceLabelType={pieceLabelType}
+                      isSelected={selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex}
                     />
                   )}
                 </div>

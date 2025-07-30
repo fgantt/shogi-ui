@@ -2,7 +2,7 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType }) => {
+const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece }) => {
   return (
     <div className={`captured-pieces ${player}`}>
       <h3>{player === 'player1' ? 'Player 1' : 'Player 2'} Captured</h3>
@@ -19,6 +19,7 @@ const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceL
             onClick={() => onPieceClick(type)}
             pieceLabelType={pieceLabelType}
             count={count}
+            isSelected={selectedCapturedPiece && selectedCapturedPiece.type === type}
           />
         ))}
       </div>
