@@ -170,7 +170,7 @@
   border: 3px solid #000;
   padding: 0;
   width: 900px; /* Changed width to 700px */
-  height: 220px; /* Set height to 220px */
+  height: 250px; /* Set height to 250px */
   background-color: #3D8B3D;
   color: #000;
   box-sizing: border-box;
@@ -184,7 +184,7 @@
 }
 
 .move-table-container {
-  max-height: 680px; /* Set a max height for the scrollable area */
+  max-height: 180px; /* Set a max height for the scrollable area */
   overflow-y: auto; /* Enable vertical scrolling */
 }
 
@@ -192,26 +192,26 @@
   width: 100%;
   border-collapse: collapse;
   color: #000;
+  table-layout: fixed;
 }
 
 .move-table thead {
-  display: table; /* Ensures thead behaves like a table row */
-  width: 100%; /* Changed width to 100% */
-  table-layout: fixed; /* Fixes column widths */
+  display: table;
+  width: 100%;
 }
 
 .move-table tbody {
-  display: block; /* Allows tbody to scroll independently */
-  max-height: 650px; /* Set a fixed height for scrolling */
+  display: block;
+  max-height: 180px; /* Set a fixed height for scrolling */
   overflow-y: auto; /* Enable vertical scrolling */
   width: 100%;
 }
 
 .move-table tr {
-  display: table; /* Ensures rows within tbody behave like table rows */
+  display: table;
   width: 100%;
-  table-layout: fixed; /* Fixes column widths for rows */
 }
+
 
 .move-table th,
 .move-table td {
@@ -223,12 +223,12 @@
 
 .move-table th:nth-child(1) { width: 10%; } /* Move Number */
 .move-table th:nth-child(2) { width: 15%; } /* Player */
-.move-table th:nth-child(3) { text-align: left; padding-left: 1rem; } /* Action */
+.move-table th:nth-child(3) { width: 55%; text-align: left; padding-left: 1rem; } /* Action */
 .move-table th:nth-child(4) { width: 20%; } /* Time */
 
 .move-table td:nth-child(1) { width: 10%; } /* Move Number */
 .move-table td:nth-child(2) { width: 15%; } /* Player */
-.move-table td:nth-child(3) { text-align: left; padding-left: 1rem; } /* Action */
+.move-table td:nth-child(3) { width: 55%; text-align: left; padding-left: 1rem; } /* Action */
 .move-table td:nth-child(4) { width: 20%; } /* Time */
 
 .move-table th {

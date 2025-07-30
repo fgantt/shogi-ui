@@ -53,11 +53,11 @@ const MoveLog = ({ moves, pieceLabelType }) => {
                     ? `${pieceLabelType === 'kanji'
                         ? padToTwoChars(KANJI_MAP[move.captured.split(' / ')[0]])
                         : padToTwoChars(ENGLISH_MAP[move.captured.split(' / ')[0]])} / check`
-                    : (move.captured === 'check'
-                      ? 'check'
-                      : (pieceLabelType === 'kanji'
-                        ? padToTwoChars(KANJI_MAP[move.captured])
-                        : padToTwoChars(ENGLISH_MAP[move.captured]))))}
+                      : (move.captured === 'check'
+                        ? 'check'
+                        : (pieceLabelType === 'kanji'
+                          ? padToTwoChars(KANJI_MAP[move.captured])
+                          : padToTwoChars(ENGLISH_MAP[move.captured]))))}
               </td>
               <td>{move.timestamp}</td>
             </tr>
