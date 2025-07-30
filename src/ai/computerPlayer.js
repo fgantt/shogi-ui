@@ -174,7 +174,7 @@ export function getAiMove(gameState, difficulty) {
         const moves = getLegalMoves(piece, r, c, gameState.board);
         moves.forEach(to => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          if (simulatedGameState !== gameState) { // Only add if the move is legal (doesn't put own king in check)
+          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
             possibleMoves.push({ from: [r, c], to, type: 'move' });
           }
         });
@@ -188,7 +188,7 @@ export function getAiMove(gameState, difficulty) {
       for (let c = 0; c < 9; c++) {
         if (!gameState.board[r][c]) { // Only drop on empty squares
           const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          if (simulatedGameState !== gameState) { // Only add if the drop is legal (doesn't put own king in check)
+          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the drop doesn't put own king in check
             possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type });
           }
         }

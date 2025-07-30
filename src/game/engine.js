@@ -254,9 +254,6 @@ export function movePiece(gameState, from, to) {
 
   // If no promotion choice is needed (or it's mandatory), proceed with the move.
   const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory);
-  if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
-    return gameState; // Illegal move: current player moved into check
-  }
   return simulatedGameState;
 }
 

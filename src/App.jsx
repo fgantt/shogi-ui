@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, PLAYER_1, PLAYER_2 } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, PLAYER_1, PLAYER_2 } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -119,9 +119,13 @@ function App() {
       // No piece selected, select the clicked piece if it belongs to the current player
       setSelectedPiece({ row, col, piece: pieceAtClick });
       const moves = getLegalMoves(pieceAtClick, row, col, gameState.board);
-      setLegalMoves(moves);
+      const filteredMoves = moves.filter(to => {
+        const simulatedGameState = movePiece(gameState, [row, col], to);
+        return !isKingInCheck(simulatedGameState.board, gameState.currentPlayer); // Only keep moves that don't result in current player's king being in check
+      });
+      setLegalMoves(filteredMoves);
       setLegalDropSquares([]); // Clear legal drop squares when a board piece is selected
-      console.log("Legal moves for selected piece:", moves);
+      console.log("Legal moves for selected piece:", filteredMoves);
     }
   };
 
@@ -130,8 +134,13 @@ function App() {
     if (pieceAtDragStart && pieceAtDragStart.player === gameState.currentPlayer) {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
       setSelectedCapturedPiece(null); // Clear any selected captured piece
-      setLegalMoves(getLegalMoves(pieceAtDragStart, row, col, gameState.board));
-      console.log("Legal moves for dragged piece:", getLegalMoves(pieceAtDragStart, row, col, gameState.board));
+      const moves = getLegalMoves(pieceAtDragStart, row, col, gameState.board);
+      const filteredMoves = moves.filter(to => {
+        const simulatedGameState = movePiece(gameState, [row, col], to);
+        return !isKingInCheck(simulatedGameState.board, gameState.currentPlayer); // Only keep moves that don't result in current player's king being in check
+      });
+      setLegalMoves(filteredMoves);
+      console.log("Legal moves for dragged piece:", filteredMoves);
     }
   };
 
