@@ -261,6 +261,7 @@ function App() {
         onPieceLabelTypeChange={setPieceLabelType}
         pieceLabelType={pieceLabelType}
         onOpenSettings={handleOpenSettings}
+        aiDifficulty={aiDifficulty}
       />
       <div className="game-container">
         <CapturedPieces

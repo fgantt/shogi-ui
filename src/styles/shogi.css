@@ -277,3 +277,43 @@
   flex-direction: column;
   align-items: center;
 }
+
+.game-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: rgba(51, 51, 51, 0.75);
+  color: white;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.game-controls-left,
+.game-controls-right {
+  display: flex;
+  gap: 10px;
+}
+
+.game-controls button {
+  background-color: #00008B;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.game-controls button:hover {
+  background-color: #0000CD;
+}
+
+.difficulty-display {
+  font-size: 1.1em;
+  font-weight: bold;
+}
