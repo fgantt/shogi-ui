@@ -109,6 +109,22 @@
   font-weight: bold;
 }
 
+.badge-attacked {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
 .player1 {
   /* Player 1 pieces are handled by SvgPiece fill color */
   color: #000; /* Keep for text if any, but SVG handles fill */

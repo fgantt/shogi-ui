@@ -573,3 +573,27 @@ export function isCheckmate(gameState) {
 
     return true; // No legal moves or drops to escape check, so it's checkmate
 }
+
+/**
+ * Gets all squares attacked by a player.
+ * @param {Array<Array<object>>} board The board state.
+ * @param {string} player The player who is attacking.
+ * @returns {Set<string>} A set of attacked squares in "row,col" format.
+ */
+export function getAttackedSquares(board, player) {
+  const attackedSquares = new Set();
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const piece = board[r][c];
+      if (piece && piece.player === player) {
+        const moves = getLegalMoves(piece, r, c, board);
+        for (const move of moves) {
+          attackedSquares.add(`${move[0]},${move[1]}`);
+        }
+      }
+    }
+  }
+
+  return attackedSquares;
+}

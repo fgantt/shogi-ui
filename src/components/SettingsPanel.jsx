@@ -12,6 +12,8 @@ const SettingsPanel = ({
   onClose,
   currentWallpaper,
   currentBoardBackground,
+  showAttackedPieces,
+  onShowAttackedPiecesChange,
 }) => {
   const getFileName = (path) => {
     const parts = path.split('/');
@@ -115,6 +117,20 @@ const SettingsPanel = ({
                 title={getFileName(wp)}
               />
             )})}
+          </div>
+        </section>
+
+        <section>
+          <h3>Show Attacked Pieces</h3>
+          <div className="setting-group">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={showAttackedPieces}
+                onChange={(e) => onShowAttackedPiecesChange(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
           </div>
         </section>
 

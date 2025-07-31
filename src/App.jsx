@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, PLAYER_1, PLAYER_2 } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, PLAYER_1, PLAYER_2, getAttackedSquares } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -21,6 +21,8 @@ function App() {
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [attackedSquares, setAttackedSquares] = useState({ player1: new Set(), player2: new Set() });
+  const [showAttackedPieces, setShowAttackedPieces] = useState(true);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -52,6 +54,10 @@ function App() {
     importBoardBackgrounds();
   }, []);
 
+  useEffect(() => {
+    updateAttackedSquares();
+  }, [gameState.board]);
+
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
       const randomIndex = Math.floor(Math.random() * wallpaperList.length);
@@ -70,7 +76,11 @@ function App() {
     }
   };
 
-  
+  const updateAttackedSquares = () => {
+    const player1Attacks = getAttackedSquares(gameState.board, PLAYER_1);
+    const player2Attacks = getAttackedSquares(gameState.board, PLAYER_2);
+    setAttackedSquares({ player1: player1Attacks, player2: player2Attacks });
+  };
 
   const handlePlayerMove = (newGameState, from, to) => {
     setGameState(newGameState);
@@ -284,6 +294,8 @@ function App() {
           lastMove={lastMove}
           pieceLabelType={pieceLabelType}
           selectedPiece={selectedPiece}
+          attackedSquares={attackedSquares}
+          showAttackedPieces={showAttackedPieces}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}
@@ -314,6 +326,8 @@ function App() {
           onClose={handleCloseSettings}
           currentWallpaper={currentWallpaper}
           currentBoardBackground={currentBoardBackground}
+          showAttackedPieces={showAttackedPieces}
+          onShowAttackedPiecesChange={setShowAttackedPieces}
         />
       )}
     </div>
