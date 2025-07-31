@@ -23,6 +23,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [attackedSquares, setAttackedSquares] = useState({ player1: new Set(), player2: new Set() });
   const [showAttackedPieces, setShowAttackedPieces] = useState(true);
+  const [showPieceTooltips, setShowPieceTooltips] = useState(false);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -296,6 +297,7 @@ function App() {
           selectedPiece={selectedPiece}
           attackedSquares={attackedSquares}
           showAttackedPieces={showAttackedPieces}
+          showPieceTooltips={showPieceTooltips}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}
@@ -328,6 +330,8 @@ function App() {
           currentBoardBackground={currentBoardBackground}
           showAttackedPieces={showAttackedPieces}
           onShowAttackedPiecesChange={setShowAttackedPieces}
+          showPieceTooltips={showPieceTooltips}
+          onShowPieceTooltipsChange={setShowPieceTooltips}
         />
       )}
     </div>

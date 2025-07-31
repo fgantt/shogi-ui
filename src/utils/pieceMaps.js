@@ -36,3 +36,32 @@ export const ENGLISH_MAP = {
   [PROMOTED_BISHOP]: 'B+',
   [PROMOTED_ROOK]: 'R+',
 };
+
+export const ENGLISH_NAMES = {
+  [PAWN]: 'Pawn',
+  [LANCE]: 'Lance',
+  [KNIGHT]: 'Knight',
+  [SILVER]: 'Silver',
+  [GOLD]: 'Gold',
+  [BISHOP]: 'Bishop',
+  [ROOK]: 'Rook',
+  [KING]: 'King',
+  [PROMOTED_PAWN]: 'Promoted Pawn',
+  [PROMOTED_LANCE]: 'Promoted Lance',
+  [PROMOTED_KNIGHT]: 'Promoted Knight',
+  [PROMOTED_SILVER]: 'Promoted Silver',
+  [PROMOTED_BISHOP]: 'Promoted Bishop',
+  [PROMOTED_ROOK]: 'Promoted Rook',
+};
+
+export function getOppositeLabel(pieceType, currentLabelType) {
+  if (currentLabelType === 'kanji') {
+    return ENGLISH_MAP[pieceType];
+  } else {
+    return KANJI_MAP[pieceType];
+  }
+}
+
+export function getEnglishName(pieceType) {
+  return ENGLISH_NAMES[pieceType];
+}

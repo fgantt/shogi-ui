@@ -14,6 +14,8 @@ const SettingsPanel = ({
   currentBoardBackground,
   showAttackedPieces,
   onShowAttackedPiecesChange,
+  showPieceTooltips,
+  onShowPieceTooltipsChange,
 }) => {
   const getFileName = (path) => {
     const parts = path.split('/');
@@ -128,6 +130,20 @@ const SettingsPanel = ({
                 type="checkbox"
                 checked={showAttackedPieces}
                 onChange={(e) => onShowAttackedPiecesChange(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Show Piece Tooltips</h3>
+          <div className="setting-group">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={showPieceTooltips}
+                onChange={(e) => onShowPieceTooltipsChange(e.target.checked)}
               />
               <span className="slider round"></span>
             </label>
