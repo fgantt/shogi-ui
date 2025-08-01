@@ -1,9 +1,9 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const GameControls = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty }) => {
+const GameControls = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking }) => {
   return (
-    <div className="game-controls">
+    <div className={`game-controls ${isThinking ? 'ai-thinking-overlay' : ''}`}>
       <div className="game-controls-left">
         <button onClick={onNewGame}>
           <span role="img" aria-label="New Game">🔄</span> New Game

@@ -26,6 +26,7 @@ function App() {
   const [showAttackedPieces, setShowAttackedPieces] = useState(true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
   const [checkmateWinner, setCheckmateWinner] = useState(null);
+  const [isThinking, setIsThinking] = useState(false);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -60,6 +61,36 @@ function App() {
   useEffect(() => {
     updateAttackedSquares();
   }, [gameState.board]);
+
+  useEffect(() => {
+    if (gameState.currentPlayer === PLAYER_2) {
+      setIsThinking(true);
+      const performAiMove = async () => {
+        const aiMove = await getAiMove(gameState, aiDifficulty);
+        setGameState(currentGameState => {
+          let nextState;
+          if (aiMove) {
+            setLastMove({ from: aiMove.from, to: aiMove.to });
+            if (aiMove.from === 'drop') {
+              nextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
+            } else if (Array.isArray(aiMove.from)) {
+              nextState = movePiece(currentGameState, aiMove.from, aiMove.to);
+            } else {
+              nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
+            }
+          } else {
+            nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
+          }
+          setIsThinking(false); // Stop thinking *after* new state is determined
+          return nextState;
+        });
+      };
+
+      const timerId = setTimeout(performAiMove, 2000);
+
+      return () => clearTimeout(timerId);
+    }
+  }, [gameState.currentPlayer, aiDifficulty]);
 
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
@@ -98,30 +129,10 @@ function App() {
       setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
       return; // Stop game if checkmate
     }
-
-    // AI makes a move after player
-    setTimeout(() => {
-      const aiMove = getAiMove(newGameState, aiDifficulty);
-      let finalAiGameState = newGameState;
-      if (aiMove) {
-        if (aiMove.from === 'drop') {
-          finalAiGameState = dropPiece(newGameState, aiMove.type, aiMove.to);
-        } else {
-          finalAiGameState = movePiece(newGameState, aiMove.from, aiMove.to);
-        }
-        setLastMove({ from: aiMove.from, to: aiMove.to });
-      }
-      // Ensure currentPlayer is always switched back to PLAYER_1 after AI's turn
-      setGameState({ ...finalAiGameState, currentPlayer: PLAYER_1 });
-
-      // Check for checkmate after AI's move
-      if (isCheckmate(finalAiGameState)) {
-        setCheckmateWinner(finalAiGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-      }
-    }, 500); // Delay AI move for better UX
   };
 
   const handleSquareClick = (row, col) => {
+    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
     const pieceAtClick = gameState.board[row][col];
 
     // Deselect if the already selected piece is clicked again
@@ -168,6 +179,7 @@ function App() {
   };
 
   const handleDragStart = (row, col) => {
+    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
     const pieceAtDragStart = gameState.board[row][col];
     if (pieceAtDragStart && pieceAtDragStart.player === gameState.currentPlayer) {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
@@ -183,6 +195,7 @@ function App() {
   };
 
   const handleDrop = (row, col) => {
+    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
     if (selectedCapturedPiece) {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
       handlePlayerMove(newGameState, 'drop', [row, col]);
@@ -202,6 +215,7 @@ function App() {
   };
 
   const handleCapturedPieceClick = (pieceType) => {
+    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is clicked again, deselect it
       setSelectedCapturedPiece(null);
@@ -215,7 +229,7 @@ function App() {
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
-    if (isThinking) return;
+    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is dragged again, deselect it
       setSelectedCapturedPiece(null);
@@ -289,6 +303,7 @@ function App() {
         pieceLabelType={pieceLabelType}
         onOpenSettings={handleOpenSettings}
         aiDifficulty={aiDifficulty}
+        isThinking={isThinking}
       />
       <div className="game-container">
         <CapturedPieces
@@ -298,6 +313,7 @@ function App() {
           onPieceDragStart={handleCapturedPieceDragStart}
           pieceLabelType={pieceLabelType}
           selectedCapturedPiece={selectedCapturedPiece}
+          isThinking={isThinking}
         />
         <Board
           board={gameState.board}
@@ -314,6 +330,7 @@ function App() {
           attackedSquares={attackedSquares}
           showAttackedPieces={showAttackedPieces}
           showPieceTooltips={showPieceTooltips}
+          isThinking={isThinking}
         />
         <CapturedPieces
           pieces={gameState.capturedPieces[PLAYER_1]}

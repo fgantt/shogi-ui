@@ -565,7 +565,7 @@ export function isCheckmate(gameState) {
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
                     // Simulate the move
-                    const tempState = movePiece({ ...gameState, promotionPending: null }, [r, c], move);
+                    const tempState = completeMove(gameState, [r, c], move, false); // Assume no promotion for checkmate simulation
                     if (!isKingInCheck(tempState.board, currentPlayer)) {
                         return false; // Found a move to escape check
                     }

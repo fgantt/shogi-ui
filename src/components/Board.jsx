@@ -2,7 +2,7 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips }) => {
+const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking }) => {
   console.log("Board received legalMoves:", legalMoves);
   console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
@@ -20,14 +20,21 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
   const isLastMoveSquare = (row, col) => {
     if (!lastMove) return false;
     const { from, to } = lastMove;
-    return (from[0] === row && from[1] === col) || (to[0] === row && to[1] === col);
+
+    // Check if 'to' is a valid coordinate
+    const isToSquare = Array.isArray(to) && to.length === 2 && to[0] === row && to[1] === col;
+
+    // Check if 'from' is a valid coordinate (and not a drop)
+    const isFromSquare = Array.isArray(from) && from.length === 2 && from[0] === row && from[1] === col;
+
+    return isFromSquare || isToSquare;
   };
 
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const rowNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   return (
-    <div className="shogi-board-container">
+    <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''}`}>
       <div className="column-numbers">
         {columnNumbers.map((num, index) => (
           <div key={index} className="column-number-cell">

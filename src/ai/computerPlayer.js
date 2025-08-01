@@ -83,9 +83,11 @@ function evaluateBoard(gameState) {
  * @param {number} beta The beta value for alpha-beta pruning.
  * @returns {{score: number, move: object}} The best score and corresponding move.
  */
-function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
+async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
+  console.log(`minimax: depth ${depth}, maxDepth ${maxDepth}, maximizingPlayer ${maximizingPlayer}, alpha ${alpha}, beta ${beta}`);
   if (depth === maxDepth || gameState.isCheckmate) {
     const score = evaluateBoard(gameState);
+    console.log(`minimax: Terminal node reached. Score: ${score}`);
     return { score, move: null }; // Return null for move at terminal nodes
   }
 
@@ -132,7 +134,7 @@ function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity
       newGameState = movePiece(gameState, move.from, move.to);
     }
 
-    const { score } = minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta);
+    const { score } = await minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta);
 
     if (maximizingPlayer) {
       if (score > bestScore) {
@@ -154,11 +156,12 @@ function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity
       }
     }
   }
-
+  console.log(`minimax: Returning bestScore ${bestScore} for depth ${depth}`);
   return { score: bestScore, move: bestMove };
 }
 
-export function getAiMove(gameState, difficulty) {
+export async function getAiMove(gameState, difficulty) {
+  console.log(`getAiMove: Starting AI move calculation for difficulty ${difficulty}`);
   const { currentPlayer } = gameState;
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
 
@@ -198,6 +201,7 @@ export function getAiMove(gameState, difficulty) {
   });
 
   if (possibleMoves.length === 0) {
+    console.log('getAiMove: No legal moves available.');
     return null; // No legal moves available
   }
 
@@ -205,6 +209,7 @@ export function getAiMove(gameState, difficulty) {
     case 'easy':
       // Easy AI logic: random move
       const randomIndex = Math.floor(Math.random() * possibleMoves.length);
+      console.log(`getAiMove: Easy mode returning random move: ${JSON.stringify(possibleMoves[randomIndex])}`);
       return possibleMoves[randomIndex];
     case 'medium':
       bestScore = -Infinity;
@@ -218,13 +223,14 @@ export function getAiMove(gameState, difficulty) {
           newGameState = movePiece(gameState, move.from, move.to);
         }
 
-        const { score } = minimax(newGameState, 0, 2, !maximizingPlayer); // Shallow search depth of 2
+        const { score } = await minimax(newGameState, 0, 2, !maximizingPlayer); // Shallow search depth of 2
 
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
       }
+      console.log(`getAiMove: Medium mode returning best move: ${JSON.stringify(bestMove)} with score ${bestScore}`);
       return bestMove;
     case 'hard':
       bestScore = -Infinity;
@@ -239,15 +245,17 @@ export function getAiMove(gameState, difficulty) {
           newGameState = movePiece(gameState, move.from, move.to);
         }
 
-        const { score } = await minimax(newGameState, 0, 4, !maximizingPlayer); // Deeper search depth of 4
+        const { score } = await minimax(newGameState, 0, 2, !maximizingPlayer); // Deeper search depth of 2 (reduced for performance)
 
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
       }
+      console.log(`getAiMove: Hard mode returning best move: ${JSON.stringify(bestMove)} with score ${bestScore}`);
       return bestMove;
     default:
+      console.log('getAiMove: Unknown difficulty, returning null.');
       return null;
   }
 }

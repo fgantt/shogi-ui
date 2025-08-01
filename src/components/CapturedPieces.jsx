@@ -2,9 +2,9 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece }) => {
+const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece, isThinking }) => {
   return (
-    <div className={`captured-pieces ${player} ${isThinking ? 'thinking' : ''}`}>
+    <div className={`captured-pieces ${player} ${isThinking ? 'ai-thinking-overlay' : ''}`}>
       <h3>{player === 'player1' ? 'Player 1' : 'Player 2'} Captured</h3>
       <div className="pieces-list">
         {Object.entries(pieces.reduce((acc, piece) => {
