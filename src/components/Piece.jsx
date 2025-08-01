@@ -17,7 +17,7 @@ const Piece = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSe
     >
       <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
       {count > 1 && <div className="badge-counter">{count}</div>}
-      {isAttacked && <div className="badge-attacked">!</div>}
+      {isAttacked && <div className={`badge-attacked badge-attacked-${player}`}>!</div>}
       {showTooltips && showTooltip && (
         <div className="piece-tooltip">
           {getOppositeLabel(type, pieceLabelType)} - {getEnglishName(type)}
