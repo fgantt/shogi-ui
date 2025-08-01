@@ -308,7 +308,7 @@ export function completeMove(gameState, from, to, promote) {
         capturedValue = 'check';
     }
 
-    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }];
+    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }), promotionDeclined: !promote && gameState.promotionPending }];
 
     const updatedGameState = {
         ...gameState,

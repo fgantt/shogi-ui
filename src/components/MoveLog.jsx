@@ -52,7 +52,7 @@ const formatMove = (move, allMoves) => {
 
     if (move.promote) {
       notation += '+';
-    } else if (move.unpromote) { // Assuming unpromote flag exists if needed
+    } else if (move.promotionDeclined) {
       notation += '=';
     }
   }
