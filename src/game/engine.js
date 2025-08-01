@@ -373,7 +373,8 @@ export function dropPiece(gameState, pieceType, to) {
       return gameState;
   }
   if (pieceType === KNIGHT && toRow + (player_mult * 2) < 0) {
-      return gameState;
+      const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+      return { ...gameState, currentPlayer: nextPlayer };
   }
 
 
@@ -386,7 +387,8 @@ export function dropPiece(gameState, pieceType, to) {
 
   // Check if this simulated drop puts the *current player's* king in check
   if (isKingInCheck(tempBoard, currentPlayer)) {
-    return gameState; // Illegal drop: current player dropped into check
+    const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+    return { ...gameState, currentPlayer: nextPlayer }; // Illegal drop: current player dropped into check
   }
 
   // If the drop is legal, proceed with updating the actual game state
