@@ -386,26 +386,43 @@ export function dropPiece(gameState, pieceType, to) {
 
   const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
+  // Simulate the drop on a temporary board to check for self-check
+  const tempBoard = board.map(row => [...row]);
+  tempBoard[toRow][toCol] = { type: pieceType, player: currentPlayer };
+
+  // Check if this simulated drop puts the *current player's* king in check
+  if (isKingInCheck(tempBoard, currentPlayer)) {
+    return gameState; // Illegal drop: current player dropped into check
+  }
+
+  // If the drop is legal, proceed with updating the actual game state
+  const newBoard = tempBoard; // Use the board with the piece dropped
+
+  const newCapturedPieces = { ...capturedPieces };
+  newCapturedPieces[currentPlayer] = [...capturedPieces[currentPlayer]];
+  newCapturedPieces[currentPlayer].splice(capturedPieceIndex, 1);
+
+  const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  const isCheckAfterDrop = isKingInCheck(newBoard, nextPlayer); // Check if opponent is in check
+
+  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: isCheckAfterDrop ? 'check' : null, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+
   const finalGameState = {
     ...gameState,
     board: newBoard,
     capturedPieces: newCapturedPieces,
-    currentPlayer: gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+    currentPlayer: nextPlayer, // Switch player here
     moveHistory: newMoveHistory,
     pastStates: [...pastStates, gameState], // Save current state before drop
-    isCheck: isKingInCheck(newBoard, gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1),
+    isCheck: isCheckAfterDrop, // Set isCheck for the next player
     kingPositions: {
       ...gameState.kingPositions,
-      [currentPlayer]: (pieceType === KING || pieceType === PROMOTED_ROOK || pieceType === PROMOTED_BISHOP) ? [toRow, toCol] : gameState.kingPositions[currentPlayer] // Update king position if king was dropped
+      [currentPlayer]: (pieceType === KING || pieceType === PROMOTED_ROOK || pieceType === PROMOTED_BISHOP) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
     }
   };
 
   console.log("dropPiece - new gameState.isCheck:", finalGameState.isCheck);
   console.log("dropPiece - new gameState.kingPositions:", finalGameState.kingPositions);
-
-  if (isKingInCheck(finalGameState.board, currentPlayer)) {
-    return gameState; // Illegal drop: current player dropped into check
-  }
 
   return finalGameState;
 }
