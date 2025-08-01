@@ -8,10 +8,12 @@ This is a browser-based implementation of Shogi, also known as Japanese Chess. I
 - [Piece Kanji Legend](#piece-kanji-legend)
 - [Features](#features)
 - [Getting Started](#getting-started)
-- [Screenshot](#screenshot)
+
 
 ## About Shogi
 Shogi shares similarities with Western chess but has unique and fascinating differences, most notably the "drop" rule, where captured pieces can be brought back into play. This significantly changes the game's dynamics, making it a deeply strategic and complex game.
+
+![Shogi Board Screenshot](board.png)
 
 ## Rules of Shogi
 
@@ -128,6 +130,3 @@ To run the game locally, follow these steps:
 
     The game should now be accessible in your browser at `http://localhost:5173` (or another port if 5173 is in use).
 
-## Screenshot
-
-![Shogi Board Screenshot](board.png)
