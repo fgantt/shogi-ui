@@ -69,7 +69,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
         y="45"
         textAnchor="middle"
         dominantBaseline="middle"
-        fontSize="36"
+        fontSize={label.length === 2 ? "24" : "36"}
         fill={textColor}
         fontFamily={
           pieceLabelType === "kanji"
