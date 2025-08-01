@@ -23,6 +23,8 @@ export const PROMOTED_PAWN = '+P';
 export const PLAYER_1 = 'player1';
 export const PLAYER_2 = 'player2';
 
+const formatShogiCoords = (r, c) => `[${r + 1}, ${9 - c}]`;
+
 /**
  * Creates the initial game state.
  * @returns {object} The initial game state.
@@ -322,8 +324,13 @@ export function completeMove(gameState, from, to, promote) {
           [piece.player]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[piece.player] // Update king position if king moved
         }
     };
-    console.log("completeMove - new gameState.isCheck:", updatedGameState.isCheck);
-    console.log("completeMove - new gameState.kingPositions:", updatedGameState.kingPositions);
+
+
+  console.log("completeMove - new gameState.isCheck:", updatedGameState.isCheck);
+  console.log("completeMove - new gameState.kingPositions:", {
+    [PLAYER_1]: formatShogiCoords(updatedGameState.kingPositions[PLAYER_1][0], updatedGameState.kingPositions[PLAYER_1][1]),
+    [PLAYER_2]: formatShogiCoords(updatedGameState.kingPositions[PLAYER_2][0], updatedGameState.kingPositions[PLAYER_2][1]),
+  });
     return updatedGameState;
 }
 
@@ -371,20 +378,7 @@ export function dropPiece(gameState, pieceType, to) {
 
 
   // 4. Update the board and captured pieces
-  const newBoard = board.map(row => [...row]);
-  newBoard[toRow][toCol] = { type: pieceType, player: currentPlayer };
-
-  const newCapturedPieces = { ...capturedPieces };
-  newCapturedPieces[currentPlayer] = [...capturedPieces[currentPlayer]];
-  newCapturedPieces[currentPlayer].splice(capturedPieceIndex, 1);
-
-  const isCheckAfterDrop = isKingInCheck(newBoard, gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-  let capturedValue = null;
-  if (isCheckAfterDrop) {
-    capturedValue = 'check';
-  }
-
-  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+  
 
   // Simulate the drop on a temporary board to check for self-check
   const tempBoard = board.map(row => [...row]);
@@ -422,7 +416,10 @@ export function dropPiece(gameState, pieceType, to) {
   };
 
   console.log("dropPiece - new gameState.isCheck:", finalGameState.isCheck);
-  console.log("dropPiece - new gameState.kingPositions:", finalGameState.kingPositions);
+  console.log("dropPiece - new gameState.kingPositions:", {
+    [PLAYER_1]: formatShogiCoords(finalGameState.kingPositions[PLAYER_1][0], finalGameState.kingPositions[PLAYER_1][1]),
+    [PLAYER_2]: formatShogiCoords(finalGameState.kingPositions[PLAYER_2][0], finalGameState.kingPositions[PLAYER_2][1]),
+  });
 
   return finalGameState;
 }
@@ -444,7 +441,7 @@ export function isKingInCheck(board, player) {
       const piece = board[r][c];
       if (piece && piece.type === KING && piece.player === player) {
         kingPosition = [r, c];
-        console.log(`King position for ${player}: [${kingPosition[0]}, ${kingPosition[1]}]`);
+        console.log(`King position for ${player}: ${formatShogiCoords(kingPosition[0], kingPosition[1])}`);
         break;
       }
     }
@@ -464,7 +461,7 @@ export function isKingInCheck(board, player) {
         const moves = getLegalMoves(piece, r, c, board);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            console.log(`King of ${player} is in check by ${piece.type} at [${r}, ${c}]`);
+            console.log(`King of ${player} is in check by ${piece.type} at ${formatShogiCoords(r, c)}`);
             return true; // King is in check
           }
         }

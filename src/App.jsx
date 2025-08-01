@@ -94,16 +94,17 @@ function App() {
     // AI makes a move after player
     setTimeout(() => {
       const aiMove = getAiMove(newGameState, aiDifficulty);
+      let finalAiGameState = newGameState;
       if (aiMove) {
-        let finalAiGameState;
         if (aiMove.from === 'drop') {
           finalAiGameState = dropPiece(newGameState, aiMove.type, aiMove.to);
         } else {
           finalAiGameState = movePiece(newGameState, aiMove.from, aiMove.to);
         }
-        setGameState(finalAiGameState);
         setLastMove({ from: aiMove.from, to: aiMove.to });
       }
+      // Ensure currentPlayer is always switched back to PLAYER_1 after AI's turn
+      setGameState({ ...finalAiGameState, currentPlayer: PLAYER_1 });
     }, 500); // Delay AI move for better UX
   };
 
@@ -122,7 +123,9 @@ function App() {
       // A captured piece is selected, attempt to drop it
       if (legalDropSquares.some(square => square[0] === row && square[1] === col)) {
         const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
-        handlePlayerMove(newGameState, 'drop', [row, col]);
+        if (newGameState !== gameState) { // Only proceed if the drop was successful
+          handlePlayerMove(newGameState, 'drop', [row, col]);
+        }
       }
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
