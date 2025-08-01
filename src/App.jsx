@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, PLAYER_1, PLAYER_2, getAttackedSquares } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -7,6 +7,7 @@ import PromotionModal from './components/PromotionModal';
 import GameControls from './components/GameControls';
 import SettingsPanel from './components/SettingsPanel';
 import MoveLog from './components/MoveLog';
+import CheckmateModal from './components/CheckmateModal';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
@@ -24,6 +25,7 @@ function App() {
   const [attackedSquares, setAttackedSquares] = useState({ player1: new Set(), player2: new Set() });
   const [showAttackedPieces, setShowAttackedPieces] = useState(true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
+  const [checkmateWinner, setCheckmateWinner] = useState(null);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -91,6 +93,12 @@ function App() {
     setLegalDropSquares([]); // Clear legal drop squares after a move
     setLastMove({ from: from, to: to });
 
+    // Check for checkmate after player's move
+    if (isCheckmate(newGameState)) {
+      setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+      return; // Stop game if checkmate
+    }
+
     // AI makes a move after player
     setTimeout(() => {
       const aiMove = getAiMove(newGameState, aiDifficulty);
@@ -105,6 +113,11 @@ function App() {
       }
       // Ensure currentPlayer is always switched back to PLAYER_1 after AI's turn
       setGameState({ ...finalAiGameState, currentPlayer: PLAYER_1 });
+
+      // Check for checkmate after AI's move
+      if (isCheckmate(finalAiGameState)) {
+        setCheckmateWinner(finalAiGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+      }
     }, 500); // Delay AI move for better UX
   };
 
@@ -228,6 +241,7 @@ function App() {
     setLastMove(null);
     setRandomWallpaper();
     setRandomBoardBackground();
+    setCheckmateWinner(null);
   };
 
   const handleUndoMove = () => {
@@ -252,8 +266,6 @@ function App() {
   const handleCloseSettings = () => {
     setIsSettingsOpen(false);
   };
-
-  
 
   const handleSelectWallpaper = (wallpaper) => {
     document.body.style.backgroundImage = `url('${wallpaper}')`;
@@ -335,6 +347,14 @@ function App() {
           onShowAttackedPiecesChange={setShowAttackedPieces}
           showPieceTooltips={showPieceTooltips}
           onShowPieceTooltipsChange={setShowPieceTooltips}
+        />
+      )}
+
+      {checkmateWinner && (
+        <CheckmateModal
+          winner={checkmateWinner}
+          onDismiss={() => setCheckmateWinner(null)}
+          onNewGame={handleNewGame}
         />
       )}
     </div>
