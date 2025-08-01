@@ -124,6 +124,7 @@ function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity
   let bestMove = null;
 
   for (const move of possibleMoves) {
+    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
     let newGameState;
     if (move.from === 'drop') {
       newGameState = dropPiece(gameState, move.type, move.to);
@@ -230,6 +231,7 @@ export function getAiMove(gameState, difficulty) {
       bestMove = null;
 
       for (const move of possibleMoves) {
+        await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
         let newGameState;
         if (move.from === 'drop') {
           newGameState = dropPiece(gameState, move.type, move.to);
@@ -237,7 +239,7 @@ export function getAiMove(gameState, difficulty) {
           newGameState = movePiece(gameState, move.from, move.to);
         }
 
-        const { score } = minimax(newGameState, 0, 4, !maximizingPlayer); // Deeper search depth of 4
+        const { score } = await minimax(newGameState, 0, 4, !maximizingPlayer); // Deeper search depth of 4
 
         if (score > bestScore) {
           bestScore = score;

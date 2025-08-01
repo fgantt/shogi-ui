@@ -215,6 +215,7 @@ function App() {
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
+    if (isThinking) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is dragged again, deselect it
       setSelectedCapturedPiece(null);
@@ -321,6 +322,7 @@ function App() {
           onPieceDragStart={handleCapturedPieceDragStart}
           pieceLabelType={pieceLabelType}
           selectedCapturedPiece={selectedCapturedPiece}
+          isThinking={isThinking}
         />
       </div>
 

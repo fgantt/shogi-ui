@@ -4,7 +4,7 @@ import '../styles/shogi.css';
 
 const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece }) => {
   return (
-    <div className={`captured-pieces ${player}`}>
+    <div className={`captured-pieces ${player} ${isThinking ? 'thinking' : ''}`}>
       <h3>{player === 'player1' ? 'Player 1' : 'Player 2'} Captured</h3>
       <div className="pieces-list">
         {Object.entries(pieces.reduce((acc, piece) => {
@@ -15,8 +15,8 @@ const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceL
             key={type}
             type={type}
             player={player}
-            onDragStart={() => onPieceDragStart(type)}
-            onClick={() => onPieceClick(type)}
+            onDragStart={isThinking ? null : () => onPieceDragStart(type)}
+            onClick={isThinking ? null : () => onPieceClick(type)}
             pieceLabelType={pieceLabelType}
             count={count}
             isSelected={selectedCapturedPiece && selectedCapturedPiece.type === type}
