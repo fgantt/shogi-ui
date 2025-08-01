@@ -18,6 +18,29 @@ const PIECE_VALUES = {
   [PROMOTED_ROOK]: 12,
 };
 
+// Helper to score moves for move ordering
+function scoreMove(move, gameState) {
+  let score = 0;
+  const { board, currentPlayer } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+
+  if (move.isCapture) {
+    score += 10; // High priority for captures
+    // Add bonus for capturing higher value pieces
+    const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
+    if (capturedPieceType) {
+      score += PIECE_VALUES[capturedPieceType];
+    }
+  }
+  if (move.isCheck) {
+    score += 8; // Priority for checks
+  }
+  if (move.isPromotion) {
+    score += 6; // Priority for promotions
+  }
+  return score;
+}
+
 /**
  * Evaluates the board state from the perspective of the current player.
  * A positive score favors the current player, a negative score favors the opponent.
@@ -101,7 +124,11 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       if (piece && piece.player === currentPlayer) {
         const moves = getLegalMoves(piece, r, c, board);
         moves.forEach(to => {
-          possibleMoves.push({ from: [r, c], to, type: 'move' });
+          const simulatedGameState = movePiece(gameState, [r, c], to);
+          const isCapture = gameState.board[to[0]][to[1]] !== null;
+          const isPromotion = simulatedGameState.promotionPending !== null;
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+          possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isPromotion, isCheck });
         });
       }
     }
@@ -114,13 +141,17 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
         if (!board[r][c]) { // Only drop on empty squares
           // Simulate drop to check legality (e.g., Nifu, no legal moves)
           const tempState = dropPiece(gameState, capturedPiece.type, [r, c]);
+          const isCheck = isKingInCheck(tempState.board, tempState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
           if (tempState !== gameState) { // If drop was legal
-            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type.startsWith('+') ? capturedPiece.type.substring(1) : capturedPiece.type });
+            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type.startsWith('+') ? capturedPiece.type.substring(1) : capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
           }
         }
       }
     }
   });
+
+  // Sort moves for better alpha-beta pruning performance
+  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   let bestScore = maximizingPlayer ? -Infinity : Infinity;
   let bestMove = null;
@@ -178,8 +209,11 @@ export async function getAiMove(gameState, difficulty) {
         const moves = getLegalMoves(piece, r, c, gameState.board);
         moves.forEach(to => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
+          const isCapture = gameState.board[to[0]][to[1]] !== null;
+          const isPromotion = simulatedGameState.promotionPending !== null;
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
           if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
-            possibleMoves.push({ from: [r, c], to, type: 'move' });
+            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isPromotion, isCheck });
           }
         });
       }
@@ -192,13 +226,17 @@ export async function getAiMove(gameState, difficulty) {
       for (let c = 0; c < 9; c++) {
         if (!gameState.board[r][c]) { // Only drop on empty squares
           const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
           if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the drop doesn't put own king in check
-            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type });
+            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
           }
         }
       }
     }
   });
+
+  // Sort moves for better alpha-beta pruning performance
+  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   if (possibleMoves.length === 0) {
     console.log('getAiMove: No legal moves available.');
