@@ -25,7 +25,10 @@ const getPieceInitial = (pieceType) => {
 };
 
 const formatMove = (move, allMoves) => {
-  const pieceInitial = getPieceInitial(move.piece);
+  let pieceInitial = getPieceInitial(move.piece);
+  if (move.promote && pieceInitial.startsWith('+')) {
+    pieceInitial = pieceInitial.substring(1);
+  }
   const toFile = 9 - move.to[1]; // Convert 0-indexed col to 1-9 file (right to left)
   const toRank = move.to[0] + 1; // Convert 0-indexed row to 1-9 rank (top to bottom)
 
