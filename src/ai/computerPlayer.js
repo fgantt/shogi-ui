@@ -35,9 +35,6 @@ function scoreMove(move, gameState) {
   if (move.isCheck) {
     score += 8; // Priority for checks
   }
-  if (move.isPromotion) {
-    score += 6; // Priority for promotions
-  }
   return score;
 }
 
@@ -53,34 +50,42 @@ function evaluateBoard(gameState) {
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
   // Material advantage
+  let materialScore = 0;
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       const piece = board[r][c];
       if (piece) {
         if (piece.player === currentPlayer) {
-          score += PIECE_VALUES[piece.type];
+          materialScore += PIECE_VALUES[piece.type];
         } else {
-          score -= PIECE_VALUES[piece.type];
+          materialScore -= PIECE_VALUES[piece.type];
         }
       }
     }
   }
+  score += materialScore;
 
   // Captured pieces advantage
+  let capturedScore = 0;
   capturedPieces[currentPlayer].forEach(piece => {
-    score += PIECE_VALUES[piece.type];
+    const type = piece.type.startsWith('+') ? piece.type.substring(1) : piece.type;
+    capturedScore += PIECE_VALUES[type];
   });
   capturedPieces[opponent].forEach(piece => {
-    score -= PIECE_VALUES[piece.type];
+    const type = piece.type.startsWith('+') ? piece.type.substring(1) : piece.type;
+    capturedScore -= PIECE_VALUES[type];
   });
+  score += capturedScore;
 
   // Check/Checkmate bonus/penalty
+  let checkScore = 0;
   if (isKingInCheck(board, opponent)) {
-    score += 50; // Bonus for checking opponent
+    checkScore += 50; // Bonus for checking opponent
   }
   if (isKingInCheck(board, currentPlayer)) {
-    score -= 50; // Penalty for being in check
+    checkScore -= 50; // Penalty for being in check
   }
+  score += checkScore;
 
   // Checkmate bonus/penalty
   if (isCheckmate(gameState)) {
@@ -97,6 +102,96 @@ function evaluateBoard(gameState) {
 }
 
 /**
+ * Performs a quiescence search to evaluate noisy positions.
+ * @param {object} gameState The current game state.
+ * @param {number} alpha The alpha value for alpha-beta pruning.
+ * @param {number} beta The beta value for alpha-beta pruning.
+ * @returns {number} The evaluation score after quiescence search.
+ */
+const MAX_QUIESCENCE_DEPTH = 1; // Limit quiescence search depth to prevent infinite loops
+
+async function quiescenceSearch(gameState, alpha, beta, depth) {
+  let standPat = evaluateBoard(gameState);
+  console.log(`quiescenceSearch: Entering (alpha: ${alpha}, beta: ${beta}, depth: ${depth})`);
+  if (depth >= MAX_QUIESCENCE_DEPTH) {
+    const score = evaluateBoard(gameState);
+    return score;
+  }
+  if (standPat >= beta) {
+    return beta;
+  }
+  if (standPat > alpha) {
+    alpha = standPat;
+  }
+
+  const { board, currentPlayer, capturedPieces } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  const possibleNoisyMoves = [];
+
+  // Collect noisy moves (captures, checks, promotions)
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.player === currentPlayer) {
+        const moves = getLegalMoves(piece, r, c, board);
+        moves.forEach(to => {
+          const simulatedGameState = movePiece(gameState, [r, c], to);
+          const targetPieceAfterMove = simulatedGameState.board[to[0]][to[1]];
+          const isCapture = targetPieceAfterMove && targetPieceAfterMove.player !== currentPlayer;
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+
+          if (isCapture || isCheck) {
+            possibleNoisyMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
+          }
+        });
+      }
+    }
+  }
+
+  // Collect noisy drops (checks)
+  capturedPieces[currentPlayer].forEach(capturedPiece => {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (!board[r][c]) { // Only drop on empty squares
+          const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          if (isCheck) {
+            possibleNoisyMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type, isCapture: false, isCheck });
+          }
+        }
+      }
+    }
+  });
+
+  // Sort noisy moves for better pruning
+  possibleNoisyMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
+
+  if (possibleNoisyMoves.length === 0) {
+    return alpha;
+  }
+
+  for (const move of possibleNoisyMoves) {
+    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control
+    let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
+    if (move.from === 'drop') {
+      newGameState = dropPiece(newGameState, move.type, move.to);
+    } else {
+      newGameState = movePiece(newGameState, move.from, move.to);
+    }
+
+    const score = -(await quiescenceSearch(newGameState, -beta, -alpha, depth + 1)); // Negamax: negate score from recursive call
+
+    if (score >= beta) {
+      return beta;
+    }
+    if (score > alpha) {
+      alpha = score;
+    }
+  }
+  return alpha;
+}
+
+/**
  * Minimax algorithm to find the best move.
  * @param {object} gameState The current game state.
  * @param {number} depth The current search depth.
@@ -107,14 +202,13 @@ function evaluateBoard(gameState) {
  * @returns {{score: number, move: object}} The best score and corresponding move.
  */
 async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
-  console.log(`minimax: depth ${depth}, maxDepth ${maxDepth}, maximizingPlayer ${maximizingPlayer}, alpha ${alpha}, beta ${beta}`);
   if (depth === maxDepth || gameState.isCheckmate) {
-    const score = evaluateBoard(gameState);
-    console.log(`minimax: Terminal node reached. Score: ${score}`);
+    const score = await quiescenceSearch(gameState, alpha, beta, 0); // Call quiescence search at max depth
     return { score, move: null }; // Return null for move at terminal nodes
   }
 
   const { board, currentPlayer, capturedPieces } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
   const possibleMoves = [];
 
   // Collect all possible moves for pieces on the board
@@ -125,10 +219,11 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
         const moves = getLegalMoves(piece, r, c, board);
         moves.forEach(to => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          const isCapture = gameState.board[to[0]][to[1]] !== null;
-          const isPromotion = simulatedGameState.promotionPending !== null;
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-          possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isPromotion, isCheck });
+          const isCapture = gameState.board[to[0]][to[1]] && gameState.board[to[0]][to[1]].player !== currentPlayer;
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          if (isCapture || isCheck) {
+            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
+          }
         });
       }
     }
@@ -141,9 +236,9 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
         if (!board[r][c]) { // Only drop on empty squares
           // Simulate drop to check legality (e.g., Nifu, no legal moves)
           const tempState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          const isCheck = isKingInCheck(tempState.board, tempState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-          if (tempState !== gameState) { // If drop was legal
-            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type.startsWith('+') ? capturedPiece.type.substring(1) : capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
+          const isCheck = isKingInCheck(tempState.board, tempState.currentPlayer);
+          if (tempState !== gameState && isCheck) { // If drop was legal and results in a check
+            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type.startsWith('+') ? capturedPiece.type.substring(1) : capturedPiece.type, isCapture: false, isCheck });
           }
         }
       }
@@ -158,11 +253,11 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
 
   for (const move of possibleMoves) {
     await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
-    let newGameState;
+    let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
     if (move.from === 'drop') {
-      newGameState = dropPiece(gameState, move.type, move.to);
+      newGameState = dropPiece(newGameState, move.type, move.to);
     } else {
-      newGameState = movePiece(gameState, move.from, move.to);
+      newGameState = movePiece(newGameState, move.from, move.to);
     }
 
     const { score } = await minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta);
@@ -187,14 +282,13 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       }
     }
   }
-  console.log(`minimax: Returning bestScore ${bestScore} for depth ${depth}`);
   return { score: bestScore, move: bestMove };
 }
 
 export async function getAiMove(gameState, difficulty) {
-  console.log(`getAiMove: Starting AI move calculation for difficulty ${difficulty}`);
   const { currentPlayer } = gameState;
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
   let bestMove = null;
   let bestScore = -Infinity;
@@ -209,11 +303,10 @@ export async function getAiMove(gameState, difficulty) {
         const moves = getLegalMoves(piece, r, c, gameState.board);
         moves.forEach(to => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          const isCapture = gameState.board[to[0]][to[1]] !== null;
-          const isPromotion = simulatedGameState.promotionPending !== null;
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+          const isCapture = gameState.board[to[0]][to[1]] && gameState.board[to[0]][to[1]].player !== currentPlayer;
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
           if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
-            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isPromotion, isCheck });
+            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
           }
         });
       }
@@ -226,7 +319,7 @@ export async function getAiMove(gameState, difficulty) {
       for (let c = 0; c < 9; c++) {
         if (!gameState.board[r][c]) { // Only drop on empty squares
           const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
           if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the drop doesn't put own king in check
             possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
           }
@@ -239,7 +332,6 @@ export async function getAiMove(gameState, difficulty) {
   possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   if (possibleMoves.length === 0) {
-    console.log('getAiMove: No legal moves available.');
     return null; // No legal moves available
   }
 
@@ -247,28 +339,26 @@ export async function getAiMove(gameState, difficulty) {
     case 'easy':
       // Easy AI logic: random move
       const randomIndex = Math.floor(Math.random() * possibleMoves.length);
-      console.log(`getAiMove: Easy mode returning random move: ${JSON.stringify(possibleMoves[randomIndex])}`);
       return possibleMoves[randomIndex];
     case 'medium':
       bestScore = -Infinity;
       bestMove = null;
 
       for (const move of possibleMoves) {
-        let newGameState;
+        let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
         if (move.from === 'drop') {
-          newGameState = dropPiece(gameState, move.type, move.to);
+          newGameState = dropPiece(newGameState, move.type, move.to);
         } else {
-          newGameState = movePiece(gameState, move.from, move.to);
+          newGameState = movePiece(newGameState, move.from, move.to);
         }
 
-        const { score } = await minimax(newGameState, 0, 2, !maximizingPlayer); // Shallow search depth of 2
+        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Shallow search depth of 1
 
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
       }
-      console.log(`getAiMove: Medium mode returning best move: ${JSON.stringify(bestMove)} with score ${bestScore}`);
       return bestMove;
     case 'hard':
       bestScore = -Infinity;
@@ -276,24 +366,22 @@ export async function getAiMove(gameState, difficulty) {
 
       for (const move of possibleMoves) {
         await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
-        let newGameState;
+        let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
         if (move.from === 'drop') {
-          newGameState = dropPiece(gameState, move.type, move.to);
+          newGameState = dropPiece(newGameState, move.type, move.to);
         } else {
-          newGameState = movePiece(gameState, move.from, move.to);
+          newGameState = movePiece(newGameState, move.from, move.to);
         }
 
-        const { score } = await minimax(newGameState, 0, 2, !maximizingPlayer); // Deeper search depth of 2 (reduced for performance)
+        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Deeper search depth of 1 (reduced for performance)
 
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
       }
-      console.log(`getAiMove: Hard mode returning best move: ${JSON.stringify(bestMove)} with score ${bestScore}`);
       return bestMove;
     default:
-      console.log('getAiMove: Unknown difficulty, returning null.');
       return null;
   }
 }

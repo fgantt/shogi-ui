@@ -18,7 +18,7 @@ function App() {
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
   const [legalDropSquares, setLegalDropSquares] = useState([]); // Array of [row, col] for drops
-  const [aiDifficulty, setAiDifficulty] = useState('easy'); // easy, medium, hard
+  const [aiDifficulty, setAiDifficulty] = useState('medium'); // easy, medium, hard
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
