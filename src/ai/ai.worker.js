@@ -373,6 +373,14 @@ async function quiescenceSearch(gameState, alpha, beta, depth) {
  */
 async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
   const hash = generateStateHash(gameState);
+
+  // Check for repetition in actual game history
+  for (const pastState of gameState.pastStates) {
+    if (generateStateHash(pastState) === hash) {
+      return { score: -100000, move: null }; // Strong repetition penalty
+    }
+  }
+
   if (transpositionTable.has(hash)) {
     const cached = transpositionTable.get(hash);
     if (cached.depth >= depth) {
@@ -550,7 +558,7 @@ async function getAiMove(gameState, difficulty) {
           newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
         }
 
-        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Shallow search depth of 1
+        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer, -Infinity, Infinity, new Set()); // Shallow search depth of 1
 
         if (score > bestScore) {
           bestScore = score;
@@ -571,7 +579,7 @@ async function getAiMove(gameState, difficulty) {
           newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
         }
 
-        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Deeper search depth of 1 (reduced for performance)
+        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer, -Infinity, Infinity, new Set()); // Deeper search depth of 1 (reduced for performance)
 
         if (score > bestScore) {
           bestScore = score;
