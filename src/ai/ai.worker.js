@@ -266,7 +266,108 @@ function evaluateBoard(gameState) {
     }
   }
 
-  // TODO: Add more sophisticated evaluation (e.g., piece mobility, king safety, pawn structure)
+  // King Safety Evaluation
+  let kingSafetyScore = 0;
+  let kingPos = null;
+
+  // Find the king's position
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === KING && piece.player === currentPlayer) {
+        kingPos = [r, c];
+        break;
+      }
+    }
+    if (kingPos) break;
+  }
+
+  if (kingPos) {
+    const [kingR, kingC] = kingPos;
+
+    // Define a safety zone around the king (e.g., 3x3 area)
+    const safetyZone = [];
+    for (let r = Math.max(0, kingR - 1); r <= Math.min(8, kingR + 1); r++) {
+      for (let c = Math.max(0, kingC - 1); c <= Math.min(8, kingC + 1); c++) {
+        safetyZone.push([r, c]);
+      }
+    }
+
+    // Count friendly defenders and enemy attackers in the safety zone
+    let friendlyDefenders = 0;
+    let enemyAttackers = 0;
+
+    for (const [r, c] of safetyZone) {
+      const piece = board[r][c];
+      if (piece) {
+        if (piece.player === currentPlayer) {
+          friendlyDefenders += PIECE_VALUES[piece.type] / 100; // Smaller bonus for defenders
+        } else {
+          enemyAttackers += PIECE_VALUES[piece.type] / 50; // Larger penalty for attackers
+        }
+      }
+    }
+
+    kingSafetyScore += friendlyDefenders - enemyAttackers;
+
+    // Penalize open files/ranks/diagonals leading to the king
+    // Check file
+    let fileOpen = true;
+    for (let r = 0; r < 9; r++) {
+      if (r !== kingR && board[r][kingC] && board[r][kingC].player === currentPlayer && board[r][kingC].type !== PAWN) {
+        fileOpen = false;
+        break;
+      }
+    }
+    if (fileOpen) {
+      kingSafetyScore -= 20; // Penalty for open file
+    }
+
+    // Check rank (less critical in Shogi, but still relevant)
+    let rankOpen = true;
+    for (let c = 0; c < 9; c++) {
+      if (c !== kingC && board[kingR][c] && board[kingR][c].player === currentPlayer && board[kingR][c].type !== PAWN) {
+        rankOpen = false;
+        break;
+      }
+    }
+    if (rankOpen) {
+      kingSafetyScore -= 10; // Penalty for open rank
+    }
+
+    // Check diagonals (simplified for now)
+    // Top-left to bottom-right diagonal
+    let diag1Open = true;
+    for (let i = -8; i <= 8; i++) {
+      const r = kingR + i;
+      const c = kingC + i;
+      if (r >= 0 && r < 9 && c >= 0 && c < 9 && r !== kingR && c !== kingC && board[r][c] && board[r][c].player === currentPlayer && board[r][c].type !== PAWN) {
+        diag1Open = false;
+        break;
+      }
+    }
+    if (diag1Open) {
+      kingSafetyScore -= 15; // Penalty for open diagonal
+    }
+
+    // Top-right to bottom-left diagonal
+    let diag2Open = true;
+    for (let i = -8; i <= 8; i++) {
+      const r = kingR + i;
+      const c = kingC - i;
+      if (r >= 0 && r < 9 && c >= 0 && c < 9 && r !== kingR && c !== kingC && board[r][c] && board[r][c].player === currentPlayer && board[r][c].type !== PAWN) {
+        diag2Open = false;
+        break;
+      }
+    }
+    if (diag2Open) {
+      kingSafetyScore -= 15; // Penalty for open diagonal
+    }
+  }
+
+  score += kingSafetyScore;
+
+  return score;
 
   return score;
 }
