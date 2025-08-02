@@ -280,7 +280,11 @@ function evaluateBoard(gameState) {
  */
 const MAX_QUIESCENCE_DEPTH = 3; // Limit quiescence search depth to prevent infinite loops
 
-async function quiescenceSearch(gameState, alpha, beta, depth) {
+async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLimit) {
+  if (Date.now() - startTime > timeLimit) {
+    console.log(`Quiescence search time limit exceeded at depth ${depth}`);
+    return null; // Indicate that the search was cut short
+  }
   let standPat = evaluateBoard(gameState);
   
   if (depth >= MAX_QUIESCENCE_DEPTH) {
@@ -341,6 +345,9 @@ async function quiescenceSearch(gameState, alpha, beta, depth) {
   }
 
   for (const move of possibleNoisyMoves) {
+    if (Date.now() - startTime > timeLimit) {
+      return 0; // Abort if time limit exceeded during move iteration
+    }
     await new Promise(resolve => setTimeout(resolve, 0)); // Yield control
     let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
     if (move.from === 'drop') {
@@ -349,7 +356,7 @@ async function quiescenceSearch(gameState, alpha, beta, depth) {
       newGameState = movePiece(newGameState, move.from, move.to);
     }
 
-    const score = -(await quiescenceSearch(newGameState, -beta, -alpha, depth + 1)); // Negamax: negate score from recursive call
+    const score = -(await quiescenceSearch(newGameState, -beta, -alpha, depth + 1, startTime, timeLimit)); // Negamax: negate score from recursive call
 
     if (score >= beta) {
       return beta;
@@ -371,7 +378,11 @@ async function quiescenceSearch(gameState, alpha, beta, depth) {
  * @param {number} beta The beta value for alpha-beta pruning.
  * @returns {{score: number, move: object}} The best score and corresponding move.
  */
-async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
+async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity, startTime, timeLimit, history = new Set()) {
+  if (Date.now() - startTime > timeLimit) {
+    console.log(`Minimax time limit exceeded at depth ${depth}`);
+    return { score: null, move: null }; // Indicate that the search was cut short
+  }
   const hash = generateStateHash(gameState);
 
   // Check for repetition in actual game history
@@ -379,6 +390,11 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
     if (generateStateHash(pastState) === hash) {
       return { score: -100000, move: null }; // Strong repetition penalty
     }
+  }
+
+  // Check for repetition within the current search branch
+  if (history.has(hash)) {
+    return { score: -50000, move: null }; // Penalty for immediate repetition in search
   }
 
   if (transpositionTable.has(hash)) {
@@ -389,7 +405,7 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
   }
 
   if (depth === maxDepth || gameState.isCheckmate) {
-    const score = await quiescenceSearch(gameState, alpha, beta, 0); // Call quiescence search at max depth
+    const score = await quiescenceSearch(gameState, alpha, beta, 0, startTime, timeLimit); // Call quiescence search at max depth
     transpositionTable.set(hash, { depth, score });
     return { score, move: null }; // Return null for move at terminal nodes
   }
@@ -439,6 +455,9 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
   let bestMove = null;
 
   for (const move of possibleMoves) {
+    if (Date.now() - startTime > timeLimit) {
+      return { score: 0, move: null }; // Abort if time limit exceeded during move iteration
+    }
     await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
     let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
     if (move.from === 'drop') {
@@ -447,7 +466,10 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       newGameState = movePiece(newGameState, move.from, move.to);
     }
 
-    const { score } = await minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta);
+    const newHistory = new Set(history);
+    newHistory.add(hash);
+
+    const { score } = await minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
 
     if (maximizingPlayer) {
       if (score > bestScore) {
@@ -537,9 +559,16 @@ async function getAiMove(gameState, difficulty) {
   // Sort moves for better alpha-beta pruning performance
   possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
+  const startTime = Date.now();
+  const timeLimit = difficulty === 'medium' ? 1000 : 3000; // 1 second for medium, 3 for hard
+
   if (possibleMoves.length === 0) {
+    console.log("No legal moves available for AI.");
     return null; // No legal moves available
   }
+
+  console.log(`AI thinking for difficulty: ${difficulty}, Time limit: ${timeLimit}ms`);
+  console.log(`Initial possible moves count: ${possibleMoves.length}`);
 
   switch (difficulty) {
     case 'easy':
@@ -547,46 +576,44 @@ async function getAiMove(gameState, difficulty) {
       const randomIndex = Math.floor(Math.random() * possibleMoves.length);
       return possibleMoves[randomIndex];
     case 'medium':
-      bestScore = -Infinity;
-      bestMove = null;
-
-      for (const move of possibleMoves) {
-        let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
-        if (move.from === 'drop') {
-          newGameState = dropPiece(newGameState, move.type, move.to);
-        } else {
-          newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
-        }
-
-        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer, -Infinity, Infinity, new Set()); // Shallow search depth of 1
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = move;
-        }
-      }
-      return bestMove;
     case 'hard':
-      bestScore = -Infinity;
-      bestMove = null;
+      let currentBestMove = possibleMoves[0]; // Initialize with the first possible move
+      let currentBestScore = -Infinity;
 
-      for (const move of possibleMoves) {
-        await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
-        let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
-        if (move.from === 'drop') {
-          newGameState = dropPiece(newGameState, move.type, move.to);
-        } else {
-          newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
+      for (let depth = 1; depth <= 5; depth++) { // Iterate up to a maximum depth
+        let iterationBestMove = null;
+        let iterationBestScore = -Infinity;
+
+        for (const move of possibleMoves) {
+          if (Date.now() - startTime > timeLimit) {
+            console.log(`Time limit exceeded at depth ${depth}. Returning best move found so far.`);
+            return currentBestMove; // Return the best move found so far
+          }
+
+          let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
+          if (move.from === 'drop') {
+            newGameState = dropPiece(newGameState, move.type, move.to);
+          } else {
+            newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
+          }
+
+          const { score } = await minimax(newGameState, 0, depth, !maximizingPlayer, -Infinity, Infinity, startTime, timeLimit, new Set()); // Use current depth
+          console.log(`Minimax returned score: ${score} for move:`, move);
+
+          if (score === null) {
+            // If minimax returned null, it means time limit was exceeded for this branch
+            // We should stop this iteration and return the best move found so far from previous depths.
+            console.log(`Minimax returned null score, time limit hit. Returning currentBestMove.`);
+            return currentBestMove;
+          }
         }
-
-        const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer, -Infinity, Infinity, new Set()); // Deeper search depth of 1 (reduced for performance)
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestMove = move;
+        // If a full iteration is completed, update the overall best move
+        if (iterationBestMove) {
+          currentBestMove = iterationBestMove;
+          currentBestScore = iterationBestScore;
         }
       }
-      return bestMove;
+      return currentBestMove;
     default:
       return null;
   }
