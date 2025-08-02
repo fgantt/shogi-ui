@@ -228,7 +228,7 @@ export function getLegalMoves(piece, row, col, board) {
  * @param {[number, number]} to The destination [row, col] of the piece.
  * @returns {object} The new game state, possibly with a `promotionPending` flag.
  */
-export function movePiece(gameState, from, to) {
+export function movePiece(gameState, from, to, promoteOverride = null) {
   const { board, currentPlayer } = gameState;
   const [fromRow, fromCol] = from;
   const [toRow, toCol] = to;
@@ -236,7 +236,17 @@ export function movePiece(gameState, from, to) {
   const piece = board[fromRow][fromCol];
   if (!piece) return gameState;
 
-  // --- Promotion Logic ---
+  if (promoteOverride !== null) {
+    // AI is making the decision, directly complete the move with the AI's promotion choice
+    let pieceToMove = { ...piece };
+    if (promoteOverride && !pieceToMove.type.startsWith('+')) {
+      pieceToMove.type = `+${pieceToMove.type}`;
+    }
+    const simulatedGameState = completeMove(gameState, from, to, promoteOverride, pieceToMove);
+    return simulatedGameState;
+  }
+
+  // --- Promotion Logic (for human player) ---
   const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
   const inPromotionZone = (currentPlayer === PLAYER_1 && toRow <= promotionZoneStart) || (currentPlayer === PLAYER_2 && toRow >= promotionZoneStart);
   const wasInPromotionZone = (currentPlayer === PLAYER_1 && fromRow <= promotionZoneStart) || (currentPlayer === PLAYER_2 && fromRow >= promotionZoneStart);
@@ -269,7 +279,7 @@ export function movePiece(gameState, from, to) {
   }
 
   // Proceed with the move (either promoted or not, depending on the above logic)
-  const simulatedGameState = completeMove(gameState, from, to, (canPromote && !isPromotionMandatory) ? false : isPromotionMandatory, pieceToMove);
+  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory, pieceToMove);
   return simulatedGameState;
 }
 
@@ -557,9 +567,11 @@ export function getLegalDrops(gameState, pieceType) {
  * @returns {boolean} True if the current player is in checkmate.
  */
 export function isCheckmate(gameState) {
+    console.log("isCheckmate: Checking for checkmate for player", gameState.currentPlayer, "with gameState:", gameState);
     const { board, currentPlayer, capturedPieces } = gameState;
 
     if (!isKingInCheck(board, currentPlayer)) {
+        console.log("isCheckmate: King is not in check.");
         return false;
     }
 
@@ -568,11 +580,14 @@ export function isCheckmate(gameState) {
         for (let c = 0; c < COLS; c++) {
             const piece = board[r][c];
             if (piece && piece.player === currentPlayer) {
+                console.log("isCheckmate: Checking moves for piece at", r, c, "type", piece.type);
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
                     // Simulate the move
                     const tempState = completeMove(gameState, [r, c], move, false); // Assume no promotion for checkmate simulation
+                    console.log("isCheckmate: Simulating move from", [r, c], "to", move, ". King in check after move:", isKingInCheck(tempState.board, currentPlayer));
                     if (!isKingInCheck(tempState.board, currentPlayer)) {
+                        console.log("isCheckmate: Found a move to escape check.");
                         return false; // Found a move to escape check
                     }
                 }
@@ -582,17 +597,21 @@ export function isCheckmate(gameState) {
 
     // Check if dropping any piece can get the king out of check
     for (const captured of capturedPieces[currentPlayer]) {
+        console.log("isCheckmate: Checking drops for captured piece type", captured.type);
         // Use getLegalDrops to find valid drop squares
         const possibleDropSquares = getLegalDrops(gameState, captured.type);
         for (const dropSquare of possibleDropSquares) {
             const tempBoard = board.map(row => [...row]);
             tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
+            console.log("isCheckmate: Simulating drop of", captured.type, "to", dropSquare, ". King in check after drop:", isKingInCheck(tempBoard, currentPlayer));
             if (!isKingInCheck(tempBoard, currentPlayer)) {
+                console.log("isCheckmate: Found a drop to escape check.");
                 return false; // Found a drop to escape check
             }
         }
     }
 
+    console.log("isCheckmate: No legal moves or drops to escape check. Checkmate detected.");
     return true; // No legal moves or drops to escape check, so it's checkmate
 }
 

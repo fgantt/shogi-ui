@@ -112,7 +112,7 @@ const MAX_QUIESCENCE_DEPTH = 1; // Limit quiescence search depth to prevent infi
 
 async function quiescenceSearch(gameState, alpha, beta, depth) {
   let standPat = evaluateBoard(gameState);
-  console.log(`quiescenceSearch: Entering (alpha: ${alpha}, beta: ${beta}, depth: ${depth})`);
+  
   if (depth >= MAX_QUIESCENCE_DEPTH) {
     const score = evaluateBoard(gameState);
     return score;
@@ -305,8 +305,30 @@ export async function getAiMove(gameState, difficulty) {
           const simulatedGameState = movePiece(gameState, [r, c], to);
           const isCapture = gameState.board[to[0]][to[1]] && gameState.board[to[0]][to[1]].player !== currentPlayer;
           const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
+          const inPromotionZone = (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) || (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
+          const wasInPromotionZone = (currentPlayer === PLAYER_1 && r <= promotionZoneStart) || (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
+          const promotablePieces = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
+          const canPromote = promotablePieces.includes(piece.type) && (inPromotionZone || wasInPromotionZone);
+          const lastRank = currentPlayer === PLAYER_1 ? 0 : 8;
+          const secondLastRank = currentPlayer === PLAYER_1 ? 1 : 7;
+          let isPromotionMandatory = false;
+          if ((piece.type === PAWN || piece.type === LANCE) && to[0] === lastRank) {
+              isPromotionMandatory = true;
+          }
+          if (piece.type === KNIGHT && (to[0] === lastRank || to[0] === secondLastRank)) {
+              isPromotionMandatory = true;
+          }
+
+          let promote = false;
+          if (canPromote && !isPromotionMandatory) {
+            promote = true; // AI always promotes if optional
+          } else if (isPromotionMandatory) {
+            promote = true; // Mandatory promotion
+          }
+
           if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
-            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
+            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck, promote });
           }
         });
       }
@@ -349,7 +371,7 @@ export async function getAiMove(gameState, difficulty) {
         if (move.from === 'drop') {
           newGameState = dropPiece(newGameState, move.type, move.to);
         } else {
-          newGameState = movePiece(newGameState, move.from, move.to);
+          newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
         }
 
         const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Shallow search depth of 1
@@ -370,7 +392,7 @@ export async function getAiMove(gameState, difficulty) {
         if (move.from === 'drop') {
           newGameState = dropPiece(newGameState, move.type, move.to);
         } else {
-          newGameState = movePiece(newGameState, move.from, move.to);
+          newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
         }
 
         const { score } = await minimax(newGameState, 0, 1, !maximizingPlayer); // Deeper search depth of 1 (reduced for performance)

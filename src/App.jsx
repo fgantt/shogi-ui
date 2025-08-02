@@ -74,7 +74,7 @@ function App() {
             if (aiMove.from === 'drop') {
               nextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
             } else if (Array.isArray(aiMove.from)) {
-              nextState = movePiece(currentGameState, aiMove.from, aiMove.to);
+              nextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
             } else {
               nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
             }
@@ -82,6 +82,10 @@ function App() {
             nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
           }
           setIsThinking(false); // Stop thinking *after* new state is determined
+          // Check for checkmate after AI's move
+          if (isCheckmate(nextState)) {
+            setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+          }
           return nextState;
         });
       };
