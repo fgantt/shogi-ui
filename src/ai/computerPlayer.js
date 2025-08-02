@@ -1,4 +1,4 @@
-import { getLegalMoves, movePiece, dropPiece, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
+import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
 
 // Piece values for evaluation (can be adjusted)
 const PIECE_VALUES = {
@@ -108,7 +108,7 @@ function evaluateBoard(gameState) {
  * @param {number} beta The beta value for alpha-beta pruning.
  * @returns {number} The evaluation score after quiescence search.
  */
-const MAX_QUIESCENCE_DEPTH = 1; // Limit quiescence search depth to prevent infinite loops
+const MAX_QUIESCENCE_DEPTH = 3; // Limit quiescence search depth to prevent infinite loops
 
 async function quiescenceSearch(gameState, alpha, beta, depth) {
   let standPat = evaluateBoard(gameState);
@@ -337,17 +337,14 @@ export async function getAiMove(gameState, difficulty) {
 
   // Collect all possible drops for captured pieces
   gameState.capturedPieces[currentPlayer].forEach(capturedPiece => {
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (!gameState.board[r][c]) { // Only drop on empty squares
-          const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
-          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the drop doesn't put own king in check
-            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
-          }
-        }
+    const legalDrops = getLegalDrops(gameState, capturedPiece.type);
+    legalDrops.forEach(to => {
+      const simulatedGameState = dropPiece(gameState, capturedPiece.type, to);
+      if (simulatedGameState !== gameState && !isKingInCheck(simulatedGameState.board, currentPlayer)) {
+        const isCheck = isKingInCheck(simulatedGameState.board, opponent);
+        possibleMoves.push({ from: 'drop', to, type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
       }
-    }
+    });
   });
 
   // Sort moves for better alpha-beta pruning performance

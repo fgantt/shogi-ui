@@ -67,18 +67,32 @@ function App() {
       setIsThinking(true);
       const performAiMove = async () => {
         const aiMove = await getAiMove(gameState, aiDifficulty);
+        
         setGameState(currentGameState => {
           let nextState;
           if (aiMove) {
-            setLastMove({ from: aiMove.from, to: aiMove.to });
+            let attemptedNextState;
             if (aiMove.from === 'drop') {
-              nextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
+              attemptedNextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
             } else if (Array.isArray(aiMove.from)) {
-              nextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
+              attemptedNextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
             } else {
+              console.error("AI returned an unexpected move format:", aiMove);
+              attemptedNextState = currentGameState; // Fallback to current state
+            }
+
+            if (attemptedNextState !== currentGameState) {
+              // Move was successful
+              nextState = attemptedNextState;
+              setLastMove({ from: aiMove.from, to: aiMove.to });
+            } else {
+              // Move was illegal, keep current state and switch player to human
+              
               nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
             }
           } else {
+            // AI found no legal moves, switch turn back to human
+            
             nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
           }
           setIsThinking(false); // Stop thinking *after* new state is determined
@@ -158,7 +172,7 @@ function App() {
     } else if (selectedPiece) {
       // A piece on the board is already selected, attempt to move it
       if (legalMoves.some(move => {
-        console.log("handleSquareClick - Checking legal move: ", move, "against clicked: ", [row, col]);
+        
         return move[0] === row && move[1] === col;
       })) {
         const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
@@ -178,7 +192,7 @@ function App() {
       });
       setLegalMoves(filteredMoves);
       setLegalDropSquares([]); // Clear legal drop squares when a board piece is selected
-      console.log("Legal moves for selected piece:", filteredMoves);
+      
     }
   };
 
