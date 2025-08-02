@@ -638,3 +638,20 @@ export function getAttackedSquares(board, player) {
 
   return attackedSquares;
 }
+
+/**
+ * Generates a unique hash for the current game state.
+ * @param {object} gameState The current game state.
+ * @returns {string} A unique string representing the game state.
+ */
+export function generateStateHash(gameState) {
+  const { board, currentPlayer, capturedPieces } = gameState;
+  const boardState = board.map(row => 
+    row.map(piece => piece ? `${piece.player[0]}${piece.type}` : '-').join('')
+  ).join('|');
+  
+  const capturedPlayer1 = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
+  const capturedPlayer2 = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+
+  return `${boardState}|${currentPlayer}|p1c:${capturedPlayer1}|p2c:${capturedPlayer2}`;
+}

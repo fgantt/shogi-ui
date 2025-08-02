@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -27,6 +27,7 @@ function App() {
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [repetitionCount, setRepetitionCount] = useState({});
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -100,6 +101,22 @@ function App() {
           if (isCheckmate(nextState)) {
             setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
           }
+
+          const hash = generateStateHash(nextState);
+          const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
+          setRepetitionCount(newRepetitionCount);
+
+          if (newRepetitionCount[hash] >= 4) {
+            const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
+            if (isCheck) {
+              // Perpetual check, the player who made the move loses
+              setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+            } else {
+              // Repetition draw
+              setCheckmateWinner('draw');
+            }
+          }
+
           return nextState;
         });
       };
@@ -135,6 +152,22 @@ function App() {
   };
 
   const handlePlayerMove = (newGameState, from, to) => {
+    const hash = generateStateHash(newGameState);
+    const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
+    setRepetitionCount(newRepetitionCount);
+
+    if (newRepetitionCount[hash] >= 4) {
+      const isCheck = isKingInCheck(newGameState.board, newGameState.currentPlayer);
+      if (isCheck) {
+        // Perpetual check, the player who made the move loses
+        setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+      } else {
+        // Repetition draw
+        setCheckmateWinner('draw');
+      }
+      return;
+    }
+
     setGameState(newGameState);
     setSelectedPiece(null);
     setSelectedCapturedPiece(null);
