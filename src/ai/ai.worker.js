@@ -369,6 +369,27 @@ function evaluateBoard(gameState) {
 
   return score;
 
+  // Piece Mobility
+  let mobilityScore = 0;
+  let currentPlayerMobility = 0;
+  let opponentMobility = 0;
+
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        const moves = getLegalMoves(piece, r, c, board);
+        if (piece.player === currentPlayer) {
+          currentPlayerMobility += moves.length;
+        } else {
+          opponentMobility += moves.length;
+        }
+      }
+    }
+  }
+  mobilityScore = (currentPlayerMobility - opponentMobility) * 0.5; // Adjust multiplier as needed
+  score += mobilityScore;
+
   return score;
 }
 
