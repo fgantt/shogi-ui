@@ -64,68 +64,67 @@ function App() {
   }, [gameState.board]);
 
   useEffect(() => {
-    if (gameState.currentPlayer === PLAYER_2) {
+    if (gameState.currentPlayer === PLAYER_2 && !checkmateWinner) {
       setIsThinking(true);
-      const performAiMove = async () => {
-        const aiMove = await getAiMove(gameState, aiDifficulty);
-        
-        setGameState(currentGameState => {
-          let nextState;
-          if (aiMove) {
-            let attemptedNextState;
-            if (aiMove.from === 'drop') {
-              attemptedNextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
-            } else if (Array.isArray(aiMove.from)) {
-              attemptedNextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
-            } else {
-              console.error("AI returned an unexpected move format:", aiMove);
-              attemptedNextState = currentGameState; // Fallback to current state
-            }
+      getAiMove(gameState, aiDifficulty)
+        .then(aiMove => {
+          setGameState(currentGameState => {
+            let nextState;
+            if (aiMove) {
+              let attemptedNextState;
+              if (aiMove.from === 'drop') {
+                attemptedNextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
+              } else if (Array.isArray(aiMove.from)) {
+                attemptedNextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
+              } else {
+                console.error("AI returned an unexpected move format:", aiMove);
+                attemptedNextState = currentGameState; // Fallback to current state
+              }
 
-            if (attemptedNextState !== currentGameState) {
-              // Move was successful
-              nextState = attemptedNextState;
-              setLastMove({ from: aiMove.from, to: aiMove.to });
+              if (attemptedNextState !== currentGameState) {
+                // Move was successful
+                nextState = attemptedNextState;
+                setLastMove({ from: aiMove.from, to: aiMove.to });
+              } else {
+                // Move was illegal, keep current state and switch player to human
+                nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
+              }
             } else {
-              // Move was illegal, keep current state and switch player to human
-              
+              // AI found no legal moves, switch turn back to human
               nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
             }
-          } else {
-            // AI found no legal moves, switch turn back to human
-            
-            nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
-          }
-          setIsThinking(false); // Stop thinking *after* new state is determined
-          // Check for checkmate after AI's move
-          if (isCheckmate(nextState)) {
-            setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-          }
 
-          const hash = generateStateHash(nextState);
-          const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
-          setRepetitionCount(newRepetitionCount);
-
-          if (newRepetitionCount[hash] >= 4) {
-            const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
-            if (isCheck) {
-              // Perpetual check, the player who made the move loses
+            // Check for checkmate after AI's move
+            if (isCheckmate(nextState)) {
               setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-            } else {
-              // Repetition draw
-              setCheckmateWinner('draw');
             }
-          }
 
-          return nextState;
+            const hash = generateStateHash(nextState);
+            const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
+            setRepetitionCount(newRepetitionCount);
+
+            if (newRepetitionCount[hash] >= 4) {
+              const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
+              if (isCheck) {
+                // Perpetual check, the player who made the move loses
+                setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+              } else {
+                // Repetition draw
+                setCheckmateWinner('draw');
+              }
+            }
+
+            return nextState;
+          });
+        })
+        .catch(error => {
+          console.error("Error getting AI move:", error);
+        })
+        .finally(() => {
+          setIsThinking(false);
         });
-      };
-
-      const timerId = setTimeout(performAiMove, 2000);
-
-      return () => clearTimeout(timerId);
     }
-  }, [gameState.currentPlayer, aiDifficulty]);
+  }, [gameState.currentPlayer, aiDifficulty, checkmateWinner]);
 
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
