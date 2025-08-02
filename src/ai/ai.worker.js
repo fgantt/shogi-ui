@@ -1,7 +1,10 @@
-import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
+import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCheckmate, generateStateHash, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
+
+let transpositionTable = new Map();
 
 // This is the main entry point for the worker
 self.onmessage = async (event) => {
+  transpositionTable.clear();
   const { gameState, difficulty } = event.data;
   const bestMove = await getAiMove(gameState, difficulty);
   self.postMessage(bestMove);
@@ -209,8 +212,17 @@ async function quiescenceSearch(gameState, alpha, beta, depth) {
  * @returns {{score: number, move: object}} The best score and corresponding move.
  */
 async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
+  const hash = generateStateHash(gameState);
+  if (transpositionTable.has(hash)) {
+    const cached = transpositionTable.get(hash);
+    if (cached.depth >= depth) {
+      return { score: cached.score, move: null };
+    }
+  }
+
   if (depth === maxDepth || gameState.isCheckmate) {
     const score = await quiescenceSearch(gameState, alpha, beta, 0); // Call quiescence search at max depth
+    transpositionTable.set(hash, { depth, score });
     return { score, move: null }; // Return null for move at terminal nodes
   }
 
