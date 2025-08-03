@@ -1,12 +1,5 @@
 {
-  "initial_state_hash": [
-    {
-      "from": [6, 4],
-      "to": [5, 4],
-      "type": "pawn",
-      "isCapture": false,
-      "isCheck": false,
-      "promote": false
-    }
+  "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B3S1R1/LNSGKG1NL b - 2": [
+    { "from": [2, 1], "to": [3, 1] }
   ]
 }

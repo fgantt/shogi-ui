@@ -645,13 +645,57 @@ export function getAttackedSquares(board, player) {
  * @returns {string} A unique string representing the game state.
  */
 export function generateStateHash(gameState) {
-  const { board, currentPlayer, capturedPieces } = gameState;
-  const boardState = board.map(row => 
-    row.map(piece => piece ? `${piece.player[0]}${piece.type}` : '-').join('')
-  ).join('|');
-  
-  const capturedPlayer1 = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
-  const capturedPlayer2 = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+  const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
 
-  return `${boardState}|${currentPlayer}|p1c:${capturedPlayer1}|p2c:${capturedPlayer2}`;
+  let fen = '';
+
+  // Board state
+  for (let i = 0; i < 9; i++) {
+    let empty = 0;
+    for (let j = 0; j < 9; j++) {
+      const piece = board[i][j];
+      if (piece) {
+        if (empty > 0) {
+          fen += empty;
+          empty = 0;
+        }
+        let pieceChar = piece.type.toLowerCase();
+        if (piece.player === PLAYER_1) {
+          pieceChar = pieceChar.toUpperCase();
+        }
+        if (piece.type.startsWith('+')) {
+            pieceChar = '+' + pieceChar[1];
+        }
+        fen += pieceChar;
+      } else {
+        empty++;
+      }
+    }
+    if (empty > 0) {
+      fen += empty;
+    }
+    if (i < 8) {
+      fen += '/';
+    }
+  }
+
+  // Active player
+  fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
+
+  // Captured pieces
+  let capturedString = '-';
+  const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
+  const p2Captured = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+  if (p1Captured.length > 0) {
+      capturedString = p1Captured.toUpperCase();
+  }
+  if (p2Captured.length > 0) {
+      capturedString += p2Captured.toLowerCase();
+  }
+  fen += capturedString + ' ';
+
+  // Move number
+  fen += (moveHistory.length + 1);
+
+  return fen;
 }
