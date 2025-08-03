@@ -516,6 +516,43 @@ function evaluateBoard(gameState) {
   }
   score += threatDefenseScore;
 
+  // Passed Pawns
+  let passedPawnScore = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === PAWN) {
+        let isPassed = true;
+        const direction = piece.player === PLAYER_1 ? -1 : 1; // Direction to opponent's side
+        const startRank = piece.player === PLAYER_1 ? r - 1 : r + 1;
+        const endRank = piece.player === PLAYER_1 ? -1 : 9;
+
+        // Check current file and adjacent files for opponent pawns
+        for (let i = startRank; i !== endRank; i += direction) {
+          if (board[i]?.[c]?.type === PAWN && board[i][c].player !== piece.player) {
+            isPassed = false;
+            break;
+          }
+          if (c > 0 && board[i]?.[c - 1]?.type === PAWN && board[i][c - 1].player !== piece.player) {
+            isPassed = false;
+            break;
+          }
+          if (c < 8 && board[i]?.[c + 1]?.type === PAWN && board[i][c + 1].player !== piece.player) {
+            isPassed = false;
+            break;
+          }
+        }
+
+        if (isPassed) {
+          // Bonus for passed pawns, higher if closer to promotion
+          const distanceToPromotion = piece.player === PLAYER_1 ? r : 8 - r;
+          passedPawnScore += (piece.player === currentPlayer ? 20 + (distanceToPromotion * 5) : -(20 + (distanceToPromotion * 5)));
+        }
+      }
+    }
+  }
+  score += passedPawnScore;
+
   return score;
 }
 
