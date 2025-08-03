@@ -1,4 +1,5 @@
 import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCheckmate, generateStateHash, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
+import openingBook from './openingBook.json';
 
 let transpositionTable = new Map();
 
@@ -675,6 +676,15 @@ async function getAiMove(gameState, difficulty) {
   const { currentPlayer } = gameState;
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+
+  // Check opening book
+  const currentHash = generateStateHash(gameState);
+  if (openingBook[currentHash]) {
+    const moves = openingBook[currentHash];
+    const randomIndex = Math.floor(Math.random() * moves.length);
+    console.log("Move from opening book:", moves[randomIndex]);
+    return moves[randomIndex];
+  }
 
   let bestMove = null;
   let bestScore = -Infinity;

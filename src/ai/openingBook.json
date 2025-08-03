@@ -1,0 +1,12 @@
+{
+  "initial_state_hash": [
+    {
+      "from": [6, 4],
+      "to": [5, 4],
+      "type": "pawn",
+      "isCapture": false,
+      "isCheck": false,
+      "promote": false
+    }
+  ]
+}
