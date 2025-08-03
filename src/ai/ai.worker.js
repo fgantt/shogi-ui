@@ -553,6 +553,37 @@ function evaluateBoard(gameState) {
   }
   score += passedPawnScore;
 
+  // King's Escape Squares
+  let kingEscapeScore = 0;
+  if (kingPos) {
+    const [kingR, kingC] = kingPos;
+    let escapeSquares = 0;
+
+    // Check all 8 surrounding squares (and the king's own square if it can move there)
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue; // Skip king's current square
+
+        const newR = kingR + dr;
+        const newC = kingC + dc;
+
+        if (newR >= 0 && newR < 9 && newC >= 0 && newC < 9) {
+          // Temporarily move the king to the new square to check for checks
+          const originalPiece = board[newR][newC];
+          const tempBoard = JSON.parse(JSON.stringify(board)); // Deep copy
+          tempBoard[newR][newC] = { type: KING, player: currentPlayer };
+          tempBoard[kingR][kingC] = null;
+
+          if (!isKingInCheck(tempBoard, currentPlayer)) {
+            escapeSquares++;
+          }
+        }
+      }
+    }
+    kingEscapeScore = escapeSquares * 5; // Bonus for each escape square
+  }
+  score += kingEscapeScore;
+
   return score;
 }
 
