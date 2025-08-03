@@ -621,6 +621,8 @@ function evaluateBoard(gameState) {
  * @returns {number} The evaluation score after quiescence search.
  */
 const MAX_QUIESCENCE_DEPTH = 3; // Limit quiescence search depth to prevent infinite loops
+const LMR_DEPTH = 3; // Minimum depth for LMR to apply
+const LMR_REDUCTION = 1; // How much to reduce the depth by
 
 async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLimit) {
   if (Date.now() - startTime > timeLimit) {
@@ -721,6 +723,9 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
  * @returns {{score: number, move: object}} The best score and corresponding move.
  */
 async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity, startTime, timeLimit, history = new Set()) {
+  const { board, currentPlayer, capturedPieces } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+
   if (Date.now() - startTime > timeLimit) {
     console.log(`Minimax time limit exceeded at depth ${depth}`);
     return { score: null, move: null }; // Indicate that the search was cut short
@@ -752,8 +757,18 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
     return { score, move: null }; // Return null for move at terminal nodes
   }
 
-  const { board, currentPlayer, capturedPieces } = gameState;
-  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  // Futility Pruning
+  if (depth < maxDepth && !isKingInCheck(gameState.board, currentPlayer)) { // Only apply if not in check
+    const evalScore = evaluateBoard(gameState);
+    const margin = 200; // Adjust margin as needed
+    if (maximizingPlayer && evalScore + margin <= alpha) {
+      return { score: alpha, move: null };
+    }
+    if (!maximizingPlayer && evalScore - margin >= beta) {
+      return { score: beta, move: null };
+    }
+  }
+
   const possibleMoves = [];
 
   // Collect all possible moves for pieces on the board
@@ -796,7 +811,8 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
   let bestScore = maximizingPlayer ? -Infinity : Infinity;
   let bestMove = null;
 
-  for (const move of possibleMoves) {
+  for (let i = 0; i < possibleMoves.length; i++) {
+    const move = possibleMoves[i];
     if (Date.now() - startTime > timeLimit) {
       return { score: 0, move: null }; // Abort if time limit exceeded during move iteration
     }
@@ -811,7 +827,12 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
     const newHistory = new Set(history);
     newHistory.add(hash);
 
-    const { score } = await minimax(newGameState, depth + 1, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
+    let reduction = 0;
+    if (depth >= LMR_DEPTH && i >= 4 && !move.isCapture && !move.isCheck) { // Apply LMR if conditions met
+      reduction = LMR_REDUCTION;
+    }
+
+    const { score } = await minimax(newGameState, depth + 1 + reduction, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
 
     if (maximizingPlayer) {
       if (score > bestScore) {
