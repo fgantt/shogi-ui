@@ -2,6 +2,8 @@ import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCh
 import openingBook from './openingBook.json';
 
 let transpositionTable = new Map();
+let historyTable = Array(9).fill(0).map(() => Array(9).fill(0)); // For history heuristic
+let killerMoves = Array(2).fill(null); // For killer moves (stores 2 best non-captures at current depth)
 
 // This is the main entry point for the worker
 self.onmessage = async (event) => {
@@ -194,15 +196,28 @@ function scoreMove(move, gameState) {
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
   if (move.isCapture) {
-    score += 10; // High priority for captures
+    score += 1000; // High priority for captures
     // Add bonus for capturing higher value pieces
     const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
     if (capturedPieceType) {
       score += PIECE_VALUES[capturedPieceType];
     }
   }
+
+  // Killer moves bonus
+  if (move.from === killerMoves[0]?.from && move.to === killerMoves[0]?.to) {
+    score += 900; // High bonus for first killer move
+  } else if (move.from === killerMoves[1]?.from && move.to === killerMoves[1]?.to) {
+    score += 800; // High bonus for second killer move
+  }
+
+  // History heuristic bonus
+  if (move.from !== 'drop' && historyTable[move.from[0]] && historyTable[move.from[0]][move.from[1]]) {
+    score += historyTable[move.from[0]][move.from[1]];
+  }
+
   if (move.isCheck) {
-    score += 8; // Priority for checks
+    score += 50; // Priority for checks
   }
   return score;
 }
@@ -832,7 +847,9 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       reduction = LMR_REDUCTION;
     }
 
-    const { score } = await minimax(newGameState, depth + 1 + reduction, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
+    const { score, move: bestChildMove } = await minimax(newGameState, depth + 1 + reduction, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
+
+    if (score === null) return { score: null, move: null }; // Propagate time limit exceeded
 
     if (maximizingPlayer) {
       if (score > bestScore) {
@@ -841,6 +858,14 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       }
       alpha = Math.max(alpha, bestScore);
       if (beta <= alpha) {
+        // Beta cut-off, this is a good move, add to killer moves and history
+        if (!move.isCapture && !move.isCheck) { // Only non-captures and non-checks
+          killerMoves[1] = killerMoves[0];
+          killerMoves[0] = move;
+        }
+        if (move.from !== 'drop') {
+          historyTable[move.from[0]][move.from[1]] += depth; // Update history score
+        }
         break; // Beta cut-off
       }
     } else {
@@ -850,6 +875,14 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
       }
       beta = Math.min(beta, bestScore);
       if (beta <= alpha) {
+        // Alpha cut-off, this is a good move, add to killer moves and history
+        if (!move.isCapture && !move.isCheck) { // Only non-captures and non-checks
+          killerMoves[1] = killerMoves[0];
+          killerMoves[0] = move;
+        }
+        if (move.from !== 'drop') {
+          historyTable[move.from[0]][move.from[1]] += depth; // Update history score
+        }
         break; // Alpha cut-off
       }
     }
