@@ -584,6 +584,32 @@ function evaluateBoard(gameState) {
   }
   score += kingEscapeScore;
 
+  // Piece Development (Active Squares)
+  let developmentScore = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        if (piece.player === currentPlayer) {
+          // Reward pieces in opponent's territory
+          if (currentPlayer === PLAYER_1 && r <= 3) { // Rows 0-3 for Player 1
+            developmentScore += PIECE_VALUES[piece.type] * 0.05; // Small bonus
+          } else if (currentPlayer === PLAYER_2 && r >= 5) { // Rows 5-8 for Player 2
+            developmentScore += PIECE_VALUES[piece.type] * 0.05; // Small bonus
+          }
+        } else { // Opponent's piece
+          // Penalize opponent's pieces in our territory
+          if (opponent === PLAYER_1 && r <= 3) { // Rows 0-3 for Player 1
+            developmentScore -= PIECE_VALUES[piece.type] * 0.05; // Small penalty
+          } else if (opponent === PLAYER_2 && r >= 5) { // Rows 5-8 for Player 2
+            developmentScore -= PIECE_VALUES[piece.type] * 0.05; // Small penalty
+          }
+        }
+      }
+    }
+  }
+  score += developmentScore;
+
   return score;
 }
 
