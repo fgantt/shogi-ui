@@ -979,7 +979,15 @@ async function getAiMove(gameState, difficulty) {
   possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   const startTime = Date.now();
-  const timeLimit = difficulty === 'medium' ? 1000 : 3000; // 1 second for medium, 3 for hard
+  let timeLimit = difficulty === 'medium' ? 1000 : 3000; // Base time limit
+
+  // Dynamic time management based on game phase
+  const movesMade = gameState.pastStates.length;
+  if (movesMade < 10) { // Early game
+    timeLimit *= 0.5; // Use half the time
+  } else if (movesMade > 40) { // Late game
+    timeLimit *= 1.5; // Use 1.5 times the time
+  }
 
   if (possibleMoves.length === 0) {
     console.log("No legal moves available for AI.");
