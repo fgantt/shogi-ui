@@ -390,6 +390,61 @@ function evaluateBoard(gameState) {
   mobilityScore = (currentPlayerMobility - opponentMobility) * 0.5; // Adjust multiplier as needed
   score += mobilityScore;
 
+  // Pawn Structure
+  let pawnStructureScore = 0;
+  const pawns = { [PLAYER_1]: [], [PLAYER_2]: [] };
+
+  // Collect pawn positions
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === PAWN) {
+        pawns[piece.player].push([r, c]);
+      }
+    }
+  }
+
+  // Evaluate pawn chains (connected pawns)
+  for (const player of [PLAYER_1, PLAYER_2]) {
+    for (const [r, c] of pawns[player]) {
+      const direction = player === PLAYER_1 ? -1 : 1; // Pawns move up for player1, down for player2
+      // Check for pawn in front-left or front-right
+      if (c > 0 && board[r + direction]?.[c - 1]?.type === PAWN && board[r + direction][c - 1].player === player) {
+        pawnStructureScore += (player === currentPlayer ? 5 : -5); // Bonus for connected pawns
+      }
+      if (c < 8 && board[r + direction]?.[c + 1]?.type === PAWN && board[r + direction][c + 1].player === player) {
+        pawnStructureScore += (player === currentPlayer ? 5 : -5); // Bonus for connected pawns
+      }
+    }
+  }
+
+  // Penalize isolated pawns (no friendly pawns on adjacent files)
+  for (const player of [PLAYER_1, PLAYER_2]) {
+    for (const [r, c] of pawns[player]) {
+      let isolated = true;
+      if (c > 0) {
+        for (let r2 = 0; r2 < 9; r2++) {
+          if (board[r2][c - 1]?.type === PAWN && board[r2][c - 1].player === player) {
+            isolated = false;
+            break;
+          }
+        }
+      }
+      if (c < 8) {
+        for (let r2 = 0; r2 < 9; r2++) {
+          if (board[r2][c + 1]?.type === PAWN && board[r2][c + 1].player === player) {
+            isolated = false;
+            break;
+          }
+        }
+      }
+      if (isolated) {
+        pawnStructureScore += (player === currentPlayer ? -10 : 10); // Penalty for isolated pawns
+      }
+    }
+  }
+  score += pawnStructureScore;
+
   return score;
 }
 
