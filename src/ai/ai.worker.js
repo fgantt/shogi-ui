@@ -196,12 +196,14 @@ function scoreMove(move, gameState) {
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
   if (move.isCapture) {
-    score += 1000; // High priority for captures
-    // Add bonus for capturing higher value pieces
+    // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
     const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
-    if (capturedPieceType) {
-      score += PIECE_VALUES[capturedPieceType];
+    const attackingPieceType = board[move.from[0]][move.from[1]]?.type;
+
+    if (capturedPieceType && attackingPieceType) {
+      score += PIECE_VALUES[capturedPieceType] * 10 - PIECE_VALUES[attackingPieceType];
     }
+    score += 1000; // Base bonus for captures
   }
 
   // Killer moves bonus
