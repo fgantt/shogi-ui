@@ -446,6 +446,76 @@ function evaluateBoard(gameState) {
   }
   score += pawnStructureScore;
 
+  // Threats and Defenses
+  let threatDefenseScore = 0;
+
+  // Initialize attack and defense counts for each square for both players
+  const attackCounts = {
+    [PLAYER_1]: Array(9).fill(0).map(() => Array(9).fill(0)),
+    [PLAYER_2]: Array(9).fill(0).map(() => Array(9).fill(0)),
+  };
+  const defenseCounts = {
+    [PLAYER_1]: Array(9).fill(0).map(() => Array(9).fill(0)),
+    [PLAYER_2]: Array(9).fill(0).map(() => Array(9).fill(0)),
+  };
+
+  // Populate attack and defense counts
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        const moves = getLegalMoves(piece, r, c, board);
+        moves.forEach(to => {
+          const targetPiece = board[to[0]][to[1]];
+          if (targetPiece && targetPiece.player !== piece.player) {
+            // This piece attacks an opponent's piece
+            attackCounts[piece.player][to[0]][to[1]]++;
+          } else if (targetPiece && targetPiece.player === piece.player) {
+            // This piece defends a friendly piece
+            defenseCounts[piece.player][to[0]][to[1]]++;
+          } else {
+            // This piece attacks an empty square (control of square) - can be considered for mobility or general influence
+            // For now, we'll focus on direct attacks/defenses of pieces
+          }
+        });
+      }
+    }
+  }
+
+  // Evaluate based on attack and defense counts
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        const currentPieceAttacks = attackCounts[currentPlayer][r][c];
+        const opponentPieceAttacks = attackCounts[opponent][r][c];
+        const currentPieceDefenses = defenseCounts[currentPlayer][r][c];
+        const opponentPieceDefenses = defenseCounts[opponent][r][c];
+
+        if (piece.player === currentPlayer) {
+          // If our piece is attacked more than defended by us
+          if (opponentPieceAttacks > currentPieceDefenses) {
+            threatDefenseScore -= PIECE_VALUES[piece.type] * 0.5; // Penalty for undefended attacked piece
+          }
+          // If our piece is defended more than attacked by opponent
+          if (currentPieceDefenses > opponentPieceAttacks) {
+            threatDefenseScore += PIECE_VALUES[piece.type] * 0.1; // Bonus for well-defended piece
+          }
+        } else { // Opponent's piece
+          // If opponent's piece is attacked more than defended by them
+          if (currentPieceAttacks > opponentPieceDefenses) {
+            threatDefenseScore += PIECE_VALUES[piece.type] * 0.5; // Bonus for attacking undefended opponent piece
+          }
+          // If opponent's piece is defended more than attacked by us
+          if (opponentPieceDefenses > currentPieceAttacks) {
+            threatDefenseScore -= PIECE_VALUES[piece.type] * 0.1; // Penalty for well-defended opponent piece
+          }
+        }
+      }
+    }
+  }
+  score += threatDefenseScore;
+
   return score;
 }
 
