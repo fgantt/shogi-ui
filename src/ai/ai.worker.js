@@ -766,6 +766,18 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
     }
   }
 
+  // Null Move Pruning
+  if (depth >= 3 && !isKingInCheck(board, currentPlayer)) { // Apply if depth is sufficient and not in check
+    const nullMoveGameState = { ...gameState, currentPlayer: opponent };
+    const { score: nullMoveScore } = await minimax(nullMoveGameState, depth - 1 - 2, maxDepth, !maximizingPlayer, -beta, -alpha, startTime, timeLimit, new Set()); // Reduced depth, inverted alpha-beta
+
+    if (nullMoveScore === null) return { score: null, move: null }; // Propagate time limit exceeded
+
+    if (nullMoveScore >= beta) {
+      return { score: beta, move: null };
+    }
+  }
+
   if (depth === maxDepth || gameState.isCheckmate) {
     const score = await quiescenceSearch(gameState, alpha, beta, 0, startTime, timeLimit); // Call quiescence search at max depth
     transpositionTable.set(hash, { depth, score });
