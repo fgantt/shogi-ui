@@ -233,6 +233,13 @@ function evaluateBoard(gameState) {
 async function getAiMove(gameState, difficulty) {
   const { currentPlayer, moveHistory } = gameState;
 
+  // Check opening book first
+  const boardHash = generateStateHash(gameState);
+  if (openingBook[boardHash]) {
+    const moves = openingBook[boardHash];
+    return moves[Math.floor(Math.random() * moves.length)];
+  }
+
   // Opening Randomness
   if (moveHistory.length < 5) {
     const possibleMoves = [];
