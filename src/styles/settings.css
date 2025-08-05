@@ -40,6 +40,9 @@
   margin-top: 0;
   margin-bottom: 10px;
   color: #00008B; /* Dark blue for section headers */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .settings-panel .setting-group {
@@ -94,4 +97,12 @@
 
 .settings-panel button:hover {
   background-color: #0000CD; /* Even darker blue on hover */
+}
+
+.collapse-arrow {
+  transition: transform 0.3s ease-in-out;
+}
+
+.collapse-arrow.collapsed {
+  transform: rotate(-90deg);
 }

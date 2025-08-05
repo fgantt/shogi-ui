@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const SettingsPanel = ({
   aiDifficulty,
@@ -17,6 +17,16 @@ const SettingsPanel = ({
   showPieceTooltips,
   onShowPieceTooltipsChange,
 }) => {
+  const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(true);
+  const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(true);
+
+  const toggleBoardBackgroundCollapse = () => {
+    setIsBoardBackgroundCollapsed(!isBoardBackgroundCollapsed);
+  };
+
+  const toggleWallpaperCollapse = () => {
+    setIsWallpaperCollapsed(!isWallpaperCollapsed);
+  };
   const getFileName = (path) => {
     const parts = path.split('/');
     const fileNameWithExtension = parts[parts.length - 1];
@@ -87,39 +97,49 @@ const SettingsPanel = ({
         </section>
 
         <section>
-          <h3>Board Background</h3>
-          <div className="setting-group setting-thumbnails">
-            {boardBackgroundList.map((bg, index) => {
-              console.log(`Board Thumbnail: ${bg}, Current Board: ${currentBoardBackground}, Match: ${bg === currentBoardBackground}`);
-              return (
-              <img
-                key={index}
-                src={bg}
-                alt={`Board Background ${index + 1}`}
-                className={`thumbnail ${bg === currentBoardBackground ? 'selected-thumbnail' : ''}`}
-                onClick={() => onSelectBoardBackground(bg)}
-                title={getFileName(bg)}
-              />
-            )})}
-          </div>
+          <h3 onClick={toggleBoardBackgroundCollapse} style={{ cursor: 'pointer' }}>
+            Board Background
+            <span className={`collapse-arrow ${isBoardBackgroundCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+          </h3>
+          {!isBoardBackgroundCollapsed && (
+            <div className="setting-group setting-thumbnails">
+              {boardBackgroundList.map((bg, index) => {
+                // console.log(`Board Thumbnail: ${bg}, Current Board: ${currentBoardBackground}, Match: ${bg === currentBoardBackground}`);
+                return (
+                <img
+                  key={index}
+                  src={bg}
+                  alt={`Board Background ${index + 1}`}
+                  className={`thumbnail ${bg === currentBoardBackground ? 'selected-thumbnail' : ''}`}
+                  onClick={() => onSelectBoardBackground(bg)}
+                  title={getFileName(bg)}
+                />
+              )})}
+            </div>
+          )}
         </section>
 
         <section>
-          <h3>Wallpaper</h3>
-          <div className="setting-group setting-thumbnails">
-            {wallpaperList.map((wp, index) => {
-              console.log(`Wallpaper Thumbnail: ${wp}, Current Wallpaper: ${currentWallpaper}, Match: ${wp === currentWallpaper}`);
-              return (
-              <img
-                key={index}
-                src={wp}
-                alt={`Wallpaper ${index + 1}`}
-                className={`thumbnail ${wp === currentWallpaper ? 'selected-thumbnail' : ''}`}
-                onClick={() => onSelectWallpaper(wp)}
-                title={getFileName(wp)}
-              />
-            )})}
-          </div>
+          <h3 onClick={toggleWallpaperCollapse} style={{ cursor: 'pointer' }}>
+            Wallpaper
+            <span className={`collapse-arrow ${isWallpaperCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+          </h3>
+          {!isWallpaperCollapsed && (
+            <div className="setting-group setting-thumbnails">
+              {wallpaperList.map((wp, index) => {
+                // console.log(`Wallpaper Thumbnail: ${wp}, Current Wallpaper: ${currentWallpaper}, Match: ${wp === currentWallpaper}`);
+                return (
+                <img
+                  key={index}
+                  src={wp}
+                  alt={`Wallpaper ${index + 1}`}
+                  className={`thumbnail ${wp === currentWallpaper ? 'selected-thumbnail' : ''}`}
+                  onClick={() => onSelectWallpaper(wp)}
+                  title={getFileName(wp)}
+                />
+              )})}
+            </div>
+          )}
         </section>
 
         <section>
