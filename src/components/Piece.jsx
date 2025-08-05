@@ -8,14 +8,16 @@ const Piece = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSe
 
   return (
     <div
-      className={`piece ${player} ${isSelected ? 'selected' : ''}`}
+      className={`piece ${isSelected ? 'selected' : ''}`}
       draggable="true"
       onDragStart={onDragStart}
       onClick={onClick}
       onMouseEnter={() => showTooltips && setShowTooltip(true)}
       onMouseLeave={() => showTooltips && setShowTooltip(false)}
     >
-      <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
+      <div className={`piece-inner ${player}`}>
+        <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
+      </div>
       {count > 1 && <div className="badge-counter">{count}</div>}
       {isAttacked && <div className={`badge-attacked badge-attacked-${player}`}>!</div>}
       {showTooltips && showTooltip && (

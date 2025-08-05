@@ -151,9 +151,7 @@
   color: #000; /* Keep for text if any, but SVG handles fill */
 }
 
-.player2 {
-  /* Player 2 pieces are handled by SvgPiece fill color */
-  color: #000; /* Keep for text if any, but SVG handles fill */
+.piece-inner.player2 {
   transform: rotate(180deg);
 }
 

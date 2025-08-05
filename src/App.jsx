@@ -8,12 +8,15 @@ import GameControls from './components/GameControls';
 import SettingsPanel from './components/SettingsPanel';
 import MoveLog from './components/MoveLog';
 import CheckmateModal from './components/CheckmateModal';
+import StartGameModal from './components/StartGameModal';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
 
 function App() {
   const [gameState, setGameState] = useState(getInitialGameState());
+  const [humanPlayer, setHumanPlayer] = useState(PLAYER_1);
+  const [aiPlayer, setAiPlayer] = useState(PLAYER_2);
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
@@ -22,6 +25,7 @@ function App() {
   const [lastMove, setLastMove] = useState(null); // { from: [r,c], to: [r,c] }
   const [pieceLabelType, setPieceLabelType] = useState('kanji'); // 'kanji' or 'english'
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isStartModalOpen, setIsStartModalOpen] = useState(true);
   const [attackedSquares, setAttackedSquares] = useState({ player1: new Set(), player2: new Set() });
   const [showAttackedPieces, setShowAttackedPieces] = useState(true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
@@ -64,7 +68,7 @@ function App() {
   }, [gameState.board]);
 
   useEffect(() => {
-    if (gameState.currentPlayer === PLAYER_2 && !checkmateWinner) {
+    if (gameState.currentPlayer === aiPlayer && !checkmateWinner) {
       setIsThinking(true);
       getAiMove(gameState, aiDifficulty)
         .then(aiMove => {
@@ -87,16 +91,16 @@ function App() {
                 setLastMove({ from: aiMove.from, to: aiMove.to });
               } else {
                 // Move was illegal, keep current state and switch player to human
-                nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
+                nextState = { ...currentGameState, currentPlayer: humanPlayer };
               }
             } else {
               // AI found no legal moves, switch turn back to human
-              nextState = { ...currentGameState, currentPlayer: PLAYER_1 };
+              nextState = { ...currentGameState, currentPlayer: humanPlayer };
             }
 
             // Check for checkmate after AI's move
             if (isCheckmate(nextState)) {
-              setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+              setCheckmateWinner(nextState.currentPlayer === humanPlayer ? aiPlayer : humanPlayer);
             }
 
             const hash = generateStateHash(nextState);
@@ -107,7 +111,7 @@ function App() {
               const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
               if (isCheck) {
                 // Perpetual check, the player who made the move loses
-                setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+                setCheckmateWinner(nextState.currentPlayer === humanPlayer ? aiPlayer : humanPlayer);
               } else {
                 // Repetition draw
                 setCheckmateWinner('draw');
@@ -124,7 +128,7 @@ function App() {
           setIsThinking(false);
         });
     }
-  }, [gameState.currentPlayer, aiDifficulty, checkmateWinner]);
+  }, [gameState.currentPlayer, aiDifficulty, checkmateWinner, humanPlayer, aiPlayer]);
 
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
@@ -182,7 +186,7 @@ function App() {
   };
 
   const handleSquareClick = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
+    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
     const pieceAtClick = gameState.board[row][col];
 
     // Deselect if the already selected piece is clicked again
@@ -229,7 +233,7 @@ function App() {
   };
 
   const handleDragStart = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
+    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
     const pieceAtDragStart = gameState.board[row][col];
     if (pieceAtDragStart && pieceAtDragStart.player === gameState.currentPlayer) {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
@@ -245,7 +249,7 @@ function App() {
   };
 
   const handleDrop = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
+    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
     if (selectedCapturedPiece) {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
       handlePlayerMove(newGameState, 'drop', [row, col]);
@@ -265,7 +269,7 @@ function App() {
   };
 
   const handleCapturedPieceClick = (pieceType) => {
-    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
+    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is clicked again, deselect it
       setSelectedCapturedPiece(null);
@@ -279,7 +283,7 @@ function App() {
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
-    if (isThinking || gameState.currentPlayer !== PLAYER_1) return;
+    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is dragged again, deselect it
       setSelectedCapturedPiece(null);
@@ -298,15 +302,17 @@ function App() {
     handlePlayerMove(newGameState, from, to);
   };
 
-  const handleNewGame = () => {
+  const handleStartGame = (settings) => {
+    setAiDifficulty(settings.difficulty);
+    setPieceLabelType(settings.pieceSet);
+    setHumanPlayer(settings.player);
+    setAiPlayer(settings.player === PLAYER_1 ? PLAYER_2 : PLAYER_1);
     setGameState(getInitialGameState());
-    setSelectedPiece(null);
-    setSelectedCapturedPiece(null);
-    setLegalMoves([]);
-    setLastMove(null);
-    setRandomWallpaper();
-    setRandomBoardBackground();
-    setCheckmateWinner(null);
+    setIsStartModalOpen(false);
+  };
+
+  const handleNewGame = () => {
+    setIsStartModalOpen(true);
   };
 
   const handleUndoMove = () => {
@@ -424,6 +430,14 @@ function App() {
           winner={checkmateWinner}
           onDismiss={() => setCheckmateWinner(null)}
           onNewGame={handleNewGame}
+        />
+      )}
+
+      {isStartModalOpen && (
+        <StartGameModal
+          isOpen={isStartModalOpen}
+          onClose={() => setIsStartModalOpen(false)}
+          onStartGame={handleStartGame}
         />
       )}
     </div>
