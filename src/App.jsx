@@ -308,6 +308,13 @@ function App() {
     setHumanPlayer(settings.player);
     setAiPlayer(settings.player === PLAYER_1 ? PLAYER_2 : PLAYER_1);
     setGameState(getInitialGameState());
+    setSelectedPiece(null);
+    setSelectedCapturedPiece(null);
+    setLegalMoves([]);
+    setLegalDropSquares([]);
+    setLastMove(null);
+    setCheckmateWinner(null);
+    setRepetitionCount({});
     setIsStartModalOpen(false);
   };
 
