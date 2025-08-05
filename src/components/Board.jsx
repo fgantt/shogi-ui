@@ -3,8 +3,8 @@ import Piece from './Piece';
 import '../styles/shogi.css';
 
 const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking }) => {
-  console.log("Board received legalMoves:", legalMoves);
-  console.log("Board received legalDropSquares:", legalDropSquares);
+  // console.log("Board received legalMoves:", legalMoves);
+  // console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
     return legalMoves.some(move => move[0] === row && move[1] === col);
   };

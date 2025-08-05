@@ -338,8 +338,8 @@ async function getAiMove(gameState, difficulty) {
     return null; // No legal moves available
   }
 
-  console.log(`AI thinking for difficulty: ${difficulty}, Time limit: ${timeLimit}ms`);
-  console.log(`Initial possible moves count: ${possibleMoves.length}`);
+  // console.log(`AI thinking for difficulty: ${difficulty}, Time limit: ${timeLimit}ms`);
+  // console.log(`Initial possible moves count: ${possibleMoves.length}`);
 
   switch (difficulty) {
     case 'easy':
@@ -369,12 +369,12 @@ async function getAiMove(gameState, difficulty) {
           }
 
           const { score } = await minimax(newGameState, 0, depth, !maximizingPlayer, -Infinity, Infinity, startTime, timeLimit, new Set()); // Use current depth
-          console.log(`Minimax returned score: ${score} for move:`, move);
+          // console.log(`Minimax returned score: ${score} for move:`, move);
 
           if (score === null) {
             // If minimax returned null, it means time limit was exceeded for this branch
             // We should stop this iteration and return the best move found so far from previous depths.
-            console.log(`Minimax returned null score, time limit hit. Returning currentBestMove.`);
+            // console.log(`Minimax returned null score, time limit hit. Returning currentBestMove.`);
             return currentBestMove;
           }
         }
@@ -429,7 +429,7 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
   if (Date.now() - startTime > timeLimit) {
-    console.log(`Minimax time limit exceeded at depth ${depth}`);
+    // console.log(`Minimax time limit exceeded at depth ${depth}`);
     return { score: null, move: null }; // Indicate that the search was cut short
   }
   const hash = generateStateHash(gameState);
