@@ -236,6 +236,7 @@ async function getAiMove(gameState, difficulty) {
   // Check opening book first
   const boardHash = generateStateHash(gameState);
   if (openingBook[boardHash]) {
+    console.log("AI: Choosing move from opening book.");
     const moves = openingBook[boardHash];
     return moves[Math.floor(Math.random() * moves.length)];
   }
