@@ -40,12 +40,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
   const textColor = isPromoted ? "#b80000" : "black";
 
   return (
-    <svg
-      width="70"
-      height="76"
-      viewBox="0 0 70 76"
-      className={player === "player2" ? "rotate-180" : ""}
-    >
+    <svg width="70" height="76" viewBox="0 0 70 76" className={player === 'player2' ? 'rotate-180' : ''}>
       <defs>
         <pattern
           id="wood-bambo-pattern"
@@ -54,7 +49,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
           height="1"
         >
           <image
-            href="/public/boards/wood-ginkgo-1.jpg"
+            href="/public/boards/wood-bambo.jpg"
             x="0"
             y="0"
             width="70"
