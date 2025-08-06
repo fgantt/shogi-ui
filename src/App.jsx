@@ -403,37 +403,10 @@ function App() {
         isThinking={isThinking}
       />
       <div className="game-container">
-        <CapturedPieces
-          pieces={gameState.capturedPieces[PLAYER_2]}
-          player={PLAYER_2}
-          onPieceClick={handleCapturedPieceClick}
-          onPieceDragStart={handleCapturedPieceDragStart}
-          pieceLabelType={pieceLabelType}
-          selectedCapturedPiece={selectedCapturedPiece}
-          isThinking={isThinking}
-          boardBackground={currentBoardBackground}
-        />
-        <div className="board-and-player1-captured">
-          <Board
-            board={gameState.board}
-            onSquareClick={handleSquareClick}
-            onDragStart={handleDragStart}
-            onDrop={handleDrop}
-            legalMoves={legalMoves}
-            legalDropSquares={legalDropSquares}
-            isCheck={gameState.isCheck}
-            kingPosition={gameState.kingPositions[gameState.currentPlayer]}
-            lastMove={lastMove}
-            pieceLabelType={pieceLabelType}
-            selectedPiece={selectedPiece}
-            attackedSquares={attackedSquares}
-            showAttackedPieces={showAttackedPieces}
-            showPieceTooltips={showPieceTooltips}
-            isThinking={isThinking}
-          />
+        <div className="board-and-captured-pieces">
           <CapturedPieces
-            pieces={gameState.capturedPieces[PLAYER_1]}
-            player={PLAYER_1}
+            pieces={gameState.capturedPieces[PLAYER_2]}
+            player={PLAYER_2}
             onPieceClick={handleCapturedPieceClick}
             onPieceDragStart={handleCapturedPieceDragStart}
             pieceLabelType={pieceLabelType}
@@ -441,10 +414,38 @@ function App() {
             isThinking={isThinking}
             boardBackground={currentBoardBackground}
           />
+          <div className="board-and-player1-captured">
+            <Board
+              board={gameState.board}
+              onSquareClick={handleSquareClick}
+              onDragStart={handleDragStart}
+              onDrop={handleDrop}
+              legalMoves={legalMoves}
+              legalDropSquares={legalDropSquares}
+              isCheck={gameState.isCheck}
+              kingPosition={gameState.kingPositions[gameState.currentPlayer]}
+              lastMove={lastMove}
+              pieceLabelType={pieceLabelType}
+              selectedPiece={selectedPiece}
+              attackedSquares={attackedSquares}
+              showAttackedPieces={showAttackedPieces}
+              showPieceTooltips={showPieceTooltips}
+              isThinking={isThinking}
+            />
+            <CapturedPieces
+              pieces={gameState.capturedPieces[PLAYER_1]}
+              player={PLAYER_1}
+              onPieceClick={handleCapturedPieceClick}
+              onPieceDragStart={handleCapturedPieceDragStart}
+              pieceLabelType={pieceLabelType}
+              selectedCapturedPiece={selectedCapturedPiece}
+              isThinking={isThinking}
+              boardBackground={currentBoardBackground}
+            />
+          </div>
         </div>
+        <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
       </div>
-
-      <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
 
       {gameState.promotionPending && (
         <PromotionModal onPromote={handlePromotionChoice} />

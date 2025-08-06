@@ -157,16 +157,15 @@
 
 .game-container {
   display: flex;
-  flex-direction: column; /* Arrange items vertically */
-  align-items: center;
+  flex-direction: row; /* Arrange items horizontally */
   gap: 10px; /* Adjust gap as needed */
 }
 
-.board-and-player1-captured {
+.board-and-captured-pieces {
   display: flex;
-  flex-direction: column; /* Board and Player 1 captured pieces arranged vertically */
+  flex-direction: column;
   align-items: center;
-  gap: 10px; /* Adjust gap as needed */
+  gap: 10px;
 }
 
 .captured-pieces {
@@ -237,11 +236,11 @@
 }
 
 .move-log {
-  margin-top: 20px;
+  margin-top: 0;
   border: 3px solid #000;
   padding: 0;
-  width: 650px; /* Changed width to 700px */
-  height: 250px; /* Set height to 250px */
+  width: 250px; /* Adjusted width */
+  height: 684px; /* Match board height */
   background-color: #3D8B3D;
   color: #000;
   box-sizing: border-box;
