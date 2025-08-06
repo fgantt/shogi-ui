@@ -15,7 +15,7 @@ const Piece = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSe
       onMouseEnter={() => showTooltips && setShowTooltip(true)}
       onMouseLeave={() => showTooltips && setShowTooltip(false)}
     >
-      <div className={`piece-inner ${player}`}>
+      <div className="piece-inner">
         <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
       </div>
       {count > 1 && <div className="badge-counter">{count}</div>}

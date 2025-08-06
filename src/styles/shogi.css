@@ -151,50 +151,78 @@
   color: #000; /* Keep for text if any, but SVG handles fill */
 }
 
-.piece-inner.player2 {
+.rotate-180 {
   transform: rotate(180deg);
 }
 
 .game-container {
   display: flex;
-  justify-content: center;
+  flex-direction: column; /* Arrange items vertically */
   align-items: center;
-  gap: 20px;
+  gap: 10px; /* Adjust gap as needed */
+}
+
+.board-and-player1-captured {
+  display: flex;
+  flex-direction: column; /* Board and Player 1 captured pieces arranged vertically */
+  align-items: center;
+  gap: 10px; /* Adjust gap as needed */
 }
 
 .captured-pieces {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  flex-direction: row; /* Arrange items in a row */
+  align-items: flex-start; /* Align items to the top */
+  justify-content: space-between; /* Distribute space between items */
   border: 3px solid #000;
-  padding: 10px;
-  width: 140px; /* Increased width to allow two pieces side-by-side */
-  min-height: 684px; /* Match board height */
-  justify-content: space-between;
-  background-color: rgba(61, 139, 61, 0.75); /* Slightly darker felt green with 75% transparency */
-  color: #000; /* Black text */
-}
-
-.captured-pieces.player2 {
-  transform: rotate(180deg);
+  padding: 0;
+  width: 630px; /* Match board width */
+  min-height: 80px; /* Adjust height for horizontal layout */
+  color: #000;
 }
 
 .captured-pieces h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #000; /* Black text */
-  text-align: center;
+  color: #000;
+  margin: 0; /* Remove default margins */
+  white-space: nowrap; /* Prevent wrapping */
+  background-color: #3D8B3D; /* Green background for the banner effect */
+  padding: 5px 10px; /* Add some padding for better appearance */
+  display: inline-block;
+  position: relative;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 20px 100%);
 }
 
+.captured-pieces.player1 h3 {
+  order: 2; /* Place heading after pieces-list */
+  padding-left: 2rem;
+}
 
+.captured-pieces.player2 h3 {
+  order: 1; /* Place heading before pieces-list */
+  display: inline-block;
+  position: relative;
+  clip-path: polygon(0% 0%, 100% 0%, calc(100% - 20px) 100%, 0% 100%);
+  padding-right: 2rem;
+}
 
 .captured-pieces .pieces-list {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  justify-content: center;
-  width: 100%; /* Ensure the list takes full width of its container */
+  flex-grow: 1; /* Allow pieces-list to take available space */
 }
+
+.captured-pieces.player1 .pieces-list {
+  order: 1; /* Place pieces-list before heading */
+  justify-content: flex-start;
+}
+
+.captured-pieces.player2 .pieces-list {
+  order: 2; /* Place pieces-list after heading */
+  justify-content: flex-end;
+}
+
+
 
 .legal-move {
   background-color: rgba(170, 255, 170, 0.5); /* Light green with 50% transparency */

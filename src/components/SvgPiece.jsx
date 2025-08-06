@@ -40,7 +40,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
   const textColor = isPromoted ? "#b80000" : "black";
 
   return (
-    <svg width="70" height="76" viewBox="0 0 70 76">
+    <svg width="70" height="76" viewBox="0 0 70 76" className={player === 'player2' ? 'rotate-180' : ''}>
       <defs>
         <pattern
           id="wood-bambo-pattern"

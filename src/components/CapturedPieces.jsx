@@ -12,7 +12,7 @@ const PIECE_ORDER = {
   'R': 7, // Rook
 };
 
-const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece, isThinking }) => {
+const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece, isThinking, boardBackground }) => {
   const groupedPieces = pieces.reduce((acc, piece) => {
     acc[piece.type] = (acc[piece.type] || 0) + 1;
     return acc;
@@ -23,9 +23,14 @@ const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceL
   });
 
   return (
-    <div className={`captured-pieces ${player} ${isThinking ? 'ai-thinking-overlay' : ''}`}>
-      <h3>{player === 'player1' ? 'Player 1' : 'Player 2'} Captured</h3>
-      <div className="pieces-list">
+    <div className={`captured-pieces ${player}`} style={{ backgroundImage: `url('${boardBackground}')` }}>
+      <h3>
+        {player === 'player1' ? '☗ ' : <><span style={{ color: "white" }}>☗</span>{' '}</>}
+        {pieceLabelType === 'kanji'
+          ? (player === 'player1' ? 'Sente' : 'Gote')
+          : (player === 'player1' ? 'Black' : 'White')}
+      </h3>
+      <div className={`pieces-list ${player}`}>
         {sortedPieces.map(([type, count]) => (
           <Piece
             key={type}
