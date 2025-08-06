@@ -414,35 +414,33 @@ function App() {
             isThinking={isThinking}
             boardBackground={currentBoardBackground}
           />
-          <div className="board-and-player1-captured">
-            <Board
-              board={gameState.board}
-              onSquareClick={handleSquareClick}
-              onDragStart={handleDragStart}
-              onDrop={handleDrop}
-              legalMoves={legalMoves}
-              legalDropSquares={legalDropSquares}
-              isCheck={gameState.isCheck}
-              kingPosition={gameState.kingPositions[gameState.currentPlayer]}
-              lastMove={lastMove}
-              pieceLabelType={pieceLabelType}
-              selectedPiece={selectedPiece}
-              attackedSquares={attackedSquares}
-              showAttackedPieces={showAttackedPieces}
-              showPieceTooltips={showPieceTooltips}
-              isThinking={isThinking}
-            />
-            <CapturedPieces
-              pieces={gameState.capturedPieces[PLAYER_1]}
-              player={PLAYER_1}
-              onPieceClick={handleCapturedPieceClick}
-              onPieceDragStart={handleCapturedPieceDragStart}
-              pieceLabelType={pieceLabelType}
-              selectedCapturedPiece={selectedCapturedPiece}
-              isThinking={isThinking}
-              boardBackground={currentBoardBackground}
-            />
-          </div>
+          <Board
+            board={gameState.board}
+            onSquareClick={handleSquareClick}
+            onDragStart={handleDragStart}
+            onDrop={handleDrop}
+            legalMoves={legalMoves}
+            legalDropSquares={legalDropSquares}
+            isCheck={gameState.isCheck}
+            kingPosition={gameState.kingPositions[gameState.currentPlayer]}
+            lastMove={lastMove}
+            pieceLabelType={pieceLabelType}
+            selectedPiece={selectedPiece}
+            attackedSquares={attackedSquares}
+            showAttackedPieces={showAttackedPieces}
+            showPieceTooltips={showPieceTooltips}
+            isThinking={isThinking}
+          />
+          <CapturedPieces
+            pieces={gameState.capturedPieces[PLAYER_1]}
+            player={PLAYER_1}
+            onPieceClick={handleCapturedPieceClick}
+            onPieceDragStart={handleCapturedPieceDragStart}
+            pieceLabelType={pieceLabelType}
+            selectedCapturedPiece={selectedCapturedPiece}
+            isThinking={isThinking}
+            boardBackground={currentBoardBackground}
+          />
         </div>
         <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
       </div>
