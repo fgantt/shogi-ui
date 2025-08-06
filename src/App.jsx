@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -32,6 +32,7 @@ function App() {
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [repetitionCount, setRepetitionCount] = useState({});
+  const [checkingPiece, setCheckingPiece] = useState(null);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -65,7 +66,12 @@ function App() {
 
   useEffect(() => {
     updateAttackedSquares();
-  }, [gameState.board]);
+    if (gameState.isCheck) {
+      setCheckingPiece(getCheckingPiece(gameState.board, gameState.currentPlayer));
+    } else {
+      setCheckingPiece(null);
+    }
+  }, [gameState.board, gameState.isCheck, gameState.currentPlayer]);
 
   useEffect(() => {
     if (isStartModalOpen) return; // Do not run AI logic if modal is open
@@ -430,6 +436,7 @@ function App() {
             showAttackedPieces={showAttackedPieces}
             showPieceTooltips={showPieceTooltips}
             isThinking={isThinking}
+            checkingPiece={checkingPiece}
           />
           <CapturedPieces
             pieces={gameState.capturedPieces[PLAYER_1]}

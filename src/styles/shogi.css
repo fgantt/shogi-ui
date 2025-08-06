@@ -41,6 +41,14 @@
   padding: 0 3px;
 }
 
+.check-line-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none; /* Make sure it doesn't interfere with clicks */
+  z-index: 1; /* Place it above the board but below the pieces */
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(9, 70px);
@@ -51,6 +59,7 @@
   background-color: #8B4513; /* Darker wood brown */
   background-image: linear-gradient(90deg, #8B4513 0%, #A0522D 20%, #8B4513 40%, #A0522D 60%, #8B4513 80%, #A0522D 100%);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  position: relative; /* Add this to position the SVG correctly */
 }
 
 .board-row {

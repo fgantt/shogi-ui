@@ -448,12 +448,12 @@ export function dropPiece(gameState, pieceType, to) {
 }
 
 /**
- * Checks if a player's king is in check.
+ * Gets the position of the piece checking the king.
  * @param {Array<Array<object>>} board The board state.
  * @param {string} player The player to check.
- * @returns {boolean} True if the king is in check, false otherwise.
+ * @returns {[number, number] | null} The [row, col] of the checking piece, or null if not in check.
  */
-export function isKingInCheck(board, player) {
+export function getCheckingPiece(board, player) {
   const opponent = player === PLAYER_1 ? PLAYER_2 : PLAYER_1;
   let kingPosition = null;
 
@@ -470,7 +470,7 @@ export function isKingInCheck(board, player) {
   }
 
   if (!kingPosition) {
-    return false; // Should not happen in a real game
+    return null; // Should not happen in a real game
   }
 
   // Check if any opponent piece can attack the king
@@ -481,14 +481,25 @@ export function isKingInCheck(board, player) {
         const moves = getLegalMoves(piece, r, c, board);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            return true; // King is in check
+            return [r, c]; // Return the position of the checking piece
           }
         }
       }
     }
   }
 
-  return false;
+  return null; // King is not in check
+}
+
+
+/**
+ * Checks if a player's king is in check.
+ * @param {Array<Array<object>>} board The board state.
+ * @param {string} player The player to check.
+ * @returns {boolean} True if the king is in check, false otherwise.
+ */
+export function isKingInCheck(board, player) {
+  return getCheckingPiece(board, player) !== null;
 }
 
 /**

@@ -2,7 +2,7 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking }) => {
+const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece }) => {
   // console.log("Board received legalMoves:", legalMoves);
   // console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
@@ -30,6 +30,25 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
     return isFromSquare || isToSquare;
   };
 
+  const renderCheckLine = () => {
+    if (!isCheck || !checkingPiece || !kingPosition) return null;
+
+    const [checkingRow, checkingCol] = checkingPiece;
+    const [kingRow, kingCol] = kingPosition;
+
+    // Calculate center points of the squares
+    const startX = checkingCol * 70 + 35;
+    const startY = checkingRow * 76 + 38;
+    const endX = kingCol * 70 + 35;
+    const endY = kingRow * 76 + 38;
+
+    return (
+      <svg className="check-line-svg" width="630" height="684">
+        <line x1={startX} y1={startY} x2={endX} y2={endY} stroke="red" strokeWidth="4" />
+      </svg>
+    );
+  };
+
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const rowNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -44,6 +63,7 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
       </div>
       <div className="board-and-row-numbers">
         <div className="board">
+          {renderCheckLine()}
           {board.map((row, rowIndex) => (
             <div key={rowIndex} className="board-row">
               {row.map((piece, colIndex) => (
