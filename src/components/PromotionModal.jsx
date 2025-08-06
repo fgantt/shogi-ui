@@ -1,14 +1,16 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const PromotionModal = ({ onPromote, onCancel }) => {
+const PromotionModal = ({ onPromote }) => {
   return (
-    <div className="modal-overlay">
-      <div className="promotion-modal">
+    <div className="settings-overlay">
+      <div className="settings-panel">
         <h2>Promote Piece?</h2>
         <p>Do you want to promote this piece?</p>
-        <button onClick={() => onPromote(true)}>Promote</button>
-        <button onClick={() => onPromote(false)}>Don't Promote</button>
+        <div className="promotion-modal-buttons">
+          <button onClick={() => onPromote(true)}>Promote</button>
+          <button onClick={() => onPromote(false)}>Don't Promote</button>
+        </div>
       </div>
     </div>
   );

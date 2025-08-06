@@ -14,12 +14,14 @@ const CheckmateModal = ({ winner, onDismiss, onNewGame }) => {
   }
 
   return (
-    <div className="modal-overlay">
-      <div className="promotion-modal">
+    <div className="settings-overlay">
+      <div className="settings-panel">
         <h2>{title}</h2>
         <p>{message}</p>
-        <button onClick={onDismiss}>Dismiss</button>
-        <button onClick={onNewGame}>New Game</button>
+        <div className="checkmate-modal-buttons">
+          <button onClick={onNewGame}>New Game</button>
+          <button onClick={onDismiss}>Dismiss</button>
+        </div>
       </div>
     </div>
   );
