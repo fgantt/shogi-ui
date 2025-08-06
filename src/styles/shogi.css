@@ -293,12 +293,12 @@
 }
 
 .move-table th:nth-child(1) { width: 10%; } /* Move Number */
-.move-table th:nth-child(2) { width: 15%; } /* Player */
-.move-table th:nth-child(3) { width: 75%; text-align: left; padding-left: 1rem; } /* Action */
+.move-table th:nth-child(2) { width: 45%; } /* Player 1 Move */
+.move-table th:nth-child(3) { width: 45%; text-align: left; padding-left: 1rem; } /* Player 2 Move */
 
 .move-table td:nth-child(1) { width: 10%; } /* Move Number */
-.move-table td:nth-child(2) { width: 15%; } /* Player */
-.move-table td:nth-child(3) { width: 75%; text-align: left; padding-left: 1rem; } /* Action */
+.move-table td:nth-child(2) { width: 45%; } /* Player 1 Move */
+.move-table td:nth-child(3) { width: 45%; text-align: left; padding-left: 1rem; } /* Player 2 Move */
 
 .move-table th {
   background-color: #2E8B57; /* Slightly darker green for headers */

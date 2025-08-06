@@ -87,22 +87,22 @@ const MoveLog = ({ moves, pieceLabelType }) => {
             <th onClick={toggleSortOrder} style={{ cursor: 'pointer' }}>
               Move {sortOrder === 'asc' ? '▲' : '▼'}
             </th>
-            <th>Player</th>
-            <th>Move Notation</th>
-            
+            <th>☗</th>
+            <th><span style={{ color: "white" }}>☗</span></th>
           </tr>
         </thead>
         <tbody>
-          {sortedMoves.map((move, index) => (
-            <tr key={index}>
-              <td>{moves.indexOf(move) + 1}</td>
-              <td>{move.player === 'player1' ? '☗' : <span style={{ color: "white" }}>☗</span>}</td>
-              <td>
-                {formatMove(move, sortedMoves)}
-              </td>
-              
-            </tr>
-          ))}
+          {Array.from({ length: Math.ceil(moves.length / 2) }).map((_, i) => {
+            const player1Move = moves[i * 2];
+            const player2Move = moves[i * 2 + 1];
+            return (
+              <tr key={i}>
+                <td>{i + 1}</td>
+                <td>{player1Move ? formatMove(player1Move, moves) : ''}</td>
+                <td>{player2Move ? formatMove(player2Move, moves) : ''}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
