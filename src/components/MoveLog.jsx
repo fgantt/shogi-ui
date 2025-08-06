@@ -89,18 +89,18 @@ const MoveLog = ({ moves, pieceLabelType }) => {
             </th>
             <th>Player</th>
             <th>Move Notation</th>
-            <th>Time</th>
+            
           </tr>
         </thead>
         <tbody>
           {sortedMoves.map((move, index) => (
             <tr key={index}>
               <td>{moves.indexOf(move) + 1}</td>
-              <td>{move.player === 'player1' ? 'Player 1' : 'Player 2'}</td>
+              <td>{move.player === 'player1' ? '☗' : <span style={{ color: "white" }}>☗</span>}</td>
               <td>
                 {formatMove(move, sortedMoves)}
               </td>
-              <td>{move.timestamp}</td>
+              
             </tr>
           ))}
         </tbody>
