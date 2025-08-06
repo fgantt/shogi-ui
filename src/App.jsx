@@ -107,11 +107,12 @@ function App() {
               setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
             }
 
-            const hash = generateStateHash(nextState);
-            const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
+            const newRepetitionCount = { ...repetitionCount };
+            const currentHash = generateStateHash(nextState);
+            newRepetitionCount[currentHash] = (newRepetitionCount[currentHash] || 0) + 1;
             setRepetitionCount(newRepetitionCount);
 
-            if (newRepetitionCount[hash] >= 4) {
+            if (newRepetitionCount[currentHash] >= 4) {
               const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
               if (isCheck) {
                 // Perpetual check, the player who made the move loses
@@ -159,11 +160,12 @@ function App() {
   };
 
   const handlePlayerMove = (newGameState, from, to) => {
-    const hash = generateStateHash(newGameState);
-    const newRepetitionCount = { ...repetitionCount, [hash]: (repetitionCount[hash] || 0) + 1 };
+    const newRepetitionCount = { ...repetitionCount };
+    const currentHash = generateStateHash(newGameState);
+    newRepetitionCount[currentHash] = (newRepetitionCount[currentHash] || 0) + 1;
     setRepetitionCount(newRepetitionCount);
 
-    if (newRepetitionCount[hash] >= 4) {
+    if (newRepetitionCount[currentHash] >= 4) {
       const isCheck = isKingInCheck(newGameState.board, newGameState.currentPlayer);
       if (isCheck) {
         // Perpetual check, the player who made the move loses
