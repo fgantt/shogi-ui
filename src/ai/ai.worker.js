@@ -197,6 +197,20 @@ function getKingSafetyScore(board, player, kingPos) {
   return safetyScore;
 }
 
+function getMobilityScore(board, player) {
+  let mobility = 0;
+  const legalMoves = getLegalMoves(board, player);
+  mobility = legalMoves.length;
+
+  // Bonus for controlling the center
+  for (const move of legalMoves) {
+    if (move.to[0] >= 3 && move.to[0] <= 5 && move.to[1] >= 3 && move.to[1] <= 5) {
+      mobility += 0.1; // Small bonus for each move that lands in the center
+    }
+  }
+  return mobility;
+}
+
 function evaluateBoard(gameState) {
     let score = 0;
     const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
@@ -253,6 +267,10 @@ function evaluateBoard(gameState) {
     score += getKingSafetyScore(board, currentPlayer, playerKingPos);
     score -= getKingSafetyScore(board, opponent, opponentKingPos);
 
+    // Mobility Score
+    const playerMobility = getMobilityScore(board, currentPlayer);
+    const opponentMobility = getMobilityScore(board, opponent);
+    score += (playerMobility - opponentMobility) * 10; // Adjust weight as needed
 
     // Threat Analysis
     const attackedByPlayer = getAttackedSquares(board, currentPlayer);
