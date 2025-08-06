@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
 import { KING, ROOK, BISHOP, GOLD, SILVER, KNIGHT, LANCE, PAWN, PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN, PLAYER_1, PLAYER_2 } from '../game/engine';
 
@@ -65,18 +65,15 @@ const formatMove = (move, allMoves) => {
 
 const MoveLog = ({ moves, pieceLabelType }) => {
   const [sortOrder, setSortOrder] = useState('desc');
+  const tableBodyRef = useRef(null);
 
-  const sortedMoves = [...moves].sort((a, b) => {
-    if (sortOrder === 'asc') {
-      return moves.indexOf(a) - moves.indexOf(b);
-    } else {
-      return moves.indexOf(b) - moves.indexOf(a);
+  useEffect(() => {
+    if (tableBodyRef.current) {
+      tableBodyRef.current.scrollTop = tableBodyRef.current.scrollHeight;
     }
-  });
+  }, [moves]);
 
-  const toggleSortOrder = () => {
-    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-  };
+  
 
   return (
     <div className="move-log">
@@ -84,14 +81,12 @@ const MoveLog = ({ moves, pieceLabelType }) => {
       <table className="move-table">
         <thead>
           <tr>
-            <th onClick={toggleSortOrder} style={{ cursor: 'pointer' }}>
-              Move {sortOrder === 'asc' ? '▲' : '▼'}
-            </th>
+            <th></th>
             <th>☗</th>
             <th><span style={{ color: "white" }}>☗</span></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody ref={tableBodyRef}>
           {Array.from({ length: Math.ceil(moves.length / 2) }).map((_, i) => {
             const player1Move = moves[i * 2];
             const player2Move = moves[i * 2 + 1];

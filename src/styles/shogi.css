@@ -242,7 +242,7 @@
   padding: 0;
   width: 250px; /* Adjusted width */
   height: 684px; /* Match board height */
-  background-color: #3D8B3D;
+  background-color: #F5DEB3; /* Wheat - light, slightly worn paper */
   color: #000;
   box-sizing: border-box;
 }
@@ -255,7 +255,7 @@
 }
 
 .move-table-container {
-  max-height: 180px; /* Set a max height for the scrollable area */
+  max-height: 624px; /* Set a max height for the scrollable area */
   overflow-y: auto; /* Enable vertical scrolling */
 }
 
@@ -273,7 +273,7 @@
 
 .move-table tbody {
   display: block;
-  max-height: 180px; /* Set a fixed height for scrolling */
+  max-height: 624px; /* Set a fixed height for scrolling */
   overflow-y: auto; /* Enable vertical scrolling */
   width: 100%;
 }
@@ -292,25 +292,25 @@
   white-space: nowrap; /* Prevent headers and cells from wrapping */
 }
 
-.move-table th:nth-child(1) { width: 10%; } /* Move Number */
-.move-table th:nth-child(2) { width: 45%; } /* Player 1 Move */
-.move-table th:nth-child(3) { width: 45%; text-align: left; padding-left: 1rem; } /* Player 2 Move */
+.move-table th:nth-child(1) { width: 20%; } /* Move Number */
+.move-table th:nth-child(2) { width: 40%; text-align: center; } /* Player 1 Move */
+.move-table th:nth-child(3) { width: 40%; text-align: center; padding-left: 1rem; } /* Player 2 Move */
 
-.move-table td:nth-child(1) { width: 10%; } /* Move Number */
-.move-table td:nth-child(2) { width: 45%; } /* Player 1 Move */
-.move-table td:nth-child(3) { width: 45%; text-align: left; padding-left: 1rem; } /* Player 2 Move */
+.move-table td:nth-child(1) { width: 20%; text-align: right; padding-right: .5rem; } /* Move Number */
+.move-table td:nth-child(2) { width: 40%; text-align: left; padding-left: 1rem; } /* Player 1 Move */
+.move-table td:nth-child(3) { width: 40%; text-align: left; padding-left: 1rem; } /* Player 2 Move */
 
 .move-table th {
-  background-color: #2E8B57; /* Slightly darker green for headers */
+  background-color: #C8C8A0; /* Slightly darker, aged paper */
   font-weight: bold;
 }
 
 .move-table tbody tr:nth-child(odd) {
-  background-color: #4CAF50; /* Lighter green for odd rows */
+  background-color: #F8F8E0; /* Lighter, slightly yellowed paper */
 }
 
 .move-table tbody tr:nth-child(even) {
-  background-color: #3D8B3D; /* Darker green for even rows */
+  background-color: #E0D8B0; /* Slightly darker, aged paper */
 }
 
 .modal-overlay {
