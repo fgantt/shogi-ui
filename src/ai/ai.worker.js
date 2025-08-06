@@ -440,35 +440,69 @@ async function getAiMove(gameState, difficulty) {
 
 function scoreMove(move, gameState) {
   let score = 0;
-  const { board, currentPlayer } = gameState;
+  const { board, currentPlayer, moveHistory } = gameState;
   const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
+  // 1. Promotion Priority
+  if (move.promote) {
+    score += 800; // Strong bonus for promoting a piece
+  }
+
+  // 2. MVV-LVA for Captures
   if (move.isCapture) {
-    // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
     const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
-    const attackingPieceType = board[move.from[0]][move.from[1]]?.type;
+    const attackingPieceType = move.from === 'drop' ? move.type : board[move.from[0]][move.from[1]]?.type;
 
     if (capturedPieceType && attackingPieceType) {
       score += PIECE_VALUES[capturedPieceType] * 10 - PIECE_VALUES[attackingPieceType];
     }
-    score += 1000; // Base bonus for captures
+    score += 1000; // Base bonus for any capture
   }
 
-  // Killer moves bonus
-  if (move.from === killerMoves[0]?.from && move.to === killerMoves[0]?.to) {
-    score += 900; // High bonus for first killer move
-  } else if (move.from === killerMoves[1]?.from && move.to === killerMoves[1]?.to) {
-    score += 800; // High bonus for second killer move
+  // 3. Recapture Priority
+  if (moveHistory.length > 0) {
+    const lastMove = moveHistory[moveHistory.length - 1];
+    if (lastMove.to[0] === move.to[0] && lastMove.to[1] === move.to[1]) {
+      score += 1200; // High bonus for immediate recapture
+    }
   }
 
-  // History heuristic bonus
+  // 4. Killer Moves Bonus (for quiet moves)
+  if (!move.isCapture) {
+    if (killerMoves[0] && move.from === killerMoves[0].from && move.to[0] === killerMoves[0].to[0] && move.to[1] === killerMoves[0].to[1]) {
+      score += 900;
+    } else if (killerMoves[1] && move.from === killerMoves[1].from && move.to[0] === killerMoves[1].to[0] && move.to[1] === killerMoves[1].to[1]) {
+      score += 800;
+    }
+  }
+
+  // 5. History Heuristic Bonus
   if (move.from !== 'drop' && historyTable[move.from[0]] && historyTable[move.from[0]][move.from[1]]) {
     score += historyTable[move.from[0]][move.from[1]];
   }
 
-  if (move.isCheck) {
-    score += 50; // Priority for checks
+  // 6. Escape from Attack Priority
+  if (move.from !== 'drop') {
+    const attackedSquares = getAttackedSquares(board, opponent);
+    const fromKey = `${move.from[0]},${move.from[1]}`;
+    if (attackedSquares.has(fromKey)) {
+        const attackingPiece = board[move.from[0]][move.from[1]];
+        if (attackingPiece) {
+            score += PIECE_VALUES[attackingPiece.type] / 4; // Bonus for escaping attack, proportional to piece value
+        }
+    }
   }
+
+  // 7. Center Control Bonus
+  if (move.to[0] >= 3 && move.to[0] <= 5 && move.to[1] >= 3 && move.to[1] <= 5) {
+      score += 20; // Small bonus for moving towards the center
+  }
+
+  // 8. Check Priority
+  if (move.isCheck) {
+    score += 50;
+  }
+
   return score;
 }
 
