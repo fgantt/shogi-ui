@@ -15,8 +15,8 @@ import './styles/settings.css';
 
 function App() {
   const [gameState, setGameState] = useState(getInitialGameState());
-  const [humanPlayer, setHumanPlayer] = useState(PLAYER_1);
-  const [aiPlayer, setAiPlayer] = useState(PLAYER_2);
+  const [player1Type, setPlayer1Type] = useState('human'); // 'human' or 'ai'
+  const [player2Type, setPlayer2Type] = useState('ai'); // 'human' or 'ai'
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
@@ -68,7 +68,11 @@ function App() {
   }, [gameState.board]);
 
   useEffect(() => {
-    if (gameState.currentPlayer === aiPlayer && !checkmateWinner) {
+    if (isStartModalOpen) return; // Do not run AI logic if modal is open
+
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+
+    if (currentPlayerType === 'ai' && !checkmateWinner) {
       setIsThinking(true);
       getAiMove(gameState, aiDifficulty)
         .then(aiMove => {
@@ -91,16 +95,16 @@ function App() {
                 setLastMove({ from: aiMove.from, to: aiMove.to });
               } else {
                 // Move was illegal, keep current state and switch player to human
-                nextState = { ...currentGameState, currentPlayer: humanPlayer };
+                nextState = { ...currentGameState, currentPlayer: (gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1) };
               }
             } else {
               // AI found no legal moves, switch turn back to human
-              nextState = { ...currentGameState, currentPlayer: humanPlayer };
+              nextState = { ...currentGameState, currentPlayer: (gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1) };
             }
 
             // Check for checkmate after AI's move
             if (isCheckmate(nextState)) {
-              setCheckmateWinner(nextState.currentPlayer === humanPlayer ? aiPlayer : humanPlayer);
+              setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
             }
 
             const hash = generateStateHash(nextState);
@@ -111,7 +115,7 @@ function App() {
               const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
               if (isCheck) {
                 // Perpetual check, the player who made the move loses
-                setCheckmateWinner(nextState.currentPlayer === humanPlayer ? aiPlayer : humanPlayer);
+                setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
               } else {
                 // Repetition draw
                 setCheckmateWinner('draw');
@@ -128,7 +132,7 @@ function App() {
           setIsThinking(false);
         });
     }
-  }, [gameState.currentPlayer, aiDifficulty, checkmateWinner, humanPlayer, aiPlayer]);
+  }, [gameState.currentPlayer, aiDifficulty, checkmateWinner, player1Type, player2Type]);
 
   const setRandomWallpaper = () => {
     if (wallpaperList.length > 0) {
@@ -186,7 +190,8 @@ function App() {
   };
 
   const handleSquareClick = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+    if (isThinking || currentPlayerType === 'ai') return;
     const pieceAtClick = gameState.board[row][col];
 
     // Deselect if the already selected piece is clicked again
@@ -233,7 +238,8 @@ function App() {
   };
 
   const handleDragStart = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+    if (isThinking || currentPlayerType === 'ai') return;
     const pieceAtDragStart = gameState.board[row][col];
     if (pieceAtDragStart && pieceAtDragStart.player === gameState.currentPlayer) {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
@@ -249,7 +255,8 @@ function App() {
   };
 
   const handleDrop = (row, col) => {
-    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+    if (isThinking || currentPlayerType === 'ai') return;
     if (selectedCapturedPiece) {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
       handlePlayerMove(newGameState, 'drop', [row, col]);
@@ -269,7 +276,8 @@ function App() {
   };
 
   const handleCapturedPieceClick = (pieceType) => {
-    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+    if (isThinking || currentPlayerType === 'ai') return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is clicked again, deselect it
       setSelectedCapturedPiece(null);
@@ -283,7 +291,8 @@ function App() {
   };
 
   const handleCapturedPieceDragStart = (pieceType) => {
-    if (isThinking || gameState.currentPlayer !== humanPlayer) return;
+    const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
+    if (isThinking || currentPlayerType === 'ai') return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is dragged again, deselect it
       setSelectedCapturedPiece(null);
@@ -305,8 +314,8 @@ function App() {
   const handleStartGame = (settings) => {
     setAiDifficulty(settings.difficulty);
     setPieceLabelType(settings.pieceSet);
-    setHumanPlayer(settings.player);
-    setAiPlayer(settings.player === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+    setPlayer1Type(settings.player1Type);
+    setPlayer2Type(settings.player2Type);
     setGameState(getInitialGameState());
     setSelectedPiece(null);
     setSelectedCapturedPiece(null);
@@ -316,6 +325,29 @@ function App() {
     setCheckmateWinner(null);
     setRepetitionCount({});
     setIsStartModalOpen(false);
+
+    // If Player 1 is AI, trigger their first move
+    if (settings.player1Type === 'ai') {
+      setIsThinking(true);
+      getAiMove(getInitialGameState(), settings.difficulty) // Pass initial state for AI's first move
+        .then(aiMove => {
+          setGameState(currentGameState => {
+            let nextState;
+            if (aiMove) {
+              nextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
+            } else {
+              nextState = { ...currentGameState, currentPlayer: PLAYER_2 }; // AI found no legal moves, switch turn
+            }
+            return nextState;
+          });
+        })
+        .catch(error => {
+          console.error("Error getting AI move for Player 1:", error);
+        })
+        .finally(() => {
+          setIsThinking(false);
+        });
+    }
   };
 
   const handleNewGame = () => {

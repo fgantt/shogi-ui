@@ -8,7 +8,8 @@ const StartGameModal = ({ isOpen, onClose, onStartGame }) => {
     const formData = new FormData(event.target);
     const settings = {
       difficulty: formData.get('difficulty'),
-      player: formData.get('player'),
+      player1Type: formData.get('player1Type'),
+      player2Type: formData.get('player2Type'),
       pieceSet: formData.get('pieceSet'),
     };
     onStartGame(settings);
@@ -29,10 +30,17 @@ const StartGameModal = ({ isOpen, onClose, onStartGame }) => {
             </select>
           </div>
           <div className="setting-group">
-            <label htmlFor="player">You Play As:</label>
-            <select id="player" name="player" defaultValue="player1">
-              <option value="player1">Player 1 (Moves First)</option>
-              <option value="player2">Player 2</option>
+            <label htmlFor="player1Type">Player 1 Type:</label>
+            <select id="player1Type" name="player1Type" defaultValue="human">
+              <option value="human">Human</option>
+              <option value="ai">AI</option>
+            </select>
+          </div>
+          <div className="setting-group">
+            <label htmlFor="player2Type">Player 2 Type:</label>
+            <select id="player2Type" name="player2Type" defaultValue="ai">
+              <option value="human">Human</option>
+              <option value="ai">AI</option>
             </select>
           </div>
           <div className="setting-group">

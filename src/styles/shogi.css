@@ -186,15 +186,7 @@
   text-align: center;
 }
 
-.ai-thinking-overlay {
-  opacity: 0.9;
-  pointer-events: none;
-}
 
-.thinking {
-  pointer-events: none; /* Disable clicks */
-  opacity: 0.7; /* Dim the elements */
-}
 
 .captured-pieces .pieces-list {
   display: flex;
