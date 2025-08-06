@@ -159,6 +159,7 @@
   display: flex;
   flex-direction: row; /* Arrange items horizontally */
   gap: 10px; /* Adjust gap as needed */
+  align-items: center;
 }
 
 .board-and-captured-pieces {
