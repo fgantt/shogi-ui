@@ -134,9 +134,72 @@ const PSTs = {
     [PROMOTED_ROOK]: ROOK_PST,
 };
 
+function getKingSafetyScore(board, player, kingPos) {
+  if (!kingPos) return 0;
+
+  const [kingR, kingC] = kingPos;
+  let safetyScore = 0;
+
+  // Define Mino castle patterns for both players
+  const minoCastlePlayer1 = {
+    king: [8, 7],
+    gold1: [7, 7],
+    gold2: [8, 6],
+    silver: [7, 8],
+  };
+  const minoCastlePlayer2 = {
+    king: [0, 1],
+    gold1: [1, 1],
+    gold2: [0, 2],
+    silver: [1, 0],
+  };
+
+  const castlePattern = player === PLAYER_1 ? minoCastlePlayer1 : minoCastlePlayer2;
+  let castleBonus = 0;
+  let piecesInPlace = 0;
+
+  // Check for King's position
+  if (board[castlePattern.king[0]] && board[castlePattern.king[0]][castlePattern.king[1]]?.type === KING) {
+    piecesInPlace++;
+  }
+  // Check for Golds
+  if (board[castlePattern.gold1[0]] && board[castlePattern.gold1[0]][castlePattern.gold1[1]]?.type === GOLD) {
+    piecesInPlace++;
+  }
+  if (board[castlePattern.gold2[0]] && board[castlePattern.gold2[0]][castlePattern.gold2[1]]?.type === GOLD) {
+    piecesInPlace++;
+  }
+  // Check for Silver
+  if (board[castlePattern.silver[0]] && board[castlePattern.silver[0]][castlePattern.silver[1]]?.type === SILVER) {
+    piecesInPlace++;
+  }
+
+  if (piecesInPlace >= 3) {
+    castleBonus = 150 * piecesInPlace; // Bonus for each piece in place
+    if (piecesInPlace === 4) {
+      castleBonus += 200; // Extra bonus for a complete Mino castle
+    }
+  }
+  safetyScore += castleBonus;
+
+  // General King Safety: Penalize for nearby enemy pieces
+  let enemyAttackers = 0;
+  for (let r = Math.max(0, kingR - 2); r <= Math.min(8, kingR + 2); r++) {
+    for (let c = Math.max(0, kingC - 2); c <= Math.min(8, kingC + 2); c++) {
+      const piece = board[r][c];
+      if (piece && piece.player !== player) {
+        enemyAttackers++;
+      }
+    }
+  }
+  safetyScore -= enemyAttackers * 30; // Penalty for each nearby enemy piece
+
+  return safetyScore;
+}
+
 function evaluateBoard(gameState) {
     let score = 0;
-    const { board, currentPlayer, capturedPieces, pastStates, moveHistory } = gameState;
+    const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
     const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
     // Tempo Bonus
@@ -144,6 +207,21 @@ function evaluateBoard(gameState) {
         const lastMove = moveHistory[moveHistory.length - 1];
         if (lastMove.piece !== KING) {
             score += 10;
+        }
+    }
+
+    // Find Kings
+    let playerKingPos = null;
+    let opponentKingPos = null;
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            if (board[r][c] && board[r][c].type === KING) {
+                if (board[r][c].player === currentPlayer) {
+                    playerKingPos = [r, c];
+                } else {
+                    opponentKingPos = [r, c];
+                }
+            }
         }
     }
 
@@ -171,41 +249,10 @@ function evaluateBoard(gameState) {
         score -= PIECE_VALUES[piece.type];
     }
 
-    // King Safety and Threat Analysis
-    let kingPos = null;
-    for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (board[r][c] && board[r][c].type === KING && board[r][c].player === currentPlayer) {
-                kingPos = [r, c];
-                break;
-            }
-        }
-        if (kingPos) break;
-    }
+    // King Safety Score
+    score += getKingSafetyScore(board, currentPlayer, playerKingPos);
+    score -= getKingSafetyScore(board, opponent, opponentKingPos);
 
-    if (kingPos) {
-        const [kingR, kingC] = kingPos;
-        const safetyZone = [];
-        for (let r = Math.max(0, kingR - 1); r <= Math.min(8, kingR + 1); r++) {
-            for (let c = Math.max(0, kingC - 1); c <= Math.min(8, kingC + 1); c++) {
-                safetyZone.push([r, c]);
-            }
-        }
-
-        let friendlyDefenders = 0;
-        let enemyAttackers = 0;
-        for (const [r, c] of safetyZone) {
-            const piece = board[r][c];
-            if (piece) {
-                if (piece.player === currentPlayer) {
-                    friendlyDefenders++;
-                } else {
-                    enemyAttackers++;
-                }
-            }
-        }
-        score += (friendlyDefenders - enemyAttackers) * 50;
-    }
 
     // Threat Analysis
     const attackedByPlayer = getAttackedSquares(board, currentPlayer);
