@@ -300,10 +300,12 @@ async function getAiMove(gameState, difficulty) {
 
   // Check opening book first
   const boardHash = generateStateHash(gameState);
-  if (openingBook[boardHash]) {
-    console.log("AI: Choosing move from opening book.");
-    const moves = openingBook[boardHash];
-    return moves[Math.floor(Math.random() * moves.length)];
+  for (const opening of openingBook) {
+    if (opening.moves[boardHash]) {
+      console.log(`AI: Choosing move from opening: ${opening.name}`);
+      const moves = opening.moves[boardHash];
+      return moves[Math.floor(Math.random() * moves.length)];
+    }
   }
 
   // Opening Randomness
@@ -397,7 +399,7 @@ async function getAiMove(gameState, difficulty) {
   possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   const startTime = Date.now();
-  const timeLimit = difficulty === 'medium' ? 1000 : 3000; // 1 second for medium, 3 for hard
+  const timeLimit = difficulty === 'medium' ? 3000 : 9000; // 3 seconds for medium, 9 for hard
 
   if (possibleMoves.length === 0) {
     console.log("No legal moves available for AI.");
@@ -696,7 +698,7 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
   }
   let standPat = evaluateBoard(gameState);
   
-  if (depth >= 3) { // Limit quiescence search depth
+  if (depth >= 5) { // Limit quiescence search depth
     return standPat;
   }
 
