@@ -74,6 +74,19 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
                   onDragOver={(e) => e.preventDefault()} // Allow drop
                   onDrop={() => onDrop(rowIndex, colIndex)}
                 >
+                  {/* Intersection dots */}
+                  {(rowIndex === 2 && colIndex === 2) && (
+                    <div className="intersection-dot"></div>
+                  )}
+                  {(rowIndex === 2 && colIndex === 5) && (
+                    <div className="intersection-dot"></div>
+                  )}
+                  {(rowIndex === 5 && colIndex === 2) && (
+                    <div className="intersection-dot"></div>
+                  )}
+                  {(rowIndex === 5 && colIndex === 5) && (
+                    <div className="intersection-dot"></div>
+                  )}
                   {piece && (
                     <Piece
                       type={piece.type}

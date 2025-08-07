@@ -76,6 +76,17 @@
   position: relative; /* Needed for absolute positioning of overlay */
 }
 
+.intersection-dot {
+  position: absolute;
+  bottom: -5px; /* Half of the dot's height to center it on the border */
+  right: -5px; /* Half of the dot's width to center it on the border */
+  width: 10px;
+  height: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  z-index: 2; /* Ensure it's above the board squares */
+}
+
 .piece {
   /* Remove old styling */
   background-color: transparent;
