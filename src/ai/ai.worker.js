@@ -399,7 +399,7 @@ async function getAiMove(gameState, difficulty) {
   possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
 
   const startTime = Date.now();
-  const timeLimit = difficulty === 'medium' ? 3000 : 9000; // 3 seconds for medium, 9 for hard
+  const timeLimit = difficulty === 'easy' ? 1000 : difficulty === 'medium' ? 3000 : 9000; // 1s for easy, 3s for medium, 9s for hard
 
   if (possibleMoves.length === 0) {
     console.log("No legal moves available for AI.");
@@ -409,11 +409,9 @@ async function getAiMove(gameState, difficulty) {
   // console.log(`AI thinking for difficulty: ${difficulty}, Time limit: ${timeLimit}ms`);
   // console.log(`Initial possible moves count: ${possibleMoves.length}`);
 
-  switch (difficulty) {
+  
+    switch (difficulty) {
     case 'easy':
-      // Easy AI logic: random move
-      const randomIndex = Math.floor(Math.random() * possibleMoves.length);
-      return possibleMoves[randomIndex];
     case 'medium':
     case 'hard':
       let currentBestMove = possibleMoves[0]; // Initialize with the first possible move
