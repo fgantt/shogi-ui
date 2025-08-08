@@ -294,7 +294,11 @@ async function getAiMove(gameState, difficulty) {
   const { currentPlayer, moveHistory } = gameState;
 
   // Check opening book first
-  const boardHash = generateStateHash(gameState);
+  const tempGameState = {
+    ...gameState,
+    currentPlayer: currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+  };
+  const boardHash = generateStateHash(tempGameState);
   console.log("boardHash", boardHash);
   const availableOpenings = [];
   for (const opening of openingBook) {
@@ -307,7 +311,13 @@ async function getAiMove(gameState, difficulty) {
     const chosenOpening = availableOpenings[Math.floor(Math.random() * availableOpenings.length)];
     console.log(`AI: Choosing move from opening: ${chosenOpening.name}`);
     const moves = chosenOpening.moves[boardHash];
-    return moves[Math.floor(Math.random() * moves.length)];
+    const move = moves[Math.floor(Math.random() * moves.length)];
+
+    // Convert Shogi coordinates to internal coordinates
+    const from = [parseInt(move.from[1], 10) - 1, 9 - parseInt(move.from[0], 10)];
+    const to = [parseInt(move.to[1], 10) - 1, 9 - parseInt(move.to[0], 10)];
+
+    return { from, to, type: 'move', isCapture: false, isCheck: false, promote: false };
   }
 
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2

@@ -1,79 +1,78 @@
-
 [
   {
     "name": "Aggressive Rook",
     "moves": {
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": [6, 7], "to": [5, 7] }
+        { "from": "27", "to": "26" }
       ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 2": [
-        { "from": [2, 1], "to": [3, 1] }
+      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
+        { "from": "83", "to": "84" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL b - 3": [
-        { "from": [1, 7], "to": [1, 6] }
+        { "from": "26", "to": "25" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL w - 4": [
-        { "from": [8, 1], "to": [2, 7] }
+        { "from": "22", "to": "88" }
       ],
       "lnsgkgsnl/1r5R1/pppppp1pp/8p/9/9/PPPPPPPPP/1B6/LNSGKGSNL b - 5": [
-        { "from": [1, 6], "to": [2, 6] }
+        { "from": "25", "to": "35" }
       ],
       "lnsgkgsnl/1r5R1/ppppp2pp/6p1p/9/9/PPPPPPPPP/1B6/LNSGKGSNL w - 6": [
-        { "from": [2, 7], "to": [2, 6] }
+        { "from": "88", "to": "85" }
       ],
       "lnsgkgsnl/1r5R1/ppppp2pp/6p1p/9/9/PPPPPPPPP/1B6/LNSGKGSNL b - 7": [
-        { "from": [0, 7], "to": [1, 7] }
+        { "from": "28", "to": "27" }
       ],
       "lnsgkgsnl/1r5R1/ppppp2pp/6p1p/9/9/PPPPPPPPP/1B6/LNSGKGSNL w - 8": [
-        { "from": [2, 6], "to": [3, 6] }
+        { "from": "85", "to": "75" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/6p2/9/PPPPPPPPP/1B6/LNSGKGSNL b - 9": [
-        { "from": [3, 7], "to": [4, 7] }
+        { "from": "37", "to": "47" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/6p2/9/PPPPPPPPP/1B6/LNSGKGSNL w - 10": [
-        { "from": [3, 1], "to": [4, 1] }
+        { "from": "84", "to": "85" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/2p4p1/9/PPPPP1PPP/1B6/LNSGKGSNL b - 11": [
-        { "from": [4, 7], "to": [4, 6] }
+        { "from": "47", "to": "46" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/2p4p1/9/PPPPP1PPP/1B6/LNSGKGSNL w - 12": [
-        { "from": [4, 1], "to": [4, 2] }
+        { "from": "85", "to": "86" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 13": [
-        { "from": [5, 7], "to": [5, 6] }
+        { "from": "57", "to": "56" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/7p1/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 14": [
-        { "from": [5, 1], "to": [5, 2] }
+        { "from": "53", "to": "54" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/5p1p1/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 15": [
-        { "from": [4, 6], "to": [3, 6] }
+        { "from": "46", "to": "36" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/5p1p1/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 16": [
-        { "from": [4, 2], "to": [3, 2] }
+        { "from": "43", "to": "53" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 17": [
-        { "from": [3, 7], "to": [3, 6] }
+        { "from": "37", "to": "36" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1ppp/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 18": [
-        { "from": [3, 1], "to": [3, 2] }
+        { "from": "33", "to": "34" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 19": [
-        { "from": [2, 7], "to": [2, 6] }
+        { "from": "27", "to": "26" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 20": [
-        { "from": [2, 1], "to": [2, 2] }
+        { "from": "23", "to": "24" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 21": [
-        { "from": [8, 7], "to": [7, 7] }
+        { "from": "28", "to": "38" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 22": [
-        { "from": [0, 1], "to": [1, 1] }
+        { "from": "22", "to": "32" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL b - 23": [
-        { "from": [7, 7], "to": [6, 8] }
+        { "from": "38", "to": "39" }
       ],
       "lnsgkgsnl/1r5R1/ppppp1p1p/3p2p2/2p4p1/5P2P/PP1PP1P1P/1B6/LNSGKGSNL w - 24": [
-        { "from": [1, 1], "to": [2, 2] }
+        { "from": "21", "to": "22" }
       ]
     }
   },
@@ -81,16 +80,64 @@
     "name": "Yagura",
     "moves": {
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": [6, 7], "to": [5, 7] }
+        { "from": "77", "to": "76" }
       ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 2": [
-        { "from": [2, 1], "to": [3, 1] }
+      "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 2": [
+        { "from": "33", "to": "34" }
       ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL b - 3": [
-        { "from": [6, 6], "to": [5, 6] }
+      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/9/PPPPP1PPP/1B5R1/LNSGKGSNL b - 3": [
+        { "from": "69", "to": "78" }
       ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPP1PPP/1B4R2/LNSGKGSNL w - 4": [
-        { "from": [3, 3], "to": [4, 3] }
+      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1BG4R1/LNS1KGSNL w - 4": [
+        { "from": "41", "to": "42" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pppp1pp/1ksp2p2/9/2P6/PP1PPPPPP/1BG4R1/LNS1KGSNL b - 5": [
+        { "from": "59", "to": "68" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pppp1pp/1ksp2p2/9/2P6/PP1PPPPPP/1BG3R1/LNSGK2NL w - 6": [
+        { "from": "42", "to": "43" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pp1p1pp/1ksp2p2/9/2P6/PP1PPPPPP/1BG3R1/LNSGK2NL b - 7": [
+        { "from": "68", "to": "77" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pp1p1pp/1ksp2p2/9/2P6/PP1PPPPPP/1B2SGR1/LNSGK2NL w - 8": [
+        { "from": "43", "to": "44" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pp1p1pp/1k1p2p2/9/2P6/PP1PPPPPP/1B2SGR1/LNSGK2NL b - 9": [
+        { "from": "79", "to": "78" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1pp1p1pp/1k1p2p2/9/2P6/PP1PPPPPP/1B1S1SR1/LNSGK2NL w - 10": [
+        { "from": "44", "to": "45" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k1p2p2/9/2P6/PP1PPPPPP/1B1S1SR1/LNSGK2NL b - 11": [
+        { "from": "78", "to": "77" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k1p2p2/9/2P6/PP1PPPPPP/1B2S1R1/LNSGK2NL w - 12": [
+        { "from": "45", "to": "46" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k4p2/9/2P6/PP1PPPPPP/1B2S1R1/LNSGK2NL b - 13": [
+        { "from": "77", "to": "76" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k4p2/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL w - 14": [
+        { "from": "46", "to": "47" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL b - 15": [
+        { "from": "76", "to": "75" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p2p1pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL w - 16": [
+        { "from": "47", "to": "48" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p4pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL b - 17": [
+        { "from": "75", "to": "74" }
+      ],
+      "lnsgkgsnl/1r1g3l/p1p4pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL w - 18": [
+        { "from": "48", "to": "49" }
+      ],
+      "lnsgkgsnl/1r1g3l/p6pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL b - 19": [
+        { "from": "74", "to": "73" }
+      ],
+      "lnsgkgsnl/1r1g3l/p6pp/1k6/9/2P6/PP1PPPPPP/1B1S1S2/LNSGK2NL w - 20": [
+        { "from": "49", "to": "58" }
       ]
     }
   },
@@ -98,16 +145,16 @@
     "name": "Kakugawari (Bishop Exchange)",
     "moves": {
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": [6, 7], "to": [5, 7] }
+        { "from": "27", "to": "26" }
       ],
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL w - 2": [
-        { "from": [2, 2], "to": [3, 2] }
+        { "from": "83", "to": "84" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL b - 3": [
-        { "from": [1, 7], "to": [1, 1] }
+        { "from": "22", "to": "88" }
       ],
       "lnsgkgsnl/1r5S1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL w - 4": [
-        { "from": [7, 1], "to": [1, 7] }
+        { "from": "88", "to": "22" }
       ]
     }
   },
@@ -115,13 +162,13 @@
     "name": "Shikenbisya (Fourth File Rook)",
     "moves": {
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": [6, 7], "to": [5, 7] }
+        { "from": "27", "to": "26" }
       ],
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL w - 2": [
-        { "from": [2, 2], "to": [3, 2] }
+        { "from": "83", "to": "84" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL b - 3": [
-        { "from": [1, 7], "to": [4, 7] }
+        { "from": "28", "to": "58" }
       ]
     }
   },
@@ -129,22 +176,22 @@
     "name": "Aigakari (Double Wing Attack)",
     "moves": {
       "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": [6, 7], "to": [5, 7] }
+        { "from": "27", "to": "26" }
       ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 2": [
-        { "from": [2, 1], "to": [3, 1] }
+      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
+        { "from": "83", "to": "84" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/9/PPPPPPPPP/1B4R2/LNSGKGSNL b - 3": [
-        { "from": [5, 7], "to": [4, 7] }
+        { "from": "26", "to": "25" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/9/6P2/PPPPP1PPP/1B4R2/LNSGKGSNL w - 4": [
-        { "from": [3, 1], "to": [4, 1] }
+        { "from": "84", "to": "85" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/7P1/6P2/PPPPP1PPP/1B4R2/LNSGKGSNL b - 5": [
-        { "from": [8, 6], "to": [7, 7] }
+        { "from": "39", "to": "28" }
       ],
       "lnsgkgsnl/1r5b1/pppppp1pp/8p/7P1/6P2/PPPPP1PPP/1B2G2R2/LNSGKGSNL w - 6": [
-        { "from": [0, 2], "to": [1, 1] }
+        { "from": "71", "to": "82" }
       ]
     }
   }
