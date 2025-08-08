@@ -140,49 +140,44 @@ function getKingSafetyScore(board, player, kingPos) {
   const [kingR, kingC] = kingPos;
   let safetyScore = 0;
 
-  // Define Mino castle patterns for both players
-  const minoCastlePlayer1 = {
-    king: [8, 7],
-    gold1: [7, 7],
-    gold2: [8, 6],
-    silver: [7, 8],
-  };
-  const minoCastlePlayer2 = {
-    king: [0, 1],
-    gold1: [1, 1],
-    gold2: [0, 2],
-    silver: [1, 0],
-  };
+  // King Shield: Reward for having friendly pieces nearby
+  const shieldOffsets = [
+    [-1, -1], [-1, 0], [-1, 1],
+    [0, -1],           [0, 1],
+    [1, -1], [1, 0], [1, 1]
+  ];
 
-  const castlePattern = player === PLAYER_1 ? minoCastlePlayer1 : minoCastlePlayer2;
-  let castleBonus = 0;
-  let piecesInPlace = 0;
+  for (const [dr, dc] of shieldOffsets) {
+    const r = kingR + dr;
+    const c = kingC + dc;
 
-  // Check for King's position
-  if (board[castlePattern.king[0]] && board[castlePattern.king[0]][castlePattern.king[1]]?.type === KING) {
-    piecesInPlace++;
-  }
-  // Check for Golds
-  if (board[castlePattern.gold1[0]] && board[castlePattern.gold1[0]][castlePattern.gold1[1]]?.type === GOLD) {
-    piecesInPlace++;
-  }
-  if (board[castlePattern.gold2[0]] && board[castlePattern.gold2[0]][castlePattern.gold2[1]]?.type === GOLD) {
-    piecesInPlace++;
-  }
-  // Check for Silver
-  if (board[castlePattern.silver[0]] && board[castlePattern.silver[0]][castlePattern.silver[1]]?.type === SILVER) {
-    piecesInPlace++;
-  }
-
-  if (piecesInPlace >= 3) {
-    castleBonus = 150 * piecesInPlace; // Bonus for each piece in place
-    if (piecesInPlace === 4) {
-      castleBonus += 200; // Extra bonus for a complete Mino castle
+    if (r >= 0 && r < 9 && c >= 0 && c < 9) {
+      const piece = board[r][c];
+      if (piece && piece.player === player) {
+        switch (piece.type) {
+          case GOLD:
+            safetyScore += 40;
+            break;
+          case SILVER:
+            safetyScore += 30;
+            break;
+          case KNIGHT:
+            safetyScore += 20;
+            break;
+          case LANCE:
+            safetyScore += 15;
+            break;
+          case PAWN:
+            safetyScore += 10;
+            break;
+          default:
+            safetyScore += 5;
+        }
+      }
     }
   }
-  safetyScore += castleBonus;
 
-  // General King Safety: Penalize for nearby enemy pieces
+  // Penalize for nearby enemy pieces
   let enemyAttackers = 0;
   for (let r = Math.max(0, kingR - 2); r <= Math.min(8, kingR + 2); r++) {
     for (let c = Math.max(0, kingC - 2); c <= Math.min(8, kingC + 2); c++) {
@@ -192,7 +187,7 @@ function getKingSafetyScore(board, player, kingPos) {
       }
     }
   }
-  safetyScore -= enemyAttackers * 30; // Penalty for each nearby enemy piece
+  safetyScore -= enemyAttackers * 30;
 
   return safetyScore;
 }
