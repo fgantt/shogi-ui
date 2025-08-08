@@ -578,11 +578,11 @@ export function getLegalDrops(gameState, pieceType) {
  * @returns {boolean} True if the current player is in checkmate.
  */
 export function isCheckmate(gameState) {
-    console.log("isCheckmate: Checking for checkmate for player", gameState.currentPlayer, "with gameState:", gameState);
+    
     const { board, currentPlayer, capturedPieces } = gameState;
 
     if (!isKingInCheck(board, currentPlayer)) {
-        console.log("isCheckmate: King is not in check.");
+        
         return false;
     }
 
@@ -591,14 +591,14 @@ export function isCheckmate(gameState) {
         for (let c = 0; c < COLS; c++) {
             const piece = board[r][c];
             if (piece && piece.player === currentPlayer) {
-                console.log("isCheckmate: Checking moves for piece at", r, c, "type", piece.type);
+                
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
                     // Simulate the move
                     const tempState = completeMove(gameState, [r, c], move, false); // Assume no promotion for checkmate simulation
-                    console.log("isCheckmate: Simulating move from", [r, c], "to", move, ". King in check after move:", isKingInCheck(tempState.board, currentPlayer));
+                    
                     if (!isKingInCheck(tempState.board, currentPlayer)) {
-                        console.log("isCheckmate: Found a move to escape check.");
+                        
                         return false; // Found a move to escape check
                     }
                 }
@@ -607,24 +607,22 @@ export function isCheckmate(gameState) {
     }
 
     // Check if dropping any piece can get the king out of check
-    for (const captured of capturedPieces[currentPlayer]) {
-        console.log("isCheckmate: Checking drops for captured piece type", captured.type);
+    
         // Use getLegalDrops to find valid drop squares
         const possibleDropSquares = getLegalDrops(gameState, captured.type);
         for (const dropSquare of possibleDropSquares) {
             const tempBoard = board.map(row => [...row]);
             tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
-            console.log("isCheckmate: Simulating drop of", captured.type, "to", dropSquare, ". King in check after drop:", isKingInCheck(tempBoard, currentPlayer));
+            
             if (!isKingInCheck(tempBoard, currentPlayer)) {
-                console.log("isCheckmate: Found a drop to escape check.");
+                
                 return false; // Found a drop to escape check
             }
         }
     }
 
-    console.log("isCheckmate: No legal moves or drops to escape check. Checkmate detected.");
-    return true; // No legal moves or drops to escape check, so it's checkmate
-}
+    
+    
 
 /**
  * Gets all squares attacked by a player.
