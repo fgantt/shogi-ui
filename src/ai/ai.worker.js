@@ -308,38 +308,7 @@ async function getAiMove(gameState, difficulty) {
     }
   }
 
-  // Opening Randomness
-  if (moveHistory.length < 5) {
-    const possibleMoves = [];
-    for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-            const piece = gameState.board[r][c];
-            if (piece && piece.player === currentPlayer) {
-                const moves = getLegalMoves(piece, r, c, gameState.board);
-                moves.forEach(to => {
-                    const simulatedGameState = movePiece(gameState, [r, c], to);
-                    if (!isKingInCheck(simulatedGameState.board, currentPlayer)) {
-                        possibleMoves.push({ from: [r, c], to, type: 'move' });
-                    }
-                });
-            }
-        }
-    }
-    const moveScores = await Promise.all(possibleMoves.map(async move => {
-        let newGameState = { ...gameState, pastStates: [] };
-        newGameState = movePiece(newGameState, move.from, move.to, false);
-        const score = evaluateBoard(newGameState);
-        return { move, score };
-    }));
-    moveScores.sort((a, b) => b.score - a.score);
-    const topMoves = moveScores.slice(0, 3).map(ms => ms.move);
-    return topMoves[Math.floor(Math.random() * topMoves.length)];
-  }
-
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
-
-  let bestMove = null;
-  let bestScore = -Infinity;
 
   const possibleMoves = [];
 
@@ -406,54 +375,77 @@ async function getAiMove(gameState, difficulty) {
     return null; // No legal moves available
   }
 
-  // console.log(`AI thinking for difficulty: ${difficulty}, Time limit: ${timeLimit}ms`);
-  // console.log(`Initial possible moves count: ${possibleMoves.length}`);
-
-  
-    switch (difficulty) {
-    case 'easy':
-    case 'medium':
-    case 'hard':
-      let currentBestMove = possibleMoves[0]; // Initialize with the first possible move
-      let currentBestScore = -Infinity;
-
-      for (let depth = 1; depth <= 5; depth++) { // Iterate up to a maximum depth
-        let iterationBestMove = null;
-        let iterationBestScore = -Infinity;
-
-        for (const move of possibleMoves) {
-          if (Date.now() - startTime > timeLimit) {
-            console.log(`Time limit exceeded at depth ${depth}. Returning best move found so far.`);
-            return currentBestMove; // Return the best move found so far
-          }
-
-          let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
-          if (move.from === 'drop') {
-            newGameState = dropPiece(newGameState, move.type, move.to);
-          } else {
-            newGameState = movePiece(newGameState, move.from, move.to, move.promote); // Pass promote flag
-          }
-
-          const { score } = await minimax(newGameState, 0, depth, !maximizingPlayer, -Infinity, Infinity, startTime, timeLimit, new Set()); // Use current depth
-          // console.log(`Minimax returned score: ${score} for move:`, move);
-
-          if (score === null) {
-            // If minimax returned null, it means time limit was exceeded for this branch
-            // We should stop this iteration and return the best move found so far from previous depths.
-            // console.log(`Minimax returned null score, time limit hit. Returning currentBestMove.`);
-            return currentBestMove;
-          }
-        }
-        // If a full iteration is completed, update the overall best move
-        if (iterationBestMove) {
-          currentBestMove = iterationBestMove;
-          currentBestScore = iterationBestScore;
-        }
-      }
-      return currentBestMove;
-    default:
-      return null;
+  let bestMove = possibleMoves[0];
+  for (let depth = 1; depth <= 5; depth++) {
+    const { move } = await pvs(gameState, depth, -Infinity, Infinity, maximizingPlayer, startTime, timeLimit, new Set());
+    if (move) {
+      bestMove = move;
+    } else {
+      // Time limit likely exceeded, return the best move from the previous depth
+      break;
+    }
   }
+  return bestMove;
+}
+
+
+async function pvs(gameState, depth, alpha, beta, maximizingPlayer, startTime, timeLimit, history) {
+  if (Date.now() - startTime > timeLimit) {
+    return { score: 0, move: null };
+  }
+
+  const hash = generateStateHash(gameState);
+  if (history.has(hash)) {
+    return { score: 0, move: null };
+  }
+
+  if (depth === 0) {
+    const score = await quiescenceSearch(gameState, alpha, beta, 0, startTime, timeLimit);
+    return { score, move: null };
+  }
+
+  const possibleMoves = getPossibleMoves(gameState);
+  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
+
+  let bestMove = null;
+  let score = -Infinity;
+
+  for (let i = 0; i < possibleMoves.length; i++) {
+    const move = possibleMoves[i];
+    let newGameState = { ...gameState, pastStates: [] };
+    if (move.from === 'drop') {
+      newGameState = dropPiece(newGameState, move.type, move.to);
+    } else {
+      newGameState = movePiece(newGameState, move.from, move.to, move.promote);
+    }
+
+    const newHistory = new Set(history);
+    newHistory.add(hash);
+
+    let result;
+    if (i === 0) {
+      result = await pvs(newGameState, depth - 1, -beta, -alpha, !maximizingPlayer, startTime, timeLimit, newHistory);
+      score = -result.score;
+    } else {
+      result = await pvs(newGameState, depth - 1, -alpha - 1, -alpha, !maximizingPlayer, startTime, timeLimit, newHistory);
+      score = -result.score;
+      if (alpha < score && score < beta) {
+        result = await pvs(newGameState, depth - 1, -beta, -score, !maximizingPlayer, startTime, timeLimit, newHistory);
+        score = -result.score;
+      }
+    }
+
+    if (score > alpha) {
+      alpha = score;
+      bestMove = move;
+    }
+
+    if (alpha >= beta) {
+      break; // Beta cut-off
+    }
+  }
+
+  return { score: alpha, move: bestMove };
 }
 
 function scoreMove(move, gameState) {
@@ -524,65 +516,8 @@ function scoreMove(move, gameState) {
   return score;
 }
 
-async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -Infinity, beta = Infinity, startTime, timeLimit, history = new Set()) {
+function getPossibleMoves(gameState) {
   const { board, currentPlayer, capturedPieces } = gameState;
-  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-
-  if (Date.now() - startTime > timeLimit) {
-    // console.log(`Minimax time limit exceeded at depth ${depth}`);
-    return { score: null, move: null }; // Indicate that the search was cut short
-  }
-  const hash = generateStateHash(gameState);
-
-  // Check for repetition in actual game history
-  for (const pastState of gameState.pastStates) {
-    if (generateStateHash(pastState) === hash) {
-      return { score: -100000, move: null }; // Strong repetition penalty
-    }
-  }
-
-  // Check for repetition within the current search branch
-  if (history.has(hash)) {
-    return { score: -50000, move: null }; // Penalty for immediate repetition in search
-  }
-
-  if (transpositionTable.has(hash)) {
-    const cached = transpositionTable.get(hash);
-    if (cached.depth >= depth) {
-      return { score: cached.score, move: null };
-    }
-  }
-
-  // Null Move Pruning
-  if (depth >= 3 && !isKingInCheck(board, currentPlayer)) { // Apply if depth is sufficient and not in check
-    const nullMoveGameState = { ...gameState, currentPlayer: opponent };
-    const { score: nullMoveScore } = await minimax(nullMoveGameState, depth - 1 - 2, maxDepth, !maximizingPlayer, -beta, -alpha, startTime, timeLimit, new Set()); // Reduced depth, inverted alpha-beta
-
-    if (nullMoveScore === null) return { score: null, move: null }; // Propagate time limit exceeded
-
-    if (nullMoveScore >= beta) {
-      return { score: beta, move: null };
-    }
-  }
-
-  if (depth === maxDepth || gameState.isCheckmate) {
-    const score = await quiescenceSearch(gameState, alpha, beta, 0, startTime, timeLimit); // Call quiescence search at max depth
-    transpositionTable.set(hash, { depth, score });
-    return { score, move: null }; // Return null for move at terminal nodes
-  }
-
-  // Futility Pruning
-  if (depth < maxDepth && !isKingInCheck(gameState.board, currentPlayer)) { // Only apply if not in check
-    const evalScore = evaluateBoard(gameState);
-    const margin = 200; // Adjust margin as needed
-    if (maximizingPlayer && evalScore + margin <= alpha) {
-      return { score: alpha, move: null };
-    }
-    if (!maximizingPlayer && evalScore - margin >= beta) {
-      return { score: beta, move: null };
-    }
-  }
-
   const possibleMoves = [];
 
   // Collect all possible moves for pieces on the board
@@ -593,10 +528,32 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
         const moves = getLegalMoves(piece, r, c, board);
         moves.forEach(to => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          const isCapture = gameState.board[to[0]][to[1]] && gameState.board[to[0]][to[1]].player !== currentPlayer;
+          const isCapture = board[to[0]][to[1]] && board[to[0]][to[1]].player !== currentPlayer;
           const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
-          if (isCapture || isCheck) {
-            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
+          const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
+          const inPromotionZone = (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) || (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
+          const wasInPromotionZone = (currentPlayer === PLAYER_1 && r <= promotionZoneStart) || (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
+          const promotablePieces = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
+          const canPromote = promotablePieces.includes(piece.type) && (inPromotionZone || wasInPromotionZone);
+          const lastRank = currentPlayer === PLAYER_1 ? 0 : 8;
+          const secondLastRank = currentPlayer === PLAYER_1 ? 1 : 7;
+          let isPromotionMandatory = false;
+          if ((piece.type === PAWN || piece.type === LANCE) && to[0] === lastRank) {
+              isPromotionMandatory = true;
+          }
+          if (piece.type === KNIGHT && (to[0] === lastRank || to[0] === secondLastRank)) {
+              isPromotionMandatory = true;
+          }
+
+          let promote = false;
+          if (canPromote && !isPromotionMandatory) {
+            promote = true; // AI always promotes if optional
+          } else if (isPromotionMandatory) {
+            promote = true; // Mandatory promotion
+          }
+
+          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
+            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck, promote });
           }
         });
       }
@@ -605,89 +562,20 @@ async function minimax(gameState, depth, maxDepth, maximizingPlayer, alpha = -In
 
   // Collect all possible drops for captured pieces
   capturedPieces[currentPlayer].forEach(capturedPiece => {
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (!board[r][c]) { // Only drop on empty squares
-          // Simulate drop to check legality (e.g., Nifu, no legal moves)
-          const tempState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          const isCheck = isKingInCheck(tempState.board, tempState.currentPlayer);
-          if (tempState !== gameState && isCheck) { // If drop was legal and results in a check
-            possibleMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type.startsWith('+') ? capturedPiece.type.substring(1) : capturedPiece.type, isCapture: false, isCheck });
-          }
-        }
+    const legalDrops = getLegalDrops(gameState, capturedPiece.type);
+    legalDrops.forEach(to => {
+      const simulatedGameState = dropPiece(gameState, capturedPiece.type, to);
+      if (simulatedGameState !== gameState && !isKingInCheck(simulatedGameState.board, currentPlayer)) {
+        const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+        possibleMoves.push({ from: 'drop', to, type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
       }
-    }
+    });
   });
 
-  // Sort moves for better alpha-beta pruning performance
-  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
-
-  let bestScore = maximizingPlayer ? -Infinity : Infinity;
-  let bestMove = null;
-
-  for (let i = 0; i < possibleMoves.length; i++) {
-    const move = possibleMoves[i];
-    if (Date.now() - startTime > timeLimit) {
-      return { score: 0, move: null }; // Abort if time limit exceeded during move iteration
-    }
-    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control to the browser
-    let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
-    if (move.from === 'drop') {
-      newGameState = dropPiece(newGameState, move.type, move.to);
-    } else {
-      newGameState = movePiece(newGameState, move.from, move.to);
-    }
-
-    const newHistory = new Set(history);
-    newHistory.add(hash);
-
-    let reduction = 0;
-    if (depth >= LMR_DEPTH && i >= 4 && !move.isCapture && !move.isCheck) { // Apply LMR if conditions met
-      reduction = LMR_REDUCTION;
-    }
-
-    const { score, move: bestChildMove } = await minimax(newGameState, depth + 1 + reduction, maxDepth, !maximizingPlayer, alpha, beta, startTime, timeLimit, newHistory);
-
-    if (score === null) return { score: null, move: null }; // Propagate time limit exceeded
-
-    if (maximizingPlayer) {
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = move;
-      }
-      alpha = Math.max(alpha, bestScore);
-      if (beta <= alpha) {
-        // Beta cut-off, this is a good move, add to killer moves and history
-        if (!move.isCapture && !move.isCheck) { // Only non-captures and non-checks
-          killerMoves[1] = killerMoves[0];
-          killerMoves[0] = move;
-        }
-        if (move.from !== 'drop') {
-          historyTable[move.from[0]][move.from[1]] += depth; // Update history score
-        }
-        break; // Beta cut-off
-      }
-    } else {
-      if (score < bestScore) {
-        bestScore = score;
-        bestMove = move;
-      }
-      beta = Math.min(beta, bestScore);
-      if (beta <= alpha) {
-        // Alpha cut-off, this is a good move, add to killer moves and history
-        if (!move.isCapture && !move.isCheck) { // Only non-captures and non-checks
-          killerMoves[1] = killerMoves[0];
-          killerMoves[0] = move;
-        }
-        if (move.from !== 'drop') {
-          historyTable[move.from[0]][move.from[1]] += depth; // Update history score
-        }
-        break; // Alpha cut-off
-      }
-    }
-  }
-  return { score: bestScore, move: bestMove };
+  return possibleMoves;
 }
+
+
 
 async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLimit) {
   if (Date.now() - startTime > timeLimit) {
