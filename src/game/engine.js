@@ -682,7 +682,7 @@ export function getAttackedSquares(board, player) {
  * @returns {string} A unique string representing the game state.
  */
 export function generateStateHash(gameState) {
-  const { board, currentPlayer, capturedPieces } = gameState;
+  const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
 
   let fen = '';
 
@@ -730,6 +730,9 @@ export function generateStateHash(gameState) {
       capturedString += p2Captured.toLowerCase();
   }
   fen += capturedString + ' ';
+
+  // Move number
+  fen += (moveHistory.length + 1);
 
   return fen;
 }
