@@ -73,6 +73,7 @@ export function getInitialGameState() {
       [PLAYER_1]: [8, 4],
       [PLAYER_2]: [0, 4],
     },
+    isDraw: false,
   };
 }
 
@@ -351,12 +352,40 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
         kingPositions: {
           ...gameState.kingPositions,
           [currentPlayer]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
-        }
+        },
+        isDraw: false, // Initialize isDraw to false
     };
+
+    // Check for Sennichite (repetition) after the move
+    if (checkSennichite(updatedGameState)) {
+      updatedGameState.isDraw = true;
+    }
 
 
   
     return updatedGameState;
+}
+
+/**
+ * Checks for Sennichite (repetition) draw.
+ * @param {object} gameState The current game state.
+ * @returns {boolean} True if Sennichite is detected, false otherwise.
+ */
+export function checkSennichite(gameState) {
+  const { pastStates } = gameState;
+  const currentHash = generateStateHash(gameState);
+
+  let count = 0;
+  for (const state of pastStates) {
+    if (generateStateHash(state) === currentHash) {
+      count++;
+    }
+  }
+  // Add 1 for the current state itself
+  if (count + 1 >= 4) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -397,9 +426,8 @@ export function dropPiece(gameState, pieceType, to) {
   if ((pieceType === PAWN || pieceType === LANCE) && toRow + player_mult < 0) {
       return gameState;
   }
-  if (pieceType === KNIGHT && toRow + (player_mult * 2) < 0) {
-      const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-      return { ...gameState, currentPlayer: nextPlayer };
+  if (pieceType === KNIGHT && (toRow + (player_mult * 2) < 0 || toRow + (player_mult * 2) >= ROWS)) {
+      return gameState;
   }
 
 
@@ -607,7 +635,7 @@ export function isCheckmate(gameState) {
     }
 
     // Check if dropping any piece can get the king out of check
-    
+    for (const captured of capturedPieces[currentPlayer]) {
         // Use getLegalDrops to find valid drop squares
         const possibleDropSquares = getLegalDrops(gameState, captured.type);
         for (const dropSquare of possibleDropSquares) {
@@ -621,8 +649,8 @@ export function isCheckmate(gameState) {
         }
     }
 
-    
-    
+    return true;
+}
 
 /**
  * Gets all squares attacked by a player.

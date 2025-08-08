@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece } from './game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece, checkSennichite } from './game/engine';
 import { getAiMove } from './ai/computerPlayer';
 import Board from './components/Board';
 import CapturedPieces from './components/CapturedPieces';
@@ -31,7 +31,7 @@ function App() {
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
-  const [repetitionCount, setRepetitionCount] = useState({});
+  
   const [checkingPiece, setCheckingPiece] = useState(null);
 
   const [wallpaperList, setWallpaperList] = useState([]);
@@ -108,26 +108,14 @@ function App() {
               nextState = { ...currentGameState, currentPlayer: (gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1) };
             }
 
-            // Check for checkmate after AI's move
-            if (isCheckmate(nextState)) {
+            // Check for checkmate or draw after AI's move
+            if (nextState.isCheckmate) {
               setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+            } else if (nextState.isDraw) {
+              setCheckmateWinner('draw');
             }
 
-            const newRepetitionCount = { ...repetitionCount };
-            const currentHash = generateStateHash(nextState);
-            newRepetitionCount[currentHash] = (newRepetitionCount[currentHash] || 0) + 1;
-            setRepetitionCount(newRepetitionCount);
-
-            if (newRepetitionCount[currentHash] >= 4) {
-              const isCheck = isKingInCheck(nextState.board, nextState.currentPlayer);
-              if (isCheck) {
-                // Perpetual check, the player who made the move loses
-                setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-              } else {
-                // Repetition draw
-                setCheckmateWinner('draw');
-              }
-            }
+            
 
             return nextState;
           });
@@ -166,23 +154,6 @@ function App() {
   };
 
   const handlePlayerMove = (newGameState, from, to) => {
-    const newRepetitionCount = { ...repetitionCount };
-    const currentHash = generateStateHash(newGameState);
-    newRepetitionCount[currentHash] = (newRepetitionCount[currentHash] || 0) + 1;
-    setRepetitionCount(newRepetitionCount);
-
-    if (newRepetitionCount[currentHash] >= 4) {
-      const isCheck = isKingInCheck(newGameState.board, newGameState.currentPlayer);
-      if (isCheck) {
-        // Perpetual check, the player who made the move loses
-        setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-      } else {
-        // Repetition draw
-        setCheckmateWinner('draw');
-      }
-      return;
-    }
-
     setGameState(newGameState);
     setSelectedPiece(null);
     setSelectedCapturedPiece(null);
@@ -190,10 +161,13 @@ function App() {
     setLegalDropSquares([]); // Clear legal drop squares after a move
     setLastMove({ from: from, to: to });
 
-    // Check for checkmate after player's move
-    if (isCheckmate(newGameState)) {
+    // Check for checkmate or draw after player's move
+    if (newGameState.isCheckmate) {
       setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
       return; // Stop game if checkmate
+    } else if (newGameState.isDraw) {
+      setCheckmateWinner('draw');
+      return; // Stop game if draw
     }
   };
 
@@ -331,7 +305,6 @@ function App() {
     setLegalDropSquares([]);
     setLastMove(null);
     setCheckmateWinner(null);
-    setRepetitionCount({});
     setIsStartModalOpen(false);
 
     // If Player 1 is AI, trigger their first move
