@@ -295,12 +295,19 @@ async function getAiMove(gameState, difficulty) {
 
   // Check opening book first
   const boardHash = generateStateHash(gameState);
+  console.log("boardHash", boardHash);
+  const availableOpenings = [];
   for (const opening of openingBook) {
     if (opening.moves[boardHash]) {
-      console.log(`AI: Choosing move from opening: ${opening.name}`);
-      const moves = opening.moves[boardHash];
-      return moves[Math.floor(Math.random() * moves.length)];
+      availableOpenings.push(opening);
     }
+  }
+
+  if (availableOpenings.length > 0) {
+    const chosenOpening = availableOpenings[Math.floor(Math.random() * availableOpenings.length)];
+    console.log(`AI: Choosing move from opening: ${chosenOpening.name}`);
+    const moves = chosenOpening.moves[boardHash];
+    return moves[Math.floor(Math.random() * moves.length)];
   }
 
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
