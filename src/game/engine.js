@@ -361,9 +361,8 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
       updatedGameState.isDraw = true;
     }
 
-    // Calculate isCheckmate after updatedGameState is fully defined
-    updatedGameState.isCheckmate = isCheckmate(updatedGameState);
 
+  
     return updatedGameState;
 }
 
@@ -584,76 +583,14 @@ export function getLegalDrops(gameState, pieceType) {
         simulatedBoard[r][c] = { type: pieceType, player: currentPlayer };
         const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
-        if (isKingInCheck(simulatedBoard, opponent)) {
-          let canEscape = false;
+        // Temporarily remove the pawn to check if the king is still in check without it
+        const originalPieceAtDrop = simulatedBoard[r][c];
+        simulatedBoard[r][c] = null; // Remove the dropped pawn temporarily
+        const kingStillInCheckWithoutPawn = isKingInCheck(simulatedBoard, opponent);
+        simulatedBoard[r][c] = originalPieceAtDrop; // Restore the dropped pawn
 
-          // Check if opponent can move a piece to escape check
-          for (let r_opp = 0; r_opp < ROWS; r_opp++) {
-            for (let c_opp = 0; c_opp < COLS; c_opp++) {
-              const oppPiece = simulatedBoard[r_opp][c_opp];
-              if (oppPiece && oppPiece.player === opponent) {
-                const oppMoves = getLegalMoves(oppPiece, r_opp, c_opp, simulatedBoard);
-                for (const oppMove of oppMoves) {
-                  const tempOppBoard = simulatedBoard.map(row => row.slice());
-                  tempOppBoard[oppMove[0]][oppMove[1]] = oppPiece;
-                  tempOppBoard[r_opp][c_opp] = null;
-                  if (!isKingInCheck(tempOppBoard, opponent)) {
-                    canEscape = true;
-                    break;
-                  }
-                }
-              }
-              if (canEscape) break;
-            }
-            if (canEscape) break;
-          }
-
-          // Check if opponent can drop a piece to escape check
-          if (!canEscape) {
-            const oppCapturedPieces = gameState.capturedPieces[opponent];
-            for (const oppCaptured of oppCapturedPieces) {
-              for (let r_drop = 0; r_drop < ROWS; r_drop++) {
-                for (let c_drop = 0; c_drop < COLS; c_drop++) {
-                  if (simulatedBoard[r_drop][c_drop] === null) {
-                    const tempOppBoard = simulatedBoard.map(row => [...row]);
-                    tempOppBoard[r_drop][c_drop] = { type: oppCaptured.type, player: opponent };
-
-                    // Basic drop rule checks for opponent (Nifu, no legal moves after drop)
-                    if (oppCaptured.type === PAWN) {
-                        let nifu = false;
-                        for (let rowCheck = 0; rowCheck < ROWS; rowCheck++) {
-                            const pieceCheck = tempOppBoard[rowCheck][c_drop];
-                            if (pieceCheck && pieceCheck.type === PAWN && pieceCheck.player === opponent && (rowCheck !== r_drop)) {
-                                nifu = true;
-                                break;
-                            }
-                        }
-                        if (nifu) continue;
-                    }
-
-                    const opp_player_mult = opponent === PLAYER_1 ? -1 : 1;
-                    if ((oppCaptured.type === PAWN || oppCaptured.type === LANCE) && (r_drop + opp_player_mult < 0 || r_drop + opp_player_mult >= ROWS)) {
-                        continue;
-                    }
-                    if (oppCaptured.type === KNIGHT && (r_drop + (opp_player_mult * 2) < 0 || r_drop + (opp_player_mult * 2) >= ROWS)) {
-                        continue;
-                    }
-
-                    if (!isKingInCheck(tempOppBoard, opponent)) {
-                      canEscape = true;
-                      break;
-                    }
-                  }
-                }
-                if (canEscape) break;
-              }
-              if (canEscape) break;
-            }
-          }
-
-          if (!canEscape && !kingStillInCheckWithoutPawn) {
-            continue; // Uchifu-zume rule violation
-          }
+        if (isKingInCheck(simulatedBoard, opponent) && isCheckmate({ ...gameState, board: simulatedBoard, currentPlayer: opponent }) && !kingStillInCheckWithoutPawn) {
+          continue; // Uchifu-zume rule violation
         }
       }
 
@@ -685,16 +622,10 @@ export function isCheckmate(gameState) {
                 
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
-                    // Simulate the move on a temporary board
-                    const tempBoard = board.map(row => row.slice()); // Deep copy the board
-                    const pieceToMove = tempBoard[r][c];
-                    const [toRow, toCol] = move;
-
-                    // Handle capture
-                    tempBoard[toRow][toCol] = pieceToMove;
-                    tempBoard[r][c] = null;
-
-                    if (!isKingInCheck(tempBoard, currentPlayer)) {
+                    // Simulate the move
+                    const tempState = completeMove(gameState, [r, c], move, false); // Assume no promotion for checkmate simulation
+                    
+                    if (!isKingInCheck(tempState.board, currentPlayer)) {
                         
                         return false; // Found a move to escape check
                     }
@@ -705,39 +636,15 @@ export function isCheckmate(gameState) {
 
     // Check if dropping any piece can get the king out of check
     for (const captured of capturedPieces[currentPlayer]) {
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                if (board[r][c] === null) { // Only drop on empty squares
-                    const tempBoard = board.map(row => [...row]);
-                    tempBoard[r][c] = { type: captured.type, player: currentPlayer };
-
-                    // Basic drop rule checks (Nifu, no legal moves after drop)
-                    // Nifu check (two unpromoted pawns in the same file)
-                    if (captured.type === PAWN) {
-                        let nifu = false;
-                        for (let rowCheck = 0; rowCheck < ROWS; rowCheck++) {
-                            const pieceCheck = tempBoard[rowCheck][c];
-                            if (pieceCheck && pieceCheck.type === PAWN && pieceCheck.player === currentPlayer && (rowCheck !== r)) {
-                                nifu = true;
-                                break;
-                            }
-                        }
-                        if (nifu) continue;
-                    }
-
-                    // Cannot drop a piece where it has no legal moves
-                    const player_mult = currentPlayer === PLAYER_1 ? -1 : 1;
-                    if ((captured.type === PAWN || captured.type === LANCE) && (r + player_mult < 0 || r + player_mult >= ROWS)) {
-                        continue;
-                    }
-                    if (captured.type === KNIGHT && (r + (player_mult * 2) < 0 || r + (player_mult * 2) >= ROWS)) {
-                        continue;
-                    }
-
-                    if (!isKingInCheck(tempBoard, currentPlayer)) {
-                        return false; // Found a drop to escape check
-                    }
-                }
+        // Use getLegalDrops to find valid drop squares
+        const possibleDropSquares = getLegalDrops(gameState, captured.type);
+        for (const dropSquare of possibleDropSquares) {
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
+            
+            if (!isKingInCheck(tempBoard, currentPlayer)) {
+                
+                return false; // Found a drop to escape check
             }
         }
     }
@@ -775,7 +682,7 @@ export function getAttackedSquares(board, player) {
  * @returns {string} A unique string representing the game state.
  */
 export function generateStateHash(gameState) {
-  const { board, currentPlayer, capturedPieces } = gameState;
+  const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
 
   let fen = '';
 
@@ -823,6 +730,9 @@ export function generateStateHash(gameState) {
       capturedString += p2Captured.toLowerCase();
   }
   fen += capturedString + ' ';
+
+  // Move number
+  fen += (moveHistory.length + 1);
 
   return fen;
 }

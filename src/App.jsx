@@ -109,8 +109,7 @@ function App() {
             }
 
             // Check for checkmate or draw after AI's move
-            const checkmate = isCheckmate(nextState);
-            if (checkmate) {
+            if (nextState.isCheckmate) {
               setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
             } else if (nextState.isDraw) {
               setCheckmateWinner('draw');
@@ -163,8 +162,7 @@ function App() {
     setLastMove({ from: from, to: to });
 
     // Check for checkmate or draw after player's move
-    const checkmate = isCheckmate(newGameState);
-    if (checkmate) {
+    if (newGameState.isCheckmate) {
       setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
       return; // Stop game if checkmate
     } else if (newGameState.isDraw) {
