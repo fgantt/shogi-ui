@@ -1,0 +1,118 @@
+.home-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+}
+
+.home-content {
+  text-align: center;
+  max-width: 800px;
+  width: 100%;
+}
+
+.home-title {
+  font-size: 4rem;
+  font-weight: bold;
+  color: #ecf0f1;
+  margin-bottom: 1rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: 'Georgia', serif;
+}
+
+.home-subtitle {
+  font-size: 1.5rem;
+  color: #bdc3c7;
+  margin-bottom: 3rem;
+  font-style: italic;
+}
+
+.navigation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  color: #ecf0f1;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  min-height: 120px;
+}
+
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.nav-button.primary {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  border-color: #e74c3c;
+}
+
+.nav-button.primary:hover {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(231, 76, 60, 0.4);
+}
+
+.button-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.button-text {
+  font-size: 1.1rem;
+}
+
+.home-footer {
+  margin-top: 2rem;
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.home-footer p {
+  color: #95a5a6;
+  font-size: 1rem;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .home-title {
+    font-size: 3rem;
+  }
+  
+  .home-subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .navigation-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+  }
+  
+  .nav-button {
+    padding: 1.5rem 1rem;
+    min-height: 100px;
+  }
+}

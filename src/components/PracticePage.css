@@ -1,0 +1,173 @@
+.practice-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  color: #ecf0f1;
+  padding: 2rem;
+}
+
+.practice-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.back-button {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ecf0f1;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.practice-header h1 {
+  font-size: 3rem;
+  margin: 0 0 1rem 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.practice-header p {
+  font-size: 1.2rem;
+  color: #bdc3c7;
+  margin: 0;
+}
+
+.practice-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.exercises-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.exercise-card {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.exercise-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.exercise-icon {
+  font-size: 3rem;
+  margin-right: 2rem;
+  min-width: 60px;
+  text-align: center;
+}
+
+.exercise-info {
+  flex: 1;
+}
+
+.exercise-info h3 {
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem 0;
+  color: #f39c12;
+}
+
+.exercise-info p {
+  margin: 0 0 1rem 0;
+  color: #bdc3c7;
+  line-height: 1.5;
+}
+
+.difficulty-badge {
+  display: inline-block;
+  background: #27ae60;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.exercise-arrow {
+  font-size: 2rem;
+  color: #bdc3c7;
+  margin-left: 1rem;
+  transition: all 0.3s ease;
+}
+
+.exercise-card:hover .exercise-arrow {
+  color: #e74c3c;
+  transform: translateX(5px);
+}
+
+.practice-tips {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.practice-tips h3 {
+  color: #f39c12;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.practice-tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.practice-tips li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #bdc3c7;
+}
+
+.practice-tips li:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .practice-page {
+    padding: 1rem;
+  }
+  
+  .practice-header h1 {
+    font-size: 2rem;
+  }
+  
+  .exercise-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.5rem;
+  }
+  
+  .exercise-icon {
+    margin-right: 0;
+    margin-bottom: 1rem;
+  }
+  
+  .exercise-arrow {
+    margin-left: 0;
+    margin-top: 1rem;
+  }
+}

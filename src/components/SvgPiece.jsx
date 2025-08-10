@@ -28,12 +28,27 @@ const PIECE_PATHS = {
   "+P": "M35 9 L55 16 L59 67 L11 67 L16 16 Z", // Promoted Pawn
 };
 
-const SvgPiece = ({ type, player, pieceLabelType }) => {
-  const isPromoted = type.startsWith("+");
-  const label =
-    pieceLabelType === "kanji" ? KANJI_MAP[type] : ENGLISH_MAP[type];
+const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70 }) => {
+  // Handle both prop structures: direct props or piece object
+  const pieceType = type || (piece && piece.type);
+  const piecePlayer = player || (piece && piece.player);
+  const labelType = pieceLabelType || 'kanji';
+  
+  if (!pieceType) {
+    console.warn('SvgPiece: type prop is required');
+    return null;
+  }
 
-  const piecePath = PIECE_PATHS[type];
+  const isPromoted = pieceType.startsWith("+");
+  const label =
+    labelType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
+
+  const piecePath = PIECE_PATHS[pieceType];
+
+  if (!piecePath) {
+    console.warn(`SvgPiece: No path found for piece type: ${pieceType}`);
+    return null;
+  }
 
   const fillColor = "url(#wood-bambo-pattern)";
   const strokeColor = "#333";
@@ -41,10 +56,10 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
 
   return (
     <svg
-      width="70"
-      height="76"
+      width={size}
+      height={size * 1.086} // Maintain aspect ratio
       viewBox="0 0 70 76"
-      className={player === "player2" ? "rotate-180" : ""}
+      className={piecePlayer === "player2" || piecePlayer === 2 ? "rotate-180" : ""}
     >
       <defs>
         <pattern
@@ -54,7 +69,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
           height="1"
         >
           <image
-            href="/public/boards/wood-ginkgo-1.jpg"
+            href="/boards/wood-ginkgo-1.jpg"
             x="0"
             y="0"
             width="70"
@@ -77,7 +92,7 @@ const SvgPiece = ({ type, player, pieceLabelType }) => {
         fontSize={label.length === 2 ? "24" : "36"}
         fill={textColor}
         fontFamily={
-          pieceLabelType === "kanji"
+          labelType === "kanji"
             ? `'Noto Sans JP', sans-serif`
             : "sans-serif"
         }
