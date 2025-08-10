@@ -323,6 +323,10 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
         }
         newCapturedPieces[gameState.currentPlayer].push({ type: originalType, player: capturedPiece.player });
     }
+    let isKingCaptured = false;
+    if (capturedPiece && capturedPiece.type === KING) {
+        isKingCaptured = true;
+    }
 
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
@@ -354,7 +358,16 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
           [currentPlayer]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
         },
         isDraw: false, // Initialize isDraw to false
+        isCheckmate: false, // Initialize to false, will be updated below
     };
+
+    // Now that updatedGameState is defined, check for checkmate
+    // If the captured piece is a King, it's checkmate
+    if (capturedPiece && capturedPiece.type === KING) {
+        updatedGameState.isCheckmate = true;
+    } else {
+        updatedGameState.isCheckmate = isCheckmate(updatedGameState);
+    }
 
     // Check for Sennichite (repetition) after the move
     if (checkSennichite(updatedGameState)) {
@@ -440,8 +453,7 @@ export function dropPiece(gameState, pieceType, to) {
 
   // Check if this simulated drop puts the *current player's* king in check
   if (isKingInCheck(tempBoard, currentPlayer)) {
-    const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-    return { ...gameState, currentPlayer: nextPlayer }; // Illegal drop: current player dropped into check
+    return gameState; // Illegal drop: current player dropped into check, return original state
   }
 
   // If the drop is legal, proceed with updating the actual game state
@@ -622,10 +634,19 @@ export function isCheckmate(gameState) {
                 
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
-                    // Simulate the move
-                    const tempState = completeMove(gameState, [r, c], move, false); // Assume no promotion for checkmate simulation
+                    // Simulate the move on a temporary board
+                    const tempBoard = board.map(row => row.map(cell => cell ? { ...cell } : null));
+                    const pieceToMove = tempBoard[r][c];
+                    tempBoard[move[0]][move[1]] = pieceToMove;
+                    tempBoard[r][c] = null;
+
+                    // If the piece is a King, update its position for the check check
+                    let tempKingPositions = { ...gameState.kingPositions };
+                    if (pieceToMove.type === KING) {
+                        tempKingPositions[currentPlayer] = [move[0], move[1]];
+                    }
                     
-                    if (!isKingInCheck(tempState.board, currentPlayer)) {
+                    if (!isKingInCheck(tempBoard, currentPlayer, tempKingPositions)) {
                         
                         return false; // Found a move to escape check
                     }

@@ -1,8 +1,35 @@
-import { getLegalMoves, getLegalDrops, movePiece, dropPiece, isKingInCheck, isCheckmate, generateStateHash, getAttackedSquares, PLAYER_1, PLAYER_2, PAWN, LANCE, KNIGHT, SILVER, GOLD, BISHOP, ROOK, KING, PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_BISHOP, PROMOTED_ROOK } from '../game/engine';
-import openingBook from './openingBook.json';
+import {
+  getLegalMoves,
+  getLegalDrops,
+  movePiece,
+  dropPiece,
+  isKingInCheck,
+  isCheckmate,
+  generateStateHash,
+  getAttackedSquares,
+  PLAYER_1,
+  PLAYER_2,
+  PAWN,
+  LANCE,
+  KNIGHT,
+  SILVER,
+  GOLD,
+  BISHOP,
+  ROOK,
+  KING,
+  PROMOTED_PAWN,
+  PROMOTED_LANCE,
+  PROMOTED_KNIGHT,
+  PROMOTED_SILVER,
+  PROMOTED_BISHOP,
+  PROMOTED_ROOK,
+} from "../game/engine";
+import openingBook from "./openingBook.json";
 
 let transpositionTable = new Map();
-let historyTable = Array(9).fill(0).map(() => Array(9).fill(0)); // For history heuristic
+let historyTable = Array(9)
+  .fill(0)
+  .map(() => Array(9).fill(0)); // For history heuristic
 let killerMoves = Array(2).fill(null); // For killer moves (stores 2 best non-captures at current depth)
 const LMR_DEPTH = 3; // Minimum depth for LMR to apply
 const LMR_REDUCTION = 1; // How much to reduce the depth by
@@ -34,104 +61,104 @@ const PIECE_VALUES = {
 
 // Symmetrical Piece-Square Tables (PSTs)
 const PAWN_PST = [
-    [0,  0,  0,  0,  0,  0,  0,  0,  0],
-    [5,  5,  5,  5,  5,  5,  5,  5,  5],
-    [10, 10, 10, 10, 10, 10, 10, 10, 10],
-    [15, 15, 15, 15, 15, 15, 15, 15, 15],
-    [20, 20, 20, 20, 20, 20, 20, 20, 20],
-    [25, 25, 25, 25, 25, 25, 25, 25, 25],
-    [30, 30, 30, 30, 30, 30, 30, 30, 30],
-    [35, 35, 35, 35, 35, 35, 35, 35, 35],
-    [0,  0,  0,  0,  0,  0,  0,  0,  0]
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [5, 5, 5, 5, 5, 5, 5, 5, 5],
+  [10, 10, 10, 10, 10, 10, 10, 10, 10],
+  [15, 15, 15, 15, 15, 15, 15, 15, 15],
+  [20, 20, 20, 20, 20, 20, 20, 20, 20],
+  [25, 25, 25, 25, 25, 25, 25, 25, 25],
+  [30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [35, 35, 35, 35, 35, 35, 35, 35, 35],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
 const LANCE_PST = [
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0],
-    [0, 0, 5, 10, 10, 10, 5, 0, 0]
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
+  [0, 0, 5, 10, 10, 10, 5, 0, 0],
 ];
 
 const KNIGHT_PST = [
-    [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-    [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-    [-10, 0, 5, 10, 15, 10, 5, 0, -10],
-    [-10, 0, 10, 15, 20, 15, 10, 0, -10],
-    [-10, 0, 5, 10, 15, 10, 5, 0, -10],
-    [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-    [-10, 0, 5, 5, 5, 5, 5, 0, -10],
-    [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-    [-10, -10, -10, -10, -10, -10, -10, -10, -10]
+  [-10, -10, -10, -10, -10, -10, -10, -10, -10],
+  [-10, 0, 0, 0, 0, 0, 0, 0, -10],
+  [-10, 0, 5, 10, 15, 10, 5, 0, -10],
+  [-10, 0, 10, 15, 20, 15, 10, 0, -10],
+  [-10, 0, 5, 10, 15, 10, 5, 0, -10],
+  [-10, 0, 5, 10, 10, 10, 5, 0, -10],
+  [-10, 0, 5, 5, 5, 5, 5, 0, -10],
+  [-10, 0, 0, 0, 0, 0, 0, 0, -10],
+  [-10, -10, -10, -10, -10, -10, -10, -10, -10],
 ];
 
 const SILVER_PST = [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0]
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
 const GOLD_PST = [
-    [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0]
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
 const BISHOP_PST = [
-    [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-    [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-    [-10, 5, 10, 15, 15, 15, 10, 5, -10],
-    [-10, 10, 15, 20, 20, 20, 15, 10, -10],
-    [-10, 10, 15, 20, 20, 20, 15, 10, -10],
-    [-10, 5, 10, 15, 15, 15, 10, 5, -10],
-    [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-    [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-    [-10, -10, -10, -10, -10, -10, -10, -10, -10]
+  [-10, -10, -10, -10, -10, -10, -10, -10, -10],
+  [-10, 0, 5, 10, 10, 10, 5, 0, -10],
+  [-10, 5, 10, 15, 15, 15, 10, 5, -10],
+  [-10, 10, 15, 20, 20, 20, 15, 10, -10],
+  [-10, 10, 15, 20, 20, 20, 15, 10, -10],
+  [-10, 5, 10, 15, 15, 15, 10, 5, -10],
+  [-10, 0, 5, 10, 10, 10, 5, 0, -10],
+  [-10, 0, 0, 0, 0, 0, 0, 0, -10],
+  [-10, -10, -10, -10, -10, -10, -10, -10, -10],
 ];
 
 const ROOK_PST = [
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0],
-    [0, 5, 10, 15, 15, 15, 10, 5, 0]
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
+  [0, 5, 10, 15, 15, 15, 10, 5, 0],
 ];
 
 const PSTs = {
-    [PAWN]: PAWN_PST,
-    [LANCE]: LANCE_PST,
-    [KNIGHT]: KNIGHT_PST,
-    [SILVER]: SILVER_PST,
-    [GOLD]: GOLD_PST,
-    [BISHOP]: BISHOP_PST,
-    [ROOK]: ROOK_PST,
-    [KING]: Array(9).fill(Array(9).fill(0)), // King has no positional value
-    [PROMOTED_PAWN]: GOLD_PST,
-    [PROMOTED_LANCE]: GOLD_PST,
-    [PROMOTED_KNIGHT]: GOLD_PST,
-    [PROMOTED_SILVER]: GOLD_PST,
-    [PROMOTED_BISHOP]: BISHOP_PST,
-    [PROMOTED_ROOK]: ROOK_PST,
+  [PAWN]: PAWN_PST,
+  [LANCE]: LANCE_PST,
+  [KNIGHT]: KNIGHT_PST,
+  [SILVER]: SILVER_PST,
+  [GOLD]: GOLD_PST,
+  [BISHOP]: BISHOP_PST,
+  [ROOK]: ROOK_PST,
+  [KING]: Array(9).fill(Array(9).fill(0)), // King has no positional value
+  [PROMOTED_PAWN]: GOLD_PST,
+  [PROMOTED_LANCE]: GOLD_PST,
+  [PROMOTED_KNIGHT]: GOLD_PST,
+  [PROMOTED_SILVER]: GOLD_PST,
+  [PROMOTED_BISHOP]: BISHOP_PST,
+  [PROMOTED_ROOK]: ROOK_PST,
 };
 
 function getKingSafetyScore(board, player, kingPos) {
@@ -142,9 +169,14 @@ function getKingSafetyScore(board, player, kingPos) {
 
   // King Shield: Reward for having friendly pieces nearby
   const shieldOffsets = [
-    [-1, -1], [-1, 0], [-1, 1],
-    [0, -1],           [0, 1],
-    [1, -1], [1, 0], [1, 1]
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, -1],
+    [0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1],
   ];
 
   for (const [dr, dc] of shieldOffsets) {
@@ -199,7 +231,12 @@ function getMobilityScore(board, player) {
 
   // Bonus for controlling the center
   for (const move of legalMoves) {
-    if (move.to[0] >= 3 && move.to[0] <= 5 && move.to[1] >= 3 && move.to[1] <= 5) {
+    if (
+      move.to[0] >= 3 &&
+      move.to[0] <= 5 &&
+      move.to[1] >= 3 &&
+      move.to[1] <= 5
+    ) {
       mobility += 0.1; // Small bonus for each move that lands in the center
     }
   }
@@ -207,87 +244,88 @@ function getMobilityScore(board, player) {
 }
 
 function evaluateBoard(gameState) {
-    let score = 0;
-    const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
-    const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  let score = 0;
+  const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
-    // Tempo Bonus
-    if (moveHistory.length > 0) {
-        const lastMove = moveHistory[moveHistory.length - 1];
-        if (lastMove.piece !== KING) {
-            score += 10;
+  // Tempo Bonus
+  if (moveHistory.length > 0) {
+    const lastMove = moveHistory[moveHistory.length - 1];
+    if (lastMove.piece !== KING) {
+      score += 10;
+    }
+  }
+
+  // Find Kings
+  let playerKingPos = null;
+  let opponentKingPos = null;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c] && board[r][c].type === KING) {
+        if (board[r][c].player === currentPlayer) {
+          playerKingPos = [r, c];
+        } else {
+          opponentKingPos = [r, c];
         }
+      }
     }
+  }
 
-    // Find Kings
-    let playerKingPos = null;
-    let opponentKingPos = null;
-    for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-            if (board[r][c] && board[r][c].type === KING) {
-                if (board[r][c].player === currentPlayer) {
-                    playerKingPos = [r, c];
-                } else {
-                    opponentKingPos = [r, c];
-                }
-            }
+  // Material and Positional Score
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece) {
+        const pst = PSTs[piece.type];
+        const pstValue =
+          piece.player === PLAYER_1 ? pst[r][c] : pst[8 - r][8 - c];
+        if (piece.player === currentPlayer) {
+          score += PIECE_VALUES[piece.type] + pstValue;
+        } else {
+          score -= PIECE_VALUES[piece.type] + pstValue;
         }
+      }
     }
+  }
 
-    // Material and Positional Score
-    for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-            const piece = board[r][c];
-            if (piece) {
-                const pst = PSTs[piece.type];
-                const pstValue = piece.player === PLAYER_1 ? pst[r][c] : pst[8 - r][8 - c];
-                if (piece.player === currentPlayer) {
-                    score += PIECE_VALUES[piece.type] + pstValue;
-                } else {
-                    score -= (PIECE_VALUES[piece.type] + pstValue);
-                }
-            }
-        }
+  // Captured Pieces Score
+  for (const piece of capturedPieces[currentPlayer]) {
+    score += PIECE_VALUES[piece.type];
+  }
+  for (const piece of capturedPieces[opponent]) {
+    score -= PIECE_VALUES[piece.type];
+  }
+
+  // King Safety Score
+  score += getKingSafetyScore(board, currentPlayer, playerKingPos);
+  score -= getKingSafetyScore(board, opponent, opponentKingPos);
+
+  // Mobility Score
+  const playerMobility = getMobilityScore(board, currentPlayer);
+  const opponentMobility = getMobilityScore(board, opponent);
+  score += (playerMobility - opponentMobility) * 10; // Adjust weight as needed
+
+  // Threat Analysis
+  const attackedByPlayer = getAttackedSquares(board, currentPlayer);
+  const attackedByOpponent = getAttackedSquares(board, opponent);
+
+  for (const square of attackedByPlayer) {
+    const [r, c] = square.split(",").map(Number);
+    const piece = board[r][c];
+    if (piece && piece.player === opponent) {
+      score += PIECE_VALUES[piece.type] / 5;
     }
+  }
 
-    // Captured Pieces Score
-    for (const piece of capturedPieces[currentPlayer]) {
-        score += PIECE_VALUES[piece.type];
+  for (const square of attackedByOpponent) {
+    const [r, c] = square.split(",").map(Number);
+    const piece = board[r][c];
+    if (piece && piece.player === currentPlayer) {
+      score -= PIECE_VALUES[piece.type] / 5;
     }
-    for (const piece of capturedPieces[opponent]) {
-        score -= PIECE_VALUES[piece.type];
-    }
+  }
 
-    // King Safety Score
-    score += getKingSafetyScore(board, currentPlayer, playerKingPos);
-    score -= getKingSafetyScore(board, opponent, opponentKingPos);
-
-    // Mobility Score
-    const playerMobility = getMobilityScore(board, currentPlayer);
-    const opponentMobility = getMobilityScore(board, opponent);
-    score += (playerMobility - opponentMobility) * 10; // Adjust weight as needed
-
-    // Threat Analysis
-    const attackedByPlayer = getAttackedSquares(board, currentPlayer);
-    const attackedByOpponent = getAttackedSquares(board, opponent);
-
-    for (const square of attackedByPlayer) {
-        const [r, c] = square.split(',').map(Number);
-        const piece = board[r][c];
-        if (piece && piece.player === opponent) {
-            score += PIECE_VALUES[piece.type] / 5;
-        }
-    }
-
-    for (const square of attackedByOpponent) {
-        const [r, c] = square.split(',').map(Number);
-        const piece = board[r][c];
-        if (piece && piece.player === currentPlayer) {
-            score -= PIECE_VALUES[piece.type] / 5;
-        }
-    }
-
-    return score;
+  return score;
 }
 
 async function getAiMove(gameState, difficulty) {
@@ -308,16 +346,27 @@ async function getAiMove(gameState, difficulty) {
   }
 
   if (availableOpenings.length > 0) {
-    const chosenOpening = availableOpenings[Math.floor(Math.random() * availableOpenings.length)];
+    const chosenOpening =
+      availableOpenings[Math.floor(Math.random() * availableOpenings.length)];
     console.log(`AI: Choosing move from opening: ${chosenOpening.name}`);
     const moves = chosenOpening.moves[boardHash];
     const move = moves[Math.floor(Math.random() * moves.length)];
 
     // Convert Shogi coordinates to internal coordinates
-    const from = [parseInt(move.from[1], 10) - 1, 9 - parseInt(move.from[0], 10)];
+    const from = [
+      parseInt(move.from[1], 10) - 1,
+      9 - parseInt(move.from[0], 10),
+    ];
     const to = [parseInt(move.to[1], 10) - 1, 9 - parseInt(move.to[0], 10)];
 
-    return { from, to, type: 'move', isCapture: false, isCheck: false, promote: false };
+    return {
+      from,
+      to,
+      type: "move",
+      isCapture: false,
+      isCheck: false,
+      promote: false,
+    };
   }
 
   const maximizingPlayer = currentPlayer === PLAYER_2; // AI is always Player 2
@@ -330,23 +379,40 @@ async function getAiMove(gameState, difficulty) {
       const piece = gameState.board[r][c];
       if (piece && piece.player === currentPlayer) {
         const moves = getLegalMoves(piece, r, c, gameState.board);
-        moves.forEach(to => {
+        moves.forEach((to) => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          const isCapture = gameState.board[to[0]][to[1]] && gameState.board[to[0]][to[1]].player !== currentPlayer;
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          const isCapture =
+            gameState.board[to[0]][to[1]] &&
+            gameState.board[to[0]][to[1]].player !== currentPlayer;
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer,
+          );
           const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
-          const inPromotionZone = (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) || (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
-          const wasInPromotionZone = (currentPlayer === PLAYER_1 && r <= promotionZoneStart) || (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
+          const inPromotionZone =
+            (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) ||
+            (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
+          const wasInPromotionZone =
+            (currentPlayer === PLAYER_1 && r <= promotionZoneStart) ||
+            (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
           const promotablePieces = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
-          const canPromote = promotablePieces.includes(piece.type) && (inPromotionZone || wasInPromotionZone);
+          const canPromote =
+            promotablePieces.includes(piece.type) &&
+            (inPromotionZone || wasInPromotionZone);
           const lastRank = currentPlayer === PLAYER_1 ? 0 : 8;
           const secondLastRank = currentPlayer === PLAYER_1 ? 1 : 7;
           let isPromotionMandatory = false;
-          if ((piece.type === PAWN || piece.type === LANCE) && to[0] === lastRank) {
-              isPromotionMandatory = true;
+          if (
+            (piece.type === PAWN || piece.type === LANCE) &&
+            to[0] === lastRank
+          ) {
+            isPromotionMandatory = true;
           }
-          if (piece.type === KNIGHT && (to[0] === lastRank || to[0] === secondLastRank)) {
-              isPromotionMandatory = true;
+          if (
+            piece.type === KNIGHT &&
+            (to[0] === lastRank || to[0] === secondLastRank)
+          ) {
+            isPromotionMandatory = true;
           }
 
           let promote = false;
@@ -356,8 +422,16 @@ async function getAiMove(gameState, difficulty) {
             promote = true; // Mandatory promotion
           }
 
-          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
-            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck, promote });
+          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) {
+            // Only add if the move doesn't put own king in check
+            possibleMoves.push({
+              from: [r, c],
+              to,
+              type: "move",
+              isCapture,
+              isCheck,
+              promote,
+            });
           }
         });
       }
@@ -365,22 +439,38 @@ async function getAiMove(gameState, difficulty) {
   }
 
   // Collect all possible drops for captured pieces
-  gameState.capturedPieces[currentPlayer].forEach(capturedPiece => {
+  gameState.capturedPieces[currentPlayer].forEach((capturedPiece) => {
     const legalDrops = getLegalDrops(gameState, capturedPiece.type);
-    legalDrops.forEach(to => {
+    legalDrops.forEach((to) => {
       const simulatedGameState = dropPiece(gameState, capturedPiece.type, to);
-      if (simulatedGameState !== gameState && !isKingInCheck(simulatedGameState.board, currentPlayer)) {
-        const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-        possibleMoves.push({ from: 'drop', to, type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
+      if (
+        simulatedGameState !== gameState &&
+        !isKingInCheck(simulatedGameState.board, currentPlayer)
+      ) {
+        const isCheck = isKingInCheck(
+          simulatedGameState.board,
+          simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+        );
+        possibleMoves.push({
+          from: "drop",
+          to,
+          type: capturedPiece.type,
+          isCapture: false,
+          isPromotion: false,
+          isCheck,
+        });
       }
     });
   });
 
   // Sort moves for better alpha-beta pruning performance
-  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
+  possibleMoves.sort(
+    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+  );
 
   const startTime = Date.now();
-  const timeLimit = difficulty === 'easy' ? 1000 : difficulty === 'medium' ? 3000 : 9000; // 1s for easy, 3s for medium, 9s for hard
+  const timeLimit =
+    difficulty === "easy" ? 1000 : difficulty === "medium" ? 3000 : 9000; // 1s for easy, 3s for medium, 9s for hard
 
   if (possibleMoves.length === 0) {
     console.log("No legal moves available for AI.");
@@ -389,7 +479,16 @@ async function getAiMove(gameState, difficulty) {
 
   let bestMove = possibleMoves[0];
   for (let depth = 1; depth <= 5; depth++) {
-    const { move } = await pvs(gameState, depth, -Infinity, Infinity, maximizingPlayer, startTime, timeLimit, new Set());
+    const { move } = await pvs(
+      gameState,
+      depth,
+      -Infinity,
+      Infinity,
+      maximizingPlayer,
+      startTime,
+      timeLimit,
+      new Set(),
+    );
     if (move) {
       bestMove = move;
     } else {
@@ -400,8 +499,16 @@ async function getAiMove(gameState, difficulty) {
   return bestMove;
 }
 
-
-async function pvs(gameState, depth, alpha, beta, maximizingPlayer, startTime, timeLimit, history) {
+async function pvs(
+  gameState,
+  depth,
+  alpha,
+  beta,
+  maximizingPlayer,
+  startTime,
+  timeLimit,
+  history,
+) {
   if (Date.now() - startTime > timeLimit) {
     return { score: 0, move: null };
   }
@@ -412,12 +519,21 @@ async function pvs(gameState, depth, alpha, beta, maximizingPlayer, startTime, t
   }
 
   if (depth === 0) {
-    const score = await quiescenceSearch(gameState, alpha, beta, 0, startTime, timeLimit);
+    const score = await quiescenceSearch(
+      gameState,
+      alpha,
+      beta,
+      0,
+      startTime,
+      timeLimit,
+    );
     return { score, move: null };
   }
 
   const possibleMoves = getPossibleMoves(gameState);
-  possibleMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
+  possibleMoves.sort(
+    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+  );
 
   let bestMove = null;
   let score = -Infinity;
@@ -425,7 +541,7 @@ async function pvs(gameState, depth, alpha, beta, maximizingPlayer, startTime, t
   for (let i = 0; i < possibleMoves.length; i++) {
     const move = possibleMoves[i];
     let newGameState = { ...gameState, pastStates: [] };
-    if (move.from === 'drop') {
+    if (move.from === "drop") {
       newGameState = dropPiece(newGameState, move.type, move.to);
     } else {
       newGameState = movePiece(newGameState, move.from, move.to, move.promote);
@@ -436,13 +552,40 @@ async function pvs(gameState, depth, alpha, beta, maximizingPlayer, startTime, t
 
     let result;
     if (i === 0) {
-      result = await pvs(newGameState, depth - 1, -beta, -alpha, !maximizingPlayer, startTime, timeLimit, newHistory);
+      result = await pvs(
+        newGameState,
+        depth - 1,
+        -beta,
+        -alpha,
+        !maximizingPlayer,
+        startTime,
+        timeLimit,
+        newHistory,
+      );
       score = -result.score;
     } else {
-      result = await pvs(newGameState, depth - 1, -alpha - 1, -alpha, !maximizingPlayer, startTime, timeLimit, newHistory);
+      result = await pvs(
+        newGameState,
+        depth - 1,
+        -alpha - 1,
+        -alpha,
+        !maximizingPlayer,
+        startTime,
+        timeLimit,
+        newHistory,
+      );
       score = -result.score;
       if (alpha < score && score < beta) {
-        result = await pvs(newGameState, depth - 1, -beta, -score, !maximizingPlayer, startTime, timeLimit, newHistory);
+        result = await pvs(
+          newGameState,
+          depth - 1,
+          -beta,
+          -score,
+          !maximizingPlayer,
+          startTime,
+          timeLimit,
+          newHistory,
+        );
         score = -result.score;
       }
     }
@@ -473,10 +616,14 @@ function scoreMove(move, gameState) {
   // 2. MVV-LVA for Captures
   if (move.isCapture) {
     const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
-    const attackingPieceType = move.from === 'drop' ? move.type : board[move.from[0]][move.from[1]]?.type;
+    const attackingPieceType =
+      move.from === "drop"
+        ? move.type
+        : board[move.from[0]][move.from[1]]?.type;
 
     if (capturedPieceType && attackingPieceType) {
-      score += PIECE_VALUES[capturedPieceType] * 10 - PIECE_VALUES[attackingPieceType];
+      score +=
+        PIECE_VALUES[capturedPieceType] * 10 - PIECE_VALUES[attackingPieceType];
     }
     score += 1000; // Base bonus for any capture
   }
@@ -491,33 +638,52 @@ function scoreMove(move, gameState) {
 
   // 4. Killer Moves Bonus (for quiet moves)
   if (!move.isCapture) {
-    if (killerMoves[0] && move.from === killerMoves[0].from && move.to[0] === killerMoves[0].to[0] && move.to[1] === killerMoves[0].to[1]) {
+    if (
+      killerMoves[0] &&
+      move.from === killerMoves[0].from &&
+      move.to[0] === killerMoves[0].to[0] &&
+      move.to[1] === killerMoves[0].to[1]
+    ) {
       score += 900;
-    } else if (killerMoves[1] && move.from === killerMoves[1].from && move.to[0] === killerMoves[1].to[0] && move.to[1] === killerMoves[1].to[1]) {
+    } else if (
+      killerMoves[1] &&
+      move.from === killerMoves[1].from &&
+      move.to[0] === killerMoves[1].to[0] &&
+      move.to[1] === killerMoves[1].to[1]
+    ) {
       score += 800;
     }
   }
 
   // 5. History Heuristic Bonus
-  if (move.from !== 'drop' && historyTable[move.from[0]] && historyTable[move.from[0]][move.from[1]]) {
+  if (
+    move.from !== "drop" &&
+    historyTable[move.from[0]] &&
+    historyTable[move.from[0]][move.from[1]]
+  ) {
     score += historyTable[move.from[0]][move.from[1]];
   }
 
   // 6. Escape from Attack Priority
-  if (move.from !== 'drop') {
+  if (move.from !== "drop") {
     const attackedSquares = getAttackedSquares(board, opponent);
     const fromKey = `${move.from[0]},${move.from[1]}`;
     if (attackedSquares.has(fromKey)) {
-        const attackingPiece = board[move.from[0]][move.from[1]];
-        if (attackingPiece) {
-            score += PIECE_VALUES[attackingPiece.type] / 4; // Bonus for escaping attack, proportional to piece value
-        }
+      const attackingPiece = board[move.from[0]][move.from[1]];
+      if (attackingPiece) {
+        score += PIECE_VALUES[attackingPiece.type] / 4; // Bonus for escaping attack, proportional to piece value
+      }
     }
   }
 
   // 7. Center Control Bonus
-  if (move.to[0] >= 3 && move.to[0] <= 5 && move.to[1] >= 3 && move.to[1] <= 5) {
-      score += 20; // Small bonus for moving towards the center
+  if (
+    move.to[0] >= 3 &&
+    move.to[0] <= 5 &&
+    move.to[1] >= 3 &&
+    move.to[1] <= 5
+  ) {
+    score += 20; // Small bonus for moving towards the center
   }
 
   // 8. Check Priority
@@ -538,23 +704,39 @@ function getPossibleMoves(gameState) {
       const piece = board[r][c];
       if (piece && piece.player === currentPlayer) {
         const moves = getLegalMoves(piece, r, c, board);
-        moves.forEach(to => {
+        moves.forEach((to) => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
-          const isCapture = board[to[0]][to[1]] && board[to[0]][to[1]].player !== currentPlayer;
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          const isCapture =
+            board[to[0]][to[1]] && board[to[0]][to[1]].player !== currentPlayer;
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer,
+          );
           const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
-          const inPromotionZone = (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) || (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
-          const wasInPromotionZone = (currentPlayer === PLAYER_1 && r <= promotionZoneStart) || (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
+          const inPromotionZone =
+            (currentPlayer === PLAYER_1 && to[0] <= promotionZoneStart) ||
+            (currentPlayer === PLAYER_2 && to[0] >= promotionZoneStart);
+          const wasInPromotionZone =
+            (currentPlayer === PLAYER_1 && r <= promotionZoneStart) ||
+            (currentPlayer === PLAYER_2 && r >= promotionZoneStart);
           const promotablePieces = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
-          const canPromote = promotablePieces.includes(piece.type) && (inPromotionZone || wasInPromotionZone);
+          const canPromote =
+            promotablePieces.includes(piece.type) &&
+            (inPromotionZone || wasInPromotionZone);
           const lastRank = currentPlayer === PLAYER_1 ? 0 : 8;
           const secondLastRank = currentPlayer === PLAYER_1 ? 1 : 7;
           let isPromotionMandatory = false;
-          if ((piece.type === PAWN || piece.type === LANCE) && to[0] === lastRank) {
-              isPromotionMandatory = true;
+          if (
+            (piece.type === PAWN || piece.type === LANCE) &&
+            to[0] === lastRank
+          ) {
+            isPromotionMandatory = true;
           }
-          if (piece.type === KNIGHT && (to[0] === lastRank || to[0] === secondLastRank)) {
-              isPromotionMandatory = true;
+          if (
+            piece.type === KNIGHT &&
+            (to[0] === lastRank || to[0] === secondLastRank)
+          ) {
+            isPromotionMandatory = true;
           }
 
           let promote = false;
@@ -564,8 +746,16 @@ function getPossibleMoves(gameState) {
             promote = true; // Mandatory promotion
           }
 
-          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) { // Only add if the move doesn't put own king in check
-            possibleMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck, promote });
+          if (!isKingInCheck(simulatedGameState.board, currentPlayer)) {
+            // Only add if the move doesn't put own king in check
+            possibleMoves.push({
+              from: [r, c],
+              to,
+              type: "move",
+              isCapture,
+              isCheck,
+              promote,
+            });
           }
         });
       }
@@ -573,13 +763,26 @@ function getPossibleMoves(gameState) {
   }
 
   // Collect all possible drops for captured pieces
-  capturedPieces[currentPlayer].forEach(capturedPiece => {
+  capturedPieces[currentPlayer].forEach((capturedPiece) => {
     const legalDrops = getLegalDrops(gameState, capturedPiece.type);
-    legalDrops.forEach(to => {
+    legalDrops.forEach((to) => {
       const simulatedGameState = dropPiece(gameState, capturedPiece.type, to);
-      if (simulatedGameState !== gameState && !isKingInCheck(simulatedGameState.board, currentPlayer)) {
-        const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
-        possibleMoves.push({ from: 'drop', to, type: capturedPiece.type, isCapture: false, isPromotion: false, isCheck });
+      if (
+        simulatedGameState !== gameState &&
+        !isKingInCheck(simulatedGameState.board, currentPlayer)
+      ) {
+        const isCheck = isKingInCheck(
+          simulatedGameState.board,
+          simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+        );
+        possibleMoves.push({
+          from: "drop",
+          to,
+          type: capturedPiece.type,
+          isCapture: false,
+          isPromotion: false,
+          isCheck,
+        });
       }
     });
   });
@@ -587,16 +790,22 @@ function getPossibleMoves(gameState) {
   return possibleMoves;
 }
 
-
-
-async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLimit) {
+async function quiescenceSearch(
+  gameState,
+  alpha,
+  beta,
+  depth,
+  startTime,
+  timeLimit,
+) {
   if (Date.now() - startTime > timeLimit) {
     console.log(`Quiescence search time limit exceeded at depth ${depth}`);
     return null; // Indicate that the search was cut short
   }
   let standPat = evaluateBoard(gameState);
-  
-  if (depth >= 5) { // Limit quiescence search depth
+
+  if (depth >= 5) {
+    // Limit quiescence search depth
     return standPat;
   }
 
@@ -617,14 +826,25 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
       const piece = board[r][c];
       if (piece && piece.player === currentPlayer) {
         const moves = getLegalMoves(piece, r, c, board);
-        moves.forEach(to => {
+        moves.forEach((to) => {
           const simulatedGameState = movePiece(gameState, [r, c], to);
           const targetPieceAfterMove = simulatedGameState.board[to[0]][to[1]];
-          const isCapture = targetPieceAfterMove && targetPieceAfterMove.player !== currentPlayer;
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+          const isCapture =
+            targetPieceAfterMove &&
+            targetPieceAfterMove.player !== currentPlayer;
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer,
+          );
 
           if (isCapture || isCheck) {
-            possibleNoisyMoves.push({ from: [r, c], to, type: 'move', isCapture, isCheck });
+            possibleNoisyMoves.push({
+              from: [r, c],
+              to,
+              type: "move",
+              isCapture,
+              isCheck,
+            });
           }
         });
       }
@@ -632,14 +852,27 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
   }
 
   // Collect noisy drops (checks)
-  capturedPieces[currentPlayer].forEach(capturedPiece => {
+  capturedPieces[currentPlayer].forEach((capturedPiece) => {
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
-        if (!board[r][c]) { // Only drop on empty squares
-          const simulatedGameState = dropPiece(gameState, capturedPiece.type, [r, c]);
-          const isCheck = isKingInCheck(simulatedGameState.board, simulatedGameState.currentPlayer);
+        if (!board[r][c]) {
+          // Only drop on empty squares
+          const simulatedGameState = dropPiece(gameState, capturedPiece.type, [
+            r,
+            c,
+          ]);
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer,
+          );
           if (isCheck) {
-            possibleNoisyMoves.push({ from: 'drop', to: [r, c], type: capturedPiece.type, isCapture: false, isCheck });
+            possibleNoisyMoves.push({
+              from: "drop",
+              to: [r, c],
+              type: capturedPiece.type,
+              isCapture: false,
+              isCheck,
+            });
           }
         }
       }
@@ -647,7 +880,9 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
   });
 
   // Sort noisy moves for better pruning
-  possibleNoisyMoves.sort((a, b) => scoreMove(b, gameState) - scoreMove(a, gameState));
+  possibleNoisyMoves.sort(
+    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+  );
 
   if (possibleNoisyMoves.length === 0) {
     return alpha;
@@ -657,15 +892,22 @@ async function quiescenceSearch(gameState, alpha, beta, depth, startTime, timeLi
     if (Date.now() - startTime > timeLimit) {
       return 0; // Abort if time limit exceeded during move iteration
     }
-    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control
+    await new Promise((resolve) => setTimeout(resolve, 0)); // Yield control
     let newGameState = { ...gameState, pastStates: [] }; // Deep copy relevant parts of gameState, omit pastStates
-    if (move.from === 'drop') {
+    if (move.from === "drop") {
       newGameState = dropPiece(newGameState, move.type, move.to);
     } else {
       newGameState = movePiece(newGameState, move.from, move.to);
     }
 
-    const score = -(await quiescenceSearch(newGameState, -beta, -alpha, depth + 1, startTime, timeLimit)); // Negamax: negate score from recursive call
+    const score = -(await quiescenceSearch(
+      newGameState,
+      -beta,
+      -alpha,
+      depth + 1,
+      startTime,
+      timeLimit,
+    )); // Negamax: negate score from recursive call
 
     if (score >= beta) {
       return beta;
