@@ -1,6 +1,5 @@
 .practice-exercise-detail {
   min-height: 100vh;
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
   color: #ecf0f1;
   padding: 2rem;
 }
@@ -14,7 +13,7 @@
   position: absolute;
   top: 2rem;
   left: 2rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: #ecf0f1;
   padding: 0.5rem 1rem;
@@ -24,7 +23,7 @@
 }
 
 .back-button:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
@@ -68,7 +67,7 @@
 }
 
 .question-card {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 255, 0.7);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 15px;
   padding: 2rem;
@@ -98,7 +97,7 @@
 }
 
 .answer-option {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 255, 0.7);
   border: 2px solid rgba(255, 255, 255, 0.2);
   color: #ecf0f1;
   padding: 1rem;
@@ -110,7 +109,7 @@
 }
 
 .answer-option:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.4);
   transform: translateY(-2px);
 }

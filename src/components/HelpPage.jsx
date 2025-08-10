@@ -17,7 +17,8 @@ const HelpPage = () => {
         [-1, -1], [-1, 0], [-1, 1],
         [0, -1],           [0, 1],
         [1, -1],  [1, 0],  [1, 1]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Gold General (金将)',
@@ -27,7 +28,8 @@ const HelpPage = () => {
         [-1, -1], [-1, 0], [-1, 1],
         [0, -1],           [0, 1],
         [0, 0],  [1, 0]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Silver General (銀将)',
@@ -36,7 +38,8 @@ const HelpPage = () => {
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
         [0, 0],  [1, -1],  [1, 1]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Knight (桂馬)',
@@ -44,7 +47,8 @@ const HelpPage = () => {
       description: 'Moves two squares forward and then one square sideways (L-shape, but only forward). Can jump over other pieces.',
       movement: [
         [-2, -1], [-2, 1]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Lance (香車)',
@@ -52,7 +56,8 @@ const HelpPage = () => {
       description: 'Moves any number of squares directly forward. Cannot move backward or sideways.',
       movement: [
         [-1, 0], [-2, 0], [-3, 0], [-4, 0]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Rook (飛車)',
@@ -63,7 +68,8 @@ const HelpPage = () => {
         [0, -1], [0, -2], [0, -3], [0, -4],
         [0, 1],  [0, 2],  [0, 3],  [0, 4],
         [1, 0],  [2, 0],  [3, 0],  [4, 0]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Bishop (角行)',
@@ -74,7 +80,8 @@ const HelpPage = () => {
         [-1, 1],  [-2, 2],  [-3, 3],  [-4, 4],
         [1, -1],  [2, -2],  [3, -3],  [4, -4],
         [1, 1],   [2, 2],   [3, 3],   [4, 4]
-      ]
+      ],
+      promoted: false
     },
     {
       name: 'Pawn (歩兵)',
@@ -82,7 +89,83 @@ const HelpPage = () => {
       description: 'Moves one square directly forward. Captures by moving forward onto an opponent\'s piece.',
       movement: [
         [-1, 0]
-      ]
+      ],
+      promoted: false
+    }
+  ];
+
+  const promotedPieceData = [
+    {
+      name: 'Promoted Silver (成銀)',
+      type: SILVER,
+      description: 'Promoted Silver moves like a Gold General - one square orthogonally or one square diagonally forward.',
+      movement: [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [0, 0],  [1, 0]
+      ],
+      promoted: true
+    },
+    {
+      name: 'Promoted Knight (成桂)',
+      type: KNIGHT,
+      description: 'Promoted Knight moves like a Gold General - one square orthogonally or one square diagonally forward.',
+      movement: [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [0, 0],  [1, 0]
+      ],
+      promoted: true
+    },
+    {
+      name: 'Promoted Lance (成香)',
+      type: LANCE,
+      description: 'Promoted Lance moves like a Gold General - one square orthogonally or one square diagonally forward.',
+      movement: [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [0, 0],  [1, 0]
+      ],
+      promoted: true
+    },
+    {
+      name: 'Dragon King (龍王)',
+      type: ROOK,
+      description: 'Dragon King combines Rook and King movements - moves any number of squares horizontally/vertically, plus one square diagonally.',
+      movement: [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [1, -1],  [1, 0],  [1, 1],
+        [-2, 0], [-3, 0], [-4, 0],
+        [0, -2], [0, -3], [0, -4],
+        [0, 2],  [0, 3],  [0, 4],
+        [2, 0],  [3, 0],  [4, 0]
+      ],
+      promoted: true
+    },
+    {
+      name: 'Dragon Horse (龍馬)',
+      type: BISHOP,
+      description: 'Dragon Horse combines Bishop and King movements - moves any number of squares diagonally, plus one square orthogonally.',
+      movement: [
+        [-1, -1], [-2, -2], [-3, -3], [-4, -4],
+        [-1, 1],  [-2, 2],  [-3, 3],  [-4, 4],
+        [1, -1],  [2, -2],  [3, -3],  [4, -4],
+        [1, 1],   [2, 2],   [3, 3],   [4, 4],
+        [-1, 0], [0, -1], [0, 1], [1, 0]
+      ],
+      promoted: true
+    },
+    {
+      name: 'Promoted Pawn (と金)',
+      type: PAWN,
+      description: 'Promoted Pawn moves like a Gold General - one square orthogonally or one square diagonally forward.',
+      movement: [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [0, 0],  [1, 0]
+      ],
+      promoted: true
     }
   ];
 
@@ -112,7 +195,7 @@ const HelpPage = () => {
               <div key={index} className={className}>
                 {isPiece && (
                   <SvgPiece 
-                    piece={{ type: piece.type, player: 1, promoted: false }}
+                    piece={{ type: piece.type, player: 1, promoted: piece.promoted }}
                     size={30}
                   />
                 )}
@@ -204,12 +287,31 @@ const HelpPage = () => {
           <div className="content-section">
             <h2>Piece Movements</h2>
             <p>Click on a piece to see its movement pattern:</p>
+            
+            <h3>Regular Pieces</h3>
             <div className="pieces-grid">
               {pieceData.map((piece, index) => (
                 <div key={index} className="piece-card">
                   <div className="piece-header">
                     <SvgPiece 
                       piece={{ type: piece.type, player: 1, promoted: false }}
+                      size={40}
+                    />
+                    <h3>{piece.name}</h3>
+                  </div>
+                  <p className="piece-description">{piece.description}</p>
+                  {renderMovementDiagram(piece)}
+                </div>
+              ))}
+            </div>
+
+            <h3>Promoted Pieces</h3>
+            <div className="pieces-grid">
+              {promotedPieceData.map((piece, index) => (
+                <div key={index} className="piece-card">
+                  <div className="piece-header">
+                    <SvgPiece 
+                      piece={{ type: piece.type, player: 1, promoted: true }}
                       size={40}
                     />
                     <h3>{piece.name}</h3>
