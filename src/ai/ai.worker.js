@@ -328,6 +328,255 @@ function evaluateBoard(gameState) {
   return score;
 }
 
+/**
+ * Finds the position of a player's king on the board
+ * @param {Array<Array>} board - The current board state
+ * @param {string} player - The player whose king to find
+ * @returns {Array|null} - [row, col] of the king, or null if not found
+ */
+function findKingPosition(board, player) {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === KING && piece.player === player) {
+        return [r, c];
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Evaluates the safety of a drop move by checking if the piece would be immediately captured
+ * @param {object} gameState - The current game state
+ * @param {string} pieceType - The type of piece being dropped
+ * @param {Array} dropPosition - [row, col] where the piece would be dropped
+ * @returns {object} - {isSafe: boolean, safetyScore: number, immediateThreats: Array}
+ */
+function evaluateDropSafety(gameState, pieceType, dropPosition) {
+  const { board, currentPlayer } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  const [dropRow, dropCol] = dropPosition;
+  
+  // Simulate the drop
+  const simulatedBoard = board.map(row => [...row]);
+  simulatedBoard[dropRow][dropCol] = { type: pieceType, player: currentPlayer };
+  
+  // Get all squares the opponent can attack after the drop
+  const attackedSquares = getAttackedSquares(simulatedBoard, opponent);
+  const dropSquareKey = `${dropRow},${dropCol}`;
+  
+  // Check if the drop square is under immediate attack
+  const isUnderImmediateAttack = attackedSquares.has(dropSquareKey);
+  
+  if (isUnderImmediateAttack) {
+    // Find what pieces can attack this square
+    const immediateThreats = [];
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const piece = simulatedBoard[r][c];
+        if (piece && piece.player === opponent) {
+          const moves = getLegalMoves(piece, r, c, simulatedBoard);
+          if (moves.some(([moveRow, moveCol]) => moveRow === dropRow && moveCol === dropCol)) {
+            immediateThreats.push({
+              piece: piece.type,
+              position: [r, c],
+              value: PIECE_VALUES[piece.type]
+            });
+          }
+        }
+      }
+    }
+    
+    // Calculate safety score - heavily penalize drops that would be captured
+    const pieceValue = PIECE_VALUES[pieceType];
+    const totalThreatValue = immediateThreats.reduce((sum, threat) => sum + threat.value, 0);
+    
+    // If the piece would be captured by a piece of equal or higher value, it's very bad
+    const worstThreat = Math.max(...immediateThreats.map(t => t.value));
+    let safetyScore = -pieceValue * 2; // Base penalty for being under attack
+    
+    if (worstThreat >= pieceValue) {
+      safetyScore -= pieceValue * 3; // Additional penalty for being captured by equal/higher value piece
+    }
+    
+    console.log(`AI: Unsafe drop detected for ${pieceType} at [${dropRow},${dropCol}]. Threats:`, immediateThreats.map(t => `${t.piece}(${t.value})`).join(', '), `Safety score: ${safetyScore}`);
+    
+    return {
+      isSafe: false,
+      safetyScore,
+      immediateThreats,
+      worstThreat
+    };
+  }
+  
+  // Check for potential future threats (pieces that could move to attack this square)
+  const potentialThreats = [];
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = simulatedBoard[r][c];
+      if (piece && piece.player === opponent) {
+        // Check if this piece could move to attack the drop square in one move
+        const moves = getLegalMoves(piece, r, c, simulatedBoard);
+        for (const [moveRow, moveCol] of moves) {
+          // If the piece can move to a position where it could then attack the drop square
+          const tempBoard = simulatedBoard.map(row => [...row]);
+          tempBoard[moveRow][moveCol] = piece;
+          tempBoard[r][c] = null;
+          
+          const movesAfterMove = getLegalMoves(piece, moveRow, moveCol, tempBoard);
+          if (movesAfterMove.some(([finalRow, finalCol]) => finalRow === dropRow && finalCol === dropCol)) {
+            potentialThreats.push({
+              piece: piece.type,
+              position: [r, c],
+              value: PIECE_VALUES[piece.type]
+            });
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  // Small penalty for potential future threats
+  const potentialThreatScore = potentialThreats.length * -10;
+  
+  // Bonus for drops that create tactical advantages
+  let tacticalBonus = 0;
+  
+  // Bonus for drops that attack opponent pieces
+  const movesAfterDrop = getLegalMoves({ type: pieceType, player: currentPlayer }, dropRow, dropCol, simulatedBoard);
+  for (const [moveRow, moveCol] of movesAfterDrop) {
+    const targetPiece = simulatedBoard[moveRow][moveCol];
+    if (targetPiece && targetPiece.player === opponent) {
+      // Higher bonus for attacking higher-value pieces
+      const attackBonus = PIECE_VALUES[targetPiece.type] / 8;
+      tacticalBonus += attackBonus;
+      
+      // Extra bonus if the attack creates a fork (attacking multiple pieces)
+      let forkBonus = 0;
+      for (const [otherMoveRow, otherMoveCol] of movesAfterDrop) {
+        if (otherMoveRow !== moveRow || otherMoveCol !== moveCol) {
+          const otherTarget = simulatedBoard[otherMoveRow][otherMoveCol];
+          if (otherTarget && otherTarget.player === opponent) {
+            forkBonus += PIECE_VALUES[otherTarget.type] / 15;
+          }
+        }
+      }
+      tacticalBonus += forkBonus;
+    }
+  }
+  
+  // Bonus for drops that control important squares (center, near opponent king)
+  if (dropRow >= 3 && dropRow <= 5 && dropCol >= 3 && dropCol <= 5) {
+    tacticalBonus += 15; // Center control bonus
+  }
+  
+  // Bonus for drops that create fork or pin opportunities
+  const opponentKingPos = findKingPosition(simulatedBoard, opponent);
+  if (opponentKingPos) {
+    const [kingRow, kingCol] = opponentKingPos;
+    const distanceToKing = Math.abs(dropRow - kingRow) + Math.abs(dropCol - kingCol);
+    if (distanceToKing <= 3) {
+      tacticalBonus += 20; // Bonus for drops near opponent king
+    }
+  }
+  
+  // Bonus for drops that protect friendly pieces
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = simulatedBoard[r][c];
+      if (piece && piece.player === currentPlayer && piece.type !== KING) {
+        const distance = Math.abs(dropRow - r) + Math.abs(dropCol - c);
+        if (distance === 1) {
+          tacticalBonus += 10; // Small bonus for protecting adjacent friendly pieces
+        }
+      }
+    }
+  }
+  
+  // Consider opponent's defensive capabilities
+  let defensiveBonus = 0;
+  const opponentAttackedSquares = getAttackedSquares(simulatedBoard, opponent);
+  
+  // Bonus if the drop square is protected by our pieces
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = simulatedBoard[r][c];
+      if (piece && piece.player === currentPlayer) {
+        const moves = getLegalMoves(piece, r, c, simulatedBoard);
+        if (moves.some(([moveRow, moveCol]) => moveRow === dropRow && moveCol === dropCol)) {
+          defensiveBonus += 15; // Bonus for protected drops
+          break;
+        }
+      }
+    }
+  }
+  
+  // Penalty if opponent can easily defend against the drop
+  let opponentDefenseCount = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = simulatedBoard[r][c];
+      if (piece && piece.player === opponent) {
+        const moves = getLegalMoves(piece, r, c, simulatedBoard);
+        if (moves.some(([moveRow, moveCol]) => {
+          // Check if this move would defend against our drop
+          const tempBoard = simulatedBoard.map(row => [...row]);
+          tempBoard[moveRow][moveCol] = piece;
+          tempBoard[r][c] = null;
+          
+          // If after this move, our drop piece can't attack effectively
+          const movesAfterOpponentMove = getLegalMoves({ type: pieceType, player: currentPlayer }, dropRow, dropCol, tempBoard);
+          return movesAfterOpponentMove.length === 0 || 
+                 movesAfterOpponentMove.every(([finalRow, finalCol]) => {
+                   const target = tempBoard[finalRow][finalCol];
+                   return !target || target.player === currentPlayer;
+                 });
+        })) {
+          opponentDefenseCount++;
+        }
+      }
+    }
+  }
+  
+  if (opponentDefenseCount > 0) {
+    defensiveBonus -= opponentDefenseCount * 10; // Penalty for easily defended drops
+  }
+  
+  // Consider whether this is a good time to drop this piece
+  let timingBonus = 0;
+  
+  // Bonus for dropping pieces when we have a material advantage (can afford to lose the piece)
+  const materialAdvantage = evaluateBoard(gameState) - evaluateBoard({...gameState, currentPlayer: opponent});
+  if (materialAdvantage > 500) {
+    timingBonus += 25; // Bonus for dropping when ahead
+  }
+  
+  // Penalty for dropping valuable pieces early in the game
+  if (gameState.moveHistory && gameState.moveHistory.length < 20) {
+    if (pieceType === BISHOP || pieceType === ROOK) {
+      timingBonus -= 30; // Prefer to keep major pieces early
+    } else if (pieceType === GOLD || pieceType === SILVER) {
+      timingBonus -= 20; // Prefer to keep minor pieces early
+    }
+  }
+  
+  const finalSafetyScore = potentialThreatScore + tacticalBonus + defensiveBonus + timingBonus;
+  
+  // Log safe drops with high tactical value for debugging
+  if (tacticalBonus > 50) {
+    console.log(`AI: Safe drop for ${pieceType} at [${dropRow},${dropCol}]. Tactical bonus: ${tacticalBonus}, Final score: ${finalSafetyScore}`);
+  }
+  
+  return {
+    isSafe: true,
+    safetyScore: finalSafetyScore,
+    immediateThreats: [],
+    potentialThreats
+  };
+}
+
 async function getAiMove(gameState, difficulty) {
   const { currentPlayer, moveHistory } = gameState;
 
@@ -447,18 +696,27 @@ async function getAiMove(gameState, difficulty) {
         simulatedGameState !== gameState &&
         !isKingInCheck(simulatedGameState.board, currentPlayer)
       ) {
-        const isCheck = isKingInCheck(
-          simulatedGameState.board,
-          simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
-        );
-        possibleMoves.push({
-          from: "drop",
-          to,
-          type: capturedPiece.type,
-          isCapture: false,
-          isPromotion: false,
-          isCheck,
-        });
+        // Evaluate drop safety before adding to possible moves
+        const dropSafety = evaluateDropSafety(gameState, capturedPiece.type, to);
+        
+        // Only add drops that aren't extremely unsafe (immediate capture by equal/higher value piece)
+        const pieceValue = PIECE_VALUES[capturedPiece.type];
+        const isExtremelyUnsafe = !dropSafety.isSafe && dropSafety.worstThreat >= pieceValue;
+        
+        if (!isExtremelyUnsafe) {
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+          );
+          possibleMoves.push({
+            from: "drop",
+            to,
+            type: capturedPiece.type,
+            isCapture: false,
+            isPromotion: false,
+            isCheck,
+          });
+        }
       }
     });
   });
@@ -691,6 +949,20 @@ function scoreMove(move, gameState) {
     score += 50;
   }
 
+  // 9. Drop Safety Evaluation (NEW)
+  if (move.from === "drop") {
+    const dropSafety = evaluateDropSafety(gameState, move.type, move.to);
+    score += dropSafety.safetyScore;
+    
+    // Additional penalty for very unsafe drops
+    if (!dropSafety.isSafe && dropSafety.worstThreat >= PIECE_VALUES[move.type]) {
+      score -= PIECE_VALUES[move.type] * 5; // Heavy penalty for drops that would be captured by equal/higher value pieces
+    }
+    
+    // Log the final score for drop moves
+    console.log(`AI: Drop move ${move.type} to [${move.to[0]},${move.to[1]}] scored: ${score} (base: ${score - dropSafety.safetyScore}, safety: ${dropSafety.safetyScore})`);
+  }
+
   return score;
 }
 
@@ -771,18 +1043,27 @@ function getPossibleMoves(gameState) {
         simulatedGameState !== gameState &&
         !isKingInCheck(simulatedGameState.board, currentPlayer)
       ) {
-        const isCheck = isKingInCheck(
-          simulatedGameState.board,
-          simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
-        );
-        possibleMoves.push({
-          from: "drop",
-          to,
-          type: capturedPiece.type,
-          isCapture: false,
-          isPromotion: false,
-          isCheck,
-        });
+        // Evaluate drop safety before adding to possible moves
+        const dropSafety = evaluateDropSafety(gameState, capturedPiece.type, to);
+        
+        // Only add drops that aren't extremely unsafe (immediate capture by equal/higher value piece)
+        const pieceValue = PIECE_VALUES[capturedPiece.type];
+        const isExtremelyUnsafe = !dropSafety.isSafe && dropSafety.worstThreat >= pieceValue;
+        
+        if (!isExtremelyUnsafe) {
+          const isCheck = isKingInCheck(
+            simulatedGameState.board,
+            simulatedGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+          );
+          possibleMoves.push({
+            from: "drop",
+            to,
+            type: capturedPiece.type,
+            isCapture: false,
+            isPromotion: false,
+            isCheck,
+          });
+        }
       }
     });
   });
