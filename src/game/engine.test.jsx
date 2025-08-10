@@ -721,3 +721,4 @@ describe('checkSennichite', () => {
     expect(gameState.isDraw).toBe(true);
   });
 });
+

@@ -386,11 +386,11 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
  */
 export function checkSennichite(gameState) {
   const { pastStates } = gameState;
-  const currentHash = generateStateHash(gameState);
+  const currentHash = generateSennichiteHash(gameState);
 
   let count = 0;
   for (const state of pastStates) {
-    if (generateStateHash(state) === currentHash) {
+    if (generateSennichiteHash(state) === currentHash) {
       count++;
     }
   }
@@ -751,6 +751,68 @@ export function generateStateHash(gameState) {
       capturedString += p2Captured.toLowerCase();
   }
   fen += capturedString + ' ';
+
+  // Move number
+  fen += (moveHistory.length + 1);
+
+  return fen;
+}
+
+/**
+ * Generates a unique hash for the current game state, excluding the move number.
+ * Used specifically for Sennichite (repetition) detection.
+ * @param {object} gameState The current game state.
+ * @returns {string} A unique string representing the game state without move number.
+ */
+export function generateSennichiteHash(gameState) {
+  const { board, currentPlayer, capturedPieces } = gameState;
+
+  let fen = '';
+
+  // Board state
+  for (let i = 0; i < 9; i++) {
+    let empty = 0;
+    for (let j = 0; j < 9; j++) {
+      const piece = board[i][j];
+      if (piece) {
+        if (empty > 0) {
+          fen += empty;
+          empty = 0;
+        }
+        let pieceChar = piece.type.toLowerCase();
+        if (piece.player === PLAYER_1) {
+          pieceChar = pieceChar.toUpperCase();
+        }
+        if (piece.type.startsWith('+')) {
+            pieceChar = '+' + pieceChar[1];
+        }
+        fen += pieceChar;
+      } else {
+        empty++;
+      }
+    }
+    if (empty > 0) {
+      fen += empty;
+    }
+    if (i < 8) {
+      fen += '/';
+    }
+  }
+
+  // Active player
+  fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
+
+  // Captured pieces
+  let capturedString = '-';
+  const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
+  const p2Captured = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+  if (p1Captured.length > 0) {
+      capturedString = p1Captured.toUpperCase();
+  }
+  if (p2Captured.length > 0) {
+      capturedString += p2Captured.toLowerCase();
+  }
+  fen += capturedString;
 
   return fen;
 }
