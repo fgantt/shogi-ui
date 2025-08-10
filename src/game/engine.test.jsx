@@ -656,3 +656,68 @@ describe('isCheckmate', () => {
     expect(isCheckmate(gameState)).toBe(false);
   });
 });
+
+describe('checkSennichite', () => {
+  it('should detect a draw by repetition (Sennichite) after four occurrences of the same position', () => {
+    let gameState = getInitialGameState();
+
+    // Set up a simplified board for the repetition
+    // Remove all pieces except the ones involved in the repetition and the kings
+    gameState.board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+
+    // Place kings
+    gameState.board[8][4] = { type: KING, player: PLAYER_1 };
+    gameState.kingPositions[PLAYER_1] = [8, 4];
+    gameState.board[0][4] = { type: KING, player: PLAYER_2 };
+    gameState.kingPositions[PLAYER_2] = [0, 4];
+
+    // Place the pieces involved in the repetition
+    // Player 1 Gold at [3,3] (Shogi G64)
+    gameState.board[3][3] = { type: GOLD, player: PLAYER_1 };
+    // Player 2 Promoted Lance at [5,5] (Shogi +L46)
+    gameState.board[5][5] = { type: PROMOTED_LANCE, player: PLAYER_2 };
+
+    // Define the repeating moves
+    const repeatingMoves = [
+      // black G64-65 (internal [3,3] to [4,3])
+      { from: [3, 3], to: [4, 3], player: PLAYER_1 },
+      // white +L46-45 (internal [5,5] to [4,5])
+      { from: [5, 5], to: [4, 5], player: PLAYER_2 },
+      // black G65-64 (internal [4,3] to [3,3])
+      { from: [4, 3], to: [3, 3], player: PLAYER_1 },
+      // white +L45-46 (internal [4,5] to [5,5])
+      { from: [4, 5], to: [5, 5], player: PLAYER_2 },
+    ];
+
+    // Perform the repeating moves to trigger Sennichite
+    // The position repeats every 4 moves. We need 4 occurrences of the same position.
+    // Initial state is 1st occurrence.
+    // After 4 moves, it's the 2nd occurrence.
+    // After 8 moves, it's the 3rd occurrence.
+    // After 12 moves, it's the 4th occurrence, and should be a draw.
+    const numRepetitions = 3; // To get 4 occurrences (initial + 3 repetitions)
+
+    for (let i = 0; i < numRepetitions; i++) {
+      for (const move of repeatingMoves) {
+        // Ensure the current player matches the move's player
+        if (gameState.currentPlayer !== move.player) {
+          // This should not happen if the sequence is correct, but as a safeguard
+          // we might need to manually switch player or adjust the test setup.
+          // For this specific test, the sequence alternates players correctly.
+        }
+
+        // Simulate the move
+        gameState = movePiece(gameState, move.from, move.to);
+        // After each move, check if it's a draw
+        if (gameState.isDraw) {
+          break; // Exit if draw is detected early
+        }
+      }
+      if (gameState.isDraw) {
+        break; // Exit outer loop if draw is detected
+      }
+    }
+
+    expect(gameState.isDraw).toBe(true);
+  });
+});

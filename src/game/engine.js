@@ -752,8 +752,5 @@ export function generateStateHash(gameState) {
   }
   fen += capturedString + ' ';
 
-  // Move number
-  fen += (moveHistory.length + 1);
-
   return fen;
 }
