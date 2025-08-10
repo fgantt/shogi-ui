@@ -567,6 +567,34 @@ describe('dropPiece', () => {
     expect(newStateAfterSelfCheckDrop).toBe(gameStateBeforeSelfCheckDrop);
     expect(newStateAfterSelfCheckDrop.currentPlayer).toBe(PLAYER_1); // Current player should not switch
   });
+
+  it('should set isCheckmate to true when a drop results in checkmate', () => {
+    const initialState = getInitialGameState();
+    // Clear the board for a specific checkmate scenario
+    initialState.board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+
+    // Player 2 King at [0,0]
+    initialState.board[0][0] = { type: KING, player: PLAYER_2 };
+    initialState.kingPositions[PLAYER_2] = [0, 0];
+
+    // Player 1 Gold General at [0,1] (covers escape squares)
+    initialState.board[0][1] = { type: GOLD, player: PLAYER_1 };
+
+    // Player 1 Gold General at [1,1] (covers more escape squares)
+    initialState.board[1][1] = { type: GOLD, player: PLAYER_1 };
+
+    // Player 1 has a captured Pawn
+    initialState.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_1 });
+
+    // Set current player to Player 1
+    initialState.currentPlayer = PLAYER_1;
+
+    // Drop the Pawn at [1,0] to checkmate Player 2 King
+    const newState = dropPiece(initialState, PAWN, [1, 0]);
+
+    expect(newState.isCheckmate).toBe(true);
+    expect(newState.currentPlayer).toBe(PLAYER_2); // It's Player 2's turn, and they are checkmated
+  });
 });
 
 describe('isKingInCheck', () => {

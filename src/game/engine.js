@@ -479,10 +479,18 @@ export function dropPiece(gameState, pieceType, to) {
     kingPositions: {
       ...gameState.kingPositions,
       [currentPlayer]: (pieceType === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
-    }
+    },
+    isCheckmate: false, // Initialize to false, will be updated below
+    isDraw: false, // Initialize to false, will be updated below
   };
 
-  
+  // Now that finalGameState is defined, check for checkmate
+  finalGameState.isCheckmate = isCheckmate(finalGameState);
+
+  // Check for Sennichite (repetition) after the drop
+  if (checkSennichite(finalGameState)) {
+    finalGameState.isDraw = true;
+  }
 
   return finalGameState;
 }
@@ -618,11 +626,9 @@ export function getLegalDrops(gameState, pieceType) {
  * @returns {boolean} True if the current player is in checkmate.
  */
 export function isCheckmate(gameState) {
-    
     const { board, currentPlayer, capturedPieces } = gameState;
 
     if (!isKingInCheck(board, currentPlayer)) {
-        
         return false;
     }
 
@@ -631,7 +637,6 @@ export function isCheckmate(gameState) {
         for (let c = 0; c < COLS; c++) {
             const piece = board[r][c];
             if (piece && piece.player === currentPlayer) {
-                
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
                     // Simulate the move on a temporary board
@@ -647,7 +652,6 @@ export function isCheckmate(gameState) {
                     }
                     
                     if (!isKingInCheck(tempBoard, currentPlayer, tempKingPositions)) {
-                        
                         return false; // Found a move to escape check
                     }
                 }
@@ -664,7 +668,6 @@ export function isCheckmate(gameState) {
             tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
             
             if (!isKingInCheck(tempBoard, currentPlayer)) {
-                
                 return false; // Found a drop to escape check
             }
         }
