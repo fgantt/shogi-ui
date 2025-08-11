@@ -300,6 +300,18 @@ function evaluateBoard(gameState) {
   score += getKingSafetyScore(board, currentPlayer, playerKingPos);
   score -= getKingSafetyScore(board, opponent, opponentKingPos);
 
+  // Enhanced Pawn Structure Analysis
+  score += evaluatePawnStructure(board, currentPlayer);
+  score -= evaluatePawnStructure(board, opponent);
+
+  // King Activity in Endgame
+  score += evaluateKingActivity(board, currentPlayer, playerKingPos, capturedPieces);
+  score -= evaluateKingActivity(board, opponent, opponentKingPos, capturedPieces);
+
+  // Connected Rooks Bonus
+  score += evaluateConnectedRooks(board, currentPlayer);
+  score -= evaluateConnectedRooks(board, opponent);
+
   // Mobility Score
   const playerMobility = getMobilityScore(board, currentPlayer);
   const opponentMobility = getMobilityScore(board, opponent);
@@ -721,9 +733,9 @@ async function getAiMove(gameState, difficulty) {
     });
   });
 
-  // Sort moves for better alpha-beta pruning performance
+  // Enhanced move ordering for better alpha-beta pruning
   possibleMoves.sort(
-    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+    (a, b) => scoreMoveEnhanced(b, gameState) - scoreMoveEnhanced(a, gameState),
   );
 
   const startTime = Date.now();
@@ -735,25 +747,119 @@ async function getAiMove(gameState, difficulty) {
     return null; // No legal moves available
   }
 
+  // Iterative Deepening with Time Management
   let bestMove = possibleMoves[0];
-  for (let depth = 1; depth <= 5; depth++) {
-    const { move } = await pvs(
-      gameState,
-      depth,
-      -Infinity,
-      Infinity,
-      maximizingPlayer,
-      startTime,
-      timeLimit,
-      new Set(),
-    );
-    if (move) {
-      bestMove = move;
-    } else {
-      // Time limit likely exceeded, return the best move from the previous depth
+  let bestScore = -Infinity;
+  let currentDepth = 1;
+  const maxDepth = difficulty === "easy" ? 3 : difficulty === "medium" ? 4 : 6;
+  
+  // Reserve some time for the final iteration
+  const timeReserve = timeLimit * 0.1; // Reserve 10% of time
+  const searchTimeLimit = timeLimit - timeReserve;
+  
+  console.log(`AI: Starting iterative deepening search with time limit: ${searchTimeLimit}ms`);
+  
+  // Aspiration windows for better search efficiency
+  let alpha = -Infinity;
+  let beta = Infinity;
+  let windowSize = 100; // Initial window size
+  
+  // Dynamic time management based on position complexity
+  let timePerMove = searchTimeLimit / maxDepth;
+  let earlyExitThreshold = 0.8; // Exit early if we're using too much time
+  
+  while (currentDepth <= maxDepth && (Date.now() - startTime) < searchTimeLimit) {
+    const timeUsed = Date.now() - startTime;
+    const timeRemaining = searchTimeLimit - timeUsed;
+    
+    // Adjust search time based on position complexity
+    if (currentDepth > 3) {
+      const complexityFactor = Math.min(2.0, Math.max(0.5, Math.abs(bestScore) / 500));
+      timePerMove = (timeRemaining / (maxDepth - currentDepth + 1)) * complexityFactor;
+    }
+    
+    console.log(`AI: Searching at depth ${currentDepth} with window [${alpha}, ${beta}], time remaining: ${timeRemaining}ms`);
+    
+    try {
+      const { move, score } = await pvs(
+        gameState,
+        currentDepth,
+        alpha,
+        beta,
+        maximizingPlayer,
+        startTime,
+        searchTimeLimit,
+        new Set(),
+      );
+      
+      if (move && score !== null) {
+        bestMove = move;
+        bestScore = score;
+        console.log(`AI: Depth ${currentDepth} completed. Best move:`, bestMove, `Score: ${bestScore}`);
+        
+        // Update aspiration window for next iteration
+        if (score <= alpha) {
+          // Score is below lower bound, expand window downward
+          beta = alpha;
+          alpha = score - windowSize;
+          windowSize *= 2; // Increase window size
+        } else if (score >= beta) {
+          // Score is above upper bound, expand window upward
+          alpha = beta;
+          beta = score + windowSize;
+          windowSize *= 2; // Increase window size
+        } else {
+          // Score is within bounds, narrow window for next iteration
+          alpha = score - windowSize / 2;
+          beta = score + windowSize / 2;
+          windowSize = Math.max(50, windowSize / 2); // Decrease window size but maintain minimum
+        }
+        
+        // Early exit if we're clearly winning and have limited time
+        if (bestScore > 800 && timeRemaining < searchTimeLimit * earlyExitThreshold) {
+          console.log(`AI: Position is clearly winning (${bestScore}), exiting early due to time constraints`);
+          break;
+        }
+        
+      } else {
+        // Time limit exceeded or search failed
+        console.log(`AI: Search at depth ${currentDepth} was interrupted or failed`);
+        break;
+      }
+      
+      currentDepth++;
+      
+      // If we're already winning by a lot, don't search deeper
+      if (bestScore > 1000 && currentDepth > 3) {
+        console.log(`AI: Position is clearly winning (${bestScore}), stopping search at depth ${currentDepth - 1}`);
+        break;
+      }
+      
+      // If we're losing by a lot, search deeper to find better moves
+      if (bestScore < -1000 && currentDepth <= maxDepth) {
+        console.log(`AI: Position is difficult (${bestScore}), continuing search to depth ${currentDepth}`);
+      }
+      
+      // Check if we should continue based on time and score stability
+      if (currentDepth > 3) {
+        const timePerDepth = timeUsed / (currentDepth - 1);
+        const estimatedTimeForNextDepth = timePerDepth * 2; // Rough estimate
+        
+        if (estimatedTimeForNextDepth > timeRemaining * 0.7) {
+          console.log(`AI: Estimated time for next depth (${estimatedTimeForNextDepth}ms) exceeds available time (${timeRemaining}ms), stopping search`);
+          break;
+        }
+      }
+      
+    } catch (error) {
+      console.log(`AI: Error at depth ${currentDepth}:`, error);
       break;
     }
   }
+  
+  const totalTime = Date.now() - startTime;
+  console.log(`AI: Search completed in ${totalTime}ms. Final depth: ${currentDepth - 1}. Best move:`, bestMove, `Score: ${bestScore}`);
+  
   return bestMove;
 }
 
@@ -776,6 +882,17 @@ async function pvs(
     return { score: 0, move: null };
   }
 
+  // Check endgame tablebase first
+  const endgameResult = getEndgameTablebaseMove(gameState.board, gameState.currentPlayer, gameState.capturedPieces);
+  if (endgameResult) {
+    if (endgameResult.isDraw) {
+      return { score: 0, move: null };
+    } else if (endgameResult.isWinning) {
+      const score = maximizingPlayer ? endgameResult.score : -endgameResult.score;
+      return { score, move: null };
+    }
+  }
+
   if (depth === 0) {
     const score = await quiescenceSearch(
       gameState,
@@ -788,9 +905,40 @@ async function pvs(
     return { score, move: null };
   }
 
+  // Null Move Pruning - if we can skip a move and still be winning, the position is very good
+  if (depth >= 3 && !isKingInCheck(gameState.board, gameState.currentPlayer)) {
+    const nullMoveState = { ...gameState, currentPlayer: gameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1 };
+    const nullMoveResult = await pvs(
+      nullMoveState,
+      depth - 3, // Reduced depth for null move
+      -beta,
+      -beta + 1,
+      !maximizingPlayer,
+      startTime,
+      timeLimit,
+      new Set(history),
+    );
+    
+    if (-nullMoveResult.score >= beta) {
+      return { score: beta, move: null }; // Beta cutoff
+    }
+  }
+
+  // Futility Pruning - if we're way ahead and this is a quiet move, skip deep search
+  const standPat = evaluateBoard(gameState);
+  const futilityMargin = 300; // Material value threshold
+  
+  if (depth <= 2 && !maximizingPlayer && standPat - futilityMargin >= beta) {
+    return { score: standPat, move: null };
+  }
+  
+  if (depth <= 2 && maximizingPlayer && standPat + futilityMargin <= alpha) {
+    return { score: standPat, move: null };
+  }
+
   const possibleMoves = getPossibleMoves(gameState);
   possibleMoves.sort(
-    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+    (a, b) => scoreMoveEnhanced(b, gameState) - scoreMoveEnhanced(a, gameState),
   );
 
   let bestMove = null;
@@ -851,6 +999,20 @@ async function pvs(
     if (score > alpha) {
       alpha = score;
       bestMove = move;
+      
+      // Update killer moves for quiet moves
+      if (!move.isCapture && !move.isCheck) {
+        if (killerMoves[0] === null || (killerMoves[0].from !== move.from || 
+            killerMoves[0].to[0] !== move.to[0] || killerMoves[0].to[1] !== move.to[1])) {
+          killerMoves[1] = killerMoves[0];
+          killerMoves[0] = { from: move.from, to: move.to };
+        }
+      }
+      
+      // Update history table
+      if (move.from !== "drop") {
+        historyTable[move.from[0]][move.from[1]] += depth * depth;
+      }
     }
 
     if (alpha >= beta) {
@@ -964,6 +1126,215 @@ function scoreMove(move, gameState) {
   }
 
   return score;
+}
+
+function scoreMoveEnhanced(move, gameState) {
+  let score = 0;
+  const { board, currentPlayer, moveHistory } = gameState;
+  const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+
+  // 1. Promotion Priority (highest priority)
+  if (move.promote) {
+    score += 800; // Strong bonus for promoting a piece
+  }
+
+  // 2. Enhanced MVV-LVA for Captures with SEE
+  if (move.isCapture) {
+    const capturedPieceType = board[move.to[0]][move.to[1]]?.type;
+    const attackingPieceType =
+      move.from === "drop"
+        ? move.type
+        : board[move.from[0]][move.from[1]]?.type;
+
+    if (capturedPieceType && attackingPieceType) {
+      // Enhanced MVV-LVA: Most Valuable Victim - Least Valuable Attacker
+      const victimValue = PIECE_VALUES[capturedPieceType];
+      const attackerValue = PIECE_VALUES[attackingPieceType];
+      
+      // Base capture score: victim value * 10 - attacker value
+      score += victimValue * 10 - attackerValue;
+      
+      // Additional bonus for good captures (capturing higher value pieces)
+      if (victimValue > attackerValue) {
+        score += 500; // Bonus for winning exchanges
+      } else if (victimValue === attackerValue) {
+        score += 100; // Neutral exchange
+      } else {
+        score -= 200; // Penalty for losing exchanges
+      }
+      
+      // SEE (Static Exchange Evaluation) - quick evaluation of the exchange
+      const seeScore = calculateSEE(board, move, currentPlayer);
+      score += seeScore * 2; // Weight SEE heavily in move ordering
+    }
+    score += 1000; // Base bonus for any capture
+  }
+
+  // 3. Recapture Priority
+  if (moveHistory.length > 0) {
+    const lastMove = moveHistory[moveHistory.length - 1];
+    if (lastMove.to[0] === move.to[0] && lastMove.to[1] === move.to[1]) {
+      score += 1200; // High bonus for immediate recapture
+    }
+  }
+
+  // 4. Killer Moves Bonus (for quiet moves)
+  if (!move.isCapture) {
+    if (
+      killerMoves[0] &&
+      move.from === killerMoves[0].from &&
+      move.to[0] === killerMoves[0].to[0] &&
+      move.to[1] === killerMoves[0].to[1]
+    ) {
+      score += 900;
+    } else if (
+      killerMoves[1] &&
+      move.from === killerMoves[1].from &&
+      move.to[0] === killerMoves[1].to[0] &&
+      move.to[1] === killerMoves[1].to[1]
+    ) {
+      score += 800;
+    }
+  }
+
+  // 5. History Heuristic Bonus
+  if (
+    move.from !== "drop" &&
+    historyTable[move.from[0]] &&
+    historyTable[move.from[0]][move.from[1]]
+  ) {
+    score += historyTable[move.from[0]][move.from[1]];
+  }
+
+  // 6. Escape from Attack Priority
+  if (move.from !== "drop") {
+    const attackedSquares = getAttackedSquares(board, opponent);
+    const fromKey = `${move.from[0]},${move.from[1]}`;
+    if (attackedSquares.has(fromKey)) {
+      const attackingPiece = board[move.from[0]][move.from[1]];
+      if (attackingPiece) {
+        score += PIECE_VALUES[attackingPiece.type] / 4; // Bonus for escaping attack, proportional to piece value
+      }
+    }
+  }
+
+  // 7. Center Control Bonus
+  if (
+    move.to[0] >= 3 &&
+    move.to[0] <= 5 &&
+    move.to[1] >= 3 &&
+    move.to[1] <= 5
+  ) {
+    score += 20; // Small bonus for moving towards the center
+  }
+
+  // 8. Check Priority
+  if (move.isCheck) {
+    score += 50;
+  }
+
+  // 9. Drop Safety Evaluation
+  if (move.from === "drop") {
+    const dropSafety = evaluateDropSafety(gameState, move.type, move.to);
+    score += dropSafety.safetyScore;
+    
+    // Additional penalty for very unsafe drops
+    if (!dropSafety.isSafe && dropSafety.worstThreat >= PIECE_VALUES[move.type]) {
+      score -= PIECE_VALUES[move.type] * 5; // Heavy penalty for drops that would be captured by equal/higher value pieces
+    }
+    
+    // Log the final score for drop moves
+    console.log(`AI: Drop move ${move.type} to [${move.to[0]},${move.to[1]}] scored: ${score} (base: ${score - dropSafety.safetyScore}, safety: ${dropSafety.safetyScore})`);
+  }
+
+  return score;
+}
+
+/**
+ * Calculate Static Exchange Evaluation (SEE) for a move
+ * This evaluates the material value of a capture sequence
+ */
+function calculateSEE(board, move, currentPlayer) {
+  if (!move.isCapture) return 0;
+  
+  const [toRow, toCol] = move.to;
+  let totalScore = 0;
+  let currentBoard = board.map(row => [...row]);
+  let currentPlayerTurn = currentPlayer;
+  
+  // Simulate the initial capture
+  const attackingPiece = move.from === "drop" 
+    ? { type: move.type, player: currentPlayer }
+    : currentBoard[move.from[0]][move.from[1]];
+  
+  if (!attackingPiece) return 0;
+  
+  const victimPiece = currentBoard[toRow][toCol];
+  if (!victimPiece) return 0;
+  
+  // Initial capture
+  totalScore = PIECE_VALUES[victimPiece.type];
+  currentBoard[toRow][toCol] = attackingPiece;
+  if (move.from !== "drop") {
+    currentBoard[move.from[0]][move.from[1]] = null;
+  }
+  
+  // Find the next attacker to this square
+  let nextAttacker = findLeastValuableAttacker(currentBoard, toRow, toCol, currentPlayerTurn === currentPlayer ? PLAYER_1 : PLAYER_2);
+  
+  // Continue the exchange until no more captures are possible
+  let depth = 0;
+  const maxDepth = 6; // Limit exchange depth to prevent infinite loops
+  
+  while (nextAttacker && depth < maxDepth) {
+    const attackerPiece = currentBoard[nextAttacker.row][nextAttacker.col];
+    if (!attackerPiece) break;
+    
+    // Make the capture
+    currentBoard[toRow][toCol] = attackerPiece;
+    currentBoard[nextAttacker.row][nextAttacker.col] = null;
+    
+    // Update score (negative because it's opponent's turn)
+    if (depth % 2 === 0) {
+      totalScore -= PIECE_VALUES[attackerPiece.type];
+    } else {
+      totalScore += PIECE_VALUES[attackerPiece.type];
+    }
+    
+    // Find next attacker
+    currentPlayerTurn = currentPlayerTurn === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+    nextAttacker = findLeastValuableAttacker(currentBoard, toRow, toCol, currentPlayerTurn);
+    depth++;
+  }
+  
+  return totalScore;
+}
+
+/**
+ * Find the least valuable piece that can attack a given square
+ */
+function findLeastValuableAttacker(board, row, col, player) {
+  let bestAttacker = null;
+  let bestValue = Infinity;
+  
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.player === player) {
+        // Check if this piece can attack the target square
+        const moves = getLegalMoves(piece, r, c, board);
+        if (moves.some(([moveRow, moveCol]) => moveRow === row && moveCol === col)) {
+          const pieceValue = PIECE_VALUES[piece.type];
+          if (pieceValue < bestValue) {
+            bestValue = pieceValue;
+            bestAttacker = { row: r, col: c, piece: piece.type, value: pieceValue };
+          }
+        }
+      }
+    }
+  }
+  
+  return bestAttacker;
 }
 
 function getPossibleMoves(gameState) {
@@ -1160,9 +1531,9 @@ async function quiescenceSearch(
     }
   });
 
-  // Sort noisy moves for better pruning
+  // Sort noisy moves for better pruning using enhanced scoring
   possibleNoisyMoves.sort(
-    (a, b) => scoreMove(b, gameState) - scoreMove(a, gameState),
+    (a, b) => scoreMoveEnhanced(b, gameState) - scoreMoveEnhanced(a, gameState),
   );
 
   if (possibleNoisyMoves.length === 0) {
@@ -1198,4 +1569,315 @@ async function quiescenceSearch(
     }
   }
   return alpha;
+}
+
+/**
+ * Evaluate pawn structure for a player
+ */
+function evaluatePawnStructure(board, player) {
+  let score = 0;
+  const pawns = [];
+  
+  // Collect all pawns for this player
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === PAWN && piece.player === player) {
+        pawns.push([r, c]);
+      }
+    }
+  }
+  
+  if (pawns.length === 0) return 0;
+  
+  // Bonus for pawn chains
+  for (let i = 0; i < pawns.length; i++) {
+    for (let j = i + 1; j < pawns.length; j++) {
+      const [r1, c1] = pawns[i];
+      const [r2, c2] = pawns[j];
+      
+      // Check if pawns are adjacent horizontally or vertically
+      if ((Math.abs(r1 - r2) === 1 && c1 === c2) || (Math.abs(c1 - c2) === 1 && r1 === r2)) {
+        score += 15; // Bonus for connected pawns
+      }
+    }
+  }
+  
+  // Bonus for advanced pawns (closer to promotion zone)
+  const promotionZoneStart = player === PLAYER_1 ? 2 : 6;
+  for (const [r, c] of pawns) {
+    if (player === PLAYER_1 && r <= promotionZoneStart) {
+      score += (promotionZoneStart - r) * 10; // Bonus for advancing towards promotion
+    } else if (player === PLAYER_2 && r >= promotionZoneStart) {
+      score += (r - promotionZoneStart) * 10;
+    }
+  }
+  
+  // Penalty for isolated pawns
+  for (const [r, c] of pawns) {
+    let isIsolated = true;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
+          const piece = board[nr][nc];
+          if (piece && piece.type === PAWN && piece.player === player) {
+            isIsolated = false;
+            break;
+          }
+        }
+      }
+      if (!isIsolated) break;
+    }
+    if (isIsolated) {
+      score -= 20; // Penalty for isolated pawns
+    }
+  }
+  
+  return score;
+}
+
+/**
+ * Evaluate king activity in endgame situations
+ */
+function evaluateKingActivity(board, player, kingPos, capturedPieces) {
+  if (!kingPos) return 0;
+  
+  // Only consider king activity in endgame (few pieces remaining)
+  const totalPieces = countPieces(board) + countCapturedPieces(capturedPieces);
+  if (totalPieces > 20) return 0; // Not endgame yet
+  
+  let score = 0;
+  const [kingR, kingC] = kingPos;
+  
+  // Bonus for king activity in endgame
+  if (totalPieces <= 10) {
+    // In very late endgame, encourage king to move towards center
+    const centerDistance = Math.abs(kingR - 4) + Math.abs(kingC - 4);
+    score += (9 - centerDistance) * 5;
+  }
+  
+  // Bonus for king being near opponent's side in endgame
+  const opponentSide = player === PLAYER_1 ? 8 : 0;
+  const distanceToOpponentSide = Math.abs(kingR - opponentSide);
+  if (totalPieces <= 15) {
+    score += (9 - distanceToOpponentSide) * 3;
+  }
+  
+  return score;
+}
+
+/**
+ * Evaluate connected rooks (rooks that can support each other)
+ */
+function evaluateConnectedRooks(board, player) {
+  let score = 0;
+  const rooks = [];
+  
+  // Collect all rooks for this player
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === ROOK && piece.player === player) {
+        rooks.push([r, c]);
+      }
+    }
+  }
+  
+  if (rooks.length < 2) return 0;
+  
+  // Check if rooks are on the same rank or file
+  for (let i = 0; i < rooks.length; i++) {
+    for (let j = i + 1; j < rooks.length; j++) {
+      const [r1, c1] = rooks[i];
+      const [r2, c2] = rooks[j];
+      
+      if (r1 === r2 || c1 === c2) {
+        // Check if there are no pieces blocking the connection
+        let isConnected = true;
+        if (r1 === r2) {
+          // Same rank, check if no pieces between
+          const minC = Math.min(c1, c2);
+          const maxC = Math.max(c1, c2);
+          for (let c = minC + 1; c < maxC; c++) {
+            if (board[r1][c]) {
+              isConnected = false;
+              break;
+            }
+          }
+        } else {
+          // Same file, check if no pieces between
+          const minR = Math.min(r1, r2);
+          const maxR = Math.max(r1, r2);
+          for (let r = minR + 1; r < maxR; r++) {
+            if (board[r][c1]) {
+              isConnected = false;
+              break;
+            }
+          }
+        }
+        
+        if (isConnected) {
+          score += 30; // Bonus for connected rooks
+        }
+      }
+    }
+  }
+  
+  return score;
+}
+
+/**
+ * Count total pieces on the board
+ */
+function countPieces(board) {
+  let count = 0;
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c]) count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Count total captured pieces
+ */
+function countCapturedPieces(capturedPieces) {
+  let count = 0;
+  for (const player in capturedPieces) {
+    count += capturedPieces[player].length;
+  }
+  return count;
+}
+
+/**
+ * Simple endgame tablebase for basic positions
+ * Returns the best move and score for known endgame positions
+ */
+function getEndgameTablebaseMove(board, currentPlayer, capturedPieces) {
+  const totalPieces = countPieces(board) + countCapturedPieces(capturedPieces);
+  
+  // Only use tablebase for very simple endgames
+  if (totalPieces > 6) return null;
+  
+  // King vs King (draw)
+  if (totalPieces === 2) {
+    return { move: null, score: 0, isDraw: true };
+  }
+  
+  // King + Pawn vs King
+  if (totalPieces === 3) {
+    const result = evaluateKingPawnEndgame(board, currentPlayer);
+    if (result) return result;
+  }
+  
+  // King + 2 Pawns vs King
+  if (totalPieces === 4) {
+    const result = evaluateKingTwoPawnsEndgame(board, currentPlayer);
+    if (result) return result;
+  }
+  
+  return null;
+}
+
+/**
+ * Evaluate King + Pawn vs King endgame
+ */
+function evaluateKingPawnEndgame(board, currentPlayer) {
+  let playerKing = null;
+  let opponentKing = null;
+  let playerPawn = null;
+  
+  // Find kings and pawn
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (!piece) continue;
+      
+      if (piece.type === KING) {
+        if (piece.player === currentPlayer) {
+          playerKing = [r, c];
+        } else {
+          opponentKing = [r, c];
+        }
+      } else if (piece.type === PAWN && piece.player === currentPlayer) {
+        playerPawn = [r, c];
+      }
+    }
+  }
+  
+  if (!playerKing || !opponentKing || !playerPawn) return null;
+  
+  const [pawnR, pawnC] = playerPawn;
+  const [oppKingR, oppKingC] = opponentKing;
+  
+  // Check if pawn can promote
+  const promotionRank = currentPlayer === PLAYER_1 ? 0 : 8;
+  const distanceToPromotion = Math.abs(pawnR - promotionRank);
+  
+  // Check if opponent king can catch the pawn
+  const distanceToPawn = Math.abs(oppKingR - pawnR) + Math.abs(oppKingC - pawnC);
+  
+  // If pawn is close to promotion and opponent king is far, this is winning
+  if (distanceToPromotion <= 2 && distanceToPawn > 3) {
+    return { move: null, score: 1000, isWinning: true };
+  }
+  
+  // If opponent king is very close to pawn, this might be a draw
+  if (distanceToPawn <= 2) {
+    return { move: null, score: 100, isDraw: true };
+  }
+  
+  return null;
+}
+
+/**
+ * Evaluate King + 2 Pawns vs King endgame
+ */
+function evaluateKingTwoPawnsEndgame(board, currentPlayer) {
+  let playerKing = null;
+  let opponentKing = null;
+  const playerPawns = [];
+  
+  // Find kings and pawns
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const piece = board[r][c];
+      if (!piece) continue;
+      
+      if (piece.type === KING) {
+        if (piece.player === currentPlayer) {
+          playerKing = [r, c];
+        } else {
+          opponentKing = [r, c];
+        }
+      } else if (piece.type === PAWN && piece.player === currentPlayer) {
+        playerPawns.push([r, c]);
+      }
+    }
+  }
+  
+  if (!playerKing || !opponentKing || playerPawns.length !== 2) return null;
+  
+  // Check if either pawn is close to promotion
+  const promotionRank = currentPlayer === PLAYER_1 ? 0 : 8;
+  let hasAdvancedPawn = false;
+  
+  for (const [pawnR, pawnC] of playerPawns) {
+    const distanceToPromotion = Math.abs(pawnR - promotionRank);
+    if (distanceToPromotion <= 2) {
+      hasAdvancedPawn = true;
+      break;
+    }
+  }
+  
+  // Two pawns with one close to promotion is usually winning
+  if (hasAdvancedPawn) {
+    return { move: null, score: 1500, isWinning: true };
+  }
+  
+  return null;
 }
