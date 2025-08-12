@@ -5,6 +5,7 @@ import PracticePage from './components/PracticePage';
 import PracticeExerciseDetail from './components/PracticeExerciseDetail';
 import HelpPage from './components/HelpPage';
 import AboutPage from './components/AboutPage';
+import WebAssemblyDemo from './components/WebAssemblyDemo';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
@@ -19,6 +20,7 @@ function App() {
         <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/wasm-demo" element={<WebAssemblyDemo />} />
       </Routes>
     </div>
   );

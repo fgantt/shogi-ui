@@ -59,6 +59,14 @@ const HomePage = () => {
             <span className="button-icon">ℹ️</span>
             <span className="button-text">About</span>
           </button>
+          
+          <button 
+            className="nav-button"
+            onClick={() => navigate('/wasm-demo')}
+          >
+            <span className="button-icon">🚀</span>
+            <span className="button-text">WebAssembly Demo</span>
+          </button>
         </div>
         
         <div className="home-footer">

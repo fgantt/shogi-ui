@@ -22,3 +22,51 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust and WebAssembly build artifacts
+target/
+pkg/
+pkg-bundler/
+*.wasm
+*.wasm.map
+*.d.ts
+
+# Rust specific
+*.rs.bk
+*.pdb
+
+# WebAssembly specific
+*.wat
+*.wast
+*.wastm
+
+# Additional Rust build artifacts
+**/*.rlib
+**/*.rmeta
+**/*.d
+**/*.o
+**/*.so
+**/*.dylib
+**/*.dll
+**/*.exe
+
+# Rust incremental compilation
+**/incremental/
+
+# Rust profiling
+**/*.profraw
+
+# Rust coverage
+**/*.profdata
+
+# Additional development artifacts
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
