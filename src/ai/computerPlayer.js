@@ -1,7 +1,18 @@
-import { getWasmAiMove, isWasmEngineAvailable, getPerformanceMetrics } from './wasmEngine.js';
+import { getWasmAiMove, isWasmEngineAvailable, getPerformanceMetrics, initializeWasmEngine } from './wasmEngine.js';
 
 let aiWorker;
 let useWasmEngine = true;
+
+export async function initializeWasm() {
+  if (useWasmEngine && !isWasmEngineAvailable()) {
+    try {
+      await initializeWasmEngine();
+    } catch (error) {
+      console.error("Failed to initialize wasm engine on startup", error);
+      useWasmEngine = false;
+    }
+  }
+}
 
 function initializeWorker() {
   aiWorker = new Worker(new URL('./ai.worker.js', import.meta.url), { type: 'module' });

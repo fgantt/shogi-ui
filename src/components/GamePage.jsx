@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece, checkSennichite } from '../game/engine';
-import { getAiMove } from '../ai/computerPlayer';
+import { getAiMove, initializeWasm } from '../ai/computerPlayer';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import PromotionModal from './PromotionModal';
@@ -39,6 +39,10 @@ const GamePage = () => {
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
   const [currentWallpaper, setCurrentWallpaper] = useState('');
   const [currentBoardBackground, setCurrentBoardBackground] = useState('');
+
+  useEffect(() => {
+    initializeWasm();
+  }, []);
 
   useEffect(() => {
     // Check if settings should be opened from navigation

@@ -6,7 +6,7 @@ let isInitialized = false;
 /**
  * Initialize the WebAssembly engine
  */
-async function initializeWasmEngine() {
+export async function initializeWasmEngine() {
     if (isInitialized) {
         return;
     }
@@ -81,7 +81,7 @@ function convertGameStateToEngine(gameState) {
             }
             
             for (let col = 0; col < 9; col++) {
-                const cell = board[row][col];
+                const cell = board[8 - row][col];
                 if (cell && typeof cell === 'object' && cell.type && cell.player) {
                     const pieceType = convertPieceTypeToEngine(cell.type);
                     const player = cell.player === 'player1' ? 'Black' : 'White';
@@ -206,7 +206,7 @@ function convertEngineMoveToGame(engineMove) {
             // Drop move
             return {
                 from: 'drop',
-                to: [engineMove.to.row, engineMove.to.col],
+                to: [8 - engineMove.to.row, engineMove.to.col],
                 pieceType: convertEnginePieceTypeToGame(engineMove.piece_type),
                 isCapture: false,
                 isPromotion: false,
@@ -215,8 +215,8 @@ function convertEngineMoveToGame(engineMove) {
         } else {
             // Regular move
             return {
-                from: [engineMove.from.row, engineMove.from.col],
-                to: [engineMove.to.row, engineMove.to.col],
+                from: [8 - engineMove.from.row, engineMove.from.col],
+                to: [8 - engineMove.to.row, engineMove.to.col],
                 type: 'move',
                 isCapture: engineMove.is_capture || false,
                 isCheck: false,

@@ -37,6 +37,18 @@ impl BitboardBoard {
         board
     }
 
+    pub fn empty() -> Self {
+        Self {
+            pieces: [[EMPTY_BITBOARD; 14]; 2],
+            occupied: EMPTY_BITBOARD,
+            black_occupied: EMPTY_BITBOARD,
+            white_occupied: EMPTY_BITBOARD,
+            piece_positions: HashMap::new(),
+            zobrist_hash: 0,
+            attack_patterns: AttackPatterns::new(),
+        }
+    }
+
     fn setup_initial_position(&mut self) {
         // Black pieces (bottom)
         self.place_piece(Piece::new(PieceType::Lance, Player::Black), Position::new(0, 0));
@@ -77,7 +89,7 @@ impl BitboardBoard {
         }
     }
 
-    fn place_piece(&mut self, piece: Piece, position: Position) {
+    pub fn place_piece(&mut self, piece: Piece, position: Position) {
         let player_idx = if piece.player == Player::Black { 0 } else { 1 };
         let piece_idx = piece.piece_type.to_u8() as usize;
         

@@ -37,6 +37,26 @@ pub enum PieceType {
 }
 
 impl PieceType {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "Pawn" => Some(PieceType::Pawn),
+            "Lance" => Some(PieceType::Lance),
+            "Knight" => Some(PieceType::Knight),
+            "Silver" => Some(PieceType::Silver),
+            "Gold" => Some(PieceType::Gold),
+            "Bishop" => Some(PieceType::Bishop),
+            "Rook" => Some(PieceType::Rook),
+            "King" => Some(PieceType::King),
+            "PromotedPawn" => Some(PieceType::PromotedPawn),
+            "PromotedLance" => Some(PieceType::PromotedLance),
+            "PromotedKnight" => Some(PieceType::PromotedKnight),
+            "PromotedSilver" => Some(PieceType::PromotedSilver),
+            "PromotedBishop" => Some(PieceType::PromotedBishop),
+            "PromotedRook" => Some(PieceType::PromotedRook),
+            _ => None,
+        }
+    }
+
     pub fn from_u8(value: u8) -> Self {
         match value {
             0 => PieceType::Pawn,
