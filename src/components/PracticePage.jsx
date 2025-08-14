@@ -15,8 +15,8 @@ const PracticePage = () => {
     },
     {
       id: 'movement-identification',
-      title: 'Movement Identification',
-      description: 'Practice recognizing the movement patterns of different Shogi pieces.',
+      title: 'Movement Pattern Recognition',
+      description: 'Practice recognizing the movement patterns of different Shogi pieces using only visual diagrams. 10 randomized questions including promoted pieces.',
       icon: '♟️',
       difficulty: 'Beginner'
     }
@@ -58,7 +58,8 @@ const PracticePage = () => {
         <div className="practice-tips">
           <h3>💡 Practice Tips</h3>
           <ul>
-            <li>Start with Name Identification to learn piece recognition (now with 10 randomized questions including promoted pieces!)</li>
+            <li>Start with Name Identification to learn piece recognition (10 randomized questions including promoted pieces!)</li>
+            <li>Practice Movement Pattern Recognition with visual diagrams only - no text descriptions (10 randomized questions including promoted pieces!)</li>
             <li>Practice regularly to build muscle memory</li>
             <li>Focus on understanding movement patterns</li>
             <li>Don't worry about speed - accuracy comes first</li>

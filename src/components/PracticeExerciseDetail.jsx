@@ -35,27 +35,212 @@ const PracticeExerciseDetail = () => {
     { type: PROMOTED_PAWN, player: 1, promoted: true, name: 'Promoted Pawn (と金)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Pawn (と金)', 'Promoted Silver (成銀)'] }
   ];
 
-  // Sample questions for movement identification
+  // Movement identification questions with grid diagrams
   const movementIdentificationQuestions = [
     {
       piece: { type: PAWN, player: 1, promoted: false },
       question: 'How does a pawn move?',
-      options: ['One square forward', 'One square in any direction', 'Two squares forward', 'Diagonally forward'],
+      options: [
+        { text: 'One square forward', diagram: 'pawn' },
+        { text: 'One square in any direction', diagram: 'king' },
+        { text: 'Two squares forward', diagram: 'knight' },
+        { text: 'Diagonally forward', diagram: 'silver' }
+      ],
       correctAnswer: 0
     },
     {
       piece: { type: KNIGHT, player: 1, promoted: false },
       question: 'How does a knight move?',
-      options: ['One square forward', 'Two squares forward and one sideways', 'Any number of squares forward', 'Diagonally'],
+      options: [
+        { text: 'One square forward', diagram: 'pawn' },
+        { text: 'Two squares forward and one sideways', diagram: 'knight' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Diagonally', diagram: 'bishop' }
+      ],
       correctAnswer: 1
     },
     {
       piece: { type: LANCE, player: 1, promoted: false },
       question: 'How does a lance move?',
-      options: ['One square forward', 'Any number of squares forward', 'Diagonally', 'Any direction'],
+      options: [
+        { text: 'One square forward', diagram: 'pawn' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Diagonally', diagram: 'bishop' },
+        { text: 'Any direction', diagram: 'king' }
+      ],
       correctAnswer: 1
+    },
+    {
+      piece: { type: SILVER, player: 1, promoted: false },
+      question: 'How does a silver general move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Any number of squares diagonally', diagram: 'bishop' }
+      ],
+      correctAnswer: 0
+    },
+    {
+      piece: { type: GOLD, player: 1, promoted: false },
+      question: 'How does a gold general move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Any number of squares diagonally', diagram: 'bishop' }
+      ],
+      correctAnswer: 1
+    },
+    {
+      piece: { type: BISHOP, player: 1, promoted: false },
+      question: 'How does a bishop move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Any number of squares diagonally', diagram: 'bishop' }
+      ],
+      correctAnswer: 3
+    },
+    {
+      piece: { type: ROOK, player: 1, promoted: false },
+      question: 'How does a rook move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares horizontally or vertically', diagram: 'rook' },
+        { text: 'Any number of squares diagonally', diagram: 'bishop' }
+      ],
+      correctAnswer: 2
+    },
+    {
+      piece: { type: KING, player: 1, promoted: false },
+      question: 'How does a king move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares horizontally or vertically', diagram: 'rook' },
+        { text: 'One square in any direction', diagram: 'king' }
+      ],
+      correctAnswer: 3
+    },
+    {
+      piece: { type: PROMOTED_PAWN, player: 1, promoted: true },
+      question: 'How does a promoted pawn move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares forward', diagram: 'lance' },
+        { text: 'Any number of squares diagonally', diagram: 'bishop' }
+      ],
+      correctAnswer: 1
+    },
+    {
+      piece: { type: PROMOTED_ROOK, player: 1, promoted: true },
+      question: 'How does a promoted rook (dragon king) move?',
+      options: [
+        { text: 'One square forward or diagonally', diagram: 'silver' },
+        { text: 'One square orthogonally or diagonally forward', diagram: 'gold' },
+        { text: 'Any number of squares horizontally/vertically + one square diagonally', diagram: 'promotedRook' },
+        { text: 'Any number of squares diagonally + one square orthogonally', diagram: 'promotedBishop' }
+      ],
+      correctAnswer: 2
     }
   ];
+
+  // Function to render movement diagram for answer choices
+  const renderMovementDiagram = (diagramType) => {
+    const gridSize = 5;
+    const center = Math.floor(gridSize / 2);
+    
+    let movement = [];
+    let pieceType = PAWN;
+    let promoted = false;
+    
+    // Define movement patterns for each diagram type
+    switch (diagramType) {
+      case 'pawn':
+        movement = [[-1, 0]];
+        pieceType = PAWN;
+        break;
+      case 'knight':
+        movement = [[-2, -1], [-2, 1]];
+        pieceType = KNIGHT;
+        break;
+      case 'lance':
+        movement = [[-1, 0], [-2, 0], [-3, 0], [-4, 0]];
+        pieceType = LANCE;
+        break;
+      case 'silver':
+        movement = [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 1]];
+        pieceType = SILVER;
+        break;
+      case 'gold':
+        movement = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0]];
+        pieceType = GOLD;
+        break;
+      case 'bishop':
+        movement = [[-1, -1], [-2, -2], [-3, -3], [-4, -4], [-1, 1], [-2, 2], [-3, 3], [-4, 4], [1, -1], [2, -2], [3, -3], [4, -4], [1, 1], [2, 2], [3, 3], [4, 4]];
+        pieceType = BISHOP;
+        break;
+      case 'rook':
+        movement = [[-1, 0], [-2, 0], [-3, 0], [-4, 0], [0, -1], [0, -2], [0, -3], [0, -4], [0, 1], [0, 2], [0, 3], [0, 4], [1, 0], [2, 0], [3, 0], [4, 0]];
+        pieceType = ROOK;
+        break;
+      case 'king':
+        movement = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+        pieceType = KING;
+        break;
+      case 'promotedRook':
+        movement = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1], [-2, 0], [-3, 0], [-4, 0], [0, -2], [0, -3], [0, -4], [0, 2], [0, 3], [0, 4], [2, 0], [3, 0], [4, 0]];
+        pieceType = ROOK;
+        promoted = true;
+        break;
+      case 'promotedBishop':
+        movement = [[-1, -1], [-2, -2], [-3, -3], [-4, -4], [-1, 1], [-2, 2], [-3, 3], [-4, 4], [1, -1], [2, -2], [3, -3], [4, -4], [1, 1], [2, 2], [3, 3], [4, 4], [-1, 0], [0, -1], [0, 1], [1, 0]];
+        pieceType = BISHOP;
+        promoted = true;
+        break;
+      default:
+        movement = [[-1, 0]];
+        pieceType = PAWN;
+    }
+    
+    return (
+      <div className="movement-diagram">
+        <div className="diagram-grid" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
+          {Array.from({ length: gridSize * gridSize }, (_, index) => {
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            const relativeRow = row - center;
+            const relativeCol = col - center;
+            
+            const isPiece = row === center && col === center;
+            const isLegalMove = movement.some(([dr, dc]) => 
+              dr === relativeRow && dc === relativeCol
+            );
+            
+            let className = 'diagram-square';
+            if (isPiece) className += ' piece-square';
+            else if (isLegalMove) className += ' legal-move';
+            
+            return (
+              <div key={index} className={className}>
+                {isPiece && (
+                  <SvgPiece 
+                    piece={{ type: pieceType, player: 1, promoted: promoted }}
+                    size={30}
+                    hideText={true}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   // Function to shuffle array and get random subset
   const shuffleAndSelect = (array, count) => {
@@ -71,19 +256,21 @@ const PracticeExerciseDetail = () => {
       const generatedQuestions = selectedPieces.map((piece, index) => ({
         piece: { type: piece.type, player: piece.player, promoted: piece.promoted },
         question: 'What piece is this?',
-        options: shuffleAndSelect(piece.options, 4), // Shuffle the options too
+        options: shuffleAndSelect(piece.options, 4).map(option => ({ text: option, diagram: null })), // Convert to new structure
         correctAnswer: 0, // First option is always the correct one after shuffling
         correctName: piece.name
       }));
       
       // Update correctAnswer index based on where the correct name ended up
       generatedQuestions.forEach(q => {
-        q.correctAnswer = q.options.findIndex(option => option === q.correctName);
+        q.correctAnswer = q.options.findIndex(option => option.text === q.correctName);
       });
       
       setQuestions(generatedQuestions);
-    } else {
-      setQuestions(movementIdentificationQuestions);
+    } else if (exerciseId === 'movement-identification') {
+      // Generate 10 random questions from movement identification questions
+      const selectedQuestions = shuffleAndSelect(movementIdentificationQuestions, 10);
+      setQuestions(selectedQuestions);
     }
   }, [exerciseId]);
 
@@ -140,7 +327,7 @@ const PracticeExerciseDetail = () => {
       case 'name-identification':
         return 'Identify Shogi pieces by their appearance and kanji characters (including promoted pieces)';
       case 'movement-identification':
-        return 'Learn how different Shogi pieces move on the board';
+        return 'Learn how different Shogi pieces move on the board using only visual movement diagrams (including promoted pieces)';
       default:
         return 'Practice your Shogi skills';
     }
@@ -226,7 +413,11 @@ const PracticeExerciseDetail = () => {
                 onClick={() => handleAnswerSelect(index)}
                 disabled={showFeedback}
               >
-                {option}
+                {exerciseId === 'movement-identification' ? (
+                  renderMovementDiagram(option.diagram)
+                ) : (
+                  option.text
+                )}
               </button>
             ))}
           </div>
@@ -239,7 +430,7 @@ const PracticeExerciseDetail = () => {
                 </div>
               ) : (
                 <div className="incorrect-answer">
-                  ✗ Incorrect. The correct answer is: {currentQ.options[currentQ.correctAnswer]}
+                  ✗ Incorrect. The correct answer is: {exerciseId === 'movement-identification' ? currentQ.options[currentQ.correctAnswer].text : currentQ.options[currentQ.correctAnswer].text}
                 </div>
               )}
               

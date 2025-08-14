@@ -28,7 +28,7 @@ const PIECE_PATHS = {
   "+P": "M35 9 L55 16 L59 67 L11 67 L16 16 Z", // Promoted Pawn
 };
 
-const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70 }) => {
+const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70, hideText = false }) => {
   // Handle both prop structures: direct props or piece object
   const pieceType = type || (piece && piece.type);
   const piecePlayer = player || (piece && piece.player);
@@ -84,21 +84,23 @@ const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70 }) => {
         stroke={strokeColor}
         strokeWidth="1"
       />
-      <text
-        x="35"
-        y="45"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize={label.length === 2 ? "24" : "36"}
-        fill={textColor}
-        fontFamily={
-          labelType === "kanji"
-            ? `'Noto Sans JP', sans-serif`
-            : "sans-serif"
-        }
-      >
-        {label}
-      </text>
+      {!hideText && (
+        <text
+          x="35"
+          y="45"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={label.length === 2 ? "24" : "36"}
+          fill={textColor}
+          fontFamily={
+            labelType === "kanji"
+              ? `'Noto Sans JP', sans-serif`
+              : "sans-serif"
+          }
+        >
+          {label}
+        </text>
+      )}
     </svg>
   );
 };
