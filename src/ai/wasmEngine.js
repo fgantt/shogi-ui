@@ -1,4 +1,4 @@
-import init, { ShogiEngine } from '../../pkg/shogi_engine.js';
+import { ShogiEngine, PieceType, Player } from '../../pkg-bundler/shogi_engine.js';
 
 let wasmEngine = null;
 let isInitialized = false;
@@ -12,9 +12,6 @@ export async function initializeWasmEngine() {
     }
     
     try {
-        console.log('Initializing WebAssembly engine...');
-        await init();
-        console.log('WebAssembly engine initialized successfully');
         isInitialized = true;
     } catch (error) {
         console.error('Failed to initialize WebAssembly engine:', error);
@@ -174,7 +171,6 @@ function setupEnginePosition(engine, engineState) {
         // Set captured pieces
         engine.set_captured_pieces(JSON.stringify(engineState.capturedPieces));
         
-        console.log('Engine position set up successfully');
     } catch (error) {
         console.error('Error setting up engine position:', error);
         throw error;
@@ -204,9 +200,10 @@ function convertEngineMoveToGame(engineMove) {
     try {
         if (engineMove.from === null || engineMove.from === undefined) {
             // Drop move
+            const toCoord = [8 - engineMove.to.row, engineMove.to.col];
             return {
                 from: 'drop',
-                to: [8 - engineMove.to.row, engineMove.to.col],
+                to: toCoord,
                 pieceType: convertEnginePieceTypeToGame(engineMove.piece_type),
                 isCapture: false,
                 isPromotion: false,
@@ -214,9 +211,11 @@ function convertEngineMoveToGame(engineMove) {
             };
         } else {
             // Regular move
+            const fromCoord = [8 - engineMove.from.col, engineMove.from.row];
+            const toCoord = [8 - engineMove.to.col, engineMove.to.row];
             return {
-                from: [8 - engineMove.from.row, engineMove.from.col],
-                to: [8 - engineMove.to.row, engineMove.to.col],
+                from: fromCoord,
+                to: toCoord,
                 type: 'move',
                 isCapture: engineMove.is_capture || false,
                 isCheck: false,
@@ -234,20 +233,20 @@ function convertEngineMoveToGame(engineMove) {
  */
 function convertEnginePieceTypeToGame(pieceType) {
     const reversePieceMap = {
-        'King': 'K',
-        'Rook': 'R',
-        'Bishop': 'B',
-        'Gold': 'G',
-        'Silver': 'S',
-        'Knight': 'N',
-        'Lance': 'L',
-        'Pawn': 'P',
-        'PromotedPawn': '+P',
-        'PromotedLance': '+L',
-        'PromotedKnight': '+N',
-        'PromotedSilver': '+S',
-        'PromotedBishop': '+B',
-        'PromotedRook': '+R'
+        [PieceType.King]: 'K',
+        [PieceType.Rook]: 'R',
+        [PieceType.Bishop]: 'B',
+        [PieceType.Gold]: 'G',
+        [PieceType.Silver]: 'S',
+        [PieceType.Knight]: 'N',
+        [PieceType.Lance]: 'L',
+        [PieceType.Pawn]: 'P',
+        [PieceType.PromotedPawn]: '+P',
+        [PieceType.PromotedLance]: '+L',
+        [PieceType.PromotedKnight]: '+N',
+        [PieceType.PromotedSilver]: '+S',
+        [PieceType.PromotedBishop]: '+B',
+        [PieceType.PromotedRook]: '+R'
     };
     
     return reversePieceMap[pieceType] || 'P';
@@ -257,14 +256,11 @@ function convertEnginePieceTypeToGame(pieceType) {
  * Performance comparison between WebAssembly and JavaScript engines
  */
 export async function benchmarkEngines(gameState, difficulty) {
-    console.log('Benchmarking engines...');
-    
     // Benchmark WebAssembly engine
     const wasmStart = performance.now();
     try {
         const wasmMove = await getWasmAiMove(gameState, difficulty);
         const wasmTime = performance.now() - wasmStart;
-        console.log(`WebAssembly engine: ${wasmTime.toFixed(2)}ms`);
         
         return {
             wasm: {
@@ -332,7 +328,6 @@ export function getEngineCapabilities() {
 export function resetEngine() {
     isInitialized = false;
     wasmEngine = null;
-    console.log('WebAssembly engine reset');
 }
 
 /**

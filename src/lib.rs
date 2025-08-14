@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
+use web_sys::console;
 
 mod bitboards;
 mod moves;
@@ -44,6 +45,11 @@ pub struct ShogiEngine {
 }
 
 #[wasm_bindgen]
+pub fn test_logging() {
+    web_sys::console::log_1(&"Hello from wasm!".into());
+}
+
+#[wasm_bindgen]
 impl ShogiEngine {
     pub fn new() -> Self {
         Self {
@@ -56,19 +62,26 @@ impl ShogiEngine {
     }
 
     pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
-        // Create a move generator
-        let move_generator = MoveGenerator::new();
-        
-        // Generate all legal moves for the current player
-        let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player);
-        
-        if legal_moves.is_empty() {
-            return None;
+        console::log_1(&format!("get_best_move: difficulty={}, time_limit_ms={}", difficulty, time_limit_ms).into());
+        let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty as u8, time_limit_ms);
+        console::log_1(&format!("get_best_move: searcher created with actual_difficulty={}", actual_difficulty).into());
+        if let Some((move_, _score)) = searcher.search(&self.board, &self.captured_pieces, self.current_player) {
+            console::log_1(&format!("get_best_move: search returned move {:?}", move_).into());
+            Some(move_)
+        } else {
+            console::log_1(&format!("get_best_move: search failed, falling back to random move").into());
+            // Fallback to random move if search fails
+            let move_generator = MoveGenerator::new();
+            let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
+            if legal_moves.is_empty() {
+                console::log_1(&format!("get_best_move: no legal moves for fallback").into());
+                return None;
+            }
+            console::log_1(&format!("get_best_move: choosing random move from {} legal moves", legal_moves.len()).into());
+            let mut rng = rand::thread_rng();
+            legal_moves.choose(&mut rng).cloned()
         }
-
-        // Choose a random move
-        let mut rng = rand::thread_rng();
-        legal_moves.choose(&mut rng).cloned()
     }
 
     fn search_at_depth(&self, _depth: u8, _time_limit_ms: u32) -> Option<(Move, i32)> {

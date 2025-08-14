@@ -1,5 +1,6 @@
 use crate::types::*;
 use crate::bitboards::*;
+use std::collections::HashSet;
 
 /// Move generator for the Shogi engine
 pub struct MoveGenerator {
@@ -15,14 +16,14 @@ impl MoveGenerator {
     }
 
     /// Generate all legal moves for a given position
-    pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+    pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut legal_moves = Vec::new();
         
         // Generate moves for pieces on the board
         legal_moves.extend(self.generate_piece_moves(board, player));
         
         // Generate drop moves
-        legal_moves.extend(self.generate_drop_moves(board, player));
+        legal_moves.extend(self.generate_drop_moves(board, player, captured_pieces));
         
         legal_moves
     }
@@ -123,7 +124,9 @@ impl MoveGenerator {
                 // Capture move
                 if let Some(target_piece) = board.get_piece(new_pos) {
                     if target_piece.player != piece.player {
-                        let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                        let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
                         if board.is_legal_move(&move_) {
                             moves.push(move_);
                         }
@@ -136,7 +139,9 @@ impl MoveGenerator {
                             };
                             
                             if promotion_zone {
-                                let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                promoted_move.is_capture = true;
+                                promoted_move.captured_piece = Some(target_piece.clone());
                                 if board.is_legal_move(&promoted_move) {
                                     moves.push(promoted_move);
                                 }
@@ -170,7 +175,9 @@ impl MoveGenerator {
                 if let Some(target_piece) = board.get_piece(new_pos) {
                     if target_piece.player != piece.player {
                         // Capture move
-                        let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                        let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
                         if board.is_legal_move(&move_) {
                             moves.push(move_);
                         }
@@ -183,7 +190,9 @@ impl MoveGenerator {
                             };
                             
                             if promotion_zone {
-                                let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                promoted_move.is_capture = true;
+                                promoted_move.captured_piece = Some(target_piece.clone());
                                 if board.is_legal_move(&promoted_move) {
                                     moves.push(promoted_move);
                                 }
@@ -237,7 +246,12 @@ impl MoveGenerator {
                 let new_pos = Position::new(new_row as u8, new_col as u8);
                 
                 if !board.is_square_occupied_by(new_pos, piece.player) {
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if let Some(target_piece) = board.get_piece(new_pos) {
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
+                    }
+
                     if board.is_legal_move(&move_) {
                         moves.push(move_);
                     }
@@ -250,7 +264,11 @@ impl MoveGenerator {
                         };
                         
                         if promotion_zone {
-                            let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                            let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                            if let Some(target_piece) = board.get_piece(new_pos) {
+                                promoted_move.is_capture = true;
+                                promoted_move.captured_piece = Some(target_piece.clone());
+                            }
                             if board.is_legal_move(&promoted_move) {
                                 moves.push(promoted_move);
                             }
@@ -284,7 +302,11 @@ impl MoveGenerator {
                 let new_pos = Position::new(new_row as u8, new_col as u8);
                 
                 if !board.is_square_occupied_by(new_pos, piece.player) {
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if let Some(target_piece) = board.get_piece(new_pos) {
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
+                    }
                     if board.is_legal_move(&move_) {
                         moves.push(move_);
                     }
@@ -297,7 +319,11 @@ impl MoveGenerator {
                         };
                         
                         if promotion_zone {
-                            let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                            let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                            if let Some(target_piece) = board.get_piece(new_pos) {
+                                promoted_move.is_capture = true;
+                                promoted_move.captured_piece = Some(target_piece.clone());
+                            }
                             if board.is_legal_move(&promoted_move) {
                                 moves.push(promoted_move);
                             }
@@ -332,7 +358,11 @@ impl MoveGenerator {
                 let new_pos = Position::new(new_row as u8, new_col as u8);
                 
                 if !board.is_square_occupied_by(new_pos, piece.player) {
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if let Some(target_piece) = board.get_piece(new_pos) {
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
+                    }
                     if board.is_legal_move(&move_) {
                         moves.push(move_);
                     }
@@ -368,7 +398,9 @@ impl MoveGenerator {
                     if let Some(target_piece) = board.get_piece(new_pos) {
                         if target_piece.player != piece.player {
                             // Capture move
-                            let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            move_.is_capture = true;
+                            move_.captured_piece = Some(target_piece.clone());
                             if board.is_legal_move(&move_) {
                                 moves.push(move_);
                             }
@@ -381,7 +413,9 @@ impl MoveGenerator {
                                 };
                                 
                                 if promotion_zone {
-                                    let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                    let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                    promoted_move.is_capture = true;
+                                    promoted_move.captured_piece = Some(target_piece.clone());
                                     if board.is_legal_move(&promoted_move) {
                                         moves.push(promoted_move);
                                     }
@@ -443,7 +477,9 @@ impl MoveGenerator {
                     if let Some(target_piece) = board.get_piece(new_pos) {
                         if target_piece.player != piece.player {
                             // Capture move
-                            let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            move_.is_capture = true;
+                            move_.captured_piece = Some(target_piece.clone());
                             if board.is_legal_move(&move_) {
                                 moves.push(move_);
                             }
@@ -456,7 +492,9 @@ impl MoveGenerator {
                                 };
                                 
                                 if promotion_zone {
-                                    let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                    let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
+                                    promoted_move.is_capture = true;
+                                    promoted_move.captured_piece = Some(target_piece.clone());
                                     if board.is_legal_move(&promoted_move) {
                                         moves.push(promoted_move);
                                     }
@@ -511,7 +549,11 @@ impl MoveGenerator {
                 let new_pos = Position::new(new_row as u8, new_col as u8);
                 
                 if !board.is_square_occupied_by(new_pos, piece.player) {
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if let Some(target_piece) = board.get_piece(new_pos) {
+                        move_.is_capture = true;
+                        move_.captured_piece = Some(target_piece.clone());
+                    }
                     if board.is_legal_move(&move_) {
                         moves.push(move_);
                     }
@@ -550,28 +592,22 @@ impl MoveGenerator {
     }
 
     /// Generate drop moves
-    fn generate_drop_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+    fn generate_drop_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut moves = Vec::new();
-        
-        // This should get the captured pieces from the game state
-        // For now, we'll generate drops for all piece types
-        let piece_types = [
-            PieceType::Pawn,
-            PieceType::Lance,
-            PieceType::Knight,
-            PieceType::Silver,
-            PieceType::Gold,
-            PieceType::Bishop,
-            PieceType::Rook,
-        ];
-        
-        for piece_type in piece_types.iter() {
+        let mut processed_pieces = HashSet::new();
+        let captured = if player == Player::Black { &captured_pieces.black } else { &captured_pieces.white };
+
+        for &piece_type in captured {
+            if !processed_pieces.insert(piece_type) {
+                continue; // Already processed this piece type
+            }
+
             for row in 0..9 {
                 for col in 0..9 {
                     let pos = Position::new(row, col);
                     
                     if !board.is_square_occupied(pos) {
-                        let move_ = Move::new_drop(*piece_type, pos, player);
+                        let move_ = Move::new_drop(piece_type, pos, player);
                         if board.is_legal_move(&move_) {
                             moves.push(move_);
                         }

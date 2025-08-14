@@ -67,13 +67,13 @@ export function getInitialGameState() {
     },
     moveHistory: [],
     isCheck: false,
-    isCheckmate: false,
     pastStates: [], // Add pastStates to store previous game states
     kingPositions: {
       [PLAYER_1]: [8, 4],
       [PLAYER_2]: [0, 4],
     },
     isDraw: false,
+    isCheckmate: false,
   };
 }
 
@@ -227,6 +227,7 @@ export function getLegalMoves(piece, row, col, board) {
  * @param {object} gameState The current game state.
  * @param {[number, number]} from The starting [row, col] of the piece.
  * @param {[number, number]} to The destination [row, col] of the piece.
+ * @param {boolean} promoteOverride Whether to promote the piece (for AI).
  * @returns {object} The new game state, possibly with a `promotionPending` flag.
  */
 export function movePiece(gameState, from, to, promoteOverride = null) {
@@ -235,7 +236,14 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
   const [toRow, toCol] = to;
 
   const piece = board[fromRow][fromCol];
-  if (!piece) return gameState;
+  console.log(`movePiece: Attempting to move from [${fromRow}, ${fromCol}] to [${toRow}, ${toCol}]`);
+  console.log("movePiece: Piece at 'from' position:", piece);
+  console.log("movePiece: Current player:", currentPlayer);
+
+  if (!piece) {
+    console.warn("movePiece: No piece found at 'from' coordinates. Returning original gameState.");
+    return gameState;
+  }
 
   if (promoteOverride !== null) {
     // AI is making the decision, directly complete the move with the AI's promotion choice
@@ -244,6 +252,12 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
       pieceToMove.type = `+${pieceToMove.type}`;
     }
     const simulatedGameState = completeMove(gameState, from, to, promoteOverride, pieceToMove);
+    // After simulating the move, check if the current player's king is in check
+    // If it is, the move is illegal, so return the original game state
+    if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
+      console.warn("movePiece: AI move results in self-check. Returning original gameState.");
+      return gameState;
+    }
     return simulatedGameState;
   }
 
@@ -281,6 +295,14 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
 
   // Proceed with the move (either promoted or not, depending on the above logic)
   const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory, pieceToMove);
+
+  // After simulating the move, check if the current player's king is in check
+  // If it is, the move is illegal, so return the original game state
+  if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
+    console.warn("movePiece: Human move results in self-check. Returning original gameState.");
+    return gameState;
+  }
+
   return simulatedGameState;
 }
 
@@ -342,7 +364,7 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
         capturedValue = 'check';
     }
 
-    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }), promotionDeclined: !promote && gameState.promotionPending }];
+    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
     const updatedGameState = {
         ...gameState,
@@ -357,7 +379,6 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
           ...gameState.kingPositions,
           [currentPlayer]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
         },
-        isDraw: false, // Initialize isDraw to false
         isCheckmate: false, // Initialize to false, will be updated below
     };
 
@@ -414,12 +435,14 @@ export function dropPiece(gameState, pieceType, to) {
 
   // 1. Check if the destination square is empty
   if (board[toRow][toCol]) {
+    console.warn("dropPiece: Cannot drop on occupied square. Returning original gameState.");
     return gameState; // Can only drop on empty squares
   }
 
   // 2. Check if the player has the piece to drop
   const capturedPieceIndex = capturedPieces[currentPlayer].findIndex(p => p.type === pieceType);
   if (capturedPieceIndex === -1) {
+    console.warn(`dropPiece: Player ${currentPlayer} does not have piece type ${pieceType} to drop. Returning original gameState.`);
     return gameState; // Piece not available to drop
   }
 
@@ -436,7 +459,7 @@ export function dropPiece(gameState, pieceType, to) {
 
   // Cannot drop a piece where it has no legal moves
   const player_mult = currentPlayer === PLAYER_1 ? -1 : 1;
-  if ((pieceType === PAWN || pieceType === LANCE) && toRow + player_mult < 0) {
+  if ((pieceType === PAWN || pieceType === LANCE) && (toRow + player_mult < 0 || toRow + player_mult >= ROWS)) {
       return gameState;
   }
   if (pieceType === KNIGHT && (toRow + (player_mult * 2) < 0 || toRow + (player_mult * 2) >= ROWS)) {
@@ -453,6 +476,7 @@ export function dropPiece(gameState, pieceType, to) {
 
   // Check if this simulated drop puts the *current player's* king in check
   if (isKingInCheck(tempBoard, currentPlayer)) {
+    console.warn("dropPiece: Drop results in self-check. Returning original gameState.");
     return gameState; // Illegal drop: current player dropped into check, return original state
   }
 
@@ -742,7 +766,6 @@ export function generateStateHash(gameState) {
 
   // Active player
   fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
-
   // Captured pieces
   let capturedString = '-';
   const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
@@ -804,7 +827,6 @@ export function generateSennichiteHash(gameState) {
 
   // Active player
   fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
-
   // Captured pieces
   let capturedString = '-';
   const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');

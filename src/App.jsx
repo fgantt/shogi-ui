@@ -9,8 +9,14 @@ import WebAssemblyDemo from './components/WebAssemblyDemo';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
+import { useEffect } from 'react';
+import { test_logging } from "../pkg-bundler/shogi_engine.js";
 
 function App() {
+  useEffect(() => {
+    test_logging();
+  }, []);
+
   return (
     <div className="app">
       <Routes>

@@ -1,5 +1,6 @@
 use crate::types::*;
 use std::collections::HashMap;
+use web_sys::console;
 
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {
@@ -173,7 +174,9 @@ impl BitboardBoard {
         }
     }
 
-    pub fn make_move(&mut self, move_: &Move) {
+    pub fn make_move(&mut self, move_: &Move) -> Option<Piece> {
+        console::log_1(&format!("make_move: {:?}", move_).into());
+        let mut captured_piece = None;
         if let Some(from) = move_.from {
             // Remove piece from starting position
             if let Some(piece) = self.remove_piece(from) {
@@ -186,8 +189,8 @@ impl BitboardBoard {
                 
                 // Handle capture
                 if move_.is_capture {
-                    if let Some(_captured_piece) = self.remove_piece(move_.to) {
-                        // Add to captured pieces (this should be handled by the game state)
+                    if let Some(cp) = self.remove_piece(move_.to) {
+                        captured_piece = Some(cp);
                     }
                 }
                 
@@ -199,6 +202,7 @@ impl BitboardBoard {
             // Drop move
             self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
         }
+        captured_piece
     }
 
     pub fn is_legal_move(&self, move_: &Move) -> bool {

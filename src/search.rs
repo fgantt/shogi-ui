@@ -3,6 +3,7 @@ use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
 use std::collections::HashMap;
+use web_sys::console;
 
 /// Search engine for the Shogi AI
 pub struct SearchEngine {
@@ -25,7 +26,9 @@ impl SearchEngine {
     }
 
     /// Search for the best move at a given depth
-    pub fn search_at_depth(&mut self, board: &BitboardBoard, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
+    pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
+        console::log_1(&format!("search_at_depth: depth={}, player={:?}", depth, player).into());
+        console::log_1(&format!("search_at_depth: entered function").into());
         let start_time = std::time::Instant::now();
         let mut alpha = i32::MIN + 1;
         let mut beta = i32::MAX - 1;
@@ -34,27 +37,34 @@ impl SearchEngine {
         let mut best_score = i32::MIN;
         
         // Generate all legal moves
-        let legal_moves = self.move_generator.generate_legal_moves(board, Player::Black); // Assuming AI is Black
+        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         
         if legal_moves.is_empty() {
+            console::log_1(&format!("search_at_depth: no legal moves found").into());
             return None;
         }
         
         // Sort moves for better pruning
-        let mut sorted_moves = self.sort_moves(&legal_moves, board);
+        let sorted_moves = self.sort_moves(&legal_moves, board);
         
         for move_ in sorted_moves {
             // Check time limit
             if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+                console::log_1(&format!("search_at_depth: time limit exceeded").into());
                 break;
             }
             
             // Make move
             let mut new_board = board.clone();
-            new_board.make_move(&move_);
+            let captured_piece = new_board.make_move(&move_);
+
+            let mut new_captured = captured_pieces.clone();
+            if let Some(piece) = captured_piece {
+                new_captured.add_piece(piece.piece_type, player);
+            }
             
             // Search
-            let score = -self.negamax(&mut new_board, depth - 1, -beta, -alpha, start_time, time_limit_ms);
+            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms);
             
             if score > best_score {
                 best_score = score;
@@ -62,18 +72,22 @@ impl SearchEngine {
                 alpha = score;
                 
                 if alpha >= beta {
+                    console::log_1(&format!("search_at_depth: beta cutoff").into());
                     break; // Beta cutoff
                 }
             }
         }
         
+        console::log_1(&format!("search_at_depth: best_move={:?}, best_score={}", best_move, best_score).into());
         best_move.map(|m| (m, best_score))
     }
 
     /// Negamax search with alpha-beta pruning
-    fn negamax(&mut self, board: &mut BitboardBoard, depth: u8, alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+        console::log_1(&format!("negamax: depth={}, player={:?}, alpha={}, beta={}", depth, player, alpha, beta).into());
         // Check time limit
         if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+            console::log_1(&format!("negamax: time limit exceeded").into());
             return 0;
         }
         
@@ -82,14 +96,19 @@ impl SearchEngine {
         if let Some(entry) = self.transposition_table.get(&hash) {
             if entry.depth >= depth {
                 match entry.flag {
-                    TranspositionFlag::Exact => return entry.score,
+                    TranspositionFlag::Exact => {
+                        console::log_1(&format!("negamax: TT hit (Exact), score={}", entry.score).into());
+                        return entry.score;
+                    }
                     TranspositionFlag::LowerBound => {
                         if entry.score >= beta {
+                            console::log_1(&format!("negamax: TT hit (LowerBound), score={}", entry.score).into());
                             return entry.score;
                         }
                     }
                     TranspositionFlag::UpperBound => {
                         if entry.score <= alpha {
+                            console::log_1(&format!("negamax: TT hit (UpperBound), score={}", entry.score).into());
                             return entry.score;
                         }
                     }
@@ -99,53 +118,66 @@ impl SearchEngine {
         
         // Leaf node evaluation
         if depth == 0 {
-            return self.quiescence_search(board, alpha, beta, start_time, time_limit_ms);
+            let score = self.quiescence_search(board, captured_pieces, player, alpha, beta, start_time, time_limit_ms);
+            console::log_1(&format!("negamax: depth=0, score={}", score).into());
+            return score;
         }
         
         // Null move pruning
-        if depth >= 3 && !board.is_king_in_check(Player::Black) {
-            let null_move_score = -self.negamax(board, depth - 3, -beta, -beta + 1, start_time, time_limit_ms);
+        if depth >= 3 && !board.is_king_in_check(player) {
+            console::log_1(&format!("negamax: null move pruning").into());
+            let null_move_score = -self.negamax(board, captured_pieces, player.opposite(), depth - 3, -beta, -beta + 1, start_time, time_limit_ms);
             if null_move_score >= beta {
+                console::log_1(&format!("negamax: null move pruning cutoff, score={}", null_move_score).into());
                 return beta;
             }
         }
         
         // Futility pruning
-        let stand_pat = self.evaluator.evaluate(board, Player::Black);
+        let stand_pat = self.evaluator.evaluate(board, player);
         if depth <= 2 && stand_pat - 300 >= beta {
+            console::log_1(&format!("negamax: futility pruning, stand_pat={}", stand_pat).into());
             return stand_pat;
         }
         
         // Generate moves
-        let legal_moves = self.move_generator.generate_legal_moves(board, Player::Black);
+        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
-            if board.is_king_in_check(Player::Black) {
+            if board.is_king_in_check(player) {
+                console::log_1(&format!("negamax: checkmate").into());
                 return i32::MIN + 1; // Checkmate
             } else {
+                console::log_1(&format!("negamax: stalemate").into());
                 return 0; // Stalemate
             }
         }
         
         // Sort moves
-        let mut sorted_moves = self.sort_moves(&legal_moves, board);
+        let sorted_moves = self.sort_moves(&legal_moves, board);
         
         let mut best_score = i32::MIN;
         let mut alpha = alpha;
         
         for (i, move_) in sorted_moves.iter().enumerate() {
+            console::log_1(&format!("negamax: trying move {:?}", move_).into());
             // Make move
             let mut new_board = board.clone();
-            new_board.make_move(move_);
+            let captured_piece = new_board.make_move(move_);
+
+            let mut new_captured = captured_pieces.clone();
+            if let Some(piece) = captured_piece {
+                new_captured.add_piece(piece.piece_type, player);
+            }
             
             let score = if i == 0 {
                 // Principal variation search
-                -self.negamax(&mut new_board, depth - 1, -beta, -alpha, start_time, time_limit_ms)
+                -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms)
             } else {
                 // Null window search
-                let score = -self.negamax(&mut new_board, depth - 1, -alpha - 1, -alpha, start_time, time_limit_ms);
+                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -alpha - 1, -alpha, start_time, time_limit_ms);
                 if score > alpha && score < beta {
                     // Re-search with full window
-                    -self.negamax(&mut new_board, depth - 1, -beta, -alpha, start_time, time_limit_ms)
+                    -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms)
                 } else {
                     score
                 }
@@ -169,6 +201,7 @@ impl SearchEngine {
                 }
                 
                 if alpha >= beta {
+                    console::log_1(&format!("negamax: beta cutoff, score={}", score).into());
                     break; // Beta cutoff
                 }
             }
@@ -192,75 +225,95 @@ impl SearchEngine {
         
         self.transposition_table.insert(hash, entry);
         
+        console::log_1(&format!("negamax: returning score={}", best_score).into());
         best_score
     }
 
     /// Quiescence search for tactical positions
-    fn quiescence_search(&self, board: &BitboardBoard, mut alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+        console::log_1(&format!("quiescence_search: player={:?}, alpha={}, beta={}", player, alpha, beta).into());
         // Check time limit
         if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+            console::log_1(&format!("quiescence_search: time limit exceeded").into());
             return 0;
         }
         
-        let stand_pat = self.evaluator.evaluate(board, Player::Black);
+        let stand_pat = self.evaluator.evaluate(board, player);
+        console::log_1(&format!("quiescence_search: stand_pat={}", stand_pat).into());
         
         if stand_pat >= beta {
+            console::log_1(&format!("quiescence_search: stand_pat >= beta, returning beta").into());
             return beta;
         }
         
         if alpha < stand_pat {
             alpha = stand_pat;
+            console::log_1(&format!("quiescence_search: alpha updated to stand_pat={}", alpha).into());
         }
         
         // Generate only captures and checks
-        let noisy_moves = self.generate_noisy_moves(board, Player::Black);
+        let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
+        console::log_1(&format!("quiescence_search: generated {} noisy moves", noisy_moves.len()).into());
         
         for move_ in noisy_moves {
+            console::log_1(&format!("quiescence_search: trying noisy move {:?}", move_).into());
             // Check time limit
             if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+                console::log_1(&format!("quiescence_search: time limit exceeded during noisy move").into());
                 break;
             }
             
             // Make move
             let mut new_board = board.clone();
-            new_board.make_move(&move_);
+            let captured_piece = new_board.make_move(&move_);
+
+            let mut new_captured = captured_pieces.clone();
+            if let Some(piece) = captured_piece {
+                new_captured.add_piece(piece.piece_type, player);
+            }
             
             // Search
-            let score = -self.quiescence_search(&new_board, -beta, -alpha, start_time, time_limit_ms);
+            let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, start_time, time_limit_ms);
             
             if score >= beta {
+                console::log_1(&format!("quiescence_search: score >= beta, returning beta").into());
                 return beta;
             }
             
             if score > alpha {
                 alpha = score;
+                console::log_1(&format!("quiescence_search: alpha updated to score={}", alpha).into());
             }
         }
         
+        console::log_1(&format!("quiescence_search: returning alpha={}", alpha).into());
         alpha
     }
 
     /// Generate noisy moves (captures, checks, promotions)
-    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut noisy_moves = Vec::new();
         
         // Generate all legal moves
-        let all_moves = self.move_generator.generate_legal_moves(board, player);
+        let all_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         
         for move_ in all_moves {
             if move_.is_capture || move_.is_promotion || self.is_checking_move(board, &move_) {
                 noisy_moves.push(move_);
             }
         }
-        
+        console::log_1(&format!("generate_noisy_moves: generated {} noisy moves", noisy_moves.len()).into());
         noisy_moves
     }
 
     /// Check if a move gives check
     fn is_checking_move(&self, board: &BitboardBoard, move_: &Move) -> bool {
+        console::log_1(&format!("is_checking_move: checking move {:?}", move_).into());
         let mut new_board = board.clone();
         new_board.make_move(move_);
-        new_board.is_king_in_check(move_.player.opposite())
+        let is_check = new_board.is_king_in_check(move_.player.opposite());
+        console::log_1(&format!("is_checking_move: move {:?} results in check: {}", move_, is_check).into());
+        is_check
     }
 
     /// Sort moves for better alpha-beta pruning
@@ -353,6 +406,7 @@ pub struct IterativeDeepening {
 
 impl IterativeDeepening {
     pub fn new(max_depth: u8, time_limit_ms: u32) -> Self {
+        console::log_1(&format!("IterativeDeepening::new: max_depth={}, time_limit_ms={}", max_depth, time_limit_ms).into());
         Self {
             search_engine: SearchEngine::new(),
             max_depth,
@@ -361,37 +415,59 @@ impl IterativeDeepening {
     }
 
     /// Perform iterative deepening search
-    pub fn search(&mut self, board: &BitboardBoard) -> Option<(Move, i32)> {
-        let start_time = std::time::Instant::now();
+    pub fn search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Option<(Move, i32)> {
+        console::log_1(&format!("IterativeDeepening::search: starting search for player {:?}", player).into());
+        // Add log before start_time
+        console::log_1(&format!("IterativeDeepening::search: before start_time").into());
+        let start_time = web_sys::window()
+            .expect("should have a window")
+            .performance()
+            .expect("should have a performance object")
+            .now();
+        console::log_1(&format!("IterativeDeepening::search: start_time initialized").into());
+        // Add log before best_move
+        console::log_1(&format!("IterativeDeepening::search: before best_move").into());
         let mut best_move = None;
+        console::log_1(&format!("IterativeDeepening::search: best_move initialized").into());
+        // Add log before best_score
+        console::log_1(&format!("IterativeDeepening::search: before best_score").into());
         let mut best_score = i32::MIN;
+        console::log_1(&format!("IterativeDeepening::search: best_score initialized").into());
         
         // Reserve some time for the final iteration
+        // Add log before search_time_limit
+        console::log_1(&format!("IterativeDeepening::search: before search_time_limit").into());
         let search_time_limit = self.time_limit_ms - 100; // Reserve 100ms
+        console::log_1(&format!("IterativeDeepening::search: search_time_limit initialized").into());
         
         for depth in 1..=self.max_depth {
+            console::log_1(&format!("IterativeDeepening::search: searching at depth {}", depth).into());
             // Check if we have enough time
-            let elapsed = start_time.elapsed().as_millis();
-            if elapsed >= search_time_limit as u128 {
+            let elapsed = web_sys::window().unwrap().performance().unwrap().now() - start_time;
+            if elapsed >= search_time_limit as f64 {
+                console::log_1(&format!("IterativeDeepening::search: time limit reached, breaking").into());
                 break;
             }
             
-            let remaining_time = search_time_limit - elapsed as u32;
-            
-            if let Some((move_, score)) = self.search_engine.search_at_depth(board, depth, remaining_time) {
+            let remaining_time = (search_time_limit as f64 - elapsed) as u32;
+            console::log_1(&format!("IterativeDeepening::search: calling search_at_depth with depth={}, remaining_time={}", depth, remaining_time).into());
+            if let Some((move_, score)) = self.search_engine.search_at_depth(board, captured_pieces, player, depth, remaining_time) {
                 best_move = Some(move_);
                 best_score = score;
                 
                 // Early exit if we're clearly winning
                 if score > 1000 && depth >= 3 {
+                    console::log_1(&format!("IterativeDeepening::search: early exit due to high score").into());
                     break;
                 }
             } else {
                 // Search failed, use previous result
+                console::log_1(&format!("IterativeDeepening::search: search_at_depth returned None, breaking").into());
                 break;
             }
         }
         
+        console::log_1(&format!("IterativeDeepening::search: finished search, best_move={:?}, best_score={}", best_move, best_score).into());
         best_move.map(|m| (m, best_score))
     }
 
