@@ -8,6 +8,7 @@ This is a browser-based implementation of Shogi, also known as Japanese Chess. I
 - [Piece Kanji Legend](#piece-kanji-legend)
 - [Features](#features)
 - [Getting Started](#getting-started)
+- [WebAssembly Engine](#webassembly-engine)
 
 
 ## About Shogi
@@ -100,6 +101,7 @@ When a piece moves onto a square occupied by an opponent's piece, the opponent's
 
 ## Features
 
+*   **High-performance game engine:** The core game logic, including move generation, validation, and AI, is implemented in Rust and compiled to WebAssembly for native-like performance in the browser.
 *   Single-player mode against an AI opponent.
 *   Three AI difficulty levels: Easy, Medium, and Hard.
 *   Click-to-move and drag-and-drop functionality for pieces.
@@ -129,4 +131,28 @@ To run the game locally, follow these steps:
     ```
 
     The game should now be accessible in your browser at `http://localhost:5173` (or another port if 5173 is in use).
+
+## WebAssembly Engine
+
+The core game logic of this Shogi application is powered by a Rust-based engine compiled to WebAssembly (WASM). This allows for high-performance move calculation and AI, running directly in the browser.
+
+### Building the WASM module
+
+The pre-compiled WebAssembly module is included in the `pkg/` directory. However, if you make changes to the Rust source code (`.rs` files), you will need to rebuild the module.
+
+**Prerequisites:**
+
+*   [Rust](https://www.rust-lang.org/tools/install)
+*   [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+
+**Build command:**
+
+To rebuild the WebAssembly module, run the following command from the project root:
+
+```bash
+wasm-pack build --target web
+```
+
+This command will compile the Rust code, generate the necessary JavaScript bindings, and place the output in the `pkg/` directory.
+
 
