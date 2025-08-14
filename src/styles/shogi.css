@@ -464,3 +464,99 @@
 .promotion-modal-buttons button:last-child:hover {
   background-color: #5a6268; /* Darker Gray */
 }
+
+/* Game Over State */
+.shogi-board-container.game-over {
+  position: relative;
+}
+
+.shogi-board-container.game-over::after {
+  content: "GAME OVER";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px 40px;
+  border-radius: 10px;
+  font-size: 24px;
+  font-weight: bold;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.shogi-board-container.game-over .board {
+  opacity: 0.7;
+  filter: grayscale(30%);
+}
+
+.shogi-board-container.game-over .board-square {
+  cursor: not-allowed;
+}
+
+.shogi-board-container.game-over .piece {
+  cursor: not-allowed;
+}
+
+/* Game over overlay for entire game area */
+.game-page.game-over::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Game controls game over state */
+.game-page.game-over .game-controls {
+  opacity: 0.8;
+}
+
+.game-page.game-over .game-controls button:not(.new-game-btn) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.game-page.game-over .game-controls button.new-game-btn {
+  background-color: #28a745;
+  border-color: #28a745;
+  font-weight: bold;
+}
+
+/* Disabled button styling */
+.game-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+.game-controls button:disabled:hover {
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+/* Game over note styling */
+.game-over-note {
+  font-style: italic;
+  color: #666;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* Captured pieces game over state */
+.shogi-board-container.game-over ~ .captured-pieces,
+.shogi-board-container.game-over + .captured-pieces {
+  opacity: 0.7;
+  filter: grayscale(30%);
+}
+
+.shogi-board-container.game-over ~ .captured-pieces .piece,
+.shogi-board-container.game-over + .captured-pieces .piece {
+  cursor: not-allowed;
+}

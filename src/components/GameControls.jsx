@@ -1,14 +1,14 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const GameControls = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking }) => {
+const GameControls = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking, isGameOver }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">
-        <button onClick={onNewGame}>
+        <button onClick={onNewGame} className="new-game-btn">
           <span role="img" aria-label="New Game">🔄</span> New Game
         </button>
-        <button onClick={onUndoMove} className={isThinking ? 'thinking' : ''}>
+        <button onClick={onUndoMove} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
           <span role="img" aria-label="Undo Move">↩️</span> Undo Move
         </button>
       </div>

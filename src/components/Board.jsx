@@ -2,7 +2,7 @@ import React from 'react';
 import Piece from './Piece';
 import '../styles/shogi.css';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece }) => {
+const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
   // console.log("Board received legalMoves:", legalMoves);
   // console.log("Board received legalDropSquares:", legalDropSquares);
   const isLegalMove = (row, col) => {
@@ -53,7 +53,7 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
   const rowNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   return (
-    <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''}`}>
+    <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''} ${isGameOver ? 'game-over' : ''}`}>
       <div className="column-numbers">
         {columnNumbers.map((num, index) => (
           <div key={index} className="column-number-cell">

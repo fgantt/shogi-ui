@@ -12,7 +12,7 @@ const PIECE_ORDER = {
   'R': 7, // Rook
 };
 
-const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece, isThinking, boardBackground }) => {
+const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceLabelType, selectedCapturedPiece, isThinking, boardBackground, isGameOver }) => {
   const groupedPieces = pieces.reduce((acc, piece) => {
     acc[piece.type] = (acc[piece.type] || 0) + 1;
     return acc;
@@ -36,8 +36,8 @@ const CapturedPieces = ({ pieces, player, onPieceClick, onPieceDragStart, pieceL
             key={type}
             type={type}
             player={player}
-            onDragStart={isThinking ? null : () => onPieceDragStart(type)}
-            onClick={isThinking ? null : () => onPieceClick(type)}
+            onDragStart={isThinking || isGameOver ? null : () => onPieceDragStart(type)}
+            onClick={isThinking || isGameOver ? null : () => onPieceClick(type)}
             pieceLabelType={pieceLabelType}
             count={count}
             isSelected={selectedCapturedPiece && selectedCapturedPiece.type === type}

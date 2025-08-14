@@ -32,6 +32,7 @@ const GamePage = () => {
   const [showPieceTooltips, setShowPieceTooltips] = useState(false);
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
   
   const [checkingPiece, setCheckingPiece] = useState(null);
 
@@ -135,7 +136,7 @@ const GamePage = () => {
 
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
 
-    if (currentPlayerType === 'ai' && !checkmateWinner) {
+    if (currentPlayerType === 'ai' && !checkmateWinner && !isGameOver) {
       setIsThinking(true);
       getAiMove(gameState, aiDifficulty)
         .then(aiMove => {
@@ -168,8 +169,10 @@ const GamePage = () => {
             // Check for checkmate or draw after AI's move
             if (nextState.isCheckmate) {
               setCheckmateWinner(nextState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+              setIsGameOver(true);
             } else if (nextState.isDraw) {
               setCheckmateWinner('draw');
+              setIsGameOver(true);
             }
 
             return nextState;
@@ -222,16 +225,18 @@ const GamePage = () => {
     // Check for checkmate or draw after player's move
     if (newGameState.isCheckmate) {
       setCheckmateWinner(newGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1);
+      setIsGameOver(true);
       return; // Stop game if checkmate
     } else if (newGameState.isDraw) {
       setCheckmateWinner('draw');
+      setIsGameOver(true);
       return; // Stop game if draw
     }
   };
 
   const handleSquareClick = (row, col) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
-    if (isThinking || currentPlayerType === 'ai') return;
+    if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
     const pieceAtClick = gameState.board[row][col];
 
     // Deselect if the already selected piece is clicked again
@@ -279,7 +284,7 @@ const GamePage = () => {
 
   const handleDragStart = (row, col) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
-    if (isThinking || currentPlayerType === 'ai') return;
+    if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
     const pieceAtDragStart = gameState.board[row][col];
     if (pieceAtDragStart && pieceAtDragStart.player === gameState.currentPlayer) {
       setSelectedPiece({ row, col, piece: pieceAtDragStart });
@@ -296,7 +301,7 @@ const GamePage = () => {
 
   const handleDrop = (row, col) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
-    if (isThinking || currentPlayerType === 'ai') return;
+    if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
     if (selectedCapturedPiece) {
       const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
       handlePlayerMove(newGameState, 'drop', [row, col]);
@@ -317,7 +322,7 @@ const GamePage = () => {
 
   const handleCapturedPieceClick = (pieceType) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
-    if (isThinking || currentPlayerType === 'ai') return;
+    if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is clicked again, deselect it
       setSelectedCapturedPiece(null);
@@ -332,7 +337,7 @@ const GamePage = () => {
 
   const handleCapturedPieceDragStart = (pieceType) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
-    if (isThinking || currentPlayerType === 'ai') return;
+    if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
     if (selectedCapturedPiece && selectedCapturedPiece.type === pieceType) {
       // If the same captured piece is dragged again, deselect it
       setSelectedCapturedPiece(null);
@@ -363,6 +368,7 @@ const GamePage = () => {
     setLegalDropSquares([]);
     setLastMove(null);
     setCheckmateWinner(null);
+    setIsGameOver(false);
     setIsStartModalOpen(false);
 
     // If Player 1 is AI, trigger their first move
@@ -391,6 +397,7 @@ const GamePage = () => {
 
   const handleNewGame = () => {
     setIsStartModalOpen(true);
+    setIsGameOver(false);
   };
 
   const handleUndoMove = () => {
@@ -401,6 +408,12 @@ const GamePage = () => {
       setSelectedCapturedPiece(null);
       setLegalMoves([]);
       setLastMove(previousState.moveHistory.length > 0 ? { from: previousState.moveHistory[previousState.moveHistory.length - 1].from, to: previousState.moveHistory[previousState.moveHistory.length - 1].to } : null);
+      
+      // Reset game over state if we're undoing back to a state before the game ended
+      if (!previousState.isCheckmate && !previousState.isDraw) {
+        setIsGameOver(false);
+        setCheckmateWinner(null);
+      }
     }
   };
 
@@ -430,7 +443,7 @@ const GamePage = () => {
   };
 
   return (
-    <div className="game-page">
+    <div className={`game-page ${isGameOver ? 'game-over' : ''}`}>
       <div className="game-header">
         <button className="back-button" onClick={() => navigate('/')}>
           ← Back to Home
@@ -447,6 +460,7 @@ const GamePage = () => {
         onOpenSettings={handleOpenSettings}
         aiDifficulty={aiDifficulty}
         isThinking={isThinking}
+        isGameOver={isGameOver}
       />
       
       <div className="game-container">
@@ -460,6 +474,7 @@ const GamePage = () => {
             selectedCapturedPiece={selectedCapturedPiece}
             isThinking={isThinking}
             boardBackground={currentBoardBackground}
+            isGameOver={isGameOver}
           />
           <Board
             board={gameState.board}
@@ -478,6 +493,7 @@ const GamePage = () => {
             showPieceTooltips={showPieceTooltips}
             isThinking={isThinking}
             checkingPiece={checkingPiece}
+            isGameOver={isGameOver}
           />
           <CapturedPieces
             pieces={gameState.capturedPieces[PLAYER_1]}
@@ -488,6 +504,7 @@ const GamePage = () => {
             selectedCapturedPiece={selectedCapturedPiece}
             isThinking={isThinking}
             boardBackground={currentBoardBackground}
+            isGameOver={isGameOver}
           />
         </div>
         <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
