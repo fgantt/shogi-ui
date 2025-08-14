@@ -35,6 +35,130 @@ const PracticeExerciseDetail = () => {
     { type: PROMOTED_PAWN, player: 1, promoted: true, name: 'Promoted Pawn (と金)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Pawn (と金)', 'Promoted Silver (成銀)'] }
   ];
 
+  // Promotion matching questions
+  const promotionMatchingQuestions = [
+    {
+      piece: { type: PAWN, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Pawn (と金)', piece: { type: PROMOTED_PAWN, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } },
+        { text: 'Promoted Lance (成香)', piece: { type: PROMOTED_LANCE, player: 1, promoted: true } }
+      ],
+      correctAnswer: 0,
+      explanation: 'Pawns promote to Promoted Pawns (と金), which move like Gold Generals'
+    },
+    {
+      piece: { type: KNIGHT, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Pawn (と金)', piece: { type: PROMOTED_PAWN, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } },
+        { text: 'Promoted Lance (成香)', piece: { type: PROMOTED_LANCE, player: 1, promoted: true } }
+      ],
+      correctAnswer: 2,
+      explanation: 'Knights promote to Promoted Knights (成桂), which move like Gold Generals'
+    },
+    {
+      piece: { type: LANCE, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Pawn (と金)', piece: { type: PROMOTED_PAWN, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } },
+        { text: 'Promoted Lance (成香)', piece: { type: PROMOTED_LANCE, player: 1, promoted: true } }
+      ],
+      correctAnswer: 3,
+      explanation: 'Lances promote to Promoted Lances (成香), which move like Gold Generals'
+    },
+    {
+      piece: { type: SILVER, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Pawn (と金)', piece: { type: PROMOTED_PAWN, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } },
+        { text: 'Promoted Lance (成香)', piece: { type: PROMOTED_LANCE, player: 1, promoted: true } }
+      ],
+      correctAnswer: 1,
+      explanation: 'Silver Generals promote to Promoted Silvers (成銀), which move like Gold Generals'
+    },
+    {
+      piece: { type: ROOK, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Rook (龍王)', piece: { type: PROMOTED_ROOK, player: 1, promoted: true } },
+        { text: 'Promoted Bishop (龍馬)', piece: { type: PROMOTED_BISHOP, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } }
+      ],
+      correctAnswer: 0,
+      explanation: 'Rooks promote to Promoted Rooks (龍王), which can move like Rooks plus one square diagonally'
+    },
+    {
+      piece: { type: BISHOP, player: 1, promoted: false },
+      question: 'What does this piece become when promoted?',
+      options: [
+        { text: 'Promoted Rook (龍王)', piece: { type: PROMOTED_ROOK, player: 1, promoted: true } },
+        { text: 'Promoted Bishop (龍馬)', piece: { type: PROMOTED_BISHOP, player: 1, promoted: true } },
+        { text: 'Promoted Silver (成銀)', piece: { type: PROMOTED_SILVER, player: 1, promoted: true } },
+        { text: 'Promoted Knight (成桂)', piece: { type: PROMOTED_KNIGHT, player: 1, promoted: true } }
+      ],
+      correctAnswer: 1,
+      explanation: 'Bishops promote to Promoted Bishops (龍馬), which can move like Bishops plus one square orthogonally'
+    },
+    {
+      piece: { type: PROMOTED_PAWN, player: 1, promoted: true },
+      question: 'What piece promotes to this?',
+      options: [
+        { text: 'Pawn (歩兵)', piece: { type: PAWN, player: 1, promoted: false } },
+        { text: 'Knight (桂馬)', piece: { type: KNIGHT, player: 1, promoted: false } },
+        { text: 'Lance (香車)', piece: { type: LANCE, player: 1, promoted: false } },
+        { text: 'Silver (銀将)', piece: { type: SILVER, player: 1, promoted: false } }
+      ],
+      correctAnswer: 0,
+      explanation: 'Promoted Pawns (と金) come from Pawns (歩兵)'
+    },
+    {
+      piece: { type: PROMOTED_ROOK, player: 1, promoted: true },
+      question: 'What piece promotes to this?',
+      options: [
+        { text: 'Pawn (歩兵)', piece: { type: PAWN, player: 1, promoted: false } },
+        { text: 'Rook (飛車)', piece: { type: ROOK, player: 1, promoted: false } },
+        { text: 'Bishop (角行)', piece: { type: BISHOP, player: 1, promoted: false } },
+        { text: 'Silver (銀将)', piece: { type: SILVER, player: 1, promoted: false } }
+      ],
+      correctAnswer: 1,
+      explanation: 'Promoted Rooks (龍王) come from Rooks (飛車)'
+    },
+    {
+      piece: { type: PROMOTED_BISHOP, player: 1, promoted: true },
+      question: 'What piece promotes to this?',
+      options: [
+        { text: 'Pawn (歩兵)', piece: { type: PAWN, player: 1, promoted: false } },
+        { text: 'Rook (飛車)', piece: { type: ROOK, player: 1, promoted: false } },
+        { text: 'Bishop (角行)', piece: { type: BISHOP, player: 1, promoted: false } },
+        { text: 'Silver (銀将)', piece: { type: SILVER, player: 1, promoted: false } }
+      ],
+      correctAnswer: 2,
+      explanation: 'Promoted Bishops (龍馬) come from Bishops (角行)'
+    },
+    {
+      piece: { type: PROMOTED_SILVER, player: 1, promoted: true },
+      question: 'What piece promotes to this?',
+      options: [
+        { text: 'Pawn (歩兵)', piece: { type: PAWN, player: 1, promoted: false } },
+        { text: 'Knight (桂馬)', piece: { type: KNIGHT, player: 1, promoted: false } },
+        { text: 'Lance (香車)', piece: { type: LANCE, player: 1, promoted: false } },
+        { text: 'Silver (銀将)', piece: { type: SILVER, player: 1, promoted: false } }
+      ],
+      correctAnswer: 3,
+      explanation: 'Promoted Silvers (成銀) come from Silver Generals (銀将)'
+    }
+  ];
+
   // Movement identification questions with grid diagrams
   const movementIdentificationQuestions = [
     {
@@ -271,6 +395,10 @@ const PracticeExerciseDetail = () => {
       // Generate 10 random questions from movement identification questions
       const selectedQuestions = shuffleAndSelect(movementIdentificationQuestions, 10);
       setQuestions(selectedQuestions);
+    } else if (exerciseId === 'promotion-matching') {
+      // Generate 10 random questions from promotion matching questions
+      const selectedQuestions = shuffleAndSelect(promotionMatchingQuestions, 10);
+      setQuestions(selectedQuestions);
     }
   }, [exerciseId]);
 
@@ -317,6 +445,8 @@ const PracticeExerciseDetail = () => {
         return 'Piece Name Identification';
       case 'movement-identification':
         return 'Movement Pattern Recognition';
+      case 'promotion-matching':
+        return 'Promotion Matching';
       default:
         return 'Practice Exercise';
     }
@@ -328,6 +458,8 @@ const PracticeExerciseDetail = () => {
         return 'Identify Shogi pieces by their appearance and kanji characters (including promoted pieces)';
       case 'movement-identification':
         return 'Learn how different Shogi pieces move on the board using only visual movement diagrams (including promoted pieces)';
+      case 'promotion-matching':
+        return 'Match Shogi pieces to their promoted versions. Learn which pieces can be promoted and what they become.';
       default:
         return 'Practice your Shogi skills';
     }
@@ -415,6 +547,10 @@ const PracticeExerciseDetail = () => {
               >
                 {exerciseId === 'movement-identification' ? (
                   renderMovementDiagram(option.diagram)
+                ) : exerciseId === 'promotion-matching' && option.piece ? (
+                  <div className="piece-option">
+                    <SvgPiece piece={option.piece} size={80} />
+                  </div>
                 ) : (
                   option.text
                 )}
@@ -431,6 +567,12 @@ const PracticeExerciseDetail = () => {
               ) : (
                 <div className="incorrect-answer">
                   ✗ Incorrect. The correct answer is: {exerciseId === 'movement-identification' ? currentQ.options[currentQ.correctAnswer].text : currentQ.options[currentQ.correctAnswer].text}
+                </div>
+              )}
+              
+              {exerciseId === 'promotion-matching' && currentQ.explanation && (
+                <div className="explanation">
+                  <strong>Explanation:</strong> {currentQ.explanation}
                 </div>
               )}
               

@@ -138,6 +138,14 @@
   opacity: 0.8;
 }
 
+.piece-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
 .answer-feedback {
   text-align: center;
   padding: 1rem;
@@ -157,6 +165,17 @@
   color: #e74c3c;
   font-size: 1.1rem;
   margin-bottom: 1rem;
+}
+
+.explanation {
+  background: rgba(52, 152, 219, 0.1);
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  color: #bdc3c7;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 
 .action-buttons {

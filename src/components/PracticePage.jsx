@@ -19,6 +19,13 @@ const PracticePage = () => {
       description: 'Practice recognizing the movement patterns of different Shogi pieces using only visual diagrams. 10 randomized questions including promoted pieces.',
       icon: '♟️',
       difficulty: 'Beginner'
+    },
+    {
+      id: 'promotion-matching',
+      title: 'Promotion Matching',
+      description: 'Match Shogi pieces to their promoted versions. Learn which pieces can be promoted and what they become.',
+      icon: '⬆️',
+      difficulty: 'Beginner'
     }
   ];
 
@@ -60,6 +67,7 @@ const PracticePage = () => {
           <ul>
             <li>Start with Name Identification to learn piece recognition (10 randomized questions including promoted pieces!)</li>
             <li>Practice Movement Pattern Recognition with visual diagrams only - no text descriptions (10 randomized questions including promoted pieces!)</li>
+            <li>Try Promotion Matching to learn which pieces can be promoted and what they become</li>
             <li>Practice regularly to build muscle memory</li>
             <li>Focus on understanding movement patterns</li>
             <li>Don't worry about speed - accuracy comes first</li>
