@@ -9,7 +9,7 @@ const PracticePage = () => {
     {
       id: 'name-identification',
       title: 'Name Identification',
-      description: 'Learn to identify Shogi pieces by their appearance and kanji characters.',
+      description: 'Learn to identify Shogi pieces by their appearance and kanji characters, including promoted pieces.',
       icon: '🎯',
       difficulty: 'Beginner'
     },
@@ -58,7 +58,7 @@ const PracticePage = () => {
         <div className="practice-tips">
           <h3>💡 Practice Tips</h3>
           <ul>
-            <li>Start with Name Identification to learn piece recognition</li>
+            <li>Start with Name Identification to learn piece recognition (now with 10 randomized questions including promoted pieces!)</li>
             <li>Practice regularly to build muscle memory</li>
             <li>Focus on understanding movement patterns</li>
             <li>Don't worry about speed - accuracy comes first</li>

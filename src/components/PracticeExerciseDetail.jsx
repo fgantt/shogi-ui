@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import SvgPiece from './SvgPiece';
-import { KING, GOLD, SILVER, ROOK, BISHOP, PAWN, KNIGHT, LANCE } from '../game/engine';
+import { 
+  KING, GOLD, SILVER, ROOK, BISHOP, PAWN, KNIGHT, LANCE,
+  PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN
+} from '../game/engine';
 import './PracticeExerciseDetail.css';
 
 const PracticeExerciseDetail = () => {
@@ -12,39 +15,24 @@ const PracticeExerciseDetail = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isCorrect, setIsCorrect] = useState(null);
+  const [questions, setQuestions] = useState([]);
 
-  // Sample questions for piece identification
-  const pieceIdentificationQuestions = [
-    {
-      piece: { type: KING, player: 1, promoted: false },
-      question: 'What piece is this?',
-      options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Rook (飛車)'],
-      correctAnswer: 0
-    },
-    {
-      piece: { type: GOLD, player: 1, promoted: false },
-      question: 'What piece is this?',
-      options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Bishop (角行)'],
-      correctAnswer: 1
-    },
-    {
-      piece: { type: SILVER, player: 1, promoted: false },
-      question: 'What piece is this?',
-      options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Knight (桂馬)'],
-      correctAnswer: 2
-    },
-    {
-      piece: { type: ROOK, player: 1, promoted: false },
-      question: 'What piece is this?',
-      options: ['King (王将)', 'Gold General (金将)', 'Rook (飛車)', 'Bishop (角行)'],
-      correctAnswer: 2
-    },
-    {
-      piece: { type: BISHOP, player: 1, promoted: false },
-      question: 'What piece is this?',
-      options: ['King (王将)', 'Gold General (金将)', 'Rook (飛車)', 'Bishop (角行)'],
-      correctAnswer: 3
-    }
+  // All possible pieces for name identification (including promoted pieces)
+  const allPieces = [
+    { type: KING, player: 1, promoted: false, name: 'King (王将)', options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Rook (飛車)'] },
+    { type: GOLD, player: 1, promoted: false, name: 'Gold General (金将)', options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Bishop (角行)'] },
+    { type: SILVER, player: 1, promoted: false, name: 'Silver General (銀将)', options: ['King (王将)', 'Gold General (金将)', 'Silver General (銀将)', 'Knight (桂馬)'] },
+    { type: ROOK, player: 1, promoted: false, name: 'Rook (飛車)', options: ['King (王将)', 'Gold General (金将)', 'Rook (飛車)', 'Bishop (角行)'] },
+    { type: BISHOP, player: 1, promoted: false, name: 'Bishop (角行)', options: ['King (王将)', 'Gold General (金将)', 'Rook (飛車)', 'Bishop (角行)'] },
+    { type: KNIGHT, player: 1, promoted: false, name: 'Knight (桂馬)', options: ['King (王将)', 'Gold General (金将)', 'Knight (桂馬)', 'Lance (香車)'] },
+    { type: LANCE, player: 1, promoted: false, name: 'Lance (香車)', options: ['King (王将)', 'Gold General (金将)', 'Knight (桂馬)', 'Lance (香車)'] },
+    { type: PAWN, player: 1, promoted: false, name: 'Pawn (歩兵)', options: ['King (王将)', 'Gold General (金将)', 'Pawn (歩兵)', 'Knight (桂馬)'] },
+    { type: PROMOTED_ROOK, player: 1, promoted: true, name: 'Promoted Rook (龍王)', options: ['King (王将)', 'Promoted Rook (龍王)', 'Promoted Bishop (龍馬)', 'Gold General (金将)'] },
+    { type: PROMOTED_BISHOP, player: 1, promoted: true, name: 'Promoted Bishop (龍馬)', options: ['King (王将)', 'Promoted Rook (龍王)', 'Promoted Bishop (龍馬)', 'Silver General (銀将)'] },
+    { type: PROMOTED_SILVER, player: 1, promoted: true, name: 'Promoted Silver (成銀)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Silver (成銀)', 'Promoted Knight (成桂)'] },
+    { type: PROMOTED_KNIGHT, player: 1, promoted: true, name: 'Promoted Knight (成桂)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Knight (成桂)', 'Promoted Lance (成香)'] },
+    { type: PROMOTED_LANCE, player: 1, promoted: true, name: 'Promoted Lance (成香)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Knight (成桂)', 'Promoted Lance (成香)'] },
+    { type: PROMOTED_PAWN, player: 1, promoted: true, name: 'Promoted Pawn (と金)', options: ['King (王将)', 'Gold General (金将)', 'Promoted Pawn (と金)', 'Promoted Silver (成銀)'] }
   ];
 
   // Sample questions for movement identification
@@ -69,20 +57,38 @@ const PracticeExerciseDetail = () => {
     }
   ];
 
-  const getQuestions = () => {
-    switch (exerciseId) {
-      case 'name-identification':
-        return pieceIdentificationQuestions;
-      case 'movement-identification':
-        return movementIdentificationQuestions;
-      default:
-        return pieceIdentificationQuestions;
-    }
+  // Function to shuffle array and get random subset
+  const shuffleAndSelect = (array, count) => {
+    const shuffled = [...array].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
   };
 
-  const questions = getQuestions();
+  // Initialize questions when component mounts or exercise changes
+  useEffect(() => {
+    if (exerciseId === 'name-identification') {
+      // Generate 10 random questions from all pieces
+      const selectedPieces = shuffleAndSelect(allPieces, 10);
+      const generatedQuestions = selectedPieces.map((piece, index) => ({
+        piece: { type: piece.type, player: piece.player, promoted: piece.promoted },
+        question: 'What piece is this?',
+        options: shuffleAndSelect(piece.options, 4), // Shuffle the options too
+        correctAnswer: 0, // First option is always the correct one after shuffling
+        correctName: piece.name
+      }));
+      
+      // Update correctAnswer index based on where the correct name ended up
+      generatedQuestions.forEach(q => {
+        q.correctAnswer = q.options.findIndex(option => option === q.correctName);
+      });
+      
+      setQuestions(generatedQuestions);
+    } else {
+      setQuestions(movementIdentificationQuestions);
+    }
+  }, [exerciseId]);
+
   const totalQuestions = questions.length;
-  const progress = ((currentQuestion + 1) / totalQuestions) * 100;
+  const progress = totalQuestions > 0 ? ((currentQuestion + 1) / totalQuestions) * 100 : 0;
 
   const handleAnswerSelect = (answerIndex) => {
     if (showFeedback) return; // Prevent multiple selections
@@ -132,13 +138,27 @@ const PracticeExerciseDetail = () => {
   const getExerciseDescription = () => {
     switch (exerciseId) {
       case 'name-identification':
-        return 'Identify Shogi pieces by their appearance and kanji characters';
+        return 'Identify Shogi pieces by their appearance and kanji characters (including promoted pieces)';
       case 'movement-identification':
         return 'Learn how different Shogi pieces move on the board';
       default:
         return 'Practice your Shogi skills';
     }
   };
+
+  // Don't render until questions are loaded
+  if (questions.length === 0) {
+    return (
+      <div className="practice-exercise-detail">
+        <div className="exercise-header">
+          <button className="back-button" onClick={() => navigate('/practice')}>
+            ← Back to Practice
+          </button>
+          <h1>Loading...</h1>
+        </div>
+      </div>
+    );
+  }
 
   if (currentQuestion >= totalQuestions) {
     return (
