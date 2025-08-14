@@ -58,10 +58,14 @@ const GamePage = () => {
       const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
       const paths = Object.keys(modules).map(path => path.replace('/public', ''));
       setWallpaperList(paths);
-      if (paths.length > 0) {
-        const initialWallpaper = paths[Math.floor(Math.random() * paths.length)];
-        document.body.style.backgroundImage = `url('${initialWallpaper}')`;
-        setCurrentWallpaper(initialWallpaper);
+      // Set current wallpaper to match the one set by App.jsx
+      const currentBodyBackground = document.body.style.backgroundImage;
+      if (currentBodyBackground && currentBodyBackground !== 'none') {
+        // Extract the URL from the background-image style
+        const urlMatch = currentBodyBackground.match(/url\(['"]?([^'"]+)['"]?\)/);
+        if (urlMatch) {
+          setCurrentWallpaper(urlMatch[1]);
+        }
       }
     };
     const importBoardBackgrounds = async () => {

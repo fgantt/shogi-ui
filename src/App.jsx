@@ -15,6 +15,24 @@ import { test_logging } from "../pkg-bundler/shogi_engine.js";
 function App() {
   useEffect(() => {
     test_logging();
+    
+    // Initialize default wallpaper for all routes
+    const initializeDefaultWallpaper = async () => {
+      const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
+      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
+      if (paths.length > 0) {
+        // Set photo1.jpg as the default wallpaper
+        const defaultWallpaper = '/wallpapers/photo1.jpg';
+        const initialWallpaper = paths.includes(defaultWallpaper) ? defaultWallpaper : paths[0];
+        document.body.style.backgroundImage = `url('${initialWallpaper}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundRepeat = 'no-repeat';
+        document.body.style.backgroundPosition = 'center center';
+        document.body.style.backgroundAttachment = 'fixed';
+      }
+    };
+    
+    initializeDefaultWallpaper();
   }, []);
 
   return (
