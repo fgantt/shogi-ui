@@ -54,6 +54,41 @@ const GamePage = () => {
   }, [location.state, navigate]);
 
   useEffect(() => {
+    // Apply settings from navigation state if available
+    if (location.state) {
+      if (location.state.aiDifficulty) {
+        setAiDifficulty(location.state.aiDifficulty);
+      }
+      if (location.state.pieceLabelType) {
+        setPieceLabelType(location.state.pieceLabelType);
+      }
+      if (location.state.showAttackedPieces !== undefined) {
+        setShowAttackedPieces(location.state.showAttackedPieces);
+      }
+      if (location.state.showPieceTooltips !== undefined) {
+        setShowPieceTooltips(location.state.showPieceTooltips);
+      }
+      if (location.state.currentWallpaper) {
+        setCurrentWallpaper(location.state.currentWallpaper);
+        document.body.style.backgroundImage = `url('${location.state.currentWallpaper}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundRepeat = 'no-repeat';
+        document.body.style.backgroundPosition = 'center center';
+        document.body.style.backgroundAttachment = 'fixed';
+      }
+      if (location.state.currentBoardBackground) {
+        setCurrentBoardBackground(location.state.currentBoardBackground);
+        const boardElement = document.querySelector('.board, .shogi-board');
+        if (boardElement) {
+          boardElement.style.backgroundImage = `url('${location.state.currentBoardBackground}')`;
+        }
+      }
+      // Clear the navigation state after applying settings
+      navigate('/game', { replace: true });
+    }
+  }, [location.state, navigate]);
+
+  useEffect(() => {
     const importWallpapers = async () => {
       const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
       const paths = Object.keys(modules).map(path => path.replace('/public', ''));
