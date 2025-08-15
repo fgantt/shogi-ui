@@ -2,8 +2,21 @@ import React, { useState } from 'react';
 import SvgPiece from './SvgPiece';
 import { getOppositeLabel, getEnglishName } from '../utils/pieceMaps';
 import '../styles/shogi.css';
+import type { PieceType, Player } from '../types';
 
-const Piece = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSelected, isAttacked, showTooltips }) => {
+interface PieceProps {
+  type: PieceType;
+  player: Player;
+  onDragStart?: () => void;
+  onClick?: () => void;
+  pieceLabelType: string;
+  count?: number;
+  isSelected?: boolean;
+  isAttacked?: boolean;
+  showTooltips?: boolean;
+}
+
+const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSelected, isAttacked, showTooltips }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -18,7 +31,7 @@ const Piece = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSe
       <div className="piece-inner">
         <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
       </div>
-      {count > 1 && <div className="badge-counter">{count}</div>}
+      {count && count > 1 && <div className="badge-counter">{count}</div>}
       {isAttacked && <div className={`badge-attacked badge-attacked-${player}`}>!</div>}
       {showTooltips && showTooltip && (
         <div className="piece-tooltip">

@@ -1,10 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
-import { KING, ROOK, BISHOP, GOLD, SILVER, KNIGHT, LANCE, PAWN, PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN, PLAYER_1, PLAYER_2 } from '../game/engine';
+import React, { useRef, useEffect } from 'react';
+import type { Move, PieceType } from '../types';
+import { KING, ROOK, BISHOP, GOLD, SILVER, KNIGHT, LANCE, PAWN, PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN } from '../game/engine';
 
-const padToTwoChars = (str) => str.length === 1 ? ` ${str}` : str;
-
-const getPieceInitial = (pieceType) => {
+const getPieceInitial = (pieceType: PieceType): string => {
   switch (pieceType) {
     case KING: return 'K';
     case ROOK: return 'R';
@@ -24,29 +22,27 @@ const getPieceInitial = (pieceType) => {
   }
 };
 
-const formatMove = (move, allMoves) => {
+const formatMove = (move: Move, allMoves: Move[]): string => {
   let pieceInitial = getPieceInitial(move.piece);
   if (move.promote && pieceInitial.startsWith('+')) {
     pieceInitial = pieceInitial.substring(1);
   }
-  const toFile = 9 - move.to[1]; // Convert 0-indexed col to 1-9 file (right to left)
-  const toRank = move.to[0] + 1; // Convert 0-indexed row to 1-9 rank (top to bottom)
+  const toFile = 9 - move.to[1];
+  const toRank = move.to[0] + 1;
 
   let notation = '';
 
   if (move.from === 'drop') {
     notation = `${pieceInitial}*${toFile}${toRank}`;
-  } else {
+  } else if (Array.isArray(move.from)) {
     const fromFile = 9 - move.from[1];
     const fromRank = move.from[0] + 1;
     const moveType = move.captured && !move.captured.includes('check') ? 'x' : '-';
 
-    // Check for ambiguity
     const ambiguousMoves = allMoves.filter(m =>
       m.piece === move.piece &&
-      m.to[0] === move.to[0] &&
-      m.to[1] === move.to[1] &&
-      m !== move // Exclude the current move itself
+      Array.isArray(m.to) && m.to[0] === move.to[0] && m.to[1] === move.to[1] &&
+      m !== move
     );
 
     const fromNotation = ambiguousMoves.length > 0 ? `${fromFile}${fromRank}` : '';
@@ -55,17 +51,18 @@ const formatMove = (move, allMoves) => {
 
     if (move.promote) {
       notation += '+';
-    } else if (move.promotionDeclined) {
-      notation += '=';
     }
   }
 
   return notation;
 };
 
-const MoveLog = ({ moves, pieceLabelType }) => {
-  const [sortOrder, setSortOrder] = useState('desc');
-  const tableBodyRef = useRef(null);
+interface MoveLogProps {
+  moves: Move[];
+}
+
+const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
 
   useEffect(() => {
     if (tableBodyRef.current) {
@@ -73,17 +70,15 @@ const MoveLog = ({ moves, pieceLabelType }) => {
     }
   }, [moves]);
 
-  
-
   return (
     <div className="move-log">
       <h3>Move History</h3>
       <table className="move-table">
         <thead>
           <tr>
-            <th></th>
-            <th>☗</th>
-            <th><span style={{ color: "white" }}>☗</span></th>
+            <th>#</th>
+            <th>Sente (Black)</th>
+            <th>Gote (White)</th>
           </tr>
         </thead>
         <tbody ref={tableBodyRef}>

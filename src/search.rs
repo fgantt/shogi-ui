@@ -5,6 +5,12 @@ use crate::moves::*;
 use std::collections::HashMap;
 use web_sys::console;
 
+fn now() -> f64 {
+    let window = web_sys::window().expect("should have a window in this context");
+    let performance = window.performance().expect("performance should be available");
+    performance.now()
+}
+
 /// Search engine for the Shogi AI
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -29,64 +35,63 @@ impl SearchEngine {
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
         console::log_1(&format!("search_at_depth: depth={}, player={:?}", depth, player).into());
         console::log_1(&format!("search_at_depth: entered function").into());
-        let start_time = std::time::Instant::now();
+        let start_time = now();
         let mut alpha = i32::MIN + 1;
         let mut beta = i32::MAX - 1;
         
         let mut best_move = None;
         let mut best_score = i32::MIN;
         
+        console::log_1(&format!("search_at_depth: before generate_legal_moves").into());
         // Generate all legal moves
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
+        console::log_1(&format!("search_at_depth: after generate_legal_moves, count={}", legal_moves.len()).into());
         
         if legal_moves.is_empty() {
             console::log_1(&format!("search_at_depth: no legal moves found").into());
             return None;
         }
         
+        console::log_1(&format!("search_at_depth: before sort_moves").into());
         // Sort moves for better pruning
         let sorted_moves = self.sort_moves(&legal_moves, board);
+        console::log_1(&format!("search_at_depth: after sort_moves").into());
         
+        console::log_1(&format!("search_at_depth: entering move loop").into());
         for move_ in sorted_moves {
+            console::log_1(&format!("search_at_depth: inside move loop, current move={:?}", move_).into());
             // Check time limit
-            if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+            if (now() - start_time) > time_limit_ms as f64 {
                 console::log_1(&format!("search_at_depth: time limit exceeded").into());
                 break;
             }
             
+            console::log_1(&format!("search_at_depth: before make_move").into());
             // Make move
             let mut new_board = board.clone();
             let captured_piece = new_board.make_move(&move_);
+            console::log_1(&format!("search_at_depth: after make_move").into());
 
             let mut new_captured = captured_pieces.clone();
             if let Some(piece) = captured_piece {
                 new_captured.add_piece(piece.piece_type, player);
             }
             
+            console::log_1(&format!("search_at_depth: before negamax").into());
             // Search
             let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms);
-            
-            if score > best_score {
-                best_score = score;
-                best_move = Some(move_);
-                alpha = score;
-                
-                if alpha >= beta {
-                    console::log_1(&format!("search_at_depth: beta cutoff").into());
-                    break; // Beta cutoff
-                }
-            }
-        }
-        
+            console::log_1(&format!("search_at_depth: after negamax, score={}", score).into());
+            } // This closes the for loop
+
         console::log_1(&format!("search_at_depth: best_move={:?}, best_score={}", best_move, best_score).into());
         best_move.map(|m| (m, best_score))
     }
 
     /// Negamax search with alpha-beta pruning
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32) -> i32 {
         console::log_1(&format!("negamax: depth={}, player={:?}, alpha={}, beta={}", depth, player, alpha, beta).into());
         // Check time limit
-        if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+        if (now() - start_time) > time_limit_ms as f64 {
             console::log_1(&format!("negamax: time limit exceeded").into());
             return 0;
         }
@@ -230,10 +235,10 @@ impl SearchEngine {
     }
 
     /// Quiescence search for tactical positions
-    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: std::time::Instant, time_limit_ms: u32) -> i32 {
+    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32) -> i32 {
         console::log_1(&format!("quiescence_search: player={:?}, alpha={}, beta={}", player, alpha, beta).into());
         // Check time limit
-        if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+        if (now() - start_time) > time_limit_ms as f64 {
             console::log_1(&format!("quiescence_search: time limit exceeded").into());
             return 0;
         }
@@ -258,7 +263,7 @@ impl SearchEngine {
         for move_ in noisy_moves {
             console::log_1(&format!("quiescence_search: trying noisy move {:?}", move_).into());
             // Check time limit
-            if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+            if (now() - start_time) > time_limit_ms as f64 {
                 console::log_1(&format!("quiescence_search: time limit exceeded during noisy move").into());
                 break;
             }
@@ -419,12 +424,7 @@ impl IterativeDeepening {
         console::log_1(&format!("IterativeDeepening::search: starting search for player {:?}", player).into());
         // Add log before start_time
         console::log_1(&format!("IterativeDeepening::search: before start_time").into());
-        let start_time = web_sys::window()
-            .expect("should have a window")
-            .performance()
-            .expect("should have a performance object")
-            .now();
-        console::log_1(&format!("IterativeDeepening::search: start_time initialized").into());
+        let start_time = now();
         // Add log before best_move
         console::log_1(&format!("IterativeDeepening::search: before best_move").into());
         let mut best_move = None;
@@ -443,14 +443,16 @@ impl IterativeDeepening {
         for depth in 1..=self.max_depth {
             console::log_1(&format!("IterativeDeepening::search: searching at depth {}", depth).into());
             // Check if we have enough time
-            let elapsed = web_sys::window().unwrap().performance().unwrap().now() - start_time;
+                        console::log_1(&"before elapsed".into());
+            let elapsed = now() - start_time;
+            console::log_1(&"after elapsed".into());
             if elapsed >= search_time_limit as f64 {
                 console::log_1(&format!("IterativeDeepening::search: time limit reached, breaking").into());
                 break;
             }
             
             let remaining_time = (search_time_limit as f64 - elapsed) as u32;
-            console::log_1(&format!("IterativeDeepening::search: calling search_at_depth with depth={}, remaining_time={}", depth, remaining_time).into());
+            web_sys::console::log_1(&format!("IterativeDeepening::search: calling search_at_depth with board_hash={}, captured_black={}, captured_white={}, player={:?}, depth={}, remaining_time={}", board.get_zobrist_hash(), captured_pieces.black.len(), captured_pieces.white.len(), player, depth, remaining_time).into());
             if let Some((move_, score)) = self.search_engine.search_at_depth(board, captured_pieces, player, depth, remaining_time) {
                 best_move = Some(move_);
                 best_score = score;

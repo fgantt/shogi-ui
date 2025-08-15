@@ -1,3 +1,4 @@
+import type { GameState, Piece, Coords, Player } from '../types';
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getInitialGameState,
@@ -7,10 +8,16 @@ import {
   isKingInCheck,
   isCheckmate,
   PAWN, LANCE, KNIGHT, SILVER, GOLD, KING, ROOK, BISHOP,
-  PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_SILVER, PROMOTED_ROOK, PROMOTED_BISHOP,
+  PROMOTED_PAWN, PROMOTED_LANCE, PROMOTED_KNIGHT, PROMOTED_ROOK, PROMOTED_BISHOP,
   PLAYER_1, PLAYER_2,
   ROWS, COLS
 } from './engine';
+
+interface RepeatingMove {
+  from: Coords;
+  to: Coords;
+  player: Player;
+}
 
 describe('getInitialGameState', () => {
   it('should return the correct initial game state', () => {
@@ -35,7 +42,7 @@ describe('getInitialGameState', () => {
 });
 
 describe('getLegalMoves', () => {
-  let board;
+  let board: (Piece | null)[][];
 
   beforeEach(() => {
     board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
@@ -44,71 +51,78 @@ describe('getLegalMoves', () => {
   it('should return correct moves for a Pawn (Player 1)', () => {
     board[6][4] = { type: PAWN, player: PLAYER_1 };
     const moves = getLegalMoves(board[6][4], 6, 4, board);
-    expect(moves).toEqual([[5, 4]]);
+    expect(moves).toEqual([[5, 4]] as Coords[]);
   });
 
   it('should return correct moves for a Pawn (Player 2)', () => {
     board[2][4] = { type: PAWN, player: PLAYER_2 };
     const moves = getLegalMoves(board[2][4], 2, 4, board);
-    expect(moves).toEqual([[3, 4]]);
+    expect(moves).toEqual([[3, 4]] as Coords[]);
   });
 
   it('should return correct moves for a Lance (Player 1)', () => {
     board[8][0] = { type: LANCE, player: PLAYER_1 };
     const moves = getLegalMoves(board[8][0], 8, 0, board);
-    expect(moves).toEqual([[7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0], [0, 0]]);
+    expect(moves).toEqual([[7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0], [0, 0]] as Coords[]);
   });
 
   it('should return correct moves for a Lance (Player 2)', () => {
     board[0][0] = { type: LANCE, player: PLAYER_2 };
     const moves = getLegalMoves(board[0][0], 0, 0, board);
-    expect(moves).toEqual([[1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0]]);
+    expect(moves).toEqual([[1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0]] as Coords[]);
   });
 
   it('should return correct moves for a Knight (Player 1)', () => {
     board[5][4] = { type: KNIGHT, player: PLAYER_1 };
     const moves = getLegalMoves(board[5][4], 5, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[3, 3], [3, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = [[3, 3], [3, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Knight (Player 2)', () => {
     board[3][4] = { type: KNIGHT, player: PLAYER_2 };
     const moves = getLegalMoves(board[3][4], 3, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[5, 3], [5, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = ([[5, 3], [5, 5]] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Silver General (Player 1)', () => {
     board[5][4] = { type: SILVER, player: PLAYER_1 };
     const moves = getLegalMoves(board[5][4], 5, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[4, 4], [4, 3], [4, 5], [6, 3], [6, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = ([[4, 4], [4, 3], [4, 5], [6, 3], [6, 5]] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Silver General (Player 2)', () => {
     board[3][4] = { type: SILVER, player: PLAYER_2 };
     const moves = getLegalMoves(board[3][4], 3, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[4, 4], [4, 3], [4, 5], [2, 3], [2, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = ([[4, 4], [4, 3], [4, 5], [2, 3], [2, 5]] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Gold General (Player 1)', () => {
     board[5][4] = { type: GOLD, player: PLAYER_1 };
     const moves = getLegalMoves(board[5][4], 5, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[4, 4], [6, 4], [5, 3], [5, 5], [4, 3], [4, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = ([[4, 4], [6, 4], [5, 3], [5, 5], [4, 3], [4, 5]] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Gold General (Player 2)', () => {
     board[3][4] = { type: GOLD, player: PLAYER_2 };
     const moves = getLegalMoves(board[3][4], 3, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([[4, 4], [2, 4], [3, 3], [3, 5], [4, 3], [4, 5]].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    const expectedMoves = ([[4, 4], [2, 4], [3, 3], [3, 5], [4, 3], [4, 5]] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a King', () => {
     board[4][4] = { type: KING, player: PLAYER_1 };
     const moves = getLegalMoves(board[4][4], 4, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([
+    const expectedMoves = ([
       [3, 3], [3, 4], [3, 5],
       [4, 3],         [4, 5],
       [5, 3], [5, 4], [5, 5],
-    ].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    ] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 
   it('should return correct moves for a Rook', () => {
@@ -134,7 +148,7 @@ describe('getLegalMoves', () => {
     board[6][4] = { type: PAWN, player: PLAYER_1 };
     board[5][4] = { type: PAWN, player: PLAYER_2 };
     const moves = getLegalMoves(board[6][4], 6, 4, board);
-    expect(moves).toEqual([[5, 4]]);
+    expect(moves).toEqual([[5, 4]] as Coords[]);
   });
 
   it('should return correct moves for a Promoted Rook (Dragon King)', () => {
@@ -152,17 +166,18 @@ describe('getLegalMoves', () => {
   it('should return correct moves for a Promoted Pawn (Gold General)', () => {
     board[5][4] = { type: PROMOTED_PAWN, player: PLAYER_1 };
     const moves = getLegalMoves(board[5][4], 5, 4, board);
-    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual([
+    const expectedMoves = ([
       [4, 4], [6, 4], [5, 3], [5, 5], [4, 3], [4, 5]
-    ].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    ] as Coords[]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(moves.sort((a, b) => a[0] - b[0] || a[1] - b[1])).toEqual(expectedMoves);
   });
 });
 
 describe('movePiece', () => {
   it('should move a piece to an empty square', () => {
     const initialState = getInitialGameState();
-    const from = [6, 4]; // Player 1 Pawn
-    const to = [5, 4];
+    const from: Coords = [6, 4]; // Player 1 Pawn
+    const to: Coords = [5, 4];
     const newState = movePiece(initialState, from, to);
 
     expect(newState.board[5][4]).toEqual({ type: PAWN, player: PLAYER_1 });
@@ -175,8 +190,8 @@ describe('movePiece', () => {
     const initialState = getInitialGameState();
     // Move P1 Pawn to capture P2 Pawn
     initialState.board[5][4] = { type: PAWN, player: PLAYER_2 }; // Place P2 Pawn for capture
-    const from = [6, 4]; // Player 1 Pawn
-    const to = [5, 4];
+    const from: Coords = [6, 4]; // Player 1 Pawn
+    const to: Coords = [5, 4];
     const newState = movePiece(initialState, from, to);
 
     expect(newState.board[5][4]).toEqual({ type: PAWN, player: PLAYER_1 });
@@ -188,8 +203,8 @@ describe('movePiece', () => {
   it('should revert promoted piece to original type when captured', () => {
     const initialState = getInitialGameState();
     initialState.board[5][4] = { type: PROMOTED_ROOK, player: PLAYER_2 };
-    const from = [6, 4]; // Player 1 Pawn
-    const to = [5, 4];
+    const from: Coords = [6, 4]; // Player 1 Pawn
+    const to: Coords = [5, 4];
     const newState = movePiece(initialState, from, to);
 
     expect(newState.capturedPieces[PLAYER_1]).toEqual([{ type: ROOK, player: PLAYER_2 }]);
@@ -198,8 +213,8 @@ describe('movePiece', () => {
   it('should set promotionPending for optional promotion', () => {
     const initialState = getInitialGameState();
     initialState.board[2][4] = { type: SILVER, player: PLAYER_1 }; // P1 Silver near promotion zone
-    const from = [2, 4];
-    const to = [1, 4]; // Into promotion zone
+    const from: Coords = [2, 4];
+    const to: Coords = [1, 4]; // Into promotion zone
     const newState = movePiece(initialState, from, to);
 
     expect(newState.promotionPending).toEqual({
@@ -213,8 +228,8 @@ describe('movePiece', () => {
   it('should automatically promote for mandatory promotion (Pawn)', () => {
     const initialState = getInitialGameState();
     initialState.board[1][4] = { type: PAWN, player: PLAYER_1 };
-    const from = [1, 4];
-    const to = [0, 4];
+    const from: Coords = [1, 4];
+    const to: Coords = [0, 4];
     const newState = movePiece(initialState, from, to);
 
     expect(newState.board[0][4]).toEqual({ type: PROMOTED_PAWN, player: PLAYER_1 });
@@ -224,8 +239,8 @@ describe('movePiece', () => {
   it('should automatically promote for mandatory promotion (Knight)', () => {
     const initialState = getInitialGameState();
     initialState.board[2][4] = { type: KNIGHT, player: PLAYER_1 };
-    const from = [2, 4];
-    const to = [0, 3];
+    const from: Coords = [2, 4];
+    const to: Coords = [0, 3];
     const newState = movePiece(initialState, from, to);
 
     expect(newState.board[0][3]).toEqual({ type: PROMOTED_KNIGHT, player: PLAYER_1 });
@@ -274,8 +289,8 @@ describe('movePiece', () => {
     // Set current player to Player 1
     initialState.currentPlayer = PLAYER_1;
 
-    const from = [8, 0]; // Player 1 Rook
-    const to = [0, 0]; // Move to checkmate Player 2 King
+    const from: Coords = [8, 0]; // Player 1 Rook
+    const to: Coords = [0, 0]; // Move to checkmate Player 2 King
 
     const newState = movePiece(initialState, from, to, true); // Force promotion for this test
 
@@ -290,7 +305,7 @@ describe('dropPiece', () => {
     // Clear the pawn at [6,5] to avoid Nifu rule for this test
     initialState.board[6][5] = null;
     initialState.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_1 }); // Corrected player
-    const newState = dropPiece(initialState, PAWN, [5, 5]);
+    const newState = dropPiece(initialState, PAWN, [5, 5] as Coords);
 
     expect(newState.board[5][5]).toEqual({ type: PAWN, player: PLAYER_1 });
     expect(newState.capturedPieces[PLAYER_1]).toEqual([]);
@@ -301,7 +316,7 @@ describe('dropPiece', () => {
     const initialState = getInitialGameState();
     initialState.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_2 });
     initialState.board[5][5] = { type: PAWN, player: PLAYER_2 };
-    const newState = dropPiece(initialState, PAWN, [5, 5]);
+    const newState = dropPiece(initialState, PAWN, [5, 5] as Coords);
 
     expect(newState).toBe(initialState); // Should return the same state
   });
@@ -310,7 +325,7 @@ describe('dropPiece', () => {
     const initialState = getInitialGameState();
     initialState.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_2 });
     initialState.board[5][5] = { type: PAWN, player: PLAYER_1 }; // Existing pawn in the column
-    const newState = dropPiece(initialState, PAWN, [4, 5]);
+    const newState = dropPiece(initialState, PAWN, [4, 5] as Coords);
 
     expect(newState).toBe(initialState);
   });
@@ -318,7 +333,7 @@ describe('dropPiece', () => {
   it('should not drop a pawn on the last rank', () => {
     const initialState = getInitialGameState();
     initialState.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_2 });
-    const newState = dropPiece(initialState, PAWN, [0, 4]);
+    const newState = dropPiece(initialState, PAWN, [0, 4] as Coords);
 
     expect(newState).toBe(initialState);
   });
@@ -326,7 +341,7 @@ describe('dropPiece', () => {
   it('should not drop a lance on the last rank', () => {
     const initialState = getInitialGameState();
     initialState.capturedPieces[PLAYER_1].push({ type: LANCE, player: PLAYER_2 });
-    const newState = dropPiece(initialState, LANCE, [0, 4]);
+    const newState = dropPiece(initialState, LANCE, [0, 4] as Coords);
 
     expect(newState).toBe(initialState);
   });
@@ -334,7 +349,7 @@ describe('dropPiece', () => {
   it('should not drop a knight on the last two ranks', () => {
     const initialState = getInitialGameState();
     initialState.capturedPieces[PLAYER_1].push({ type: KNIGHT, player: PLAYER_2 });
-    const newState = dropPiece(initialState, KNIGHT, [1, 4]);
+    const newState = dropPiece(initialState, KNIGHT, [1, 4] as Coords);
 
     expect(newState).toBe(initialState);
   });
@@ -431,7 +446,7 @@ describe('dropPiece', () => {
     // the `dropPiece` function returns the *original* `gameState` without any modifications.
 
     const initialGameState = getInitialGameState();
-    // Manually set up a state where dropping a pawn at [7,4] would put P1's king at [8,4] in check.
+    // Manually set up a state where dropping a pawn at [7,4] would put P1's king at [8,4] in check
     // This is a contrived scenario to test the specific bug.
     initialGameState.board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
     initialGameState.board[8][4] = { type: KING, player: PLAYER_1 }; // P1 King
@@ -477,61 +492,7 @@ describe('dropPiece', () => {
     // We will mock `isKingInCheck` to return true for the `currentPlayer` after the simulated drop.
     // This will directly test the `if (isKingInCheck(tempBoard, currentPlayer))` block.
 
-    const mockIsKingInCheck = (board, player) => {
-      // For this specific test, we want to simulate a self-check.
-      // Let's say if the piece is dropped at [7,4], it causes a self-check.
-      if (player === PLAYER_1 && board[7][4] && board[7][4].type === PAWN && board[7][4].player === PLAYER_1) {
-        // This is a contrived condition to trigger the `isKingInCheck` to be true.
-        // In a real game, dropping a pawn at [7,4] would not put your own king in check.
-        return true;
-      }
-      return false;
-    };
-
-    // Temporarily replace the actual isKingInCheck with our mock
-    const originalIsKingInCheck = isKingInCheck;
-    // isKingInCheck = mockIsKingInCheck; // Cannot reassign const
-
-    // Instead of mocking, let's create a scenario where the drop *actually* causes a self-check.
-    // This is very difficult to do with a single drop in Shogi.
-
-    // The most direct way to test the bug is to ensure that if `isKingInCheck(tempBoard, currentPlayer)` is true,
-    // the `dropPiece` function returns the *original* `gameState` without any modifications.
-
-    // Let's create a scenario where the drop *would* put the current player's king in check.
-    // This is highly unusual for Shogi, as drops are usually to empty squares.
-    // The only way a drop could put *your own* king in check is if it uncovers a check from your opponent.
-    // This is a "discovered check" on yourself.
-
-    // Let's assume the `isKingInCheck` function is correct.
-    // The problematic line is: `return { ...gameState, currentPlayer: nextPlayer };`
-    // This should be `return gameState;`
-
-    // We need to create a scenario where `isKingInCheck(tempBoard, currentPlayer)` returns true.
-    // This means the `tempBoard` (after the simulated drop) has the `currentPlayer`'s king in check.
-    // This can happen if the drop *unblocks* a check from an opponent's piece.
-
-    // Example:
-    // P1 King at [8,4]
-    // P2 Rook at [8,0]
-    // P1 has a piece at [8,1] (e.g., a pawn) blocking the Rook's check.
-    // P1 tries to drop a captured piece (e.g., a pawn) at [8,1] (where the blocking piece is).
-    // This is an illegal drop because the square is not empty.
-
-    // Let's simplify the test for the problematic line.
-    // We will create a scenario where `isKingInCheck(tempBoard, currentPlayer)` *would* be true.
-    // This means the `tempBoard` (after the simulated drop) has the `currentPlayer`'s king in check.
-    // This can happen if the drop *unblocks* a check from an opponent's piece.
-
-    // Scenario:
-    // P1 King at [8,4]
-    // P2 Rook at [8,0]
-    // P1 has a piece at [8,1] (e.g., a pawn) blocking the Rook's check.
-    // P1 tries to drop a captured piece (e.g., a pawn) at [8,1] (where the blocking piece is).
-    // This is an illegal drop because the square is not empty.
-
-    // The most direct way to test the bug is to ensure that if `isKingInCheck(tempBoard, currentPlayer)` is true,
-    // the `dropPiece` function returns the *original* `gameState` without any modifications.
+    
 
     const initialGameStateForSelfCheck = getInitialGameState();
     initialGameStateForSelfCheck.board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
@@ -559,7 +520,7 @@ describe('dropPiece', () => {
     gameStateBeforeSelfCheckDrop.capturedPieces[PLAYER_1].push({ type: PAWN, player: PLAYER_1 }); // P1 has a pawn to drop
 
     // Attempt to drop the pawn at [7,1] (an empty square)
-    const newStateAfterSelfCheckDrop = dropPiece(gameStateBeforeSelfCheckDrop, PAWN, [7, 1]);
+    const newStateAfterSelfCheckDrop = dropPiece(gameStateBeforeSelfCheckDrop, PAWN, [7, 1] as Coords);
 
     // After this drop, the P1 King at [8,4] is now in check from P2 Rook at [8,0] because the pawn at [8,1] moved.
     // So, `isKingInCheck(tempBoard, currentPlayer)` should be true.
@@ -590,7 +551,7 @@ describe('dropPiece', () => {
     initialState.currentPlayer = PLAYER_1;
 
     // Drop the Pawn at [1,0] to checkmate Player 2 King
-    const newState = dropPiece(initialState, PAWN, [1, 0]);
+    const newState = dropPiece(initialState, PAWN, [1, 0] as Coords);
 
     expect(newState.isCheckmate).toBe(true);
     expect(newState.currentPlayer).toBe(PLAYER_2); // It's Player 2's turn, and they are checkmated
@@ -598,7 +559,7 @@ describe('dropPiece', () => {
 });
 
 describe('isKingInCheck', () => {
-  let board;
+  let board: (Piece | null)[][];
 
   beforeEach(() => {
     board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
@@ -629,7 +590,7 @@ describe('isKingInCheck', () => {
 });
 
 describe('isCheckmate', () => {
-  let gameState;
+  let gameState: GameState;
 
   beforeEach(() => {
     gameState = getInitialGameState();
@@ -706,7 +667,7 @@ describe('checkSennichite', () => {
     gameState.board[5][5] = { type: PROMOTED_LANCE, player: PLAYER_2 };
 
     // Define the repeating moves
-    const repeatingMoves = [
+    const repeatingMoves: RepeatingMove[] = [
       // black G64-65 (internal [3,3] to [4,3])
       { from: [3, 3], to: [4, 3], player: PLAYER_1 },
       // white +L46-45 (internal [5,5] to [4,5])

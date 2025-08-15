@@ -1,16 +1,29 @@
 import React from 'react';
 
-const StartGameModal = ({ isOpen, onClose, onStartGame }) => {
+interface GameSettings {
+  difficulty: 'easy' | 'medium' | 'hard';
+  player1Type: 'human' | 'ai';
+  player2Type: 'human' | 'ai';
+  pieceSet: 'kanji' | 'international';
+}
+
+interface StartGameModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onStartGame: (settings: GameSettings) => void;
+}
+
+const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStartGame }) => {
   if (!isOpen) return null;
 
-  const handleSubmit = (event) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.target);
-    const settings = {
-      difficulty: formData.get('difficulty'),
-      player1Type: formData.get('player1Type'),
-      player2Type: formData.get('player2Type'),
-      pieceSet: formData.get('pieceSet'),
+    const formData = new FormData(event.currentTarget);
+    const settings: GameSettings = {
+      difficulty: formData.get('difficulty') as GameSettings['difficulty'],
+      player1Type: formData.get('player1Type') as GameSettings['player1Type'],
+      player2Type: formData.get('player2Type') as GameSettings['player2Type'],
+      pieceSet: formData.get('pieceSet') as GameSettings['pieceSet'],
     };
     onStartGame(settings);
     onClose();

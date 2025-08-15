@@ -1,79 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  getWasmAiMove, 
-  isWasmEngineAvailable, 
-  getEngineStats, 
-  getEngineCapabilities,
-  benchmarkEngines,
-  getPerformanceMetrics,
-  resetEngine
-} from '../ai/wasmEngine.js';
-import { 
-  getEngineStatus, 
-  compareEnginePerformance, 
-  getEngineRecommendations 
-} from '../ai/computerPlayer.js';
+import { useState, useEffect } from 'react';
+import { getWasmAiMove, resetEngine } from '../ai/wasmEngine';
+import { getEngineStatus } from '../ai/computerPlayer';
 import './WebAssemblyDemo.css';
+import { GameState, Move, Piece } from '../types';
+
+interface EngineStatus {
+  wasmAvailable: boolean;
+  wasmEnabled: boolean;
+  currentEngine: string;
+}
+
+interface TestResults {
+  success: boolean;
+  message?: string;
+  move?: Move;
+  performance?: any;
+  benchmark?: any;
+  error?: string;
+}
 
 const WebAssemblyDemo = () => {
-  const [engineStatus, setEngineStatus] = useState(null);
-  const [testResults, setTestResults] = useState(null);
+  const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
+  const [testResults, setTestResults] = useState<TestResults | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Mock game state for testing
-  const mockGameState = {
+  const mockGameState: GameState = {
     board: [
-      // Row 0 (top - player2)
-      [
-        { type: 'L', player: 'player2' }, // Lance
-        { type: 'N', player: 'player2' }, // Knight
-        { type: 'S', player: 'player2' }, // Silver
-        { type: 'G', player: 'player2' }, // Gold
-        { type: 'K', player: 'player2' }, // King
-        { type: 'G', player: 'player2' }, // Gold
-        { type: 'S', player: 'player2' }, // Silver
-        { type: 'N', player: 'player2' }, // Knight
-        { type: 'L', player: 'player2' }  // Lance
-      ],
-      // Row 1
-      [
-        null,
-        { type: 'R', player: 'player2' }, // Rook
-        null, null, null, null, null,
-        { type: 'B', player: 'player2' }, // Bishop
-        null
-      ],
-      // Row 2
-      Array(9).fill(null).map(() => ({ type: 'P', player: 'player2' })), // Pawns
-      // Row 3 (empty)
+      [{ type: 'L', player: 'player2' }, { type: 'N', player: 'player2' }, { type: 'S', player: 'player2' }, { type: 'G', player: 'player2' }, { type: 'K', player: 'player2' }, { type: 'G', player: 'player2' }, { type: 'S', player: 'player2' }, { type: 'N', player: 'player2' }, { type: 'L', player: 'player2' }],
+      [null, { type: 'R', player: 'player2' }, null, null, null, null, null, { type: 'B', player: 'player2' }, null],
+      Array(9).fill(null).map((): Piece => ({ type: 'P', player: 'player2' })), // Pawns
       Array(9).fill(null),
-      // Row 4 (empty)
       Array(9).fill(null),
-      // Row 5 (empty)
       Array(9).fill(null),
-      // Row 6
-      Array(9).fill(null).map(() => ({ type: 'P', player: 'player1' })), // Pawns
-      // Row 7
-      [
-        null,
-        { type: 'B', player: 'player1' }, // Bishop
-        null, null, null, null, null,
-        { type: 'R', player: 'player1' }, // Rook
-        null
-      ],
-      // Row 8 (bottom - player1)
-      [
-        { type: 'L', player: 'player1' }, // Lance
-        { type: 'N', player: 'player1' }, // Knight
-        { type: 'S', player: 'player1' }, // Silver
-        { type: 'G', player: 'player1' }, // Gold
-        { type: 'K', player: 'player1' }, // King
-        { type: 'G', player: 'player1' }, // Gold
-        { type: 'S', player: 'player1' }, // Silver
-        { type: 'N', player: 'player1' }, // Knight
-        { type: 'L', player: 'player1' }  // Lance
-      ]
+      Array(9).fill(null).map((): Piece => ({ type: 'P', player: 'player1' })), // Pawns
+      [null, { type: 'B', player: 'player1' }, null, null, null, null, null, { type: 'R', player: 'player1' }, null],
+      [{ type: 'L', player: 'player1' }, { type: 'N', player: 'player1' }, { type: 'S', player: 'player1' }, { type: 'G', player: 'player1' }, { type: 'K', player: 'player1' }, { type: 'G', player: 'player1' }, { type: 'S', player: 'player1' }, { type: 'N', player: 'player1' }, { type: 'L', player: 'player1' }]
     ],
     currentPlayer: 'player1',
     capturedPieces: {
@@ -82,7 +45,13 @@ const WebAssemblyDemo = () => {
     },
     moveHistory: [],
     isCheck: false,
-    isCheckmate: false
+    isCheckmate: false,
+    isDraw: false,
+    kingPositions: {
+        player1: [8, 4],
+        player2: [0, 4]
+    },
+    pastStates: []
   };
 
   useEffect(() => {
@@ -93,8 +62,8 @@ const WebAssemblyDemo = () => {
     try {
       const status = getEngineStatus();
       setEngineStatus(status);
-    } catch (error) {
-      setError('Failed to check engine status: ' + error.message);
+        } catch (error: any) {
+            setError("error");
     }
   };
 
@@ -105,12 +74,10 @@ const WebAssemblyDemo = () => {
       
       console.log('Initializing WebAssembly engine...');
       
-      // Try to get a move to trigger initialization
       const testMove = await getWasmAiMove(mockGameState, 'easy');
       
       console.log('WebAssembly initialization successful:', testMove);
       
-      // Refresh engine status
       await checkEngineStatus();
       
       setTestResults({
@@ -119,9 +86,9 @@ const WebAssemblyDemo = () => {
         move: testMove
       });
       
-    } catch (error) {
+        } catch (error: any) {
       console.error('WebAssembly initialization failed:', error);
-      setError('WebAssembly initialization failed: ' + error.message);
+            setError("error");
       setTestResults({
         success: false,
         error: error.message
@@ -131,7 +98,7 @@ const WebAssemblyDemo = () => {
     }
   };
 
-  const validateBoardStructure = (board) => {
+  const validateBoardStructure = (board: (Piece | null)[][]) => {
     if (!board || !Array.isArray(board)) {
       return { valid: false, error: 'Board is not an array' };
     }
@@ -171,14 +138,12 @@ const WebAssemblyDemo = () => {
       console.log('Running basic WebAssembly test...');
       console.log('Mock game state:', mockGameState);
       
-      // Validate board structure first
       const boardValidation = validateBoardStructure(mockGameState.board);
       if (!boardValidation.valid) {
         throw new Error(`Board validation failed: ${boardValidation.error}`);
       }
       console.log('✅ Board structure validation passed');
       
-      // Test basic move generation
       const move = await getWasmAiMove(mockGameState, 'easy');
       
       setTestResults({
@@ -187,76 +152,15 @@ const WebAssemblyDemo = () => {
         message: 'Basic test completed successfully!'
       });
       
-    } catch (error) {
+        } catch (error: any) {
       console.error('Basic test error:', error);
-      setError('Basic test failed: ' + error.message);
+            setError("error");
       setTestResults({
         success: false,
         error: error.message
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const runPerformanceTest = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log('Running performance test...');
-      
-      const results = await compareEnginePerformance(mockGameState, 'medium');
-      
-      setTestResults({
-        success: true,
-        performance: results,
-        message: 'Performance test completed!'
-      });
-      
-    } catch (error) {
-      setError('Performance test failed: ' + error.message);
-      setTestResults({
-        success: false,
-        error: error.message
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const runBenchmarkTest = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log('Running benchmark test...');
-      
-      const results = await benchmarkEngines(mockGameState, 'hard');
-      
-      setTestResults({
-        success: true,
-        benchmark: results,
-        message: 'Benchmark test completed!'
-      });
-      
-    } catch (error) {
-      setError('Benchmark test failed: ' + error.message);
-      setError('Benchmark test failed: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getEngineStats = () => {
-    try {
-      return {
-        stats: getEngineStats(),
-        capabilities: getEngineCapabilities(),
-        recommendations: getEngineRecommendations()
-      };
-    } catch (error) {
-      return { error: error.message };
     }
   };
 
@@ -325,6 +229,7 @@ const WebAssemblyDemo = () => {
     );
   };
 
+  /*
   const renderEngineInfo = () => {
     try {
       const info = getEngineStats();
@@ -357,10 +262,11 @@ const WebAssemblyDemo = () => {
           </div>
         </div>
       );
-    } catch (error) {
+    } catch (error: any) {
       return <div>Error loading engine information: {error.message}</div>;
     }
   };
+  */
 
   return (
     <div className="wasm-demo">
@@ -440,21 +346,7 @@ const WebAssemblyDemo = () => {
             {isLoading ? 'Running...' : 'Run Basic Test'}
           </button>
           
-          <button 
-            onClick={runPerformanceTest} 
-            disabled={isLoading}
-            className="btn btn-secondary"
-          >
-            {isLoading ? 'Running...' : 'Run Performance Test'}
-          </button>
           
-          <button 
-            onClick={runBenchmarkTest} 
-            disabled={isLoading}
-            className="btn btn-success"
-          >
-            {isLoading ? 'Running...' : 'Run Benchmark Test'}
-          </button>
         </div>
       </div>
       
@@ -465,7 +357,7 @@ const WebAssemblyDemo = () => {
       )}
       
       {renderTestResults()}
-      {renderEngineInfo()}
+      
       
       <div className="demo-notes">
         <h3>Notes</h3>

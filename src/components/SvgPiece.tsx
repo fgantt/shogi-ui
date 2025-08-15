@@ -1,35 +1,34 @@
 import React from "react";
 import { KANJI_MAP, ENGLISH_MAP } from "../utils/pieceMaps";
+import type { Piece, PieceType, Player } from '../types';
 
-const PIECE_PATHS = {
-  // King 60x68
+const PIECE_PATHS: { [key in PieceType]?: string } = {
   K: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
-  // Rook 58x66
   R: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  // Bishop 58x66
   B: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  // Gold General 56x64
   G: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  // Silver General 56x64
   S: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  // Knight 54x62
   N: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
-  // Lance 50x60
   L: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
-  // Pawn 48x58
   P: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
-
-  // Promoted pieces (example, adjust as needed)
-  "+R": "M35 5 L60 12 L64 71 L6 71 L10 12 Z", // Promoted Rook (Dragon King)
-  "+B": "M35 5 L60 12 L64 71 L6 71 L10 12 Z", // Promoted Bishop (Dragon Horse)
-  "+S": "M35 6 L58 13 L63 70 L7 70 L12 13 Z", // Promoted Silver
-  "+N": "M35 7 L57 14 L62 69 L8 69 L13 14 Z", // Promoted Knight
-  "+L": "M35 8 L56 15 L60 68 L10 68 L15 15 Z", // Promoted Lance
-  "+P": "M35 9 L55 16 L59 67 L11 67 L16 16 Z", // Promoted Pawn
+  "+R": "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  "+B": "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  "+S": "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  "+N": "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
+  "+L": "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  "+P": "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
 };
 
-const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70, hideText = false }) => {
-  // Handle both prop structures: direct props or piece object
+interface SvgPieceProps {
+  type?: PieceType;
+  player?: Player;
+  pieceLabelType?: string;
+  piece?: Piece;
+  size?: number;
+  hideText?: boolean;
+}
+
+const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece, size = 70, hideText = false }) => {
   const pieceType = type || (piece && piece.type);
   const piecePlayer = player || (piece && piece.player);
   const labelType = pieceLabelType || 'kanji';
@@ -40,8 +39,7 @@ const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70, hideText = f
   }
 
   const isPromoted = pieceType.startsWith("+");
-  const label =
-    labelType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
+  const label = labelType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
 
   const piecePath = PIECE_PATHS[pieceType];
 
@@ -57,9 +55,9 @@ const SvgPiece = ({ type, player, pieceLabelType, piece, size = 70, hideText = f
   return (
     <svg
       width={size}
-      height={size * 1.086} // Maintain aspect ratio
+      height={size * 1.086}
       viewBox="0 0 70 76"
-      className={piecePlayer === "player2" || piecePlayer === 2 ? "rotate-180" : ""}
+      className={piecePlayer === "player2" ? "rotate-180" : ""}
     >
       <defs>
         <pattern

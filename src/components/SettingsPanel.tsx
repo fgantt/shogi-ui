@@ -1,6 +1,27 @@
 import React, { useState } from 'react';
 
-const SettingsPanel = ({
+type Difficulty = 'easy' | 'medium' | 'hard';
+type PieceLabelType = 'kanji' | 'english';
+
+interface SettingsPanelProps {
+  aiDifficulty: Difficulty;
+  onDifficultyChange: (difficulty: Difficulty) => void;
+  pieceLabelType: PieceLabelType;
+  onPieceLabelTypeChange: (type: PieceLabelType) => void;
+  wallpaperList: string[];
+  onSelectWallpaper: (wallpaper: string) => void;
+  boardBackgroundList: string[];
+  onSelectBoardBackground: (background: string) => void;
+  onClose: () => void;
+  currentWallpaper: string;
+  currentBoardBackground: string;
+  showAttackedPieces: boolean;
+  onShowAttackedPiecesChange: (show: boolean) => void;
+  showPieceTooltips: boolean;
+  onShowPieceTooltipsChange: (show: boolean) => void;
+}
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
   aiDifficulty,
   onDifficultyChange,
   pieceLabelType,
@@ -27,7 +48,7 @@ const SettingsPanel = ({
   const toggleWallpaperCollapse = () => {
     setIsWallpaperCollapsed(!isWallpaperCollapsed);
   };
-  const getFileName = (path) => {
+  const getFileName = (path: string): string => {
     const parts = path.split('/');
     const fileNameWithExtension = parts[parts.length - 1];
     const fileName = fileNameWithExtension.split('.')[0];
@@ -103,9 +124,7 @@ const SettingsPanel = ({
           </h3>
           {!isBoardBackgroundCollapsed && (
             <div className="setting-group setting-thumbnails">
-              {boardBackgroundList.map((bg, index) => {
-                // console.log(`Board Thumbnail: ${bg}, Current Board: ${currentBoardBackground}, Match: ${bg === currentBoardBackground}`);
-                return (
+              {boardBackgroundList.map((bg, index) => (
                 <img
                   key={index}
                   src={bg}
@@ -114,7 +133,7 @@ const SettingsPanel = ({
                   onClick={() => onSelectBoardBackground(bg)}
                   title={getFileName(bg)}
                 />
-              )})}
+              ))}
             </div>
           )}
         </section>
@@ -126,9 +145,7 @@ const SettingsPanel = ({
           </h3>
           {!isWallpaperCollapsed && (
             <div className="setting-group setting-thumbnails">
-              {wallpaperList.map((wp, index) => {
-                // console.log(`Wallpaper Thumbnail: ${wp}, Current Wallpaper: ${currentWallpaper}, Match: ${wp === currentWallpaper}`);
-                return (
+              {wallpaperList.map((wp, index) => (
                 <img
                   key={index}
                   src={wp}
@@ -137,7 +154,7 @@ const SettingsPanel = ({
                   onClick={() => onSelectWallpaper(wp)}
                   title={getFileName(wp)}
                 />
-              )})}
+              ))}
             </div>
           )}
         </section>

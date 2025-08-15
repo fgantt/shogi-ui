@@ -1,30 +1,46 @@
 import React from 'react';
-import Piece from './Piece';
+import PieceComponent from './Piece';
 import '../styles/shogi.css';
+import type { Piece, Move } from '../types';
 
-const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
-  // console.log("Board received legalMoves:", legalMoves);
-  // console.log("Board received legalDropSquares:", legalDropSquares);
-  const isLegalMove = (row, col) => {
+interface BoardProps {
+  board: (Piece | null)[][];
+  onSquareClick: (row: number, col: number) => void;
+  onDragStart: (row: number, col: number) => void;
+  onDrop: (row: number, col: number) => void;
+  legalMoves: [number, number][];
+  legalDropSquares: [number, number][];
+  isCheck: boolean;
+  kingPosition: [number, number] | null;
+  lastMove: Move | null;
+  pieceLabelType: string;
+  selectedPiece: { row: number; col: number } | null;
+  attackedSquares: { player1: Set<string>; player2: Set<string> };
+  showAttackedPieces: boolean;
+  showPieceTooltips: boolean;
+  isThinking: boolean;
+  checkingPiece: [number, number] | null;
+  isGameOver: boolean;
+}
+
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
+  const isLegalMove = (row: number, col: number): boolean => {
     return legalMoves.some(move => move[0] === row && move[1] === col);
   };
 
-  const isLegalDropSquare = (row, col) => {
+  const isLegalDropSquare = (row: number, col: number): boolean => {
     return legalDropSquares.some(square => square[0] === row && square[1] === col);
   };
 
-  const isKingSquare = (row, col) => {
-    return kingPosition && kingPosition[0] === row && kingPosition[1] === col;
+  const isKingSquare = (row: number, col: number): boolean => {
+    return kingPosition ? kingPosition[0] === row && kingPosition[1] === col : false;
   };
 
-  const isLastMoveSquare = (row, col) => {
+  const isLastMoveSquare = (row: number, col: number): boolean => {
     if (!lastMove) return false;
     const { from, to } = lastMove;
 
-    // Check if 'to' is a valid coordinate
     const isToSquare = Array.isArray(to) && to.length === 2 && to[0] === row && to[1] === col;
-
-    // Check if 'from' is a valid coordinate (and not a drop)
     const isFromSquare = Array.isArray(from) && from.length === 2 && from[0] === row && from[1] === col;
 
     return isFromSquare || isToSquare;
@@ -36,7 +52,6 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
     const [checkingRow, checkingCol] = checkingPiece;
     const [kingRow, kingCol] = kingPosition;
 
-    // Calculate center points of the squares
     const startX = checkingCol * 70 + 35;
     const startY = checkingRow * 76 + 38;
     const endX = kingCol * 70 + 35;
@@ -55,8 +70,8 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
   return (
     <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''} ${isGameOver ? 'game-over' : ''}`}>
       <div className="column-numbers">
-        {columnNumbers.map((num, index) => (
-          <div key={index} className="column-number-cell">
+        {columnNumbers.map((num) => (
+          <div key={num} className="column-number-cell">
             {num}
           </div>
         ))}
@@ -74,26 +89,17 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
                   onDragOver={(e) => e.preventDefault()} // Allow drop
                   onDrop={() => onDrop(rowIndex, colIndex)}
                 >
-                  {/* Intersection dots */}
-                  {(rowIndex === 2 && colIndex === 2) && (
-                    <div className="intersection-dot"></div>
-                  )}
-                  {(rowIndex === 2 && colIndex === 5) && (
-                    <div className="intersection-dot"></div>
-                  )}
-                  {(rowIndex === 5 && colIndex === 2) && (
-                    <div className="intersection-dot"></div>
-                  )}
-                  {(rowIndex === 5 && colIndex === 5) && (
-                    <div className="intersection-dot"></div>
-                  )}
+                  {(rowIndex === 2 && colIndex === 2) && <div className="intersection-dot"></div>}
+                  {(rowIndex === 2 && colIndex === 5) && <div className="intersection-dot"></div>}
+                  {(rowIndex === 5 && colIndex === 2) && <div className="intersection-dot"></div>}
+                  {(rowIndex === 5 && colIndex === 5) && <div className="intersection-dot"></div>}
                   {piece && (
-                    <Piece
+                    <PieceComponent
                       type={piece.type}
                       player={piece.player}
                       onDragStart={() => onDragStart(rowIndex, colIndex)}
                       pieceLabelType={pieceLabelType}
-                      isSelected={selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex}
+                      isSelected={selectedPiece ? selectedPiece.row === rowIndex && selectedPiece.col === colIndex : false}
                       isAttacked={showAttackedPieces && attackedSquares[piece.player === 'player1' ? 'player2' : 'player1'].has(`${rowIndex},${colIndex}`)}
                       showTooltips={showPieceTooltips}
                     />
@@ -104,8 +110,8 @@ const Board = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDro
           ))}
         </div>
         <div className="row-numbers">
-          {rowNumbers.map((num, index) => (
-            <div key={index} className="row-number-cell">
+          {rowNumbers.map((num) => (
+            <div key={num} className="row-number-cell">
               {num}
             </div>
           ))}

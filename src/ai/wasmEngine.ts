@@ -1,12 +1,12 @@
-import { ShogiEngine, PieceType, Player } from '../../pkg-bundler/shogi_engine.js';
+import { ShogiEngine, PieceType as WasmPieceType } from '../../pkg-bundler/shogi_engine.js';
+import type { GameState, Piece, PieceType } from '../types';
 
-let wasmEngine = null;
 let isInitialized = false;
 
 /**
  * Initialize the WebAssembly engine
  */
-export async function initializeWasmEngine() {
+export async function initializeWasmEngine(): Promise<void> {
     if (isInitialized) {
         return;
     }
@@ -22,35 +22,44 @@ export async function initializeWasmEngine() {
 /**
  * Get the best move using the WebAssembly engine
  */
-export async function getWasmAiMove(gameState, difficulty) {
+export async function getWasmAiMove(gameState: GameState, difficulty: string | number): Promise<any> {
     if (!isInitialized) {
         await initializeWasmEngine();
     }
     
     try {
-        // Create new engine instance
         const engine = ShogiEngine.new();
-        
-        // Convert game state to engine format
         const engineState = convertGameStateToEngine(gameState);
-        
-        // Set up the engine with current position
         setupEnginePosition(engine, engineState);
-        
-        // Get time limit based on difficulty
         const timeLimit = getTimeLimit(difficulty);
         
-        // Get best move
-        const bestMove = engine.get_best_move(difficulty, timeLimit);
+        let difficultyLevel: number;
+        if (typeof difficulty === 'string') {
+            switch (difficulty) {
+                case 'easy':
+                    difficultyLevel = 1;
+                    break;
+                case 'medium':
+                    difficultyLevel = 2;
+                    break;
+                case 'hard':
+                    difficultyLevel = 3;
+                    break;
+                default:
+                    difficultyLevel = 2;
+            }
+        } else {
+            difficultyLevel = difficulty;
+        }
+
+        const bestMove = engine.get_best_move(difficultyLevel, timeLimit);
         
         if (bestMove) {
-            // Convert engine move back to game format
             return convertEngineMoveToGame(bestMove);
         } else {
             console.warn('No move returned from WebAssembly engine');
             return null;
         }
-        
     } catch (error) {
         console.error('Error in WebAssembly engine:', error);
         throw error;
@@ -60,17 +69,15 @@ export async function getWasmAiMove(gameState, difficulty) {
 /**
  * Convert game state to engine format
  */
-function convertGameStateToEngine(gameState) {
+function convertGameStateToEngine(gameState: GameState): any {
     try {
         const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
         
-        // Validate board structure
         if (!board || !Array.isArray(board) || board.length !== 9) {
             throw new Error('Invalid board structure: board must be a 9x9 array');
         }
         
-        // Convert the board to a format the Rust engine can understand
-        const engineBoard = [];
+        const engineBoard: { position: { row: number, col: number }, piece_type: string, player: string }[] = [];
         
         for (let row = 0; row < 9; row++) {
             if (!board[row] || !Array.isArray(board[row]) || board[row].length !== 9) {
@@ -97,7 +104,7 @@ function convertGameStateToEngine(gameState) {
             capturedPieces: convertCapturedPieces(capturedPieces),
             moveHistory: moveHistory || []
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error converting game state:', error);
         console.error('Game state received:', gameState);
         throw new Error(`Failed to convert game state: ${error.message}`);
@@ -107,8 +114,8 @@ function convertGameStateToEngine(gameState) {
 /**
  * Convert piece types from game format to engine format
  */
-function convertPieceTypeToEngine(pieceType) {
-    const pieceMap = {
+function convertPieceTypeToEngine(pieceType: PieceType): string {
+    const pieceMap: Record<PieceType, string> = {
         'K': 'King',
         'R': 'Rook',
         'B': 'Bishop',
@@ -131,25 +138,23 @@ function convertPieceTypeToEngine(pieceType) {
 /**
  * Convert captured pieces to engine format
  */
-function convertCapturedPieces(capturedPieces) {
-    const engineCaptured = [];
+function convertCapturedPieces(capturedPieces: GameState['capturedPieces']): any[] {
+    const engineCaptured: { piece_type: string, player: string }[] = [];
     
-    // Convert player1 captured pieces
     if (capturedPieces.player1) {
-        capturedPieces.player1.forEach(piece => {
+        capturedPieces.player1.forEach((piece: Piece) => {
             engineCaptured.push({
                 piece_type: convertPieceTypeToEngine(piece.type),
-                player: 'White' // These were captured from White
+                player: 'White'
             });
         });
     }
     
-    // Convert player2 captured pieces
     if (capturedPieces.player2) {
-        capturedPieces.player2.forEach(piece => {
+        capturedPieces.player2.forEach((piece: Piece) => {
             engineCaptured.push({
                 piece_type: convertPieceTypeToEngine(piece.type),
-                player: 'Black' // These were captured from Black
+                player: 'Black'
             });
         });
     }
@@ -160,17 +165,11 @@ function convertCapturedPieces(capturedPieces) {
 /**
  * Set up the engine with the current position
  */
-function setupEnginePosition(engine, engineState) {
+function setupEnginePosition(engine: ShogiEngine, engineState: any): void {
     try {
-        // Set the board position
         engine.set_position(JSON.stringify(engineState.board));
-        
-        // Set current player
         engine.set_current_player(engineState.currentPlayer);
-        
-        // Set captured pieces
         engine.set_captured_pieces(JSON.stringify(engineState.capturedPieces));
-        
     } catch (error) {
         console.error('Error setting up engine position:', error);
         throw error;
@@ -180,45 +179,40 @@ function setupEnginePosition(engine, engineState) {
 /**
  * Get time limit based on difficulty
  */
-function getTimeLimit(difficulty) {
+function getTimeLimit(difficulty: number | string): number {
     switch (difficulty) {
         case 'easy':
-            return 1000; // 1 second
+        case 1:
+            return 1000;
         case 'medium':
-            return 3000; // 3 seconds
+        case 2:
+            return 3000;
         case 'hard':
-            return 9000; // 9 seconds
+        case 3:
+            return 9000;
         default:
-            return 3000; // Default to medium
+            return 3000;
     }
 }
 
 /**
  * Convert engine move back to game format
  */
-function convertEngineMoveToGame(engineMove) {
+function convertEngineMoveToGame(engineMove: any): any {
     try {
         if (engineMove.from === null || engineMove.from === undefined) {
-            // Drop move
-            const toCoord = [8 - engineMove.to.row, engineMove.to.col];
+            const toCoord: [number, number] = [8 - engineMove.to.row, engineMove.to.col];
             return {
                 from: 'drop',
                 to: toCoord,
                 pieceType: convertEnginePieceTypeToGame(engineMove.piece_type),
-                isCapture: false,
-                isPromotion: false,
-                isCheck: false
             };
         } else {
-            // Regular move
-            const fromCoord = [8 - engineMove.from.col, engineMove.from.row];
-            const toCoord = [8 - engineMove.to.col, engineMove.to.row];
+            const fromCoord: [number, number] = [8 - engineMove.from.col, engineMove.from.row];
+            const toCoord: [number, number] = [8 - engineMove.to.col, engineMove.to.row];
             return {
                 from: fromCoord,
                 to: toCoord,
-                type: 'move',
-                isCapture: engineMove.is_capture || false,
-                isCheck: false,
                 promote: engineMove.is_promotion || false
             };
         }
@@ -231,116 +225,38 @@ function convertEngineMoveToGame(engineMove) {
 /**
  * Convert engine piece types back to game format
  */
-function convertEnginePieceTypeToGame(pieceType) {
-    const reversePieceMap = {
-        [PieceType.King]: 'K',
-        [PieceType.Rook]: 'R',
-        [PieceType.Bishop]: 'B',
-        [PieceType.Gold]: 'G',
-        [PieceType.Silver]: 'S',
-        [PieceType.Knight]: 'N',
-        [PieceType.Lance]: 'L',
-        [PieceType.Pawn]: 'P',
-        [PieceType.PromotedPawn]: '+P',
-        [PieceType.PromotedLance]: '+L',
-        [PieceType.PromotedKnight]: '+N',
-        [PieceType.PromotedSilver]: '+S',
-        [PieceType.PromotedBishop]: '+B',
-        [PieceType.PromotedRook]: '+R'
+function convertEnginePieceTypeToGame(pieceType: WasmPieceType): PieceType {
+    const reversePieceMap: { [key in WasmPieceType]: PieceType } = {
+        [WasmPieceType.King]: 'K',
+        [WasmPieceType.Rook]: 'R',
+        [WasmPieceType.Bishop]: 'B',
+        [WasmPieceType.Gold]: 'G',
+        [WasmPieceType.Silver]: 'S',
+        [WasmPieceType.Knight]: 'N',
+        [WasmPieceType.Lance]: 'L',
+        [WasmPieceType.Pawn]: 'P',
+        [WasmPieceType.PromotedPawn]: '+P',
+        [WasmPieceType.PromotedLance]: '+L',
+        [WasmPieceType.PromotedKnight]: '+N',
+        [WasmPieceType.PromotedSilver]: '+S',
+        [WasmPieceType.PromotedBishop]: '+B',
+        [WasmPieceType.PromotedRook]: '+R'
     };
     
     return reversePieceMap[pieceType] || 'P';
 }
 
 /**
- * Performance comparison between WebAssembly and JavaScript engines
- */
-export async function benchmarkEngines(gameState, difficulty) {
-    // Benchmark WebAssembly engine
-    const wasmStart = performance.now();
-    try {
-        const wasmMove = await getWasmAiMove(gameState, difficulty);
-        const wasmTime = performance.now() - wasmStart;
-        
-        return {
-            wasm: {
-                move: wasmMove,
-                time: wasmTime
-            }
-        };
-    } catch (error) {
-        console.error('WebAssembly benchmark failed:', error);
-        return {
-            wasm: {
-                move: null,
-                time: -1,
-                error: error.message
-            }
-        };
-    }
-}
-
-/**
- * Get engine statistics
- */
-export function getEngineStats() {
-    return {
-        isInitialized,
-        engineType: 'WebAssembly',
-        features: [
-            'Bitboard representation',
-            'Advanced search algorithms',
-            'Position evaluation',
-            'Move generation',
-            'Transposition table',
-            'Killer moves',
-            'History heuristic'
-        ]
-    };
-}
-
-/**
- * Check if WebAssembly engine is available
- */
-export function isWasmEngineAvailable() {
-    return isInitialized;
-}
-
-/**
- * Get engine version and capabilities
- */
-export function getEngineCapabilities() {
-    return {
-        maxSearchDepth: 20,
-        supportsBitboards: true,
-        supportsTranspositionTable: true,
-        supportsKillerMoves: true,
-        supportsHistoryHeuristic: true,
-        supportsQuiescenceSearch: true,
-        supportsNullMovePruning: true,
-        supportsFutilityPruning: true
-    };
-}
-
-/**
- * Reset the engine state
- */
-export function resetEngine() {
-    isInitialized = false;
-    wasmEngine = null;
-}
-
-/**
  * Get detailed performance metrics
  */
-export async function getPerformanceMetrics(gameState, difficulty) {
+export async function getPerformanceMetrics(gameState: GameState, difficulty: number): Promise<any> {
     const startTime = performance.now();
-    const startMemory = performance.memory?.usedJSHeapSize || 0;
+    const startMemory = (performance as any).memory?.usedJSHeapSize || 0;
     
     try {
         const move = await getWasmAiMove(gameState, difficulty);
         const endTime = performance.now();
-        const endMemory = performance.memory?.usedJSHeapSize || 0;
+        const endMemory = (performance as any).memory?.usedJSHeapSize || 0;
         
         return {
             move,
@@ -349,7 +265,7 @@ export async function getPerformanceMetrics(gameState, difficulty) {
             engineType: 'WebAssembly',
             difficulty
         };
-    } catch (error) {
+    } catch (error: any) {
         return {
             move: null,
             error: error.message,
@@ -358,4 +274,18 @@ export async function getPerformanceMetrics(gameState, difficulty) {
             difficulty
         };
     }
+}
+
+/**
+ * Check if WebAssembly engine is available
+ */
+export function isWasmEngineAvailable(): boolean {
+    return isInitialized;
+}
+
+/**
+ * Reset the engine state
+ */
+export function resetEngine(): void {
+    isInitialized = false;
 }

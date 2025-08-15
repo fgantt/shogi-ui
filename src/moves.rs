@@ -17,6 +17,7 @@ impl MoveGenerator {
 
     /// Generate all legal moves for a given position
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        web_sys::console::log_1(&format!("generate_legal_moves: start").into());
         let mut legal_moves = Vec::new();
         
         // Generate moves for pieces on the board
@@ -43,6 +44,7 @@ impl MoveGenerator {
                 let piece_type_enum = PieceType::from_u8(piece_type as u8);
                 let piece = Piece::new(piece_type_enum, player);
                 
+                web_sys::console::log_1(&format!("generate_piece_moves: piece_type={:?}, player={:?}, pos={:?}", piece.piece_type, piece.player, pos).into());
                 // Generate moves for this piece
                 let piece_moves = self.generate_moves_for_piece(board, &piece, pos);
                 moves.extend(piece_moves);
@@ -55,34 +57,43 @@ impl MoveGenerator {
     /// Generate moves for a specific piece
     fn generate_moves_for_piece(&self, board: &BitboardBoard, piece: &Piece, pos: Position) -> Vec<Move> {
         let mut moves = Vec::new();
-        
+        web_sys::console::log_1(&format!("generate_moves_for_piece: piece={:?}, pos={:?}", piece, pos).into());
         match piece.piece_type {
             PieceType::Pawn => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_pawn_moves").into());
                 moves.extend(self.generate_pawn_moves(board, piece, pos));
             }
             PieceType::Lance => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_lance_moves").into());
                 moves.extend(self.generate_lance_moves(board, piece, pos));
             }
             PieceType::Knight => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_knight_moves").into());
                 moves.extend(self.generate_knight_moves(board, piece, pos));
             }
             PieceType::Silver => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_silver_moves").into());
                 moves.extend(self.generate_silver_moves(board, piece, pos));
             }
             PieceType::Gold => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_gold_moves").into());
                 moves.extend(self.generate_gold_moves(board, piece, pos));
             }
             PieceType::Bishop => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_bishop_moves").into());
                 moves.extend(self.generate_bishop_moves(board, piece, pos));
             }
             PieceType::Rook => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_rook_moves").into());
                 moves.extend(self.generate_rook_moves(board, piece, pos));
             }
             PieceType::King => {
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_king_moves").into());
                 moves.extend(self.generate_king_moves(board, piece, pos));
             }
             _ => {
                 // Promoted pieces
+                web_sys::console::log_1(&format!("generate_moves_for_piece: calling generate_promoted_moves").into());
                 moves.extend(self.generate_promoted_moves(board, piece, pos));
             }
         }

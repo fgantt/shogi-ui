@@ -1,7 +1,16 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const GameControls = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking, isGameOver }) => {
+interface GameControlsProps {
+  onNewGame: () => void;
+  onUndoMove: () => void;
+  onOpenSettings: () => void;
+  aiDifficulty: string | null;
+  isThinking: boolean;
+  isGameOver: boolean;
+}
+
+const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking, isGameOver }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">

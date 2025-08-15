@@ -1,39 +1,34 @@
+import type { Piece, Move, GameState, Player, PieceType } from '../types';
+
 export const ROWS = 9;
 export const COLS = 9;
 
 // Piece Types
-export const KING = 'K';
-export const ROOK = 'R';
-export const BISHOP = 'B';
-export const GOLD = 'G';
-export const SILVER = 'S';
-export const KNIGHT = 'N';
-export const LANCE = 'L';
-export const PAWN = 'P';
+export const KING: PieceType = 'K';
+export const ROOK: PieceType = 'R';
+export const BISHOP: PieceType = 'B';
+export const GOLD: PieceType = 'G';
+export const SILVER: PieceType = 'S';
+export const KNIGHT: PieceType = 'N';
+export const LANCE: PieceType = 'L';
+export const PAWN: PieceType = 'P';
 
 // Promoted Piece Types
-export const PROMOTED_ROOK = '+R';
-export const PROMOTED_BISHOP = '+B';
-export const PROMOTED_SILVER = '+S';
-export const PROMOTED_KNIGHT = '+N';
-export const PROMOTED_LANCE = '+L';
-export const PROMOTED_PAWN = '+P';
+export const PROMOTED_ROOK: PieceType = '+R';
+export const PROMOTED_BISHOP: PieceType = '+B';
+export const PROMOTED_SILVER: PieceType = '+S';
+export const PROMOTED_KNIGHT: PieceType = '+N';
+export const PROMOTED_LANCE: PieceType = '+L';
+export const PROMOTED_PAWN: PieceType = '+P';
 
 // Players
-export const PLAYER_1 = 'player1';
-export const PLAYER_2 = 'player2';
+export const PLAYER_1: Player = 'player1';
+export const PLAYER_2: Player = 'player2';
 
-const formatShogiCoords = (r, c) => `[${r + 1}, ${9 - c}]`;
+export function getInitialGameState(): GameState {
+  const board: (Piece | null)[][] = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
 
-/**
- * Creates the initial game state.
- * @returns {object} The initial game state.
- */
-export function getInitialGameState() {
-  const board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
-
-  // Helper to create a piece
-  const piece = (type, player) => ({ type, player });
+  const piece = (type: PieceType, player: Player): Piece => ({ type, player });
 
   // Player 1 (bottom)
   board[8] = [
@@ -57,38 +52,27 @@ export function getInitialGameState() {
     board[2][i] = piece(PAWN, PLAYER_2);
   }
 
-
   return {
     board,
     currentPlayer: PLAYER_1,
     capturedPieces: {
-      [PLAYER_1]: [],
-      [PLAYER_2]: []
+      player1: [],
+      player2: []
     },
     moveHistory: [],
     isCheck: false,
-    pastStates: [], // Add pastStates to store previous game states
+    pastStates: [],
     kingPositions: {
-      [PLAYER_1]: [8, 4],
-      [PLAYER_2]: [0, 4],
+      player1: [8, 4],
+      player2: [0, 4],
     },
     isDraw: false,
     isCheckmate: false,
   };
 }
 
-/**
- * Gets all legal moves for a piece at a given position.
- * @param {object} piece The piece to get moves for.
- * @param {number} row The row of the piece.
- * @param {number} col The column of the piece.
- * @param {Array<Array<object>>} board The current board state.
- * @returns {Array<[number, number]>} An array of [row, col] pairs representing legal moves.
- */
-export function getLegalMoves(piece, row, col, board) {
-  
-  
-  const moves = [];
+export function getLegalMoves(piece: Piece | null, row: number, col: number, board: (Piece | null)[][]): [number, number][] {
+  const moves: [number, number][] = [];
   if (!piece) {
     return moves;
   }
@@ -96,25 +80,24 @@ export function getLegalMoves(piece, row, col, board) {
   const { type, player } = piece;
   const player_mult = player === PLAYER_1 ? -1 : 1;
 
-  const canMove = (r, c) => {
+  const canMove = (r: number, c: number): boolean => {
     if (r < 0 || r >= ROWS || c < 0 || c >= COLS) {
-      return false; // Off-board
+      return false;
     }
     const targetPiece = board[r][c];
     if (targetPiece && targetPiece.player === player) {
-      return false; // Cannot capture own piece
+      return false;
     }
     return true;
   };
 
-  const addMove = (r, c) => {
+  const addMove = (r: number, c: number) => {
     if (canMove(r, c)) {
       moves.push([r, c]);
     }
   };
 
-  // Helper for sliding pieces (Rook, Bishop, Lance)
-  const addSlidingMoves = (directions) => {
+  const addSlidingMoves = (directions: [number, number][]) => {
     for (const [dr, dc] of directions) {
       let r = row + dr;
       let c = col + dc;
@@ -122,11 +105,11 @@ export function getLegalMoves(piece, row, col, board) {
         const targetPiece = board[r][c];
         if (targetPiece) {
           if (targetPiece.player !== player) {
-            moves.push([r, c]); // Can capture
+            moves.push([r, c]);
           }
-          break; // Stop after hitting any piece (friendly or enemy)
+          break;
         }
-        moves.push([r, c]); // Empty square
+        moves.push([r, c]);
         r += dr;
         c += dc;
       }
@@ -134,7 +117,7 @@ export function getLegalMoves(piece, row, col, board) {
   };
 
   const getGoldMoves = () => {
-      const goldMoves = [
+      const goldMoves: [number, number][] = [
         [row + player_mult, col],
         [row - player_mult, col],
         [row, col + 1],
@@ -147,35 +130,28 @@ export function getLegalMoves(piece, row, col, board) {
 
   switch (type) {
     case PAWN:
-      // Move forward
       addMove(row + player_mult, col);
-      // In Shogi, pawns capture by moving one square directly forward onto an opponent's piece.
-      // The `addMove` function already handles this by checking if the target square is occupied by an opponent's piece.
       break;
-
     case LANCE:
       addSlidingMoves([[player_mult, 0]]);
       break;
-
     case KNIGHT:
-      const knightMoves = [
+      const knightMoves: [number, number][] = [
         [row + player_mult * 2, col + 1],
         [row + player_mult * 2, col - 1],
       ];
       knightMoves.forEach(([r, c]) => addMove(r, c));
       break;
-
     case SILVER:
-      const silverMoves = [
-        [row + player_mult, col], // Forward
-        [row + player_mult, col + 1], // Forward-right
-        [row + player_mult, col - 1], // Forward-left
-        [row - player_mult, col + 1], // Backward-right
-        [row - player_mult, col - 1], // Backward-left
+      const silverMoves: [number, number][] = [
+        [row + player_mult, col],
+        [row + player_mult, col + 1],
+        [row + player_mult, col - 1],
+        [row - player_mult, col + 1],
+        [row - player_mult, col - 1],
       ];
       silverMoves.forEach(([r, c]) => addMove(r, c));
       break;
-
     case GOLD:
     case PROMOTED_PAWN:
     case PROMOTED_LANCE:
@@ -183,24 +159,20 @@ export function getLegalMoves(piece, row, col, board) {
     case PROMOTED_SILVER:
         getGoldMoves();
         break;
-
     case BISHOP:
       addSlidingMoves([[-1, -1], [-1, 1], [1, -1], [1, 1]]);
       break;
-
     case ROOK:
       addSlidingMoves([[-1, 0], [1, 0], [0, -1], [0, 1]]);
       break;
-
     case KING:
-      const kingMoves = [
+      const kingMoves: [number, number][] = [
         [row - 1, col - 1], [row - 1, col], [row - 1, col + 1],
         [row,     col - 1],                 [row,     col + 1],
         [row + 1, col - 1], [row + 1, col], [row + 1, col + 1],
       ];
       kingMoves.forEach(([r, c]) => addMove(r, c));
       break;
-
     case PROMOTED_BISHOP:
         addSlidingMoves([[-1, -1], [-1, 1], [1, -1], [1, 1]]);
         addMove(row - 1, col);
@@ -208,7 +180,6 @@ export function getLegalMoves(piece, row, col, board) {
         addMove(row, col - 1);
         addMove(row, col + 1);
         break;
-
     case PROMOTED_ROOK:
         addSlidingMoves([[-1, 0], [1, 0], [0, -1], [0, 1]]);
         addMove(row - 1, col - 1);
@@ -221,24 +192,12 @@ export function getLegalMoves(piece, row, col, board) {
   return moves;
 }
 
-/**
- * Moves a piece and updates the game state.
- * This function now handles promotion logic.
- * @param {object} gameState The current game state.
- * @param {[number, number]} from The starting [row, col] of the piece.
- * @param {[number, number]} to The destination [row, col] of the piece.
- * @param {boolean} promoteOverride Whether to promote the piece (for AI).
- * @returns {object} The new game state, possibly with a `promotionPending` flag.
- */
-export function movePiece(gameState, from, to, promoteOverride = null) {
+export function movePiece(gameState: GameState, from: [number, number], to: [number, number], promoteOverride: boolean | null = null): GameState {
   const { board, currentPlayer } = gameState;
   const [fromRow, fromCol] = from;
-  const [toRow, toCol] = to;
+  const [toRow] = to;
 
   const piece = board[fromRow][fromCol];
-  console.log(`movePiece: Attempting to move from [${fromRow}, ${fromCol}] to [${toRow}, ${toCol}]`);
-  console.log("movePiece: Piece at 'from' position:", piece);
-  console.log("movePiece: Current player:", currentPlayer);
 
   if (!piece) {
     console.warn("movePiece: No piece found at 'from' coordinates. Returning original gameState.");
@@ -246,14 +205,11 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
   }
 
   if (promoteOverride !== null) {
-    // AI is making the decision, directly complete the move with the AI's promotion choice
-    let pieceToMove = { ...piece };
+    let pieceToMove: Piece = { ...piece };
     if (promoteOverride && !pieceToMove.type.startsWith('+')) {
-      pieceToMove.type = `+${pieceToMove.type}`;
+      pieceToMove.type = `+${pieceToMove.type}` as PieceType;
     }
-    const simulatedGameState = completeMove(gameState, from, to, promoteOverride, pieceToMove);
-    // After simulating the move, check if the current player's king is in check
-    // If it is, the move is illegal, so return the original game state
+    const simulatedGameState = completeMove(gameState, from, to, promoteOverride);
     if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
       console.warn("movePiece: AI move results in self-check. Returning original gameState.");
       return gameState;
@@ -261,15 +217,13 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
     return simulatedGameState;
   }
 
-  // --- Promotion Logic (for human player) ---
   const promotionZoneStart = currentPlayer === PLAYER_1 ? 2 : 6;
   const inPromotionZone = (currentPlayer === PLAYER_1 && toRow <= promotionZoneStart) || (currentPlayer === PLAYER_2 && toRow >= promotionZoneStart);
   const wasInPromotionZone = (currentPlayer === PLAYER_1 && fromRow <= promotionZoneStart) || (currentPlayer === PLAYER_2 && fromRow >= promotionZoneStart);
 
-  const promotablePieces = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
+  const promotablePieces: PieceType[] = [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK];
   const canPromote = promotablePieces.includes(piece.type) && (inPromotionZone || wasInPromotionZone);
 
-  // Mandatory promotion check
   const lastRank = currentPlayer === PLAYER_1 ? 0 : 8;
   const secondLastRank = currentPlayer === PLAYER_1 ? 1 : 7;
   let isPromotionMandatory = false;
@@ -280,24 +234,19 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
       isPromotionMandatory = true;
   }
 
-  let pieceToMove = { ...piece };
+  let pieceToMove: Piece = { ...piece };
 
   if (canPromote && !isPromotionMandatory) {
-    // If promotion is optional, return a state that asks the UI for a choice.
     return {
       ...gameState,
       promotionPending: { from, to, piece },
     };
   } else if (isPromotionMandatory && !pieceToMove.type.startsWith('+')) {
-    // If promotion is mandatory, promote the piece
-    pieceToMove.type = `+${pieceToMove.type}`;
+    pieceToMove.type = `+${pieceToMove.type}` as PieceType;
   }
 
-  // Proceed with the move (either promoted or not, depending on the above logic)
-  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory, pieceToMove);
+  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory);
 
-  // After simulating the move, check if the current player's king is in check
-  // If it is, the move is illegal, so return the original game state
   if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
     console.warn("movePiece: Human move results in self-check. Returning original gameState.");
     return gameState;
@@ -306,30 +255,20 @@ export function movePiece(gameState, from, to, promoteOverride = null) {
   return simulatedGameState;
 }
 
-/**
- * Completes a move, including capture and promotion.
- * @param {object} gameState The current game state.
- * @param {[number, number]} from The starting [row, col].
- * @param {[number, number]} to The destination [row, col].
- * @param {boolean} promote Whether to promote the piece.
- * @returns {object} The final new game state.
- */
-export function completeMove(gameState, from, to, promote, movedPiece = null) {
+export function completeMove(gameState: GameState, from: [number, number], to: [number, number], promote: boolean): GameState {
     const { board, currentPlayer, capturedPieces, moveHistory, pastStates } = gameState;
-    const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-    // Deep copy the board
-    const newBoard = board.map(row => row.map(cell => cell ? { ...cell } : null));
+    const nextPlayer: Player = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+    const newBoard: (Piece | null)[][] = board.map(row => row.map(cell => cell ? { ...cell } : null));
 
     const [fromRow, fromCol] = from;
     const [toRow, toCol] = to;
 
-    // Get the piece that is actually moving from the original board
     const pieceToMove = board[fromRow][fromCol];
-    if (!pieceToMove) return gameState; // Should not happen if movePiece is called correctly
+    if (!pieceToMove) return gameState;
 
-    let piece = { ...pieceToMove }; // Create a new object for the piece that will be on the board
+    let piece: Piece = { ...pieceToMove };
     if (promote && !piece.type.startsWith('+')) {
-        piece.type = `+${piece.type}`;
+        piece.type = `+${piece.type}` as PieceType;
     }
 
     const capturedPiece = newBoard[toRow][toCol];
@@ -339,22 +278,18 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
     };
 
     if (capturedPiece) {
-        let originalType = capturedPiece.type;
+        let originalType: PieceType = capturedPiece.type;
         if (originalType.startsWith('+')) {
-            originalType = originalType.substring(1);
+            originalType = originalType.substring(1) as PieceType;
         }
         newCapturedPieces[gameState.currentPlayer].push({ type: originalType, player: capturedPiece.player });
-    }
-    let isKingCaptured = false;
-    if (capturedPiece && capturedPiece.type === KING) {
-        isKingCaptured = true;
     }
 
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
 
     const isCheckAfterMove = isKingInCheck(newBoard, nextPlayer);
-    let capturedValue = null;
+    let capturedValue: string | null = null;
     if (capturedPiece) {
         capturedValue = capturedPiece.type;
         if (isCheckAfterMove) {
@@ -364,48 +299,39 @@ export function completeMove(gameState, from, to, promote, movedPiece = null) {
         capturedValue = 'check';
     }
 
-    const newMoveHistory = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+    const newMoveHistory: Move[] = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
-    const updatedGameState = {
+    const updatedGameState: GameState = {
         ...gameState,
         board: newBoard,
         capturedPieces: newCapturedPieces,
         currentPlayer: nextPlayer,
         moveHistory: newMoveHistory,
         promotionPending: null,
-        pastStates: [...pastStates, gameState], // Save current state before move
+        pastStates: [...pastStates, gameState],
         isCheck: isKingInCheck(newBoard, nextPlayer),
         kingPositions: {
           ...gameState.kingPositions,
           [currentPlayer]: (piece.type === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
         },
-        isCheckmate: false, // Initialize to false, will be updated below
+        isCheckmate: false,
+        isDraw: false,
     };
 
-    // Now that updatedGameState is defined, check for checkmate
-    // If the captured piece is a King, it's checkmate
     if (capturedPiece && capturedPiece.type === KING) {
         updatedGameState.isCheckmate = true;
     } else {
         updatedGameState.isCheckmate = isCheckmate(updatedGameState);
     }
 
-    // Check for Sennichite (repetition) after the move
     if (checkSennichite(updatedGameState)) {
       updatedGameState.isDraw = true;
     }
 
-
-  
     return updatedGameState;
 }
 
-/**
- * Checks for Sennichite (repetition) draw.
- * @param {object} gameState The current game state.
- * @returns {boolean} True if Sennichite is detected, false otherwise.
- */
-export function checkSennichite(gameState) {
+export function checkSennichite(gameState: GameState): boolean {
   const { pastStates } = gameState;
   const currentHash = generateSennichiteHash(gameState);
 
@@ -415,49 +341,33 @@ export function checkSennichite(gameState) {
       count++;
     }
   }
-  // Add 1 for the current state itself
-  if (count + 1 >= 4) {
-    return true;
-  }
-  return false;
+  return count + 1 >= 4;
 }
 
-/**
- * Drops a captured piece onto the board.
- * @param {object} gameState The current game state.
- * @param {string} pieceType The type of piece to drop.
- * @param {[number, number]} to The destination [row, col] of the drop.
- * @returns {object} The new game state.
- */
-export function dropPiece(gameState, pieceType, to) {
+export function dropPiece(gameState: GameState, pieceType: PieceType, to: [number, number]): GameState {
   const { board, currentPlayer, capturedPieces, pastStates } = gameState;
   const [toRow, toCol] = to;
 
-  // 1. Check if the destination square is empty
   if (board[toRow][toCol]) {
     console.warn("dropPiece: Cannot drop on occupied square. Returning original gameState.");
-    return gameState; // Can only drop on empty squares
+    return gameState;
   }
 
-  // 2. Check if the player has the piece to drop
   const capturedPieceIndex = capturedPieces[currentPlayer].findIndex(p => p.type === pieceType);
   if (capturedPieceIndex === -1) {
     console.warn(`dropPiece: Player ${currentPlayer} does not have piece type ${pieceType} to drop. Returning original gameState.`);
-    return gameState; // Piece not available to drop
+    return gameState;
   }
 
-  // 3. Check for illegal drop rules
-  // Nifu check (two unpromoted pawns in the same file)
   if (pieceType === PAWN) {
     for (let r = 0; r < ROWS; r++) {
       const piece = board[r][toCol];
       if (piece && piece.type === PAWN && piece.player === currentPlayer) {
-        return gameState; // Nifu rule violation
+        return gameState;
       }
     }
   }
 
-  // Cannot drop a piece where it has no legal moves
   const player_mult = currentPlayer === PLAYER_1 ? -1 : 1;
   if ((pieceType === PAWN || pieceType === LANCE) && (toRow + player_mult < 0 || toRow + player_mult >= ROWS)) {
       return gameState;
@@ -466,52 +376,43 @@ export function dropPiece(gameState, pieceType, to) {
       return gameState;
   }
 
-
-  // 4. Update the board and captured pieces
-  
-
-  // Simulate the drop on a temporary board to check for self-check
   const tempBoard = board.map(row => [...row]);
   tempBoard[toRow][toCol] = { type: pieceType, player: currentPlayer };
 
-  // Check if this simulated drop puts the *current player's* king in check
   if (isKingInCheck(tempBoard, currentPlayer)) {
     console.warn("dropPiece: Drop results in self-check. Returning original gameState.");
-    return gameState; // Illegal drop: current player dropped into check, return original state
+    return gameState;
   }
 
-  // If the drop is legal, proceed with updating the actual game state
-  const newBoard = tempBoard; // Use the board with the piece dropped
+  const newBoard = tempBoard;
 
   const newCapturedPieces = { ...capturedPieces };
   newCapturedPieces[currentPlayer] = [...capturedPieces[currentPlayer]];
   newCapturedPieces[currentPlayer].splice(capturedPieceIndex, 1);
 
-  const nextPlayer = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-  const isCheckAfterDrop = isKingInCheck(newBoard, nextPlayer); // Check if opponent is in check
+  const nextPlayer: Player = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  const isCheckAfterDrop = isKingInCheck(newBoard, nextPlayer);
 
-  const newMoveHistory = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: isCheckAfterDrop ? 'check' : null, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
+  const newMoveHistory: any[] = [...gameState.moveHistory, { from: 'drop', to, piece: pieceType, player: currentPlayer, captured: isCheckAfterDrop ? 'check' : null, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
-  const finalGameState = {
+  const finalGameState: GameState = {
     ...gameState,
     board: newBoard,
     capturedPieces: newCapturedPieces,
-    currentPlayer: nextPlayer, // Switch player here
+    currentPlayer: nextPlayer,
     moveHistory: newMoveHistory,
-    pastStates: [...pastStates, gameState], // Save current state before drop
-    isCheck: isCheckAfterDrop, // Set isCheck for the next player
+    pastStates: [...pastStates, gameState],
+    isCheck: isCheckAfterDrop,
     kingPositions: {
       ...gameState.kingPositions,
       [currentPlayer]: (pieceType === KING) ? [toRow, toCol] : gameState.kingPositions[currentPlayer]
     },
-    isCheckmate: false, // Initialize to false, will be updated below
-    isDraw: false, // Initialize to false, will be updated below
+    isCheckmate: false,
+    isDraw: false,
   };
 
-  // Now that finalGameState is defined, check for checkmate
   finalGameState.isCheckmate = isCheckmate(finalGameState);
 
-  // Check for Sennichite (repetition) after the drop
   if (checkSennichite(finalGameState)) {
     finalGameState.isDraw = true;
   }
@@ -519,17 +420,10 @@ export function dropPiece(gameState, pieceType, to) {
   return finalGameState;
 }
 
-/**
- * Gets the position of the piece checking the king.
- * @param {Array<Array<object>>} board The board state.
- * @param {string} player The player to check.
- * @returns {[number, number] | null} The [row, col] of the checking piece, or null if not in check.
- */
-export function getCheckingPiece(board, player) {
-  const opponent = player === PLAYER_1 ? PLAYER_2 : PLAYER_1;
-  let kingPosition = null;
+export function getCheckingPiece(board: (Piece | null)[][], player: Player): [number, number] | null {
+  const opponent: Player = player === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+  let kingPosition: [number, number] | null = null;
 
-  // Find the king's position directly from the board
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const piece = board[r][c];
@@ -542,10 +436,9 @@ export function getCheckingPiece(board, player) {
   }
 
   if (!kingPosition) {
-    return null; // Should not happen in a real game
+    return null;
   }
 
-  // Check if any opponent piece can attack the king
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const piece = board[r][c];
@@ -553,38 +446,24 @@ export function getCheckingPiece(board, player) {
         const moves = getLegalMoves(piece, r, c, board);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            return [r, c]; // Return the position of the checking piece
+            return [r, c];
           }
         }
       }
     }
   }
 
-  return null; // King is not in check
+  return null;
 }
 
-
-/**
- * Checks if a player's king is in check.
- * @param {Array<Array<object>>} board The board state.
- * @param {string} player The player to check.
- * @returns {boolean} True if the king is in check, false otherwise.
- */
-export function isKingInCheck(board, player) {
+export function isKingInCheck(board: (Piece | null)[][], player: Player): boolean {
   return getCheckingPiece(board, player) !== null;
 }
 
-/**
- * Gets all legal drop squares for a captured piece.
- * @param {object} gameState The current game state.
- * @param {string} pieceType The type of piece to drop.
- * @returns {Array<[number, number]>} An array of [row, col] pairs representing legal drop squares.
- */
-export function getLegalDrops(gameState, pieceType) {
+export function getLegalDrops(gameState: GameState, pieceType: PieceType): [number, number][] {
   const { board, currentPlayer } = gameState;
-  const legalDrops = [];
+  const legalDrops: [number, number][] = [];
 
-  // Check if the player actually has the piece to drop
   const hasPieceToDrop = gameState.capturedPieces[currentPlayer].some(p => p.type === pieceType);
   if (!hasPieceToDrop) {
     return legalDrops;
@@ -592,12 +471,10 @@ export function getLegalDrops(gameState, pieceType) {
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      // 1. Must be an empty square
       if (board[r][c] !== null) {
         continue;
       }
 
-      // 2. Nifu check (two unpromoted pawns in the same file)
       if (pieceType === PAWN) {
         let nifu = false;
         for (let row = 0; row < ROWS; row++) {
@@ -612,7 +489,6 @@ export function getLegalDrops(gameState, pieceType) {
         }
       }
 
-      // 3. Cannot drop a piece where it has no legal moves (e.g., Pawn on last rank, Knight on last two ranks, Lance on last rank)
       const player_mult = currentPlayer === PLAYER_1 ? -1 : 1;
       if ((pieceType === PAWN || pieceType === LANCE) && (r + player_mult < 0 || r + player_mult >= ROWS)) {
         continue;
@@ -621,20 +497,18 @@ export function getLegalDrops(gameState, pieceType) {
         continue;
       }
 
-      // 4. Cannot drop a pawn to give an immediate checkmate (Uchifu-zume)
       if (pieceType === PAWN) {
         const simulatedBoard = board.map(row => [...row]);
         simulatedBoard[r][c] = { type: pieceType, player: currentPlayer };
-        const opponent = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
+        const opponent: Player = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
 
-        // Temporarily remove the pawn to check if the king is still in check without it
         const originalPieceAtDrop = simulatedBoard[r][c];
-        simulatedBoard[r][c] = null; // Remove the dropped pawn temporarily
+        simulatedBoard[r][c] = null;
         const kingStillInCheckWithoutPawn = isKingInCheck(simulatedBoard, opponent);
-        simulatedBoard[r][c] = originalPieceAtDrop; // Restore the dropped pawn
+        simulatedBoard[r][c] = originalPieceAtDrop;
 
         if (isKingInCheck(simulatedBoard, opponent) && isCheckmate({ ...gameState, board: simulatedBoard, currentPlayer: opponent }) && !kingStillInCheckWithoutPawn) {
-          continue; // Uchifu-zume rule violation
+          continue;
         }
       }
 
@@ -644,55 +518,46 @@ export function getLegalDrops(gameState, pieceType) {
   return legalDrops;
 }
 
-/**
- * Checks if a player is in checkmate.
- * @param {object} gameState The current game state.
- * @returns {boolean} True if the current player is in checkmate.
- */
-export function isCheckmate(gameState) {
+export function isCheckmate(gameState: GameState): boolean {
     const { board, currentPlayer, capturedPieces } = gameState;
 
     if (!isKingInCheck(board, currentPlayer)) {
         return false;
     }
 
-    // Check if any move can get the king out of check
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const piece = board[r][c];
             if (piece && piece.player === currentPlayer) {
                 const moves = getLegalMoves(piece, r, c, board);
                 for (const move of moves) {
-                    // Simulate the move on a temporary board
                     const tempBoard = board.map(row => row.map(cell => cell ? { ...cell } : null));
                     const pieceToMove = tempBoard[r][c];
+                    if (!pieceToMove) continue;
                     tempBoard[move[0]][move[1]] = pieceToMove;
                     tempBoard[r][c] = null;
 
-                    // If the piece is a King, update its position for the check check
                     let tempKingPositions = { ...gameState.kingPositions };
                     if (pieceToMove.type === KING) {
                         tempKingPositions[currentPlayer] = [move[0], move[1]];
                     }
                     
-                    if (!isKingInCheck(tempBoard, currentPlayer, tempKingPositions)) {
-                        return false; // Found a move to escape check
+                    if (!isKingInCheck(tempBoard, currentPlayer)) {
+                        return false;
                     }
                 }
             }
         }
     }
 
-    // Check if dropping any piece can get the king out of check
     for (const captured of capturedPieces[currentPlayer]) {
-        // Use getLegalDrops to find valid drop squares
         const possibleDropSquares = getLegalDrops(gameState, captured.type);
         for (const dropSquare of possibleDropSquares) {
             const tempBoard = board.map(row => [...row]);
             tempBoard[dropSquare[0]][dropSquare[1]] = { type: captured.type, player: currentPlayer };
             
             if (!isKingInCheck(tempBoard, currentPlayer)) {
-                return false; // Found a drop to escape check
+                return false;
             }
         }
     }
@@ -700,14 +565,8 @@ export function isCheckmate(gameState) {
     return true;
 }
 
-/**
- * Gets all squares attacked by a player.
- * @param {Array<Array<object>>} board The board state.
- * @param {string} player The player who is attacking.
- * @returns {Set<string>} A set of attacked squares in "row,col" format.
- */
-export function getAttackedSquares(board, player) {
-  const attackedSquares = new Set();
+export function getAttackedSquares(board: (Piece | null)[][], player: Player): Set<string> {
+  const attackedSquares = new Set<string>();
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -724,17 +583,11 @@ export function getAttackedSquares(board, player) {
   return attackedSquares;
 }
 
-/**
- * Generates a unique hash for the current game state.
- * @param {object} gameState The current game state.
- * @returns {string} A unique string representing the game state.
- */
-export function generateStateHash(gameState) {
+export function generateStateHash(gameState: GameState): string {
   const { board, currentPlayer, capturedPieces, moveHistory } = gameState;
 
   let fen = '';
 
-  // Board state
   for (let i = 0; i < 9; i++) {
     let empty = 0;
     for (let j = 0; j < 9; j++) {
@@ -764,12 +617,10 @@ export function generateStateHash(gameState) {
     }
   }
 
-  // Active player
-  fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
-  // Captured pieces
+  fen += currentPlayer === PLAYER_1 ? ' b ' : ' w ';
   let capturedString = '-';
-  const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
-  const p2Captured = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+  const p1Captured = capturedPieces.player1.map(p => p.type).sort().join('');
+  const p2Captured = capturedPieces.player2.map(p => p.type).sort().join('');
   if (p1Captured.length > 0) {
       capturedString = p1Captured.toUpperCase();
   }
@@ -778,24 +629,16 @@ export function generateStateHash(gameState) {
   }
   fen += capturedString + ' ';
 
-  // Move number
   fen += (moveHistory.length + 1);
 
   return fen;
 }
 
-/**
- * Generates a unique hash for the current game state, excluding the move number.
- * Used specifically for Sennichite (repetition) detection.
- * @param {object} gameState The current game state.
- * @returns {string} A unique string representing the game state without move number.
- */
-export function generateSennichiteHash(gameState) {
+export function generateSennichiteHash(gameState: GameState): string {
   const { board, currentPlayer, capturedPieces } = gameState;
 
   let fen = '';
 
-  // Board state
   for (let i = 0; i < 9; i++) {
     let empty = 0;
     for (let j = 0; j < 9; j++) {
@@ -825,12 +668,10 @@ export function generateSennichiteHash(gameState) {
     }
   }
 
-  // Active player
-  fen += currentPlayer === PLAYER_1 ? ' w ' : ' b ';
-  // Captured pieces
+  fen += currentPlayer === PLAYER_1 ? ' b ' : ' w ';
   let capturedString = '-';
-  const p1Captured = capturedPieces[PLAYER_1].map(p => p.type).sort().join('');
-  const p2Captured = capturedPieces[PLAYER_2].map(p => p.type).sort().join('');
+  const p1Captured = capturedPieces.player1.map(p => p.type).sort().join('');
+  const p2Captured = capturedPieces.player2.map(p => p.type).sort().join('');
   if (p1Captured.length > 0) {
       capturedString = p1Captured.toUpperCase();
   }

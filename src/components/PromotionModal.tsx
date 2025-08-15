@@ -1,7 +1,11 @@
 import React from 'react';
 import '../styles/shogi.css';
 
-const PromotionModal = ({ onPromote }) => {
+interface PromotionModalProps {
+  onPromote: (promote: boolean) => void;
+}
+
+const PromotionModal: React.FC<PromotionModalProps> = ({ onPromote }) => {
   return (
     <div className="settings-overlay">
       <div className="settings-panel">
