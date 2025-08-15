@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import SettingsPanel from './SettingsPanel';
 import './HomePage.css';
 
-const HomePage = () => {
+const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [aiDifficulty, setAiDifficulty] = useState('medium');
-  const [pieceLabelType, setPieceLabelType] = useState('kanji');
-  const [wallpaperList, setWallpaperList] = useState([]);
-  const [boardBackgroundList, setBoardBackgroundList] = useState([]);
-  const [currentWallpaper, setCurrentWallpaper] = useState('');
-  const [currentBoardBackground, setCurrentBoardBackground] = useState('');
-  const [showAttackedPieces, setShowAttackedPieces] = useState(true);
-  const [showPieceTooltips, setShowPieceTooltips] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [pieceLabelType, setPieceLabelType] = useState<'kanji' | 'english'>('kanji');
+  const [wallpaperList, setWallpaperList] = useState<string[]>([]);
+  const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
+  const [currentWallpaper, setCurrentWallpaper] = useState<string>('');
+  const [currentBoardBackground, setCurrentBoardBackground] = useState<string>('');
+  const [showAttackedPieces, setShowAttackedPieces] = useState<boolean>(true);
+  const [showPieceTooltips, setShowPieceTooltips] = useState<boolean>(false);
 
   useEffect(() => {
     const importWallpapers = async () => {

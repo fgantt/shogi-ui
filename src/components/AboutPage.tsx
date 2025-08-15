@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AboutPage.css';
 
-const AboutPage = () => {
+const AboutPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (

@@ -1,6 +1,12 @@
 import React from 'react';
 
-const CheckmateModal = ({ winner, onDismiss, onNewGame }) => {
+interface CheckmateModalProps {
+  winner: 'player1' | 'player2' | 'draw' | null;
+  onDismiss: () => void;
+  onNewGame: () => void;
+}
+
+const CheckmateModal: React.FC<CheckmateModalProps> = ({ winner, onDismiss, onNewGame }) => {
   let title, message;
 
   if (winner === 'draw') {

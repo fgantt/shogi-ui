@@ -7,15 +7,15 @@ import {
 } from '../game/engine';
 import './PracticeExerciseDetail.css';
 
-const PracticeExerciseDetail = () => {
+const PracticeExerciseDetail: React.FC = () => {
   const navigate = useNavigate();
-  const { exerciseId } = useParams();
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [score, setScore] = useState(0);
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [isCorrect, setIsCorrect] = useState(null);
-  const [questions, setQuestions] = useState([]);
+  const { exerciseId } = useParams<{ exerciseId: string }>();
+  const [currentQuestion, setCurrentQuestion] = useState<number>(0);
+  const [score, setScore] = useState<number>(0);
+  const [showFeedback, setShowFeedback] = useState<boolean>(false);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [questions, setQuestions] = useState<any[]>([]); // TODO: Define a proper interface for questions
 
   // All possible pieces for name identification (including promoted pieces)
   const allPieces = [

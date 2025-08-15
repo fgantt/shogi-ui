@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PracticePage.css';
 
-const PracticePage = () => {
+const PracticePage: React.FC = () => {
   const navigate = useNavigate();
 
   const practiceExercises = [

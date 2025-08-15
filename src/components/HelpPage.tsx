@@ -4,7 +4,7 @@ import SvgPiece from './SvgPiece';
 import { KING, GOLD, SILVER, KNIGHT, LANCE, ROOK, BISHOP, PAWN } from '../game/engine';
 import './HelpPage.css';
 
-const HelpPage = () => {
+const HelpPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('about');
 
