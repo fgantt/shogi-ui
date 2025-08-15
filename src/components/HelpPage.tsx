@@ -169,13 +169,13 @@ const HelpPage: React.FC = () => {
     }
   ];
 
-  const renderMovementDiagram = (piece) => {
+  const renderMovementDiagram = (piece: any) => {
     const gridSize = 5;
     const center = Math.floor(gridSize / 2);
     
     return (
-      <div className="movement-diagram">
-        <div className="diagram-grid" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
+      <div className="movement-diagram" style={{ width: 'auto', height: 'auto' }}>
+        <div className="diagram-grid" style={{ position: 'static', width: 'auto', height: 'auto', gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
           {Array.from({ length: gridSize * gridSize }, (_, index) => {
             const row = Math.floor(index / gridSize);
             const col = index % gridSize;
@@ -183,7 +183,7 @@ const HelpPage: React.FC = () => {
             const relativeCol = col - center;
             
             const isPiece = row === center && col === center;
-            const isLegalMove = piece.movement.some(([dr, dc]) => 
+            const isLegalMove = piece.movement.some(([dr, dc]: [number, number]) => 
               dr === relativeRow && dc === relativeCol
             );
             
@@ -197,6 +197,7 @@ const HelpPage: React.FC = () => {
                   <SvgPiece 
                     piece={{ type: piece.type, player: 1, promoted: piece.promoted }}
                     size={30}
+                    hideText={true}
                   />
                 )}
               </div>
