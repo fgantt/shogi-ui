@@ -16,8 +16,8 @@ const GamePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [gameState, setGameState] = useState(getInitialGameState());
-  const [player1Type, setPlayer1Type] = useState('human'); // 'human' or 'ai'
-  const [player2Type, setPlayer2Type] = useState('ai'); // 'human' or 'ai'
+  const [player1Type, setPlayer1Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('human');
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('ai-js'); // Default to Jax-Bot for Player 2
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
@@ -136,9 +136,9 @@ const GamePage = () => {
 
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
 
-    if (currentPlayerType === 'ai' && !checkmateWinner && !isGameOver) {
+    if (currentPlayerType.startsWith('ai-') && !checkmateWinner && !isGameOver) { // Check if it's any AI type
       setIsThinking(true);
-      getAiMove(gameState, aiDifficulty)
+      getAiMove(gameState, aiDifficulty, currentPlayerType) // Pass currentPlayerType to getAiMove
         .then(aiMove => {
           setGameState(currentGameState => {
             let nextState;
@@ -372,9 +372,9 @@ const GamePage = () => {
     setIsStartModalOpen(false);
 
     // If Player 1 is AI, trigger their first move
-    if (settings.player1Type === 'ai') {
+    if (settings.player1Type.startsWith('ai-')) { // Check if it's any AI type
       setIsThinking(true);
-      getAiMove(getInitialGameState(), settings.difficulty) // Pass initial state for AI's first move
+      getAiMove(getInitialGameState(), settings.difficulty, settings.player1Type) // Pass player1Type to getAiMove
         .then(aiMove => {
           setGameState(currentGameState => {
             let nextState;

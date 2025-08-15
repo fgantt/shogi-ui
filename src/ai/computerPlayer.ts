@@ -8,15 +8,14 @@ interface AiWorker extends Worker {
 }
 
 let aiWorker: AiWorker;
-let useWasmEngine = true;
+
 
 export async function initializeWasm(): Promise<void> {
-  if (useWasmEngine && !isWasmEngineAvailable()) {
+  if (!isWasmEngineAvailable()) {
     try {
       await initializeWasmEngine();
     } catch (error) {
       console.error("Failed to initialize wasm engine on startup", error);
-      useWasmEngine = false;
     }
   }
 }
@@ -42,28 +41,36 @@ function initializeWorker(): void {
 /**
  * Get AI move with WebAssembly engine fallback to JavaScript
  */
-export async function getAiMove(gameState: GameState, difficulty: number): Promise<any> {
-  // Try WebAssembly engine first
-  if (useWasmEngine && isWasmEngineAvailable()) {
-    try {
-      console.log('Using WebAssembly engine...');
-      const startTime = performance.now();
-      
-      const move = await getWasmAiMove(gameState, difficulty);
-      
-      const executionTime = performance.now() - startTime;
-      console.log(`WebAssembly engine completed in ${executionTime.toFixed(2)}ms`);
-      
-      return move;
-    } catch (error: any) {
-      console.warn('WebAssembly engine failed, falling back to JavaScript:', error.message);
-      useWasmEngine = false; // Disable WebAssembly for this session
+export async function getAiMove(gameState: GameState, difficulty: number, engineType: 'ai-js' | 'ai-wasm'): Promise<any> {
+  if (engineType === 'ai-wasm') {
+    // Try WebAssembly engine
+    if (isWasmEngineAvailable()) {
+      try {
+        console.log('Using WebAssembly engine...');
+        const startTime = performance.now();
+        
+        const move = await getWasmAiMove(gameState, difficulty);
+        
+        const executionTime = performance.now() - startTime;
+        console.log(`WebAssembly engine completed in ${executionTime.toFixed(2)}ms`);
+        
+        return move;
+      } catch (error: any) {
+        console.error('WebAssembly engine failed:', error.message);
+        throw new Error('WASM engine failed'); // Re-throw to be caught by caller
+      }
+    } else {
+      console.warn('WebAssembly engine not available, falling back to JavaScript.');
+      return getJavaScriptAiMove(gameState, difficulty);
     }
+  } else if (engineType === 'ai-js') {
+    console.log('Using JavaScript engine...');
+    return getJavaScriptAiMove(gameState, difficulty);
+  } else {
+    // Default to JavaScript if an unknown engineType is passed
+    console.warn(`Unknown engine type: ${engineType}. Defaulting to JavaScript engine.`);
+    return getJavaScriptAiMove(gameState, difficulty);
   }
-
-  // Fallback to JavaScript engine
-  console.log('Using JavaScript engine...');
-  return getJavaScriptAiMove(gameState, difficulty);
 }
 
 /**
@@ -82,89 +89,12 @@ function getJavaScriptAiMove(gameState: GameState, difficulty: number): Promise<
   });
 }
 
-/**
- * Force use of JavaScript engine (for testing/fallback)
- */
-export function forceJavaScriptEngine(): void {
-  useWasmEngine = false;
-  console.log('Forced JavaScript engine mode');
-}
 
-/**
- * Re-enable WebAssembly engine
- */
-export function enableWasmEngine(): void {
-  useWasmEngine = true;
-  console.log('WebAssembly engine re-enabled');
-}
 
-/**
- * Get current engine status
- */
-export function getEngineStatus(): { wasmAvailable: boolean; wasmEnabled: boolean; currentEngine: string } {
-  return {
-    wasmAvailable: isWasmEngineAvailable(),
-    wasmEnabled: useWasmEngine,
-    currentEngine: useWasmEngine && isWasmEngineAvailable() ? 'WebAssembly' : 'JavaScript'
-  };
-}
 
-/**
- * Get performance comparison between engines
- */
-export async function compareEnginePerformance(gameState: GameState, difficulty: number): Promise<any> {
-  const results: any = {};
-  
-  // Test WebAssembly engine if available
-  if (isWasmEngineAvailable()) {
-    try {
-      const wasmMetrics = await getPerformanceMetrics(gameState, difficulty);
-      results.wasm = wasmMetrics;
-    } catch (error: any) {
-      results.wasm = { error: error.message };
-    }
-  }
-  
-  // Test JavaScript engine
-  try {
-    const jsStart = performance.now();
-    const jsStartMemory = (performance as any).memory?.usedJSHeapSize || 0;
-    
-    const jsMove = await getJavaScriptAiMove(gameState, difficulty);
-    
-    const jsTime = performance.now() - jsStart;
-    const jsMemory = (performance as any).memory?.usedJSHeapSize || 0;
-    
-    results.javascript = {
-      move: jsMove,
-      executionTime: jsTime,
-      memoryUsed: jsMemory - jsStartMemory,
-      engineType: 'JavaScript',
-      difficulty
-    };
-  } catch (error: any) {
-    results.javascript = { error: error.message };
-  }
-  
-  return results;
-}
 
-/**
- * Get engine recommendations for different difficulties
- */
-export function getEngineRecommendations(): any {
-  return {
-    easy: {
-      recommended: 'WebAssembly',
-      reason: 'Fast move generation and evaluation'
-    },
-    medium: {
-      recommended: 'WebAssembly', 
-      reason: 'Better search depth in same time'
-    },
-    hard: {
-      recommended: 'WebAssembly',
-      reason: 'Significant performance improvement for deep search'
-    }
-  };
-}
+
+
+
+
+

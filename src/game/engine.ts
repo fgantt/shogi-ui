@@ -106,10 +106,12 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
         if (targetPiece) {
           if (targetPiece.player !== player) {
             moves.push([r, c]);
+            console.log(`Sliding move: ${piece.type} at [${row},${col}] can capture ${targetPiece.type} at [${r},${c}]`);
           }
           break;
         }
         moves.push([r, c]);
+        console.log(`Sliding move: ${piece.type} at [${row},${col}] can move to [${r},${c}]`);
         r += dr;
         c += dc;
       }
@@ -444,9 +446,11 @@ export function getCheckingPiece(board: (Piece | null)[][], player: Player): [nu
       const piece = board[r][c];
       if (piece && piece.player === opponent) {
         const moves = getLegalMoves(piece, r, c, board);
+        console.log(`Piece at [${r},${c}] (${piece.type}, ${piece.player}) has legal moves:`, moves);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            return [r, c];
+            console.log(`Piece at [${r},${c}] (${piece.type}, ${piece.player}) is checking king at [${kingPosition[0]},${kingPosition[1]}]`);
+            return [r, c]; // This opponent's piece is checking the king
           }
         }
       }

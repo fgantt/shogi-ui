@@ -2,8 +2,8 @@ import React from 'react';
 
 interface GameSettings {
   difficulty: 'easy' | 'medium' | 'hard';
-  player1Type: 'human' | 'ai';
-  player2Type: 'human' | 'ai';
+  player1Type: 'human' | 'ai-js' | 'ai-wasm';
+  player2Type: 'human' | 'ai-js' | 'ai-wasm';
   pieceSet: 'kanji' | 'international';
 }
 
@@ -49,7 +49,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             <div className="setting-group">
               <select id="player1Type" name="player1Type" defaultValue="human">
                 <option value="human">Human</option>
-                <option value="ai">AI</option>
+                <option value="ai-js">AI - Jax-Bot</option>
+                <option value="ai-wasm">AI - Raptor-Bot</option>
               </select>
             </div>
           </section>
@@ -58,7 +59,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             <div className="setting-group">
               <select id="player2Type" name="player2Type" defaultValue="ai">
                 <option value="human">Human</option>
-                <option value="ai">AI</option>
+                <option value="ai-js">AI - Jax-Bot</option>
+                <option value="ai-wasm">AI - Raptor-Bot</option>
               </select>
             </div>
           </section>

@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getWasmAiMove, resetEngine } from '../ai/wasmEngine';
-import { getEngineStatus } from '../ai/computerPlayer';
+
 import './WebAssemblyDemo.css';
 import { GameState, Move, Piece } from '../types';
 
-interface EngineStatus {
-  wasmAvailable: boolean;
-  wasmEnabled: boolean;
-  currentEngine: string;
-}
+
 
 interface TestResults {
   success: boolean;
@@ -20,7 +16,6 @@ interface TestResults {
 }
 
 const WebAssemblyDemo = () => {
-  const [engineStatus, setEngineStatus] = useState<EngineStatus | null>(null);
   const [testResults, setTestResults] = useState<TestResults | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,18 +49,7 @@ const WebAssemblyDemo = () => {
     pastStates: []
   };
 
-  useEffect(() => {
-    checkEngineStatus();
-  }, []);
-
-  const checkEngineStatus = async () => {
-    try {
-      const status = getEngineStatus();
-      setEngineStatus(status);
-        } catch (error: any) {
-            setError("error");
-    }
-  };
+  
 
   const initializeWebAssembly = async () => {
     try {
@@ -164,33 +148,7 @@ const WebAssemblyDemo = () => {
     }
   };
 
-  const renderEngineStatus = () => {
-    if (!engineStatus) return <div>Loading engine status...</div>;
-    
-    return (
-      <div className="engine-status">
-        <h3>Engine Status</h3>
-        <div className="status-grid">
-          <div className="status-item">
-            <strong>WebAssembly Available:</strong> 
-            <span className={engineStatus.wasmAvailable ? 'status-ok' : 'status-error'}>
-              {engineStatus.wasmAvailable ? '✅ Yes' : '❌ No'}
-            </span>
-          </div>
-          <div className="status-item">
-            <strong>WebAssembly Enabled:</strong> 
-            <span className={engineStatus.wasmEnabled ? 'status-ok' : 'status-warning'}>
-              {engineStatus.wasmEnabled ? '✅ Yes' : '⚠️ No'}
-            </span>
-          </div>
-          <div className="status-item">
-            <strong>Current Engine:</strong> 
-            <span className="status-info">{engineStatus.currentEngine}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  
 
   const renderTestResults = () => {
     if (!testResults) return null;
@@ -273,7 +231,7 @@ const WebAssemblyDemo = () => {
       <h2>WebAssembly Engine Demo</h2>
       <p>This page demonstrates the WebAssembly integration with the Shogi AI engine.</p>
       
-      {renderEngineStatus()}
+      
       
       <div className="debug-info">
         <h3>Debug Information</h3>

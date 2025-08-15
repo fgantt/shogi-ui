@@ -412,7 +412,7 @@ function evaluateDropSafety(gameState, pieceType, dropPosition) {
       safetyScore -= pieceValue * 3; // Additional penalty for being captured by equal/higher value piece
     }
     
-    console.log(`AI: Unsafe drop detected for ${pieceType} at [${dropRow},${dropCol}]. Threats:`, immediateThreats.map(t => `${t.piece}(${t.value})`).join(', '), `Safety score: ${safetyScore}`);
+    
     
     return {
       isSafe: false,
@@ -577,9 +577,7 @@ function evaluateDropSafety(gameState, pieceType, dropPosition) {
   const finalSafetyScore = potentialThreatScore + tacticalBonus + defensiveBonus + timingBonus;
   
   // Log safe drops with high tactical value for debugging
-  if (tacticalBonus > 50) {
-    console.log(`AI: Safe drop for ${pieceType} at [${dropRow},${dropCol}]. Tactical bonus: ${tacticalBonus}, Final score: ${finalSafetyScore}`);
-  }
+  
   
   return {
     isSafe: true,
@@ -1120,9 +1118,6 @@ function scoreMove(move, gameState) {
     if (!dropSafety.isSafe && dropSafety.worstThreat >= PIECE_VALUES[move.type]) {
       score -= PIECE_VALUES[move.type] * 5; // Heavy penalty for drops that would be captured by equal/higher value pieces
     }
-    
-    // Log the final score for drop moves
-    console.log(`AI: Drop move ${move.type} to [${move.to[0]},${move.to[1]}] scored: ${score} (base: ${score - dropSafety.safetyScore}, safety: ${dropSafety.safetyScore})`);
   }
 
   return score;
@@ -1242,9 +1237,6 @@ function scoreMoveEnhanced(move, gameState) {
     if (!dropSafety.isSafe && dropSafety.worstThreat >= PIECE_VALUES[move.type]) {
       score -= PIECE_VALUES[move.type] * 5; // Heavy penalty for drops that would be captured by equal/higher value pieces
     }
-    
-    // Log the final score for drop moves
-    console.log(`AI: Drop move ${move.type} to [${move.to[0]},${move.to[1]}] scored: ${score} (base: ${score - dropSafety.safetyScore}, safety: ${dropSafety.safetyScore})`);
   }
 
   return score;
