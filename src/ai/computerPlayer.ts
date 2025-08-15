@@ -21,7 +21,7 @@ export async function initializeWasm(): Promise<void> {
 }
 
 function initializeWorker(): void {
-  aiWorker = new Worker(new URL('./ai.worker.js', import.meta.url), { type: 'module' });
+  aiWorker = new Worker(new URL('./ai.worker.ts', import.meta.url), { type: 'module' });
 
   aiWorker.onmessage = (event: MessageEvent) => {
     // The worker will send back the best move, which we will then resolve.

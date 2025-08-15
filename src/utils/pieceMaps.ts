@@ -54,7 +54,9 @@ export const ENGLISH_NAMES = {
   [PROMOTED_ROOK]: 'Promoted Rook',
 };
 
-export function getOppositeLabel(pieceType, currentLabelType) {
+import type { PieceType } from '../types'; // Import PieceType
+
+export function getOppositeLabel(pieceType: PieceType, currentLabelType: 'kanji' | 'english'): string {
   if (currentLabelType === 'kanji') {
     return ENGLISH_MAP[pieceType];
   } else {
@@ -62,6 +64,6 @@ export function getOppositeLabel(pieceType, currentLabelType) {
   }
 }
 
-export function getEnglishName(pieceType) {
+export function getEnglishName(pieceType: PieceType): string {
   return ENGLISH_NAMES[pieceType];
 }

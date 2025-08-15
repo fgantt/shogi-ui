@@ -106,12 +106,10 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
         if (targetPiece) {
           if (targetPiece.player !== player) {
             moves.push([r, c]);
-            console.log(`Sliding move: ${piece.type} at [${row},${col}] can capture ${targetPiece.type} at [${r},${c}]`);
           }
           break;
         }
         moves.push([r, c]);
-        console.log(`Sliding move: ${piece.type} at [${row},${col}] can move to [${r},${c}]`);
         r += dr;
         c += dc;
       }
@@ -177,17 +175,21 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
       break;
     case PROMOTED_BISHOP:
         addSlidingMoves([[-1, -1], [-1, 1], [1, -1], [1, 1]]);
-        addMove(row - 1, col);
-        addMove(row + 1, col);
-        addMove(row, col - 1);
-        addMove(row, col + 1);
+        addMove(row + player_mult * -1, col + player_mult * 0); // King moves
+        addMove(row + player_mult * 0, col + player_mult * -1);
+        addMove(row + player_mult * 0, col + player_mult * 1);
+        addMove(row + player_mult * 1, col + player_mult * 0);
         break;
     case PROMOTED_ROOK:
         addSlidingMoves([[-1, 0], [1, 0], [0, -1], [0, 1]]);
-        addMove(row - 1, col - 1);
-        addMove(row - 1, col + 1);
-        addMove(row + 1, col - 1);
-        addMove(row + 1, col + 1);
+        addMove(row + player_mult * -1, col + player_mult * -1); // King moves
+        addMove(row + player_mult * -1, col + player_mult * 0);
+        addMove(row + player_mult * -1, col + player_mult * 1);
+        addMove(row + player_mult * 0, col + player_mult * -1);
+        addMove(row + player_mult * 0, col + player_mult * 1);
+        addMove(row + player_mult * 1, col + player_mult * -1);
+        addMove(row + player_mult * 1, col + player_mult * 0);
+        addMove(row + player_mult * 1, col + player_mult * 1);
         break;
   }
 
@@ -446,11 +448,9 @@ export function getCheckingPiece(board: (Piece | null)[][], player: Player): [nu
       const piece = board[r][c];
       if (piece && piece.player === opponent) {
         const moves = getLegalMoves(piece, r, c, board);
-        console.log(`Piece at [${r},${c}] (${piece.type}, ${piece.player}) has legal moves:`, moves);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            console.log(`Piece at [${r},${c}] (${piece.type}, ${piece.player}) is checking king at [${kingPosition[0]},${kingPosition[1]}]`);
-            return [r, c]; // This opponent's piece is checking the king
+            return [r, c];
           }
         }
       }

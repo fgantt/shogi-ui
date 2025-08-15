@@ -4,14 +4,14 @@ import openingBook from '../ai/openingBook.json';
 import { describe, it, expect } from 'vitest';
 
 // Helper function to convert Shogi coordinates (e.g., '77') to internal [row, col]
-const shogiToInternal = (shogiCoord) => {
+const shogiToInternal = (shogiCoord: string): [number, number] => {
   const file = parseInt(shogiCoord[0], 10);
   const rank = parseInt(shogiCoord[1], 10);
   return [rank - 1, 9 - file];
 };
 
 describe('Opening Book Validation', () => {
-  openingBook.forEach(opening => {
+  openingBook.forEach((opening: { name: string; moves: { [key: string]: any[] } }) => {
     if (opening.name === "Side Pawn Picker (Yokofudori)" || opening.name === "Aggressive Rook") { // Temporarily skip Aggressive Rook due to FEN mismatch with engine
       it.skip(`should correctly play through the "${opening.name}" opening`, () => {});
       return;
