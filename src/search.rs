@@ -8,7 +8,8 @@ use web_sys::console;
 fn now() -> f64 {
     let window = web_sys::window().expect("should have a window in this context");
     let performance = window.performance().expect("performance should be available");
-    performance.now()
+    let now  = performance.now();
+    now
 }
 
 /// Search engine for the Shogi AI
@@ -81,7 +82,22 @@ impl SearchEngine {
             // Search
             let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms);
             console::log_1(&format!("search_at_depth: after negamax, score={}", score).into());
-            } // This closes the for loop
+            
+            // Update best move and score
+            if score > best_score {
+                best_score = score;
+                best_move = Some(move_);
+            }
+            
+            // Alpha-beta pruning
+            if score >= beta {
+                console::log_1(&format!("search_at_depth: beta cutoff, score={}", score).into());
+                break;
+            }
+            if score > alpha {
+                alpha = score;
+            }
+        }
 
         console::log_1(&format!("search_at_depth: best_move={:?}, best_score={}", best_move, best_score).into());
         best_move.map(|m| (m, best_score))
