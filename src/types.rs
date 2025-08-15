@@ -174,8 +174,8 @@ impl Position {
 
     pub fn is_in_promotion_zone(self, player: Player) -> bool {
         match player {
-            Player::Black => self.row <= 2,
-            Player::White => self.row >= 6,
+            Player::Black => self.row >= 6,
+            Player::White => self.row <= 2,
         }
     }
 }

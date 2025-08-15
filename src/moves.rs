@@ -117,14 +117,12 @@ impl MoveGenerator {
                     moves.push(move_);
                 }
                 
-                // Check if promotion is possible
+                                // Check if promotion is possible
                 if piece.piece_type.can_promote() {
-                    let promotion_zone = match piece.player {
-                        Player::Black => new_row <= 2,
-                        Player::White => new_row >= 6,
-                    };
-                    
-                    if promotion_zone {
+                    let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                    let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
+
+                    if from_in_promotion_zone || to_in_promotion_zone {
                         let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                         if board.is_legal_move(&promoted_move) {
                             moves.push(promoted_move);
@@ -142,14 +140,12 @@ impl MoveGenerator {
                             moves.push(move_);
                         }
                         
-                        // Check promotion on capture
+                                                // Check promotion on capture
                         if piece.piece_type.can_promote() {
-                            let promotion_zone = match piece.player {
-                                Player::Black => new_row <= 2,
-                                Player::White => new_row >= 6,
-                            };
+                            let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                            let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                             
-                            if promotion_zone {
+                            if from_in_promotion_zone || to_in_promotion_zone {
                                 let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                                 promoted_move.is_capture = true;
                                 promoted_move.captured_piece = Some(target_piece.clone());
@@ -193,14 +189,12 @@ impl MoveGenerator {
                             moves.push(move_);
                         }
                         
-                        // Check promotion on capture
+                                                // Check promotion on capture
                         if piece.piece_type.can_promote() {
-                            let promotion_zone = match piece.player {
-                                Player::Black => current_row <= 2,
-                                Player::White => current_row >= 6,
-                            };
+                            let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                            let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                             
-                            if promotion_zone {
+                            if from_in_promotion_zone || to_in_promotion_zone {
                                 let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                                 promoted_move.is_capture = true;
                                 promoted_move.captured_piece = Some(target_piece.clone());
@@ -219,14 +213,12 @@ impl MoveGenerator {
                     moves.push(move_);
                 }
                 
-                // Check promotion
+                                // Check promotion
                 if piece.piece_type.can_promote() {
-                    let promotion_zone = match piece.player {
-                        Player::Black => current_row <= 2,
-                        Player::White => current_row >= 6,
-                    };
+                    let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                    let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                     
-                    if promotion_zone {
+                    if from_in_promotion_zone || to_in_promotion_zone {
                         let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                         if board.is_legal_move(&promoted_move) {
                             moves.push(promoted_move);
@@ -269,12 +261,10 @@ impl MoveGenerator {
                     
                     // Check promotion
                     if piece.piece_type.can_promote() {
-                        let promotion_zone = match piece.player {
-                            Player::Black => new_row <= 2,
-                            Player::White => new_row >= 6,
-                        };
+                        let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                        let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                         
-                        if promotion_zone {
+                        if from_in_promotion_zone || to_in_promotion_zone {
                             let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                             if let Some(target_piece) = board.get_piece(new_pos) {
                                 promoted_move.is_capture = true;
@@ -313,23 +303,22 @@ impl MoveGenerator {
                 let new_pos = Position::new(new_row as u8, new_col as u8);
                 
                 if !board.is_square_occupied_by(new_pos, piece.player) {
-                    let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    // Generate unpromoted move
+                    let mut unpromoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
                     if let Some(target_piece) = board.get_piece(new_pos) {
-                        move_.is_capture = true;
-                        move_.captured_piece = Some(target_piece.clone());
+                        unpromoted_move.is_capture = true;
+                        unpromoted_move.captured_piece = Some(target_piece.clone());
                     }
-                    if board.is_legal_move(&move_) {
-                        moves.push(move_);
+                    if board.is_legal_move(&unpromoted_move) {
+                        moves.push(unpromoted_move);
                     }
                     
-                    // Check promotion
+                    // Check if promotion is possible (optional promotion)
                     if piece.piece_type.can_promote() {
-                        let promotion_zone = match piece.player {
-                            Player::Black => new_row <= 2,
-                            Player::White => new_row >= 6,
-                        };
+                        let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                        let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                         
-                        if promotion_zone {
+                        if from_in_promotion_zone || to_in_promotion_zone {
                             let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                             if let Some(target_piece) = board.get_piece(new_pos) {
                                 promoted_move.is_capture = true;
@@ -408,22 +397,20 @@ impl MoveGenerator {
                     // Square is occupied
                     if let Some(target_piece) = board.get_piece(new_pos) {
                         if target_piece.player != piece.player {
-                            // Capture move
-                            let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
-                            move_.is_capture = true;
-                            move_.captured_piece = Some(target_piece.clone());
-                            if board.is_legal_move(&move_) {
-                                moves.push(move_);
+                            // Capture move (unpromoted)
+                            let mut unpromoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            unpromoted_move.is_capture = true;
+                            unpromoted_move.captured_piece = Some(target_piece.clone());
+                            if board.is_legal_move(&unpromoted_move) {
+                                moves.push(unpromoted_move);
                             }
                             
-                            // Check promotion
+                            // Check promotion (optional promotion)
                             if piece.piece_type.can_promote() {
-                                let promotion_zone = match piece.player {
-                                    Player::Black => current_row <= 2,
-                                    Player::White => current_row >= 6,
-                                };
+                                let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                                let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                                 
-                                if promotion_zone {
+                                if from_in_promotion_zone || to_in_promotion_zone {
                                     let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                                     promoted_move.is_capture = true;
                                     promoted_move.captured_piece = Some(target_piece.clone());
@@ -436,20 +423,18 @@ impl MoveGenerator {
                     }
                     break; // Can't move further
                 } else {
-                    // Empty square
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
-                    if board.is_legal_move(&move_) {
-                        moves.push(move_);
+                    // Empty square (unpromoted)
+                    let unpromoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if board.is_legal_move(&unpromoted_move) {
+                        moves.push(unpromoted_move);
                     }
                     
-                    // Check promotion
+                    // Check promotion (optional promotion)
                     if piece.piece_type.can_promote() {
-                        let promotion_zone = match piece.player {
-                            Player::Black => current_row <= 2,
-                            Player::White => current_row >= 6,
-                        };
+                        let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                        let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                         
-                        if promotion_zone {
+                        if from_in_promotion_zone || to_in_promotion_zone {
                             let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                             if board.is_legal_move(&promoted_move) {
                                 moves.push(promoted_move);
@@ -487,22 +472,20 @@ impl MoveGenerator {
                     // Square is occupied
                     if let Some(target_piece) = board.get_piece(new_pos) {
                         if target_piece.player != piece.player {
-                            // Capture move
-                            let mut move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
-                            move_.is_capture = true;
-                            move_.captured_piece = Some(target_piece.clone());
-                            if board.is_legal_move(&move_) {
-                                moves.push(move_);
+                            // Capture move (unpromoted)
+                            let mut unpromoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                            unpromoted_move.is_capture = true;
+                            unpromoted_move.captured_piece = Some(target_piece.clone());
+                            if board.is_legal_move(&unpromoted_move) {
+                                moves.push(unpromoted_move);
                             }
                             
-                            // Check promotion
+                            // Check promotion (optional promotion)
                             if piece.piece_type.can_promote() {
-                                let promotion_zone = match piece.player {
-                                    Player::Black => current_row <= 2,
-                                    Player::White => current_row >= 6,
-                                };
+                                let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                                let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                                 
-                                if promotion_zone {
+                                if from_in_promotion_zone || to_in_promotion_zone {
                                     let mut promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                                     promoted_move.is_capture = true;
                                     promoted_move.captured_piece = Some(target_piece.clone());
@@ -515,20 +498,18 @@ impl MoveGenerator {
                     }
                     break; // Can't move further
                 } else {
-                    // Empty square
-                    let move_ = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
-                    if board.is_legal_move(&move_) {
-                        moves.push(move_);
+                    // Empty square (unpromoted)
+                    let unpromoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, false);
+                    if board.is_legal_move(&unpromoted_move) {
+                        moves.push(unpromoted_move);
                     }
                     
-                    // Check promotion
+                    // Check promotion (optional promotion)
                     if piece.piece_type.can_promote() {
-                        let promotion_zone = match piece.player {
-                            Player::Black => current_row <= 2,
-                            Player::White => current_row >= 6,
-                        };
+                        let from_in_promotion_zone = pos.is_in_promotion_zone(piece.player);
+                        let to_in_promotion_zone = new_pos.is_in_promotion_zone(piece.player);
                         
-                        if promotion_zone {
+                        if from_in_promotion_zone || to_in_promotion_zone {
                             let promoted_move = Move::new_move(pos, new_pos, piece.piece_type, piece.player, true);
                             if board.is_legal_move(&promoted_move) {
                                 moves.push(promoted_move);

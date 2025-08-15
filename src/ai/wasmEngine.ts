@@ -145,7 +145,7 @@ function convertCapturedPieces(capturedPieces: GameState['capturedPieces']): any
         capturedPieces.player1.forEach((piece: Piece) => {
             engineCaptured.push({
                 piece_type: convertPieceTypeToEngine(piece.type),
-                player: 'White'
+                                player: 'Black'
             });
         });
     }
@@ -154,7 +154,7 @@ function convertCapturedPieces(capturedPieces: GameState['capturedPieces']): any
         capturedPieces.player2.forEach((piece: Piece) => {
             engineCaptured.push({
                 piece_type: convertPieceTypeToEngine(piece.type),
-                player: 'Black'
+                player: 'White'
             });
         });
     }
@@ -208,8 +208,8 @@ function convertEngineMoveToGame(engineMove: any): any {
                 pieceType: convertEnginePieceTypeToGame(engineMove.piece_type),
             };
         } else {
-            const fromCoord: [number, number] = [8 - engineMove.from.col, engineMove.from.row];
-            const toCoord: [number, number] = [8 - engineMove.to.col, engineMove.to.row];
+                        const fromCoord: [number, number] = [8 - engineMove.from.row, engineMove.from.col];
+            const toCoord: [number, number] = [8 - engineMove.to.row, engineMove.to.col];
             return {
                 from: fromCoord,
                 to: toCoord,
