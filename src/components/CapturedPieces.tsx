@@ -38,8 +38,10 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ pieces, player, onPiece
   return (
     <div className={`captured-pieces ${player}`} style={{ backgroundImage: `url(${boardBackground})` }}>
       <h3>
-        {player === 'player1' ? '☗' : '☖'}{pieceLabelType === 'kanji' ? (player === 'player1' ? 'Sente' : 'Gote') : (player === 'player1' ? 'Black' : 'White')}
-      </h3>
+      {player === 'player1' ? '☗ ' : <><span style={{ color: "white" }}>☗</span>{' '}</>}
+        {pieceLabelType === 'kanji'
+          ? (player === 'player1' ? 'Sente' : 'Gote')
+          : (player === 'player1' ? 'Black' : 'White')}      </h3>
       <div className={`pieces-list ${player}`}>
         {sortedPieces.map(([type, count]) => (
           <PieceComponent

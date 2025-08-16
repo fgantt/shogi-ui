@@ -76,9 +76,9 @@ const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
       <table className="move-table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Sente (Black)</th>
-            <th>Gote (White)</th>
+            <th></th>
+            <th><span style={{ color: "black" }}>☗</span></th>
+            <th><span style={{ color: "white" }}>☗</span></th>
           </tr>
         </thead>
         <tbody ref={tableBodyRef}>
