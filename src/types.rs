@@ -137,6 +137,30 @@ impl PieceType {
             _ => None,
         }
     }
+
+    pub fn unpromoted_version(self) -> Option<Self> {
+        match self {
+            PieceType::PromotedPawn => Some(PieceType::Pawn),
+            PieceType::PromotedLance => Some(PieceType::Lance),
+            PieceType::PromotedKnight => Some(PieceType::Knight),
+            PieceType::PromotedSilver => Some(PieceType::Silver),
+            PieceType::PromotedBishop => Some(PieceType::Bishop),
+            PieceType::PromotedRook => Some(PieceType::Rook),
+            _ => None,
+        }
+    }
+
+    pub fn get_move_offsets(&self, direction: i8) -> Vec<(i8, i8)> {
+        match self {
+            PieceType::Silver => vec![(direction, 0), (direction, -1), (direction, 1), (-direction, -1), (-direction, 1)],
+            PieceType::Gold | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => 
+                vec![(direction, 0), (direction, -1), (direction, 1), (0, -1), (0, 1), (-direction, 0)],
+            PieceType::King => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
+            PieceType::PromotedBishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)],
+            PieceType::PromotedRook => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
+            _ => vec![], // Pawn, Lance, Knight, Rook, Bishop are handled by sliding logic
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -194,6 +218,39 @@ impl Piece {
 
     pub fn value(self) -> i32 {
         self.piece_type.base_value()
+    }
+
+    pub fn unpromoted(self) -> Self {
+        if let Some(unpromoted_type) = self.piece_type.unpromoted_version() {
+            Piece::new(unpromoted_type, self.player)
+        } else {
+            self
+        }
+    }
+
+    pub fn to_fen_char(&self) -> String {
+        let mut fen_char = match self.piece_type {
+            PieceType::Pawn => "p",
+            PieceType::Lance => "l",
+            PieceType::Knight => "n",
+            PieceType::Silver => "s",
+            PieceType::Gold => "g",
+            PieceType::Bishop => "b",
+            PieceType::Rook => "r",
+            PieceType::King => "k",
+            PieceType::PromotedPawn => "+p",
+            PieceType::PromotedLance => "+l",
+            PieceType::PromotedKnight => "+n",
+            PieceType::PromotedSilver => "+s",
+            PieceType::PromotedBishop => "+b",
+            PieceType::PromotedRook => "+r",
+        }.to_string();
+
+        if self.player == Player::Black {
+            fen_char = fen_char.to_uppercase();
+        }
+
+        fen_char
     }
 }
 

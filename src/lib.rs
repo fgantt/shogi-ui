@@ -2,7 +2,6 @@ use wasm_bindgen::prelude::*;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
-use web_sys::console;
 
 mod bitboards;
 mod moves;
@@ -12,8 +11,6 @@ mod types;
 
 use bitboards::*;
 use moves::*;
-use evaluation::*;
-use search::*;
 use types::*;
 
 #[derive(Serialize, Deserialize)]
@@ -41,12 +38,6 @@ pub struct ShogiEngine {
     captured_pieces: CapturedPieces,
     current_player: Player,
     move_history: Vec<Move>,
-    transposition_table: HashMap<u64, TranspositionEntry>,
-}
-
-#[wasm_bindgen]
-pub fn test_logging() {
-    web_sys::console::log_1(&"Hello from wasm!".into());
 }
 
 #[wasm_bindgen]
@@ -57,96 +48,28 @@ impl ShogiEngine {
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
             move_history: Vec::new(),
-            transposition_table: HashMap::new(),
         }
     }
 
     pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
-        console::log_1(&format!("get_best_move: difficulty={}, time_limit_ms={}", difficulty, time_limit_ms).into());
         let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty as u8, time_limit_ms);
-        console::log_1(&format!("get_best_move: searcher created with actual_difficulty={}", actual_difficulty).into());
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms);
         if let Some((move_, _score)) = searcher.search(&self.board, &self.captured_pieces, self.current_player) {
-            console::log_1(&format!("get_best_move: search returned move {:?}", move_).into());
             Some(move_)
         } else {
-            console::log_1(&format!("get_best_move: search failed, falling back to random move").into());
             // Fallback to random move if search fails
             let move_generator = MoveGenerator::new();
             let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
             if legal_moves.is_empty() {
-                console::log_1(&format!("get_best_move: no legal moves for fallback").into());
                 return None;
             }
-            console::log_1(&format!("get_best_move: choosing random move from {} legal moves", legal_moves.len()).into());
             let mut rng = rand::thread_rng();
             legal_moves.choose(&mut rng).cloned()
         }
     }
 
-    fn search_at_depth(&self, _depth: u8, _time_limit_ms: u32) -> Option<(Move, i32)> {
-        // Placeholder for search implementation
-        None
-    }
-
-    pub fn make_move(&mut self, from: u8, to: u8, promote: bool) -> bool {
-        let from_pos = Position::from_u8(from);
-        let to_pos = Position::from_u8(to);
-        
-        if let Some(move_) = self.board.generate_move(from_pos, to_pos, promote) {
-            if self.board.is_legal_move(&move_) {
-                self.board.make_move(&move_);
-                self.move_history.push(move_.clone());
-                self.current_player = self.current_player.opposite();
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn drop_piece(&mut self, piece_type: u8, to: u8) -> bool {
-        let piece = PieceType::from_u8(piece_type);
-        let to_pos = Position::from_u8(to);
-        
-        if let Some(move_) = self.board.generate_drop(piece, to_pos) {
-            if self.board.is_legal_move(&move_) {
-                self.board.make_move(&move_);
-                self.move_history.push(move_);
-                self.current_player = self.current_player.opposite();
-                return true;
-            }
-        }
-        false
-    }
-
     pub fn get_board_state(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.board.to_fen()).unwrap()
-    }
-
-    pub fn is_checkmate(&self) -> bool {
-        self.board.is_checkmate(self.current_player)
-    }
-
-    pub fn is_stalemate(&self) -> bool {
-        self.board.is_stalemate(self.current_player)
-    }
-
-    pub fn get_legal_moves(&self, from: u8) -> Vec<u8> {
-        let from_pos = Position::from_u8(from);
-        self.board
-            .get_legal_moves(from_pos)
-            .into_iter()
-            .map(|pos| pos.to_u8())
-            .collect()
-    }
-
-    pub fn get_legal_drops(&self, piece_type: u8) -> Vec<u8> {
-        let piece = PieceType::from_u8(piece_type);
-        self.board
-            .get_legal_drops(piece)
-            .into_iter()
-            .map(|pos| pos.to_u8())
-            .collect()
+        serde_wasm_bindgen::to_value(&self.board.to_fen(self.current_player, &self.captured_pieces)).unwrap()
     }
 
     // Methods needed for WebAssembly integration
@@ -167,17 +90,11 @@ impl ShogiEngine {
 
     pub fn set_captured_pieces(&mut self, captured_json: &str) {
         self.captured_pieces = CapturedPieces::new(); // Clear captured pieces
-        let captured_pieces: Vec<CapturedPieceJson> = serde_json::from_str(captured_json).unwrap();
-        for captured_piece_json in captured_pieces {
+        let captured_pieces_json: Vec<CapturedPieceJson> = serde_json::from_str(captured_json).unwrap();
+        for captured_piece_json in captured_pieces_json {
             let player = if captured_piece_json.player == "Black" { Player::Black } else { Player::White };
             let piece_type = PieceType::from_str(&captured_piece_json.piece_type).unwrap();
             self.captured_pieces.add_piece(piece_type, player);
         }
     }
-}
-
-// Helper function to convert between Rust and JavaScript types
-#[wasm_bindgen]
-pub fn init_panic_hook() {
-    console_error_panic_hook::set_once();
 }

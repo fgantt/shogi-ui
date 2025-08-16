@@ -22,6 +22,9 @@ impl PositionEvaluator {
     pub fn evaluate(&self, board: &BitboardBoard, player: Player) -> i32 {
         let mut score = 0;
         
+        // Add a small tempo bonus for the current player
+        score += 10;
+
         // Material and positional score
         score += self.evaluate_material_and_position(board, player);
         
@@ -386,18 +389,16 @@ impl PositionEvaluator {
         let mut score = 0;
         
         // Bonus for developing pieces early
-        // This is a simplified implementation
-        let mut developed_pieces = 0;
-        
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
                         match piece.piece_type {
-                            PieceType::Bishop | PieceType::Rook => {
-                                if self.is_piece_developed(pos, player) {
-                                    developed_pieces += 1;
+                            // Encourage moving key pieces out of their starting positions
+                            PieceType::Bishop | PieceType::Rook | PieceType::Silver | PieceType::Gold => {
+                                if self.is_piece_developed(piece.piece_type, pos, player) {
+                                    score += 25; // Increased bonus for developing important pieces
                                 }
                             }
                             _ => {}
@@ -407,16 +408,18 @@ impl PositionEvaluator {
             }
         }
         
-        score += developed_pieces * 15;
-        
         score
     }
 
     /// Check if a piece is developed
-    fn is_piece_developed(&self, pos: Position, player: Player) -> bool {
-        match player {
-            Player::Black => pos.row < 6, // Moved from starting position
-            Player::White => pos.row > 2,
+    fn is_piece_developed(&self, piece_type: PieceType, pos: Position, player: Player) -> bool {
+        let start_row = if player == Player::Black { 8 } else { 0 };
+        match piece_type {
+            PieceType::Rook => pos.row != start_row,
+            PieceType::Bishop => pos.row != start_row,
+            PieceType::Silver => pos.row != start_row,
+            PieceType::Gold => pos.row != start_row,
+            _ => false, // Only check major pieces for this specific bonus
         }
     }
 

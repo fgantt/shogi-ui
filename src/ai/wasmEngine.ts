@@ -205,7 +205,7 @@ function convertEngineMoveToGame(engineMove: any): any {
             return {
                 from: 'drop',
                 to: toCoord,
-                pieceType: convertEnginePieceTypeToGame(engineMove.piece_type),
+                type: convertEnginePieceTypeToGame(engineMove.piece_type),
             };
         } else {
                         const fromCoord: [number, number] = [8 - engineMove.from.row, engineMove.from.col];
