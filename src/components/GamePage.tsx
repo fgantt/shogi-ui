@@ -17,7 +17,7 @@ const GamePage = () => {
   const location = useLocation();
   const [gameState, setGameState] = useState(getInitialGameState());
   const [player1Type, setPlayer1Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('human');
-  const [player2Type, setPlayer2Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('ai-js'); // Default to Jax-Bot for Player 2
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('ai-js'); // Default to Jaguar for Player 2
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]

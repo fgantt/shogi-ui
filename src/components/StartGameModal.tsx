@@ -49,8 +49,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             <div className="setting-group">
               <select id="player1Type" name="player1Type" defaultValue="human">
                 <option value="human">Human</option>
-                <option value="ai-js">AI - Jax-Bot</option>
-                <option value="ai-wasm">AI - Raptor-Bot</option>
+                <option value="ai-js">AI - Jaguar</option>
+                <option value="ai-wasm">AI - Raptor</option>
               </select>
             </div>
           </section>
@@ -59,8 +59,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             <div className="setting-group">
               <select id="player2Type" name="player2Type" defaultValue="ai">
                 <option value="human">Human</option>
-                <option value="ai-js">AI - Jax-Bot</option>
-                <option value="ai-wasm">AI - Raptor-Bot</option>
+                <option value="ai-js">AI - Jaguar</option>
+                <option value="ai-wasm">AI - Raptor</option>
               </select>
             </div>
           </section>
