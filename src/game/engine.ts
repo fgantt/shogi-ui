@@ -196,7 +196,7 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
   return moves;
 }
 
-export function movePiece(gameState: GameState, from: [number, number], to: [number, number], promoteOverride: boolean | null = null): GameState {
+export function movePiece(gameState: GameState, from: [number, number], to: [number, number], playerName: string, promoteOverride: boolean | null = null): GameState {
   const { board, currentPlayer } = gameState;
   const [fromRow, fromCol] = from;
   const [toRow] = to;
@@ -204,7 +204,7 @@ export function movePiece(gameState: GameState, from: [number, number], to: [num
   const piece = board[fromRow][fromCol];
 
   if (!piece) {
-    console.warn("movePiece: No piece found at 'from' coordinates. Returning original gameState.");
+    
     return gameState;
   }
 
@@ -213,9 +213,9 @@ export function movePiece(gameState: GameState, from: [number, number], to: [num
     if (promoteOverride && !pieceToMove.type.startsWith('+')) {
       pieceToMove.type = `+${pieceToMove.type}` as PieceType;
     }
-    const simulatedGameState = completeMove(gameState, from, to, promoteOverride);
+    const simulatedGameState = completeMove(gameState, from, to, promoteOverride, playerName);
     if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
-      console.warn("movePiece: AI move results in self-check. Returning original gameState.");
+      
       return gameState;
     }
     return simulatedGameState;
@@ -249,17 +249,17 @@ export function movePiece(gameState: GameState, from: [number, number], to: [num
     pieceToMove.type = `+${pieceToMove.type}` as PieceType;
   }
 
-  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory);
+  const simulatedGameState = completeMove(gameState, from, to, isPromotionMandatory, playerName);
 
   if (isKingInCheck(simulatedGameState.board, currentPlayer)) {
-    console.warn("movePiece: Human move results in self-check. Returning original gameState.");
+    
     return gameState;
   }
 
   return simulatedGameState;
 }
 
-export function completeMove(gameState: GameState, from: [number, number], to: [number, number], promote: boolean): GameState {
+export function completeMove(gameState: GameState, from: [number, number], to: [number, number], promote: boolean, playerName: string): GameState {
     const { board, currentPlayer, capturedPieces, moveHistory, pastStates } = gameState;
     const nextPlayer: Player = currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1;
     const newBoard: (Piece | null)[][] = board.map(row => row.map(cell => cell ? { ...cell } : null));
@@ -332,6 +332,11 @@ export function completeMove(gameState: GameState, from: [number, number], to: [
       updatedGameState.isDraw = true;
     }
 
+    const playerNum = updatedGameState.currentPlayer === PLAYER_1 ? 2 : 1;
+    const color = updatedGameState.currentPlayer === PLAYER_1 ? "White" : "Black";
+    const shogiNotation = getShogiNotation({ from, to, piece: piece.type, promote }, piece);
+    console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);
+
     return updatedGameState;
 }
 
@@ -348,18 +353,18 @@ export function checkSennichite(gameState: GameState): boolean {
   return count + 1 >= 4;
 }
 
-export function dropPiece(gameState: GameState, pieceType: PieceType, to: [number, number]): GameState {
+export function dropPiece(gameState: GameState, pieceType: PieceType, to: [number, number], playerName: string): GameState {
   const { board, currentPlayer, capturedPieces, pastStates } = gameState;
   const [toRow, toCol] = to;
 
   if (board[toRow][toCol]) {
-    console.warn("dropPiece: Cannot drop on occupied square. Returning original gameState.");
+    
     return gameState;
   }
 
   const capturedPieceIndex = capturedPieces[currentPlayer].findIndex(p => p.type === pieceType);
   if (capturedPieceIndex === -1) {
-    console.warn(`dropPiece: Player ${currentPlayer} does not have piece type ${pieceType} to drop. Returning original gameState.`);
+    
     return gameState;
   }
 
@@ -384,7 +389,7 @@ export function dropPiece(gameState: GameState, pieceType: PieceType, to: [numbe
   tempBoard[toRow][toCol] = { type: pieceType, player: currentPlayer };
 
   if (isKingInCheck(tempBoard, currentPlayer)) {
-    console.warn("dropPiece: Drop results in self-check. Returning original gameState.");
+    
     return gameState;
   }
 
@@ -420,6 +425,11 @@ export function dropPiece(gameState: GameState, pieceType: PieceType, to: [numbe
   if (checkSennichite(finalGameState)) {
     finalGameState.isDraw = true;
   }
+
+  const playerNum = finalGameState.currentPlayer === PLAYER_1 ? 2 : 1;
+  const color = finalGameState.currentPlayer === PLAYER_1 ? "White" : "Black";
+  const shogiNotation = getShogiNotation({ from: 'drop', to, piece: pieceType, promote: false }, { type: pieceType, player: currentPlayer });
+  console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);
 
   return finalGameState;
 }
@@ -685,4 +695,21 @@ export function generateSennichiteHash(gameState: GameState): string {
   fen += capturedString;
 
   return fen;
+}
+
+function getShogiNotation(move: Partial<Move>, piece: Piece): string {
+  const pieceNotation = piece.type.startsWith('+') ? `+${piece.type.charAt(1)}` : piece.type.charAt(0);
+
+  if (move.from === 'drop') {
+    const file = 9 - move.to[1];
+    const rank = String.fromCharCode('a'.charCodeAt(0) + move.to[0]);
+    return `${pieceNotation}*${file}${rank}`;
+  }
+
+  const toFile = 9 - move.to[1];
+  const toRank = String.fromCharCode('a'.charCodeAt(0) + move.to[0]);
+  const isCapture = move.captured !== undefined && move.captured !== null;
+  const promotion = move.promote ? '+' : '';
+
+  return `${pieceNotation}${isCapture ? 'x' : '-'}${toFile}${toRank}${promotion}`;
 }

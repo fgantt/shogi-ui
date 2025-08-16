@@ -17,7 +17,7 @@ const GamePage = () => {
   const location = useLocation();
   const [gameState, setGameState] = useState(getInitialGameState());
   const [player1Type, setPlayer1Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('human');
-  const [player2Type, setPlayer2Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('ai-js'); // Default to Jaguar for Player 2
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai-js' | 'ai-wasm'>('ai-wasm'); // Default to Jaguar for Player 2
   const [selectedPiece, setSelectedPiece] = useState(null); // { row, col, piece }
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState(null); // { type }
   const [legalMoves, setLegalMoves] = useState([]); // Array of [row, col]
@@ -33,6 +33,12 @@ const GamePage = () => {
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+
+  const playerNames = {
+    'human': 'Human',
+    'ai-js': 'Jaguar',
+    'ai-wasm': 'Raptor'
+  };
   
   const [checkingPiece, setCheckingPiece] = useState(null);
 
@@ -145,9 +151,11 @@ const GamePage = () => {
             if (aiMove) {
               let attemptedNextState;
               if (aiMove.from === 'drop') {
-                attemptedNextState = dropPiece(currentGameState, aiMove.type, aiMove.to);
+                const playerName = currentGameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
+                attemptedNextState = dropPiece(currentGameState, aiMove.type, aiMove.to, playerName);
               } else if (Array.isArray(aiMove.from)) {
-                attemptedNextState = movePiece(currentGameState, aiMove.from, aiMove.to, aiMove.promote);
+                const playerName = currentGameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
+                attemptedNextState = movePiece(currentGameState, aiMove.from, aiMove.to, playerName, aiMove.promote);
               } else {
                 console.error("AI returned an unexpected move format:", aiMove);
                 attemptedNextState = currentGameState; // Fallback to current state
@@ -250,7 +258,8 @@ const GamePage = () => {
     if (selectedCapturedPiece) {
       // A captured piece is selected, attempt to drop it
       if (legalDropSquares.some(square => square[0] === row && square[1] === col)) {
-        const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
+        const playerName = gameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
+        const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col], playerName);
         if (newGameState !== gameState) { // Only proceed if the drop was successful
           handlePlayerMove(newGameState, 'drop', [row, col]);
         }
@@ -261,7 +270,8 @@ const GamePage = () => {
         
         return move[0] === row && move[1] === col;
       })) {
-        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
+        const playerName = gameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
+        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col], playerName);
         if (result.promotionPending) {
           setGameState(result); // Update state to show modal
         } else {
@@ -302,15 +312,16 @@ const GamePage = () => {
   const handleDrop = (row, col) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
     if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
+    const playerName = gameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
     if (selectedCapturedPiece) {
-      const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col]);
+      const newGameState = dropPiece(gameState, selectedCapturedPiece.type, [row, col], playerName);
       handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
       if (legalMoves.some(move => {
         console.log("handleDrop - Checking legal move: ", move, "against dropped: ", [row, col]);
         return move[0] === row && move[1] === col;
       })) {
-        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col]);
+        const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col], playerName);
         if (result.promotionPending) {
           setGameState(result);
         } else {
@@ -352,7 +363,8 @@ const GamePage = () => {
 
   const handlePromotionChoice = (promote) => {
     const { from, to } = gameState.promotionPending;
-    const newGameState = completeMove(gameState, from, to, promote);
+    const playerName = gameState.currentPlayer === PLAYER_1 ? playerNames[player1Type] : playerNames[player2Type];
+    const newGameState = completeMove(gameState, from, to, promote, playerName);
     handlePlayerMove(newGameState, from, to);
   };
 
