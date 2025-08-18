@@ -93,7 +93,7 @@ impl SearchEngine {
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
-            return if board.is_king_in_check(player) { i32::MIN + 1 } else { 0 };
+            return if board.is_king_in_check(player, captured_pieces) { i32::MIN + 1 } else { 0 };
         }
         
         let sorted_moves = self.sort_moves(&legal_moves, board);
@@ -167,13 +167,13 @@ impl SearchEngine {
     }
 
     fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
-        self.move_generator.generate_legal_captures(board, player)
+        self.move_generator.generate_legal_captures(board, player, _captured_pieces)
     }
 
-    fn is_checking_move(&self, board: &BitboardBoard, move_: &Move) -> bool {
+    fn is_checking_move(&self, board: &BitboardBoard, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
         let mut new_board = board.clone();
         new_board.make_move(move_);
-        new_board.is_king_in_check(move_.player.opposite())
+        new_board.is_king_in_check(move_.player.opposite(), captured_pieces)
     }
 
     fn sort_moves(&self, moves: &[Move], board: &BitboardBoard) -> Vec<Move> {

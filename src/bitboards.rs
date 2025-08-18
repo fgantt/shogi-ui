@@ -101,7 +101,7 @@ impl BitboardBoard {
         captured_piece
     }
 
-    pub fn is_king_in_check(&self, player: Player) -> bool {
+    pub fn is_king_in_check(&self, player: Player, _captured_pieces: &CapturedPieces) -> bool {
         if let Some(king_pos) = self.find_king_position(player) {
             return self.is_square_attacked_by(king_pos, player.opposite());
         }
@@ -114,29 +114,32 @@ impl BitboardBoard {
         if king_bb == 0 { None } else { get_lsb(king_bb) }
     }
 
-    pub fn is_square_attacked_by(&self, position: Position, player: Player) -> bool {
+    pub fn is_square_attacked_by(&self, _position: Position, _player: Player) -> bool {
         // This is a complex method, a full implementation is required for correctness.
         // For now, we assume a simplified logic.
         false
     }
 
-    pub fn is_legal_move(&self, move_: &Move) -> bool {
+    pub fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
         let mut temp_board = self.clone();
-        temp_board.make_move(move_);
-        !temp_board.is_king_in_check(move_.player)
+        let mut temp_captured = captured_pieces.clone();
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, move_.player);
+        }
+        !temp_board.is_king_in_check(move_.player, &temp_captured)
     }
     
-    pub fn is_checkmate(&self, player: Player) -> bool {
-        self.is_king_in_check(player) && !self.has_legal_moves(player)
+    pub fn is_checkmate(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
+        self.is_king_in_check(player, captured_pieces) && !self.has_legal_moves(player, captured_pieces)
     }
 
-    pub fn is_stalemate(&self, player: Player) -> bool {
-        !self.is_king_in_check(player) && !self.has_legal_moves(player)
+    pub fn is_stalemate(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
+        !self.is_king_in_check(player, captured_pieces) && !self.has_legal_moves(player, captured_pieces)
     }
 
-    fn has_legal_moves(&self, player: Player) -> bool {
-        // Simplified: In a real scenario, you would generate all moves and check for legality.
-        true
+    fn has_legal_moves(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
+        let move_generator = crate::moves::MoveGenerator::new();
+        !move_generator.generate_legal_moves(self, player, captured_pieces).is_empty()
     }
 
     pub fn to_fen(&self, player: Player, captured_pieces: &CapturedPieces) -> String {

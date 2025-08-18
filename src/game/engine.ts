@@ -305,6 +305,9 @@ export function completeMove(gameState: GameState, from: [number, number], to: [
 
     const newMoveHistory: Move[] = [...moveHistory, { from, to, piece: piece.type, promote, player: currentPlayer, captured: capturedValue, timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }) }];
 
+    const gameStateCopy = { ...gameState };
+    delete gameStateCopy.pastStates;
+
     const updatedGameState: GameState = {
         ...gameState,
         board: newBoard,
@@ -312,7 +315,7 @@ export function completeMove(gameState: GameState, from: [number, number], to: [
         currentPlayer: nextPlayer,
         moveHistory: newMoveHistory,
         promotionPending: null,
-        pastStates: [...pastStates, gameState],
+        pastStates: [...pastStates, gameStateCopy],
         isCheck: isKingInCheck(newBoard, nextPlayer),
         kingPositions: {
           ...gameState.kingPositions,
@@ -334,7 +337,7 @@ export function completeMove(gameState: GameState, from: [number, number], to: [
 
     const playerNum = updatedGameState.currentPlayer === PLAYER_1 ? 2 : 1;
     const color = updatedGameState.currentPlayer === PLAYER_1 ? "White" : "Black";
-    const shogiNotation = getShogiNotation({ from, to, piece: piece.type, promote }, piece);
+    const shogiNotation = getShogiNotation({ from, to, piece: piece.type, promote, captured: capturedValue }, piece);
 
     if (playerName !== undefined && playerName)
       console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);

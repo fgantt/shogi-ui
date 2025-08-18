@@ -13,28 +13,43 @@ impl MoveGenerator {
     }
 
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        let is_in_check = board.is_king_in_check(player, captured_pieces);
+
         let mut pseudo_legal_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+
+        let legal_moves: Vec<Move> = pseudo_legal_moves.into_iter().filter(|m| {
+            let mut temp_board = board.clone();
+            let mut temp_captured = captured_pieces.clone();
+            
+            temp_board.make_move(m);
+
+            !temp_board.is_king_in_check(player, &temp_captured)
+        }).collect();
+
+        if is_in_check {
+            // If in check, only moves that resolve the check are legal.
+            // The filtering above already handles this.
+            // If no moves are found, it's checkmate.
+        }
+        
+        legal_moves
+    }
+
+    pub fn generate_legal_captures(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        let pseudo_legal_moves = self.generate_pseudo_legal_captures(board, player, captured_pieces);
         
         // Filter out moves that leave the king in check
         pseudo_legal_moves.into_iter().filter(|m| {
             let mut temp_board = board.clone();
-            temp_board.make_move(m);
-            !temp_board.is_king_in_check(player)
+            let mut temp_captured = captured_pieces.clone();
+            if let Some(captured) = temp_board.make_move(m) {
+                temp_captured.add_piece(captured.piece_type, m.player);
+            }
+            !temp_board.is_king_in_check(player, &temp_captured)
         }).collect()
     }
 
-    pub fn generate_legal_captures(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
-        let pseudo_legal_moves = self.generate_pseudo_legal_captures(board, player);
-        
-        // Filter out moves that leave the king in check
-        pseudo_legal_moves.into_iter().filter(|m| {
-            let mut temp_board = board.clone();
-            temp_board.make_move(m);
-            !temp_board.is_king_in_check(player)
-        }).collect()
-    }
-
-    fn generate_pseudo_legal_captures(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+    fn generate_pseudo_legal_captures(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
         self.generate_capture_piece_moves(board, player)
     }
 

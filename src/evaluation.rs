@@ -233,7 +233,7 @@ impl PositionEvaluator {
     }
 
     /// Estimate mobility for a piece type
-    fn estimate_piece_mobility(&self, piece_type: PieceType, pos: Position, board: &BitboardBoard) -> i32 {
+    fn estimate_piece_mobility(&self, piece_type: PieceType, _pos: Position, _board: &BitboardBoard) -> i32 {
         match piece_type {
             PieceType::Pawn => 1,
             PieceType::Lance => 3,
@@ -357,7 +357,7 @@ impl PositionEvaluator {
     }
 
     /// Evaluate coordinated attacks
-    fn evaluate_coordinated_attacks(&self, board: &BitboardBoard, player: Player) -> i32 {
+    fn evaluate_coordinated_attacks(&self, _board: &BitboardBoard, _player: Player) -> i32 {
         // This is a simplified implementation
         // In practice, we'd analyze attack patterns and piece coordination
         0
