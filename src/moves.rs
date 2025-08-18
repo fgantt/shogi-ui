@@ -23,6 +23,119 @@ impl MoveGenerator {
         }).collect()
     }
 
+    pub fn generate_legal_captures(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+        let pseudo_legal_moves = self.generate_pseudo_legal_captures(board, player);
+        
+        // Filter out moves that leave the king in check
+        pseudo_legal_moves.into_iter().filter(|m| {
+            let mut temp_board = board.clone();
+            temp_board.make_move(m);
+            !temp_board.is_king_in_check(player)
+        }).collect()
+    }
+
+    fn generate_pseudo_legal_captures(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+        self.generate_capture_piece_moves(board, player)
+    }
+
+    fn generate_capture_piece_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+        let mut moves = Vec::new();
+        for r in 0..9 {
+            for c in 0..9 {
+                let pos = Position::new(r, c);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        moves.extend(self.generate_capture_moves_for_piece(board, piece, pos));
+                    }
+                }
+            }
+        }
+        moves
+    }
+
+    fn generate_capture_moves_for_piece(&self, board: &BitboardBoard, piece: &Piece, pos: Position) -> Vec<Move> {
+        let mut moves = Vec::new();
+        let player = piece.player;
+
+        let handle_capture_move = |moves: &mut Vec<Move>, to_pos: Position| {
+            if !board.is_square_occupied_by(to_pos, player) {
+                if board.is_square_occupied(to_pos) { // Is a capture
+                    let from_in_promo = pos.is_in_promotion_zone(player);
+                    let to_in_promo = to_pos.is_in_promotion_zone(player);
+
+                    // Non-promoted move
+                    let mut move_ = Move::new_move(pos, to_pos, piece.piece_type, player, false);
+                    move_.is_capture = true;
+                    move_.captured_piece = board.get_piece(to_pos).cloned();
+                    moves.push(move_);
+
+                    // Promoted move
+                    if piece.piece_type.can_promote() && (from_in_promo || to_in_promo) {
+                        let mut promoted_move = Move::new_move(pos, to_pos, piece.piece_type, player, true);
+                        promoted_move.is_capture = true;
+                        promoted_move.captured_piece = board.get_piece(to_pos).cloned();
+                        moves.push(promoted_move);
+                    }
+                }
+            }
+        };
+
+        match piece.piece_type {
+            PieceType::Pawn => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let new_row = pos.row as i8 + dir;
+                if new_row >= 0 && new_row < 9 {
+                    handle_capture_move(&mut moves, Position::new(new_row as u8, pos.col));
+                }
+            },
+            PieceType::Knight => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
+                for (dr, dc) in move_offsets.iter() {
+                    let new_row = pos.row as i8 + dr;
+                    let new_col = pos.col as i8 + dc;
+                    if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                        handle_capture_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                    }
+                }
+            },
+            PieceType::Lance | PieceType::Rook | PieceType::Bishop => {
+                let directions = match piece.piece_type {
+                    PieceType::Lance => if player == Player::Black { vec![(1, 0)] } else { vec![(-1, 0)] },
+                    PieceType::Rook => vec![(1, 0), (-1, 0), (0, 1), (0, -1)],
+                    PieceType::Bishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1)],
+                    _ => vec![]
+                };
+
+                for (dr, dc) in directions {
+                    let mut current_pos = pos;
+                    loop {
+                        let new_row = current_pos.row as i8 + dr;
+                        let new_col = current_pos.col as i8 + dc;
+                        if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 { break; }
+                        
+                        current_pos = Position::new(new_row as u8, new_col as u8);
+                        handle_capture_move(&mut moves, current_pos);
+
+                        if board.is_square_occupied(current_pos) { break; }
+                    }
+                }
+            },
+            PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver | PieceType::PromotedBishop | PieceType::PromotedRook => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let offsets = piece.piece_type.get_move_offsets(dir);
+                for (dr, dc) in offsets {
+                    let new_row = pos.row as i8 + dr;
+                    let new_col = pos.col as i8 + dc;
+                    if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                        handle_capture_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                    }
+                }
+            }
+        }
+        moves
+    }
+
     fn generate_pseudo_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut moves = Vec::new();
         moves.extend(self.generate_piece_moves(board, player));

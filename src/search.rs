@@ -88,7 +88,7 @@ impl SearchEngine {
         }
         
         if depth == 0 {
-            return self.quiescence_search(board, captured_pieces, player, alpha, beta, start_time, time_limit_ms);
+            return self.quiescence_search(board, captured_pieces, player, alpha, beta, start_time, time_limit_ms, 5);
         }
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
@@ -134,16 +134,21 @@ impl SearchEngine {
         best_score
     }
 
-    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32) -> i32 {
+    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32, depth: u8) -> i32 {
         if (now() - start_time) > time_limit_ms as f64 { return 0; }
+
+        if depth == 0 {
+            return self.evaluator.evaluate(board, player);
+        }
         
         let stand_pat = self.evaluator.evaluate(board, player);
         if stand_pat >= beta { return beta; }
         if alpha < stand_pat { alpha = stand_pat; }
         
         let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
-        
-        for move_ in noisy_moves {
+        let sorted_noisy_moves = self.sort_moves(&noisy_moves, board);
+
+        for move_ in sorted_noisy_moves {
             if (now() - start_time) > time_limit_ms as f64 { break; }
             
             let mut new_board = board.clone();
@@ -152,7 +157,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, start_time, time_limit_ms);
+            let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, start_time, time_limit_ms, depth - 1);
             
             if score >= beta { return beta; }
             if score > alpha { alpha = score; }
@@ -161,15 +166,8 @@ impl SearchEngine {
         alpha
     }
 
-    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
-        let mut noisy_moves = Vec::new();
-        let all_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
-        for move_ in all_moves {
-            if move_.is_capture || move_.is_promotion || self.is_checking_move(board, &move_) {
-                noisy_moves.push(move_);
-            }
-        }
-        noisy_moves
+    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
+        self.move_generator.generate_legal_captures(board, player)
     }
 
     fn is_checking_move(&self, board: &BitboardBoard, move_: &Move) -> bool {
