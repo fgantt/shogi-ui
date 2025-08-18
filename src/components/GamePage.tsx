@@ -309,6 +309,10 @@ const GamePage = () => {
     }
   };
 
+  const getRankLetter = (row: number): string => {
+  return String.fromCharCode('a'.charCodeAt(0) + row);
+};
+
   const handleDrop = (row, col) => {
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
     if (isThinking || currentPlayerType === 'ai' || isGameOver) return;
@@ -318,7 +322,7 @@ const GamePage = () => {
       handlePlayerMove(newGameState, 'drop', [row, col]);
     } else if (selectedPiece) {
       if (legalMoves.some(move => {
-        console.log("handleDrop - Checking legal move: ", move, "against dropped: ", [row, col]);
+        console.log(`handleDrop - Checking legal move: ${9 - move[1]}${getRankLetter(move[0])} against dropped: ${9 - col}${getRankLetter(row)}`);
         return move[0] === row && move[1] === col;
       })) {
         const result = movePiece(gameState, [selectedPiece.row, selectedPiece.col], [row, col], playerName);

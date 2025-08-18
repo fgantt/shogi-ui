@@ -335,7 +335,9 @@ export function completeMove(gameState: GameState, from: [number, number], to: [
     const playerNum = updatedGameState.currentPlayer === PLAYER_1 ? 2 : 1;
     const color = updatedGameState.currentPlayer === PLAYER_1 ? "White" : "Black";
     const shogiNotation = getShogiNotation({ from, to, piece: piece.type, promote }, piece);
-    console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);
+
+    if (playerName !== undefined && playerName)
+      console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);
 
     return updatedGameState;
 }
@@ -429,6 +431,8 @@ export function dropPiece(gameState: GameState, pieceType: PieceType, to: [numbe
   const playerNum = finalGameState.currentPlayer === PLAYER_1 ? 2 : 1;
   const color = finalGameState.currentPlayer === PLAYER_1 ? "White" : "Black";
   const shogiNotation = getShogiNotation({ from: 'drop', to, piece: pieceType, promote: false }, { type: pieceType, player: currentPlayer });
+
+  if (playerName !== undefined && playerName)
   console.log(`Player ${playerNum} (${color}) - ${playerName} moved ${shogiNotation}`);
 
   return finalGameState;

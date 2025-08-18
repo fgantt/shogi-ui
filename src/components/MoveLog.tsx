@@ -22,13 +22,17 @@ const getPieceInitial = (pieceType: PieceType): string => {
   }
 };
 
+const getRankLetter = (row: number): string => {
+  return String.fromCharCode('a'.charCodeAt(0) + row);
+};
+
 const formatMove = (move: Move, allMoves: Move[]): string => {
   let pieceInitial = getPieceInitial(move.piece);
   if (move.promote && pieceInitial.startsWith('+')) {
     pieceInitial = pieceInitial.substring(1);
   }
   const toFile = 9 - move.to[1];
-  const toRank = move.to[0] + 1;
+  const toRank = getRankLetter(move.to[0]);
 
   let notation = '';
 
@@ -36,7 +40,7 @@ const formatMove = (move: Move, allMoves: Move[]): string => {
     notation = `${pieceInitial}*${toFile}${toRank}`;
   } else if (Array.isArray(move.from)) {
     const fromFile = 9 - move.from[1];
-    const fromRank = move.from[0] + 1;
+    const fromRank = getRankLetter(move.from[0]);
     const moveType = move.captured && !move.captured.includes('check') ? 'x' : '-';
 
     const ambiguousMoves = allMoves.filter(m =>

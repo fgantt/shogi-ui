@@ -65,7 +65,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop
   };
 
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
-  const rowNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
 
   return (
     <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''} ${isGameOver ? 'game-over' : ''}`}>
@@ -110,9 +110,9 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop
           ))}
         </div>
         <div className="row-numbers">
-          {rowNumbers.map((num) => (
-            <div key={num} className="row-number-cell">
-              {num}
+          {rowLetters.map((letter) => (
+            <div key={letter} className="row-number-cell">
+              {letter}
             </div>
           ))}
         </div>
