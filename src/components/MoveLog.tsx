@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import type { Move, PieceType } from '../types';
+import type { Move, PieceType, GameState } from '../types';
 import { KING, ROOK, BISHOP, GOLD, SILVER, KNIGHT, LANCE, PAWN, PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN } from '../game/engine';
+import { getMoveString } from '../game/kifu';
 
 const getPieceInitial = (pieceType: PieceType): string => {
   switch (pieceType) {
@@ -26,7 +27,7 @@ const getRankLetter = (row: number): string => {
   return String.fromCharCode('a'.charCodeAt(0) + row);
 };
 
-const formatMove = (move: Move, allMoves: Move[]): string => {
+const formatMoveWestern = (move: Move, allMoves: Move[]): string => {
   let pieceInitial = getPieceInitial(move.piece);
   if (move.promote && pieceInitial.startsWith('+')) {
     pieceInitial = pieceInitial.substring(1);
@@ -63,9 +64,11 @@ const formatMove = (move: Move, allMoves: Move[]): string => {
 
 interface MoveLogProps {
   moves: Move[];
+  gameState: GameState;
+  notation: 'western' | 'kifu';
 }
 
-const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
+const MoveLog: React.FC<MoveLogProps> = ({ moves, gameState, notation }) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
 
   useEffect(() => {
@@ -73,6 +76,15 @@ const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
       tableBodyRef.current.scrollTop = tableBodyRef.current.scrollHeight;
     }
   }, [moves]);
+
+  const formatMove = (move: Move, allMoves: Move[], lastMove: Move | null): string => {
+    if (notation === 'kifu') {
+        const playerChar = move.player === 'player1' ? '▲' : '△';
+        return playerChar + getMoveString(move, gameState, lastMove);
+    } else {
+      return formatMoveWestern(move, allMoves);
+    }
+  };
 
   return (
     <div className="move-log">
@@ -89,11 +101,12 @@ const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
           {Array.from({ length: Math.ceil(moves.length / 2) }).map((_, i) => {
             const player1Move = moves[i * 2];
             const player2Move = moves[i * 2 + 1];
+            const lastMove = i > 0 ? moves[i * 2 -1] : null
             return (
               <tr key={i}>
                 <td>{i + 1}</td>
-                <td>{player1Move ? formatMove(player1Move, moves) : ''}</td>
-                <td>{player2Move ? formatMove(player2Move, moves) : ''}</td>
+                <td>{player1Move ? formatMove(player1Move, moves, lastMove) : ''}</td>
+                <td>{player2Move ? formatMove(player2Move, moves, player1Move) : ''}</td>
               </tr>
             );
           })}

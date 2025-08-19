@@ -249,53 +249,27 @@ describe('movePiece', () => {
 
   it('should set isCheckmate to true when a move results in checkmate', () => {
     const initialState = getInitialGameState();
-    // Clear the board
     initialState.board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
 
-    // Set up a checkmate scenario for Player 2 without capturing the King
-    // Player 2 King at [0,0]
-    initialState.board[0][0] = { type: KING, player: PLAYER_2 };
-    initialState.kingPositions[PLAYER_2] = [0, 0];
+    // Player 2 King at 1a (0,8)
+    initialState.board[0][8] = { type: KING, player: PLAYER_2 };
+    initialState.kingPositions[PLAYER_2] = [0, 8];
 
-    // Player 1 Rook at [0,1] (checks the King)
-    initialState.board[0][1] = { type: ROOK, player: PLAYER_1 };
+    // Player 1 Rook at 1c (2,8)
+    initialState.board[2][8] = { type: ROOK, player: PLAYER_1 };
+    
+    // Player 1 Gold at 2b (1,7)
+    initialState.board[1][7] = { type: GOLD, player: PLAYER_1 };
 
-    // Player 1 Gold General at [1,0] (covers escape squares [1,0] and [1,1])
-    initialState.board[1][0] = { type: GOLD, player: PLAYER_1 };
-
-    // Player 1 makes a move that results in checkmate
-    // Let's say Player 1 moves a pawn to create the checkmate.
-    // This test is for `movePiece` resulting in checkmate, so we need a piece to move.
-    // Let's move the Rook from [0,1] to [0,8] (a non-checkmating move initially)
-    // Then, we'll set up a scenario where a *subsequent* move leads to checkmate.
-
-    // For this test, we want to directly test `movePiece` leading to checkmate.
-    // So, the `initialState` should be *before* the checkmating move.
-
-    // Let's set up a board where Player 1 moves a Rook to checkmate Player 2.
-    // Player 2 King at [0,0]
-    initialState.board[0][0] = { type: KING, player: PLAYER_2 };
-    initialState.kingPositions[PLAYER_2] = [0, 0];
-
-    // Player 1 Rook at [8,0] (will move to [0,0] to checkmate)
-    initialState.board[8][0] = { type: ROOK, player: PLAYER_1 };
-
-    // Player 1 Gold General at [1,0] (covers escape squares [1,0] and [1,1])
-    initialState.board[1][0] = { type: GOLD, player: PLAYER_1 };
-
-    // Player 1 Gold General at [0,1] (covers escape squares [0,1])
-    initialState.board[0][1] = { type: GOLD, player: PLAYER_1 };
-
-    // Set current player to Player 1
     initialState.currentPlayer = PLAYER_1;
 
-    const from: Coords = [8, 0]; // Player 1 Rook
-    const to: Coords = [0, 0]; // Move to checkmate Player 2 King
+    const from: Coords = [2, 8]; // Player 1 Rook
+    const to: Coords = [1, 8];   // Move to 1b to checkmate
 
-    const newState = movePiece(initialState, from, to, true); // Force promotion for this test
+    const newState = movePiece(initialState, from, to, 'Test', false);
 
     expect(newState.isCheckmate).toBe(true);
-    expect(newState.currentPlayer).toBe(PLAYER_2); // It's Player 2's turn, and they are checkmated
+    expect(newState.currentPlayer).toBe(PLAYER_2);
   });
 });
 

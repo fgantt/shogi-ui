@@ -1,223 +1,234 @@
 import { getInitialGameState, movePiece, dropPiece, getLegalMoves, ROWS, COLS } from './engine';
-import type { GameState, Move } from '../types';
+import type { GameState, Move, Piece as PieceType, Player, Coords } from '../types';
+
+const pieceMap: { [key: string]: string } = {
+  'K': '玉', 'R': '飛', 'B': '角', 'G': '金', 'S': '銀', 'N': '桂', 'L': '香', 'P': '歩',
+  '+R': '龍', '+B': '馬', '+S': '成銀', '+N': '成桂', '+L': '成香', '+P': 'と',
+  '玉': 'K', '飛': 'R', '角': 'B', '金': 'G', '銀': 'S', '桂': 'N', '香': 'L', '歩': 'P',
+  '龍': '+R', '馬': '+B', '成銀': '+S', '成桂': '+N', '成香': '+L', 'と': '+P',
+};
+
+const fileMap: { [key: string]: number } = { '１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9 };
+const rankMap: { [key: string]: number } = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+const fileMapReverse: { [key: number]: string } = { 1: '１', 2: '２', 3: '３', 4: '４', 5: '５', 6: '６', 7: '７', 8: '８', 9: '９' };
+const rankMapReverse: { [key: number]: string } = { 1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '七', 8: '八', 9: '九' };
+
 
 export function parseKifu(kifu: string): GameState {
   const lines = kifu.split('\n');
-  const header: { [key: string]: string } = {};
-  let moveLines: string[] = [];
-  let inHeader = true;
   let gameState = getInitialGameState();
+  let lastMove: Move | null = null;
 
-  // Parse header and separate move lines
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (inHeader) {
-      if (line.length === 0) {
-        continue;
-      }
-      if (/^\d/.test(line)) { // If the line starts with a digit, it's a move line
-        inHeader = false;
-        moveLines.push(line); // This line is the first move line
-      } else {
-        const match = line.match(/^(.*?)[\u003A\uFF1A](.*)$/);
-        if (match) {
-          header[match[1]] = match[2].trim();
-        } else {
-          // If it's not a header line and doesn't start with a digit, it's an unexpected line in header section
-          // For now, we'll just log it and skip.
-          console.warn("parseKifu: Skipping unexpected line in header section:", line);
-        }
-      }
-    } else {
-      moveLines.push(line);
-    }
-  }
-
-  // Parse moves
-  const moves: Move[] = [];
-  const moveLineRegex = /^\d+\s+([^\s]+)(?:\s+\(.*\))?$/; // Matches "NUMBER MOVE_STRING (TIME_INFO)"
-                                                        // Captures MOVE_STRING in group 1
-  for (let i = 0; i < moveLines.length; i++) {
-    const line = moveLines[i].trim();
-    if (line.length === 0) {
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.length === 0 || !/^\d/.test(trimmedLine)) {
       continue;
     }
-    const match = line.match(moveLineRegex);
-    if (match) {
-      const moveString = match[1]; // This should be "８六歩" or "８三歩打"
-      const moveNumber = parseInt(line.split(' ')[0]); // Get move number from the start of the line
 
-      const currentPlayerForMove = (moveNumber % 2 !== 0) ? 'player1' : 'player2';
-      const parsedMove = parseMove(moveString, gameState, currentPlayerForMove);
-      if (parsedMove) {
-        parsedMove.player = currentPlayerForMove; // Ensure player is set correctly in the parsed move
+    const moveNumberMatch = trimmedLine.match(/^(\d+)/);
+    if (!moveNumberMatch) continue;
 
-        // Apply the move to the gameState immediately
-        if (parsedMove.from === 'drop') {
-          gameState = dropPiece(gameState, parsedMove.piece, parsedMove.to, parsedMove.player);
-        } else {
-          gameState = movePiece(gameState, parsedMove.from, parsedMove.to, parsedMove.player, parsedMove.promote);
-        }
-        moves.push(parsedMove);
+    const moveNumber = parseInt(moveNumberMatch[1], 10);
+    const player: Player = (moveNumber % 2 !== 0) ? 'player1' : 'player2';
+
+    const moveStringWithParens = trimmedLine.substring(moveNumberMatch[0].length).trim();
+    const moveString = moveStringWithParens.split('(')[0].trim();
+
+    const move = parseMove(moveString, gameState, lastMove, player);
+
+    if (move) {
+      let newGameState: GameState;
+      if (move.from === 'drop') {
+        newGameState = dropPiece(gameState, move.piece, move.to as Coords, player);
+      } else {
+        newGameState = movePiece(gameState, move.from as Coords, move.to as Coords, player, move.promote);
+      }
+      
+      if (newGameState !== gameState) {
+          gameState = newGameState;
+          lastMove = move;
+      } else {
+          console.warn("Kifu parsing: Illegal move skipped", moveString);
       }
     } else {
-      // If a line in the move section doesn't match the expected move format,
-      // it might be an unexpected line or the end of the moves.
-      // For now, we'll just log it and skip.
-      console.warn("parseKifu: Skipping malformed move line:", line);
+        console.warn("Kifu parsing: Could not parse move", moveString);
     }
   }
 
-  
-
-   console.log("Final gameState from parseKifu:", gameState);
   return gameState;
 }
 
-export function generateKifu(gameState: GameState): string {
-  const { moveHistory } = gameState;
+function parseMove(moveString: string, gameState: GameState, lastMove: Move | null, player: Player): Move | null {
+    let match;
+    let isSameAsLast = false;
+    let fileChar, rankChar, pieceChar, actionChar;
 
-  const header = [
-    `先手：${'Player 1'}`,
-    `後手：${'Player 2'}`,
-    `手合割：平手`,
-    `開始日時：${new Date().toLocaleString()}`,
-    `終了日時：${new Date().toLocaleString()}`,
-    ''
-  ].join('\n');
+    if (moveString.startsWith('同')) {
+        isSameAsLast = true;
+        const sameMoveRegex = /同\s*?([玉飛角金銀桂香歩龍馬成銀成桂成香と])(成|不成|打|引|寄|上|右|左|直)?/;
+        match = moveString.match(sameMoveRegex);
+        if (!match) return null;
+        pieceChar = match[1];
+        actionChar = match[2];
+    } else {
+        const moveRegex = /([１-９])([一二三四五六七八九])([玉飛角金銀桂香歩龍馬成銀成桂成香と])(成|不成|打|引|寄|上|右|左|直)?/;
+        match = moveString.match(moveRegex);
+        if (!match) return null;
+        fileChar = match[1];
+        rankChar = match[2];
+        pieceChar = match[3];
+        actionChar = match[4];
+    }
 
-  const moves = moveHistory.map((move, index) => {
-    const moveNumber = index + 1;
-    const moveString = getMoveString(move);
-    const timeString = `( 0:00/00:00:00)`; // Placeholder for time
-    return `${moveNumber} ${moveString} ${timeString}`;
-  }).join('\n');
-
-  return `${header}\n${moves}`;
-}
-
-function getMoveString(move: Move): string {
-  const { from, to, piece, promote } = move;
-
-  const pieceMap: { [key: string]: string } = {
-    'K': '玉',
-    'R': '飛',
-    'B': '角',
-    'G': '金',
-    'S': '銀',
-    'N': '桂',
-    'L': '香',
-    'P': '歩',
-    '+R': '龍',
-    '+B': '馬',
-    '+S': '成銀',
-    '+N': '成桂',
-    '+L': '成香',
-    '+P': 'と',
-  };
-
-  const fileMap: { [key: number]: string } = {
-    0: '１', 1: '２', 2: '３', 3: '４', 4: '５', 5: '６', 6: '７', 7: '８', 8: '９'
-  };
-
-  const rankMap: { [key: number]: string } = {
-    0: '一', 1: '二', 2: '三', 3: '四', 4: '五', 5: '六', 6: '七', 7: '八', 8: '九'
-  };
-
-  if (from === 'drop') {
-    return `${fileMap[to[1]]}${rankMap[to[0]]}${pieceMap[piece]}打`;
-  }
-
-  const fromString = `${fileMap[from[1]]}${rankMap[from[0]]}`;
-  const toString = `${fileMap[to[1]]}${rankMap[to[0]]}`;
-  const promoteString = promote ? '成' : '';
-
-  return `${toString}${pieceMap[piece]}${promoteString}`;
-}
-
-function parseMove(moveString: string, gameState: GameState, player: Player): Move | null {
-  const moveRegex = /^([１２３４５６７８９])(一|二|三|四|五|六|七|八|九)([玉飛角金銀桂香歩龍馬成銀成桂成香と])(成|打)?$/;
-  const match = moveString.match(moveRegex);
-
-  if (!match) {
-    console.log("parseMove: No match for moveString:", moveString);
-    return null;
-  }
-
-  const pieceMap: { [key: string]: string } = {
-    '玉': 'K', '飛': 'R', '角': 'B', '金': 'G', '銀': 'S', '桂': 'N', '香': 'L', '歩': 'P',
-    '龍': '+R', '馬': '+B', '成銀': '+S', '成桂': '+N', '成香': '+L', 'と': '+P',
-  };
-
-  const fileMap: { [key: string]: number } = {
-    '１': 0, '２': 1, '３': 2, '４': 3, '５': 4, '６': 5, '７': 6, '８': 7, '９': 8
-  };
-
-  const rankMap: { [key: string]: number } = {
-    '一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '七': 6, '八': 7, '九': 8
-  };
-
-  const toFileChar = match[1];
-  const toRankChar = match[2];
-  const pieceChar = match[3];
-  const suffix = match[4]; // '成' or '打' or undefined
-
-  const to: [number, number] = [rankMap[toRankChar], fileMap[toFileChar]];
+  const to: Coords = isSameAsLast && lastMove ? lastMove.to as Coords : [rankMap[rankChar] - 1, 9-fileMap[fileChar!]];
   const piece = pieceMap[pieceChar];
-  const promote = suffix === '成';
-  const isDrop = suffix === '打';
-
-  let from: [number, number] | 'drop';
+  const isDrop = actionChar === '打';
+  const promote = actionChar === '成';
 
   if (isDrop) {
-    from = 'drop';
-  } else {
-    // For simple moves, 'from' is not explicitly given in the KIF string.
-    // We need to find the piece on the board that could have made this move.
-    // Iterate through the board to find the piece that could have made this move.
-    let foundFrom: [number, number] | null = null;
-    const board = gameState.board;
+    return { from: 'drop', to, piece, player, timestamp: new Date().toISOString() };
+  }
 
-    // Determine the unpromoted piece type for comparison
-    let unpromotedPieceType = piece;
-    if (piece.startsWith('+')) {
-      unpromotedPieceType = piece.substring(1);
-    }
+  // Find the 'from' position
+  const possibleSources: Coords[] = [];
+  const board = gameState.board;
+  const unpromotedPiece = piece.startsWith('+') ? piece.substring(1) : piece;
 
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const pieceOnBoard = board[r][c];
-        if (pieceOnBoard && pieceOnBoard.player === player) {
-          // Compare piece type, considering promoted pieces
-          let pieceOnBoardType = pieceOnBoard.type;
-          if (pieceOnBoardType.startsWith('+')) {
-            pieceOnBoardType = pieceOnBoardType.substring(1);
-          }
-
-          if (pieceOnBoardType === unpromotedPieceType) {
-            const legalMoves = getLegalMoves(pieceOnBoard, r, c, board);
-            for (const legalMove of legalMoves) {
-              if (legalMove[0] === to[0] && legalMove[1] === to[1]) {
-                foundFrom = [r, c];
-                break;
-              }
-            }
-          }
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const boardPiece = board[r][c];
+      if (boardPiece && boardPiece.player === player && (boardPiece.type === unpromotedPiece || boardPiece.type === piece)) {
+        const legalMoves = getLegalMoves(boardPiece, r, c, board);
+        if (legalMoves.some(move => move[0] === to[0] && move[1] === to[1])) {
+          possibleSources.push([r, c]);
         }
-        if (foundFrom) break;
       }
-      if (foundFrom) break;
-    }
-
-    if (foundFrom) {
-      from = foundFrom;
-    } else {
-      // If no valid 'from' is found, it indicates an error in KIF or game state.
-      // For now, return null to indicate parsing failure.
-      console.warn(`parseMove: Could not find 'from' for move: ${moveString} to ${to} by ${player}`);
-      return null;
     }
   }
 
-  return { from, to, piece, promote, player };
+  if (possibleSources.length === 0) {
+    return null; // Should not happen in a valid kifu
+  }
+
+  if (possibleSources.length === 1) {
+    return { from: possibleSources[0], to, piece, player, promote, timestamp: new Date().toISOString() };
+  }
+
+  // Handle ambiguities
+  let from: Coords | null = null;
+  if (actionChar) {
+    switch (actionChar) {
+      case '引': // Move backward
+        from = possibleSources.find(source => source[0] < to[0]) || null;
+        break;
+      case '寄': // Move sideways
+        from = possibleSources.find(source => source[0] === to[0]) || null;
+        break;
+      case '上': // Move forward
+        from = possibleSources.find(source => source[0] > to[0]) || null;
+        break;
+      case '直': // Straight forward (for rook, bishop, etc.)
+        from = possibleSources.find(source => source[1] === to[1]) || null;
+        break;
+      case '右':
+        from = possibleSources.sort((a, b) => b[1] - a[1])[0];
+        break;
+      case '左':
+        from = possibleSources.sort((a, b) => a[1] - b[1])[0];
+        break;
+    }
+  }
+
+  if (from) {
+    return { from, to, piece, player, promote, timestamp: new Date().toISOString() };
+  }
+  
+  return { from: possibleSources[0], to, piece, player, promote, timestamp: new Date().toISOString() };
+}
+
+
+export function generateKifu(gameState: GameState): string {
+  const { moveHistory } = gameState;
+  let kifu = '';
+  const header = [
+    `先手：Player 1`,
+    `後手：Player 2`,
+    `手合割：平手`,
+    `手数----指手---------消費時間--`,
+  ].join('\n');
+  kifu += header + '\n';
+
+  let lastMove: Move | null = null;
+  moveHistory.forEach((move, index) => {
+    const moveNumber = index + 1;
+    const playerChar = move.player === 'player1' ? '▲' : '△';
+    const moveString = getMoveString(move, gameState, lastMove);
+    kifu += `${moveNumber} ${playerChar}${moveString}\n`;
+    lastMove = move;
+  });
+
+  return kifu;
+}
+
+export function getMoveString(move: Move, gameState: GameState, lastMove: Move | null): string {
+  const { from, to, piece, promote } = move;
+  const toFile = fileMapReverse[9 - to[1]];
+  const toRank = rankMapReverse[to[0] + 1];
+
+  let moveStr = '';
+
+  if (lastMove && to[0] === lastMove.to[0] && to[1] === lastMove.to[1]) {
+    moveStr += '同\u3000';
+  } else {
+    moveStr += `${toFile}${toRank}`;
+  }
+  
+  moveStr += pieceMap[piece];
+
+  if (from === 'drop') {
+    moveStr += '打';
+    return moveStr;
+  }
+
+  if (promote) {
+    moveStr += '成';
+  }
+
+  // Disambiguation logic
+  const board = gameState.board;
+  const otherPieces: Coords[] = [];
+  const unpromotedPiece = piece.startsWith('+') ? piece.substring(1) : piece;
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const boardPiece = board[r][c];
+      if (boardPiece && boardPiece.player === move.player && (boardPiece.type === unpromotedPiece || boardPiece.type === piece) && (r !== from[0] || c !== from[1])) {
+        const legalMoves = getLegalMoves(boardPiece, r, c, board);
+        if (legalMoves.some(m => m[0] === to[0] && m[1] === to[1])) {
+          otherPieces.push([r, c]);
+        }
+      }
+    }
+  }
+
+  if (otherPieces.length > 0) {
+    const fromRow = from[0];
+    const fromCol = from[1];
+    const toRow = to[0];
+    const toCol = to[1];
+
+    const canMoveStraight = piece === 'R' || piece === 'L' || piece === '+R';
+
+    if (fromCol === toCol && canMoveStraight) {
+      moveStr += '直';
+    } else if (fromRow > toRow) {
+      moveStr += '上';
+    } else if (fromRow < toRow) {
+      moveStr += '引';
+    } else if (fromCol !== toCol) {
+      moveStr += '寄';
+    }
+  }
+
+  return moveStr;
 }

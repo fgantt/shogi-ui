@@ -37,7 +37,7 @@ describe('Opening Book Validation', () => {
             promote = true;
         }
         
-        gameState = movePiece(gameState, from, to, promote);
+        gameState = movePiece(gameState, from, to, "Test", promote);
 
         moveNumber++;
       }

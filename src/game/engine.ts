@@ -72,9 +72,9 @@ export function getInitialGameState(): GameState {
 }
 
 export function getLegalMoves(piece: Piece | null, row: number, col: number, board: (Piece | null)[][]): [number, number][] {
-  const moves: [number, number][] = [];
+  const moves = new Set<string>();
   if (!piece) {
-    return moves;
+    return [];
   }
 
   const { type, player } = piece;
@@ -93,7 +93,7 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
 
   const addMove = (r: number, c: number) => {
     if (canMove(r, c)) {
-      moves.push([r, c]);
+      moves.add(`${r},${c}`);
     }
   };
 
@@ -105,11 +105,11 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
         const targetPiece = board[r][c];
         if (targetPiece) {
           if (targetPiece.player !== player) {
-            moves.push([r, c]);
+            moves.add(`${r},${c}`);
           }
           break;
         }
-        moves.push([r, c]);
+        moves.add(`${r},${c}`);
         r += dr;
         c += dc;
       }
@@ -175,25 +175,21 @@ export function getLegalMoves(piece: Piece | null, row: number, col: number, boa
       break;
     case PROMOTED_BISHOP:
         addSlidingMoves([[-1, -1], [-1, 1], [1, -1], [1, 1]]);
-        addMove(row + player_mult * -1, col + player_mult * 0); // King moves
-        addMove(row + player_mult * 0, col + player_mult * -1);
-        addMove(row + player_mult * 0, col + player_mult * 1);
-        addMove(row + player_mult * 1, col + player_mult * 0);
+        const pbKingMoves: [number, number][] = [
+            [row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]
+        ];
+        pbKingMoves.forEach(([r, c]) => addMove(r, c));
         break;
     case PROMOTED_ROOK:
         addSlidingMoves([[-1, 0], [1, 0], [0, -1], [0, 1]]);
-        addMove(row + player_mult * -1, col + player_mult * -1); // King moves
-        addMove(row + player_mult * -1, col + player_mult * 0);
-        addMove(row + player_mult * -1, col + player_mult * 1);
-        addMove(row + player_mult * 0, col + player_mult * -1);
-        addMove(row + player_mult * 0, col + player_mult * 1);
-        addMove(row + player_mult * 1, col + player_mult * -1);
-        addMove(row + player_mult * 1, col + player_mult * 0);
-        addMove(row + player_mult * 1, col + player_mult * 1);
+        const prKingMoves: [number, number][] = [
+            [row - 1, col - 1], [row - 1, col + 1], [row + 1, col - 1], [row + 1, col + 1]
+        ];
+        prKingMoves.forEach(([r, c]) => addMove(r, c));
         break;
   }
 
-  return moves;
+  return Array.from(moves).map(s => s.split(',').map(Number) as [number, number]);
 }
 
 export function movePiece(gameState: GameState, from: [number, number], to: [number, number], playerName: string, promoteOverride: boolean | null = null): GameState {

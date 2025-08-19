@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type PieceLabelType = 'kanji' | 'english';
+type Notation = 'western' | 'kifu';
 
 interface SettingsPanelProps {
   aiDifficulty: Difficulty;
   onDifficultyChange: (difficulty: Difficulty) => void;
   pieceLabelType: PieceLabelType;
   onPieceLabelTypeChange: (type: PieceLabelType) => void;
+  notation: Notation;
+  onNotationChange: (notation: Notation) => void;
   wallpaperList: string[];
   onSelectWallpaper: (wallpaper: string) => void;
   boardBackgroundList: string[];
@@ -26,6 +29,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onDifficultyChange,
   pieceLabelType,
   onPieceLabelTypeChange,
+  notation,
+  onNotationChange,
   wallpaperList,
   onSelectWallpaper,
   boardBackgroundList,
@@ -113,6 +118,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onChange={() => onPieceLabelTypeChange('english')}
               />
               English
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Move Log Notation</h3>
+          <div className="setting-group">
+            <label>
+              <input
+                type="radio"
+                value="western"
+                checked={notation === 'western'}
+                onChange={() => onNotationChange('western')}
+              />
+              Western
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="kifu"
+                checked={notation === 'kifu'}
+                onChange={() => onNotationChange('kifu')}
+              />
+              Kifu
             </label>
           </div>
         </section>

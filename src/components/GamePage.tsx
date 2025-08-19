@@ -35,6 +35,7 @@ const GamePage = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isLoadingGame, setIsLoadingGame] = useState(false);
+  const [notation, setNotation] = useState<'western' | 'kifu'>('western');
 
   const playerNames = {
     'human': 'Human',
@@ -561,7 +562,7 @@ const GamePage = () => {
             isGameOver={isGameOver}
           />
         </div>
-        <MoveLog moves={gameState.moveHistory} pieceLabelType={pieceLabelType} />
+        <MoveLog moves={gameState.moveHistory} gameState={gameState} notation={notation} />
       </div>
 
       {gameState.promotionPending && (
@@ -585,6 +586,8 @@ const GamePage = () => {
           onShowAttackedPiecesChange={setShowAttackedPieces}
           showPieceTooltips={showPieceTooltips}
           onShowPieceTooltipsChange={setShowPieceTooltips}
+          notation={notation}
+          onNotationChange={setNotation}
         />
       )}
 
