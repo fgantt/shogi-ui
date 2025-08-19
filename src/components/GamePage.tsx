@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece, checkSennichite } from '../game/engine';
+import { generateKifu, parseKifu } from '../game/kifu';
 import { getAiMove, initializeWasm } from '../ai/computerPlayer';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
@@ -33,6 +34,7 @@ const GamePage = () => {
   const [checkmateWinner, setCheckmateWinner] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isLoadingGame, setIsLoadingGame] = useState(false);
 
   const playerNames = {
     'human': 'Human',
@@ -138,7 +140,7 @@ const GamePage = () => {
   }, [gameState.board, gameState.isCheck, gameState.currentPlayer]);
 
   useEffect(() => {
-    if (isStartModalOpen) return; // Do not run AI logic if modal is open
+    if (isStartModalOpen || isLoadingGame) return; // Do not run AI logic if modal is open or game is loading
 
     const currentPlayerType = gameState.currentPlayer === PLAYER_1 ? player1Type : player2Type;
 
@@ -458,6 +460,40 @@ const GamePage = () => {
     setCurrentBoardBackground(boardBackground);
   };
 
+  const handleSaveGame = () => {
+    const kifu = generateKifu(gameState);
+    const blob = new Blob([kifu], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'shogi-game.kif';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleLoadGame = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.kif';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setIsLoadingGame(true); // Set loading state to true
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const kifu = e.target?.result as string;
+          const newGameState = parseKifu(kifu);
+          console.log("Parsed newGameState:", newGameState); // <--- Add this line
+          setGameState(newGameState);
+          setIsLoadingGame(false);
+          setIsStartModalOpen(false); // Add this line
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
   return (
     <div className={`game-page ${isGameOver ? 'game-over' : ''}`}>
       <div className="game-header">
@@ -470,6 +506,8 @@ const GamePage = () => {
       <GameControls
         onNewGame={handleNewGame}
         onUndoMove={handleUndoMove}
+        onSaveGame={handleSaveGame}
+        onLoadGame={handleLoadGame}
         onDifficultyChange={handleDifficultyChange}
         onPieceLabelTypeChange={setPieceLabelType}
         pieceLabelType={pieceLabelType}

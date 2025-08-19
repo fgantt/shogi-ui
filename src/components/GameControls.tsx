@@ -5,12 +5,14 @@ interface GameControlsProps {
   onNewGame: () => void;
   onUndoMove: () => void;
   onOpenSettings: () => void;
+  onSaveGame: () => void;
+  onLoadGame: () => void;
   aiDifficulty: string | null;
   isThinking: boolean;
   isGameOver: boolean;
 }
 
-const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onUndoMove, onOpenSettings, aiDifficulty, isThinking, isGameOver }) => {
+const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onUndoMove, onOpenSettings, onSaveGame, onLoadGame, aiDifficulty, isThinking, isGameOver }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">
@@ -19,6 +21,12 @@ const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onUndoMove, onOp
         </button>
         <button onClick={onUndoMove} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
           <span role="img" aria-label="Undo Move">↩️</span> Undo Move
+        </button>
+        <button onClick={onSaveGame} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
+          <span role="img" aria-label="Save Game">💾</span> Save Game
+        </button>
+        <button onClick={onLoadGame} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
+          <span role="img" aria-label="Load Game">📂</span> Load Game
         </button>
       </div>
       <div className="difficulty-display">
