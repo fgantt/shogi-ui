@@ -191,6 +191,11 @@ const GamePage = () => {
         })
         .catch(error => {
           console.error("Error getting AI move:", error);
+          // If AI fails, switch turn back to the other player to prevent getting stuck
+          setGameState(currentGameState => ({
+            ...currentGameState,
+            currentPlayer: currentGameState.currentPlayer === PLAYER_1 ? PLAYER_2 : PLAYER_1,
+          }));
         })
         .finally(() => {
           setIsThinking(false);

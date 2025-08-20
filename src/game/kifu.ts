@@ -32,7 +32,7 @@ export function parseKifu(kifu: string): GameState {
     const player: Player = (moveNumber % 2 !== 0) ? 'player1' : 'player2';
 
     const moveStringWithParens = trimmedLine.substring(moveNumberMatch[0].length).trim();
-    const moveString = moveStringWithParens.split('(')[0].trim();
+    const moveString = moveStringWithParens.replace(/^[▲△]\s*/, '').split('(')[0].trim();
 
     const move = parseMove(moveString, gameState, lastMove, player);
 
@@ -48,10 +48,10 @@ export function parseKifu(kifu: string): GameState {
           gameState = newGameState;
           lastMove = move;
       } else {
-          console.warn("Kifu parsing: Illegal move skipped", moveString);
+          console.warn("Kifu parsing: Illegal move skipped", moveStringWithParens);
       }
     } else {
-        console.warn("Kifu parsing: Could not parse move", moveString);
+        console.warn("Kifu parsing: Could not parse move", moveStringWithParens);
     }
   }
 
@@ -65,13 +65,13 @@ function parseMove(moveString: string, gameState: GameState, lastMove: Move | nu
 
     if (moveString.startsWith('同')) {
         isSameAsLast = true;
-        const sameMoveRegex = /同\s*?([玉飛角金銀桂香歩龍馬成銀成桂成香と])(成|不成|打|引|寄|上|右|左|直)?/;
+        const sameMoveRegex = /同\s*?(成銀|成桂|成香|龍|馬|玉|飛|角|金|銀|桂|香|歩|と)(成|不成|打|引|寄|上|右|左|直)?/;
         match = moveString.match(sameMoveRegex);
         if (!match) return null;
         pieceChar = match[1];
         actionChar = match[2];
     } else {
-        const moveRegex = /([１-９])([一二三四五六七八九])([玉飛角金銀桂香歩龍馬成銀成桂成香と])(成|不成|打|引|寄|上|右|左|直)?/;
+        const moveRegex = /([１-９])([一二三四五六七八九])(成銀|成桂|成香|龍|馬|玉|飛|角|金|銀|桂|香|歩|と)(成|不成|打|引|寄|上|右|左|直)?/;
         match = moveString.match(moveRegex);
         if (!match) return null;
         fileChar = match[1];
