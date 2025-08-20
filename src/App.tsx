@@ -5,6 +5,7 @@ import PracticePage from './components/PracticePage';
 import PracticeExerciseDetail from './components/PracticeExerciseDetail';
 import HelpPage from './components/HelpPage';
 import AboutPage from './components/AboutPage';
+
 import WebAssemblyDemo from './components/WebAssemblyDemo';
 import './App.css';
 import './styles/shogi.css';
