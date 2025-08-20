@@ -547,6 +547,7 @@ const GamePage = () => {
             kingPosition={gameState.kingPositions[gameState.currentPlayer]}
             lastMove={lastMove}
             pieceLabelType={pieceLabelType}
+            notation={notation}
             selectedPiece={selectedPiece}
             attackedSquares={attackedSquares}
             showAttackedPieces={showAttackedPieces}

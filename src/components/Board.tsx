@@ -14,6 +14,7 @@ interface BoardProps {
   kingPosition: [number, number] | null;
   lastMove: Move | null;
   pieceLabelType: string;
+  notation: 'western' | 'kifu'; // Add this line
   selectedPiece: { row: number; col: number } | null;
   attackedSquares: { player1: Set<string>; player2: Set<string> };
   showAttackedPieces: boolean;
@@ -23,7 +24,7 @@ interface BoardProps {
   isGameOver: boolean;
 }
 
-const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, notation, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
   const isLegalMove = (row: number, col: number): boolean => {
     return legalMoves.some(move => move[0] === row && move[1] === col);
   };
@@ -66,6 +67,7 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop
 
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const rowLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
+  const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
   return (
     <div className={`shogi-board-container ${isThinking ? 'ai-thinking-overlay' : ''} ${isGameOver ? 'game-over' : ''}`}>
@@ -110,9 +112,9 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop
           ))}
         </div>
         <div className="row-numbers">
-          {rowLetters.map((letter) => (
-            <div key={letter} className="row-number-cell">
-              {letter}
+          {(notation === 'kifu' ? kifuRowLabels : rowLetters).map((label) => (
+            <div key={label} className="row-number-cell">
+              {label}
             </div>
           ))}
         </div>
