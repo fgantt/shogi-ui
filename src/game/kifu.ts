@@ -58,6 +58,69 @@ export function parseKifu(kifu: string): GameState {
   return gameState;
 }
 
+export function getMoveString(move: Move, gameState: GameState, lastMove: Move | null): string {
+  const { from, to, piece, promote } = move;
+  const toFile = fileMapReverse[9 - to[1]];
+  const toRank = rankMapReverse[to[0] + 1];
+
+  let moveStr = '';
+
+  if (lastMove && to[0] === lastMove.to[0] && to[1] === lastMove.to[1]) {
+    moveStr += '同\u3000';
+  } else {
+    moveStr += `${toFile}${toRank}`;
+  }
+  
+  moveStr += pieceMap[piece];
+
+  if (from === 'drop') {
+    moveStr += '打';
+    return moveStr;
+  }
+
+  if (promote) {
+    moveStr += '成';
+  }
+
+  // Disambiguation logic
+  const board = gameState.board;
+  const otherPieces: Coords[] = [];
+  const unpromotedPiece = piece.startsWith('+') ? piece.substring(1) : piece;
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const boardPiece = board[r][c];
+      if (boardPiece && boardPiece.player === move.player && (boardPiece.type === unpromotedPiece || boardPiece.type === piece)) {
+        const legalMoves = getLegalMoves(boardPiece, r, c, board);
+        if (legalMoves.some(m => m[0] === to[0] && m[1] === to[1])) {
+          otherPieces.push([r, c]);
+        }
+      }
+    }
+  }
+
+  if (otherPieces.length > 0) {
+    const fromRow = from[0];
+    const fromCol = from[1];
+    const toRow = to[0];
+    const toCol = to[1];
+
+    const canMoveStraight = piece === 'R' || piece === 'L' || piece === '+R';
+
+    if (fromCol === toCol && canMoveStraight) {
+      moveStr += '直';
+    } else if (fromRow > toRow) {
+      moveStr += '上';
+    } else if (fromRow < toRow) {
+      moveStr += '引';
+    } else if (fromCol !== toCol) {
+      moveStr += '寄';
+    }
+  }
+
+  return moveStr;
+}
+
 function parseMove(moveString: string, gameState: GameState, lastMove: Move | null, player: Player): Move | null {
     let match;
     let isSameAsLast = false;
@@ -146,7 +209,6 @@ function parseMove(moveString: string, gameState: GameState, lastMove: Move | nu
   return { from: possibleSources[0], to, piece, player, promote, timestamp: new Date().toISOString() };
 }
 
-
 export function generateKifu(gameState: GameState): string {
   const { moveHistory } = gameState;
   let kifu = '';
@@ -170,65 +232,126 @@ export function generateKifu(gameState: GameState): string {
   return kifu;
 }
 
-export function getMoveString(move: Move, gameState: GameState, lastMove: Move | null): string {
-  const { from, to, piece, promote } = move;
-  const toFile = fileMapReverse[9 - to[1]];
-  const toRank = rankMapReverse[to[0] + 1];
+export function getKifuTooltipText(kifuMoveString: string): string {
+  let player = '';
+  let moveString = kifuMoveString;
 
-  let moveStr = '';
-
-  if (lastMove && to[0] === lastMove.to[0] && to[1] === lastMove.to[1]) {
-    moveStr += '同\u3000';
-  } else {
-    moveStr += `${toFile}${toRank}`;
-  }
-  
-  moveStr += pieceMap[piece];
-
-  if (from === 'drop') {
-    moveStr += '打';
-    return moveStr;
+  if (kifuMoveString.startsWith('▲')) {
+    player = 'Black';
+    moveString = kifuMoveString.substring(1);
+  } else if (kifuMoveString.startsWith('△')) {
+    player = 'White';
+    moveString = kifuMoveString.substring(1);
   }
 
-  if (promote) {
-    moveStr += '成';
+  let piece = '';
+  let toSquare = '';
+  let action = '';
+  let promoted = false;
+  let dropped = false;
+  let captured = false;
+
+  // Handle '同' (same square capture)
+  if (moveString.startsWith('同')) {
+    captured = true;
+    toSquare = 'the same square';
+    moveString = moveString.substring(1).trim();
   }
 
-  // Disambiguation logic
-  const board = gameState.board;
-  const otherPieces: Coords[] = [];
-  const unpromotedPiece = piece.startsWith('+') ? piece.substring(1) : piece;
+  // Extract destination coordinates
+  const coordMatch = moveString.match(/^([１-９])([一二三四五六七八九])/);
+  if (coordMatch) {
+    const file = fileMap[coordMatch[1]];
+    const rank = rankMap[coordMatch[2]];
+    toSquare = `the ${file}${rank} square`;
+    moveString = moveString.substring(coordMatch[0].length).trim();
+  }
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const boardPiece = board[r][c];
-      if (boardPiece && boardPiece.player === move.player && (boardPiece.type === unpromotedPiece || boardPiece.type === piece) && (r !== from[0] || c !== from[1])) {
-        const legalMoves = getLegalMoves(boardPiece, r, c, board);
-        if (legalMoves.some(m => m[0] === to[0] && m[1] === to[1])) {
-          otherPieces.push([r, c]);
-        }
-      }
+  // Extract piece
+  for (const kifuPiece in pieceMap) {
+    if (moveString.startsWith(kifuPiece)) {
+      piece = pieceMap[kifuPiece];
+      moveString = moveString.substring(kifuPiece.length).trim();
+      break;
     }
   }
 
-  if (otherPieces.length > 0) {
-    const fromRow = from[0];
-    const fromCol = from[1];
-    const toRow = to[0];
-    const toCol = to[1];
-
-    const canMoveStraight = piece === 'R' || piece === 'L' || piece === '+R';
-
-    if (fromCol === toCol && canMoveStraight) {
-      moveStr += '直';
-    } else if (fromRow > toRow) {
-      moveStr += '上';
-    } else if (fromRow < toRow) {
-      moveStr += '引';
-    } else if (fromCol !== toCol) {
-      moveStr += '寄';
-    }
+  // Extract action/promotion
+  if (moveString.includes('成')) {
+    promoted = true;
+    action = 'promoted it';
+  } else if (moveString.includes('打')) {
+    dropped = true;
+    action = 'dropped it';
+  } else if (moveString.includes('不成')) {
+    action = 'did not promote it';
   }
 
-  return moveStr;
+  let sentence = `${player} moved ${piece}`;
+
+  if (dropped) {
+    sentence = `${player} dropped ${piece}`;
+  }
+
+  if (toSquare) {
+    sentence += ` to ${toSquare}`;
+  }
+
+  if (captured) {
+    sentence += ` and captured a piece`;
+  }
+
+  if (promoted) {
+    sentence += ` and ${action}`;
+  } else if (action) {
+    sentence += ` and ${action}`;
+  }
+
+  sentence += '.';
+
+  return sentence;
+}
+
+export function getWesternTooltipText(westernMoveString: string): string {
+  let piece = '';
+  let toSquare = '';
+  let action = '';
+  let promoted = false;
+  let dropped = false;
+  let captured = false;
+
+  // Regex to parse Western notation
+  const moveRegex = /^([KRGBNSLP])([x*])?([1-9][a-i])(\+)?$/;
+  const match = westernMoveString.match(moveRegex);
+
+  if (match) {
+    piece = match[1];
+    const captureOrDrop = match[2];
+    toSquare = match[3];
+    promoted = !!match[4];
+
+    if (captureOrDrop === 'x') {
+      captured = true;
+    } else if (captureOrDrop === '*') {
+      dropped = true;
+    }
+
+    if (promoted) {
+      action = ' and promoted';
+    } else if (dropped) {
+      action = ' and dropped';
+    }
+
+    let sentence = `Moved ${piece} to ${toSquare}`;
+
+    if (captured) {
+      sentence += ' and captured a piece';
+    }
+
+    sentence += `${action}.`;
+
+    return sentence;
+  }
+
+  return `Invalid Western move: ${westernMoveString}`;
 }

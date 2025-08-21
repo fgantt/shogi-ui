@@ -56,4 +56,6 @@ body {
   color: #888;
 }
 
-
+.kifu-tooltip {
+  pointer-events: none; /* Allows clicks to pass through the tooltip */
+}

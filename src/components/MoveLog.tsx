@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { Move, PieceType, GameState } from '../types';
 import { KING, ROOK, BISHOP, GOLD, SILVER, KNIGHT, LANCE, PAWN, PROMOTED_ROOK, PROMOTED_BISHOP, PROMOTED_SILVER, PROMOTED_KNIGHT, PROMOTED_LANCE, PROMOTED_PAWN } from '../game/engine';
-import { getMoveString } from '../game/kifu';
+import { getMoveString, getKifuTooltipText, getWesternTooltipText } from '../game/kifu';
+
 
 const getPieceInitial = (pieceType: PieceType): string => {
   switch (pieceType) {
@@ -70,6 +71,7 @@ interface MoveLogProps {
 
 const MoveLog: React.FC<MoveLogProps> = ({ moves, gameState, notation }) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const [tooltip, setTooltip] = useState<{ visible: boolean; content: string; x: number; y: number }>({ visible: false, content: '', x: 0, y: 0 });
 
   useEffect(() => {
     if (tableBodyRef.current) {
@@ -84,6 +86,27 @@ const MoveLog: React.FC<MoveLogProps> = ({ moves, gameState, notation }) => {
     } else {
       return formatMoveWestern(move, allMoves);
     }
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLSpanElement>, moveString: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    let tooltipContent = '';
+    if (notation === 'kifu') {
+      tooltipContent = getKifuTooltipText(moveString);
+    } else if (notation === 'western') {
+      tooltipContent = getWesternTooltipText(moveString);
+    }
+
+    setTooltip({
+      visible: true,
+      content: tooltipContent,
+      x: rect.right + 10,
+      y: rect.top + rect.height / 2,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip({ ...tooltip, visible: false });
   };
 
   return (
@@ -105,13 +128,54 @@ const MoveLog: React.FC<MoveLogProps> = ({ moves, gameState, notation }) => {
             return (
               <tr key={i}>
                 <td>{i + 1}</td>
-                <td>{player1Move ? formatMove(player1Move, moves, lastMove) : ''}</td>
-                <td>{player2Move ? formatMove(player2Move, moves, player1Move) : ''}</td>
+                <td>
+                  {player1Move ? (
+                    <span
+                      onMouseEnter={(e) => handleMouseEnter(e, formatMove(player1Move, moves, lastMove))}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      {formatMove(player1Move, moves, lastMove)}
+                    </span>
+                  ) : (
+                    ''
+                  )}
+                </td>
+                <td>
+                  {player2Move ? (
+                    <span
+                      onMouseEnter={(e) => handleMouseEnter(e, formatMove(player2Move, moves, player1Move))}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      {formatMove(player2Move, moves, player1Move)}
+                    </span>
+                  ) : (
+                    ''
+                  )}
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {tooltip.visible && (
+        <div
+          className="kifu-tooltip"
+          style={{
+            position: 'absolute',
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translateY(-50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: 'white',
+            padding: '5px',
+            borderRadius: '3px',
+            whiteSpace: 'pre-wrap',
+            zIndex: 1000,
+          }}
+        >
+          {tooltip.content}
+        </div>
+      )}
     </div>
   );
 };
