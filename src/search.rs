@@ -38,7 +38,9 @@ impl SearchEngine {
         let mut best_score = i32::MIN;
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
-        if legal_moves.is_empty() { return None; }
+        if legal_moves.is_empty() {
+            return None;
+        }
         
         let sorted_moves = self.sort_moves(&legal_moves, board);
         

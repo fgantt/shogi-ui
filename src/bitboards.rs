@@ -114,10 +114,93 @@ impl BitboardBoard {
         if king_bb == 0 { None } else { get_lsb(king_bb) }
     }
 
-    pub fn is_square_attacked_by(&self, _position: Position, _player: Player) -> bool {
-        // This is a complex method, a full implementation is required for correctness.
-        // For now, we assume a simplified logic.
+    pub fn is_square_attacked_by(&self, target_pos: Position, attacking_player: Player) -> bool {
+        for r in 0..9 {
+            for c in 0..9 {
+                let from_pos = Position::new(r, c);
+                if let Some(piece) = self.get_piece(from_pos) {
+                    if piece.player == attacking_player {
+                        // Check if this piece attacks the target_pos
+                        let pseudo_moves = self.generate_pseudo_moves_for_piece(piece, from_pos);
+                        for m in pseudo_moves {
+                            if m.to == target_pos {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         false
+    }
+
+    // Helper to generate pseudo-legal moves for a single piece
+    fn generate_pseudo_moves_for_piece(&self, piece: &Piece, pos: Position) -> Vec<Move> {
+        let mut moves = Vec::new();
+        let player = piece.player;
+
+        let handle_move = |moves: &mut Vec<Move>, to_pos: Position| {
+            if !self.is_square_occupied_by(to_pos, player) {
+                moves.push(Move::new_move(pos, to_pos, piece.piece_type, player, false));
+            }
+        };
+
+        match piece.piece_type {
+            PieceType::Pawn => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let new_row = pos.row as i8 + dir;
+                if new_row >= 0 && new_row < 9 {
+                    handle_move(&mut moves, Position::new(new_row as u8, pos.col));
+                }
+            },
+            PieceType::Knight => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
+                for (dr, dc) in move_offsets.iter() {
+                    let new_row = pos.row as i8 + dr;
+                    let new_col = pos.col as i8 + dc;
+                    if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
+                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                    }
+                }
+            },
+            PieceType::Lance | PieceType::Rook | PieceType::Bishop | PieceType::PromotedBishop | PieceType::PromotedRook => {
+                let directions = match piece.piece_type {
+                    PieceType::Lance => if player == Player::Black { vec![(1, 0)] } else { vec![(-1, 0)] },
+                    PieceType::Rook => vec![(1, 0), (-1, 0), (0, 1), (0, -1)],
+                    PieceType::Bishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1)],
+                    PieceType::PromotedBishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)],
+                    PieceType::PromotedRook => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
+                    _ => vec![]
+                };
+
+                for (dr, dc) in directions {
+                    let mut current_pos = pos;
+                    loop {
+                        let new_row = current_pos.row as i8 + dr;
+                        let new_col = current_pos.col as i8 + dc;
+                        if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 { break; } // Out of bounds
+                        
+                        current_pos = Position::new(new_row as u8, new_col as u8);
+                        handle_move(&mut moves, current_pos);
+
+                        if self.is_square_occupied(current_pos) { break; } // Blocked by a piece
+                    }
+                }
+            },
+            PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let offsets = piece.piece_type.get_move_offsets(dir);
+                for (dr, dc) in offsets {
+                    let new_row = pos.row as i8 + dr;
+                    let new_col = pos.col as i8 + dc;
+                    if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
+                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                    }
+                }
+            }
+        }
+        moves
     }
 
     pub fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {

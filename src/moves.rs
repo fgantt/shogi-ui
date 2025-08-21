@@ -21,7 +21,9 @@ impl MoveGenerator {
             let mut temp_board = board.clone();
             let mut temp_captured = captured_pieces.clone();
             
-            temp_board.make_move(m);
+            if let Some(captured) = temp_board.make_move(m) {
+                temp_captured.add_piece(captured.piece_type, player);
+            }
 
             !temp_board.is_king_in_check(player, &temp_captured)
         }).collect();
