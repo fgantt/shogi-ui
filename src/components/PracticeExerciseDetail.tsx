@@ -10,6 +10,7 @@ import './PracticeExerciseDetail.css';
 const PracticeExerciseDetail: React.FC = () => {
   const navigate = useNavigate();
   const { exerciseId } = useParams<{ exerciseId: string }>();
+  const { pathname } = useLocation();
   const [currentQuestion, setCurrentQuestion] = useState<number>(0);
   const [score, setScore] = useState<number>(0);
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
@@ -333,7 +334,7 @@ const PracticeExerciseDetail: React.FC = () => {
     
     return (
       <div className="movement-diagram">
-        <div className="diagram-grid" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
+        <div className={`diagram-grid ${pathname === '/practice/movement-identification' ? 'diagram-grid-centered' : ''}`} style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
           {Array.from({ length: gridSize * gridSize }, (_, index) => {
             const row = Math.floor(index / gridSize);
             const col = index % gridSize;

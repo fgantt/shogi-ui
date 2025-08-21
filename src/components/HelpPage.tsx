@@ -175,7 +175,7 @@ const HelpPage: React.FC = () => {
     
     return (
       <div className="movement-diagram" style={{ width: 'auto', height: 'auto' }}>
-        <div className="diagram-grid" style={{ position: 'static', width: 'auto', height: 'auto', gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
+        <div className="diagram-grid" style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}>
           {Array.from({ length: gridSize * gridSize }, (_, index) => {
             const row = Math.floor(index / gridSize);
             const col = index % gridSize;

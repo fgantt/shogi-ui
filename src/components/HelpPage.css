@@ -160,13 +160,7 @@
   margin-top: 1rem;
 }
 
-.diagram-grid {
-  display: grid;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 10px;
-  border-radius: 8px;
-}
+
 
 .diagram-square {
   width: 40px;
