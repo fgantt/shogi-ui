@@ -8,10 +8,12 @@ mod moves;
 mod evaluation;
 mod search;
 mod types;
+mod opening_book;
 
 use bitboards::*;
 use moves::*;
 use types::*;
+use opening_book::OpeningBook;
 
 #[derive(Serialize, Deserialize)]
 struct PieceJson {
@@ -38,6 +40,7 @@ pub struct ShogiEngine {
     captured_pieces: CapturedPieces,
     current_player: Player,
     move_history: Vec<Move>,
+    opening_book: OpeningBook,
 }
 
 #[wasm_bindgen]
@@ -48,10 +51,16 @@ impl ShogiEngine {
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
             move_history: Vec::new(),
+            opening_book: OpeningBook::new(),
         }
     }
 
     pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        if let Some(book_move) = self.opening_book.get_move(&fen) {
+            return Some(book_move);
+        }
+
         let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
         let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms);
         if let Some((move_, _score)) = searcher.search(&self.board, &self.captured_pieces, self.current_player) {

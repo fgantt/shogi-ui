@@ -140,10 +140,10 @@ impl SearchEngine {
         if (now() - start_time) > time_limit_ms as f64 { return 0; }
 
         if depth == 0 {
-            return self.evaluator.evaluate(board, player);
+            return self.evaluator.evaluate(board, player, captured_pieces);
         }
         
-        let stand_pat = self.evaluator.evaluate(board, player);
+        let stand_pat = self.evaluator.evaluate(board, player, captured_pieces);
         if stand_pat >= beta { return beta; }
         if alpha < stand_pat { alpha = stand_pat; }
         

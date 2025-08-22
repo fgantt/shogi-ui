@@ -1,5 +1,6 @@
 use crate::types::*;
 use crate::bitboards::*;
+use crate::moves::MoveGenerator;
 
 /// Position evaluator for the Shogi engine
 pub struct PositionEvaluator {
@@ -19,7 +20,7 @@ impl PositionEvaluator {
     }
 
     /// Evaluate the current position from the perspective of the given player
-    pub fn evaluate(&self, board: &BitboardBoard, player: Player) -> i32 {
+    pub fn evaluate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         let mut score = 0;
         
         // Add a small tempo bonus for the current player
@@ -35,7 +36,7 @@ impl PositionEvaluator {
         score += self.evaluate_king_safety(board, player);
         
         // Mobility
-        score += self.evaluate_mobility(board, player);
+        score += self.evaluate_mobility(board, player, captured_pieces);
         
         // Piece coordination
         score += self.evaluate_piece_coordination(board, player);
@@ -212,24 +213,10 @@ impl PositionEvaluator {
     }
 
     /// Evaluate mobility (number of legal moves)
-    fn evaluate_mobility(&self, board: &BitboardBoard, player: Player) -> i32 {
-        // This is a simplified implementation
-        // In practice, we'd generate all legal moves and count them
-        let mut mobility = 0;
-        
-        // Count pieces and their potential moves
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player {
-                        mobility += self.estimate_piece_mobility(piece.piece_type, pos, board);
-                    }
-                }
-            }
-        }
-        
-        mobility * 10
+    fn evaluate_mobility(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        let move_generator = MoveGenerator::new();
+        let legal_moves = move_generator.generate_legal_moves(board, player, captured_pieces);
+        legal_moves.len() as i32 * self.weights.mobility_weight
     }
 
     /// Estimate mobility for a piece type
@@ -511,7 +498,7 @@ impl PieceSquareTables {
             [0, 0, 5, 10, 10, 10, 5, 0, 0],
             [0, 0, 5, 10, 10, 10, 5, 0, 0],
             [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
+            [0, 0, 0, 10, 10, 10, 5, 0, 0],
         ]
     }
 
@@ -603,12 +590,12 @@ impl EvaluationWeights {
     fn new() -> Self {
         Self {
             material_weight: 100,
-            positional_weight: 1,
-            pawn_structure_weight: 1,
-            king_safety_weight: 1,
-            mobility_weight: 1,
-            coordination_weight: 1,
-            center_control_weight: 1,
+            positional_weight: 2,
+            pawn_structure_weight: 2,
+            king_safety_weight: 3,
+            mobility_weight: 2,
+            coordination_weight: 2,
+            center_control_weight: 2,
             development_weight: 1,
         }
     }
