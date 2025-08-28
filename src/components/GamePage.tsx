@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getCheckingPiece, checkSennichite } from '../game/engine';
+import { getInitialGameState, movePiece, dropPiece, getLegalMoves, getLegalDrops, completeMove, isKingInCheck, isCheckmate, PLAYER_1, PLAYER_2, getAttackedSquares, generateStateHash, getAllCheckingPieces, checkSennichite } from '../game/engine';
 import { generateKifu, parseKifu } from '../game/kifu';
 import { getAiMove, initializeWasm } from '../ai/computerPlayer';
 import { GameState } from '../types';
@@ -48,7 +48,7 @@ const GamePage = () => {
     'ai-wasm': 'Raptor'
   };
   
-  const [checkingPiece, setCheckingPiece] = useState(null);
+  const [checkingPieces, setCheckingPieces] = useState<[number, number][]>([]);
 
   const [wallpaperList, setWallpaperList] = useState([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState([]);
@@ -139,11 +139,11 @@ const GamePage = () => {
   useEffect(() => {
     updateAttackedSquares();
     if (gameState.isCheck) {
-      setCheckingPiece(getCheckingPiece(gameState.board, gameState.currentPlayer));
+      setCheckingPieces(getAllCheckingPieces(gameState.board, gameState.currentPlayer));
     } else {
-      setCheckingPiece(null);
+      setCheckingPieces([]);
     }
-  }, [gameState.board, gameState.isCheck, gameState.currentPlayer]);
+  }, [gameState.board, gameState.currentPlayer, gameState.isCheck]);
 
   useEffect(() => {
     if (isStartModalOpen || isLoadingGame) return; // Do not run AI logic if modal is open or game is loading
@@ -547,7 +547,7 @@ const GamePage = () => {
             showAttackedPieces={showAttackedPieces}
             showPieceTooltips={showPieceTooltips}
             isThinking={isThinking}
-            checkingPiece={checkingPiece}
+            checkingPieces={checkingPieces}
             isGameOver={isGameOver}
           />
           <CapturedPieces

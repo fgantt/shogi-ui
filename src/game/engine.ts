@@ -437,7 +437,7 @@ export function dropPiece(gameState: GameState, pieceType: PieceType, to: [numbe
   return finalGameState;
 }
 
-export function getCheckingPiece(board: (Piece | null)[][], player: Player): [number, number] | null {
+export function getAllCheckingPieces(board: (Piece | null)[][], player: Player): [number, number][] {
   const opponent: Player = player === PLAYER_1 ? PLAYER_2 : PLAYER_1;
   let kingPosition: [number, number] | null = null;
 
@@ -453,8 +453,10 @@ export function getCheckingPiece(board: (Piece | null)[][], player: Player): [nu
   }
 
   if (!kingPosition) {
-    return null;
+    return [];
   }
+
+  const checkingPieces: [number, number][] = [];
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -463,14 +465,20 @@ export function getCheckingPiece(board: (Piece | null)[][], player: Player): [nu
         const moves = getLegalMoves(piece, r, c, board);
         for (const move of moves) {
           if (move[0] === kingPosition[0] && move[1] === kingPosition[1]) {
-            return [r, c];
+            checkingPieces.push([r, c]);
+            break; // This piece is checking, no need to check more moves for it
           }
         }
       }
     }
   }
 
-  return null;
+  return checkingPieces;
+}
+
+export function getCheckingPiece(board: (Piece | null)[][], player: Player): [number, number] | null {
+  const checkingPieces = getAllCheckingPieces(board, player);
+  return checkingPieces.length > 0 ? checkingPieces[0] : null;
 }
 
 export function isKingInCheck(board: (Piece | null)[][], player: Player): boolean {
@@ -716,3 +724,4 @@ function getShogiNotation(move: Partial<Move>, piece: Piece): string {
 
   return `${pieceNotation}${isCapture ? 'x' : '-'}${toFile}${toRank}${promotion}`;
 }
+

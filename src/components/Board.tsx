@@ -20,11 +20,11 @@ interface BoardProps {
   showAttackedPieces: boolean;
   showPieceTooltips: boolean;
   isThinking: boolean;
-  checkingPiece: [number, number] | null;
+  checkingPieces: [number, number][];
   isGameOver: boolean;
 }
 
-const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, notation, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPiece, isGameOver }) => {
+const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop, legalMoves, legalDropSquares, isCheck, kingPosition, lastMove, pieceLabelType, notation, selectedPiece, attackedSquares, showAttackedPieces, showPieceTooltips, isThinking, checkingPieces, isGameOver }) => {
   const isLegalMove = (row: number, col: number): boolean => {
     return legalMoves.some(move => move[0] === row && move[1] === col);
   };
@@ -48,19 +48,25 @@ const Board: React.FC<BoardProps> = ({ board, onSquareClick, onDragStart, onDrop
   };
 
   const renderCheckLine = () => {
-    if (!isCheck || !checkingPiece || !kingPosition) return null;
-
-    const [checkingRow, checkingCol] = checkingPiece;
-    const [kingRow, kingCol] = kingPosition;
-
-    const startX = checkingCol * 70 + 35;
-    const startY = checkingRow * 76 + 38;
-    const endX = kingCol * 70 + 35;
-    const endY = kingRow * 76 + 38;
+    if (!isCheck || !checkingPieces || checkingPieces.length === 0 || !kingPosition) return null;
 
     return (
       <svg className="check-line-svg" width="630" height="684">
-        <line x1={startX} y1={startY} x2={endX} y2={endY} stroke="red" strokeWidth="4" />
+        {checkingPieces.map(([checkingRow, checkingCol], index) => {
+          const [kingRow, kingCol] = kingPosition;
+
+          const startX = checkingCol * 70 + 35;
+          const startY = checkingRow * 76 + 38;
+          const endX = kingCol * 70 + 35;
+          const endY = kingRow * 76 + 38;
+
+          return (
+            <line
+              key={index}
+              x1={startX} y1={startY} x2={endX} y2={endY} stroke="red" strokeWidth="4"
+            />
+          );
+        })}
       </svg>
     );
   };
