@@ -1,0 +1,263 @@
+.load-game-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.load-game-modal {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.load-game-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.load-game-modal-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-button:hover {
+  background-color: #f0f0f0;
+}
+
+.load-game-modal-content {
+  padding: 24px;
+}
+
+.file-drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  margin-bottom: 24px;
+  transition: all 0.2s;
+  background-color: #fafafa;
+}
+
+.file-drop-zone:hover {
+  border-color: #4a90e2;
+  background-color: #f0f8ff;
+}
+
+.file-drop-zone.dragover {
+  border-color: #4a90e2;
+  background-color: #e6f3ff;
+}
+
+.file-drop-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.file-icon {
+  font-size: 48px;
+  color: #666;
+}
+
+.file-drop-content p {
+  margin: 0;
+  color: #666;
+  font-size: 16px;
+}
+
+.browse-button {
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.browse-button:hover:not(:disabled) {
+  background-color: #357abd;
+}
+
+.browse-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.file-info {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid #28a745;
+}
+
+.file-info h3 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.file-info p {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.file-info p:last-child {
+  margin-bottom: 0;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid #dc3545;
+}
+
+.error-message p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.supported-formats {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  border-left: 4px solid #17a2b8;
+}
+
+.supported-formats h3 {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.supported-formats ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.supported-formats li {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.supported-formats li:last-child {
+  margin-bottom: 0;
+}
+
+.load-game-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.cancel-button,
+.load-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-button {
+  background-color: #f8f9fa;
+  color: #666;
+  border: 1px solid #e0e0e0;
+}
+
+.cancel-button:hover {
+  background-color: #e9ecef;
+}
+
+.load-button {
+  background-color: #28a745;
+  color: white;
+}
+
+.load-button:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.load-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.load-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+@media (max-width: 600px) {
+  .load-game-modal {
+    width: 95%;
+    margin: 20px;
+  }
+  
+  .load-game-modal-header,
+  .load-game-modal-content,
+  .load-game-modal-footer {
+    padding: 16px;
+  }
+  
+  .file-drop-zone {
+    padding: 30px 16px;
+  }
+  
+  .file-drop-content p {
+    font-size: 14px;
+  }
+  
+  .load-game-modal-footer {
+    flex-direction: column;
+  }
+  
+  .cancel-button,
+  .load-button {
+    width: 100%;
+  }
+}

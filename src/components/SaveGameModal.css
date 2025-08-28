@@ -1,0 +1,174 @@
+.save-game-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.save-game-modal {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.save-game-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.save-game-modal-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-button:hover {
+  background-color: #f0f0f0;
+}
+
+.save-game-modal-content {
+  padding: 24px;
+}
+
+.format-selection,
+.filename-input {
+  margin-bottom: 20px;
+}
+
+.format-selection label,
+.filename-input label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.format-selection select,
+.filename-input input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.format-selection select:focus,
+.filename-input input:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.format-info {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  border-left: 4px solid #4a90e2;
+}
+
+.format-info p {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.format-info p:first-child {
+  margin-top: 0;
+}
+
+.format-info p:last-child {
+  margin-bottom: 0;
+}
+
+.save-game-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.cancel-button,
+.save-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-button {
+  background-color: #f8f9fa;
+  color: #666;
+  border: 1px solid #e0e0e0;
+}
+
+.cancel-button:hover {
+  background-color: #e9ecef;
+}
+
+.save-button {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.save-button:hover {
+  background-color: #357abd;
+}
+
+.save-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 600px) {
+  .save-game-modal {
+    width: 95%;
+    margin: 20px;
+  }
+  
+  .save-game-modal-header,
+  .save-game-modal-content,
+  .save-game-modal-footer {
+    padding: 16px;
+  }
+  
+  .save-game-modal-footer {
+    flex-direction: column;
+  }
+  
+  .cancel-button,
+  .save-button {
+    width: 100%;
+  }
+}

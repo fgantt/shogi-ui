@@ -19,10 +19,10 @@ const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onUndoMove, onOp
         <button onClick={onNewGame} className="new-game-btn">
           <span role="img" aria-label="New Game">🔄</span> New Game
         </button>
-        <button onClick={onUndoMove} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
+        <button onClick={onUndoMove} className={isThinking ? 'thinking' : ''} style={{display: 'none'}} disabled={isGameOver}>
           <span role="img" aria-label="Undo Move">↩️</span> Undo Move
         </button>
-        <button onClick={onSaveGame} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
+        <button onClick={onSaveGame} className={isThinking ? 'thinking' : ''} style={{display: 'none'}} disabled={isGameOver}>
           <span role="img" aria-label="Save Game">💾</span> Save Game
         </button>
         <button onClick={onLoadGame} className={isThinking ? 'thinking' : ''} disabled={isGameOver}>
