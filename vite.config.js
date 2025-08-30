@@ -7,5 +7,6 @@ export default defineConfig({
   plugins: [react(), wasm()],
   test: {
     globals: true,
+    environment: 'jsdom',
   },
 })

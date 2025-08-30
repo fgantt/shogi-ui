@@ -1,4 +1,3 @@
-
 ## References
 
 Use the following files for accurate implementation and compliance:
@@ -31,11 +30,11 @@ Use the following files for accurate implementation and compliance:
 
 ## Tasks
 
-- [ ] **1.0 Foundational Refactoring: Integrate `tsshogi` and Deprecate Old Game State**
-  - [ ] 1.1 Remove the custom `GameState`, `Move`, and `Piece` types from `src/types.ts`.
-  - [ ] 1.2 Delete the data model conversion functions (e.g., `toOurPiece`, `fromOurPiece`) from `src/game/shogi.ts`.
-  - [ ] 1.3 Refactor any components that directly used the old game state types to remove those dependencies.
-  - [ ] 1.4 Clean up or delete `src/game/shogi.ts` as its primary role is now obsolete.
+- [x] **1.0 Foundational Refactoring: Integrate `tsshogi` and Deprecate Old Game State**
+  - [x] 1.1 Remove the custom `GameState`, `Move`, and `Piece` types from `src/types.ts`.
+  - [x] 1.2 Delete the data model conversion functions (e.g., `toOurPiece`, `fromOurPiece`) from `src/game/shogi.ts`.
+  - [x] 1.3 Refactor any components that directly used the old game state types to remove those dependencies.
+  - [x] 1.4 Clean up or delete `src/game/shogi.ts` as its primary role is now obsolete.
 
 - [ ] **2.0 Implement the USI-compliant Engine and Controller**
   - [ ] 2.1 Finalize the `EngineAdapter` interface in `src/usi/engine.ts` to ensure it can handle the full USI communication lifecycle.
@@ -62,3 +61,25 @@ Use the following files for accurate implementation and compliance:
   - [ ] 5.2 Write integration tests for `WasmEngineAdapter` (`src/usi/engine.test.ts`) against a mock worker to verify USI command passing.
   - [ ] 5.3 Write component tests for the refactored `Board.tsx` to ensure it renders correctly and sends the correct USI move strings on user interaction.
   - [ ] 5.4 Write component tests for the new `EngineSettings.tsx` to verify its UI and state management logic.
+
+## Reminders and Todos (from Task 1.0)
+
+The foundational refactoring from Task 1.0 has been completed. The old game state management (`GameState`, `Move`, `Piece` types, and the `game/engine.ts` logic) has been removed. The application is currently in a non-functional state, which is expected at this stage. The following points should be addressed in the subsequent tasks.
+
+### Broken Functionality (To Be Fixed in Tasks 2.0 & 3.0)
+
+*   **`GamePage.tsx`**: This component is currently a placeholder. It needs to be refactored to use the new `ShogiController` for state management and UI rendering.
+*   **Modals**: `LoadGameModal.tsx` and `SaveGameModal.tsx` have been temporarily disabled by commenting out their core logic. They need to be re-implemented to work with the new `tsshogi` data structures and `ShogiController`.
+*   **`MoveLog.tsx`**: This component has been replaced with a placeholder. It needs to be refactored to display moves from the `tsshogi.Record` object.
+*   **AI Engines**: Both the JavaScript AI (`ai.worker.ts`) and the WASM AI (`wasmEngine.ts`) have been stripped of their old logic. The `ai.worker.ts` needs to be rewritten as a USI-compliant engine, and the `WasmEngineAdapter` will need to be implemented to communicate with it.
+
+### Testing Environment
+
+*   The test suite is currently failing. The errors `Worker is not defined` and `Record.newBySFEN is not a function` indicate issues with the `vitest` configuration.
+*   **Todo**: Further investigate the `vitest` configuration to ensure it can handle Web Workers and correctly import the `tsshogi` library in a `jsdom` environment. This will be crucial for completing the testing tasks in 5.0.
+
+### Next Steps
+
+*   **Immediate Priority**: Begin Task 2.0 to implement the `ShogiController` and the `EngineAdapter` interface. This is the core of the new architecture.
+*   **UI Refactoring**: Once the controller is in place, proceed with Task 3.0 to refactor the UI components to use the new controller.
+*   **Testing**: As the new components and services are developed, the corresponding tests should be implemented and fixed to ensure the new architecture is robust.

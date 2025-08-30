@@ -1,19 +1,21 @@
 import React, { useState, useRef } from 'react';
-import { parseShogiFile, detectFormatFromExtension, SUPPORTED_FORMATS, SupportedFormat } from '../game/shogi';
-import { GameState } from '../types';
+// import { parseShogiFile, detectFormatFromExtension, SUPPORTED_FORMATS, SupportedFormat } from '../game/shogi';
+// import { GameState } from '../types';
 import './LoadGameModal.css';
 
 interface LoadGameModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGameLoaded: (gameState: GameState) => void;
+  // onGameLoaded: (gameState: GameState) => void;
 }
 
-const LoadGameModal: React.FC<LoadGameModalProps> = ({ isOpen, onClose, onGameLoaded }) => {
+const LoadGameModal: React.FC<LoadGameModalProps> = ({ isOpen, onClose, 
+  // onGameLoaded 
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [detectedFormat, setDetectedFormat] = useState<SupportedFormat | null>(null);
+  // const [detectedFormat, setDetectedFormat] = useState<SupportedFormat | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -25,12 +27,12 @@ const LoadGameModal: React.FC<LoadGameModalProps> = ({ isOpen, onClose, onGameLo
       setError(null);
       
       // Try to detect format from extension
-      const format = detectFormatFromExtension(file.name);
-      setDetectedFormat(format);
+      // const format = detectFormatFromExtension(file.name);
+      // setDetectedFormat(format);
       
-      if (!format) {
-        setError('Could not determine file format from extension. Please ensure the file has a valid extension (.kif, .csa, .jkf, .sfen, etc.)');
-      }
+      // if (!format) {
+      //   setError('Could not determine file format from extension. Please ensure the file has a valid extension (.kif, .csa, .jkf, .sfen, etc.)');
+      // }
     }
   };
 
@@ -41,16 +43,16 @@ const LoadGameModal: React.FC<LoadGameModalProps> = ({ isOpen, onClose, onGameLo
     setError(null);
 
     try {
-      const fileContent = await readFileAsText(selectedFile);
-      const format = detectedFormat || 'kif'; // Default to KIF if we can't detect
+      // const fileContent = await readFileAsText(selectedFile);
+      // const format = detectedFormat || 'kif'; // Default to KIF if we can't detect
       
-      const gameState = parseShogiFile(fileContent, format);
-      onGameLoaded(gameState);
+      // const gameState = parseShogiFile(fileContent, format);
+      // onGameLoaded(gameState);
       onClose();
       
       // Reset state
       setSelectedFile(null);
-      setDetectedFormat(null);
+      // setDetectedFormat(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
