@@ -69,3 +69,7 @@ The Rust code is compiled to WebAssembly using `wasm-pack`. The `pkg/` directory
 ## AI Engine
 
 The AI engine is implemented in Rust and exposed to the JavaScript environment via the `ShogiEngine` class in `src/ai/wasmEngine.js`. This class handles the communication between the React components and the WebAssembly module.
+
+## Running shell commands
+
+Shell commands must be run in the background.
