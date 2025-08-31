@@ -61,9 +61,8 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
               {row.map((piece, colIndex) => (
                 <div
                   key={colIndex}
-                  className={`board-square ${isSelected(rowIndex, colIndex) ? 'selected' : ''}`}>
-                  onClick={() => onSquareClick(rowIndex, colIndex)}
-                >
+                  className={`board-square ${isSelected(rowIndex, colIndex) ? 'selected' : ''}`}
+                  onClick={() => onSquareClick(rowIndex, colIndex)}>
                   {piece && (
                     <PieceComponent
                       type={toOurPieceType(piece.kind)}
