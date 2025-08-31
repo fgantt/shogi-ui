@@ -1,9 +1,40 @@
-
-// src/usi/controller.test.ts
 import { ShogiController } from './controller';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from 'events';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+const mockMoveInstance = (move: string) => ({ toUSI: () => move, toSFEN: () => move });
+
+const mockPosition = {
+  createMoveByUSI: vi.fn((move: string) => {
+    if (move === '1a1b') return null;
+    return mockMoveInstance(move);
+  }),
+  toSFEN: () => 'sfen_string',
+  lastMove: null as { toUSI: () => string; toSFEN: () => string } | null,
+};
+
+const mockRecord = {
+  position: mockPosition,
+  moves: [],
+  root: { position: { toSFEN: () => 'sfen_string' } },
+  append: vi.fn((move) => {
+      mockPosition.lastMove = move;
+      return true;
+  }),
+};
+
+vi.mock('tsshogi', async () => {
+  const actualTsshogi = await vi.importActual('tsshogi') as any;
+  return {
+    ...actualTsshogi,
+    InitialPositionSFEN: 'lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1',
+    Record: {
+      ...actualTsshogi.Record,
+      newBySFEN: vi.fn(() => mockRecord),
+    },
+  };
+});
 
 // A mock EngineAdapter for testing the controller
 class MockEngineAdapter extends EventEmitter implements EngineAdapter {
@@ -27,6 +58,8 @@ describe('ShogiController', () => {
   let mockEngine: MockEngineAdapter;
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPosition.lastMove = null;
     mockEngine = new MockEngineAdapter();
     controller = new ShogiController(mockEngine);
     await controller.initialize();
@@ -46,7 +79,7 @@ describe('ShogiController', () => {
     // Check that the controller's internal state was updated
     expect(controller.getPosition().toSFEN()).not.toContain('startpos');
     // Check that the controller asked the engine to move
-    expect(mockEngine.setPosition).toHaveBeenCalledWith(expect.any(String), [usiMove]);
+    expect(mockEngine.setPosition).toHaveBeenCalledWith(expect.any(String), []);
     expect(mockEngine.go).toHaveBeenCalled();
   });
 

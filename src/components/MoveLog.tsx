@@ -1,10 +1,19 @@
+
 import React from 'react';
 
-const MoveLog: React.FC = () => {
+interface MoveLogProps {
+  moves: string[];
+}
+
+const MoveLog: React.FC<MoveLogProps> = ({ moves }) => {
   return (
     <div className="move-log">
       <h3>Move History</h3>
-      <p>Move history is temporarily unavailable.</p>
+      <ol>
+        {moves.map((move, index) => (
+          <li key={index}>{move}</li>
+        ))}
+      </ol>
     </div>
   );
 };

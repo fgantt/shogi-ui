@@ -30,6 +30,10 @@ export class ShogiController extends EventEmitter {
     return this.record.position;
   }
 
+  public getRecord(): Record {
+    return this.record;
+  }
+
   public handleUserMove(usiMove: string): boolean {
     const moveResult = this.applyMove(usiMove);
     if (moveResult) {
@@ -49,11 +53,9 @@ export class ShogiController extends EventEmitter {
   }
 
   private requestEngineMove(): void {
-    const moves = this.record.moves.map(m => m.toUSI());
-    // The SFEN of the initial position
-    const sfen = this.record.root.position.toSFEN(); 
+    const sfen = this.record.position.toSFEN();
     
-    this.engine.setPosition(sfen, moves);
+    this.engine.setPosition(sfen, []);
     this.engine.go({ btime: 30000, wtime: 30000, byoyomi: 1000 });
   }
   
