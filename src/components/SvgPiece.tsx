@@ -1,35 +1,35 @@
 import React from "react";
 import { KANJI_MAP, ENGLISH_MAP } from "../utils/pieceMaps";
-import type { Piece, PieceType, Player } from '../types';
+import { PieceType } from 'tsshogi';
 
 const PIECE_PATHS: { [key in PieceType]?: string } = {
-  K: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
-  R: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  B: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  G: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  S: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  N: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
-  L: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
-  P: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
-  "+R": "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  "+B": "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  "+S": "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  "+N": "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
-  "+L": "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
-  "+P": "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
+  king: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
+  rook: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  bishop: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  gold: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  silver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  knight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
+  lance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  pawn: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
+  dragon: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  horse: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  promSilver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  promKnight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
+  promLance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  promPawn: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
 };
 
 interface SvgPieceProps {
   type?: PieceType;
-  player?: Player;
+  player?: 'player1' | 'player2';
   pieceLabelType?: string;
-  piece?: Piece;
+  piece?: { type: PieceType; player: 'player1' | 'player2' };
   size?: number;
   hideText?: boolean;
 }
 
 const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece, size = 70, hideText = false }) => {
-  const pieceType = type || (piece && piece.type);
+  const pieceType: PieceType | undefined = type || (piece && piece.type);
   const piecePlayer = player || (piece && piece.player);
   const labelType = pieceLabelType || 'kanji';
   
@@ -38,7 +38,7 @@ const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece
     return null;
   }
 
-  const isPromoted = pieceType.startsWith("+");
+  const isPromoted = pieceType.includes('prom') || pieceType === 'horse' || pieceType === 'dragon';
   const label = labelType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
 
   const piecePath = PIECE_PATHS[pieceType];
