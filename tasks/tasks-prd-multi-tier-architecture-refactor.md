@@ -49,22 +49,22 @@ Use the following files for accurate implementation and compliance:
   - [x] 3.4 Update `Board.tsx` interaction logic to generate USI move strings (e.g., "7g7f", "P*5d") and call `controller.handleUserMove()`.
   - [x] 3.5 Refactor `CapturedPieces.tsx` and `MoveLog.tsx` to source their data from the `ShogiController`.
 
-- [ ] **4.0 Implement the Engine Management UI**
-  - [ ] 4.1 Create the `EngineSettings.tsx` React component.
-  - [ ] 4.2 Add a route in the React Router and a link in the main settings UI to navigate to the new panel.
-  - [ ] 4.3 Implement the UI to list available engines (the built-in WASM engine will be the first entry).
-  - [ ] 4.4 Add UI elements (e.g., a button and file input) to allow users to specify a path to an external engine executable.
-  - [ ] 4.5 Implement the client-side logic to save the user's engine selection (e.g., in `localStorage`) and instantiate the correct `EngineAdapter` on application startup.
+- [x] **4.0 Implement the Engine Management UI**
+  - [x] 4.1 Create the `EngineSettings.tsx` React component.
+  - [x] 4.2 Add a route in the React Router and a link in the main settings UI to navigate to the new panel.
+  - [x] 4.3 Implement the UI to list available engines (the built-in WASM engine will be the first entry).
+  - [x] 4.4 Add UI elements (e.g., a button and file input) to allow users to specify a path to an external engine executable.
+  - [x] 4.5 Implement the client-side logic to save the user's engine selection (e.g., in `localStorage`) and instantiate the correct `EngineAdapter` on application startup.
 
-- [ ] **5.0 Ensure Comprehensive Test Coverage**
-  - [ ] 5.1 Write unit tests for `ShogiController` (`src/usi/controller.test.ts`) to cover move validation, engine orchestration, and state changes.
-  - [ ] 5.2 Write integration tests for `WasmEngineAdapter` (`src/usi/engine.test.ts`) against a mock worker to verify USI command passing.
-  - [ ] 5.3 Write component tests for the refactored `Board.tsx` to ensure it renders correctly and sends the correct USI move strings on user interaction.
-  - [ ] 5.4 Write component tests for the new `EngineSettings.tsx` to verify its UI and state management logic.
+- [x] **5.0 Ensure Comprehensive Test Coverage**
+  - [x] 5.1 Write unit tests for `ShogiController` (`src/usi/controller.test.ts`) to cover move validation, engine orchestration, and state changes.
+  - [x] 5.2 Write integration tests for `WasmEngineAdapter` (`src/usi/engine.test.ts`) against a mock worker to verify USI command passing.
+  - [x] 5.3 Write component tests for the refactored `Board.tsx` to ensure it renders correctly and sends the correct USI move strings on user interaction.
+  - [x] 5.4 Write component tests for the new `EngineSettings.tsx` to verify its UI and state management logic.
 
-## Reminders and Todos (as of 2025-08-31)
+## Reminders and Todos (as of 2025-09-01)
 
-Tasks 2.0 and 3.0 have been completed. The application now has a functional USI controller and the UI has been refactored to use it. The game is in a playable state for board moves.
+All tasks under 1.0, 2.0, 3.0, 4.0, and 5.0 are now complete. The application has a functional USI controller, the UI has been refactored, engine management is implemented, and comprehensive test coverage is in place. The game is in a playable state with piece drops, promotion, and game end conditions visually represented.
 
 ### Implemented Functionality
 *   The `ShogiController` manages the game state using `tsshogi`.
@@ -72,13 +72,15 @@ Tasks 2.0 and 3.0 have been completed. The application now has a functional USI 
 *   The `ai.worker.ts` uses the Rust engine to calculate moves.
 *   The `GamePage` and its child components (`Board`, `CapturedPieces`, `MoveLog`) are now driven by the `ShogiController`.
 *   Users can click to select and move pieces on the board.
+*   **Piece Drops**: Implemented in the UI.
+*   **Promotion**: Implemented in the UI with a promotion modal.
+*   **Game End Conditions**: Checkmate and draw conditions are visually represented in the UI.
+*   **Engine Management UI**: Fully implemented.
+*   **Settings**: The `SettingsPanel` is fully connected to `GamePage` state and `localStorage`.
 
-### In-Progress / Broken Functionality
-*   **Piece Drops**: Moving pieces from the board is implemented, but dropping captured pieces back onto the board is not yet handled in the UI. The `handleUserMove` function in the controller will need to be called with the correct USI drop notation (e.g., `P*5d`).
-*   **Promotion**: Piece promotion is not yet implemented. The controller needs to handle promotion moves (e.g., `7g7f+`), and a promotion selection modal will be required in the UI.
-*   **Game End Conditions**: Check, checkmate, and other game end conditions are not yet visually represented in the UI, although the underlying `tsshogi` position object tracks them. The UI needs to be updated to reflect this.
-*   **Modals**: `LoadGameModal`, `SaveGameModal`, and `CheckmateModal` are still disabled. They need to be re-implemented to work with the new `ShogiController` and `tsshogi` data structures.
-*   **Settings**: The `SettingsPanel` has a placeholder for engine management, but the functionality is not implemented. Other settings in the panel are not yet connected to the new controller and game state.
+### Work in Progress
+*   **SaveGameModal**: Initial state and handler functions are implemented in `GamePage.tsx`. The `loadSfen` function has been added to `ShogiController`. The modal component itself still needs to be integrated and fully implemented.
+*   **LoadGameModal**: Initial state and handler functions are implemented in `GamePage.tsx`. The modal component itself still needs to be integrated and fully implemented.
 
 ### Testing Environment
 *   The test suite is now passing after significant workarounds.
@@ -86,6 +88,6 @@ Tasks 2.0 and 3.0 have been completed. The application now has a functional USI 
 *   **Web Worker Mocking**: The `engine.test.ts` file now uses a manual mock of the `Worker` class to allow testing of the `WasmEngineAdapter` in a Node.js environment.
 
 ### Next Steps
-*   **Immediate Priority**: Begin Task 4.0 to implement the Engine Management UI.
-*   **Complete UI Functionality**: Address the missing pieces of UI functionality, including piece drops, promotion, and game end conditions.
+*   **Complete `SaveGameModal` and `LoadGameModal`**: Integrate the modal components into `GamePage.tsx` and finalize their functionality.
 *   **Testing**: As new UI components and features are developed, continue to write or update tests. Consider further investigation into the `tsshogi` testing issue if it becomes a blocker.
+

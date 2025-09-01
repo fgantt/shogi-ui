@@ -64,4 +64,9 @@ export class ShogiController extends EventEmitter {
       this.engine.newGame();
       this.emit('stateChanged', this.record.position);
   }
+
+  public loadSfen(sfen: string): void {
+    this.record = Record.newBySFEN(sfen);
+    this.emit('stateChanged', this.record.position);
+  }
 }

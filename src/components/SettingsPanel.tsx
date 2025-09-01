@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type PieceLabelType = 'kanji' | 'english';
@@ -95,6 +96,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               />
               Hard
             </label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Engine</h3>
+          <div className="setting-group">
+            <Link to="/settings/engine" className="button-link">
+              Manage Engines
+            </Link>
           </div>
         </section>
 

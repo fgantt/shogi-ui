@@ -53,4 +53,18 @@ describe('WasmEngineAdapter', () => {
     const { move } = await p;
     expect(move).toBe('7g7f');
   });
+
+  it('should check if ready and receive readyok', async () => {
+    const p = new Promise<void>(res => engine.on('readyok', res));
+    engine.isReady();
+    expect(postMessage).toHaveBeenCalledWith({ command: 'isready' });
+    // simulate worker response
+    onmessage({ data: { command: 'readyok' } });
+    await p;
+  });
+
+  it('should quit and terminate the worker', () => {
+    engine.quit();
+    expect(terminate).toHaveBeenCalled();
+  });
 });

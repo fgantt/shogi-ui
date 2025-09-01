@@ -99,6 +99,25 @@
   background-color: #0000CD; /* Even darker blue on hover */
 }
 
+.button-link {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #00008B; /* Dark blue for button */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+  text-decoration: none;
+  text-align: center;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.button-link:hover {
+  background-color: #0000CD; /* Even darker blue on hover */
+  color: white;
+}
+
 .collapse-arrow {
   transition: transform 0.3s ease-in-out;
 }

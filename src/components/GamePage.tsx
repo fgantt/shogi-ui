@@ -1,23 +1,65 @@
 
 import React, { useState, useEffect } from 'react';
 import { useShogiController } from '../context/ShogiControllerContext';
-import { Position, Square } from 'tsshogi';
+import { Position, Square, PieceType as TsshogiPieceType } from 'tsshogi';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
 import SettingsPanel from './SettingsPanel';
 import MoveLog from './MoveLog';
+import PromotionModal from './PromotionModal';
+import CheckmateModal from './CheckmateModal';
 import './GamePage.css';
 
 const GamePage = () => {
   const controller = useShogiController();
   const [position, setPosition] = useState<Position | null>(null);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
+  const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [winner, setWinner] = useState<'player1' | 'player2' | 'draw' | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+  const [savedGames, setSavedGames] = useState<{[key: string]: string}>({});
+
+  useEffect(() => {
+    const games = JSON.parse(localStorage.getItem('shogi-saved-games') || '{}');
+    setSavedGames(games);
+  }, []);
+
+  // Settings state
+  const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
+  const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
+  const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'western');
+  const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true');
+  const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true');
+  const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '/wallpapers/photo1.jpg');
+  const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '/boards/wood-kaya.jpg');
+  const [wallpaperList, setWallpaperList] = useState<string[]>([]);
+  useEffect(() => {
+    const loadAssets = async () => {
+      const wallpaperModules = import.meta.glob('/public/wallpapers/*.{jpg,svg,jpeg,png,webp}');
+      const boardModules = import.meta.glob('/public/boards/*.{jpg,svg,jpeg,png,webp}');
+      
+      const wallpaperPaths = Object.keys(wallpaperModules).map(path => path.replace('/public', ''));
+      const boardPaths = Object.keys(boardModules).map(path => path.replace('/public', ''));
+
+      setWallpaperList(wallpaperPaths);
+      setBoardBackgroundList(boardPaths);
+    };
+
+    loadAssets();
+  }, []);
 
   useEffect(() => {
     const onStateChanged = (newPosition: Position) => {
       setPosition(newPosition);
+      if (newPosition.isCheckmate()) {
+        setWinner(newPosition.turn === 'black' ? 'player2' : 'player1');
+      } else if (newPosition.isRepetition()) {
+        setWinner('draw');
+      }
     };
 
     controller.on('stateChanged', onStateChanged);
@@ -32,15 +74,88 @@ const GamePage = () => {
     if (!position) return;
 
     const clickedSquare = Square.fromRowCol(row, col);
-    if (selectedSquare) {
-      const move = `${selectedSquare.toUSI()}${clickedSquare.toUSI()}`;
+    if (selectedCapturedPiece) {
+      const move = `${selectedCapturedPiece}*${clickedSquare.toUSI()}`;
       controller.handleUserMove(move);
+      setSelectedCapturedPiece(null);
+    } else if (selectedSquare) {
+      const piece = position.get(selectedSquare.row, selectedSquare.col);
+      if (!piece) return;
+
+      const isPromotionZone = (r: number, color: number) => {
+        return color === 0 ? r <= 2 : r >= 6;
+      };
+
+      const canPromote = piece.canPromote && (isPromotionZone(selectedSquare.row, piece.color) || isPromotionZone(clickedSquare.row, piece.color));
+
+      if (canPromote) {
+        setPromotionMove({ from: selectedSquare, to: clickedSquare });
+      } else {
+        const move = `${selectedSquare.toUSI()}${clickedSquare.toUSI()}`;
+        controller.handleUserMove(move);
+      }
       setSelectedSquare(null);
     } else {
       const piece = position.board[row][col];
       if (piece && piece.color === position.turn) {
         setSelectedSquare(clickedSquare);
       }
+    }
+  };
+
+  const handlePromotion = (promote: boolean) => {
+    if (!promotionMove) return;
+
+    const { from, to } = promotionMove;
+    const move = `${from.toUSI()}${to.toUSI()}${promote ? '+' : ''}`;
+    controller.handleUserMove(move);
+    setPromotionMove(null);
+  };
+
+  const handleNewGame = () => {
+    controller.newGame();
+    setWinner(null);
+  };
+
+  const handleDismiss = () => {
+    setWinner(null);
+  };
+
+  const handleSettingChange = (setter: (value: any) => void, key: string) => (value: any) => {
+    setter(value);
+    localStorage.setItem(key, value.toString());
+  };
+
+  const handleSaveGame = (name: string) => {
+    const sfen = controller.getPosition().toSFEN();
+    const newSavedGames = { ...savedGames, [name]: sfen };
+    setSavedGames(newSavedGames);
+    localStorage.setItem('shogi-saved-games', JSON.stringify(newSavedGames));
+    setIsSaveModalOpen(false);
+  };
+
+  const handleLoadGame = (name: string) => {
+    const sfen = savedGames[name];
+    if (sfen) {
+      controller.loadSfen(sfen);
+    }
+    setIsLoadModalOpen(false);
+  };
+
+  const handleDeleteGame = (name: string) => {
+    const newSavedGames = { ...savedGames };
+    delete newSavedGames[name];
+    setSavedGames(newSavedGames);
+    localStorage.setItem('shogi-saved-games', JSON.stringify(newSavedGames));
+  };
+
+  const handleCapturedPieceClick = (pieceType: TsshogiPieceType, player: 'player1' | 'player2') => {
+    const isPlayer1Turn = position?.turn === 'black';
+    const isPlayer2Turn = position?.turn === 'white';
+
+    if ((isPlayer1Turn && player === 'player1') || (isPlayer2Turn && player === 'player2')) {
+      setSelectedCapturedPiece(pieceType);
+      setSelectedSquare(null);
     }
   };
 
@@ -54,12 +169,32 @@ const GamePage = () => {
         <Board position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} />
       </div>
       <div className="side-panel">
-        <GameControls onNewGame={() => controller.newGame()} />
-        <CapturedPieces captured={position.hand['black']} player={'player1'} />
-        <CapturedPieces captured={position.hand['white']} player={'player2'} />
+        <GameControls onNewGame={() => controller.newGame()} onOpenSettings={() => setIsSettingsOpen(true)} />
+        <CapturedPieces captured={position.hand['black']} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.hand['white']} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
         <MoveLog moves={controller.getRecord().moves.map(m => m.toUSI())} />
       </div>
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      {isSettingsOpen && <SettingsPanel 
+        aiDifficulty={aiDifficulty}
+        onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
+        pieceLabelType={pieceLabelType}
+        onPieceLabelTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
+        notation={notation}
+        onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
+        wallpaperList={wallpaperList}
+        onSelectWallpaper={handleSettingChange(setWallpaper, 'shogi-wallpaper')}
+        boardBackgroundList={boardBackgroundList}
+        onSelectBoardBackground={handleSettingChange(setBoardBackground, 'shogi-board-background')}
+        onClose={() => setIsSettingsOpen(false)}
+        currentWallpaper={wallpaper}
+        currentBoardBackground={boardBackground}
+        showAttackedPieces={showAttackedPieces}
+        onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
+        showPieceTooltips={showPieceTooltips}
+        onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
+      />}
+      {promotionMove && <PromotionModal onPromote={handlePromotion} />}
+      {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
     </div>
   );
 };

@@ -113,4 +113,24 @@ describe('ShogiController', () => {
     mockEngine.simulateBestMove('3c3d');
     expect(listener).toHaveBeenCalledTimes(2);
   });
+
+  it('should handle a valid piece drop', () => {
+    // @ts-ignore
+    mockRecord.position.hand = { black: ['PAWN'], white: [] };
+    const usiMove = 'P*5e';
+    const result = controller.handleUserMove(usiMove);
+
+    expect(result).toBe(true);
+    expect(mockEngine.setPosition).toHaveBeenCalledWith(expect.any(String), []);
+    expect(mockEngine.go).toHaveBeenCalled();
+  });
+
+  it('should handle a promotion move', () => {
+    const usiMove = '7g7f+';
+    const result = controller.handleUserMove(usiMove);
+
+    expect(result).toBe(true);
+    expect(mockEngine.setPosition).toHaveBeenCalledWith(expect.any(String), []);
+    expect(mockEngine.go).toHaveBeenCalled();
+  });
 });

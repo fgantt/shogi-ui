@@ -5,6 +5,7 @@ import PracticePage from './components/PracticePage';
 import PracticeExerciseDetail from './components/PracticeExerciseDetail';
 import HelpPage from './components/HelpPage';
 import AboutPage from './components/AboutPage';
+import EngineSettings from './components/EngineSettings';
 
 import { ShogiController } from './usi/controller';
 import { WasmEngineAdapter } from './usi/engine';
@@ -13,9 +14,16 @@ import { ShogiControllerProvider } from './context/ShogiControllerContext';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-const wasmEngineAdapter = new WasmEngineAdapter('./ai/ai.worker.ts');
+const storedSelectedEngine = localStorage.getItem('shogi-selected-engine');
+const enginePath = storedSelectedEngine || './ai/ai.worker.ts';
+
+if (!storedSelectedEngine) {
+  localStorage.setItem('shogi-selected-engine', enginePath);
+}
+
+const wasmEngineAdapter = new WasmEngineAdapter(enginePath);
 const shogiController = new ShogiController(wasmEngineAdapter);
 
 function App() {
@@ -63,7 +71,7 @@ function App() {
         <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/about" element={<AboutPage />} />
-        <Route path="/wasm-demo" element={<WebAssemblyDemo />} />
+        <Route path="/settings/engine" element={<EngineSettings />} />
       </Routes>
     </div>
   );
