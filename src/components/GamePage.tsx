@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useShogiController } from '../context/ShogiControllerContext';
-import { Position, Square, PieceType as TsshogiPieceType } from 'tsshogi';
+import { Position, Square, PieceType as TsshogiPieceType, Color } from 'tsshogi';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
@@ -77,7 +77,7 @@ const GamePage = () => {
 
     const clickedSquare = Square.fromRowCol(row, col);
     if (selectedCapturedPiece) {
-      const move = `${selectedCapturedPiece}*${clickedSquare.toUSI()}`;
+      const move = `${selectedCapturedPiece}*${clickedSquare.usi}`;
       controller.handleUserMove(move);
       setSelectedCapturedPiece(null);
     } else if (selectedSquare) {
@@ -93,7 +93,7 @@ const GamePage = () => {
       if (canPromote) {
         setPromotionMove({ from: selectedSquare, to: clickedSquare });
       } else {
-        const move = `${selectedSquare.toUSI()}${clickedSquare.toUSI()}`;
+        const move = `${selectedSquare.usi}${clickedSquare.usi}`;
         controller.handleUserMove(move);
       }
       setSelectedSquare(null);
@@ -109,7 +109,7 @@ const GamePage = () => {
     if (!promotionMove) return;
 
     const { from, to } = promotionMove;
-    const move = `${from.toUSI()}${to.toUSI()}${promote ? '+' : ''}`;
+    const move = `${from.usi}${to.usi}${promote ? '+' : ''}`;
     controller.handleUserMove(move);
     setPromotionMove(null);
   };
@@ -177,9 +177,15 @@ const GamePage = () => {
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onOpenLoadModal={() => setIsLoadModalOpen(true)}
         />
-        <CapturedPieces captured={position.hand['black']} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
-        <CapturedPieces captured={position.hand['white']} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
-        <MoveLog moves={controller.getRecord().moves.map(m => m.toUSI())} />
+        <CapturedPieces captured={position.hand(Color.BLACK)} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.hand(Color.WHITE)} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
+        <MoveLog moves={controller.getRecord().moves.map(m => {
+          if ('usi' in m.move) {
+            return m.move.usi;
+          } else {
+            return m.displayText;
+          }
+        })} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceLabelType={pieceLabelType}

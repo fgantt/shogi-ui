@@ -1,45 +1,40 @@
 import React from 'react';
-import { PieceType as TsshogiPieceType } from 'tsshogi';
+import { PieceType as TsshogiPieceType, Hand } from 'tsshogi';
 import PieceComponent from './Piece';
 import '../styles/shogi.css';
 
-// Mapping from tsshogi PieceType to our component's PieceType
-const pieceTypeMapping: { [key in TsshogiPieceType]?: string } = {
-  PAWN: 'pawn',
-  LANCE: 'lance',
-  KNIGHT: 'knight',
-  SILVER: 'silver',
-  GOLD: 'gold',
-  BISHOP: 'bishop',
-  ROOK: 'rook',
-};
-
-const PIECE_ORDER: { [key: string]: number } = {
-  pawn: 1,
-  lance: 2,
-  knight: 3,
-  silver: 4,
-  gold: 5,
-  bishop: 6,
-  rook: 7,
+// Order for sorting pieces (lower number = higher priority)
+const PIECE_ORDER: { [key in TsshogiPieceType]: number } = {
+  [TsshogiPieceType.PAWN]: 0,
+  [TsshogiPieceType.LANCE]: 1,
+  [TsshogiPieceType.KNIGHT]: 2,
+  [TsshogiPieceType.SILVER]: 3,
+  [TsshogiPieceType.GOLD]: 4,
+  [TsshogiPieceType.BISHOP]: 5,
+  [TsshogiPieceType.ROOK]: 6,
+  [TsshogiPieceType.KING]: 7,
+  [TsshogiPieceType.PROM_PAWN]: 8,
+  [TsshogiPieceType.PROM_LANCE]: 9,
+  [TsshogiPieceType.PROM_KNIGHT]: 10,
+  [TsshogiPieceType.PROM_SILVER]: 11,
+  [TsshogiPieceType.HORSE]: 12,
+  [TsshogiPieceType.DRAGON]: 13,
 };
 
 interface CapturedPiecesProps {
-  captured: { [key in TsshogiPieceType]?: number };
+  captured: Hand;
   player: 'player1' | 'player2';
   onPieceClick?: (type: TsshogiPieceType) => void;
   selectedCapturedPiece?: TsshogiPieceType | null;
 }
 
 const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece }) => {
-  const pieces = Object.entries(captured)
-    .filter(([, count]) => count && count > 0)
-    .map(([type, count]) => ({ type: type as TsshogiPieceType, count }));
+  const pieces = captured.counts
+    .filter(({ count }) => count > 0)
+    .map(({ type, count }) => ({ type, count }));
 
-  const sortedPieces = pieces.sort(([typeA], [typeB]) => {
-    const mappedTypeA = pieceTypeMapping[typeA] ?? '';
-    const mappedTypeB = pieceTypeMapping[typeB] ?? '';
-    return (PIECE_ORDER[mappedTypeA] ?? 8) - (PIECE_ORDER[mappedTypeB] ?? 8);
+  const sortedPieces = pieces.sort(({ type: typeA }, { type: typeB }) => {
+    return PIECE_ORDER[typeA] - PIECE_ORDER[typeB];
   });
 
   return (
@@ -49,7 +44,7 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
         {sortedPieces.map(({ type, count }) => (
           <PieceComponent
             key={type}
-            type={pieceTypeMapping[type] ?? ''}
+            type={type}
             player={player}
             onClick={() => onPieceClick && onPieceClick(type)}
             pieceLabelType={'kanji'} // Hardcoded for now

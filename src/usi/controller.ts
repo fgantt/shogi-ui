@@ -1,4 +1,4 @@
-import { Record, InitialPositionSFEN, Move, Position } from 'tsshogi';
+import { Record, InitialPositionSFEN, Move, Position, ImmutablePosition } from 'tsshogi';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
@@ -12,7 +12,11 @@ export class ShogiController extends EventEmitter {
   constructor(engine: EngineAdapter) {
     super();
     this.engine = engine;
-    this.record = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
+    const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
+    if (recordResult instanceof Error) {
+      throw new Error(`Failed to create initial record: ${recordResult.message}`);
+    }
+    this.record = recordResult;
 
     this.engine.on('bestmove', ({ move: usiMove }) => {
       if (usiMove && usiMove !== 'resign') {
@@ -35,7 +39,7 @@ export class ShogiController extends EventEmitter {
     this.initialized = true;
   }
 
-  public getPosition(): Position {
+  public getPosition(): ImmutablePosition {
     return this.record.position;
   }
 
@@ -73,13 +77,21 @@ export class ShogiController extends EventEmitter {
   }
   
   public newGame(): void {
-      this.record = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
+      const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
+      if (recordResult instanceof Error) {
+        throw new Error(`Failed to create new game record: ${recordResult.message}`);
+      }
+      this.record = recordResult;
       this.engine.newGame();
       this.emitStateChanged();
   }
 
   public loadSfen(sfen: string): void {
-    this.record = Record.newByUSI(`sfen ${sfen}`);
+    const recordResult = Record.newByUSI(`sfen ${sfen}`);
+    if (recordResult instanceof Error) {
+      throw new Error(`Failed to load SFEN: ${recordResult.message}`);
+    }
+    this.record = recordResult;
     this.emitStateChanged();
   }
 
