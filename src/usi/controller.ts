@@ -2,20 +2,23 @@ import { Record, InitialPositionSFEN, Move, Position } from 'tsshogi';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
+
+
 export class ShogiController extends EventEmitter {
   private record: Record;
   private engine: EngineAdapter;
+  private initialized = false;
 
   constructor(engine: EngineAdapter) {
     super();
     this.engine = engine;
-    this.record = Record.newByUSI(`sfen ${InitialPositionSFEN}`);
+    this.record = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
 
     this.engine.on('bestmove', ({ move: usiMove }) => {
       if (usiMove && usiMove !== 'resign') {
         this.applyMove(usiMove);
       }
-      this.emit('stateChanged', this.record.position);
+      this.emitStateChanged();
     });
   }
 
@@ -27,8 +30,9 @@ export class ShogiController extends EventEmitter {
     console.log('ShogiController: Engine ready. Starting new game...');
     await this.engine.newGame();
     console.log('ShogiController: New game started. Emitting stateChanged...');
-    this.emit('stateChanged', this.record.position);
+    this.emitStateChanged();
     console.log('ShogiController: State changed emitted.');
+    this.initialized = true;
   }
 
   public getPosition(): Position {
@@ -39,10 +43,14 @@ export class ShogiController extends EventEmitter {
     return this.record;
   }
 
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
+
   public handleUserMove(usiMove: string): boolean {
     const moveResult = this.applyMove(usiMove);
     if (moveResult) {
-      this.emit('stateChanged', this.record.position);
+      this.emitStateChanged();
       this.requestEngineMove();
       return true;
     }
@@ -58,20 +66,30 @@ export class ShogiController extends EventEmitter {
   }
 
   private requestEngineMove(): void {
-    const sfen = this.record.position.toSFEN();
+    const sfen = this.record.position.sfen;
     
     this.engine.setPosition(sfen, []);
     this.engine.go({ btime: 30000, wtime: 30000, byoyomi: 1000 });
   }
   
   public newGame(): void {
-      this.record = Record.newByUSI(`sfen ${InitialPositionSFEN}`);
+      this.record = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
       this.engine.newGame();
-      this.emit('stateChanged', this.record.position);
+      this.emitStateChanged();
   }
 
   public loadSfen(sfen: string): void {
     this.record = Record.newByUSI(`sfen ${sfen}`);
-    this.emit('stateChanged', this.record.position);
+    this.emitStateChanged();
+  }
+
+  public quit(): void {
+    this.engine.quit();
+  }
+
+  private emitStateChanged(): void {
+    // Create a new Position object to ensure React detects the change.
+    const newPosition = Position.newBySFEN(this.record.position.sfen);
+    this.emit('stateChanged', newPosition);
   }
 }

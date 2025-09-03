@@ -16,6 +16,7 @@ import './styles/shogi.css';
 import './styles/settings.css';
 import { useEffect, useState } from 'react';
 
+// --- Singleton ShogiController ---
 const storedSelectedEngine = localStorage.getItem('shogi-selected-engine');
 const enginePath = storedSelectedEngine || '../ai/ai.worker.ts';
 
@@ -25,12 +26,13 @@ if (!storedSelectedEngine) {
 
 const wasmEngineAdapter = new WasmEngineAdapter(enginePath);
 const shogiController = new ShogiController(wasmEngineAdapter);
+// ---------------------------------
 
 function App() {
-  const [isControllerInitialized, setIsControllerInitialized] = useState(false);
+  const [isControllerInitialized, setIsControllerInitialized] = useState(shogiController.isInitialized());
 
   useEffect(() => {
-    if (!isControllerInitialized) {
+    if (!shogiController.isInitialized()) {
       shogiController.initialize().then(() => {
         setIsControllerInitialized(true);
       });
@@ -53,26 +55,30 @@ function App() {
     };
     
     initializeDefaultWallpaper();
-  }, [isControllerInitialized]);
+
+    // No cleanup needed for the singleton controller
+  }, []); // Empty dependency array to run only once
+
+  if (!isControllerInitialized) {
+    return <div className="loading-screen">Initializing Engine...</div>;
+  }
 
   return (
     <div className="app">
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route 
-          path="/game" 
-          element={
-            <ShogiControllerProvider controller={shogiController}>
-              <GamePage />
-            </ShogiControllerProvider>
-          } 
-        />
-        <Route path="/practice" element={<PracticePage />} />
-        <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />
-        <Route path="/help" element={<HelpPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/settings/engine" element={<EngineSettings />} />
-      </Routes>
+      <ShogiControllerProvider controller={shogiController}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route 
+            path="/game" 
+            element={<GamePage />} 
+          />
+          <Route path="/practice" element={<PracticePage />} />
+          <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/settings/engine" element={<EngineSettings />} />
+        </Routes>
+      </ShogiControllerProvider>
     </div>
   );
 }

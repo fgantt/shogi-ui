@@ -87,3 +87,33 @@ The success of this refactoring will be measured by:
 
 *   What is the desired behavior if a user-provided external engine fails to start, crashes, or violates the USI protocol during a game?
 *   What is the initial list of third-party engines we want to officially test against and support?
+
+## 10. Implementation Status & Next Steps
+
+**Date:** 2025-09-03
+
+### Completed Work
+
+The foundational refactoring to a three-tier architecture is largely complete.
+
+1.  **Architectural Separation:** The application is now structured into a UI layer (React components), a controller/adapter layer (`ShogiController`, `WasmEngineAdapter`), and an engine layer (the WASM engine in a Web Worker).
+2.  **Singleton Controller:** The `ShogiController` has been refactored into a singleton instance that persists for the application's entire session. This solved a complex series of bugs related to React's Strict Mode lifecycle, which was previously creating and destroying engine instances.
+3.  **Robust Worker Initialization:** The Web Worker engine now uses an internal command queue. This resolved a race condition where USI commands from the main thread were being sent before the worker was ready to receive them.
+4.  **USI Handshake:** The initial USI protocol handshake (`usi`, `isready`, `usinewgame`) between the adapter and the engine is now completing successfully.
+
+### Current Status
+
+We are in the final stage of debugging the application's initial startup. While the architectural refactoring is stable and the engine communication is established, the UI fails to render the board on the very first load.
+
+*   **Current Blocker:** A `TypeError` occurs immediately after the USI `usinewgame` command is processed.
+*   **Error Message:** `Uncaught (in promise) TypeError: this.record.position.toSFEN is not a function`
+*   **Root Cause:** This error indicates that our code has an incorrect assumption about the data structure of the `tsshogi` library. The `ShogiController` attempts to call a `.toSFEN()` method on the `record.position` object, but that method does not exist there.
+
+### Next Steps
+
+The path to completing the refactoring is clear and well-defined.
+
+1.  **Investigate `tsshogi` Objects:** We have just added `console.log` statements to the `ShogiController` to inspect the true structure of the `record` and `record.position` objects provided by the `tsshogi` library.
+2.  **Correct Method Calls:** Based on the logged object structure, we will correct the code in `ShogiController` (e.g., changing `this.record.position.toSFEN()` to the correct method, which may be `this.record.toSFEN()`).
+3.  **Verify Render:** Once the `TypeError` is resolved, the controller will be able to correctly emit the initial board state, and the `GamePage` component should render the board successfully.
+4.  **Final Validation:** Perform a final round of testing to ensure all functional requirements of the refactoring have been met and the application is stable.

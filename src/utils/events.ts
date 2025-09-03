@@ -21,4 +21,12 @@ export class EventEmitter {
 
     this.events[event].forEach(listener => listener(...args));
   }
+
+  once(event: string, listener: Listener): void {
+    const onceListener: Listener = (...args) => {
+      this.off(event, onceListener);
+      listener(...args);
+    };
+    this.on(event, onceListener);
+  }
 }

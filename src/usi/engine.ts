@@ -15,25 +15,18 @@ export interface EngineAdapter extends EventEmitter {
 // An adapter for a WASM engine running in a Web Worker
 export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   private worker: Worker;
-  private isReadyPromise: Promise<void>;
 
   constructor(workerPath: string) {
     super();
     this.worker = new Worker(new URL(workerPath, import.meta.url), { type: 'module' });
-    
-    this.isReadyPromise = new Promise(resolve => {
-        const readyHandler = (e: MessageEvent) => {
-            if (e.data.command === 'readyok') {
-                this.worker.removeEventListener('message', readyHandler);
-                resolve();
-            }
-        };
-        this.worker.addEventListener('message', readyHandler);
-    });
 
     this.worker.onmessage = (e: MessageEvent) => {
       const { command, ...args } = e.data;
       this.emit(command, args);
+    };
+
+    this.worker.onerror = (e: ErrorEvent) => {
+      console.error('AI Worker Error:', e.message, e.filename, e.lineno);
     };
   }
 
@@ -45,21 +38,22 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
     console.log('WasmEngineAdapter: Sending usi command...');
     this.postCommand('usi');
     return new Promise(resolve => {
-        const handler = (e: MessageEvent) => {
-            if (e.data.command === 'usiok') {
-                console.log('WasmEngineAdapter: Received usiok.');
-                this.worker.removeEventListener('message', handler);
-                resolve();
-            }
-        };
-        this.worker.addEventListener('message', handler);
+      this.once('usiok', () => {
+        console.log('WasmEngineAdapter: Received usiok.');
+        resolve();
+      });
     });
   }
-  
+
   async isReady(): Promise<void> {
-      console.log('WasmEngineAdapter: Sending isready command...');
-      this.postCommand('isready');
-      return this.isReadyPromise;
+    console.log('WasmEngineAdapter: Sending isready command...');
+    this.postCommand('isready');
+    return new Promise(resolve => {
+      this.once('readyok', () => {
+        console.log('WasmEngineAdapter: Received readyok.');
+        resolve();
+      });
+    });
   }
 
   async setOptions(options: { [key: string]: string | number | boolean }): Promise<void> {
@@ -88,6 +82,7 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   }
 
   async quit(): Promise<void> {
+    console.log('WasmEngineAdapter: quit() called. Terminating worker.');
     this.postCommand('quit');
     this.worker.terminate();
   }
