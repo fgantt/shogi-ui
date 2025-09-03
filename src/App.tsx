@@ -17,7 +17,7 @@ import './styles/settings.css';
 import { useEffect, useState } from 'react';
 
 const storedSelectedEngine = localStorage.getItem('shogi-selected-engine');
-const enginePath = storedSelectedEngine || './ai/ai.worker.ts';
+const enginePath = storedSelectedEngine || '../ai/ai.worker.ts';
 
 if (!storedSelectedEngine) {
   localStorage.setItem('shogi-selected-engine', enginePath);

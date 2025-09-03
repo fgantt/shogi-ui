@@ -1,13 +1,22 @@
-
-import { get_best_move_from_sfen } from '../../pkg-bundler/shogi_engine.js';
-import * as wasm from '../../pkg-bundler/shogi_engine.js';
+import { get_best_move_from_sfen } from '../../pkg-bundler/shogi_engine.js'; // Keep this import for now
 
 let position_sfen: string;
 let moves: string[] = [];
 
+let wasmModule: typeof import('../../pkg-bundler/shogi_engine.js'); // Declare a type for the dynamically imported module
+
 // Initialize the wasm module
 async function initWasm() {
-  await wasm.default();
+  try {
+    console.log('AI Worker: Initializing WASM module...');
+    // Dynamically import the wasm module
+    wasmModule = await import('../../pkg-bundler/shogi_engine.js');
+    await wasmModule.default(); // Call the default export to initialize
+    console.log('AI Worker: WASM module initialized.');
+  } catch (error) {
+    console.error('AI Worker: Failed to initialize WASM module:', error);
+    throw error;
+  }
 }
 
 const wasmReady = initWasm();
@@ -15,14 +24,19 @@ const wasmReady = initWasm();
 self.onmessage = async (e: MessageEvent) => {
   const { command, ...options } = e.data;
 
+  console.log('AI Worker: Received command:', command);
+  console.log('AI Worker: Awaiting wasmReady...');
   await wasmReady;
+  console.log('AI Worker: wasmReady resolved.');
 
   switch (command) {
     case 'usi':
       self.postMessage({ command: 'usiok' });
+      console.log('AI Worker: Sent usiok.');
       break;
     case 'isready':
       self.postMessage({ command: 'readyok' });
+      console.log('AI Worker: Sent readyok.');
       break;
     case 'setoption':
       // Options are not yet implemented in the wasm engine
@@ -34,7 +48,8 @@ self.onmessage = async (e: MessageEvent) => {
       handlePosition(options.position);
       break;
     case 'go':
-      const bestMove = await handleGo(options);
+      // Use wasmModule.get_best_move_from_sfen
+      const bestMove = wasmModule.get_best_move_from_sfen(position_sfen, options.difficulty || 5, options.time_limit_ms || 5000);
       self.postMessage({ command: 'bestmove', move: bestMove });
       break;
     case 'stop':
@@ -55,13 +70,6 @@ function handlePosition(position: string) {
     } else {
       moves = [];
     }
-  } else if (parts[0] === 'startpos') {
-    position_sfen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
-    if (parts.length > 2 && parts[1] === 'moves') {
-        moves = parts.slice(2);
-    } else {
-        moves = [];
-    }
   }
   // The wasm engine works with a single SFEN, so we need to apply the moves
   // This is not ideal, but it's how the current wasm interface is designed
@@ -76,12 +84,9 @@ async function handleGo(options: any): Promise<string | null> {
     // The controller is responsible for managing the full game state and giving us the current position.
     const difficulty = 5; // Hardcoded for now
     const time_limit_ms = options.btime || 5000;
-    
-    // We need to construct the current SFEN from the base and the moves.
-    // However, the rust code doesn't have a function to apply moves to a sfen.
-    // The controller already tracks the position. Let's assume the SFEN passed to setPosition is the current one.
-    
-    const bestMove = get_best_move_from_sfen(position_sfen, difficulty, time_limit_ms);
+
+    // Use wasmModule.get_best_move_from_sfen
+    const bestMove = wasmModule.get_best_move_from_sfen(position_sfen, difficulty, time_limit_ms);
 
     return bestMove || null;
 }

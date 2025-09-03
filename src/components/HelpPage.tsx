@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SvgPiece from './SvgPiece';
-import { KING, GOLD, SILVER, KNIGHT, LANCE, ROOK, BISHOP, PAWN } from '../game/engine';
+import { PieceType } from 'tsshogi';
 import './HelpPage.css';
 
 const HelpPage: React.FC = () => {
@@ -11,7 +11,7 @@ const HelpPage: React.FC = () => {
   const pieceData = [
     {
       name: 'King (王将/玉将)',
-      type: KING,
+      type: 'king' as PieceType,
       description: 'Moves one square in any direction (horizontally, vertically, or diagonally).',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -22,7 +22,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Gold General (金将)',
-      type: GOLD,
+      type: 'gold' as PieceType,
       description: 'Moves one square orthogonally or one square diagonally forward. Cannot move diagonally backward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -33,7 +33,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Silver General (銀将)',
-      type: SILVER,
+      type: 'silver' as PieceType,
       description: 'Moves one square forward or one square diagonally in any direction. Cannot move sideways or directly backward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -43,7 +43,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Knight (桂馬)',
-      type: KNIGHT,
+      type: 'knight' as PieceType,
       description: 'Moves two squares forward and then one square sideways (L-shape, but only forward). Can jump over other pieces.',
       movement: [
         [-2, -1], [-2, 1]
@@ -52,7 +52,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Lance (香車)',
-      type: LANCE,
+      type: 'lance' as PieceType,
       description: 'Moves any number of squares directly forward. Cannot move backward or sideways.',
       movement: [
         [-1, 0], [-2, 0], [-3, 0], [-4, 0]
@@ -61,7 +61,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Rook (飛車)',
-      type: ROOK,
+      type: 'rook' as PieceType,
       description: 'Moves any number of squares horizontally or vertically.',
       movement: [
         [-1, 0], [-2, 0], [-3, 0], [-4, 0],
@@ -73,7 +73,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Bishop (角行)',
-      type: BISHOP,
+      type: 'bishop' as PieceType,
       description: 'Moves any number of squares diagonally.',
       movement: [
         [-1, -1], [-2, -2], [-3, -3], [-4, -4],
@@ -85,7 +85,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Pawn (歩兵)',
-      type: PAWN,
+      type: 'pawn' as PieceType,
       description: 'Moves one square directly forward. Captures by moving forward onto an opponent\'s piece.',
       movement: [
         [-1, 0]
@@ -97,7 +97,7 @@ const HelpPage: React.FC = () => {
   const promotedPieceData = [
     {
       name: 'Promoted Silver (成銀)',
-      type: SILVER,
+      type: 'promSilver' as PieceType,
       description: 'Promoted Silver moves like a Gold General - one square orthogonally or one square diagonally forward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -108,7 +108,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Promoted Knight (成桂)',
-      type: KNIGHT,
+      type: 'promKnight' as PieceType,
       description: 'Promoted Knight moves like a Gold General - one square orthogonally or one square diagonally forward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -119,7 +119,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Promoted Lance (成香)',
-      type: LANCE,
+      type: 'promLance' as PieceType,
       description: 'Promoted Lance moves like a Gold General - one square orthogonally or one square diagonally forward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -130,7 +130,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Dragon King (龍王)',
-      type: ROOK,
+      type: 'dragon' as PieceType,
       description: 'Dragon King combines Rook and King movements - moves any number of squares horizontally/vertically, plus one square diagonally.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -145,7 +145,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Dragon Horse (龍馬)',
-      type: BISHOP,
+      type: 'horse' as PieceType,
       description: 'Dragon Horse combines Bishop and King movements - moves any number of squares diagonally, plus one square orthogonally.',
       movement: [
         [-1, -1], [-2, -2], [-3, -3], [-4, -4],
@@ -158,7 +158,7 @@ const HelpPage: React.FC = () => {
     },
     {
       name: 'Promoted Pawn (と金)',
-      type: PAWN,
+      type: 'promPawn' as PieceType,
       description: 'Promoted Pawn moves like a Gold General - one square orthogonally or one square diagonally forward.',
       movement: [
         [-1, -1], [-1, 0], [-1, 1],
@@ -195,7 +195,7 @@ const HelpPage: React.FC = () => {
               <div key={index} className={className}>
                 {isPiece && (
                   <SvgPiece 
-                    piece={{ type: piece.type, player: 1, promoted: piece.promoted }}
+                    piece={{ type: piece.type, player: 'player1', promoted: piece.promoted }}
                     size={30}
                     hideText={true}
                   />
@@ -250,16 +250,16 @@ const HelpPage: React.FC = () => {
             <h2>About Shogi</h2>
             <p>
               Shogi, also known as Japanese Chess, is a strategic board game that shares similarities 
-              with Western chess but has unique and fascinating differences. It's played on a 9x9 board 
+              with Western chess but has unique and fascinating differences. It\'s played on a 9x9 board 
               and features the distinctive rule of dropping captured pieces back onto the board.
             </p>
             <p>
               Unlike Western chess, all pieces in Shogi are the same color and are differentiated by 
               their shape and the kanji (Japanese characters) written on them. Players tell their pieces 
-              from their opponent's by the direction they are pointing.
+              from their opponent\'s by the direction they are pointing.
             </p>
             <p>
-              The most unique aspect of Shogi is the "dropping" rule - when you capture an opponent's 
+              The most unique aspect of Shogi is the "dropping" rule - when you capture an opponent\'s 
               piece, it becomes part of your "pieces in hand" and can be dropped onto any empty square 
               on the board on a subsequent turn.
             </p>
@@ -272,7 +272,7 @@ const HelpPage: React.FC = () => {
             <div className="rules-grid">
               <div className="rule-card">
                 <h3>Objective</h3>
-                <p>Checkmate the opponent's King by placing it in a position where it is under attack and has no legal move to escape.</p>
+                <p>Checkmate the opponent\'s King by placing it in a position where it is under attack and has no legal move to escape.</p>
               </div>
               <div className="rule-card">
                 <h3>Setup</h3>
@@ -280,7 +280,7 @@ const HelpPage: React.FC = () => {
               </div>
               <div className="rule-card">
                 <h3>Promotion</h3>
-                <p>Most pieces can be promoted when they enter, exit, or pass through the last three ranks on the opponent's side.</p>
+                <p>Most pieces can be promoted when they enter, exit, or pass through the last three ranks on the opponent\'s side.</p>
               </div>
               <div className="rule-card">
                 <h3>Dropping</h3>
@@ -301,7 +301,7 @@ const HelpPage: React.FC = () => {
                 <div key={index} className="piece-card">
                   <div className="piece-header">
                     <SvgPiece 
-                      piece={{ type: piece.type, player: 1, promoted: false }}
+                      piece={{ type: piece.type, player: 'player1', promoted: false }}
                       size={40}
                     />
                     <h3>{piece.name}</h3>
@@ -318,7 +318,7 @@ const HelpPage: React.FC = () => {
                 <div key={index} className="piece-card">
                   <div className="piece-header">
                     <SvgPiece 
-                      piece={{ type: piece.type, player: 1, promoted: true }}
+                      piece={{ type: piece.type, player: 'player1', promoted: true }}
                       size={40}
                     />
                     <h3>{piece.name}</h3>
@@ -341,7 +341,7 @@ const HelpPage: React.FC = () => {
             <ul>
               <li><strong>Player Indicator:</strong> Often, a symbol indicates which player is moving. Black (Sente, the first player) is typically represented by a black triangle (▲), while White (Gote, the second player) is shown with a white triangle (△).</li>
               <li><strong>Piece:</strong> The piece being moved is identified, usually by its initial in Western notation (e.g., P for Pawn, R for Rook) or its Japanese character (e.g., 歩 for Pawn).</li>
-              <li><strong>Destination Coordinates:</strong> The square the piece moves to is always indicated. Shogi boards are a 9x9 grid. Files (columns) are numbered 1 to 9 from right to left, and ranks (rows) are numbered 1 to 9 from top to bottom (from Black's perspective). A move to the square at file 7, rank 6 would be written as 76 in Western notation or ７六 in Japanese.</li>
+              <li><strong>Destination Coordinates:</strong> The square the piece moves to is always indicated. Shogi boards are a 9x9 grid. Files (columns) are numbered 1 to 9 from right to left, and ranks (rows) are numbered 1 to 9 from top to bottom (from Black\'s perspective). A move to the square at file 7, rank 6 would be written as 76 in Western notation or ７六 in Japanese.</li>
               <li><strong>Action/Movement Type:</strong> Symbols are used to clarify the type of move.
                 <ul>
                   <li><strong>Normal Move:</strong> A hyphen (-) is often used in Western notation (e.g., P-76).</li>
@@ -375,7 +375,7 @@ const HelpPage: React.FC = () => {
 
             <h3>Special Notation</h3>
             <ul>
-              <li><strong>Same Square Capture (同 dou):</strong> If a piece captures the opponent's piece on the same square where the opponent just moved, the destination coordinates can be replaced with the character '同', meaning "same." This always involves a capture.</li>
+              <li><strong>Same Square Capture (同 dou):</strong> If a piece captures the opponent\'s piece on the same square where the opponent just moved, the destination coordinates can be replaced with the character '同', meaning "same." This always involves a capture.</li>
             </ul>
 
             <h3>KIF File Format</h3>

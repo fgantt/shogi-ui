@@ -1,52 +1,21 @@
 import React, { useState } from 'react';
-// import { SUPPORTED_FORMATS, SupportedFormat, generateShogiFile } from '../game/shogi';
-// import { GameState } from '../types';
 import './SaveGameModal.css';
-
-const SUPPORTED_FORMATS: any = {};
-type SupportedFormat = any;
 
 interface SaveGameModalProps {
   isOpen: boolean;
   onClose: () => void;
-  // gameState: GameState;
+  onSave: (name: string) => void;
 }
 
-const SaveGameModal: React.FC<SaveGameModalProps> = ({ isOpen, onClose, 
-  // gameState 
-}) => {
-  const [selectedFormat, setSelectedFormat] = useState<SupportedFormat>('kif');
-  const [filename, setFilename] = useState('');
+const SaveGameModal: React.FC<SaveGameModalProps> = ({ isOpen, onClose, onSave }) => {
+  const [name, setName] = useState('');
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    try {
-      // const content = generateShogiFile(gameState, selectedFormat);
-      // const format = SUPPORTED_FORMATS[selectedFormat];
-      
-      // // Create blob and download
-      // const blob = new Blob([content], { type: format.mimeType });
-      // const url = URL.createObjectURL(blob);
-      // const a = document.createElement('a');
-      // a.href = url;
-      // a.download = filename || `shogi-game${format.extension}`;
-      // document.body.appendChild(a);
-      // a.click();
-      // document.body.removeChild(a);
-      // URL.revokeObjectURL(url);
-      
-      onClose();
-    } catch (error) {
-      console.error('Error saving game:', error);
-      alert('Failed to save game. Please try again.');
+    if (name) {
+      onSave(name);
     }
-  };
-
-  const handleClose = () => {
-    setSelectedFormat('kif');
-    setFilename('');
-    onClose();
   };
 
   return (
@@ -54,79 +23,33 @@ const SaveGameModal: React.FC<SaveGameModalProps> = ({ isOpen, onClose,
       <div className="save-game-modal">
         <div className="save-game-modal-header">
           <h2>Save Game</h2>
-          <button className="close-button" onClick={handleClose}>
+          <button className="close-button" onClick={onClose}>
             ×
           </button>
         </div>
-        
         <div className="save-game-modal-content">
-          <div className="format-selection">
-            <label htmlFor="format-select">File Format:</label>
-            <select
-              id="format-select"
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value as SupportedFormat)}
-            >
-              {Object.entries(SUPPORTED_FORMATS).map(([key, format]) => (
-                <option key={key} value={key}>
-                  {format.name} ({format.extension})
-                </option>
-              ))}
-            </select>
-          </div>
-          
           <div className="filename-input">
-            <label htmlFor="filename-input">Filename (optional):</label>
+            <label htmlFor="filename-input">Game Name:</label>
             <input
               id="filename-input"
               type="text"
-              value={filename}
-              onChange={(e) => setFilename(e.target.value)}
-              placeholder={`shogi-game${SUPPORTED_FORMATS[selectedFormat].extension}`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter a name for your game"
             />
           </div>
-          
-          <div className="format-info">
-            <p>
-              <strong>Selected format:</strong> {SUPPORTED_FORMATS[selectedFormat].name}
-            </p>
-            <p>
-              <strong>File extension:</strong> {SUPPORTED_FORMATS[selectedFormat].extension}
-            </p>
-            <p>
-              <strong>Description:</strong> {getFormatDescription(selectedFormat)}
-            </p>
-          </div>
         </div>
-        
         <div className="save-game-modal-footer">
-          <button className="cancel-button" onClick={handleClose}>
+          <button className="cancel-button" onClick={onClose}>
             Cancel
           </button>
           <button className="save-button" onClick={handleSave}>
-            Save Game
+            Save
           </button>
         </div>
       </div>
     </div>
   );
 };
-
-function getFormatDescription(format: SupportedFormat): string {
-  switch (format) {
-    case 'kif':
-      return 'Traditional Japanese KIF format, widely supported by Shogi software';
-    case 'ki2':
-      return 'Compact Japanese KI2 format, good for sharing and analysis';
-    case 'csa':
-      return 'CSA format, commonly used in Japanese Shogi servers';
-    case 'jkf':
-      return 'JSON-based format, good for programmatic access';
-    case 'sfen':
-      return 'SFEN notation, compact representation of board position';
-    default:
-      return 'Unknown format';
-  }
-}
 
 export default SaveGameModal;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { Position, Square, PieceType as TsshogiPieceType } from 'tsshogi';
@@ -9,6 +8,8 @@ import SettingsPanel from './SettingsPanel';
 import MoveLog from './MoveLog';
 import PromotionModal from './PromotionModal';
 import CheckmateModal from './CheckmateModal';
+import SaveGameModal from './SaveGameModal';
+import LoadGameModal from './LoadGameModal';
 import './GamePage.css';
 
 const GamePage = () => {
@@ -29,7 +30,6 @@ const GamePage = () => {
   }, []);
 
   // Settings state
-  const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
   const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'western');
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true');
@@ -37,6 +37,8 @@ const GamePage = () => {
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '/wallpapers/photo1.jpg');
   const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '/boards/wood-kaya.jpg');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
+  const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
+
   useEffect(() => {
     const loadAssets = async () => {
       const wallpaperModules = import.meta.glob('/public/wallpapers/*.{jpg,svg,jpeg,png,webp}');
@@ -169,14 +171,17 @@ const GamePage = () => {
         <Board position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} />
       </div>
       <div className="side-panel">
-        <GameControls onNewGame={() => controller.newGame()} onOpenSettings={() => setIsSettingsOpen(true)} />
+        <GameControls 
+          onNewGame={handleNewGame} 
+          onOpenSettings={() => setIsSettingsOpen(true)} 
+          onOpenSaveModal={() => setIsSaveModalOpen(true)}
+          onOpenLoadModal={() => setIsLoadModalOpen(true)}
+        />
         <CapturedPieces captured={position.hand['black']} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
         <CapturedPieces captured={position.hand['white']} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
         <MoveLog moves={controller.getRecord().moves.map(m => m.toUSI())} />
       </div>
       {isSettingsOpen && <SettingsPanel 
-        aiDifficulty={aiDifficulty}
-        onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
         pieceLabelType={pieceLabelType}
         onPieceLabelTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
         notation={notation}
@@ -195,6 +200,8 @@ const GamePage = () => {
       />}
       {promotionMove && <PromotionModal onPromote={handlePromotion} />}
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
+      <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
+      <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
     </div>
   );
 };

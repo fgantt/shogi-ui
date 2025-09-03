@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import SvgPiece from './SvgPiece';
 import { getOppositeLabel, getEnglishName } from '../utils/pieceMaps';
 import '../styles/shogi.css';
-import type { PieceType, Player } from '../types';
+import type { PieceType } from 'tsshogi';
 
 interface PieceProps {
   type: PieceType;
-  player: Player;
+  player: 'player1' | 'player2';
   onDragStart?: () => void;
   onClick?: () => void;
   pieceLabelType: string;

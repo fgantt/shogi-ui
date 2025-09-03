@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from '../utils/events';
 
 // An interface for any USI-compliant engine adapter
 export interface EngineAdapter extends EventEmitter {
@@ -42,10 +42,12 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   }
 
   async init(): Promise<void> {
+    console.log('WasmEngineAdapter: Sending usi command...');
     this.postCommand('usi');
     return new Promise(resolve => {
         const handler = (e: MessageEvent) => {
             if (e.data.command === 'usiok') {
+                console.log('WasmEngineAdapter: Received usiok.');
                 this.worker.removeEventListener('message', handler);
                 resolve();
             }
@@ -55,17 +57,20 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   }
   
   async isReady(): Promise<void> {
+      console.log('WasmEngineAdapter: Sending isready command...');
       this.postCommand('isready');
       return this.isReadyPromise;
   }
 
   async setOptions(options: { [key: string]: string | number | boolean }): Promise<void> {
+      console.log('WasmEngineAdapter: Setting options...', options);
       for (const [name, value] of Object.entries(options)) {
           this.postCommand('setoption', { name, value });
       }
   }
 
   async newGame(): Promise<void> {
+    console.log('WasmEngineAdapter: Sending usinewgame command...');
     this.postCommand('usinewgame');
   }
 
