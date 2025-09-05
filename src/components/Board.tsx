@@ -12,7 +12,7 @@ interface BoardProps {
 
 
 // Helper to map tsshogi color to our Player type
-function toOurPlayer(color: Color): 'player1' | 'player2' {
+function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
@@ -45,11 +45,16 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
                 const square = Square.newByXY(8 - colIndex, rowIndex); // tsshogi uses 0-8 coordinates
                 const piece = square ? position.board.at(square) : null;
                 
+                const classNames = [
+                  'board-square',
+                  isSelected(rowIndex, colIndex) ? 'selected' : '',
+                ].filter(Boolean).join(' ');
+
                 return (
                   <div
                     key={colIndex}
                     data-testid={`square-${rowIndex}-${colIndex}`}
-                    className={`board-square ${isSelected(rowIndex, colIndex) ? 'selected' : ''}`}
+                    className={classNames}
                     onClick={() => onSquareClick(rowIndex, colIndex)}>
                     {piece && (
                       <PieceComponent

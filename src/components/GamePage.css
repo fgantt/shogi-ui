@@ -3,6 +3,10 @@
   color: #ecf0f1;
 }
 
+.debug-click {
+  background-color: red !important;
+}
+
 .game-header {
   position: relative;
   text-align: center;

@@ -114,6 +114,7 @@
   align-items: center;
   position: relative; /* Added for badge positioning */
   transition: transform 0.1s ease-out, box-shadow 0.1s ease-out; /* Smooth transition for hover/active states */
+  pointer-events: none;
 }
 
 .piece.selected {

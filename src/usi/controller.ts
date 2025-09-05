@@ -1,4 +1,4 @@
-import { Record, InitialPositionSFEN, Move, Position, ImmutablePosition } from 'tsshogi';
+import { Record, InitialPositionSFEN, Move, Position, ImmutablePosition, Square } from 'tsshogi';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
@@ -49,6 +49,13 @@ export class ShogiController extends EventEmitter {
 
   public isInitialized(): boolean {
     return this.initialized;
+  }
+
+  public getLegalMovesForSquare(square: Square): Square[] {
+    const moves = this.record.position.generateMoves();
+    return moves
+      .filter(move => move.from.equals(square))
+      .map(move => move.to);
   }
 
   public handleUserMove(usiMove: string): boolean {

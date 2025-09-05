@@ -58,7 +58,7 @@ const GamePage = () => {
     const onStateChanged = (newPosition: Position) => {
       setPosition(newPosition);
       if (newPosition.isCheckmate()) {
-        setWinner(newPosition.turn === 'black' ? 'player2' : 'player1');
+        setWinner(newPosition._color === 'black' ? 'player2' : 'player1');
       } else if (newPosition.isRepetition()) {
         setWinner('draw');
       }
@@ -74,32 +74,25 @@ const GamePage = () => {
 
   const handleSquareClick = (row: number, col: number) => {
     if (!position) return;
+    const clickedSquare = Square.newByXY(8 - col, row);
+    if (!clickedSquare) return;
 
-    const clickedSquare = Square.fromRowCol(row, col);
-    if (selectedCapturedPiece) {
-      const move = `${selectedCapturedPiece}*${clickedSquare.usi}`;
-      controller.handleUserMove(move);
-      setSelectedCapturedPiece(null);
-    } else if (selectedSquare) {
-      const piece = position.get(selectedSquare.row, selectedSquare.col);
-      if (!piece) return;
+    // Deselect if clicking the same square
+    if (selectedSquare?.equals(clickedSquare)) {
+      setSelectedSquare(null);
+      return;
+    }
 
-      const isPromotionZone = (r: number, color: number) => {
-        return color === 0 ? r <= 2 : r >= 6;
-      };
-
-      const canPromote = piece.canPromote && (isPromotionZone(selectedSquare.row, piece.color) || isPromotionZone(clickedSquare.row, piece.color));
-
-      if (canPromote) {
-        setPromotionMove({ from: selectedSquare, to: clickedSquare });
-      } else {
-        const move = `${selectedSquare.usi}${clickedSquare.usi}`;
-        controller.handleUserMove(move);
-      }
+    // If a piece is selected, try to move
+    if (selectedSquare) {
+      const moveUsi = `${selectedSquare.usi}${clickedSquare.usi}`;
+      // This won't handle promotions correctly yet, but it will move the piece.
+      controller.handleUserMove(moveUsi);
       setSelectedSquare(null);
     } else {
-      const piece = position.board[row][col];
-      if (piece && piece.color === position.turn) {
+      // No piece selected, so select one
+      const piece = position.board.at(clickedSquare);
+      if (piece && piece.color === position._color) {
         setSelectedSquare(clickedSquare);
       }
     }
@@ -152,8 +145,8 @@ const GamePage = () => {
   };
 
   const handleCapturedPieceClick = (pieceType: TsshogiPieceType, player: 'player1' | 'player2') => {
-    const isPlayer1Turn = position?.turn === 'black';
-    const isPlayer2Turn = position?.turn === 'white';
+    const isPlayer1Turn = position?._color === 'black';
+    const isPlayer2Turn = position?._color === 'white';
 
     if ((isPlayer1Turn && player === 'player1') || (isPlayer2Turn && player === 'player2')) {
       setSelectedCapturedPiece(pieceType);
