@@ -468,6 +468,7 @@ impl PieceSquareTables {
         let (row, col) = if player == Player::Black {
             (pos.row, pos.col)
         } else {
+            //TODO(feg): With the switch to tsshogi, this is may no longer be needed.
             (8 - pos.row, 8 - pos.col)
         };
         

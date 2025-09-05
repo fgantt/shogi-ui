@@ -23,7 +23,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
   const isSelected = (row: number, col: number): boolean => {
     if (!selectedSquare) return false;
     // Convert row/col to tsshogi coordinates for comparison
-    const square = Square.newByXY(8 - col, row);
+    const square = Square.newByXY(col, row);
     return square ? selectedSquare.equals(square) : false;
   };
 
@@ -42,7 +42,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
             <div key={rowIndex} className="board-row">
               {Array.from({ length: 9 }, (_, colIndex) => {
                 // Convert row/col to tsshogi Square
-                const square = Square.newByXY(8 - colIndex, rowIndex); // tsshogi uses 0-8 coordinates
+                const square = Square.newByXY(colIndex, rowIndex); // tsshogi uses 0-8 coordinates
                 const piece = square ? position.board.at(square) : null;
                 
                 const classNames = [

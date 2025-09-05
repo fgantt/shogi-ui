@@ -74,7 +74,7 @@ const GamePage = () => {
 
   const handleSquareClick = (row: number, col: number) => {
     if (!position) return;
-    const clickedSquare = Square.newByXY(8 - col, row);
+    const clickedSquare = Square.newByXY(col, row);
     if (!clickedSquare) return;
 
     // Deselect if clicking the same square
