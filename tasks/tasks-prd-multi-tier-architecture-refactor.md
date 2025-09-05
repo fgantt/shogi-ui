@@ -62,32 +62,30 @@ Use the following files for accurate implementation and compliance:
   - [x] 5.3 Write component tests for the refactored `Board.tsx` to ensure it renders correctly and sends the correct USI move strings on user interaction.
   - [x] 5.4 Write component tests for the new `EngineSettings.tsx` to verify its UI and state management logic.
 
-## Reminders and Todos (as of 2025-09-01)
+## Reminders and Todos (as of 2025-09-03)
 
-All tasks under 1.0, 2.0, 3.0, 4.0, and 5.0 are now complete. The application has a functional USI controller, the UI has been refactored, engine management is implemented, and comprehensive test coverage is in place. The game is in a playable state with piece drops, promotion, and game end conditions visually represented.
+### Completed Work
 
-### Implemented Functionality
-*   The `ShogiController` manages the game state using `tsshogi`.
-*   A `WasmEngineAdapter` communicates with a USI-compliant AI worker.
-*   The `ai.worker.ts` uses the Rust engine to calculate moves.
-*   The `GamePage` and its child components (`Board`, `CapturedPieces`, `MoveLog`) are now driven by the `ShogiController`.
-*   Users can click to select and move pieces on the board.
-*   **Piece Drops**: Implemented in the UI.
-*   **Promotion**: Implemented in the UI with a promotion modal.
-*   **Game End Conditions**: Checkmate and draw conditions are visually represented in the UI.
-*   **Engine Management UI**: Fully implemented.
-*   **Settings**: The `SettingsPanel` is fully connected to `GamePage` state and `localStorage`.
+The foundational refactoring to a three-tier architecture is largely complete.
 
-### Work in Progress
-*   **SaveGameModal**: Initial state and handler functions are implemented in `GamePage.tsx`. The `loadSfen` function has been added to `ShogiController`. The modal component itself still needs to be integrated and fully implemented.
-*   **LoadGameModal**: Initial state and handler functions are implemented in `GamePage.tsx`. The modal component itself still needs to be integrated and fully implemented.
+1.  **Architectural Separation:** The application is now structured into a UI layer (React components), a controller/adapter layer (`ShogiController`, `WasmEngineAdapter`), and an engine layer (the WASM engine in a Web Worker).
+2.  **Singleton Controller:** The `ShogiController` has been refactored into a singleton instance that persists for the application's entire session. This solved a complex series of bugs related to React's Strict Mode lifecycle, which was previously creating and destroying engine instances.
+3.  **Robust Worker Initialization:** The Web Worker engine now uses an internal command queue. This resolved a race condition where USI commands from the main thread were being sent before the worker was ready to receive them.
+4.  **USI Handshake:** The initial USI protocol handshake (`usi`, `isready`, `usinewgame`) between the adapter and the engine is now completing successfully.
 
-### Testing Environment
-*   The test suite is now passing after significant workarounds.
-*   **`tsshogi` Import Issue**: There is a fundamental issue with using `tsshogi` in the `vitest` test environment. It appears that static methods on imported classes are not available, causing tests to fail. The `controller.test.ts` file now uses a comprehensive mock of the `tsshogi` library to bypass this issue. This is a workaround, and the root cause has not been identified. This means the controller's integration with the real `tsshogi` library is not being tested directly.
-*   **Web Worker Mocking**: The `engine.test.ts` file now uses a manual mock of the `Worker` class to allow testing of the `WasmEngineAdapter` in a Node.js environment.
+### Current Status
+
+We are in the final stage of debugging the application's initial startup. While the architectural refactoring is stable and the engine communication is established, the UI fails to render the board on the very first load.
+
+*   **Current Blocker:** A `TypeError` occurs immediately after the USI `usinewgame` command is processed.
+*   **Error Message:** `Uncaught (in promise) TypeError: this.record.position.toSFEN is not a function`
+*   **Root Cause:** This error indicates that our code has an incorrect assumption about the data structure of the `tsshogi` library. The `ShogiController` attempts to call a `.toSFEN()` method on the `record.position` object, but that method does not exist there.
 
 ### Next Steps
-*   **Complete `SaveGameModal` and `LoadGameModal`**: Integrate the modal components into `GamePage.tsx` and finalize their functionality.
-*   **Testing**: As new UI components and features are developed, continue to write or update tests. Consider further investigation into the `tsshogi` testing issue if it becomes a blocker.
 
+The path to completing the refactoring is clear and well-defined.
+
+1.  **Investigate `tsshogi` Objects:** We have just added `console.log` statements to the `ShogiController` to inspect the true structure of the `record` and `record.position` objects provided by the `tsshogi` library.
+2.  **Correct Method Calls:** Based on the logged object structure, we will correct the code in `ShogiController` (e.g., changing `this.record.position.toSFEN()` to the correct method, which may be `this.record.toSFEN()`).
+3.  **Verify Render:** Once the `TypeError` is resolved, the controller will be able to correctly emit the initial board state, and the `GamePage` component should render the board successfully.
+4.  **Final Validation:** Perform a final round of testing to ensure all functional requirements of the refactoring have been met and the application is stable.
