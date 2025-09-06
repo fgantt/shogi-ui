@@ -62,6 +62,10 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
                         player={toOurPlayer(piece.color)}
                         pieceLabelType={'kanji'} // Hardcoded for now
                         isSelected={isSelected(rowIndex, colIndex)}
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onSquareClick(rowIndex, colIndex)
+                        }}
                       />
                     )}
                   </div>

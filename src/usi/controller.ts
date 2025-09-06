@@ -107,8 +107,6 @@ export class ShogiController extends EventEmitter {
   }
 
   private emitStateChanged(): void {
-    // Create a new Position object to ensure React detects the change.
-    const newPosition = Position.newBySFEN(this.record.position.sfen);
-    this.emit('stateChanged', newPosition);
+    this.emit('stateChanged', this.record.position);
   }
 }

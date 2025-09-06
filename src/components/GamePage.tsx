@@ -57,11 +57,12 @@ const GamePage = () => {
   useEffect(() => {
     const onStateChanged = (newPosition: Position) => {
       setPosition(newPosition);
-      if (newPosition.isCheckmate()) {
-        setWinner(newPosition._color === 'black' ? 'player2' : 'player1');
-      } else if (newPosition.isRepetition()) {
-        setWinner('draw');
-      }
+      //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
+      // if (newPosition.isCheckmate()) {
+      //   setWinner(newPosition._color === 'black' ? 'player2' : 'player1');
+      // } else if (newPosition.isRepetition()) {
+      //   setWinner('draw');
+      // }
     };
 
     controller.on('stateChanged', onStateChanged);

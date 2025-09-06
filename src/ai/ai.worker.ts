@@ -1,6 +1,7 @@
 console.log('AI Worker: Script loading.');
 
 let wasmModule: typeof import('../../pkg-bundler/shogi_engine.js');
+let engine: any;
 let isWasmReady = false;
 const commandQueue: MessageEvent[] = [];
 
@@ -22,6 +23,7 @@ async function initWasm() {
   try {
     console.log('AI Worker: Initializing WASM module...');
     wasmModule = await import('../../pkg-bundler/shogi_engine.js');
+    engine = wasmModule.ShogiEngine.new();
     console.log('AI Worker: WASM module initialized.');
     isWasmReady = true;
     processCommandQueue();
@@ -39,6 +41,30 @@ function processCommandQueue() {
       handleMessage(event);
     }
   }
+}
+
+function posToUsi(pos) {
+  const file = 9 - pos.col;
+  const rank = String.fromCharCode('a'.charCodeAt(0) + pos.row);
+  return `${file}${rank}`;
+}
+
+function moveToUsi(move) {
+  if (!move) return 'resign';
+
+  const to = posToUsi(move.to);
+
+  // Handle drops
+  if (move.from === null || move.from === undefined) {
+    const pieceMap = ['P', 'L', 'N', 'S', 'G', 'B', 'R']; // Corresponds to PieceType enum order
+    const pieceChar = pieceMap[move.piece_type];
+    return `${pieceChar}*${to}`;
+  }
+
+  // Handle normal moves
+  const from = posToUsi(move.from);
+  const promotion = move.is_promotion ? '+' : '';
+  return `${from}${to}${promotion}`;
 }
 
 // Main message handler
@@ -63,8 +89,9 @@ function handleMessage(e: MessageEvent) {
       handlePosition(options.position);
       break;
     case 'go':
-      const bestMove = wasmModule.get_best_move_from_sfen(position_sfen, options.difficulty || 5, options.time_limit_ms || 5000);
-      self.postMessage({ command: 'bestmove', move: bestMove });
+      const bestMove = engine.get_best_move(options.difficulty || 5, options.time_limit_ms || 5000);
+      const moveString = moveToUsi(bestMove);
+      self.postMessage({ command: 'bestmove', move: moveString });
       break;
     case 'stop':
       break;
@@ -74,18 +101,100 @@ function handleMessage(e: MessageEvent) {
   }
 }
 
-let position_sfen: string;
-let moves: string[] = [];
 function handlePosition(position: string) {
   const parts = position.split(' ');
-  if (parts[0] === 'sfen') {
-    position_sfen = parts.slice(1, 7).join(' ');
-    if (parts.length > 8 && parts[7] === 'moves') {
-      moves = parts.slice(8);
-    } else {
-      moves = [];
+  if (parts[0] !== 'sfen') return;
+
+  const sfenBoard = parts[1];
+  const sfenPlayer = parts[2];
+  const sfenHand = parts[3];
+
+  const player = sfenPlayer === 'b' ? 'Black' : 'White';
+
+  const piecesJson = [];
+  const ranks = sfenBoard.split('/');
+  for (let r = 0; r < ranks.length; r++) {
+    let col = 0;
+    let promoted = false;
+    for (const char of ranks[r]) {
+      if (promoted) {
+        const pieceType = getPieceType(char, true);
+        piecesJson.push({ 
+          position: { row: r, col }, 
+          piece_type: pieceType, 
+          player: isUpperCase(char) ? 'Black' : 'White' 
+        });
+        promoted = false;
+        col++;
+        continue;
+      }
+
+      if (char === '+') {
+        promoted = true;
+        continue;
+      }
+
+      const num = parseInt(char);
+      if (!isNaN(num)) {
+        col += num;
+      } else {
+        const pieceType = getPieceType(char, false);
+        piecesJson.push({ 
+          position: { row: r, col }, 
+          piece_type: pieceType, 
+          player: isUpperCase(char) ? 'Black' : 'White' 
+        });
+        col++;
+      }
     }
   }
+
+  const capturedJson = [];
+  if (sfenHand !== '-') {
+    let count = 1;
+    for (const char of sfenHand) {
+      const num = parseInt(char);
+      if (!isNaN(num)) {
+        count = num;
+      } else {
+        const pieceType = getPieceType(char, false);
+        for (let i = 0; i < count; i++) {
+          capturedJson.push({ 
+            piece_type: pieceType, 
+            player: isUpperCase(char) ? 'Black' : 'White' 
+          });
+        }
+        count = 1;
+      }
+    }
+  }
+
+  const info = {
+    board_json: JSON.stringify(piecesJson),
+    captured_json: JSON.stringify(capturedJson),
+    player: player,
+  };
+
+  engine.set_position_from_info(JSON.stringify(info));
+}
+
+function getPieceType(char, promoted) {
+  const c = char.toLowerCase();
+  switch (c) {
+    case 'p': return promoted ? 'PromotedPawn' : 'Pawn';
+    case 'l': return promoted ? 'PromotedLance' : 'Lance';
+    case 'n': return promoted ? 'PromotedKnight' : 'Knight';
+    case 's': return promoted ? 'PromotedSilver' : 'Silver';
+    case 'g': return 'Gold';
+    case 'b': return promoted ? 'PromotedBishop' : 'Bishop';
+    case 'r': return promoted ? 'PromotedRook' : 'Rook';
+    case 'k': return 'King';
+    default: throw new Error(`Unknown piece type: ${char}`);
+  }
+}
+
+function isUpperCase(char) {
+  return char === char.toUpperCase();
 }
 
 // Start the initialization

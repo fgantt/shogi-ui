@@ -96,14 +96,4 @@ impl ShogiEngine {
     pub fn set_current_player(&mut self, player: &str) {
         self.current_player = if player == "Black" { Player::Black } else { Player::White };
     }
-
-    pub fn set_captured_pieces(&mut self, captured_json: &str) {
-        self.captured_pieces = CapturedPieces::new(); // Clear captured pieces
-        let captured_pieces_json: Vec<CapturedPieceJson> = serde_json::from_str(captured_json).unwrap();
-        for captured_piece_json in captured_pieces_json {
-            let player = if captured_piece_json.player == "Black" { Player::Black } else { Player::White };
-            let piece_type = PieceType::from_str(&captured_piece_json.piece_type).unwrap();
-            self.captured_pieces.add_piece(piece_type, player);
-        }
-    }
 }
