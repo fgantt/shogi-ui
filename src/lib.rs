@@ -3,12 +3,12 @@ use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
 
-mod bitboards;
-mod moves;
-mod evaluation;
-mod search;
-mod types;
-mod opening_book;
+pub mod bitboards;
+pub mod moves;
+pub mod evaluation;
+pub mod search;
+pub mod types;
+pub mod opening_book;
 
 use bitboards::*;
 use moves::*;
@@ -95,5 +95,83 @@ impl ShogiEngine {
 
     pub fn set_current_player(&mut self, player: &str) {
         self.current_player = if player == "Black" { Player::Black } else { Player::White };
+    }
+}
+
+impl ShogiEngine {
+    pub fn handle_position(&mut self, parts: &[&str]) {
+        let sfen_str: String;
+        let mut moves_start_index: Option<usize> = None;
+
+        if parts.is_empty() {
+            println!("info string error Invalid position command");
+            return;
+        }
+
+        if parts[0] == "startpos" {
+            sfen_str = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+            if parts.len() > 1 && parts[1] == "moves" {
+                moves_start_index = Some(2);
+            }
+        } else if parts[0] == "sfen" {
+            // sfen can be up to 4 parts, plus "moves"
+            let mut sfen_parts = Vec::new();
+            let mut current_index = 1;
+            while current_index < parts.len() && parts[current_index] != "moves" {
+                sfen_parts.push(parts[current_index]);
+                current_index += 1;
+            }
+            sfen_str = sfen_parts.join(" ");
+            if current_index < parts.len() && parts[current_index] == "moves" {
+                moves_start_index = Some(current_index + 1);
+            }
+        } else {
+            println!("info string error Invalid position command: expected 'startpos' or 'sfen'");
+            return;
+        }
+
+        match BitboardBoard::from_fen(&sfen_str) {
+            Ok((board, player, captured_pieces)) => {
+                self.board = board;
+                self.current_player = player;
+                self.captured_pieces = captured_pieces;
+            }
+            Err(e) => {
+                println!("info string error Failed to parse FEN: {}", e);
+                return;
+            }
+        }
+
+        if let Some(start_index) = moves_start_index {
+            for move_str in &parts[start_index..] {
+                match Move::from_usi_string(move_str, self.current_player, &self.board) {
+                    Ok(mv) => {
+                        if let Some(captured) = self.board.make_move(&mv) {
+                            self.captured_pieces.add_piece(captured.piece_type, self.current_player);
+                        }
+                        self.current_player = self.current_player.opposite();
+                    }
+                    Err(e) => {
+                        println!("info string error Failed to parse move '{}': {}", move_str, e);
+                        return;
+                    }
+                }
+            }
+        }
+        println!("info string Board state updated.");
+    }
+
+    pub fn handle_go(&mut self, _parts: &[&str]) {
+        // This is a placeholder implementation.
+        // A real implementation needs to parse time controls.
+        
+        // Default difficulty and time limit for now
+        let best_move = self.get_best_move(2, 5000); // 5 seconds
+
+        if let Some(mv) = best_move {
+            println!("bestmove {}", mv.to_usi_string());
+        } else {
+            println!("bestmove resign");
+        }
     }
 }

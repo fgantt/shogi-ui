@@ -202,6 +202,19 @@ impl Position {
             Player::White => self.row <= 2,
         }
     }
+
+    pub fn from_usi_string(usi_str: &str) -> Result<Position, &str> {
+        if usi_str.len() != 2 { return Err("Invalid position string"); }
+        let mut chars = usi_str.chars();
+        let file_char = chars.next().unwrap();
+        let rank_char = chars.next().unwrap();
+
+        let col = 9 - (file_char.to_digit(10).ok_or("Invalid file")? as u8);
+        let row = (rank_char as u8) - b'a';
+
+        if col > 8 || row > 8 { return Err("Position out of bounds"); }
+        Ok(Position::new(row, col))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -293,6 +306,77 @@ impl Move {
 
     pub fn is_drop(&self) -> bool {
         self.from.is_none()
+    }
+
+    pub fn from_usi_string(usi_str: &str, player: Player, board: &crate::bitboards::BitboardBoard) -> Result<Move, &'static str> {
+        if usi_str.len() < 4 {
+            return Err("Invalid USI move string length");
+        }
+
+        if usi_str.contains('*') {
+            // Drop move, e.g., "P*5e"
+            let parts: Vec<&str> = usi_str.split('*').collect();
+            if parts.len() != 2 { return Err("Invalid drop move format"); }
+            
+            let piece_type = match parts[0] {
+                "P" => PieceType::Pawn,
+                "L" => PieceType::Lance,
+                "N" => PieceType::Knight,
+                "S" => PieceType::Silver,
+                "G" => PieceType::Gold,
+                "B" => PieceType::Bishop,
+                "R" => PieceType::Rook,
+                _ => return Err("Invalid piece type for drop"),
+            };
+
+            let to = Position::from_usi_string(parts[1]).map_err(|_| "Invalid position in drop move")?;
+            Ok(Move::new_drop(piece_type, to, player))
+        } else {
+            // Normal move, e.g., "7g7f" or "2b8h+"
+            let from_str = &usi_str[0..2];
+            let to_str = &usi_str[2..4];
+            let is_promotion = usi_str.ends_with('+');
+
+            let from = Position::from_usi_string(from_str).map_err(|_| "Invalid from position")?;
+            let to = Position::from_usi_string(to_str).map_err(|_| "Invalid to position")?;
+
+            let piece_to_move = board.get_piece(from).ok_or("No piece at source square")?;
+            if piece_to_move.player != player {
+                return Err("Attempting to move opponent's piece");
+            }
+
+            let mut mv = Move::new_move(from, to, piece_to_move.piece_type, player, is_promotion);
+            
+            if board.is_square_occupied(to) {
+                mv.is_capture = true;
+            }
+            
+            Ok(mv)
+        }
+    }
+
+    pub fn to_usi_string(&self) -> String {
+        if let Some(from_pos) = self.from {
+            // Standard move or promotion
+            let from_str = format!("{}{}", 9 - from_pos.col, (b'a' + from_pos.row) as char);
+            let to_str = format!("{}{}", 9 - self.to.col, (b'a' + self.to.row) as char);
+            let promotion_str = if self.is_promotion { "+" } else { "" };
+            format!("{}{}{}", from_str, to_str, promotion_str)
+        } else {
+            // Drop
+            let piece_char = match self.piece_type {
+                PieceType::Pawn => "P",
+                PieceType::Lance => "L",
+                PieceType::Knight => "N",
+                PieceType::Silver => "S",
+                PieceType::Gold => "G",
+                PieceType::Bishop => "B",
+                PieceType::Rook => "R",
+                _ => "", // Should not happen for a drop
+            };
+            let to_str = format!("{}{}", 9 - self.to.col, (b'a' + self.to.row) as char);
+            format!("{}*{}", piece_char, to_str)
+        }
     }
 }
 
@@ -393,5 +477,54 @@ pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
         Some(pos)
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bitboards::BitboardBoard;
+
+    #[test]
+    fn test_position_from_usi() {
+        assert_eq!(Position::from_usi_string("1a").unwrap(), Position::new(0, 8));
+        assert_eq!(Position::from_usi_string("5e").unwrap(), Position::new(4, 4));
+        assert_eq!(Position::from_usi_string("9i").unwrap(), Position::new(8, 0));
+        assert!(Position::from_usi_string("0a").is_err());
+        assert!(Position::from_usi_string("1j").is_err());
+        assert!(Position::from_usi_string("1a1").is_err());
+    }
+
+    #[test]
+    fn test_move_to_usi() {
+        // Normal move
+        let mv1 = Move::new_move(Position::new(6, 2), Position::new(5, 2), PieceType::Pawn, Player::Black, false);
+        assert_eq!(mv1.to_usi_string(), "7g7f");
+
+        // Promotion
+        let mv2 = Move::new_move(Position::new(1, 1), Position::new(7, 7), PieceType::Bishop, Player::Black, true);
+        assert_eq!(mv2.to_usi_string(), "8b2h+");
+
+        // Drop
+        let mv3 = Move::new_drop(PieceType::Pawn, Position::new(3, 3), Player::Black);
+        assert_eq!(mv3.to_usi_string(), "P*6d");
+    }
+
+    #[test]
+    fn test_move_from_usi() {
+        let board = BitboardBoard::new(); // Initial position
+
+        // Normal move
+        let mv1 = Move::from_usi_string("7g7f", Player::Black, &board).unwrap();
+        assert_eq!(mv1.from, Some(Position::new(6, 2)));
+        assert_eq!(mv1.to, Position::new(5, 2));
+        assert_eq!(mv1.is_promotion, false);
+        assert_eq!(mv1.is_drop(), false);
+
+        // Drop
+        let mv2 = Move::from_usi_string("P*5e", Player::White, &board).unwrap();
+        assert_eq!(mv2.piece_type, PieceType::Pawn);
+        assert_eq!(mv2.to, Position::new(4, 4));
+        assert_eq!(mv2.is_drop(), true);
     }
 }

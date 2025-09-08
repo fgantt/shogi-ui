@@ -30,7 +30,14 @@ impl BitboardBoard {
     }
 
     fn setup_initial_position(&mut self) {
-        // This function is assumed to correctly set up the board
+        let start_fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        if let Ok((board, _, _)) = BitboardBoard::from_fen(start_fen) {
+            self.pieces = board.pieces;
+            self.occupied = board.occupied;
+            self.black_occupied = board.black_occupied;
+            self.white_occupied = board.white_occupied;
+            self.piece_positions = board.piece_positions;
+        }
     }
 
     pub fn place_piece(&mut self, piece: Piece, position: Position) {
@@ -255,6 +262,94 @@ impl BitboardBoard {
         if captured_str.is_empty() { fen.push('-'); } else { fen.push_str(&captured_str); }
         fen
     }
+
+    pub fn from_fen(fen: &str) -> Result<(BitboardBoard, Player, CapturedPieces), &str> {
+        let mut board = BitboardBoard::empty();
+        let mut captured_pieces = CapturedPieces::new();
+
+        let parts: Vec<&str> = fen.split_whitespace().collect();
+        if parts.len() < 3 {
+            return Err("Invalid FEN string: not enough parts");
+        }
+
+        // 1. Parse board state
+        let board_part = parts[0];
+        let ranks: Vec<&str> = board_part.split('/').collect();
+        if ranks.len() != 9 {
+            return Err("Invalid FEN: must have 9 ranks");
+        }
+
+        for (r, rank_str) in ranks.iter().enumerate() {
+            let mut c = 0;
+            let mut chars = rank_str.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if c >= 9 { return Err("Invalid FEN: rank has more than 9 files"); }
+                if let Some(digit) = ch.to_digit(10) {
+                    c += digit as usize;
+                } else {
+                    let is_promoted = ch == '+';
+                    let piece_char = if is_promoted {
+                        if let Some(next_ch) = chars.next() { next_ch } else { return Err("Invalid FEN: '+' must be followed by a piece"); }
+                    } else {
+                        ch
+                    };
+
+                    let player = if piece_char.is_uppercase() { Player::Black } else { Player::White };
+                    let piece_type_char = piece_char.to_ascii_lowercase();
+                    
+                    let piece_type = match piece_type_char {
+                        'p' => if is_promoted { PieceType::PromotedPawn } else { PieceType::Pawn },
+                        'l' => if is_promoted { PieceType::PromotedLance } else { PieceType::Lance },
+                        'n' => if is_promoted { PieceType::PromotedKnight } else { PieceType::Knight },
+                        's' => if is_promoted { PieceType::PromotedSilver } else { PieceType::Silver },
+                        'g' => PieceType::Gold,
+                        'b' => if is_promoted { PieceType::PromotedBishop } else { PieceType::Bishop },
+                        'r' => if is_promoted { PieceType::PromotedRook } else { PieceType::Rook },
+                        'k' => PieceType::King,
+                        _ => return Err("Invalid FEN: unknown piece character"),
+                    };
+                    
+                    board.place_piece(Piece::new(piece_type, player), Position::new(r as u8, c as u8));
+                    c += 1;
+                }
+            }
+        }
+
+        // 2. Parse side to move
+        let player = match parts[1] {
+            "b" => Player::Black,
+            "w" => Player::White,
+            _ => return Err("Invalid FEN: invalid player"),
+        };
+
+        // 3. Parse pieces in hand
+        if parts[2] != "-" {
+            let mut count = 1;
+            for ch in parts[2].chars() {
+                if let Some(digit) = ch.to_digit(10) {
+                    count = digit;
+                } else {
+                    let hand_player = if ch.is_uppercase() { Player::Black } else { Player::White };
+                    let piece_type = match ch.to_ascii_lowercase() {
+                        'p' => PieceType::Pawn,
+                        'l' => PieceType::Lance,
+                        'n' => PieceType::Knight,
+                        's' => PieceType::Silver,
+                        'g' => PieceType::Gold,
+                        'b' => PieceType::Bishop,
+                        'r' => PieceType::Rook,
+                        _ => return Err("Invalid FEN: unknown piece in hand"),
+                    };
+                    for _ in 0..count {
+                        captured_pieces.add_piece(piece_type, hand_player);
+                    }
+                    count = 1;
+                }
+            }
+        }
+
+        Ok((board, player, captured_pieces))
+    }
 }
 
 impl Clone for BitboardBoard {
@@ -277,4 +372,56 @@ struct AttackPatterns {
 
 impl AttackPatterns {
     fn new() -> Self { Self {} }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Player, PieceType, CapturedPieces, Position};
+
+    #[test]
+    fn test_from_fen_startpos() {
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        let (board, player, captured) = BitboardBoard::from_fen(fen).unwrap();
+
+        assert_eq!(player, Player::Black);
+        assert!(captured.black.is_empty());
+        assert!(captured.white.is_empty());
+
+        // Spot check a few pieces
+        let black_lance = board.get_piece(Position::new(8, 0)).unwrap();
+        assert_eq!(black_lance.piece_type, PieceType::Lance);
+        assert_eq!(black_lance.player, Player::Black);
+
+        let white_king = board.get_piece(Position::new(0, 4)).unwrap();
+        assert_eq!(white_king.piece_type, PieceType::King);
+        assert_eq!(white_king.player, Player::White);
+        
+        let black_pawn = board.get_piece(Position::new(6, 4)).unwrap();
+        assert_eq!(black_pawn.piece_type, PieceType::Pawn);
+        assert_eq!(black_pawn.player, Player::Black);
+    }
+
+    #[test]
+    fn test_from_fen_with_drops_and_promotions() {
+        let fen = "8l/1l+R2P3/p2pBG1pp/kps1p4/Nn1P2G2/P1P1P2PP/1PS6/1KSG3+r1/LN2+p3L w Sbgn3p 124";
+        let (board, player, captured) = BitboardBoard::from_fen(fen).unwrap();
+
+        assert_eq!(player, Player::White);
+
+        // Check captured pieces
+        assert_eq!(captured.black.iter().filter(|&&p| p == PieceType::Silver).count(), 1);
+        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Pawn).count(), 3);
+        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Knight).count(), 1);
+        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Gold).count(), 1);
+
+        // Spot check a few pieces on board
+        let promoted_rook = board.get_piece(Position::new(1, 2)).unwrap();
+        assert_eq!(promoted_rook.piece_type, PieceType::PromotedRook);
+        assert_eq!(promoted_rook.player, Player::Black);
+
+        let promoted_pawn = board.get_piece(Position::new(8, 4)).unwrap();
+        assert_eq!(promoted_pawn.piece_type, PieceType::PromotedPawn);
+        assert_eq!(promoted_pawn.player, Player::White);
+    }
 }
