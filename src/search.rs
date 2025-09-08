@@ -3,12 +3,8 @@ use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
 use std::collections::HashMap;
-
-fn now() -> f64 {
-    web_sys::window().expect("should have a window in this context").performance().expect("performance should be available").now()
-}
-
-
+use std::time::Instant;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -16,21 +12,28 @@ pub struct SearchEngine {
     transposition_table: HashMap<String, TranspositionEntry>,
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
+    nodes_searched: u64,
+    stop_flag: Option<Arc<AtomicBool>>,
 }
 
 impl SearchEngine {
-    pub fn new() -> Self {
+    pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
+        const BYTES_PER_ENTRY: usize = 100; // Approximate size of a TT entry
+        let capacity = hash_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
-            transposition_table: HashMap::new(),
+            transposition_table: HashMap::with_capacity(capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
+            nodes_searched: 0,
+            stop_flag,
         }
     }
 
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
-        let start_time = now();
+        self.nodes_searched = 0;
+        let start_time = Instant::now();
         let mut alpha = i32::MIN + 1;
         let beta = i32::MAX - 1;
         
@@ -47,7 +50,7 @@ impl SearchEngine {
         let mut history: Vec<String> = vec![board.to_fen(player, captured_pieces)];
 
         for move_ in sorted_moves {
-            if (now() - start_time) > time_limit_ms as f64 { break; }
+            if self.should_stop(start_time, time_limit_ms) { break; }
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -71,13 +74,13 @@ impl SearchEngine {
         best_move.map(|m| (m, best_score))
     }
 
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: Instant, time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+        if self.should_stop(start_time, time_limit_ms) { return 0; }
+        self.nodes_searched += 1;
         let fen_key = board.to_fen(player, captured_pieces);
         if history.contains(&fen_key) {
             return 0; // Repetition is a draw
         }
-
-        if (now() - start_time) > time_limit_ms as f64 { return 0; }
 
         if let Some(entry) = self.transposition_table.get(&fen_key) {
             if entry.depth >= depth {
@@ -100,10 +103,12 @@ impl SearchEngine {
         
         let sorted_moves = self.sort_moves(&legal_moves, board);
         let mut best_score = i32::MIN;
+        let mut best_move_for_tt = None;
         
         history.push(fen_key.clone());
 
         for move_ in sorted_moves {
+            if self.should_stop(start_time, time_limit_ms) { break; }
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
 
@@ -115,6 +120,7 @@ impl SearchEngine {
 
             if score > best_score {
                 best_score = score;
+                best_move_for_tt = Some(move_.clone());
                 if score > alpha {
                     alpha = score;
                     if !move_.is_capture {
@@ -131,13 +137,13 @@ impl SearchEngine {
         history.pop();
 
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
-        self.transposition_table.insert(fen_key, TranspositionEntry { score: best_score, depth, flag, best_move: None });
+        self.transposition_table.insert(fen_key, TranspositionEntry { score: best_score, depth, flag, best_move: best_move_for_tt });
         
         best_score
     }
 
-    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: f64, time_limit_ms: u32, depth: u8) -> i32 {
-        if (now() - start_time) > time_limit_ms as f64 { return 0; }
+    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: Instant, time_limit_ms: u32, depth: u8) -> i32 {
+        if self.should_stop(start_time, time_limit_ms) { return 0; }
 
         if depth == 0 {
             return self.evaluator.evaluate(board, player, captured_pieces);
@@ -151,7 +157,7 @@ impl SearchEngine {
         let sorted_noisy_moves = self.sort_moves(&noisy_moves, board);
 
         for move_ in sorted_noisy_moves {
-            if (now() - start_time) > time_limit_ms as f64 { break; }
+            if self.should_stop(start_time, time_limit_ms) { break; }
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -166,6 +172,15 @@ impl SearchEngine {
         }
         
         alpha
+    }
+
+    fn should_stop(&self, start_time: Instant, time_limit_ms: u32) -> bool {
+        if let Some(flag) = &self.stop_flag {
+            if flag.load(Ordering::Relaxed) {
+                return true;
+            }
+        }
+        start_time.elapsed().as_millis() as u32 > time_limit_ms
     }
 
     fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
@@ -228,42 +243,94 @@ impl SearchEngine {
         self.history_table = [[0; 9]; 9];
         self.killer_moves = [None, None];
     }
+
+    #[cfg(test)]
+    pub fn transposition_table_len(&self) -> usize {
+        self.transposition_table.len()
+    }
+
+    #[cfg(test)]
+    pub fn transposition_table_capacity(&self) -> usize {
+        self.transposition_table.capacity()
+    }
+
+    fn get_pv(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+        let mut pv = Vec::new();
+        let mut current_board = board.clone();
+        let mut current_captured = captured_pieces.clone();
+        let mut current_player = player;
+    
+        for _ in 0..depth {
+            let fen_key = current_board.to_fen(current_player, &current_captured);
+            if let Some(entry) = self.transposition_table.get(&fen_key) {
+                if let Some(move_) = &entry.best_move {
+                    pv.push(move_.clone());
+                    if let Some(captured) = current_board.make_move(move_) {
+                        current_captured.add_piece(captured.piece_type, current_player);
+                    }
+                    current_player = current_player.opposite();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        pv
+    }
 }
 
 
 pub struct IterativeDeepening {
-    search_engine: SearchEngine,
     max_depth: u8,
     time_limit_ms: u32,
+    stop_flag: Option<Arc<AtomicBool>>,
 }
 
 impl IterativeDeepening {
-    pub fn new(max_depth: u8, time_limit_ms: u32) -> Self {
+    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Self {
         Self {
-            search_engine: SearchEngine::new(),
             max_depth,
             time_limit_ms,
+            stop_flag,
         }
     }
 
-    pub fn search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Option<(Move, i32)> {
-        let start_time = now();
+    pub fn search(&mut self, search_engine: &mut SearchEngine, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Option<(Move, i32)> {
+        let start_time = Instant::now();
         let mut best_move = None;
         let mut best_score = i32::MIN;
         let search_time_limit = self.time_limit_ms.saturating_sub(100);
 
         for depth in 1..=self.max_depth {
-            if (now() - start_time) >= search_time_limit as f64 { break; }
-            let remaining_time = (search_time_limit as f64 - (now() - start_time)) as u32;
+            if self.should_stop(start_time, search_time_limit) { break; }
+            let remaining_time = search_time_limit - start_time.elapsed().as_millis() as u32;
 
-            if let Some((move_, score)) = self.search_engine.search_at_depth(board, captured_pieces, player, depth, remaining_time) {
+            if let Some((move_, score)) = search_engine.search_at_depth(board, captured_pieces, player, depth, remaining_time) {
                 best_move = Some(move_);
                 best_score = score;
+
+                let pv = search_engine.get_pv(board, captured_pieces, player, depth);
+                let pv_string = pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ");
+                let time_searched = start_time.elapsed().as_millis() as u32;
+                let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
+
+                println!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
+
                 if score > 10000 && depth >= 3 { break; } 
             } else {
                 break;
             }
         }
         best_move.map(|m| (m, best_score))
+    }
+
+    fn should_stop(&self, start_time: Instant, time_limit_ms: u32) -> bool {
+        if let Some(flag) = &self.stop_flag {
+            if flag.load(Ordering::Relaxed) {
+                return true;
+            }
+        }
+        start_time.elapsed().as_millis() as u32 >= time_limit_ms
     }
 }

@@ -2,6 +2,8 @@ use wasm_bindgen::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
+use std::thread;
 
 pub mod bitboards;
 pub mod moves;
@@ -12,6 +14,7 @@ pub mod opening_book;
 
 use bitboards::*;
 use moves::*;
+use search::SearchEngine;
 use types::*;
 use opening_book::OpeningBook;
 
@@ -35,46 +38,34 @@ struct CapturedPieceJson {
 }
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct ShogiEngine {
     board: BitboardBoard,
     captured_pieces: CapturedPieces,
     current_player: Player,
     move_history: Vec<Move>,
     opening_book: OpeningBook,
+    stop_flag: Arc<AtomicBool>,
+    search_engine: Arc<Mutex<SearchEngine>>,
 }
 
 #[wasm_bindgen]
 impl ShogiEngine {
     pub fn new() -> Self {
+        let stop_flag = Arc::new(AtomicBool::new(false));
         Self {
             board: BitboardBoard::new(),
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
             move_history: Vec::new(),
             opening_book: OpeningBook::new(),
+            stop_flag: stop_flag.clone(),
+            search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
         }
     }
 
-    pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
-        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
-        if let Some(book_move) = self.opening_book.get_move(&fen) {
-            return Some(book_move);
-        }
-
-        let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms);
-        if let Some((move_, _score)) = searcher.search(&self.board, &self.captured_pieces, self.current_player) {
-            Some(move_)
-        } else {
-            // Fallback to random move if search fails
-            let move_generator = MoveGenerator::new();
-            let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
-            if legal_moves.is_empty() {
-                return None;
-            }
-            let mut rng = rand::thread_rng();
-            legal_moves.choose(&mut rng).cloned()
-        }
+    pub fn get_best_move_wasm(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
+        self.get_best_move(difficulty, time_limit_ms, None)
     }
 
     pub fn get_board_state(&self) -> JsValue {
@@ -99,6 +90,29 @@ impl ShogiEngine {
 }
 
 impl ShogiEngine {
+    pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Option<Move> {
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        if let Some(book_move) = self.opening_book.get_move(&fen) {
+            return Some(book_move);
+        }
+
+        let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag);
+        let mut search_engine_guard = self.search_engine.lock().unwrap();
+        if let Some((move_, _score)) = searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player) {
+            Some(move_)
+        } else {
+            // Fallback to random move if search fails
+            let move_generator = MoveGenerator::new();
+            let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
+            if legal_moves.is_empty() {
+                return None;
+            }
+            let mut rng = rand::thread_rng();
+            legal_moves.choose(&mut rng).cloned()
+        }
+    }
+
     pub fn handle_position(&mut self, parts: &[&str]) {
         let sfen_str: String;
         let mut moves_start_index: Option<usize> = None;
@@ -161,17 +175,112 @@ impl ShogiEngine {
         println!("info string Board state updated.");
     }
 
-    pub fn handle_go(&mut self, _parts: &[&str]) {
-        // This is a placeholder implementation.
-        // A real implementation needs to parse time controls.
-        
-        // Default difficulty and time limit for now
-        let best_move = self.get_best_move(2, 5000); // 5 seconds
+    pub fn handle_go(&mut self, parts: &[&str]) {
+        let mut btime = 0;
+        let mut wtime = 0;
+        let mut byoyomi = 0;
 
-        if let Some(mv) = best_move {
-            println!("bestmove {}", mv.to_usi_string());
-        } else {
-            println!("bestmove resign");
+        let mut i = 0;
+        while i < parts.len() {
+            match parts[i] {
+                "btime" => {
+                    if i + 1 < parts.len() {
+                        btime = parts[i+1].parse().unwrap_or(0);
+                        i += 2;
+                    } else { i += 1; }
+                },
+                "wtime" => {
+                    if i + 1 < parts.len() {
+                        wtime = parts[i+1].parse().unwrap_or(0);
+                        i += 2;
+                    } else { i += 1; }
+                },
+                "byoyomi" => {
+                    if i + 1 < parts.len() {
+                        byoyomi = parts[i+1].parse().unwrap_or(0);
+                        i += 2;
+                    } else { i += 1; }
+                },
+                _ => i += 1,
+            }
         }
+
+        let time_to_use = if byoyomi > 0 {
+            byoyomi
+        } else {
+            let time_for_player = if self.current_player == Player::Black { btime } else { wtime };
+            if time_for_player > 0 {
+                time_for_player / 40
+            } else {
+                5000 // Default to 5 seconds if no time control is given
+            }
+        };
+
+        self.stop_flag.store(false, Ordering::Relaxed);
+        let mut engine_clone = self.clone();
+
+        thread::spawn(move || {
+            let best_move = engine_clone.get_best_move(5, time_to_use, Some(engine_clone.stop_flag.clone()));
+            if let Some(mv) = best_move {
+                println!("bestmove {}", mv.to_usi_string());
+            } else {
+                println!("bestmove resign");
+            }
+        });
+    }
+
+    pub fn handle_stop(&mut self) {
+        self.stop_flag.store(true, Ordering::Relaxed);
+    }
+
+    pub fn handle_setoption(&mut self, parts: &[&str]) {
+        if parts.len() >= 4 && parts[0] == "name" && parts[2] == "value" {
+            if parts[1] == "USI_Hash" {
+                if let Ok(size) = parts[3].parse::<usize>() {
+                    let mut search_engine_guard = self.search_engine.lock().unwrap();
+                    *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+                }
+            }
+        }
+    }
+
+    pub fn handle_usinewgame(&mut self) {
+        let mut search_engine_guard = self.search_engine.lock().unwrap();
+        search_engine_guard.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_setoption_hash() {
+        let mut engine = ShogiEngine::new();
+        let parts = vec!["name", "USI_Hash", "value", "32"];
+        engine.handle_setoption(&parts);
+        let search_engine = engine.search_engine.lock().unwrap();
+        const BYTES_PER_ENTRY: usize = 100;
+        let expected_capacity = 32 * 1024 * 1024 / BYTES_PER_ENTRY;
+        assert!(search_engine.transposition_table_capacity() >= expected_capacity);
+    }
+
+    #[test]
+    fn test_handle_usinewgame() {
+        let mut engine = ShogiEngine::new();
+        
+        // Simulate a search to populate the transposition table
+        {
+            let mut search_engine_guard = engine.search_engine.lock().unwrap();
+            let board = BitboardBoard::new();
+            let captured_pieces = CapturedPieces::new();
+            let mut searcher = search::IterativeDeepening::new(1, 1000, None);
+            searcher.search(&mut search_engine_guard, &board, &captured_pieces, Player::Black);
+        }
+
+        engine.handle_usinewgame();
+
+        let search_engine_guard = engine.search_engine.lock().unwrap();
+        assert_eq!(search_engine_guard.transposition_table_len(), 0);
     }
 }

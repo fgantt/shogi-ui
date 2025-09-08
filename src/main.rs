@@ -17,6 +17,9 @@ fn main() {
             "isready" => handle_isready(),
             "position" => engine.handle_position(&parts[1..]),
             "go" => engine.handle_go(&parts[1..]),
+            "stop" => engine.handle_stop(),
+            "setoption" => engine.handle_setoption(&parts[1..]),
+            "usinewgame" => engine.handle_usinewgame(),
             "quit" => break,
             _ => {
                 println!("info string Unknown command: {}", command);
@@ -28,7 +31,7 @@ fn main() {
 fn handle_usi() {
     println!("id name Shogi Engine");
     println!("id author Gemini");
-    // TODO: Add option commands here if any
+    println!("option name USI_Hash type spin default 16 min 1 max 1024");
     println!("usiok");
 }
 
