@@ -43,7 +43,6 @@ pub struct ShogiEngine {
     board: BitboardBoard,
     captured_pieces: CapturedPieces,
     current_player: Player,
-    move_history: Vec<Move>,
     opening_book: OpeningBook,
     stop_flag: Arc<AtomicBool>,
     search_engine: Arc<Mutex<SearchEngine>>,
@@ -60,7 +59,6 @@ impl ShogiEngine {
             board: BitboardBoard::new(),
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
-            move_history: Vec::new(),
             opening_book: OpeningBook::new(),
             stop_flag: stop_flag.clone(),
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
@@ -103,6 +101,27 @@ impl ShogiEngine {
         let output = buffer.clone();
         buffer.clear();
         output
+    }
+
+    pub fn to_string_for_debug(&self) -> String {
+        let mut s = String::new();
+        s.push_str("White (captured): ");
+        for piece_type in &self.captured_pieces.white {
+            s.push_str(&Piece::new(*piece_type, Player::White).to_fen_char());
+            s.push(' ');
+        }
+        s.push('\n');
+
+        s.push_str(&self.board.to_string_for_debug());
+
+        s.push_str("Black (captured): ");
+        for piece_type in &self.captured_pieces.black {
+            s.push_str(&Piece::new(*piece_type, Player::Black).to_fen_char());
+            s.push(' ');
+        }
+        s.push('\n');
+        s.push_str(&format!("Current player: {:?}\n", self.current_player));
+        s
     }
 }
 
@@ -189,6 +208,10 @@ impl ShogiEngine {
                     }
                 }
             }
+        }
+
+        if self.debug_mode {
+            eprintln!("{}", self.to_string_for_debug());
         }
         output.push("info string Board state updated.".to_string());
         output

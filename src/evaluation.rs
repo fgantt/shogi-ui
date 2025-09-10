@@ -6,16 +6,12 @@ use crate::moves::MoveGenerator;
 pub struct PositionEvaluator {
     // Piece-square tables for positional evaluation
     piece_square_tables: PieceSquareTables,
-    
-    // Evaluation weights
-    weights: EvaluationWeights,
 }
 
 impl PositionEvaluator {
     pub fn new() -> Self {
         Self {
             piece_square_tables: PieceSquareTables::new(),
-            weights: EvaluationWeights::new(),
         }
     }
 
@@ -216,23 +212,10 @@ impl PositionEvaluator {
     fn evaluate_mobility(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         let move_generator = MoveGenerator::new();
         let legal_moves = move_generator.generate_legal_moves(board, player, captured_pieces);
-        legal_moves.len() as i32 * self.weights.mobility_weight
+        legal_moves.len() as i32 * 2
     }
 
-    /// Estimate mobility for a piece type
-    fn estimate_piece_mobility(&self, piece_type: PieceType, _pos: Position, _board: &BitboardBoard) -> i32 {
-        match piece_type {
-            PieceType::Pawn => 1,
-            PieceType::Lance => 3,
-            PieceType::Knight => 2,
-            PieceType::Silver => 5,
-            PieceType::Gold => 6,
-            PieceType::Bishop => 8,
-            PieceType::Rook => 8,
-            PieceType::King => 8,
-            _ => 6, // Promoted pieces
-        }
-    }
+    
 
     /// Evaluate piece coordination
     fn evaluate_piece_coordination(&self, board: &BitboardBoard, player: Player) -> i32 {
@@ -574,30 +557,4 @@ impl PieceSquareTables {
     }
 }
 
-/// Evaluation weights for different components
-#[derive(Clone)]
-struct EvaluationWeights {
-    material_weight: i32,
-    positional_weight: i32,
-    pawn_structure_weight: i32,
-    king_safety_weight: i32,
-    mobility_weight: i32,
-    coordination_weight: i32,
-    center_control_weight: i32,
-    development_weight: i32,
-}
 
-impl EvaluationWeights {
-    fn new() -> Self {
-        Self {
-            material_weight: 100,
-            positional_weight: 2,
-            pawn_structure_weight: 2,
-            king_safety_weight: 3,
-            mobility_weight: 2,
-            coordination_weight: 2,
-            center_control_weight: 2,
-            development_weight: 1,
-        }
-    }
-}

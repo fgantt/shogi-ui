@@ -287,7 +287,7 @@ impl BitboardBoard {
                 if let Some(digit) = ch.to_digit(10) {
                     c += digit as usize;
                 } else {
-                    let is_promoted = ch == '+';
+                    let is_promoted = ch == '+' ;
                     let piece_char = if is_promoted {
                         if let Some(next_ch) = chars.next() { next_ch } else { return Err("Invalid FEN: '+' must be followed by a piece"); }
                     } else {
@@ -349,6 +349,37 @@ impl BitboardBoard {
         }
 
         Ok((board, player, captured_pieces))
+    }
+
+    pub fn to_string_for_debug(&self) -> String {
+        let mut board_str = String::new();
+        board_str.push_str("  9  8  7  6  5  4  3  2  1\n");
+        board_str.push_str("+--+--+--+--+--+--+--+--+--+\n");
+        for r in 0..9 {
+            board_str.push('|');
+            for c in 0..9 {
+                let pos = Position::new(r, c);
+                if let Some(piece) = self.get_piece(pos) {
+                    let mut piece_char = piece.to_fen_char();
+                    if piece.player == Player::White {
+                        piece_char = piece_char.to_lowercase();
+                    }
+
+                    if piece_char.starts_with('+') {
+                        board_str.push_str(&piece_char);
+                    } else {
+                        board_str.push(' ');
+                        board_str.push_str(&piece_char);
+                    }
+                } else {
+                    board_str.push_str("  ");
+                }
+                board_str.push('|');
+            }
+            board_str.push_str(&format!(" {}\n", (b'a' + r) as char));
+            board_str.push_str("+--+--+--+--+--+--+--+--+--+\n");
+        }
+        board_str
     }
 }
 

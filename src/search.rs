@@ -187,11 +187,7 @@ impl SearchEngine {
         self.move_generator.generate_legal_captures(board, player, _captured_pieces)
     }
 
-    fn is_checking_move(&self, board: &BitboardBoard, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
-        let mut new_board = board.clone();
-        new_board.make_move(move_);
-        new_board.is_king_in_check(move_.player.opposite(), captured_pieces)
-    }
+    
 
     fn sort_moves(&self, moves: &[Move], board: &BitboardBoard) -> Vec<Move> {
         let mut scored_moves: Vec<(Move, i32)> = moves.iter().map(|m| (m.clone(), self.score_move(m, board))).collect();

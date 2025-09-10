@@ -15,7 +15,7 @@ impl MoveGenerator {
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let is_in_check = board.is_king_in_check(player, captured_pieces);
 
-        let mut pseudo_legal_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+        let pseudo_legal_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
 
         let legal_moves: Vec<Move> = pseudo_legal_moves.into_iter().filter(|m| {
             let mut temp_board = board.clone();
