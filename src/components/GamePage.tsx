@@ -15,6 +15,7 @@ import './GamePage.css';
 const GamePage = () => {
   const controller = useShogiController();
   const [position, setPosition] = useState<Position | null>(null);
+  const [renderKey, setRenderKey] = useState(0); // Force re-render counter
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
@@ -56,7 +57,10 @@ const GamePage = () => {
 
   useEffect(() => {
     const onStateChanged = (newPosition: Position) => {
+      // Force a re-render by updating both position and render key
+      // The position object from tsshogi is mutable, so we need to trigger React's re-render
       setPosition(newPosition);
+      setRenderKey(prev => prev + 1);
       //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
       // if (newPosition.isCheckmate()) {
       //   setWinner(newPosition._color === 'black' ? 'player2' : 'player1');
@@ -162,7 +166,7 @@ const GamePage = () => {
   return (
     <div className={`game-page`}>
       <div className="main-area">
-        <Board position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} />
+        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} />
       </div>
       <div className="side-panel">
         <GameControls 

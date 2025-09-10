@@ -107,6 +107,7 @@ export class ShogiController extends EventEmitter {
   }
 
   private emitStateChanged(): void {
+    // Force a new reference to ensure React re-renders
     this.emit('stateChanged', this.record.position);
   }
 }
