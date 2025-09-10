@@ -89,6 +89,15 @@
   position: relative; /* Needed for absolute positioning of overlay */
 }
 
+.board-square.legal-move {
+  background-color: rgba(0, 255, 0, 0.3); /* Light green highlight for legal moves */
+  cursor: pointer;
+}
+
+.board-square.legal-move:hover {
+  background-color: rgba(0, 255, 0, 0.5); /* Darker green on hover */
+}
+
 .intersection-dot {
   position: absolute;
   bottom: -5px; /* Half of the dot's height to center it on the border */

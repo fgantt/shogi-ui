@@ -1,4 +1,4 @@
-import { Record, InitialPositionSFEN, Move, Position, ImmutablePosition, Square } from 'tsshogi';
+import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square } from 'tsshogi';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
@@ -52,10 +52,29 @@ export class ShogiController extends EventEmitter {
   }
 
   public getLegalMovesForSquare(square: Square): Square[] {
-    const moves = this.record.position.generateMoves();
-    return moves
-      .filter(move => move.from.equals(square))
-      .map(move => move.to);
+    // Since ImmutablePosition doesn't have generateMoves, we'll generate legal moves manually
+    // by checking all possible destination squares and validating each move
+    const legalMoves: Square[] = [];
+    
+    // TODO: Review this implementation for efficiency - checking all 81 squares may be overkill.
+    // Consider implementing piece-specific move generation or using tsshogi's internal move generation
+    // if available in future versions. This brute force approach works but could be optimized.
+    
+    // Check all 81 squares as potential destinations
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        const destSquare = Square.newByXY(col, row);
+        if (!destSquare) continue;
+        
+        // Create a move from the selected square to this destination
+        const move = this.record.position.createMove(square, destSquare);
+        if (move && this.record.position.isValidMove(move)) {
+          legalMoves.push(destSquare);
+        }
+      }
+    }
+    
+    return legalMoves;
   }
 
   public handleUserMove(usiMove: string): boolean {

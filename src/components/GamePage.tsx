@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useShogiController } from '../context/ShogiControllerContext';
-import { Position, Square, PieceType as TsshogiPieceType, Color } from 'tsshogi';
+import { ImmutablePosition, Square, PieceType as TsshogiPieceType } from 'tsshogi';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
@@ -14,9 +14,10 @@ import './GamePage.css';
 
 const GamePage = () => {
   const controller = useShogiController();
-  const [position, setPosition] = useState<Position | null>(null);
+  const [position, setPosition] = useState<ImmutablePosition | null>(null);
   const [renderKey, setRenderKey] = useState(0); // Force re-render counter
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
   const [winner, setWinner] = useState<'player1' | 'player2' | 'draw' | null>(null);
@@ -42,11 +43,52 @@ const GamePage = () => {
 
   useEffect(() => {
     const loadAssets = async () => {
-      const wallpaperModules = import.meta.glob('/public/wallpapers/*.{jpg,svg,jpeg,png,webp}');
-      const boardModules = import.meta.glob('/public/boards/*.{jpg,svg,jpeg,png,webp}');
+      // For now, use hardcoded lists since import.meta.glob is not available
+      const wallpaperPaths = [
+        '/wallpapers/beautiful-japanese-garden.jpg',
+        '/wallpapers/beautiful-natural-landscape.jpg',
+        '/wallpapers/fuji1.jpg',
+        '/wallpapers/koi.jpg',
+        '/wallpapers/maple.jpg',
+        '/wallpapers/mountain-house.jpeg',
+        '/wallpapers/photo1.jpg',
+        '/wallpapers/shogi-background-placeholder.svg',
+        '/wallpapers/wave.jpg',
+        '/wallpapers/woman-with-kimono-wagasa-umbrella.jpg'
+      ];
       
-      const wallpaperPaths = Object.keys(wallpaperModules).map(path => path.replace('/public', ''));
-      const boardPaths = Object.keys(boardModules).map(path => path.replace('/public', ''));
+      const boardPaths = [
+        '/boards/koi-bw.jpg',
+        '/boards/marble-calacatta.jpg',
+        '/boards/marble.jpg',
+        '/boards/quartz-1.jpg',
+        '/boards/quartz-2.jpg',
+        '/boards/stars-1.jpg',
+        '/boards/stars-2.jpg',
+        '/boards/wood-agathis-1.jpg',
+        '/boards/wood-agathis-2.jpg',
+        '/boards/wood-bambo.jpg',
+        '/boards/wood-boxwood-1.jpg',
+        '/boards/wood-boxwood-2.jpg',
+        '/boards/wood-boxwood-3.jpg',
+        '/boards/wood-boxwood-4.jpg',
+        '/boards/wood-cherry-1.jpg',
+        '/boards/wood-cherry-2.jpg',
+        '/boards/wood-cherry-3.jpg',
+        '/boards/wood-cypress-1.jpg',
+        '/boards/wood-ginkgo-1.jpg',
+        '/boards/wood-ginkgo-2.jpg',
+        '/boards/wood-ginkgo-3.jpg',
+        '/boards/wood-hiba-1.jpeg',
+        '/boards/wood-hickory-1.jpg',
+        '/boards/wood-katsura-1.png',
+        '/boards/wood-mahogany-1.jpg',
+        '/boards/wood-maple-1.jpg',
+        '/boards/wood-maple-2.webp',
+        '/boards/wood-pecan-1.jpg',
+        '/boards/wood-pecan-2.jpg',
+        '/boards/wood-red-spruce-1.jpg'
+      ];
 
       setWallpaperList(wallpaperPaths);
       setBoardBackgroundList(boardPaths);
@@ -56,14 +98,14 @@ const GamePage = () => {
   }, []);
 
   useEffect(() => {
-    const onStateChanged = (newPosition: Position) => {
+    const onStateChanged = (newPosition: ImmutablePosition) => {
       // Force a re-render by updating both position and render key
       // The position object from tsshogi is mutable, so we need to trigger React's re-render
       setPosition(newPosition);
       setRenderKey(prev => prev + 1);
       //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
       // if (newPosition.isCheckmate()) {
-      //   setWinner(newPosition._color === 'black' ? 'player2' : 'player1');
+      //   setWinner(newPosition.turn === 0 ? 'player2' : 'player1');
       // } else if (newPosition.isRepetition()) {
       //   setWinner('draw');
       // }
@@ -85,6 +127,7 @@ const GamePage = () => {
     // Deselect if clicking the same square
     if (selectedSquare?.equals(clickedSquare)) {
       setSelectedSquare(null);
+      setLegalMoves([]);
       return;
     }
 
@@ -94,11 +137,15 @@ const GamePage = () => {
       // This won't handle promotions correctly yet, but it will move the piece.
       controller.handleUserMove(moveUsi);
       setSelectedSquare(null);
+      setLegalMoves([]);
     } else {
       // No piece selected, so select one
       const piece = position.board.at(clickedSquare);
-      if (piece && piece.color === position._color) {
+      if (piece && piece.color === (position.sfen.includes(' b ') ? 'black' : 'white')) {
         setSelectedSquare(clickedSquare);
+        // Get legal moves for the selected piece
+        const moves = controller.getLegalMovesForSquare(clickedSquare);
+        setLegalMoves(moves);
       }
     }
   };
@@ -127,7 +174,7 @@ const GamePage = () => {
   };
 
   const handleSaveGame = (name: string) => {
-    const sfen = controller.getPosition().toSFEN();
+    const sfen = controller.getPosition().sfen;
     const newSavedGames = { ...savedGames, [name]: sfen };
     setSavedGames(newSavedGames);
     localStorage.setItem('shogi-saved-games', JSON.stringify(newSavedGames));
@@ -150,8 +197,8 @@ const GamePage = () => {
   };
 
   const handleCapturedPieceClick = (pieceType: TsshogiPieceType, player: 'player1' | 'player2') => {
-    const isPlayer1Turn = position?._color === 'black';
-    const isPlayer2Turn = position?._color === 'white';
+    const isPlayer1Turn = position?.sfen.includes(' b ');
+    const isPlayer2Turn = position?.sfen.includes(' w ');
 
     if ((isPlayer1Turn && player === 'player1') || (isPlayer2Turn && player === 'player2')) {
       setSelectedCapturedPiece(pieceType);
@@ -166,7 +213,7 @@ const GamePage = () => {
   return (
     <div className={`game-page`}>
       <div className="main-area">
-        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} />
+        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} legalMoves={legalMoves} />
       </div>
       <div className="side-panel">
         <GameControls 
@@ -175,8 +222,8 @@ const GamePage = () => {
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onOpenLoadModal={() => setIsLoadModalOpen(true)}
         />
-        <CapturedPieces captured={position.hand(Color.BLACK)} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
-        <CapturedPieces captured={position.hand(Color.WHITE)} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
         <MoveLog moves={controller.getRecord().moves.map(m => {
           if ('usi' in m.move) {
             return m.move.usi;
@@ -186,9 +233,9 @@ const GamePage = () => {
         })} />
       </div>
       {isSettingsOpen && <SettingsPanel 
-        pieceLabelType={pieceLabelType}
+        pieceLabelType={pieceLabelType as any}
         onPieceLabelTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
-        notation={notation}
+        notation={notation as any}
         onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
         wallpaperList={wallpaperList}
         onSelectWallpaper={handleSettingChange(setWallpaper, 'shogi-wallpaper')}
@@ -201,6 +248,8 @@ const GamePage = () => {
         onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
         showPieceTooltips={showPieceTooltips}
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
+        aiDifficulty={1 as any}
+        onDifficultyChange={() => {}}
       />}
       {promotionMove && <PromotionModal onPromote={handlePromotion} />}
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}

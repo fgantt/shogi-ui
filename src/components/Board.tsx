@@ -1,12 +1,13 @@
 import React from 'react';
-import { Position, Color, Square } from 'tsshogi';
+import { ImmutablePosition, Color, Square } from 'tsshogi';
 import PieceComponent from './Piece';
 import '../styles/shogi.css';
 
 interface BoardProps {
-  position: Position;
+  position: ImmutablePosition;
   onSquareClick: (row: number, col: number) => void;
   selectedSquare: Square | null;
+  legalMoves: Square[];
 }
 
 
@@ -16,7 +17,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -25,6 +26,12 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
     // Convert row/col to tsshogi coordinates for comparison
     const square = Square.newByXY(col, row);
     return square ? selectedSquare.equals(square) : false;
+  };
+
+  const isLegalMove = (row: number, col: number): boolean => {
+    const square = Square.newByXY(col, row);
+    if (!square) return false;
+    return legalMoves.some(move => move.equals(square));
   };
 
   return (
@@ -48,6 +55,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare }
                 const classNames = [
                   'board-square',
                   isSelected(rowIndex, colIndex) ? 'selected' : '',
+                  isLegalMove(rowIndex, colIndex) ? 'legal-move' : '',
                 ].filter(Boolean).join(' ');
 
                 return (
