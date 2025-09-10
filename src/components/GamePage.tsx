@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useShogiController } from '../context/ShogiControllerContext';
-import { ImmutablePosition, Square, PieceType as TsshogiPieceType } from 'tsshogi';
+import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
@@ -11,6 +11,18 @@ import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
 import './GamePage.css';
+
+// Helper function to check if a piece is already promoted
+const isPiecePromoted = (pieceType: TsshogiPieceType): boolean => {
+  return [
+    TsshogiPieceType.PROM_PAWN,
+    TsshogiPieceType.PROM_LANCE,
+    TsshogiPieceType.PROM_KNIGHT,
+    TsshogiPieceType.PROM_SILVER,
+    TsshogiPieceType.HORSE, // promoted bishop
+    TsshogiPieceType.DRAGON  // promoted rook
+  ].includes(pieceType);
+};
 
 const GamePage = () => {
   const controller = useShogiController();
@@ -139,11 +151,34 @@ const GamePage = () => {
 
     // If a piece is selected, try to move
     if (selectedSquare) {
-      const moveUsi = `${selectedSquare.usi}${clickedSquare.usi}`;
-      // This won't handle promotions correctly yet, but it will move the piece.
-      controller.handleUserMove(moveUsi);
-      setSelectedSquare(null);
-      setLegalMoves([]);
+      const piece = position.board.at(selectedSquare);
+      if (!piece) {
+        setSelectedSquare(null);
+        setLegalMoves([]);
+        return;
+      }
+
+      // Check if the move is eligible for promotion
+      const currentColor = position.sfen.includes(' b ') ? Color.BLACK : Color.WHITE;
+      const isFromPromotable = isPromotableRank(currentColor, selectedSquare.rank);
+      const isToPromotable = isPromotableRank(currentColor, clickedSquare.rank);
+      const canPromote = !isPiecePromoted(piece.type) && // Piece is not already promoted
+                        piece.type !== TsshogiPieceType.KING && 
+                        piece.type !== TsshogiPieceType.GOLD && 
+                        (isFromPromotable || isToPromotable);
+
+      if (canPromote) {
+        // Show promotion modal instead of making the move directly
+        setPromotionMove({ from: selectedSquare, to: clickedSquare });
+        setSelectedSquare(null);
+        setLegalMoves([]);
+      } else {
+        // Make the move directly
+        const moveUsi = `${selectedSquare.usi}${clickedSquare.usi}`;
+        controller.handleUserMove(moveUsi);
+        setSelectedSquare(null);
+        setLegalMoves([]);
+      }
     } else {
       // No piece selected, so select one
       const piece = position.board.at(clickedSquare);

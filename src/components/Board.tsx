@@ -1,5 +1,5 @@
 import React from 'react';
-import { ImmutablePosition, Color, Square } from 'tsshogi';
+import { ImmutablePosition, Square } from 'tsshogi';
 import PieceComponent from './Piece';
 import '../styles/shogi.css';
 
@@ -40,8 +40,8 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
     const square = Square.newByXY(col, row);
     if (!square) return false;
     
-    return (lastMove.from && lastMove.from.equals(square)) || 
-           (lastMove.to && lastMove.to.equals(square));
+    return (lastMove.from ? lastMove.from.equals(square) : false) || 
+           (lastMove.to ? lastMove.to.equals(square) : false);
   };
 
   return (
@@ -81,8 +81,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                         player={toOurPlayer(piece.color)}
                         pieceLabelType={'kanji'} // Hardcoded for now
                         isSelected={isSelected(rowIndex, colIndex)}
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           onSquareClick(rowIndex, colIndex)
                         }}
                       />
