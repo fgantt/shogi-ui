@@ -12,14 +12,21 @@ fn main() {
             continue;
         }
 
+        if engine.is_debug_mode() {
+            println!("info string received command: {}", command);
+        }
+
         match parts[0] {
             "usi" => handle_usi(),
             "isready" => handle_isready(),
+            "debug" => engine.handle_debug(&parts[1..]),
             "position" => engine.handle_position(&parts[1..]),
             "go" => engine.handle_go(&parts[1..]),
             "stop" => engine.handle_stop(),
+            "ponderhit" => engine.handle_ponderhit(),
             "setoption" => engine.handle_setoption(&parts[1..]),
             "usinewgame" => engine.handle_usinewgame(),
+            "gameover" => engine.handle_gameover(&parts[1..]),
             "quit" => break,
             _ => {
                 println!("info string Unknown command: {}", command);

@@ -47,6 +47,8 @@ pub struct ShogiEngine {
     opening_book: OpeningBook,
     stop_flag: Arc<AtomicBool>,
     search_engine: Arc<Mutex<SearchEngine>>,
+    debug_mode: bool,
+    pondering: bool,
 }
 
 #[wasm_bindgen]
@@ -61,7 +63,13 @@ impl ShogiEngine {
             opening_book: OpeningBook::new(),
             stop_flag: stop_flag.clone(),
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
+            debug_mode: false,
+            pondering: false,
         }
+    }
+
+    pub fn is_debug_mode(&self) -> bool {
+        self.debug_mode
     }
 
     pub fn get_best_move_wasm(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
@@ -179,6 +187,7 @@ impl ShogiEngine {
         let mut btime = 0;
         let mut wtime = 0;
         let mut byoyomi = 0;
+        let mut is_ponder = false;
 
         let mut i = 0;
         while i < parts.len() {
@@ -201,8 +210,18 @@ impl ShogiEngine {
                         i += 2;
                     } else { i += 1; }
                 },
+                "ponder" => {
+                    is_ponder = true;
+                    i += 1;
+                },
                 _ => i += 1,
             }
+        }
+
+        self.pondering = is_ponder;
+
+        if self.debug_mode {
+            println!("info string go command received with btime={}, wtime={}, byoyomi={}, ponder={}", btime, wtime, byoyomi, self.pondering);
         }
 
         let time_to_use = if byoyomi > 0 {
@@ -248,6 +267,39 @@ impl ShogiEngine {
         let mut search_engine_guard = self.search_engine.lock().unwrap();
         search_engine_guard.clear();
     }
+
+    pub fn handle_debug(&mut self, parts: &[&str]) {
+        if let Some(part) = parts.get(0) {
+            match *part {
+                "on" => {
+                    self.debug_mode = true;
+                    println!("info string debug mode enabled");
+                },
+                "off" => {
+                    self.debug_mode = false;
+                    println!("info string debug mode disabled");
+                },
+                _ => println!("info string unknown debug command {}", part),
+            }
+        } else {
+            println!("info string debug command needs an argument (on/off)");
+        }
+    }
+
+    pub fn handle_ponderhit(&mut self) {
+        self.pondering = false;
+        // The engine should switch from pondering to normal search.
+        // For now, we just print an info string.
+        println!("info string ponderhit received");
+    }
+
+    pub fn handle_gameover(&self, parts: &[&str]) {
+        if let Some(result) = parts.get(0) {
+            println!("info string game over: {}", result);
+        } else {
+            println!("info string game over command received without a result");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -282,5 +334,25 @@ mod tests {
 
         let search_engine_guard = engine.search_engine.lock().unwrap();
         assert_eq!(search_engine_guard.transposition_table_len(), 0);
+    }
+
+    #[test]
+    fn test_handle_debug() {
+        let mut engine = ShogiEngine::new();
+        assert!(!engine.debug_mode);
+        engine.handle_debug(&["on"]);
+        assert!(engine.debug_mode);
+        engine.handle_debug(&["off"]);
+        assert!(!engine.debug_mode);
+    }
+
+    #[test]
+    fn test_handle_ponder() {
+        let mut engine = ShogiEngine::new();
+        assert!(!engine.pondering);
+        engine.handle_go(&["ponder"]);
+        assert!(engine.pondering);
+        engine.handle_ponderhit();
+        assert!(!engine.pondering);
     }
 }
