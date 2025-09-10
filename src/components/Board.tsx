@@ -8,6 +8,7 @@ interface BoardProps {
   onSquareClick: (row: number, col: number) => void;
   selectedSquare: Square | null;
   legalMoves: Square[];
+  lastMove: { from: Square | null; to: Square | null } | null;
 }
 
 
@@ -17,7 +18,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -32,6 +33,15 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
     const square = Square.newByXY(col, row);
     if (!square) return false;
     return legalMoves.some(move => move.equals(square));
+  };
+
+  const isLastMove = (row: number, col: number): boolean => {
+    if (!lastMove) return false;
+    const square = Square.newByXY(col, row);
+    if (!square) return false;
+    
+    return (lastMove.from && lastMove.from.equals(square)) || 
+           (lastMove.to && lastMove.to.equals(square));
   };
 
   return (
@@ -56,6 +66,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                   'board-square',
                   isSelected(rowIndex, colIndex) ? 'selected' : '',
                   isLegalMove(rowIndex, colIndex) ? 'legal-move' : '',
+                  isLastMove(rowIndex, colIndex) ? 'last-move' : '',
                 ].filter(Boolean).join(' ');
 
                 return (

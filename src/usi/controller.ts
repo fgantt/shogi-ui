@@ -47,6 +47,26 @@ export class ShogiController extends EventEmitter {
     return this.record;
   }
 
+  public getLastMove(): { from: Square | null; to: Square | null } | null {
+    const moves = this.record.moves;
+    if (moves.length === 0) return null;
+    
+    const lastMove = moves[moves.length - 1];
+    if (!lastMove || !('from' in lastMove.move) || !('to' in lastMove.move)) {
+      return null;
+    }
+    
+    // Handle drops (where from is a PieceType) by setting from to null
+    const fromSquare = typeof lastMove.move.from === 'object' && 'x' in lastMove.move.from 
+      ? lastMove.move.from as Square 
+      : null;
+    
+    return {
+      from: fromSquare,
+      to: lastMove.move.to as Square
+    };
+  }
+
   public isInitialized(): boolean {
     return this.initialized;
   }

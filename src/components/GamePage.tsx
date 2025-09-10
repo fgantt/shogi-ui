@@ -18,6 +18,7 @@ const GamePage = () => {
   const [renderKey, setRenderKey] = useState(0); // Force re-render counter
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
+  const [lastMove, setLastMove] = useState<{ from: Square | null; to: Square | null } | null>(null);
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
   const [winner, setWinner] = useState<'player1' | 'player2' | 'draw' | null>(null);
@@ -103,6 +104,11 @@ const GamePage = () => {
       // The position object from tsshogi is mutable, so we need to trigger React's re-render
       setPosition(newPosition);
       setRenderKey(prev => prev + 1);
+      
+      // Update last move for highlighting
+      const lastMoveData = controller.getLastMove();
+      setLastMove(lastMoveData);
+      
       //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
       // if (newPosition.isCheckmate()) {
       //   setWinner(newPosition.turn === 0 ? 'player2' : 'player1');
@@ -213,7 +219,7 @@ const GamePage = () => {
   return (
     <div className={`game-page`}>
       <div className="main-area">
-        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} legalMoves={legalMoves} />
+        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} legalMoves={legalMoves} lastMove={lastMove} />
       </div>
       <div className="side-panel">
         <GameControls 
