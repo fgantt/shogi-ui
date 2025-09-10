@@ -369,7 +369,7 @@ mod tests {
             let mut search_engine_guard = engine.search_engine.lock().unwrap();
             let board = BitboardBoard::new();
             let captured_pieces = CapturedPieces::new();
-            let mut searcher = search::IterativeDeepening::new(1, 1000, None);
+            let mut searcher = search::IterativeDeepening::new(1, 1000, None, None);
             searcher.search(&mut search_engine_guard, &board, &captured_pieces, Player::Black);
         }
 

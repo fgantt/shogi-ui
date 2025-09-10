@@ -77,8 +77,8 @@ impl MoveGenerator {
         let handle_capture_move = |moves: &mut Vec<Move>, to_pos: Position| {
             if !board.is_square_occupied_by(to_pos, player) {
                 if board.is_square_occupied(to_pos) { // Is a capture
-                    let from_in_promo = pos.is_in_promotion_zone(player);
-                    let to_in_promo = to_pos.is_in_promotion_zone(player);
+                    let from_in_opponent_promo = pos.is_in_promotion_zone(player.opposite());
+                    let to_in_opponent_promo = to_pos.is_in_promotion_zone(player.opposite());
 
                     // Non-promoted move
                     let mut move_ = Move::new_move(pos, to_pos, piece.piece_type, player, false);
@@ -87,7 +87,7 @@ impl MoveGenerator {
                     moves.push(move_);
 
                     // Promoted move
-                    if piece.piece_type.can_promote() && (from_in_promo || to_in_promo) {
+                    if piece.piece_type.can_promote() && (from_in_opponent_promo || to_in_opponent_promo) {
                         let mut promoted_move = Move::new_move(pos, to_pos, piece.piece_type, player, true);
                         promoted_move.is_capture = true;
                         promoted_move.captured_piece = board.get_piece(to_pos).cloned();
@@ -99,14 +99,14 @@ impl MoveGenerator {
 
         match piece.piece_type {
             PieceType::Pawn => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let new_row = pos.row as i8 + dir;
                 if new_row >= 0 && new_row < 9 {
                     handle_capture_move(&mut moves, Position::new(new_row as u8, pos.col));
                 }
             },
             PieceType::Knight => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
                 for (dr, dc) in move_offsets.iter() {
                     let new_row = pos.row as i8 + dr;
@@ -118,7 +118,7 @@ impl MoveGenerator {
             },
             PieceType::Lance | PieceType::Rook | PieceType::Bishop => {
                 let directions = match piece.piece_type {
-                    PieceType::Lance => if player == Player::Black { vec![(1, 0)] } else { vec![(-1, 0)] },
+                    PieceType::Lance => if player == Player::Black { vec![(-1, 0)] } else { vec![(1, 0)] },
                     PieceType::Rook => vec![(1, 0), (-1, 0), (0, 1), (0, -1)],
                     PieceType::Bishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1)],
                     _ => vec![]
@@ -139,7 +139,7 @@ impl MoveGenerator {
                 }
             },
             PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver | PieceType::PromotedBishop | PieceType::PromotedRook => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let offsets = piece.piece_type.get_move_offsets(dir);
                 for (dr, dc) in offsets {
                     let new_row = pos.row as i8 + dr;
@@ -155,19 +155,19 @@ impl MoveGenerator {
 
     fn generate_pseudo_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut moves = Vec::new();
-        moves.extend(self.generate_piece_moves(board, player));
+        moves.extend(self.generate_all_piece_moves(board, player));
         moves.extend(self.generate_drop_moves(board, player, captured_pieces));
         moves
     }
 
-    fn generate_piece_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
+    pub fn generate_all_piece_moves(&self, board: &BitboardBoard, player: Player) -> Vec<Move> {
         let mut moves = Vec::new();
         for r in 0..9 {
             for c in 0..9 {
                 let pos = Position::new(r, c);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        moves.extend(self.generate_moves_for_piece(board, piece, pos));
+                        moves.extend(self.generate_moves_for_single_piece(board, piece, pos));
                     }
                 }
             }
@@ -175,15 +175,15 @@ impl MoveGenerator {
         moves
     }
 
-    fn generate_moves_for_piece(&self, board: &BitboardBoard, piece: &Piece, pos: Position) -> Vec<Move> {
+    fn generate_moves_for_single_piece(&self, board: &BitboardBoard, piece: &Piece, pos: Position) -> Vec<Move> {
         let mut moves = Vec::new();
         let player = piece.player;
 
         let handle_move = |moves: &mut Vec<Move>, to_pos: Position| {
             if !board.is_square_occupied_by(to_pos, player) {
                 let is_capture = board.is_square_occupied(to_pos);
-                let from_in_promo = pos.is_in_promotion_zone(player);
-                let to_in_promo = to_pos.is_in_promotion_zone(player);
+                let from_in_opponent_promo = pos.is_in_promotion_zone(player.opposite());
+                let to_in_opponent_promo = to_pos.is_in_promotion_zone(player.opposite());
 
                 // Non-promoted move
                 let mut move_ = Move::new_move(pos, to_pos, piece.piece_type, player, false);
@@ -194,7 +194,8 @@ impl MoveGenerator {
                 moves.push(move_);
 
                 // Promoted move
-                if piece.piece_type.can_promote() && (from_in_promo || to_in_promo) {
+                if piece.piece_type.can_promote() && (from_in_opponent_promo || to_in_opponent_promo) {
+                    
                     let mut promoted_move = Move::new_move(pos, to_pos, piece.piece_type, player, true);
                     if is_capture { 
                         promoted_move.is_capture = true;
@@ -207,14 +208,14 @@ impl MoveGenerator {
 
         match piece.piece_type {
             PieceType::Pawn => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let new_row = pos.row as i8 + dir;
                 if new_row >= 0 && new_row < 9 {
                     handle_move(&mut moves, Position::new(new_row as u8, pos.col));
                 }
             },
             PieceType::Knight => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
                 for (dr, dc) in move_offsets.iter() {
                     let new_row = pos.row as i8 + dr;
@@ -226,7 +227,7 @@ impl MoveGenerator {
             },
             PieceType::Lance | PieceType::Rook | PieceType::Bishop => {
                 let directions = match piece.piece_type {
-                    PieceType::Lance => if player == Player::Black { vec![(1, 0)] } else { vec![(-1, 0)] },
+                    PieceType::Lance => if player == Player::Black { vec![(-1, 0)] } else { vec![(1, 0)] },
                     PieceType::Rook => vec![(1, 0), (-1, 0), (0, 1), (0, -1)],
                     PieceType::Bishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1)],
                     _ => vec![]
@@ -247,7 +248,7 @@ impl MoveGenerator {
                 }
             },
             PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver | PieceType::PromotedBishop | PieceType::PromotedRook => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == Player::Black { -1 } else { 1 };
                 let offsets = piece.piece_type.get_move_offsets(dir);
                 for (dr, dc) in offsets {
                     let new_row = pos.row as i8 + dr;
@@ -285,6 +286,26 @@ impl MoveGenerator {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bitboards::BitboardBoard;
+    use crate::types::{Player, PieceType, CapturedPieces, Position};
+
+    #[test]
+    fn test_white_pawn_promotion() {
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPP1PP/1B5R1/LNSGKGSNL w - 1";
+        let (board, player, captured_pieces) = BitboardBoard::from_fen(fen).unwrap();
+        let move_generator = MoveGenerator::new();
+        let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
+        
+        for m in &moves {
+            if m.to_usi_string().contains("+") {
+                assert!(m.to.is_in_promotion_zone(player) || m.from.unwrap().is_in_promotion_zone(player));
+            }
+        }
+    }
+}
 fn is_legal_drop_location(board: &BitboardBoard, piece_type: PieceType, pos: Position, player: Player) -> bool {
     if piece_type == PieceType::Pawn {
         // Cannot drop on a file that already contains an unpromoted pawn of the same color
@@ -299,8 +320,8 @@ fn is_legal_drop_location(board: &BitboardBoard, piece_type: PieceType, pos: Pos
     }
 
     // Cannot drop a piece where it has no legal moves
-    let last_rank = if player == Player::Black { 8 } else { 0 };
-    let second_last_rank = if player == Player::Black { 7 } else { 1 };
+    let last_rank = if player == Player::Black { 0 } else { 8 };
+    let second_last_rank = if player == Player::Black { 1 } else { 7 };
     match piece_type {
         PieceType::Pawn | PieceType::Lance if pos.row == last_rank => return false,
         PieceType::Knight if pos.row == last_rank || pos.row == second_last_rank => return false,
