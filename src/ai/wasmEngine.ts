@@ -1,5 +1,6 @@
-import { ShogiEngine, PieceType as WasmPieceType } from '../../pkg-bundler/shogi_engine.js';
+import { WasmUsiHandler } from '../../pkg-bundler/shogi_engine.js';
 
+let wasmModule: typeof import('../../pkg-bundler/shogi_engine.js') | null = null;
 let isInitialized = false;
 
 /**
@@ -11,6 +12,7 @@ export async function initializeWasmEngine(): Promise<void> {
     }
     
     try {
+        wasmModule = await import('../../pkg-bundler/shogi_engine.js');
         isInitialized = true;
     } catch (error) {
         console.error('Failed to initialize WebAssembly engine:', error);
@@ -22,7 +24,17 @@ export async function initializeWasmEngine(): Promise<void> {
  * Check if WebAssembly engine is available
  */
 export function isWasmEngineAvailable(): boolean {
-    return isInitialized;
+    return isInitialized && wasmModule !== null;
+}
+
+/**
+ * Create a new WasmUsiHandler instance
+ */
+export function createWasmUsiHandler(): WasmUsiHandler {
+    if (!wasmModule) {
+        throw new Error('WebAssembly module not initialized. Call initializeWasmEngine() first.');
+    }
+    return new wasmModule.WasmUsiHandler();
 }
 
 /**
@@ -30,4 +42,5 @@ export function isWasmEngineAvailable(): boolean {
  */
 export function resetEngine(): void {
     isInitialized = false;
+    wasmModule = null;
 }

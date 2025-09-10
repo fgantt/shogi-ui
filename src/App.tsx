@@ -8,7 +8,7 @@ import AboutPage from './components/AboutPage';
 import EngineSettings from './components/EngineSettings';
 
 import { ShogiController } from './usi/controller';
-import { WasmEngineAdapter } from './usi/engine';
+import { WasmUsiEngineAdapter } from './usi/engine';
 import { ShogiControllerProvider } from './context/ShogiControllerContext';
 
 import './App.css';
@@ -17,14 +17,7 @@ import './styles/settings.css';
 import { useEffect, useState } from 'react';
 
 // --- Singleton ShogiController ---
-const storedSelectedEngine = localStorage.getItem('shogi-selected-engine');
-const enginePath = storedSelectedEngine || '../ai/ai.worker.ts';
-
-if (!storedSelectedEngine) {
-  localStorage.setItem('shogi-selected-engine', enginePath);
-}
-
-const wasmEngineAdapter = new WasmEngineAdapter(enginePath);
+const wasmEngineAdapter = new WasmUsiEngineAdapter();
 const shogiController = new ShogiController(wasmEngineAdapter);
 // ---------------------------------
 

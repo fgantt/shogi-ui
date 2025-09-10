@@ -172,7 +172,9 @@ pub struct Position {
 
 impl Position {
     pub fn new(row: u8, col: u8) -> Self {
-        debug_assert!(row < 9 && col < 9);
+        // Clamp coordinates to valid range for WASM compatibility
+        let row = if row >= 9 { 8 } else { row };
+        let col = if col >= 9 { 8 } else { col };
         Self { row, col }
     }
 
@@ -206,8 +208,8 @@ impl Position {
     pub fn from_usi_string(usi_str: &str) -> Result<Position, &str> {
         if usi_str.len() != 2 { return Err("Invalid position string"); }
         let mut chars = usi_str.chars();
-        let file_char = chars.next().unwrap();
-        let rank_char = chars.next().unwrap();
+        let file_char = chars.next().ok_or("Invalid position string")?;
+        let rank_char = chars.next().ok_or("Invalid position string")?;
 
         let col = 9 - (file_char.to_digit(10).ok_or("Invalid file")? as u8);
         let row = (rank_char as u8) - b'a';

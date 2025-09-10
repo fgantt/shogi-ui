@@ -19,7 +19,7 @@ const EngineSettings = () => {
     if (storedEngines) {
       setEngines(JSON.parse(storedEngines));
     } else {
-      const defaultEngines = [{ name: 'Built-in WASM', path: '../ai/ai.worker.ts' }];
+      const defaultEngines = [{ name: 'Built-in WASM USI Engine', path: 'wasm-usi' }];
       setEngines(defaultEngines);
       localStorage.setItem('shogi-engines', JSON.stringify(defaultEngines));
     }
@@ -27,8 +27,8 @@ const EngineSettings = () => {
     if (storedSelectedEngine) {
       setSelectedEngine(storedSelectedEngine);
     } else {
-      setSelectedEngine('../ai/ai.worker.ts');
-      localStorage.setItem('shogi-selected-engine', '../ai/ai.worker.ts');
+      setSelectedEngine('wasm-usi');
+      localStorage.setItem('shogi-selected-engine', 'wasm-usi');
     }
   }, []);
 

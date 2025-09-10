@@ -3,7 +3,7 @@ use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
 use std::collections::HashMap;
-use std::time::Instant;
+use crate::time_utils::TimeSource;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
 
 pub struct SearchEngine {
@@ -32,25 +32,38 @@ impl SearchEngine {
     }
 
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
+        crate::debug_utils::debug_log(&format!("Inside search_at_depth, depth={}", depth));
+        
         self.nodes_searched = 0;
-        let start_time = Instant::now();
+        let start_time = TimeSource::now();
         let mut alpha = i32::MIN + 1;
         let beta = i32::MAX - 1;
         
         let mut best_move = None;
         let mut best_score = i32::MIN;
         
+        crate::debug_utils::debug_log("About to generate legal moves");
+        
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
+            crate::debug_utils::debug_log("No legal moves found");
             return None;
         }
         
+        crate::debug_utils::debug_log(&format!("Found {} legal moves", legal_moves.len()));
+        
+        crate::debug_utils::debug_log("About to sort moves");
+        
         let sorted_moves = self.sort_moves(&legal_moves, board);
+        
+        crate::debug_utils::debug_log("About to start move evaluation loop");
         
         let mut history: Vec<String> = vec![board.to_fen(player, captured_pieces)];
 
         for move_ in sorted_moves {
-            if self.should_stop(start_time, time_limit_ms) { break; }
+            if self.should_stop(&start_time, time_limit_ms) { break; }
+            
+            crate::debug_utils::debug_log("About to make move");
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -59,7 +72,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms, &mut history);
+                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history);
             
             if score > best_score {
                 best_score = score;
@@ -74,8 +87,8 @@ impl SearchEngine {
         best_move.map(|m| (m, best_score))
     }
 
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: Instant, time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
-        if self.should_stop(start_time, time_limit_ms) { return 0; }
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+        if self.should_stop(&start_time, time_limit_ms) { return 0; }
         self.nodes_searched += 1;
         let fen_key = board.to_fen(player, captured_pieces);
         if history.contains(&fen_key) {
@@ -93,7 +106,7 @@ impl SearchEngine {
         }
         
         if depth == 0 {
-            return self.quiescence_search(board, captured_pieces, player, alpha, beta, start_time, time_limit_ms, 5);
+            return self.quiescence_search(board, captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
         }
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
@@ -108,7 +121,7 @@ impl SearchEngine {
         history.push(fen_key.clone());
 
         for move_ in sorted_moves {
-            if self.should_stop(start_time, time_limit_ms) { break; }
+            if self.should_stop(&start_time, time_limit_ms) { break; }
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
 
@@ -116,7 +129,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
-            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, start_time, time_limit_ms, history);
+                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, history);
 
             if score > best_score {
                 best_score = score;
@@ -142,8 +155,8 @@ impl SearchEngine {
         best_score
     }
 
-    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: Instant, time_limit_ms: u32, depth: u8) -> i32 {
-        if self.should_stop(start_time, time_limit_ms) { return 0; }
+    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
+        if self.should_stop(&start_time, time_limit_ms) { return 0; }
 
         if depth == 0 {
             return self.evaluator.evaluate(board, player, captured_pieces);
@@ -157,7 +170,7 @@ impl SearchEngine {
         let sorted_noisy_moves = self.sort_moves(&noisy_moves, board);
 
         for move_ in sorted_noisy_moves {
-            if self.should_stop(start_time, time_limit_ms) { break; }
+            if self.should_stop(&start_time, time_limit_ms) { break; }
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -165,7 +178,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, start_time, time_limit_ms, depth - 1);
+                let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, &start_time, time_limit_ms, depth - 1);
             
             if score >= beta { return beta; }
             if score > alpha { alpha = score; }
@@ -174,13 +187,13 @@ impl SearchEngine {
         alpha
     }
 
-    fn should_stop(&self, start_time: Instant, time_limit_ms: u32) -> bool {
+    fn should_stop(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
         if let Some(flag) = &self.stop_flag {
             if flag.load(Ordering::Relaxed) {
                 return true;
             }
         }
-        start_time.elapsed().as_millis() as u32 > time_limit_ms
+        start_time.has_exceeded_limit(time_limit_ms)
     }
 
     fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
@@ -295,14 +308,26 @@ impl IterativeDeepening {
     }
 
     pub fn search(&mut self, search_engine: &mut SearchEngine, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Option<(Move, i32)> {
-        let start_time = Instant::now();
+        crate::debug_utils::debug_log("Inside search method");
+        
+        crate::debug_utils::debug_log("About to get start time");
+        let start_time = TimeSource::now();
+        
+        crate::debug_utils::debug_log("About to initialize variables");
         let mut best_move = None;
         let mut best_score = i32::MIN;
+        
+        crate::debug_utils::debug_log("About to calculate search time limit");
         let search_time_limit = self.time_limit_ms.saturating_sub(100);
 
+        crate::debug_utils::debug_log("Starting search loop");
+
         for depth in 1..=self.max_depth {
-            if self.should_stop(start_time, search_time_limit) { break; }
-            let remaining_time = search_time_limit - start_time.elapsed().as_millis() as u32;
+            if self.should_stop(&start_time, search_time_limit) { break; }
+            let elapsed_ms = start_time.elapsed_ms();
+            let remaining_time = search_time_limit.saturating_sub(elapsed_ms);
+
+            crate::debug_utils::debug_log(&format!("Searching at depth {}", depth));
 
             if let Some((move_, score)) = search_engine.search_at_depth(board, captured_pieces, player, depth, remaining_time) {
                 best_move = Some(move_);
@@ -310,15 +335,16 @@ impl IterativeDeepening {
 
                 let pv = search_engine.get_pv(board, captured_pieces, player, depth);
                 let pv_string = pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ");
-                let time_searched = start_time.elapsed().as_millis() as u32;
+                let time_searched = start_time.elapsed_ms();
                 let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
                 if let Some(buffer) = &self.output_buffer {
-                    buffer.lock().unwrap().push(info_string);
-                } else {
-                    println!("{}", info_string);
+                    if let Ok(mut buffer_guard) = buffer.lock() {
+                        buffer_guard.push(info_string);
+                    }
                 }
+                // Note: println! removed for WASM compatibility - output goes through buffer
 
                 if score > 10000 && depth >= 3 { break; } 
             } else {
@@ -328,12 +354,12 @@ impl IterativeDeepening {
         best_move.map(|m| (m, best_score))
     }
 
-    fn should_stop(&self, start_time: Instant, time_limit_ms: u32) -> bool {
+    fn should_stop(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
         if let Some(flag) = &self.stop_flag {
             if flag.load(Ordering::Relaxed) {
                 return true;
             }
         }
-        start_time.elapsed().as_millis() as u32 >= time_limit_ms
+        start_time.has_exceeded_limit(time_limit_ms)
     }
 }

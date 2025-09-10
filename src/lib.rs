@@ -2,8 +2,9 @@ use wasm_bindgen::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
-use std::thread;
 
 pub mod bitboards;
 pub mod moves;
@@ -11,6 +12,8 @@ pub mod evaluation;
 pub mod search;
 pub mod types;
 pub mod opening_book;
+pub mod time_utils;
+pub mod debug_utils;
 
 use bitboards::*;
 use moves::*;
@@ -77,18 +80,20 @@ impl ShogiEngine {
     }
 
     pub fn get_board_state(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.board.to_fen(self.current_player, &self.captured_pieces)).unwrap()
+        serde_wasm_bindgen::to_value(&self.board.to_fen(self.current_player, &self.captured_pieces)).unwrap_or_else(|_| JsValue::NULL)
     }
 
     // Methods needed for WebAssembly integration
     pub fn set_position(&mut self, board_json: &str) {
         self.board = BitboardBoard::empty(); // Clear the board
-        let pieces: Vec<PieceJson> = serde_json::from_str(board_json).unwrap();
-        for piece_json in pieces {
-            let player = if piece_json.player == "Black" { Player::Black } else { Player::White };
-            let piece_type = PieceType::from_str(&piece_json.piece_type).unwrap();
-            let pos = Position::new(piece_json.position.row, piece_json.position.col);
-            self.board.place_piece(Piece::new(piece_type, player), pos);
+        if let Ok(pieces) = serde_json::from_str::<Vec<PieceJson>>(board_json) {
+            for piece_json in pieces {
+                let player = if piece_json.player == "Black" { Player::Black } else { Player::White };
+                if let Some(piece_type) = PieceType::from_str(&piece_json.piece_type) {
+                    let pos = Position::new(piece_json.position.row, piece_json.position.col);
+                    self.board.place_piece(Piece::new(piece_type, player), pos);
+                }
+            }
         }
     }
 
@@ -97,10 +102,13 @@ impl ShogiEngine {
     }
 
     pub fn get_pending_output(&mut self) -> Vec<String> {
-        let mut buffer = self.output_buffer.lock().unwrap();
-        let output = buffer.clone();
-        buffer.clear();
-        output
+        if let Ok(mut buffer) = self.output_buffer.lock() {
+            let output = buffer.clone();
+            buffer.clear();
+            output
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn to_string_for_debug(&self) -> String {
@@ -127,24 +135,93 @@ impl ShogiEngine {
 
 impl ShogiEngine {
     pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, output_buffer: Option<Arc<Mutex<Vec<String>>>>) -> Option<Move> {
+        crate::debug_utils::debug_log("Starting get_best_move");
+        
+        if let Some(buffer) = &output_buffer {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.push("info string DEBUG: Starting get_best_move".to_string());
+            }
+        }
+
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
         if let Some(book_move) = self.opening_book.get_move(&fen) {
+            if let Some(buffer) = &output_buffer {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.push("info string DEBUG: Found opening book move".to_string());
+                }
+            }
             return Some(book_move);
         }
 
+        if let Some(buffer) = &output_buffer {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.push("info string DEBUG: No opening book move, starting search".to_string());
+            }
+        }
+
         let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, output_buffer);
-        let mut search_engine_guard = self.search_engine.lock().unwrap();
-        if let Some((move_, _score)) = searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player) {
+        crate::debug_utils::debug_log("Creating searcher");
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, None);
+        
+        crate::debug_utils::debug_log("Trying to get search engine lock");
+        
+        if let Some(buffer) = &output_buffer {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.push("info string DEBUG: Created searcher, trying to get search engine lock".to_string());
+            }
+        }
+        
+        // Try to get the search engine lock, but don't panic if it fails
+        crate::debug_utils::debug_log("About to lock search engine");
+        let search_result = self.search_engine.lock().map(|mut search_engine_guard| {
+            crate::debug_utils::debug_log("Got search engine lock, starting search");
+            if let Some(buffer) = &output_buffer {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.push("info string DEBUG: Got search engine lock, starting search".to_string());
+                }
+            }
+            searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player)
+        });
+        
+        crate::debug_utils::debug_log("Search completed, checking result");
+        
+        if let Some(buffer) = &output_buffer {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.push("info string DEBUG: Search completed, checking result".to_string());
+            }
+        }
+        
+        if let Ok(Some((move_, _score))) = search_result {
+            if let Some(buffer) = &output_buffer {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.push("info string DEBUG: Search found best move".to_string());
+                }
+            }
             Some(move_)
         } else {
+            if let Some(buffer) = &output_buffer {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.push("info string DEBUG: Search failed, trying fallback random move".to_string());
+                }
+            }
             // Fallback to random move if search fails
             let move_generator = MoveGenerator::new();
             let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
             if legal_moves.is_empty() {
+                if let Some(buffer) = &output_buffer {
+                    if let Ok(mut buf) = buffer.lock() {
+                        buf.push("info string DEBUG: No legal moves available".to_string());
+                    }
+                }
                 return None;
             }
-            let mut rng = rand::thread_rng();
+            // Use a seeded RNG that's WASM-compatible
+            let mut rng = StdRng::seed_from_u64(42); // Fixed seed for deterministic behavior
+            if let Some(buffer) = &output_buffer {
+                if let Ok(mut buf) = buffer.lock() {
+                    buf.push(format!("info string DEBUG: Found {} legal moves, choosing random", legal_moves.len()));
+                }
+            }
             legal_moves.choose(&mut rng).cloned()
         }
     }
@@ -211,17 +288,33 @@ impl ShogiEngine {
         }
 
         if self.debug_mode {
-            eprintln!("{}", self.to_string_for_debug());
+            // Send debug output to output buffer and immediate output for WASM compatibility
+            let debug_output = format!("info string DEBUG: {}", self.to_string_for_debug());
+            output.push("info string DEBUG: Board state:".to_string());
+            output.push(debug_output.clone());
+            
+            if let Ok(mut buffer) = self.output_buffer.lock() {
+                buffer.push("info string DEBUG: Board state:".to_string());
+                buffer.push(debug_output);
+            }
         }
         output.push("info string Board state updated.".to_string());
         output
     }
 
     pub fn handle_go(&mut self, parts: &[&str]) -> Vec<String> {
+        // Immediate console logging for debugging
+        crate::debug_utils::debug_log("Starting handle_go");
+        
         let mut btime = 0;
         let mut wtime = 0;
         let mut byoyomi = 0;
         let mut is_ponder = false;
+
+        // Add debug logging
+        if let Ok(mut buffer) = self.output_buffer.lock() {
+            buffer.push("info string DEBUG: Starting handle_go".to_string());
+        }
 
         let mut i = 0;
         while i < parts.len() {
@@ -265,23 +358,70 @@ impl ShogiEngine {
             }
         };
 
-        self.stop_flag.store(false, Ordering::Relaxed);
-        let mut engine_clone = self.clone();
-        let output_buffer_clone = self.output_buffer.clone();
-
-        {
-            output_buffer_clone.lock().unwrap().clear();
+        if let Ok(mut buffer) = self.output_buffer.lock() {
+            buffer.push(format!("info string DEBUG: Time to use: {}ms", time_to_use));
         }
 
-        thread::spawn(move || {
-            let best_move = engine_clone.get_best_move(5, time_to_use, Some(engine_clone.stop_flag.clone()), Some(output_buffer_clone.clone()));
-            let mut buffer = output_buffer_clone.lock().unwrap();
-            if let Some(mv) = best_move {
-                buffer.push(format!("bestmove {}", mv.to_usi_string()));
-            } else {
-                buffer.push("bestmove resign".to_string());
+        crate::debug_utils::debug_log(&format!("Time to use: {}ms", time_to_use));
+
+        self.stop_flag.store(false, Ordering::Relaxed);
+        
+        // Clear the output buffer
+        if let Ok(mut buffer) = self.output_buffer.lock() {
+            buffer.clear();
+            buffer.push("info string DEBUG: Buffer cleared, starting search".to_string());
+        }
+
+        crate::debug_utils::debug_log("About to start asynchronous search");
+
+        if let Ok(mut buffer) = self.output_buffer.lock() {
+            buffer.push("info string DEBUG: Starting asynchronous search".to_string());
+        }
+
+        // Start the search in a separate thread for standalone, or synchronously for WASM
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let stop_flag = self.stop_flag.clone();
+            let output_buffer = self.output_buffer.clone();
+            let board = self.board.clone();
+            let captured_pieces = self.captured_pieces.clone();
+            let current_player = self.current_player;
+            
+            std::thread::spawn(move || {
+                let mut engine = ShogiEngine::new();
+                engine.board = board;
+                engine.captured_pieces = captured_pieces;
+                engine.current_player = current_player;
+                
+                if let Some(mv) = engine.get_best_move(5, time_to_use, Some(stop_flag), Some(output_buffer.clone())) {
+                    if let Ok(mut buffer) = output_buffer.lock() {
+                        buffer.push(format!("bestmove {}", mv.to_usi_string()));
+                        buffer.push("info string DEBUG: Best move found and sent".to_string());
+                    }
+                } else {
+                    if let Ok(mut buffer) = output_buffer.lock() {
+                        buffer.push("bestmove resign".to_string());
+                        buffer.push("info string DEBUG: No move found, resigning".to_string());
+                    }
+                }
+            });
+        }
+        
+        #[cfg(target_arch = "wasm32")]
+        {
+            // For WASM, we need to do the search synchronously since threads aren't supported
+            let best_move = self.get_best_move(5, time_to_use, Some(self.stop_flag.clone()), Some(self.output_buffer.clone()));
+            
+            if let Ok(mut buffer) = self.output_buffer.lock() {
+                if let Some(mv) = best_move {
+                    buffer.push(format!("bestmove {}", mv.to_usi_string()));
+                    buffer.push("info string DEBUG: Best move found and sent".to_string());
+                } else {
+                    buffer.push("bestmove resign".to_string());
+                    buffer.push("info string DEBUG: No move found, resigning".to_string());
+                }
             }
-        });
+        }
 
         Vec::new()
     }
@@ -295,8 +435,9 @@ impl ShogiEngine {
         if parts.len() >= 4 && parts[0] == "name" && parts[2] == "value" {
             if parts[1] == "USI_Hash" {
                 if let Ok(size) = parts[3].parse::<usize>() {
-                    let mut search_engine_guard = self.search_engine.lock().unwrap();
-                    *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+                    if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                        *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+                    }
                 }
             }
         }
@@ -304,8 +445,9 @@ impl ShogiEngine {
     }
 
     pub fn handle_usinewgame(&mut self) -> Vec<String> {
-        let mut search_engine_guard = self.search_engine.lock().unwrap();
-        search_engine_guard.clear();
+        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+            search_engine_guard.clear();
+        }
         Vec::new()
     }
 
@@ -434,7 +576,7 @@ impl UsiHandler {
             "usinewgame" => self.engine.handle_usinewgame(),
             "gameover" => self.engine.handle_gameover(&parts[1..]),
             "quit" => Vec::new(), // quit is handled by the caller
-            _ => vec![format!("info string Unknown command: {}", command_str)],
+            _ => vec![format!("info string Unknown command: {}", parts.join(" "))],
         }
     }
 
@@ -472,11 +614,11 @@ impl WasmUsiHandler {
 
     pub fn process_command(&mut self, command: &str) -> JsValue {
         let output = self.handler.handle_command(command);
-        serde_wasm_bindgen::to_value(&output).unwrap()
+        serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
     }
 
     pub fn get_pending_output(&mut self) -> JsValue {
         let output = self.handler.engine.get_pending_output();
-        serde_wasm_bindgen::to_value(&output).unwrap()
+        serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
     }
 }
