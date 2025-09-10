@@ -49,6 +49,7 @@ pub struct ShogiEngine {
     search_engine: Arc<Mutex<SearchEngine>>,
     debug_mode: bool,
     pondering: bool,
+    output_buffer: Arc<Mutex<Vec<String>>>,
 }
 
 #[wasm_bindgen]
@@ -65,6 +66,7 @@ impl ShogiEngine {
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
             debug_mode: false,
             pondering: false,
+            output_buffer: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -73,7 +75,7 @@ impl ShogiEngine {
     }
 
     pub fn get_best_move_wasm(&mut self, difficulty: u8, time_limit_ms: u32) -> Option<Move> {
-        self.get_best_move(difficulty, time_limit_ms, None)
+        self.get_best_move(difficulty, time_limit_ms, None, None)
     }
 
     pub fn get_board_state(&self) -> JsValue {
@@ -95,17 +97,24 @@ impl ShogiEngine {
     pub fn set_current_player(&mut self, player: &str) {
         self.current_player = if player == "Black" { Player::Black } else { Player::White };
     }
+
+    pub fn get_pending_output(&mut self) -> Vec<String> {
+        let mut buffer = self.output_buffer.lock().unwrap();
+        let output = buffer.clone();
+        buffer.clear();
+        output
+    }
 }
 
 impl ShogiEngine {
-    pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Option<Move> {
+    pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, output_buffer: Option<Arc<Mutex<Vec<String>>>>) -> Option<Move> {
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
         if let Some(book_move) = self.opening_book.get_move(&fen) {
             return Some(book_move);
         }
 
         let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag);
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, output_buffer);
         let mut search_engine_guard = self.search_engine.lock().unwrap();
         if let Some((move_, _score)) = searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player) {
             Some(move_)
@@ -121,13 +130,14 @@ impl ShogiEngine {
         }
     }
 
-    pub fn handle_position(&mut self, parts: &[&str]) {
+    pub fn handle_position(&mut self, parts: &[&str]) -> Vec<String> {
+        let mut output = Vec::new();
         let sfen_str: String;
         let mut moves_start_index: Option<usize> = None;
 
         if parts.is_empty() {
-            println!("info string error Invalid position command");
-            return;
+            output.push("info string error Invalid position command".to_string());
+            return output;
         }
 
         if parts[0] == "startpos" {
@@ -148,8 +158,8 @@ impl ShogiEngine {
                 moves_start_index = Some(current_index + 1);
             }
         } else {
-            println!("info string error Invalid position command: expected 'startpos' or 'sfen'");
-            return;
+            output.push("info string error Invalid position command: expected 'startpos' or 'sfen'".to_string());
+            return output;
         }
 
         match BitboardBoard::from_fen(&sfen_str) {
@@ -159,8 +169,8 @@ impl ShogiEngine {
                 self.captured_pieces = captured_pieces;
             }
             Err(e) => {
-                println!("info string error Failed to parse FEN: {}", e);
-                return;
+                output.push(format!("info string error Failed to parse FEN: {}", e));
+                return output;
             }
         }
 
@@ -174,16 +184,17 @@ impl ShogiEngine {
                         self.current_player = self.current_player.opposite();
                     }
                     Err(e) => {
-                        println!("info string error Failed to parse move '{}': {}", move_str, e);
-                        return;
+                        output.push(format!("info string error Failed to parse move '{}': {}", move_str, e));
+                        return output;
                     }
                 }
             }
         }
-        println!("info string Board state updated.");
+        output.push("info string Board state updated.".to_string());
+        output
     }
 
-    pub fn handle_go(&mut self, parts: &[&str]) {
+    pub fn handle_go(&mut self, parts: &[&str]) -> Vec<String> {
         let mut btime = 0;
         let mut wtime = 0;
         let mut byoyomi = 0;
@@ -220,10 +231,6 @@ impl ShogiEngine {
 
         self.pondering = is_ponder;
 
-        if self.debug_mode {
-            println!("info string go command received with btime={}, wtime={}, byoyomi={}, ponder={}", btime, wtime, byoyomi, self.pondering);
-        }
-
         let time_to_use = if byoyomi > 0 {
             byoyomi
         } else {
@@ -237,22 +244,31 @@ impl ShogiEngine {
 
         self.stop_flag.store(false, Ordering::Relaxed);
         let mut engine_clone = self.clone();
+        let output_buffer_clone = self.output_buffer.clone();
+
+        {
+            output_buffer_clone.lock().unwrap().clear();
+        }
 
         thread::spawn(move || {
-            let best_move = engine_clone.get_best_move(5, time_to_use, Some(engine_clone.stop_flag.clone()));
+            let best_move = engine_clone.get_best_move(5, time_to_use, Some(engine_clone.stop_flag.clone()), Some(output_buffer_clone.clone()));
+            let mut buffer = output_buffer_clone.lock().unwrap();
             if let Some(mv) = best_move {
-                println!("bestmove {}", mv.to_usi_string());
+                buffer.push(format!("bestmove {}", mv.to_usi_string()));
             } else {
-                println!("bestmove resign");
+                buffer.push("bestmove resign".to_string());
             }
         });
+
+        Vec::new()
     }
 
-    pub fn handle_stop(&mut self) {
+    pub fn handle_stop(&mut self) -> Vec<String> {
         self.stop_flag.store(true, Ordering::Relaxed);
+        Vec::new()
     }
 
-    pub fn handle_setoption(&mut self, parts: &[&str]) {
+    pub fn handle_setoption(&mut self, parts: &[&str]) -> Vec<String> {
         if parts.len() >= 4 && parts[0] == "name" && parts[2] == "value" {
             if parts[1] == "USI_Hash" {
                 if let Ok(size) = parts[3].parse::<usize>() {
@@ -261,43 +277,47 @@ impl ShogiEngine {
                 }
             }
         }
+        Vec::new()
     }
 
-    pub fn handle_usinewgame(&mut self) {
+    pub fn handle_usinewgame(&mut self) -> Vec<String> {
         let mut search_engine_guard = self.search_engine.lock().unwrap();
         search_engine_guard.clear();
+        Vec::new()
     }
 
-    pub fn handle_debug(&mut self, parts: &[&str]) {
+    pub fn handle_debug(&mut self, parts: &[&str]) -> Vec<String> {
+        let mut output = Vec::new();
         if let Some(part) = parts.get(0) {
             match *part {
                 "on" => {
                     self.debug_mode = true;
-                    println!("info string debug mode enabled");
+                    output.push("info string debug mode enabled".to_string());
                 },
                 "off" => {
                     self.debug_mode = false;
-                    println!("info string debug mode disabled");
+                    output.push("info string debug mode disabled".to_string());
                 },
-                _ => println!("info string unknown debug command {}", part),
+                _ => output.push(format!("info string unknown debug command {}", part)),
             }
         } else {
-            println!("info string debug command needs an argument (on/off)");
+            output.push("info string debug command needs an argument (on/off)".to_string());
         }
+        output
     }
 
-    pub fn handle_ponderhit(&mut self) {
+    pub fn handle_ponderhit(&mut self) -> Vec<String> {
         self.pondering = false;
         // The engine should switch from pondering to normal search.
         // For now, we just print an info string.
-        println!("info string ponderhit received");
+        vec!["info string ponderhit received".to_string()]
     }
 
-    pub fn handle_gameover(&self, parts: &[&str]) {
+    pub fn handle_gameover(&self, parts: &[&str]) -> Vec<String> {
         if let Some(result) = parts.get(0) {
-            println!("info string game over: {}", result);
+            vec![format!("info string game over: {}", result)]
         } else {
-            println!("info string game over command received without a result");
+            vec!["info string game over command received without a result".to_string()]
         }
     }
 }
@@ -354,5 +374,86 @@ mod tests {
         assert!(engine.pondering);
         engine.handle_ponderhit();
         assert!(!engine.pondering);
+    }
+}
+
+pub struct UsiHandler {
+    engine: ShogiEngine,
+}
+
+impl UsiHandler {
+    pub fn new() -> Self {
+        Self {
+            engine: ShogiEngine::new(),
+        }
+    }
+
+    pub fn handle_command(&mut self, command_str: &str) -> Vec<String> {
+        let parts: Vec<&str> = command_str.trim().split_whitespace().collect();
+
+        if parts.is_empty() {
+            return Vec::new();
+        }
+
+        if self.engine.is_debug_mode() {
+            // TODO: Add proper logging instead of returning debug messages.
+        }
+
+        match parts[0] {
+            "usi" => self.handle_usi(),
+            "isready" => self.handle_isready(),
+            "debug" => self.engine.handle_debug(&parts[1..]),
+            "position" => self.engine.handle_position(&parts[1..]),
+            "go" => self.engine.handle_go(&parts[1..]),
+            "stop" => self.engine.handle_stop(),
+            "ponderhit" => self.engine.handle_ponderhit(),
+            "setoption" => self.engine.handle_setoption(&parts[1..]),
+            "usinewgame" => self.engine.handle_usinewgame(),
+            "gameover" => self.engine.handle_gameover(&parts[1..]),
+            "quit" => Vec::new(), // quit is handled by the caller
+            _ => vec![format!("info string Unknown command: {}", command_str)],
+        }
+    }
+
+    pub fn get_pending_output(&mut self) -> Vec<String> {
+        self.engine.get_pending_output()
+    }
+
+    fn handle_usi(&self) -> Vec<String> {
+        vec![
+            "id name Shogi Engine".to_string(),
+            "id author Gemini".to_string(),
+            "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
+            "usiok".to_string(),
+        ]
+    }
+
+    fn handle_isready(&self) -> Vec<String> {
+        vec!["readyok".to_string()]
+    }
+}
+
+#[wasm_bindgen]
+pub struct WasmUsiHandler {
+    handler: UsiHandler,
+}
+
+#[wasm_bindgen]
+impl WasmUsiHandler {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            handler: UsiHandler::new(),
+        }
+    }
+
+    pub fn process_command(&mut self, command: &str) -> JsValue {
+        let output = self.handler.handle_command(command);
+        serde_wasm_bindgen::to_value(&output).unwrap()
+    }
+
+    pub fn get_pending_output(&mut self) -> JsValue {
+        let output = self.handler.engine.get_pending_output();
+        serde_wasm_bindgen::to_value(&output).unwrap()
     }
 }

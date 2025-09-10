@@ -1,6 +1,6 @@
 # Standalone USI Engine Documentation
 
-This document provides instructions on how to run and interact with the standalone Universal Shogi Interface (USI) engine, and outlines the current implementation status and future development plan.
+This document provides instructions on how to run and interact with the standalone Universal Shogi Interface (USI) engine, and outlines its architecture and features.
 
 ## How to Run the Engine
 
@@ -63,20 +63,37 @@ Here is a sample interactive session to test the basic functionality of the engi
     quit
     ```
 
+## Architecture
+
+The engine is designed with a flexible architecture that allows it to be used in different environments.
+
+-   **Core Library (`src/lib.rs`):** The core shogi logic and USI command handling are encapsulated in the `shogi-engine` library. The `UsiHandler` struct is the main entry point for processing USI commands.
+
+-   **Command-Line Interface (`src/main.rs`):** The `usi-engine` binary is a thin wrapper around the core library. It reads commands from standard input, passes them to the `UsiHandler`, and prints the output to standard output.
+
+-   **WebAssembly Interface (`src/lib.rs`):** The `WasmUsiHandler` struct exposes the engine's functionality to JavaScript. It allows the web application to send USI commands to the engine and poll for asynchronous output (like `info` and `bestmove` commands from an ongoing search).
+
 ## USI Command Support Status
 
-This section details which USI commands are supported, which are not, and the plan to implement the remaining features.
+This section details which USI commands are supported.
 
 ### Supported Commands
 
 -   `usi`: The engine correctly identifies itself and acknowledges the USI mode.
 -   `isready`: The engine correctly responds when it is ready to receive commands.
+-   `debug [on | off]`: Toggles debug logging.
 -   `position [startpos | sfen ... ] moves ...`: The engine can set the board to the starting position or a custom position from an SFEN string, and then apply a sequence of moves.
--   `go [btime | wtime | byoyomi]`: The engine starts searching for the best move from the current position, respecting time controls.
+-   `go [btime | wtime | byoyomi | ponder]`: The engine starts searching for the best move from the current position, respecting time controls and pondering.
 -   `stop`: The engine will stop searching and return the best move found so far.
+-   `ponderhit`: Signals to the engine that the expected ponder move was played.
+-   `gameover`: Informs the engine of the game's result.
 -   `setoption name <id> value <x>`: The engine can set options. Currently, only `USI_Hash` is supported.
 -   `usinewgame`: The engine clears its internal state for a new game.
 -   `quit`: The engine will exit gracefully.
+
+### Partially Supported Commands
+
+-   `register`: This command is parsed but not implemented. The engine will not respond to it.
 
 ### Supported Engine to GUI Responses
 
@@ -86,24 +103,3 @@ This section details which USI commands are supported, which are not, and the pl
 -   `bestmove`: The engine returns the best move found.
 -   `info`: The engine streams search information (depth, score, pv, nodes, nps, time).
 -   `option`: The engine declares configurable options at startup.
-
-### Unsupported Commands
-
-The following standard USI commands are not yet implemented:
-
--   `debug [on | off]`
--   `register`
--   `go ponder`
--   `ponderhit`
--   `gameover`
-
-## Implementation Plan
-
-To achieve a fully functional and compliant USI engine, the following features should be implemented in order.
-
-1.  **Lower Priority Commands:**
-    -   **Goal:** Implement the remaining USI commands for full compliance.
-    -   **Plan:**
-        -   `debug`: Add more verbose logging when enabled.
-        -   `gameover`: Inform the engine of the game result, which can be used for learning.
-        -   `go ponder` and `ponderhit`: Implement pondering logic.

@@ -4,7 +4,7 @@ use crate::evaluation::*;
 use crate::moves::*;
 use std::collections::HashMap;
 use std::time::Instant;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -285,14 +285,16 @@ pub struct IterativeDeepening {
     max_depth: u8,
     time_limit_ms: u32,
     stop_flag: Option<Arc<AtomicBool>>,
+    output_buffer: Option<Arc<Mutex<Vec<String>>>>,
 }
 
 impl IterativeDeepening {
-    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Self {
+    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, output_buffer: Option<Arc<Mutex<Vec<String>>>>) -> Self {
         Self {
             max_depth,
             time_limit_ms,
             stop_flag,
+            output_buffer,
         }
     }
 
@@ -315,7 +317,12 @@ impl IterativeDeepening {
                 let time_searched = start_time.elapsed().as_millis() as u32;
                 let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
 
-                println!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
+                let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
+                if let Some(buffer) = &self.output_buffer {
+                    buffer.lock().unwrap().push(info_string);
+                } else {
+                    println!("{}", info_string);
+                }
 
                 if score > 10000 && depth >= 3 { break; } 
             } else {

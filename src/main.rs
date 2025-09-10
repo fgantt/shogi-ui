@@ -1,47 +1,34 @@
 use std::io::{self, BufRead};
-use shogi_engine::ShogiEngine;
+use std::thread;
+use std::time::Duration;
+use shogi_engine::UsiHandler;
 
 fn main() {
-    let mut engine = ShogiEngine::new();
+    let mut handler = UsiHandler::new();
 
     for line in io::stdin().lock().lines() {
         let command = line.unwrap_or_else(|_| String::new());
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
-
-        if parts.is_empty() {
-            continue;
+        if command.trim() == "quit" {
+            break;
         }
 
-        if engine.is_debug_mode() {
-            println!("info string received command: {}", command);
+        let output = handler.handle_command(&command);
+        for out_line in output {
+            println!("{}", out_line);
         }
 
-        match parts[0] {
-            "usi" => handle_usi(),
-            "isready" => handle_isready(),
-            "debug" => engine.handle_debug(&parts[1..]),
-            "position" => engine.handle_position(&parts[1..]),
-            "go" => engine.handle_go(&parts[1..]),
-            "stop" => engine.handle_stop(),
-            "ponderhit" => engine.handle_ponderhit(),
-            "setoption" => engine.handle_setoption(&parts[1..]),
-            "usinewgame" => engine.handle_usinewgame(),
-            "gameover" => engine.handle_gameover(&parts[1..]),
-            "quit" => break,
-            _ => {
-                println!("info string Unknown command: {}", command);
+        if command.starts_with("go") {
+            loop {
+                thread::sleep(Duration::from_millis(100));
+                let pending_output = handler.get_pending_output();
+                let has_bestmove = pending_output.iter().any(|s| s.starts_with("bestmove"));
+                for out_line in pending_output {
+                    println!("{}", out_line);
+                }
+                if has_bestmove {
+                    break;
+                }
             }
         }
     }
-}
-
-fn handle_usi() {
-    println!("id name Shogi Engine");
-    println!("id author Gemini");
-    println!("option name USI_Hash type spin default 16 min 1 max 1024");
-    println!("usiok");
-}
-
-fn handle_isready() {
-    println!("readyok");
 }
