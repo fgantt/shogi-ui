@@ -9,6 +9,7 @@ interface BoardProps {
   selectedSquare: Square | null;
   legalMoves: Square[];
   lastMove: { from: Square | null; to: Square | null } | null;
+  isSquareAttacked?: (square: Square) => boolean;
 }
 
 
@@ -18,7 +19,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -81,6 +82,13 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                         player={toOurPlayer(piece.color)}
                         pieceLabelType={'kanji'} // Hardcoded for now
                         isSelected={isSelected(rowIndex, colIndex)}
+                        isAttacked={(() => {
+                          const attacked = isSquareAttacked ? isSquareAttacked(square) : false;
+                          if (attacked) {
+                            console.log(`Piece at ${square.usi} is attacked`);
+                          }
+                          return attacked;
+                        })()}
                         onClick={() => {
                           onSquareClick(rowIndex, colIndex)
                         }}

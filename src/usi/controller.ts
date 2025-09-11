@@ -97,6 +97,29 @@ export class ShogiController extends EventEmitter {
     return legalMoves;
   }
 
+  public isSquareAttacked(square: Square): boolean {
+    // Use tsshogi's listAttackers method to check if the square is under attack
+    const attackers = this.record.position.listAttackers(square);
+    
+    // Get the piece on the target square to determine which player it belongs to
+    const targetPiece = this.record.position.board.at(square);
+    if (!targetPiece) {
+      return false; // No piece on the square, so it can't be attacked
+    }
+    
+    // Filter attackers to only include pieces from the opposing player
+    const opposingAttackers = attackers.filter(attackerSquare => {
+      const attackerPiece = this.record.position.board.at(attackerSquare);
+      return attackerPiece && attackerPiece.color !== targetPiece.color;
+    });
+    
+    const isAttacked = opposingAttackers.length > 0;
+    if (isAttacked) {
+      console.log(`Square ${square.usi} (${targetPiece.color}) is attacked by ${opposingAttackers.length} opposing pieces:`, opposingAttackers.map(a => a.usi));
+    }
+    return isAttacked;
+  }
+
   public handleUserMove(usiMove: string): boolean {
     const moveResult = this.applyMove(usiMove);
     if (moveResult) {

@@ -47,7 +47,7 @@ const GamePage = () => {
   // Settings state
   const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'western');
-  const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true');
+  const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true); // Temporarily enable by default for testing
   const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true');
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '/wallpapers/photo1.jpg');
   const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '/boards/wood-kaya.jpg');
@@ -254,7 +254,15 @@ const GamePage = () => {
   return (
     <div className={`game-page`}>
       <div className="main-area">
-        <Board key={renderKey} position={position} onSquareClick={handleSquareClick} selectedSquare={selectedSquare} legalMoves={legalMoves} lastMove={lastMove} />
+        <Board 
+          key={renderKey} 
+          position={position} 
+          onSquareClick={handleSquareClick} 
+          selectedSquare={selectedSquare} 
+          legalMoves={legalMoves} 
+          lastMove={lastMove}
+          isSquareAttacked={showAttackedPieces ? (square) => controller.isSquareAttacked(square) : undefined}
+        />
       </div>
       <div className="side-panel">
         <GameControls 

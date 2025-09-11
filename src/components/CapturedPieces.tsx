@@ -26,9 +26,10 @@ interface CapturedPiecesProps {
   player: 'player1' | 'player2';
   onPieceClick?: (type: TsshogiPieceType) => void;
   selectedCapturedPiece?: TsshogiPieceType | null;
+  isAttacked?: boolean;
 }
 
-const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece }) => {
+const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked }) => {
   const pieces = captured.counts
     .filter(({ count }) => count > 0)
     .map(({ type, count }) => ({ type, count }));
@@ -50,6 +51,7 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
             pieceLabelType={'kanji'} // Hardcoded for now
             count={count}
             isSelected={selectedCapturedPiece === type}
+            isAttacked={isAttacked || false}
           />
         ))}
       </div>
