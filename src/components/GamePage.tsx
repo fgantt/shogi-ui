@@ -64,12 +64,13 @@ const GamePage = () => {
   }, []);
 
   // Settings state
+  const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
   const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
-  const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'western');
-  const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true); // Temporarily enable by default for testing
-  const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true');
-  const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '/wallpapers/photo1.jpg');
-  const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '/boards/wood-kaya.jpg');
+  const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'kifu');
+  const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
+  const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
+  const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '');
+  const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
 
@@ -124,6 +125,19 @@ const GamePage = () => {
 
       setWallpaperList(wallpaperPaths);
       setBoardBackgroundList(boardPaths);
+
+      // Set random wallpaper and board background if not already set
+      if (!wallpaper) {
+        const randomWallpaper = wallpaperPaths[Math.floor(Math.random() * wallpaperPaths.length)];
+        setWallpaper(randomWallpaper);
+        localStorage.setItem('shogi-wallpaper', randomWallpaper);
+      }
+      
+      if (!boardBackground) {
+        const randomBoardBackground = boardPaths[Math.floor(Math.random() * boardPaths.length)];
+        setBoardBackground(randomBoardBackground);
+        localStorage.setItem('shogi-board-background', randomBoardBackground);
+      }
     };
 
     loadAssets();
@@ -359,13 +373,10 @@ const GamePage = () => {
           />
         </div>
         <div className="move-log-container">
-          <MoveLog moves={controller.getRecord().moves.map(m => {
-            if ('usi' in m.move) {
-              return m.move.usi;
-            } else {
-              return m.displayText;
-            }
-          })} />
+          <MoveLog 
+            moves={controller.getRecord().moves} 
+            notation={notation as 'western' | 'kifu'}
+          />
         </div>
       </div>
 
@@ -389,8 +400,8 @@ const GamePage = () => {
         onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
         showPieceTooltips={showPieceTooltips}
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
-        aiDifficulty={1 as any}
-        onDifficultyChange={() => {}}
+        aiDifficulty={aiDifficulty as any}
+        onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
       />}
       {promotionMove && <PromotionModal onPromote={handlePromotion} />}
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}

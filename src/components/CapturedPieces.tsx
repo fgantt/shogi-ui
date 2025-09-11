@@ -40,7 +40,10 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
 
   return (
     <div className={`captured-pieces ${player}`}>
-      <h3>{player === 'player1' ? 'Sente' : 'Gote'}</h3>
+      <h3>
+        <span style={{ color: player === 'player1' ? 'black' : 'white' }}>☗ </span>
+        {player === 'player1' ? 'Sente' : 'Gote'}
+      </h3>
       <div className={`pieces-list ${player}`}>
         {sortedPieces.map(({ type, count }) => (
           <PieceComponent
