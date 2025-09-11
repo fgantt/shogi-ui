@@ -10,6 +10,9 @@ interface BoardProps {
   legalMoves: Square[];
   lastMove: { from: Square | null; to: Square | null } | null;
   isSquareAttacked?: (square: Square) => boolean;
+  isInCheck?: boolean;
+  kingInCheckSquare?: Square | null;
+  attackingPieces?: Square[];
 }
 
 
@@ -19,7 +22,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -45,6 +48,31 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
            (lastMove.to ? lastMove.to.equals(square) : false);
   };
 
+  const isInCheckSquare = (row: number, col: number): boolean => {
+    if (!isInCheck || !kingInCheckSquare) return false;
+    const square = Square.newByXY(col, row);
+    if (!square) return false;
+    return square.equals(kingInCheckSquare);
+  };
+
+  // Helper function to convert square coordinates to pixel coordinates
+  const squareToPixel = (square: Square) => {
+    // tsshogi coordinate system:
+    // file: 0-8 (where 0 = file 9, 8 = file 1) - right to left
+    // rank: 0-8 (where 0 = rank 1, 8 = rank 9) - top to bottom
+    // Our board rendering uses colIndex (0-8) and rowIndex (0-8)
+    // where colIndex goes left to right (0 = leftmost column = file 9)
+    // and rowIndex goes top to bottom (0 = top row = rank 1)
+    
+    // Convert tsshogi coordinates to our board coordinates
+    const colIndex = square.file; // file 0 (9筋) -> col 0, file 8 (1筋) -> col 8
+    const rowIndex = square.rank; // rank 0 (1段) -> row 0, rank 8 (9段) -> row 8
+    
+    const x = colIndex * 70 + 35; // 70px per square, center at 35px
+    const y = rowIndex * 76 + 38; // 76px per square, center at 38px
+    return { x, y };
+  };
+
   return (
     <div className={`shogi-board-container`}>
       <div className="column-numbers">
@@ -68,6 +96,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                   isSelected(rowIndex, colIndex) ? 'selected' : '',
                   isLegalMove(rowIndex, colIndex) ? 'legal-move' : '',
                   isLastMove(rowIndex, colIndex) ? 'last-move' : '',
+                  isInCheckSquare(rowIndex, colIndex) ? 'in-check' : '',
                 ].filter(Boolean).join(' ');
 
                 return (
@@ -100,6 +129,27 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
             </div>
           ))}
         </div>
+        {/* Red lines for check indicators */}
+        {isInCheck && kingInCheckSquare && attackingPieces && attackingPieces.length > 0 && (
+          <svg className="check-line-svg" width="630" height="684">
+            {attackingPieces.map((attackerSquare, index) => {
+              const attackerPos = squareToPixel(attackerSquare);
+              const kingPos = squareToPixel(kingInCheckSquare);
+              return (
+                <line
+                  key={index}
+                  x1={attackerPos.x}
+                  y1={attackerPos.y}
+                  x2={kingPos.x}
+                  y2={kingPos.y}
+                  stroke="red"
+                  strokeWidth="3"
+                  strokeOpacity="0.8"
+                />
+              );
+            })}
+          </svg>
+        )}
         <div className="row-numbers">
           {kifuRowLabels.map((label) => (
             <div key={label} className="row-number-cell">

@@ -38,6 +38,25 @@ const GamePage = () => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
   const [savedGames, setSavedGames] = useState<{[key: string]: string}>({});
+  const [isInCheck, setIsInCheck] = useState(false);
+  const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
+  const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
+
+  // Helper function to find the king square for a given player
+  const findKingSquare = (position: ImmutablePosition, player: 'black' | 'white'): Square | null => {
+    for (let rank = 0; rank < 9; rank++) {
+      for (let file = 0; file < 9; file++) {
+        const square = Square.newByXY(file, rank);
+        if (square) {
+          const piece = position.board.at(square);
+          if (piece && piece.type === 'king' && piece.color === player) {
+            return square;
+          }
+        }
+      }
+    }
+    return null;
+  };
 
   useEffect(() => {
     const games = JSON.parse(localStorage.getItem('shogi-saved-games') || '{}');
@@ -120,6 +139,34 @@ const GamePage = () => {
       // Update last move for highlighting
       const lastMoveData = controller.getLastMove();
       setLastMove(lastMoveData);
+      
+      // Check for check state
+      const checked = newPosition.checked;
+      setIsInCheck(checked);
+      
+      if (checked) {
+        // Find the king that's in check
+        const currentPlayer = newPosition.sfen.includes(' b ') ? 'black' : 'white';
+        const kingSquare = findKingSquare(newPosition, currentPlayer);
+        setKingInCheckSquare(kingSquare);
+        
+        if (kingSquare) {
+          // Find attacking pieces - only those from the opposing player
+          const allAttackers = newPosition.listAttackers(kingSquare);
+          const kingPiece = newPosition.board.at(kingSquare);
+          
+          if (kingPiece) {
+            const opposingAttackers = allAttackers.filter(attackerSquare => {
+              const attackerPiece = newPosition.board.at(attackerSquare);
+              return attackerPiece && attackerPiece.color !== kingPiece.color;
+            });
+            setAttackingPieces(opposingAttackers);
+          }
+        }
+      } else {
+        setKingInCheckSquare(null);
+        setAttackingPieces([]);
+      }
       
       //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
       // if (newPosition.isCheckmate()) {
@@ -289,6 +336,9 @@ const GamePage = () => {
           legalMoves={legalMoves} 
           lastMove={lastMove}
           isSquareAttacked={showAttackedPieces ? (square) => controller.isSquareAttacked(square) : undefined}
+          isInCheck={isInCheck}
+          kingInCheckSquare={kingInCheckSquare}
+          attackingPieces={attackingPieces}
         />
       </div>
       <div className="side-panel">
