@@ -327,36 +327,51 @@ const GamePage = () => {
 
   return (
     <div className={`game-page`}>
-      <div className="main-area">
-        <Board 
-          key={renderKey} 
-          position={position} 
-          onSquareClick={handleSquareClick} 
-          selectedSquare={selectedSquare} 
-          legalMoves={legalMoves} 
-          lastMove={lastMove}
-          isSquareAttacked={showAttackedPieces ? (square) => controller.isSquareAttacked(square) : undefined}
-          isInCheck={isInCheck}
-          kingInCheckSquare={kingInCheckSquare}
-          attackingPieces={attackingPieces}
-        />
-      </div>
-      <div className="side-panel">
+      {/* Control Panel at the top */}
+      <div className="control-panel">
         <GameControls 
           onNewGame={handleNewGame} 
           onOpenSettings={() => setIsSettingsOpen(true)} 
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onOpenLoadModal={() => setIsLoadModalOpen(true)}
         />
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
+      </div>
+
+      {/* Gote captured pieces */}
+      <div className="gote-captured-pieces">
         <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
-        <MoveLog moves={controller.getRecord().moves.map(m => {
-          if ('usi' in m.move) {
-            return m.move.usi;
-          } else {
-            return m.displayText;
-          }
-        })} />
+      </div>
+
+      {/* Board and Move Log side by side */}
+      <div className="board-and-move-log">
+        <div className="board-container">
+          <Board 
+            key={renderKey} 
+            position={position} 
+            onSquareClick={handleSquareClick} 
+            selectedSquare={selectedSquare} 
+            legalMoves={legalMoves} 
+            lastMove={lastMove}
+            isSquareAttacked={showAttackedPieces ? (square) => controller.isSquareAttacked(square) : undefined}
+            isInCheck={isInCheck}
+            kingInCheckSquare={kingInCheckSquare}
+            attackingPieces={attackingPieces}
+          />
+        </div>
+        <div className="move-log-container">
+          <MoveLog moves={controller.getRecord().moves.map(m => {
+            if ('usi' in m.move) {
+              return m.move.usi;
+            } else {
+              return m.displayText;
+            }
+          })} />
+        </div>
+      </div>
+
+      {/* Sente captured pieces */}
+      <div className="sente-captured-pieces">
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceLabelType={pieceLabelType as any}

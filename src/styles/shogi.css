@@ -197,19 +197,7 @@
   transform: rotate(180deg);
 }
 
-.game-container {
-  display: flex;
-  flex-direction: row; /* Arrange items horizontally */
-  gap: 10px; /* Adjust gap as needed */
-  align-items: center;
-}
-
-.board-and-captured-pieces {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
+/* Removed old layout styles - now handled in GamePage.css */
 
 .captured-pieces {
   display: flex;
