@@ -142,9 +142,31 @@ const GamePage = () => {
     const clickedSquare = Square.newByXY(col, row);
     if (!clickedSquare) return;
 
+    // Handle drop move if a captured piece is selected
+    if (selectedCapturedPiece) {
+      // Check if the clicked square is a valid drop square
+      const validDropSquares = controller.getValidDropSquares(selectedCapturedPiece);
+      const isValidDrop = validDropSquares.some(square => square.equals(clickedSquare));
+      
+      if (isValidDrop) {
+        // Create drop move USI string (e.g., "P*5d")
+        const pieceChar = controller.pieceTypeToUsiChar(selectedCapturedPiece);
+        if (pieceChar) {
+          const dropMove = `${pieceChar}*${clickedSquare.usi}`;
+          controller.handleUserMove(dropMove);
+        }
+      }
+      
+      // Clear selection after drop attempt
+      setSelectedCapturedPiece(null);
+      setLegalMoves([]);
+      return;
+    }
+
     // Deselect if clicking the same square
     if (selectedSquare?.equals(clickedSquare)) {
       setSelectedSquare(null);
+      setSelectedCapturedPiece(null);
       setLegalMoves([]);
       return;
     }
@@ -184,6 +206,7 @@ const GamePage = () => {
       const piece = position.board.at(clickedSquare);
       if (piece && piece.color === (position.sfen.includes(' b ') ? 'black' : 'white')) {
         setSelectedSquare(clickedSquare);
+        setSelectedCapturedPiece(null); // Clear captured piece selection
         // Get legal moves for the selected piece
         const moves = controller.getLegalMovesForSquare(clickedSquare);
         setLegalMoves(moves);
@@ -244,6 +267,10 @@ const GamePage = () => {
     if ((isPlayer1Turn && player === 'player1') || (isPlayer2Turn && player === 'player2')) {
       setSelectedCapturedPiece(pieceType);
       setSelectedSquare(null);
+      
+      // Get valid drop squares for the selected piece
+      const validDropSquares = controller.getValidDropSquares(pieceType);
+      setLegalMoves(validDropSquares);
     }
   };
 

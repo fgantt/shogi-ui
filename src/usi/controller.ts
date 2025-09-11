@@ -1,4 +1,4 @@
-import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square } from 'tsshogi';
+import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType } from 'tsshogi';
 import { EngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
@@ -95,6 +95,78 @@ export class ShogiController extends EventEmitter {
     }
     
     return legalMoves;
+  }
+
+  public getValidDropSquares(pieceType: TsshogiPieceType): Square[] {
+    const validSquares: Square[] = [];
+    
+    // First check if the player has this piece in their hand
+    if (!this.hasPieceInHand(pieceType)) {
+      return validSquares; // No pieces of this type in hand
+    }
+    
+    // Check all 81 squares as potential drop destinations
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        const destSquare = Square.newByXY(col, row);
+        if (!destSquare) continue;
+        
+        // Check if square is empty
+        if (this.record.position.board.at(destSquare)) {
+          continue; // Square is occupied
+        }
+        
+        // Create a drop move and check if it's valid
+        const dropMove = this.createDropMove(pieceType, destSquare);
+        if (dropMove && this.record.position.isValidMove(dropMove)) {
+          validSquares.push(destSquare);
+        }
+      }
+    }
+    
+    return validSquares;
+  }
+
+  private hasPieceInHand(pieceType: TsshogiPieceType): boolean {
+    const currentPlayer = this.record.position.sfen.includes(' b ') ? 'black' : 'white';
+    const hand = currentPlayer === 'black' ? this.record.position.blackHand : this.record.position.whiteHand;
+    
+    // Check if the hand has any pieces of this type
+    return hand.counts.some(({ type, count }) => type === pieceType && count > 0);
+  }
+
+  private createDropMove(pieceType: TsshogiPieceType, toSquare: Square): Move | null {
+    // Convert tsshogi piece type to USI piece character
+    const pieceChar = this.pieceTypeToUsiChar(pieceType);
+    if (!pieceChar) return null;
+    
+    // Create USI drop move string (e.g., "P*5d")
+    const usiMove = `${pieceChar}*${toSquare.usi}`;
+    
+    // Create move using tsshogi's createMoveByUSI
+    return this.record.position.createMoveByUSI(usiMove);
+  }
+
+  public pieceTypeToUsiChar(pieceType: TsshogiPieceType): string | null {
+    // Map tsshogi piece types to USI piece characters
+    switch (pieceType) {
+      case TsshogiPieceType.PAWN:
+        return 'P';
+      case TsshogiPieceType.LANCE:
+        return 'L';
+      case TsshogiPieceType.KNIGHT:
+        return 'N';
+      case TsshogiPieceType.SILVER:
+        return 'S';
+      case TsshogiPieceType.GOLD:
+        return 'G';
+      case TsshogiPieceType.BISHOP:
+        return 'B';
+      case TsshogiPieceType.ROOK:
+        return 'R';
+      default:
+        return null; // Invalid piece type for drops
+    }
   }
 
   public isSquareAttacked(square: Square): boolean {
