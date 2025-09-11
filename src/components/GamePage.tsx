@@ -143,6 +143,17 @@ const GamePage = () => {
     loadAssets();
   }, []);
 
+  // Apply wallpaper to document body when wallpaper changes
+  useEffect(() => {
+    if (wallpaper) {
+      document.body.style.backgroundImage = `url('${wallpaper}')`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundRepeat = 'no-repeat';
+      document.body.style.backgroundPosition = 'center center';
+      document.body.style.backgroundAttachment = 'fixed';
+    }
+  }, [wallpaper]);
+
   useEffect(() => {
     const onStateChanged = (newPosition: ImmutablePosition) => {
       // Force a re-render by updating both position and render key
@@ -298,6 +309,17 @@ const GamePage = () => {
     localStorage.setItem(key, value.toString());
   };
 
+  const handleWallpaperChange = (value: string) => {
+    setWallpaper(value);
+    localStorage.setItem('shogi-wallpaper', value);
+    // Apply wallpaper to document body immediately
+    document.body.style.backgroundImage = `url('${value}')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundRepeat = 'no-repeat';
+    document.body.style.backgroundPosition = 'center center';
+    document.body.style.backgroundAttachment = 'fixed';
+  };
+
   const handleSaveGame = (name: string) => {
     const sfen = controller.getPosition().sfen;
     const newSavedGames = { ...savedGames, [name]: sfen };
@@ -353,7 +375,7 @@ const GamePage = () => {
 
       {/* Gote captured pieces */}
       <div className="gote-captured-pieces">
-        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceLabelType={pieceLabelType as 'kanji' | 'english'} />
       </div>
 
       {/* Board and Move Log side by side */}
@@ -370,6 +392,8 @@ const GamePage = () => {
             isInCheck={isInCheck}
             kingInCheckSquare={kingInCheckSquare}
             attackingPieces={attackingPieces}
+            boardBackground={boardBackground}
+            pieceLabelType={pieceLabelType as 'kanji' | 'english'}
           />
         </div>
         <div className="move-log-container">
@@ -382,7 +406,7 @@ const GamePage = () => {
 
       {/* Sente captured pieces */}
       <div className="sente-captured-pieces">
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceLabelType={pieceLabelType as 'kanji' | 'english'} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceLabelType={pieceLabelType as any}
@@ -390,7 +414,7 @@ const GamePage = () => {
         notation={notation as any}
         onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
         wallpaperList={wallpaperList}
-        onSelectWallpaper={handleSettingChange(setWallpaper, 'shogi-wallpaper')}
+        onSelectWallpaper={handleWallpaperChange}
         boardBackgroundList={boardBackgroundList}
         onSelectBoardBackground={handleSettingChange(setBoardBackground, 'shogi-board-background')}
         onClose={() => setIsSettingsOpen(false)}

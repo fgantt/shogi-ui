@@ -13,6 +13,8 @@ interface BoardProps {
   isInCheck?: boolean;
   kingInCheckSquare?: Square | null;
   attackingPieces?: Square[];
+  boardBackground?: string;
+  pieceLabelType?: 'kanji' | 'english';
 }
 
 
@@ -22,7 +24,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceLabelType }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -83,7 +85,15 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
         ))}
       </div>
       <div className="board-and-row-numbers">
-        <div className="board">
+        <div 
+          className="board"
+          style={boardBackground ? {
+            backgroundImage: `url('${boardBackground}')`,
+            backgroundSize: 'cover',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center center'
+          } : undefined}
+        >
           {Array.from({ length: 9 }, (_, rowIndex) => (
             <div key={rowIndex} className="board-row">
               {Array.from({ length: 9 }, (_, colIndex) => {
@@ -109,7 +119,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                       <PieceComponent
                         type={piece.type}
                         player={toOurPlayer(piece.color)}
-                        pieceLabelType={'kanji'} // Hardcoded for now
+                        pieceLabelType={pieceLabelType || 'kanji'}
                         isSelected={isSelected(rowIndex, colIndex)}
                         isAttacked={(() => {
                           const attacked = isSquareAttacked ? isSquareAttacked(square) : false;

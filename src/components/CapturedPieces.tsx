@@ -27,9 +27,11 @@ interface CapturedPiecesProps {
   onPieceClick?: (type: TsshogiPieceType) => void;
   selectedCapturedPiece?: TsshogiPieceType | null;
   isAttacked?: boolean;
+  boardBackground?: string;
+  pieceLabelType?: 'kanji' | 'english';
 }
 
-const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked }) => {
+const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceLabelType }) => {
   const pieces = captured.counts
     .filter(({ count }) => count > 0)
     .map(({ type, count }) => ({ type, count }));
@@ -39,7 +41,15 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
   });
 
   return (
-    <div className={`captured-pieces ${player}`}>
+    <div 
+      className={`captured-pieces ${player}`}
+      style={boardBackground ? {
+        backgroundImage: `url('${boardBackground}')`,
+        backgroundSize: 'cover',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center center'
+      } : undefined}
+    >
       <h3>
         <span style={{ color: player === 'player1' ? 'black' : 'white' }}>☗ </span>
         {player === 'player1' ? 'Sente' : 'Gote'}
@@ -51,7 +61,7 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
             type={type}
             player={player}
             onClick={() => onPieceClick && onPieceClick(type)}
-            pieceLabelType={'kanji'} // Hardcoded for now
+            pieceLabelType={pieceLabelType || 'kanji'}
             count={count}
             isSelected={selectedCapturedPiece === type}
             isAttacked={isAttacked || false}

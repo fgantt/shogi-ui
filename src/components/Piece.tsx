@@ -31,8 +31,8 @@ const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, piece
       <div className="piece-inner">
         <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
       </div>
-      {count && count > 1 && <div className="badge-counter">{count}</div>}
-      {isAttacked && <div className={`badge-attacked badge-attacked-${player}`}>!</div>}
+      {count && count > 1 && <div className={`badge-counter ${player === 'player2' ? 'badge-counter-gote' : ''}`}>{count}</div>}
+      {isAttacked && <div className={`badge-attacked badge-attacked-${player} ${player === 'player2' ? 'badge-attacked-gote' : ''}`}>!</div>}
       {showTooltips && showTooltip && (
         <div className="piece-tooltip">
           {getOppositeLabel(type, pieceLabelType)} - {getEnglishName(type)}
