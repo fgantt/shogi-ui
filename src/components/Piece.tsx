@@ -29,7 +29,7 @@ const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, piece
       onMouseLeave={() => showTooltips && setShowTooltip(false)}
     >
       <div className="piece-inner">
-        <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} />
+        <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} isSelected={isSelected} />
       </div>
       {count && count > 1 && <div className={`badge-counter ${player === 'player2' ? 'badge-counter-gote' : ''}`}>{count}</div>}
       {isAttacked && <div className={`badge-attacked badge-attacked-${player} ${player === 'player2' ? 'badge-attacked-gote' : ''}`}>!</div>}

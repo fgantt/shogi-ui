@@ -98,6 +98,8 @@
   background-color: rgba(0, 255, 0, 0.5); /* Darker green on hover */
 }
 
+/* Board square selection is handled by the piece inside, not the square itself */
+
 .intersection-dot {
   position: absolute;
   bottom: -5px; /* Half of the dot's height to center it on the border */
@@ -126,9 +128,9 @@
 }
 
 .piece.selected {
-  transform: translateY(-5px) scale(1.05); /* Lift and slightly enlarge */
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+  transform: translateY(-8px) scale(1.08); /* Lift more and slightly enlarge */
   z-index: 10; /* Ensure it's above other pieces */
+  transition: transform 0.2s ease-out; /* Smooth transition for selection */
 }
 
 .piece svg {

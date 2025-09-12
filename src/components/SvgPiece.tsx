@@ -26,9 +26,10 @@ interface SvgPieceProps {
   piece?: { type: PieceType; player: 'player1' | 'player2' };
   size?: number;
   hideText?: boolean;
+  isSelected?: boolean;
 }
 
-const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece, size = 70, hideText = false }) => {
+const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece, size = 70, hideText = false, isSelected = false }) => {
   const pieceType: PieceType | undefined = type || (piece && piece.type);
   const piecePlayer = player || (piece && piece.player);
   const labelType = pieceLabelType || 'kanji';
@@ -75,12 +76,24 @@ const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece
             preserveAspectRatio="none"
           ></image>
         </pattern>
+        {isSelected && (
+          <filter id="piece-shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow
+              dx="0"
+              dy="8"
+              stdDeviation="4"
+              floodColor="rgba(0, 0, 0, 0.6)"
+              floodOpacity="0.8"
+            />
+          </filter>
+        )}
       </defs>
       <path
         d={piecePath}
         fill={fillColor}
         stroke={strokeColor}
         strokeWidth="1"
+        filter={isSelected ? "url(#piece-shadow)" : undefined}
       />
       {!hideText && (
         <text
