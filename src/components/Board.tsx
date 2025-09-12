@@ -6,6 +6,9 @@ import '../styles/shogi.css';
 interface BoardProps {
   position: ImmutablePosition;
   onSquareClick: (row: number, col: number) => void;
+  onDragStart?: (row: number, col: number) => void;
+  onDragEnd?: (row: number, col: number) => void;
+  onDragOver?: (row: number, col: number) => void;
   selectedSquare: Square | null;
   legalMoves: Square[];
   lastMove: { from: Square | null; to: Square | null } | null;
@@ -24,7 +27,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceLabelType }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceLabelType }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -114,7 +117,15 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                     key={colIndex}
                     data-testid={`square-${rowIndex}-${colIndex}`}
                     className={classNames}
-                    onClick={() => onSquareClick(rowIndex, colIndex)}>
+                    onClick={() => onSquareClick(rowIndex, colIndex)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      onDragOver?.(rowIndex, colIndex);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      onDragEnd?.(rowIndex, colIndex);
+                    }}>
                     {piece && (
                       <PieceComponent
                         type={piece.type}
@@ -130,6 +141,9 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, selectedSquare, 
                         })()}
                         onClick={() => {
                           onSquareClick(rowIndex, colIndex)
+                        }}
+                        onDragStart={() => {
+                          onDragStart?.(rowIndex, colIndex);
                         }}
                       />
                     )}

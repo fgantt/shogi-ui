@@ -286,6 +286,71 @@ const GamePage = () => {
     }
   };
 
+  const handleDragStart = (row: number, col: number) => {
+    if (!position) return;
+    const draggedSquare = Square.newByXY(col, row);
+    if (!draggedSquare) return;
+
+    const piece = position.board.at(draggedSquare);
+    if (piece && piece.color === (position.sfen.includes(' b ') ? 'black' : 'white')) {
+      // Select the piece and show legal moves (same as clicking)
+      setSelectedSquare(draggedSquare);
+      setSelectedCapturedPiece(null); // Clear captured piece selection
+      const moves = controller.getLegalMovesForSquare(draggedSquare);
+      setLegalMoves(moves);
+    }
+  };
+
+  const handleDragEnd = (row: number, col: number) => {
+    if (!position || !selectedSquare) return;
+    const droppedSquare = Square.newByXY(col, row);
+    if (!droppedSquare) return;
+
+    // Check if the drop is on a legal move square
+    const isLegalMove = legalMoves.some(move => move.equals(droppedSquare));
+    
+    if (isLegalMove) {
+      // Make the move (same logic as clicking)
+      const piece = position.board.at(selectedSquare);
+      if (!piece) {
+        setSelectedSquare(null);
+        setLegalMoves([]);
+        return;
+      }
+
+      // Check if the move is eligible for promotion
+      const currentColor = position.sfen.includes(' b ') ? Color.BLACK : Color.WHITE;
+      const isFromPromotable = isPromotableRank(currentColor, selectedSquare.rank);
+      const isToPromotable = isPromotableRank(currentColor, droppedSquare.rank);
+      const canPromote = !isPiecePromoted(piece.type) && // Piece is not already promoted
+                        piece.type !== TsshogiPieceType.KING && 
+                        piece.type !== TsshogiPieceType.GOLD && 
+                        (isFromPromotable || isToPromotable);
+
+      if (canPromote) {
+        // Show promotion modal instead of making the move directly
+        setPromotionMove({ from: selectedSquare, to: droppedSquare });
+        setSelectedSquare(null);
+        setLegalMoves([]);
+      } else {
+        // Make the move directly
+        const moveUsi = `${selectedSquare.usi}${droppedSquare.usi}`;
+        controller.handleUserMove(moveUsi);
+        setSelectedSquare(null);
+        setLegalMoves([]);
+      }
+    } else {
+      // Invalid drop - just clear selection
+      setSelectedSquare(null);
+      setLegalMoves([]);
+    }
+  };
+
+  const handleDragOver = (_row: number, _col: number) => {
+    // Optional: Could add visual feedback here
+    // For now, we'll just let the legal move highlighting handle it
+  };
+
   const handlePromotion = (promote: boolean) => {
     if (!promotionMove) return;
 
@@ -385,6 +450,9 @@ const GamePage = () => {
             key={renderKey} 
             position={position} 
             onSquareClick={handleSquareClick} 
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
             selectedSquare={selectedSquare} 
             legalMoves={legalMoves} 
             lastMove={lastMove}
