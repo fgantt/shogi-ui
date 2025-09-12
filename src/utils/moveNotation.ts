@@ -1,4 +1,4 @@
-import { PieceType } from 'tsshogi';
+// import { PieceType } from 'tsshogi'; // Not currently used
 
 // Convert USI move to Western notation
 export function usiToWestern(usi: string): string {
@@ -31,16 +31,43 @@ export function usiToKifu(usi: string, isBlack: boolean): string {
     return `${playerSymbol}${positionKanji}${pieceKanji}打`;
   } else if (usi.includes('+')) {
     // Promotion move: 7g7f+ -> ▲7六歩成
-    const from = usi.substring(0, 2);
     const to = usi.substring(2, 4);
-    const piece = getPieceFromMove(usi); // This would need to be determined from context
+    const piece = getPieceFromMove({ move: { pieceType: 'pawn', promote: true } }); // Default for USI-only case
     const pieceKanji = getPieceKanji(piece);
     const toKanji = convertPositionToKanji(to);
     return `${playerSymbol}${toKanji}${pieceKanji}成`;
   } else {
     // Normal move: 7g7f -> ▲7六歩
     const to = usi.substring(2, 4);
-    const piece = getPieceFromMove(usi); // This would need to be determined from context
+    const piece = getPieceFromMove({ move: { pieceType: 'pawn', promote: false } }); // Default for USI-only case
+    const pieceKanji = getPieceKanji(piece);
+    const toKanji = convertPositionToKanji(to);
+    return `${playerSymbol}${toKanji}${pieceKanji}`;
+  }
+}
+
+// Convert USI move to Kifu notation using move object for accurate piece type
+export function usiToKifuWithMove(usi: string, move: any, isBlack: boolean): string {
+  const playerSymbol = isBlack ? '▲' : '△';
+  
+  if (usi.includes('*')) {
+    // Drop move: P*5d -> ▲5四歩打
+    const piece = usi.charAt(0);
+    const position = usi.substring(2);
+    const pieceKanji = getPieceKanji(piece);
+    const positionKanji = convertPositionToKanji(position);
+    return `${playerSymbol}${positionKanji}${pieceKanji}打`;
+  } else if (usi.includes('+')) {
+    // Promotion move: 7g7f+ -> ▲7六馬成 (for promoted bishop/horse)
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move); // Use actual move object
+    const pieceKanji = getPieceKanji(piece);
+    const toKanji = convertPositionToKanji(to);
+    return `${playerSymbol}${toKanji}${pieceKanji}成`;
+  } else {
+    // Normal move: 7g7f -> ▲7六歩
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move); // Use actual move object
     const pieceKanji = getPieceKanji(piece);
     const toKanji = convertPositionToKanji(to);
     return `${playerSymbol}${toKanji}${pieceKanji}`;
@@ -58,6 +85,13 @@ function getPieceKanji(piece: string): string {
     'B': '角',
     'R': '飛',
     'K': '王',
+    // Promoted pieces
+    '+P': 'と', // Promoted Pawn
+    '+L': '杏', // Promoted Lance
+    '+N': '圭', // Promoted Knight
+    '+S': '全', // Promoted Silver
+    '+B': '馬', // Horse (Promoted Bishop)
+    '+R': '龍', // Dragon (Promoted Rook)
   };
   return pieceMap[piece] || piece;
 }
@@ -75,11 +109,44 @@ function convertPositionToKanji(position: string): string {
   return `${file}${rankMap[rank] || rank}`;
 }
 
-// Helper function to determine piece from move (simplified - would need game context)
-function getPieceFromMove(usi: string): string {
-  // This is a simplified version - in reality, we'd need the game state
-  // to determine which piece is moving. For now, we'll use a default.
-  return 'P'; // Default to pawn
+// Helper function to determine piece from move object
+function getPieceFromMove(move: any): string {
+  // Check if this is a regular move with piece type information
+  if (move.move && typeof move.move === 'object' && 'pieceType' in move.move) {
+    const pieceType = move.move.pieceType;
+    const isPromoted = move.move.promote || false;
+    
+    // Convert tsshogi piece type to USI character
+    const pieceChar = tsshogiPieceTypeToUsi(pieceType, isPromoted);
+    return pieceChar;
+  }
+  
+  // Fallback to pawn if we can't determine the piece
+  return 'P';
+}
+
+// Helper function to convert tsshogi piece type to USI character
+function tsshogiPieceTypeToUsi(pieceType: any, isPromoted: boolean = false): string {
+  // Map tsshogi PieceType enum values to USI characters
+  const pieceMap: { [key: string]: string } = {
+    'pawn': 'P',
+    'lance': 'L', 
+    'knight': 'N',
+    'silver': 'S',
+    'gold': 'G',
+    'bishop': 'B',
+    'rook': 'R',
+    'king': 'K',
+    // Promoted pieces
+    'promPawn': '+P',
+    'promLance': '+L',
+    'promKnight': '+N', 
+    'promSilver': '+S',
+    'horse': '+B', // Promoted bishop
+    'dragon': '+R', // Promoted rook
+  };
+  
+  return pieceMap[pieceType] || 'P';
 }
 
 // Convert move record to display format based on notation type
@@ -90,7 +157,8 @@ export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu', is
     if (notation === 'western') {
       return usiToWestern(usi);
     } else {
-      return usiToKifu(usi, isBlack);
+      // For kifu notation, we need to use the move object to get the correct piece type
+      return usiToKifuWithMove(usi, move, isBlack);
     }
   } 
   // Check if this is a special move
