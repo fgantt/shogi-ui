@@ -4,7 +4,7 @@ import { formatMoveForDisplay } from '../utils/moveNotation';
 
 interface MoveLogProps {
   moves: any[];
-  notation: 'western' | 'kifu';
+  notation: 'western' | 'kifu' | 'usi';
 }
 
 const MoveLog: React.FC<MoveLogProps> = ({ moves, notation }) => {

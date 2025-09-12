@@ -37,6 +37,12 @@ export function usiToWesternWithMove(usi: string, move: any): string {
   }
 }
 
+// Convert USI move to USI notation (already in correct format)
+export function usiToUsi(usi: string): string {
+  // USI notation is already in the correct format
+  return usi;
+}
+
 // Convert USI move to Kifu notation
 export function usiToKifu(usi: string, isBlack: boolean): string {
   const playerSymbol = isBlack ? '▲' : '△';
@@ -168,12 +174,14 @@ function tsshogiPieceTypeToUsi(pieceType: any): string {
 }
 
 // Convert move record to display format based on notation type
-export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu', isBlack: boolean): string {
+export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu' | 'usi', isBlack: boolean): string {
   // Check if this is a regular move with USI string
   if (move.move && typeof move.move === 'object' && 'usi' in move.move) {
     const usi = move.move.usi;
     if (notation === 'western') {
       return usiToWesternWithMove(usi, move);
+    } else if (notation === 'usi') {
+      return usiToUsi(usi);
     } else {
       // For kifu notation, we need to use the move object to get the correct piece type
       return usiToKifuWithMove(usi, move, isBlack);

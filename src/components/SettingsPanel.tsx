@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type PieceLabelType = 'kanji' | 'english';
-type Notation = 'western' | 'kifu';
+type Notation = 'western' | 'kifu' | 'usi';
 
 interface SettingsPanelProps {
   aiDifficulty: Difficulty;
@@ -152,6 +152,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onChange={() => onNotationChange('kifu')}
               />
               KIF
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="usi"
+                checked={notation === 'usi'}
+                onChange={() => onNotationChange('usi')}
+              />
+              USI
             </label>
           </div>
         </section>
