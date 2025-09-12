@@ -147,6 +147,11 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                         }}
                       />
                     )}
+                    {/* Promotion zone intersection dots */}
+                    {((rowIndex === 2 && (colIndex === 2 || colIndex === 5)) || 
+                      (rowIndex === 5 && (colIndex === 2 || colIndex === 5))) && (
+                      <div className="intersection-dot"></div>
+                    )}
                   </div>
                 );
               })}
