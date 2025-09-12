@@ -8,7 +8,7 @@ const HomePage: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [pieceLabelType, setPieceLabelType] = useState<'kanji' | 'english'>('kanji');
-  const [notation, setNotation] = useState<'western' | 'kifu' | 'usi'>('kifu');
+  const [notation, setNotation] = useState<'western' | 'kifu' | 'usi' | 'csa'>('kifu');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
   const [currentWallpaper, setCurrentWallpaper] = useState<string>('');

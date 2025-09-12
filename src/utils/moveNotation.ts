@@ -43,6 +43,39 @@ export function usiToUsi(usi: string): string {
   return usi;
 }
 
+// Convert USI move to CSA notation using move object for accurate piece type
+export function usiToCsaWithMove(usi: string, move: any, isBlack: boolean): string {
+  const player = isBlack ? '+' : '-';
+  
+  if (usi.includes('*')) {
+    // Drop move: P*5d -> +0055FU
+    const piece = usi.charAt(0);
+    const position = usi.substring(2);
+    const csaPiece = usiPieceToCsa(piece);
+    const csaPosition = convertPositionToCsa(position);
+    return `${player}00${csaPosition}${csaPiece}`;
+  } else if (usi.includes('+')) {
+    // Promotion move: 7g7f+ -> +7776TO (pawn promotes to TO, not FU+)
+    const from = usi.substring(0, 2);
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move);
+    // For promotion, use the promoted piece code directly
+    const csaPiece = usiPieceToCsaPromoted(piece);
+    const csaFrom = convertPositionToCsa(from);
+    const csaTo = convertPositionToCsa(to);
+    return `${player}${csaFrom}${csaTo}${csaPiece}`;
+  } else {
+    // Normal move: 7g7f -> +7776FU
+    const from = usi.substring(0, 2);
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move);
+    const csaPiece = usiPieceToCsa(piece);
+    const csaFrom = convertPositionToCsa(from);
+    const csaTo = convertPositionToCsa(to);
+    return `${player}${csaFrom}${csaTo}${csaPiece}`;
+  }
+}
+
 // Convert USI move to Kifu notation
 export function usiToKifu(usi: string, isBlack: boolean): string {
   const playerSymbol = isBlack ? '▲' : '△';
@@ -173,8 +206,65 @@ function tsshogiPieceTypeToUsi(pieceType: any): string {
   return pieceMap[pieceType] || 'P';
 }
 
+// Helper function to convert USI piece character to CSA piece code
+function usiPieceToCsa(piece: string): string {
+  const pieceMap: { [key: string]: string } = {
+    'P': 'FU',   // Pawn
+    'L': 'KY',   // Lance
+    'N': 'KE',   // Knight
+    'S': 'GI',   // Silver
+    'G': 'KI',   // Gold
+    'B': 'KA',   // Bishop
+    'R': 'HI',   // Rook
+    'K': 'OU',   // King
+    // Promoted pieces
+    '+P': 'TO',  // Promoted Pawn
+    '+L': 'NY',  // Promoted Lance
+    '+N': 'NK',  // Promoted Knight
+    '+S': 'NG',  // Promoted Silver
+    '+B': 'UM',  // Horse (Promoted Bishop)
+    '+R': 'RY',  // Dragon (Promoted Rook)
+  };
+  
+  return pieceMap[piece] || 'FU';
+}
+
+// Helper function to convert USI piece character to CSA promoted piece code
+function usiPieceToCsaPromoted(piece: string): string {
+  const promotedPieceMap: { [key: string]: string } = {
+    'P': 'TO',   // Pawn -> Promoted Pawn
+    'L': 'NY',   // Lance -> Promoted Lance
+    'N': 'NK',   // Knight -> Promoted Knight
+    'S': 'NG',   // Silver -> Promoted Silver
+    'B': 'UM',   // Bishop -> Horse
+    'R': 'RY',   // Rook -> Dragon
+    // Already promoted pieces
+    '+P': 'TO',  // Promoted Pawn
+    '+L': 'NY',  // Promoted Lance
+    '+N': 'NK',  // Promoted Knight
+    '+S': 'NG',  // Promoted Silver
+    '+B': 'UM',  // Horse (Promoted Bishop)
+    '+R': 'RY',  // Dragon (Promoted Rook)
+  };
+  
+  return promotedPieceMap[piece] || 'TO';
+}
+
+// Helper function to convert position to CSA format (e.g., "5d" -> "55")
+function convertPositionToCsa(position: string): string {
+  const file = position.charAt(0);
+  const rank = position.charAt(1);
+  
+  const rankMap: { [key: string]: string } = {
+    'a': '1', 'b': '2', 'c': '3', 'd': '4', 'e': '5',
+    'f': '6', 'g': '7', 'h': '8', 'i': '9'
+  };
+  
+  return `${file}${rankMap[rank] || rank}`;
+}
+
 // Convert move record to display format based on notation type
-export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu' | 'usi', isBlack: boolean): string {
+export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu' | 'usi' | 'csa', isBlack: boolean): string {
   // Check if this is a regular move with USI string
   if (move.move && typeof move.move === 'object' && 'usi' in move.move) {
     const usi = move.move.usi;
@@ -182,6 +272,8 @@ export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu' | '
       return usiToWesternWithMove(usi, move);
     } else if (notation === 'usi') {
       return usiToUsi(usi);
+    } else if (notation === 'csa') {
+      return usiToCsaWithMove(usi, move, isBlack);
     } else {
       // For kifu notation, we need to use the move object to get the correct piece type
       return usiToKifuWithMove(usi, move, isBlack);

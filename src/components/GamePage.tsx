@@ -399,7 +399,7 @@ const GamePage = () => {
         <div className="move-log-container">
           <MoveLog 
             moves={controller.getRecord().moves} 
-            notation={notation as 'western' | 'kifu' | 'usi'}
+            notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
           />
         </div>
       </div>
