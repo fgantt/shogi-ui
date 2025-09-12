@@ -142,7 +142,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 checked={notation === 'western'}
                 onChange={() => onNotationChange('western')}
               />
-              Western
+              English
             </label>
             <label>
               <input
@@ -151,7 +151,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 checked={notation === 'kifu'}
                 onChange={() => onNotationChange('kifu')}
               />
-              Kifu
+              KIF
             </label>
           </div>
         </section>

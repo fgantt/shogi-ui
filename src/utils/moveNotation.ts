@@ -1,20 +1,39 @@
 // import { PieceType } from 'tsshogi'; // Not currently used
 
-// Convert USI move to Western notation
+// Convert USI move to English notation (legacy function - use usiToWesternWithMove for accurate piece types)
 export function usiToWestern(usi: string): string {
   if (usi.includes('*')) {
-    // Drop move: P*5d -> P*5d
+    // Drop move: P*5d -> P*5d (already in correct format)
     return usi;
   } else if (usi.includes('+')) {
-    // Promotion move: 7g7f+ -> 7g-7f+
-    const from = usi.substring(0, 2);
+    // Promotion move: 7g7f+ -> P-7f+ (need piece type and destination only)
     const to = usi.substring(2, 4);
-    return `${from}-${to}+`;
+    // For now, default to P (pawn) - this should be improved with actual piece type
+    return `P-${to}+`;
   } else {
-    // Normal move: 7g7f -> 7g-7f
-    const from = usi.substring(0, 2);
+    // Normal move: 7g7f -> P-7f (need piece type and destination only)
     const to = usi.substring(2, 4);
-    return `${from}-${to}`;
+    // For now, default to P (pawn) - this should be improved with actual piece type
+    return `P-${to}`;
+  }
+}
+
+// Convert USI move to English notation using move object for accurate piece type
+export function usiToWesternWithMove(usi: string, move: any): string {
+  if (usi.includes('*')) {
+    // Drop move: P*5d -> P*5d (already in correct format)
+    return usi;
+  } else if (usi.includes('+')) {
+    // Promotion move: 7g7f+ -> P-7f+ (move results in promotion)
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move);
+    // For moves that result in promotion, add + at the end
+    return `${piece}-${to}+`;
+  } else {
+    // Normal move: 7g7f -> P-7f or +R-2b (if piece is already promoted)
+    const to = usi.substring(2, 4);
+    const piece = getPieceFromMove(move);
+    return `${piece}-${to}`;
   }
 }
 
@@ -114,10 +133,9 @@ function getPieceFromMove(move: any): string {
   // Check if this is a regular move with piece type information
   if (move.move && typeof move.move === 'object' && 'pieceType' in move.move) {
     const pieceType = move.move.pieceType;
-    const isPromoted = move.move.promote || false;
     
     // Convert tsshogi piece type to USI character
-    const pieceChar = tsshogiPieceTypeToUsi(pieceType, isPromoted);
+    const pieceChar = tsshogiPieceTypeToUsi(pieceType);
     return pieceChar;
   }
   
@@ -126,7 +144,7 @@ function getPieceFromMove(move: any): string {
 }
 
 // Helper function to convert tsshogi piece type to USI character
-function tsshogiPieceTypeToUsi(pieceType: any, isPromoted: boolean = false): string {
+function tsshogiPieceTypeToUsi(pieceType: any): string {
   // Map tsshogi PieceType enum values to USI characters
   const pieceMap: { [key: string]: string } = {
     'pawn': 'P',
@@ -137,13 +155,13 @@ function tsshogiPieceTypeToUsi(pieceType: any, isPromoted: boolean = false): str
     'bishop': 'B',
     'rook': 'R',
     'king': 'K',
-    // Promoted pieces
+    // Promoted pieces (already promoted pieces get + prefix)
     'promPawn': '+P',
     'promLance': '+L',
     'promKnight': '+N', 
     'promSilver': '+S',
-    'horse': '+B', // Promoted bishop
-    'dragon': '+R', // Promoted rook
+    'horse': '+B', // Promoted bishop (Horse)
+    'dragon': '+R', // Promoted rook (Dragon)
   };
   
   return pieceMap[pieceType] || 'P';
@@ -155,7 +173,7 @@ export function formatMoveForDisplay(move: any, notation: 'western' | 'kifu', is
   if (move.move && typeof move.move === 'object' && 'usi' in move.move) {
     const usi = move.move.usi;
     if (notation === 'western') {
-      return usiToWestern(usi);
+      return usiToWesternWithMove(usi, move);
     } else {
       // For kifu notation, we need to use the move object to get the correct piece type
       return usiToKifuWithMove(usi, move, isBlack);
