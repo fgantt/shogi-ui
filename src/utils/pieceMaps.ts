@@ -51,8 +51,8 @@ export const ENGLISH_NAMES: Record<PieceType, string> = {
   dragon: 'Promoted Rook',
 };
 
-export function getOppositeLabel(pieceType: PieceType, currentLabelType: 'kanji' | 'english'): string {
-  if (currentLabelType === 'kanji') {
+export function getOppositeLabel(pieceType: PieceType, currentLabelType: string): string {
+  if (currentLabelType === 'kanji' || currentLabelType.includes('kanji')) {
     return ENGLISH_MAP[pieceType];
   } else {
     return KANJI_MAP[pieceType];

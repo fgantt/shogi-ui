@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
-type PieceLabelType = 'kanji' | 'english';
+type PieceThemeType = 'kanji' | 'english' | '13xforever-1-kanji' | '13xforever-2-kanji' | 'Hari-Seldon-1-kanji' | 'Hari-Seldon-2-kanji' | 'Kinki-1-kanji' | 'Kinki-2-kanji' | 'Minase-1-kanji' | 'Minase-2-kanji' | 'Ryoko-1-kanji' | 'Ryoko-2-kanji';
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
 
 interface SettingsPanelProps {
   aiDifficulty: Difficulty;
   onDifficultyChange: (difficulty: Difficulty) => void;
-  pieceLabelType: PieceLabelType;
-  onPieceLabelTypeChange: (type: PieceLabelType) => void;
+  pieceThemeType: string;
+  onPieceThemeTypeChange: (type: string) => void;
   notation: Notation;
   onNotationChange: (notation: Notation) => void;
   wallpaperList: string[];
@@ -28,8 +28,8 @@ interface SettingsPanelProps {
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   aiDifficulty,
   onDifficultyChange,
-  pieceLabelType,
-  onPieceLabelTypeChange,
+  pieceThemeType,
+  onPieceThemeTypeChange,
   notation,
   onNotationChange,
   wallpaperList,
@@ -109,14 +109,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </section>
 
         <section>
-          <h3>Piece Labels</h3>
+          <h3>Piece Themes</h3>
           <div className="setting-group">
             <label>
               <input
                 type="radio"
                 value="kanji"
-                checked={pieceLabelType === 'kanji'}
-                onChange={() => onPieceLabelTypeChange('kanji')}
+                checked={pieceThemeType === 'kanji'}
+                onChange={() => onPieceThemeTypeChange('kanji')}
               />
               Kanji
             </label>
@@ -124,10 +124,100 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <input
                 type="radio"
                 value="english"
-                checked={pieceLabelType === 'english'}
-                onChange={() => onPieceLabelTypeChange('english')}
+                checked={pieceThemeType === 'english'}
+                onChange={() => onPieceThemeTypeChange('english')}
               />
               English
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="13xforever-1-kanji"
+                checked={pieceThemeType === '13xforever-1-kanji'}
+                onChange={() => onPieceThemeTypeChange('13xforever-1-kanji')}
+              />
+              13xforever 1
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="13xforever-2-kanji"
+                checked={pieceThemeType === '13xforever-2-kanji'}
+                onChange={() => onPieceThemeTypeChange('13xforever-2-kanji')}
+              />
+              13xforever 2
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Hari-Seldon-1-kanji"
+                checked={pieceThemeType === 'Hari-Seldon-1-kanji'}
+                onChange={() => onPieceThemeTypeChange('Hari-Seldon-1-kanji')}
+              />
+              Hari-Seldon 1
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Hari-Seldon-2-kanji"
+                checked={pieceThemeType === 'Hari-Seldon-2-kanji'}
+                onChange={() => onPieceThemeTypeChange('Hari-Seldon-2-kanji')}
+              />
+              Hari-Seldon 2
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Kinki-1-kanji"
+                checked={pieceThemeType === 'Kinki-1-kanji'}
+                onChange={() => onPieceThemeTypeChange('Kinki-1-kanji')}
+              />
+              Kinki 1
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Kinki-2-kanji"
+                checked={pieceThemeType === 'Kinki-2-kanji'}
+                onChange={() => onPieceThemeTypeChange('Kinki-2-kanji')}
+              />
+              Kinki 2
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Minase-1-kanji"
+                checked={pieceThemeType === 'Minase-1-kanji'}
+                onChange={() => onPieceThemeTypeChange('Minase-1-kanji')}
+              />
+              Minase 1
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Minase-2-kanji"
+                checked={pieceThemeType === 'Minase-2-kanji'}
+                onChange={() => onPieceThemeTypeChange('Minase-2-kanji')}
+              />
+              Minase 2
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Ryoko-1-kanji"
+                checked={pieceThemeType === 'Ryoko-1-kanji'}
+                onChange={() => onPieceThemeTypeChange('Ryoko-1-kanji')}
+              />
+              Ryoko 1
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="Ryoko-2-kanji"
+                checked={pieceThemeType === 'Ryoko-2-kanji'}
+                onChange={() => onPieceThemeTypeChange('Ryoko-2-kanji')}
+              />
+              Ryoko 2
             </label>
           </div>
         </section>

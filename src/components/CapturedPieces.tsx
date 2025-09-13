@@ -28,10 +28,10 @@ interface CapturedPiecesProps {
   selectedCapturedPiece?: TsshogiPieceType | null;
   isAttacked?: boolean;
   boardBackground?: string;
-  pieceLabelType?: 'kanji' | 'english';
+  pieceThemeType?: string;
 }
 
-const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceLabelType }) => {
+const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceThemeType }) => {
   const pieces = captured.counts
     .filter(({ count }) => count > 0)
     .map(({ type, count }) => ({ type, count }));
@@ -61,7 +61,7 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
             type={type}
             player={player}
             onClick={() => onPieceClick && onPieceClick(type)}
-            pieceLabelType={pieceLabelType || 'kanji'}
+            pieceThemeType={pieceThemeType || 'kanji'}
             count={count}
             isSelected={selectedCapturedPiece === type}
             isAttacked={isAttacked || false}

@@ -9,14 +9,14 @@ interface PieceProps {
   player: 'player1' | 'player2';
   onDragStart?: () => void;
   onClick?: () => void;
-  pieceLabelType: string;
+  pieceThemeType: string;
   count?: number;
   isSelected?: boolean;
   isAttacked?: boolean;
   showTooltips?: boolean;
 }
 
-const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, pieceLabelType, count, isSelected, isAttacked, showTooltips }) => {
+const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, pieceThemeType, count, isSelected, isAttacked, showTooltips }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -29,13 +29,13 @@ const Piece: React.FC<PieceProps> = ({ type, player, onDragStart, onClick, piece
       onMouseLeave={() => showTooltips && setShowTooltip(false)}
     >
       <div className="piece-inner">
-        <SvgPiece type={type} player={player} pieceLabelType={pieceLabelType} isSelected={isSelected} />
+        <SvgPiece type={type} player={player} pieceThemeType={pieceThemeType} isSelected={isSelected} />
       </div>
       {count && count > 1 && <div className={`badge-counter ${player === 'player2' ? 'badge-counter-gote' : ''}`}>{count}</div>}
       {isAttacked && <div className={`badge-attacked badge-attacked-${player} ${player === 'player2' ? 'badge-attacked-gote' : ''}`}>!</div>}
       {showTooltips && showTooltip && (
         <div className="piece-tooltip">
-          {getOppositeLabel(type, pieceLabelType)} - {getEnglishName(type)}
+          {getOppositeLabel(type, pieceThemeType)} - {getEnglishName(type)}
         </div>
       )}
     </div>

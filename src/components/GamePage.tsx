@@ -440,7 +440,7 @@ const GamePage = () => {
 
       {/* Gote captured pieces */}
       <div className="gote-captured-pieces">
-        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceLabelType={pieceLabelType as 'kanji' | 'english'} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} />
       </div>
 
       {/* Board and Move Log side by side */}
@@ -461,7 +461,7 @@ const GamePage = () => {
             kingInCheckSquare={kingInCheckSquare}
             attackingPieces={attackingPieces}
             boardBackground={boardBackground}
-            pieceLabelType={pieceLabelType as 'kanji' | 'english'}
+            pieceThemeType={pieceLabelType as any}
           />
         </div>
         <div className="move-log-container">
@@ -474,11 +474,11 @@ const GamePage = () => {
 
       {/* Sente captured pieces */}
       <div className="sente-captured-pieces">
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceLabelType={pieceLabelType as 'kanji' | 'english'} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} />
       </div>
       {isSettingsOpen && <SettingsPanel 
-        pieceLabelType={pieceLabelType as any}
-        onPieceLabelTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
+        pieceThemeType={pieceLabelType as any}
+        onPieceThemeTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
         notation={notation as any}
         onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
         wallpaperList={wallpaperList}

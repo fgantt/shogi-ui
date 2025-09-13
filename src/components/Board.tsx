@@ -17,7 +17,7 @@ interface BoardProps {
   kingInCheckSquare?: Square | null;
   attackingPieces?: Square[];
   boardBackground?: string;
-  pieceLabelType?: 'kanji' | 'english';
+  pieceThemeType?: string;
 }
 
 
@@ -27,7 +27,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceLabelType }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -130,7 +130,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                       <PieceComponent
                         type={piece.type}
                         player={toOurPlayer(piece.color)}
-                        pieceLabelType={pieceLabelType || 'kanji'}
+                        pieceThemeType={pieceThemeType || 'kanji'}
                         isSelected={isSelected(rowIndex, colIndex)}
                         isAttacked={(() => {
                           const attacked = isSquareAttacked ? isSquareAttacked(square) : false;

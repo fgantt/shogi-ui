@@ -7,7 +7,7 @@ const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [pieceLabelType, setPieceLabelType] = useState<'kanji' | 'english'>('kanji');
+  const [pieceLabelType, setPieceLabelType] = useState<string>('kanji');
   const [notation, setNotation] = useState<'western' | 'kifu' | 'usi' | 'csa'>('kifu');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
@@ -143,8 +143,8 @@ const HomePage: React.FC = () => {
         <SettingsPanel
           aiDifficulty={aiDifficulty}
           onDifficultyChange={setAiDifficulty}
-          pieceLabelType={pieceLabelType}
-          onPieceLabelTypeChange={setPieceLabelType}
+          pieceThemeType={pieceLabelType}
+          onPieceThemeTypeChange={setPieceLabelType}
           notation={notation}
           onNotationChange={setNotation}
           wallpaperList={wallpaperList}

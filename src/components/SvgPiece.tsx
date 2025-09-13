@@ -1,6 +1,7 @@
 import React from "react";
 import { KANJI_MAP, ENGLISH_MAP } from "../utils/pieceMaps";
 import { PieceType } from 'tsshogi';
+import { getSvgPathForPiece, isSvgTheme } from "../utils/pieceThemes";
 
 const PIECE_PATHS: { [key in PieceType]?: string } = {
   king: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
@@ -22,25 +23,57 @@ const PIECE_PATHS: { [key in PieceType]?: string } = {
 interface SvgPieceProps {
   type?: PieceType;
   player?: 'player1' | 'player2';
-  pieceLabelType?: string;
+  pieceThemeType?: string;
   piece?: { type: PieceType; player: 'player1' | 'player2' };
   size?: number;
   hideText?: boolean;
   isSelected?: boolean;
 }
 
-const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece, size = 70, hideText = false, isSelected = false }) => {
+const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceThemeType, piece, size = 70, hideText = false, isSelected = false }) => {
   const pieceType: PieceType | undefined = type || (piece && piece.type);
   const piecePlayer = player || (piece && piece.player);
-  const labelType = pieceLabelType || 'kanji';
+  const themeType = pieceThemeType || 'kanji';
   
   if (!pieceType) {
     console.warn('SvgPiece: type prop is required');
     return null;
   }
 
+  // Handle SVG themes
+  if (isSvgTheme(themeType) && piecePlayer) {
+    const svgPath = getSvgPathForPiece(pieceType, piecePlayer, themeType);
+    
+    return (
+      <div
+        style={{
+          width: size,
+          height: size * 1.086,
+          position: 'relative',
+          filter: isSelected ? 'drop-shadow(0 8px 4px rgba(0, 0, 0, 0.6))' : 'none'
+        }}
+      >
+        <img
+          src={svgPath}
+          alt={`${pieceType} piece`}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain'
+          }}
+          onError={(e) => {
+            console.warn(`Failed to load SVG for piece: ${svgPath}`);
+            // Fallback to default piece rendering
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Handle text-based themes (kanji/english)
   const isPromoted = pieceType.includes('prom') || pieceType === 'horse' || pieceType === 'dragon';
-  const label = labelType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
+  const label = themeType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
 
   const piecePath = PIECE_PATHS[pieceType];
 
@@ -104,7 +137,7 @@ const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceLabelType, piece
           fontSize={label.length === 2 ? "24" : "36"}
           fill={textColor}
           fontFamily={
-            labelType === "kanji"
+            themeType === "kanji"
               ? `'Noto Sans JP', sans-serif`
               : "sans-serif"
           }
