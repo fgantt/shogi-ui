@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getAvailablePieceThemes, ThemeConfig } from '../utils/themeConfig';
+import { getAvailablePieceThemes } from '../utils/pieceThemes';
+import { ThemeConfig } from '../utils/themeConfig';
 
 interface ThemeSelectorProps {
   selectedTheme: string;
