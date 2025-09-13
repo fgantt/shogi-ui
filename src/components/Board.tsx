@@ -74,7 +74,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
     const colIndex = square.file; // file 0 (9筋) -> col 0, file 8 (1筋) -> col 8
     const rowIndex = square.rank; // rank 0 (1段) -> row 0, rank 8 (9段) -> row 8
     
-    const x = colIndex * 70 + 35 - 70; // 70px per square, center at 35px, offset by one column
+    const x = colIndex * 70 + 35; // 70px per square, center at 35px
     const y = rowIndex * 76 + 38; // 76px per square, center at 38px
     return { x, y };
   };
@@ -168,16 +168,20 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
               
               
               return (
-                <line
-                  key={index}
-                  x1={attackerPos.x}
-                  y1={attackerPos.y}
-                  x2={kingPos.x}
-                  y2={kingPos.y}
-                  stroke="red"
-                  strokeWidth="3"
-                  strokeOpacity="0.8"
-                />
+                <g key={index}>
+                  <line
+                    x1={attackerPos.x}
+                    y1={attackerPos.y}
+                    x2={kingPos.x}
+                    y2={kingPos.y}
+                    stroke="red"
+                    strokeWidth="3"
+                    strokeOpacity="0.8"
+                  />
+                  {/* Debug circles to show exact positions */}
+                  <circle cx={attackerPos.x} cy={attackerPos.y} r="8" fill="blue" opacity="0.7" />
+                  <circle cx={kingPos.x} cy={kingPos.y} r="8" fill="green" opacity="0.7" />
+                </g>
               );
             })}
           </svg>
