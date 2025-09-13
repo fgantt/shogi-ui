@@ -70,6 +70,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
     // and rowIndex goes top to bottom (0 = top row = rank 1)
     
     // Convert tsshogi coordinates to our board coordinates
+    // Note: tsshogi file 0 = traditional file 9 (rightmost), file 8 = traditional file 1 (leftmost)
     const colIndex = square.file; // file 0 (9筋) -> col 0, file 8 (1筋) -> col 8
     const rowIndex = square.rank; // rank 0 (1段) -> row 0, rank 8 (9段) -> row 8
     
@@ -165,33 +166,22 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
               const attackerPos = squareToPixel(attackerSquare);
               const kingPos = squareToPixel(kingInCheckSquare);
               
-              // Debug logging
-              console.log('Check line coordinates:', {
-                attacker: {
-                  square: attackerSquare.usi,
-                  file: attackerSquare.file,
-                  rank: attackerSquare.rank,
-                  pixel: attackerPos
-                },
-                king: {
-                  square: kingInCheckSquare.usi,
-                  file: kingInCheckSquare.file,
-                  rank: kingInCheckSquare.rank,
-                  pixel: kingPos
-                }
-              });
               
               return (
-                <line
-                  key={index}
-                  x1={attackerPos.x}
-                  y1={attackerPos.y}
-                  x2={kingPos.x}
-                  y2={kingPos.y}
-                  stroke="red"
-                  strokeWidth="3"
-                  strokeOpacity="0.8"
-                />
+                <g key={index}>
+                  <line
+                    x1={attackerPos.x}
+                    y1={attackerPos.y}
+                    x2={kingPos.x}
+                    y2={kingPos.y}
+                    stroke="red"
+                    strokeWidth="3"
+                    strokeOpacity="0.8"
+                  />
+                  {/* Debug circles to show exact positions */}
+                  <circle cx={attackerPos.x} cy={attackerPos.y} r="5" fill="blue" opacity="0.7" />
+                  <circle cx={kingPos.x} cy={kingPos.y} r="5" fill="green" opacity="0.7" />
+                </g>
               );
             })}
           </svg>
