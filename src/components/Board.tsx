@@ -74,8 +74,8 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
     const colIndex = square.file; // file 0 (9筋) -> col 0, file 8 (1筋) -> col 8
     const rowIndex = square.rank; // rank 0 (1段) -> row 0, rank 8 (9段) -> row 8
     
-    const x = colIndex * 70 + 35; // 70px per square, center at 35px (no additional offset)
-    const y = rowIndex * 76 + 38 + 114; // 76px per square, center at 38px, move down by 1.5 square heights
+    const x = colIndex * 70 + 35 + 20; // 70px per square, center at 35px, move right by 20px
+    const y = rowIndex * 76 + 38 + 152; // 76px per square, center at 38px, move down by 2 square heights
     return { x, y };
   };
 
