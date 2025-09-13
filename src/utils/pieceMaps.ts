@@ -47,8 +47,8 @@ export const ENGLISH_NAMES: Record<PieceType, string> = {
   promLance: 'Promoted Lance',
   promKnight: 'Promoted Knight',
   promSilver: 'Promoted Silver',
-  horse: 'Promoted Bishop',
-  dragon: 'Promoted Rook',
+  horse: 'Dragon Horse (Promoted Bishop)',
+  dragon: 'Dragon King (Promoted Rook)',
 };
 
 export function getOppositeLabel(pieceType: PieceType, currentLabelType: string): string {

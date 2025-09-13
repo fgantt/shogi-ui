@@ -29,9 +29,10 @@ interface CapturedPiecesProps {
   isAttacked?: boolean;
   boardBackground?: string;
   pieceThemeType?: string;
+  showTooltips?: boolean;
 }
 
-const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceThemeType }) => {
+const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceThemeType, showTooltips }) => {
   const pieces = captured.counts
     .filter(({ count }) => count > 0)
     .map(({ type, count }) => ({ type, count }));
@@ -65,6 +66,7 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
             count={count}
             isSelected={selectedCapturedPiece === type}
             isAttacked={isAttacked || false}
+            showTooltips={showTooltips || false}
           />
         ))}
       </div>

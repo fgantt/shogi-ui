@@ -18,6 +18,7 @@ interface BoardProps {
   attackingPieces?: Square[];
   boardBackground?: string;
   pieceThemeType?: string;
+  showPieceTooltips?: boolean;
 }
 
 
@@ -27,7 +28,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
@@ -138,6 +139,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                         pieceThemeType={pieceThemeType || 'kanji'}
                         isSelected={isSelected(rowIndex, colIndex)}
                         isAttacked={isSquareAttacked ? isSquareAttacked(square) : false}
+                        showTooltips={showPieceTooltips || false}
                         onClick={() => {
                           onSquareClick(rowIndex, colIndex)
                         }}

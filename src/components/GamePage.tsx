@@ -440,7 +440,7 @@ const GamePage = () => {
 
       {/* Gote captured pieces */}
       <div className="gote-captured-pieces">
-        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
       </div>
 
       {/* Board and Move Log side by side */}
@@ -462,6 +462,7 @@ const GamePage = () => {
             attackingPieces={attackingPieces}
             boardBackground={boardBackground}
             pieceThemeType={pieceLabelType as any}
+            showPieceTooltips={showPieceTooltips}
           />
         </div>
         <div className="move-log-container">
@@ -474,7 +475,7 @@ const GamePage = () => {
 
       {/* Sente captured pieces */}
       <div className="sente-captured-pieces">
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceThemeType={pieceLabelType as any}
