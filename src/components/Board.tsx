@@ -178,9 +178,6 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                     strokeWidth="3"
                     strokeOpacity="0.8"
                   />
-                  {/* Debug circles to show exact positions */}
-                  <circle cx={attackerPos.x} cy={attackerPos.y} r="8" fill="blue" opacity="0.7" />
-                  <circle cx={kingPos.x} cy={kingPos.y} r="8" fill="green" opacity="0.7" />
                 </g>
               );
             })}
