@@ -168,20 +168,16 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
               
               
               return (
-                <g key={index}>
-                  <line
-                    x1={attackerPos.x}
-                    y1={attackerPos.y}
-                    x2={kingPos.x}
-                    y2={kingPos.y}
-                    stroke="red"
-                    strokeWidth="3"
-                    strokeOpacity="0.8"
-                  />
-                  {/* Debug circles to show exact positions */}
-                  <circle cx={attackerPos.x} cy={attackerPos.y} r="5" fill="blue" opacity="0.7" />
-                  <circle cx={kingPos.x} cy={kingPos.y} r="5" fill="green" opacity="0.7" />
-                </g>
+                <line
+                  key={index}
+                  x1={attackerPos.x}
+                  y1={attackerPos.y}
+                  x2={kingPos.x}
+                  y2={kingPos.y}
+                  stroke="red"
+                  strokeWidth="3"
+                  strokeOpacity="0.8"
+                />
               );
             })}
           </svg>
