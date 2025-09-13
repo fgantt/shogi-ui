@@ -22,8 +22,13 @@ export const PIECE_TYPE_TO_CSA: Record<PieceType, string> = {
 export const AVAILABLE_PIECE_THEMES = [
   '13xforever-1-kanji',
   '13xforever-2-kanji',
+  '2-kanji_red_wood',
+  'doubutsu',
   'Hari-Seldon-1-kanji',
   'Hari-Seldon-2-kanji',
+  'international',
+  'kanji_light_3D_OTB',
+  'kanji_red_wood',
   'Kinki-1-kanji',
   'Kinki-2-kanji',
   'Minase-1-kanji',

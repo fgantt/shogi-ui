@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import PiecePreview from './PiecePreview';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
-type PieceThemeType = 'kanji' | 'english' | '13xforever-1-kanji' | '13xforever-2-kanji' | 'Hari-Seldon-1-kanji' | 'Hari-Seldon-2-kanji' | 'Kinki-1-kanji' | 'Kinki-2-kanji' | 'Minase-1-kanji' | 'Minase-2-kanji' | 'Ryoko-1-kanji' | 'Ryoko-2-kanji';
+type PieceThemeType = 'kanji' | 'english' | '13xforever-1-kanji' | '13xforever-2-kanji' | '2-kanji_red_wood' | 'doubutsu' | 'Hari-Seldon-1-kanji' | 'Hari-Seldon-2-kanji' | 'international' | 'kanji_light_3D_OTB' | 'kanji_red_wood' | 'Kinki-1-kanji' | 'Kinki-2-kanji' | 'Minase-1-kanji' | 'Minase-2-kanji' | 'Ryoko-1-kanji' | 'Ryoko-2-kanji';
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
 
 interface SettingsPanelProps {
@@ -151,6 +151,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <label>
               <input
                 type="radio"
+                value="2-kanji_red_wood"
+                checked={pieceThemeType === '2-kanji_red_wood'}
+                onChange={() => onPieceThemeTypeChange('2-kanji_red_wood')}
+              />
+              2 Kanji Red Wood
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="doubutsu"
+                checked={pieceThemeType === 'doubutsu'}
+                onChange={() => onPieceThemeTypeChange('doubutsu')}
+              />
+              Doubutsu
+            </label>
+            <label>
+              <input
+                type="radio"
                 value="Hari-Seldon-1-kanji"
                 checked={pieceThemeType === 'Hari-Seldon-1-kanji'}
                 onChange={() => onPieceThemeTypeChange('Hari-Seldon-1-kanji')}
@@ -165,6 +183,33 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onChange={() => onPieceThemeTypeChange('Hari-Seldon-2-kanji')}
               />
               Hari-Seldon 2
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="international"
+                checked={pieceThemeType === 'international'}
+                onChange={() => onPieceThemeTypeChange('international')}
+              />
+              International
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="kanji_light_3D_OTB"
+                checked={pieceThemeType === 'kanji_light_3D_OTB'}
+                onChange={() => onPieceThemeTypeChange('kanji_light_3D_OTB')}
+              />
+              Kanji Light 3D OTB
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="kanji_red_wood"
+                checked={pieceThemeType === 'kanji_red_wood'}
+                onChange={() => onPieceThemeTypeChange('kanji_red_wood')}
+              />
+              Kanji Red Wood
             </label>
             <label>
               <input
