@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PieceType } from 'tsshogi';
 import { getSvgPathForPiece, isSvgTheme } from '../utils/pieceThemes';
 import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
+import { getThemeById, ThemeConfig } from '../utils/themeConfig';
 import SvgPiece from './SvgPiece';
 
 interface PiecePreviewProps {
@@ -9,6 +10,8 @@ interface PiecePreviewProps {
 }
 
 const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig | null>(null);
+
   // Define piece pairs: [base piece, promoted piece]
   const piecePairs: Array<[PieceType, PieceType]> = [
     ['pawn', 'promPawn'],
@@ -20,6 +23,14 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
     ['rook', 'dragon'],
     ['king', 'king'], // King doesn't promote
   ];
+
+  useEffect(() => {
+    const loadThemeConfig = async () => {
+      const config = await getThemeById(theme);
+      setThemeConfig(config || null);
+    };
+    loadThemeConfig();
+  }, [theme]);
 
   const renderSvgPiece = (pieceType: PieceType) => {
     const svgPath = getSvgPathForPiece(pieceType, 'player1', theme);
@@ -111,6 +122,40 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
           </div>
         ))}
       </div>
+      
+      {/* Theme description and attribution */}
+      {themeConfig && (
+        <div style={{ marginTop: '16px', fontSize: '12px', color: '#666' }}>
+          {themeConfig.description && (
+            <div style={{ marginBottom: '8px' }}>
+              {themeConfig.description}
+            </div>
+          )}
+          {themeConfig.attribution && (
+            <div style={{ fontStyle: 'italic' }}>
+              Piece designs by{' '}
+              <a 
+                href={themeConfig.attribution.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#0066cc', textDecoration: 'none' }}
+              >
+                {themeConfig.attribution.name}
+              </a>
+              , licensed under{' '}
+              <a 
+                href={themeConfig.attribution.licenseUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#0066cc', textDecoration: 'none' }}
+              >
+                {themeConfig.attribution.license}
+              </a>
+              .
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

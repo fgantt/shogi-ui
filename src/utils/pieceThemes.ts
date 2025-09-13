@@ -1,4 +1,5 @@
 import { PieceType } from 'tsshogi';
+import { getAvailableThemes, ThemeConfig } from './themeConfig';
 
 // CSA notation mapping for piece types
 export const PIECE_TYPE_TO_CSA: Record<PieceType, string> = {
@@ -18,7 +19,12 @@ export const PIECE_TYPE_TO_CSA: Record<PieceType, string> = {
   dragon: 'RY',
 };
 
-// Available piece theme folders from public/piece-themes
+// Get available piece themes from config file
+export async function getAvailablePieceThemes(): Promise<ThemeConfig[]> {
+  return await getAvailableThemes();
+}
+
+// Legacy function for backward compatibility
 export const AVAILABLE_PIECE_THEMES = [
   '13xforever-1-kanji',
   '13xforever-2-kanji',

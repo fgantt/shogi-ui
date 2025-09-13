@@ -1,0 +1,169 @@
+{
+  "themes": [
+    {
+      "id": "13xforever-1-kanji",
+      "displayName": "13xforever 1",
+      "description": "Classic kanji pieces with traditional styling",
+      "attribution": {
+        "name": "13xforever",
+        "url": "https://github.com/13xforever",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "13xforever-2-kanji",
+      "displayName": "13xforever 2",
+      "description": "Alternative kanji pieces with modern styling",
+      "attribution": {
+        "name": "13xforever",
+        "url": "https://github.com/13xforever",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "2-kanji_red_wood",
+      "displayName": "2 Kanji Red Wood",
+      "description": "Red wood pieces with kanji characters",
+      "attribution": {
+        "name": "Unknown Artist",
+        "url": "#",
+        "license": "Public Domain",
+        "licenseUrl": "#"
+      }
+    },
+    {
+      "id": "doubutsu",
+      "displayName": "Doubutsu",
+      "description": "Animal-themed pieces for a playful experience",
+      "attribution": {
+        "name": "Unknown Artist",
+        "url": "#",
+        "license": "Public Domain",
+        "licenseUrl": "#"
+      }
+    },
+    {
+      "id": "Hari-Seldon-1-kanji",
+      "displayName": "Hari-Seldon 1",
+      "description": "Elegant kanji pieces with refined design",
+      "attribution": {
+        "name": "Hari-Seldon",
+        "url": "https://github.com/Hari-Seldon",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Hari-Seldon-2-kanji",
+      "displayName": "Hari-Seldon 2",
+      "description": "Alternative elegant kanji pieces",
+      "attribution": {
+        "name": "Hari-Seldon",
+        "url": "https://github.com/Hari-Seldon",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "international",
+      "displayName": "International",
+      "description": "International-style piece designs",
+      "attribution": {
+        "name": "Unknown Artist",
+        "url": "#",
+        "license": "Public Domain",
+        "licenseUrl": "#"
+      }
+    },
+    {
+      "id": "kanji_light_3D_OTB",
+      "displayName": "Kanji Light 3D OTB",
+      "description": "Light 3D over-the-board style with kanji",
+      "attribution": {
+        "name": "Unknown Artist",
+        "url": "#",
+        "license": "Public Domain",
+        "licenseUrl": "#"
+      }
+    },
+    {
+      "id": "kanji_red_wood",
+      "displayName": "Kanji Red Wood",
+      "description": "Red wood pieces with kanji characters",
+      "attribution": {
+        "name": "Unknown Artist",
+        "url": "#",
+        "license": "Public Domain",
+        "licenseUrl": "#"
+      }
+    },
+    {
+      "id": "Kinki-1-kanji",
+      "displayName": "Kinki 1",
+      "description": "Traditional Kinki-style kanji pieces",
+      "attribution": {
+        "name": "Kinki",
+        "url": "https://github.com/Kinki",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Kinki-2-kanji",
+      "displayName": "Kinki 2",
+      "description": "Alternative Kinki-style kanji pieces",
+      "attribution": {
+        "name": "Kinki",
+        "url": "https://github.com/Kinki",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Minase-1-kanji",
+      "displayName": "Minase 1",
+      "description": "Minase-style kanji pieces with distinctive design",
+      "attribution": {
+        "name": "Minase",
+        "url": "https://github.com/Minase",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Minase-2-kanji",
+      "displayName": "Minase 2",
+      "description": "Alternative Minase-style kanji pieces",
+      "attribution": {
+        "name": "Minase",
+        "url": "https://github.com/Minase",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Ryoko-1-kanji",
+      "displayName": "Ryoko 1",
+      "description": "Ryoko-style kanji pieces with unique character",
+      "attribution": {
+        "name": "Ryoko",
+        "url": "https://github.com/Ryoko",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "Ryoko-2-kanji",
+      "displayName": "Ryoko 2",
+      "description": "Alternative Ryoko-style kanji pieces",
+      "attribution": {
+        "name": "Ryoko",
+        "url": "https://github.com/Ryoko",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    }
+  ]
+}
