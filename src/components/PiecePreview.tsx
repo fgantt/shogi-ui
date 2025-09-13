@@ -27,7 +27,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <img
         src={svgPath}
         alt={`${pieceType} piece`}
-        style={{ width: '56px', height: '56px' }}
+        style={{ width: '64px', height: '64px' }}
         onError={(e) => {
           console.warn(`Failed to load piece image: ${svgPath}`);
           e.currentTarget.style.display = 'none';
@@ -42,7 +42,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <img
         src={svgPath}
         alt={`${pieceType} piece (white)`}
-        style={{ width: '56px', height: '56px' }}
+        style={{ width: '64px', height: '64px' }}
         onError={(e) => {
           console.warn(`Failed to load piece image: ${svgPath}`);
           e.currentTarget.style.display = 'none';
@@ -71,10 +71,10 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <h4 style={{ marginBottom: '12px', fontSize: '14px', color: '#666' }}>
         Piece Preview
       </h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
         {piecePairs.map(([basePiece, promotedPiece]) => (
-          <div key={basePiece} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-            <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+          <div key={basePiece} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
               {isSvg ? (
                 renderSvgPiece(basePiece)
               ) : (
