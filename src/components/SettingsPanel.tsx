@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import PiecePreview from './PiecePreview';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type PieceThemeType = 'kanji' | 'english' | '13xforever-1-kanji' | '13xforever-2-kanji' | 'Hari-Seldon-1-kanji' | 'Hari-Seldon-2-kanji' | 'Kinki-1-kanji' | 'Kinki-2-kanji' | 'Minase-1-kanji' | 'Minase-2-kanji' | 'Ryoko-1-kanji' | 'Ryoko-2-kanji';
@@ -220,6 +221,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               Ryoko 2
             </label>
           </div>
+          <PiecePreview theme={pieceThemeType} />
         </section>
 
         <section>
