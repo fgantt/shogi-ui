@@ -27,7 +27,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <img
         src={svgPath}
         alt={`${pieceType} piece`}
-        style={{ width: '64px', height: '64px' }}
+        style={{ width: '56px', height: '56px' }}
         onError={(e) => {
           console.warn(`Failed to load piece image: ${svgPath}`);
           e.currentTarget.style.display = 'none';
@@ -38,7 +38,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
 
   const renderTextPiece = (pieceType: PieceType, isKanji: boolean) => {
     return (
-      <div style={{ width: '64px', height: '64px' }}>
+      <div style={{ width: '56px', height: '56px' }}>
         <SvgPiece
           type={pieceType}
           player="player1"
@@ -56,10 +56,10 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <h4 style={{ marginBottom: '12px', fontSize: '14px', color: '#666' }}>
         Piece Preview
       </h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
         {piecePairs.map(([basePiece, promotedPiece]) => (
-          <div key={basePiece} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div key={basePiece} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
               {isSvg ? (
                 renderSvgPiece(basePiece)
               ) : (
@@ -76,7 +76,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
                 </>
               )}
             </div>
-            <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>
+            <div style={{ fontSize: '8px', color: '#999', textAlign: 'center' }}>
               {basePiece === 'pawn' && 'Pawn'}
               {basePiece === 'lance' && 'Lance'}
               {basePiece === 'knight' && 'Knight'}
