@@ -164,6 +164,23 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
             {attackingPieces.map((attackerSquare, index) => {
               const attackerPos = squareToPixel(attackerSquare);
               const kingPos = squareToPixel(kingInCheckSquare);
+              
+              // Debug logging
+              console.log('Check line coordinates:', {
+                attacker: {
+                  square: attackerSquare.usi,
+                  file: attackerSquare.file,
+                  rank: attackerSquare.rank,
+                  pixel: attackerPos
+                },
+                king: {
+                  square: kingInCheckSquare.usi,
+                  file: kingInCheckSquare.file,
+                  rank: kingInCheckSquare.rank,
+                  pixel: kingPos
+                }
+              });
+              
               return (
                 <line
                   key={index}
