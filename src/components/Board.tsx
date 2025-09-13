@@ -62,20 +62,24 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
 
   // Helper function to convert square coordinates to pixel coordinates
   const squareToPixel = (square: Square) => {
-    // tsshogi coordinate system:
-    // file: 0-8 (where 0 = file 9, 8 = file 1) - right to left
-    // rank: 0-8 (where 0 = rank 1, 8 = rank 9) - top to bottom
-    // Our board rendering uses colIndex (0-8) and rowIndex (0-8)
-    // where colIndex goes left to right (0 = leftmost column = file 9)
-    // and rowIndex goes top to bottom (0 = top row = rank 1)
+    // Use the same coordinate system as the board rendering
+    // The board uses Square.newByXY(colIndex, rowIndex) where:
+    // colIndex 0-8 goes left to right (0 = leftmost = file 9, 8 = rightmost = file 1)
+    // rowIndex 0-8 goes top to bottom (0 = top = rank 1, 8 = bottom = rank 9)
     
-    // Convert tsshogi coordinates to our board coordinates
-    // Note: tsshogi file 0 = traditional file 9 (rightmost), file 8 = traditional file 1 (leftmost)
-    const colIndex = square.file; // file 0 (9筋) -> col 0, file 8 (1筋) -> col 8
-    const rowIndex = square.rank; // rank 0 (1段) -> row 0, rank 8 (9段) -> row 8
+    // Convert from USI string format (e.g., "2e", "1f") to board coordinates
+    const usiString = square.usi;
+    const file = parseInt(usiString[0], 10); // 1-9
+    const rankChar = usiString[1]; // a-i
+    const rank = rankChar.charCodeAt(0) - 'a'.charCodeAt(0) + 1; // 1-9
     
-    const x = colIndex * 70 + 35 + 30; // 70px per square, center at 35px, move right by 30px
-    const y = rowIndex * 76 + 38 + 171; // 76px per square, center at 38px, move down by 2.25 square heights
+    // Convert to board colIndex and rowIndex
+    const colIndex = 9 - file; // file 1 -> col 8, file 9 -> col 0
+    const rowIndex = rank - 1; // rank 1 -> row 0, rank 9 -> row 8
+    
+    const x = colIndex * 70 + 35; // 70px per square, center at 35px
+    const y = rowIndex * 76 + 38; // 76px per square, center at 38px
+    
     return { x, y };
   };
 
@@ -133,13 +137,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                         player={toOurPlayer(piece.color)}
                         pieceThemeType={pieceThemeType || 'kanji'}
                         isSelected={isSelected(rowIndex, colIndex)}
-                        isAttacked={(() => {
-                          const attacked = isSquareAttacked ? isSquareAttacked(square) : false;
-                          if (attacked) {
-                            console.log(`Piece at ${square.usi} is attacked`);
-                          }
-                          return attacked;
-                        })()}
+                        isAttacked={isSquareAttacked ? isSquareAttacked(square) : false}
                         onClick={() => {
                           onSquareClick(rowIndex, colIndex)
                         }}
@@ -158,31 +156,30 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
               })}
             </div>
           ))}
+          {/* Red lines for check indicators */}
+          {isInCheck && kingInCheckSquare && attackingPieces && attackingPieces.length > 0 && (
+            <svg className="check-line-svg" width="630" height="684">
+              {attackingPieces.map((attackerSquare, index) => {
+                const attackerPos = squareToPixel(attackerSquare);
+                const kingPos = squareToPixel(kingInCheckSquare);
+                
+                return (
+                  <g key={index}>
+                    <line
+                      x1={attackerPos.x}
+                      y1={attackerPos.y}
+                      x2={kingPos.x}
+                      y2={kingPos.y}
+                      stroke="red"
+                      strokeWidth="3"
+                      strokeOpacity="0.8"
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+          )}
         </div>
-        {/* Red lines for check indicators */}
-        {isInCheck && kingInCheckSquare && attackingPieces && attackingPieces.length > 0 && (
-          <svg className="check-line-svg" width="630" height="684">
-            {attackingPieces.map((attackerSquare, index) => {
-              const attackerPos = squareToPixel(attackerSquare);
-              const kingPos = squareToPixel(kingInCheckSquare);
-              
-              
-              return (
-                <g key={index}>
-                  <line
-                    x1={attackerPos.x}
-                    y1={attackerPos.y}
-                    x2={kingPos.x}
-                    y2={kingPos.y}
-                    stroke="red"
-                    strokeWidth="3"
-                    strokeOpacity="0.8"
-                  />
-                </g>
-              );
-            })}
-          </svg>
-        )}
         <div className="row-numbers">
           {kifuRowLabels.map((label) => (
             <div key={label} className="row-number-cell">
