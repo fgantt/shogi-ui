@@ -40,8 +40,8 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
     return (
       <div style={{ width: '64px', height: '64px' }}>
         <SvgPiece
-          pieceType={pieceType}
-          piecePlayer="player1"
+          type={pieceType}
+          player="player1"
           pieceThemeType={theme}
         />
       </div>
