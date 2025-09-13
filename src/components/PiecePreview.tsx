@@ -36,6 +36,21 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
     );
   };
 
+  const renderSvgPieceWhite = (pieceType: PieceType) => {
+    const svgPath = getSvgPathForPiece(pieceType, 'player2', theme);
+    return (
+      <img
+        src={svgPath}
+        alt={`${pieceType} piece (white)`}
+        style={{ width: '56px', height: '56px' }}
+        onError={(e) => {
+          console.warn(`Failed to load piece image: ${svgPath}`);
+          e.currentTarget.style.display = 'none';
+        }}
+      />
+    );
+  };
+
   const renderTextPiece = (pieceType: PieceType, isKanji: boolean) => {
     return (
       <div style={{ width: '56px', height: '56px' }}>
@@ -73,6 +88,13 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
                   ) : (
                     renderTextPiece(promotedPiece, isKanji)
                   )}
+                </>
+              )}
+              {/* For SVG themes, show both black and white kings */}
+              {isSvg && basePiece === 'king' && (
+                <>
+                  <span style={{ fontSize: '12px', color: '#999' }}>|</span>
+                  {renderSvgPieceWhite(basePiece)}
                 </>
               )}
             </div>
