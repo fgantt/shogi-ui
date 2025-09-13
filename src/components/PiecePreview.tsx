@@ -2,6 +2,7 @@ import React from 'react';
 import { PieceType } from 'tsshogi';
 import { getSvgPathForPiece, isSvgTheme } from '../utils/pieceThemes';
 import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
+import SvgPiece from './SvgPiece';
 
 interface PiecePreviewProps {
   theme: string;
@@ -26,7 +27,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <img
         src={svgPath}
         alt={`${pieceType} piece`}
-        style={{ width: '32px', height: '32px' }}
+        style={{ width: '64px', height: '64px' }}
         onError={(e) => {
           console.warn(`Failed to load piece image: ${svgPath}`);
           e.currentTarget.style.display = 'none';
@@ -36,24 +37,13 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
   };
 
   const renderTextPiece = (pieceType: PieceType, isKanji: boolean) => {
-    const label = isKanji ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
     return (
-      <div
-        style={{
-          width: '32px',
-          height: '32px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#f0f0f0',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          fontSize: isKanji ? '16px' : '12px',
-          fontWeight: 'bold',
-          color: '#333',
-        }}
-      >
-        {label}
+      <div style={{ width: '64px', height: '64px' }}>
+        <SvgPiece
+          pieceType={pieceType}
+          piecePlayer="player1"
+          pieceThemeType={theme}
+        />
       </div>
     );
   };
@@ -66,10 +56,10 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       <h4 style={{ marginBottom: '12px', fontSize: '14px', color: '#666' }}>
         Piece Preview
       </h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         {piecePairs.map(([basePiece, promotedPiece]) => (
           <div key={basePiece} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {isSvg ? (
                 renderSvgPiece(basePiece)
               ) : (
