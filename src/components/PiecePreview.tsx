@@ -125,20 +125,20 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
       
       {/* Theme description and attribution */}
       {themeConfig && (
-        <div style={{ marginTop: '16px', fontSize: '12px', color: '#666' }}>
+        <div style={{ marginTop: '16px', fontSize: '13px', color: '#333', lineHeight: '1.4' }}>
           {themeConfig.description && (
-            <div style={{ marginBottom: '8px' }}>
+            <div style={{ marginBottom: '10px', color: '#444' }}>
               {themeConfig.description}
             </div>
           )}
           {themeConfig.attribution && (
-            <div style={{ fontStyle: 'italic' }}>
+            <div style={{ fontStyle: 'italic', color: '#555' }}>
               Piece designs by{' '}
               <a 
                 href={themeConfig.attribution.url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                style={{ color: '#0066cc', textDecoration: 'none' }}
+                style={{ color: '#1a73e8', textDecoration: 'underline', fontWeight: '500' }}
               >
                 {themeConfig.attribution.name}
               </a>
@@ -147,7 +147,7 @@ const PiecePreview: React.FC<PiecePreviewProps> = ({ theme }) => {
                 href={themeConfig.attribution.licenseUrl} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                style={{ color: '#0066cc', textDecoration: 'none' }}
+                style={{ color: '#1a73e8', textDecoration: 'underline', fontWeight: '500' }}
               >
                 {themeConfig.attribution.license}
               </a>
