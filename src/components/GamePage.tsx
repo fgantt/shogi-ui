@@ -73,6 +73,7 @@ const GamePage = () => {
   const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
+  const [gameLayout, setGameLayout] = useState<'classic' | 'compact'>((localStorage.getItem('shogi-game-layout') as 'classic' | 'compact') || 'compact');
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -432,8 +433,97 @@ const GamePage = () => {
     return <div>Loading...</div>;
   }
 
+  if (gameLayout === 'compact') {
+    return (
+      <div className={`game-page game-page-${gameLayout}`}>
+        {/* Compact Layout */}
+        <div className="compact-layout">
+          {/* Main content area */}
+          <div className="compact-main-content">
+            {/* Left side: Gote captured pieces and move log */}
+            <div className="compact-left-side">
+              <div className="compact-gote-captured">
+                <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+              </div>
+              <div className="compact-move-log">
+                <MoveLog 
+                  moves={controller.getRecord().moves} 
+                  notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+                />
+              </div>
+            </div>
+
+            {/* Center: Board */}
+            <div className="compact-board-area">
+              <Board 
+                key={renderKey} 
+                position={position} 
+                onSquareClick={handleSquareClick} 
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                selectedSquare={selectedSquare} 
+                legalMoves={legalMoves} 
+                lastMove={lastMove}
+                isSquareAttacked={showAttackedPieces ? (square) => controller.isSquareAttacked(square) : undefined}
+                isInCheck={isInCheck}
+                kingInCheckSquare={kingInCheckSquare}
+                attackingPieces={attackingPieces}
+                boardBackground={boardBackground}
+                pieceThemeType={pieceLabelType as any}
+                showPieceTooltips={showPieceTooltips}
+                notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+              />
+            </div>
+
+            {/* Right side: Menu and Sente captured pieces */}
+            <div className="compact-right-side">
+              <div className="compact-menu-area">
+                <GameControls 
+                  onNewGame={handleNewGame} 
+                  onOpenSettings={() => setIsSettingsOpen(true)} 
+                  onOpenSaveModal={() => setIsSaveModalOpen(true)}
+                  onOpenLoadModal={() => setIsLoadModalOpen(true)}
+                />
+              </div>
+              <div className="compact-sente-captured">
+                <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+              </div>
+            </div>
+          </div>
+        </div>
+        {isSettingsOpen && <SettingsPanel 
+          pieceThemeType={pieceLabelType as any}
+          onPieceThemeTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
+          notation={notation as any}
+          onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
+          wallpaperList={wallpaperList}
+          onSelectWallpaper={handleWallpaperChange}
+          boardBackgroundList={boardBackgroundList}
+          onSelectBoardBackground={handleSettingChange(setBoardBackground, 'shogi-board-background')}
+          onClose={() => setIsSettingsOpen(false)}
+          currentWallpaper={wallpaper}
+          currentBoardBackground={boardBackground}
+          showAttackedPieces={showAttackedPieces}
+          onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
+          showPieceTooltips={showPieceTooltips}
+          onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
+          aiDifficulty={aiDifficulty as any}
+          onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
+          gameLayout={gameLayout}
+          onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
+        />}
+        {promotionMove && <PromotionModal onPromote={handlePromotion} />}
+        {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
+        <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
+        <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+      </div>
+    );
+  }
+
+  // Classic Layout
   return (
-    <div className={`game-page`}>
+    <div className={`game-page game-page-${gameLayout}`}>
       {/* Control Panel at the top */}
       <div className="control-panel">
         <GameControls 
@@ -502,6 +592,8 @@ const GamePage = () => {
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
         aiDifficulty={aiDifficulty as any}
         onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
+        gameLayout={gameLayout}
+        onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
       />}
       {promotionMove && <PromotionModal onPromote={handlePromotion} />}
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}

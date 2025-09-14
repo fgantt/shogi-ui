@@ -98,6 +98,208 @@
   }
 }
 
+/* Compact Layout Styles */
+.game-page-compact {
+  padding: 10px;
+  gap: 10px;
+}
+
+.compact-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 1400px;
+  margin: 0 auto;
+  align-items: flex-start;
+}
+
+.compact-main-content {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.compact-left-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  width: 245px; /* 3.5 squares wide */
+  height: 913px;
+}
+
+.compact-gote-captured {
+  height: 304px; /* 4 squares tall */
+  margin-top: 25px;
+}
+
+.compact-gote-captured .captured-pieces {
+  width: 100%;
+  height: 100%;
+  min-height: 304px;
+}
+
+/* Compact layout captured pieces styling */
+.game-page-compact .compact-gote-captured .captured-pieces,
+.game-page-compact .compact-sente-captured .captured-pieces {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.game-page-compact .compact-gote-captured .captured-pieces h3,
+.game-page-compact .compact-sente-captured .captured-pieces h3 {
+  order: 1;
+  margin-bottom: 10px;
+  width: 40%;
+  text-align: center;
+}
+
+.game-page-compact .compact-sente-captured .captured-pieces h3 {
+  margin-left: auto;
+}
+
+.game-page-compact .compact-gote-captured .captured-pieces .pieces-list,
+.game-page-compact .compact-sente-captured .captured-pieces .pieces-list {
+  order: 2;
+  width: 100%;
+  justify-content: flex-start;
+  padding-top: 0;
+}
+
+.compact-move-log {
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.compact-move-log .move-log {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 380px; /* Extend to bottom of board */
+}
+
+.compact-board-area {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 819px; /* Match the scaled board width */
+  overflow: visible;
+}
+
+.compact-board-area .shogi-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  overflow: visible;
+}
+
+.compact-right-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  width: 245px; /* 3.5 squares wide */
+  align-items: flex-end;
+  height: 913px;
+  justify-content: flex-start;
+  margin-left: 20px;
+}
+
+.compact-menu-area {
+  flex-shrink: 0;
+  width: 100%;
+  order: 1;
+}
+
+.compact-menu-area .game-controls {
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.compact-menu-area .game-controls-left,
+.compact-menu-area .game-controls-right {
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.compact-sente-captured {
+  height: 304px; /* 4 squares tall - same as Gote */
+  width: 100%;
+  order: 2;
+  margin-top: auto; /* Push to bottom */
+}
+
+.compact-sente-captured .captured-pieces {
+  width: 100%;
+  height: 100%;
+  min-height: 304px;
+}
+
+/* Make board bigger in compact layout */
+.game-page-compact .board {
+  transform: scale(1.3);
+  transform-origin: top left;
+}
+
+/* Scale board labels to match the scaled board */
+.game-page-compact .column-numbers {
+  width: 819px; /* 630px * 1.3 */
+  margin-right: 16px; /* 12px * 1.3 */
+  margin-bottom: 0;
+}
+
+.game-page-compact .column-number-cell {
+  width: 91px; /* 70px * 1.3 */
+}
+
+.game-page-compact .row-numbers {
+  height: 889px; /* 684px * 1.3 */
+  margin-left: 273px; /* Move right by 3 squares width (3 * 91px) */
+}
+
+.game-page-compact .row-number-cell {
+  height: 99px; /* 76px * 1.3 */
+}
+
+/* Ensure row numbers are visible and properly positioned */
+.game-page-compact .board-and-row-numbers {
+  display: flex !important;
+  align-items: flex-start;
+  overflow: visible;
+}
+
+.game-page-compact .board-and-row-numbers .row-numbers {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 889px; /* Match scaled board height */
+  margin-left: 190px;
+}
+
+.game-page-compact .board-and-row-numbers .row-number-cell {
+  height: 99px; /* 76px * 1.3 */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 139, 0.75);
+  color: #eee;
+  font-weight: bold;
+  padding: 0 3px;
+}
+
+/* Fix board container alignment */
+.game-page-compact .shogi-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 @media (max-width: 768px) {
   .game-header h1 {
     font-size: 1.5rem;
@@ -116,5 +318,101 @@
   
   .board-and-move-log {
     gap: 10px;
+  }
+
+  /* Compact layout responsive */
+  .compact-main-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .compact-left-side {
+    width: 100%;
+    max-width: 630px;
+  }
+
+  .compact-right-side {
+    width: 100%;
+    max-width: 630px;
+    align-items: center;
+    height: auto;
+  }
+
+  .compact-gote-captured,
+  .compact-sente-captured {
+    height: auto;
+    min-height: 80px;
+  }
+
+  .compact-gote-captured .captured-pieces,
+  .compact-sente-captured .captured-pieces {
+    height: auto;
+    min-height: 80px;
+  }
+
+  .compact-move-log .move-log {
+    min-height: 200px;
+  }
+
+  .compact-top-row {
+    justify-content: center;
+  }
+
+  .game-page-compact .board {
+    transform: scale(1.0);
+  }
+
+  /* Reset board label scaling on mobile */
+  .game-page-compact .column-numbers {
+    width: 635px;
+    margin-right: 12px;
+    margin-bottom: 0;
+  }
+
+  .game-page-compact .column-number-cell {
+    width: 70px;
+  }
+
+  .game-page-compact .row-numbers {
+    height: 688px;
+    margin-left: 0;
+  }
+
+  .game-page-compact .row-number-cell {
+    height: 76px;
+  }
+
+  .game-page-compact .board-and-row-numbers .row-numbers {
+    height: 688px;
+    margin-left: 0;
+  }
+
+  .game-page-compact .board-and-row-numbers .row-number-cell {
+    height: 76px;
+  }
+
+  /* Reset captured area positioning on mobile */
+  .compact-gote-captured {
+    margin-top: 0;
+  }
+
+  /* Reset board area width on mobile */
+  .compact-board-area {
+    width: 635px;
+  }
+
+  /* Reset menu to horizontal on mobile */
+  .compact-menu-area .game-controls {
+    flex-direction: row;
+  }
+
+  .compact-menu-area .game-controls-left,
+  .compact-menu-area .game-controls-right {
+    flex-direction: row;
+  }
+
+  .game-page-compact .shogi-board-container {
+    align-items: center;
   }
 }

@@ -26,6 +26,8 @@ interface SettingsPanelProps {
   onShowAttackedPiecesChange: (show: boolean) => void;
   showPieceTooltips: boolean;
   onShowPieceTooltipsChange: (show: boolean) => void;
+  gameLayout: 'classic' | 'compact';
+  onGameLayoutChange: (layout: 'classic' | 'compact') => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -46,6 +48,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onShowAttackedPiecesChange,
   showPieceTooltips,
   onShowPieceTooltipsChange,
+  gameLayout,
+  onGameLayoutChange,
 }) => {
   const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(true);
   const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(true);
@@ -240,6 +244,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 onChange={(e) => onShowPieceTooltipsChange(e.target.checked)}
               />
               <span className="slider round"></span>
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Game Layout</h3>
+          <div className="setting-group">
+            <label>
+              <input
+                type="radio"
+                value="classic"
+                checked={gameLayout === 'classic'}
+                onChange={() => onGameLayoutChange('classic')}
+              />
+              Slim Shogi
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="compact"
+                checked={gameLayout === 'compact'}
+                onChange={() => onGameLayoutChange('compact')}
+              />
+              Classic Shogi
             </label>
           </div>
         </section>
