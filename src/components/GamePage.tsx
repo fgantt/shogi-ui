@@ -231,6 +231,15 @@ const GamePage = () => {
     // USI communication event handlers
     const onUsiCommandSent = ({ command }: { command: string }) => {
       setLastSentCommand(command);
+      
+      // Clear history and last sent when usinewgame is sent
+      if (command === 'usinewgame') {
+        setCommunicationHistory([]);
+        setLastSentCommand('');
+        setLastReceivedCommand('');
+        return;
+      }
+      
       const newEntry = {
         id: `sent-${Date.now()}-${Math.random()}`,
         timestamp: new Date(),
@@ -602,6 +611,8 @@ const GamePage = () => {
         {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
         <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
         <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+        
+        {/* USI Monitor positioned below the game content */}
         <UsiMonitor
           lastSentCommand={lastSentCommand}
           lastReceivedCommand={lastReceivedCommand}
@@ -693,6 +704,8 @@ const GamePage = () => {
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
       <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
       <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+      
+      {/* USI Monitor positioned below the game content */}
       <UsiMonitor
         lastSentCommand={lastSentCommand}
         lastReceivedCommand={lastReceivedCommand}
