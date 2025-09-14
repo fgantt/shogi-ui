@@ -125,3 +125,36 @@
 .collapse-arrow.collapsed {
   transform: rotate(-90deg);
 }
+
+/* Notation option styles */
+.notation-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.notation-option:hover {
+  background-color: rgba(0, 0, 139, 0.1);
+}
+
+.notation-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notation-name {
+  font-weight: bold;
+  color: #00008B;
+}
+
+.notation-example {
+  font-size: 0.9em;
+  color: #333;
+  font-family: monospace;
+  font-weight: 500;
+}
