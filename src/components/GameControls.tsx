@@ -6,9 +6,11 @@ interface GameControlsProps {
   onOpenSettings: () => void;
   onOpenSaveModal: () => void;
   onOpenLoadModal: () => void;
+  onCyclePieceTheme: () => void;
+  onCycleBoardBackground: () => void;
 }
 
-const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal }) => {
+const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal, onCyclePieceTheme, onCycleBoardBackground }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">
@@ -23,6 +25,12 @@ const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, 
         </button>
       </div>
       <div className="game-controls-right">
+        <button onClick={onCyclePieceTheme}>
+          <span role="img" aria-label="Cycle Piece Theme">♟️</span> Pieces
+        </button>
+        <button onClick={onCycleBoardBackground}>
+          <span role="img" aria-label="Cycle Board Background">🎨</span> Board
+        </button>
         <button onClick={onOpenSettings}>
           <span role="img" aria-label="Settings">⚙️</span> Settings
         </button>

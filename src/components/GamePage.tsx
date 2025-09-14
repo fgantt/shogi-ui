@@ -10,6 +10,7 @@ import PromotionModal from './PromotionModal';
 import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
+import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -74,6 +75,7 @@ const GamePage = () => {
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
   const [gameLayout, setGameLayout] = useState<'classic' | 'compact'>((localStorage.getItem('shogi-game-layout') as 'classic' | 'compact') || 'compact');
+  const [pieceThemeList, setPieceThemeList] = useState<string[]>(['kanji', 'english', ...AVAILABLE_PIECE_THEMES]);
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -126,6 +128,18 @@ const GamePage = () => {
 
       setWallpaperList(wallpaperPaths);
       setBoardBackgroundList(boardPaths);
+
+      // Load available piece themes
+      try {
+        const themes = await getAvailablePieceThemes();
+        const loadedThemeIds = themes.map(theme => theme.id);
+        // Combine base themes with loaded themes and legacy themes, removing duplicates
+        const allThemeIds = ['kanji', 'english', ...new Set([...loadedThemeIds, ...AVAILABLE_PIECE_THEMES])];
+        setPieceThemeList(allThemeIds);
+      } catch (error) {
+        console.error('Error loading piece themes:', error);
+        // Keep the initial state with legacy themes if loading fails
+      }
 
       // Set random wallpaper and board background if not already set
       if (!wallpaper) {
@@ -392,6 +406,28 @@ const GamePage = () => {
     document.body.style.backgroundAttachment = 'fixed';
   };
 
+  const handleCyclePieceTheme = () => {
+    if (pieceThemeList.length === 0) return;
+    
+    const currentIndex = pieceThemeList.indexOf(pieceLabelType);
+    // If current theme is not in the list, start from the beginning
+    const startIndex = currentIndex === -1 ? 0 : currentIndex;
+    const nextIndex = (startIndex + 1) % pieceThemeList.length;
+    const nextTheme = pieceThemeList[nextIndex];
+    handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')(nextTheme);
+  };
+
+  const handleCycleBoardBackground = () => {
+    if (boardBackgroundList.length === 0) return;
+    
+    const currentIndex = boardBackgroundList.indexOf(boardBackground);
+    // If current background is not in the list, start from the beginning
+    const startIndex = currentIndex === -1 ? 0 : currentIndex;
+    const nextIndex = (startIndex + 1) % boardBackgroundList.length;
+    const nextBackground = boardBackgroundList[nextIndex];
+    handleSettingChange(setBoardBackground, 'shogi-board-background')(nextBackground);
+  };
+
   const handleSaveGame = (name: string) => {
     const sfen = controller.getPosition().sfen;
     const newSavedGames = { ...savedGames, [name]: sfen };
@@ -484,6 +520,8 @@ const GamePage = () => {
                   onOpenSettings={() => setIsSettingsOpen(true)} 
                   onOpenSaveModal={() => setIsSaveModalOpen(true)}
                   onOpenLoadModal={() => setIsLoadModalOpen(true)}
+                  onCyclePieceTheme={handleCyclePieceTheme}
+                  onCycleBoardBackground={handleCycleBoardBackground}
                 />
               </div>
               <div className="compact-sente-captured">
@@ -531,6 +569,8 @@ const GamePage = () => {
           onOpenSettings={() => setIsSettingsOpen(true)} 
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onOpenLoadModal={() => setIsLoadModalOpen(true)}
+          onCyclePieceTheme={handleCyclePieceTheme}
+          onCycleBoardBackground={handleCycleBoardBackground}
         />
       </div>
 
