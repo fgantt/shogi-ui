@@ -14,6 +14,30 @@ const PracticeExerciseDetail: React.FC = () => {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [questions, setQuestions] = useState<any[]>([]); // TODO: Define a proper interface for questions
+  const [pieceThemeType, setPieceThemeType] = useState<string>(localStorage.getItem('shogi-piece-label-type') || 'kanji');
+
+  // Listen for storage changes to sync theme updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'shogi-piece-label-type' && e.newValue) {
+        setPieceThemeType(e.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events (for same-tab updates)
+    const handleThemeChange = (e: CustomEvent) => {
+      setPieceThemeType(e.detail);
+    };
+
+    window.addEventListener('themeChange', handleThemeChange as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themeChange', handleThemeChange as EventListener);
+    };
+  }, []);
 
   // All possible pieces for name identification (including promoted pieces)
   const allPieces = [
@@ -354,6 +378,7 @@ const PracticeExerciseDetail: React.FC = () => {
                     piece={{ type: pieceType, player: 'player1', promoted: promoted }}
                     size={30}
                     hideText={true}
+                    pieceThemeType={pieceThemeType}
                   />
                 )}
               </div>
@@ -524,7 +549,7 @@ const PracticeExerciseDetail: React.FC = () => {
       <div className="exercise-content">
         <div className="question-card">
           <div className="piece-display">
-            <SvgPiece piece={currentQ.piece} size={80} />
+            <SvgPiece piece={currentQ.piece} size={80} pieceThemeType={pieceThemeType} />
           </div>
           
           <div className="question-text">
@@ -547,7 +572,7 @@ const PracticeExerciseDetail: React.FC = () => {
                   renderMovementDiagram(option.diagram)
                 ) : exerciseId === 'promotion-matching' && option.piece ? (
                   <div className="piece-option">
-                    <SvgPiece piece={option.piece} size={80} />
+                    <SvgPiece piece={option.piece} size={80} pieceThemeType={pieceThemeType} />
                   </div>
                 ) : (
                   option.text

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SvgPiece from './SvgPiece';
 import { PieceType } from 'tsshogi';
@@ -7,6 +7,30 @@ import './HelpPage.css';
 const HelpPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('about');
+  const [pieceThemeType, setPieceThemeType] = useState<string>(localStorage.getItem('shogi-piece-label-type') || 'kanji');
+
+  // Listen for storage changes to sync theme updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'shogi-piece-label-type' && e.newValue) {
+        setPieceThemeType(e.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events (for same-tab updates)
+    const handleThemeChange = (e: CustomEvent) => {
+      setPieceThemeType(e.detail);
+    };
+
+    window.addEventListener('themeChange', handleThemeChange as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themeChange', handleThemeChange as EventListener);
+    };
+  }, []);
 
   const pieceData = [
     {
@@ -198,6 +222,7 @@ const HelpPage: React.FC = () => {
                     piece={{ type: piece.type, player: 'player1', promoted: piece.promoted }}
                     size={30}
                     hideText={true}
+                    pieceThemeType={pieceThemeType}
                   />
                 )}
               </div>
@@ -303,6 +328,7 @@ const HelpPage: React.FC = () => {
                     <SvgPiece 
                       piece={{ type: piece.type, player: 'player1', promoted: false }}
                       size={40}
+                      pieceThemeType={pieceThemeType}
                     />
                     <h3>{piece.name}</h3>
                   </div>
@@ -320,6 +346,7 @@ const HelpPage: React.FC = () => {
                     <SvgPiece 
                       piece={{ type: piece.type, player: 'player1', promoted: true }}
                       size={40}
+                      pieceThemeType={pieceThemeType}
                     />
                     <h3>{piece.name}</h3>
                   </div>

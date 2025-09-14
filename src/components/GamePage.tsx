@@ -372,6 +372,12 @@ const GamePage = () => {
   const handleSettingChange = (setter: (value: any) => void, key: string) => (value: any) => {
     setter(value);
     localStorage.setItem(key, value.toString());
+    
+    // Dispatch custom event for same-tab theme updates
+    if (key === 'shogi-piece-label-type') {
+      const event = new CustomEvent('themeChange', { detail: value.toString() });
+      window.dispatchEvent(event);
+    }
   };
 
   const handleWallpaperChange = (value: string) => {

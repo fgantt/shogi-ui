@@ -78,6 +78,15 @@ const HomePage: React.FC = () => {
     setCurrentBoardBackground(boardBackground);
   };
 
+  const handlePieceThemeChange = (theme: string) => {
+    setPieceLabelType(theme);
+    localStorage.setItem('shogi-piece-label-type', theme);
+    
+    // Dispatch custom event for same-tab theme updates
+    const event = new CustomEvent('themeChange', { detail: theme });
+    window.dispatchEvent(event);
+  };
+
   return (
     <div className="home-page">
       <div className="home-content">
@@ -144,7 +153,7 @@ const HomePage: React.FC = () => {
           aiDifficulty={aiDifficulty}
           onDifficultyChange={setAiDifficulty}
           pieceThemeType={pieceLabelType}
-          onPieceThemeTypeChange={setPieceLabelType}
+          onPieceThemeTypeChange={handlePieceThemeChange}
           notation={notation}
           onNotationChange={setNotation}
           wallpaperList={wallpaperList}
