@@ -107,6 +107,7 @@ const GamePage = () => {
       
       const boardPaths = [
         '/boards/koi-bw.jpg',
+        '/boards/doubutsu.png',
         '/boards/marble-calacatta.jpg',
         '/boards/marble.jpg',
         '/boards/quartz-1.jpg',
