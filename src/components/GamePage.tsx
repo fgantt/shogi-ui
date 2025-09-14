@@ -10,6 +10,7 @@ import PromotionModal from './PromotionModal';
 import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
+import UsiMonitor from './UsiMonitor';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
 import './GamePage.css';
 
@@ -42,6 +43,17 @@ const GamePage = () => {
   const [isInCheck, setIsInCheck] = useState(false);
   const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
   const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
+  
+  // USI Monitor state
+  const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
+  const [lastSentCommand, setLastSentCommand] = useState<string>('');
+  const [lastReceivedCommand, setLastReceivedCommand] = useState<string>('');
+  const [communicationHistory, setCommunicationHistory] = useState<Array<{
+    id: string;
+    timestamp: Date;
+    direction: 'sent' | 'received';
+    command: string;
+  }>>([]);
 
   // Helper function to find the king square for a given player
   const findKingSquare = (position: ImmutablePosition, player: 'black' | 'white'): Square | null => {
@@ -216,11 +228,46 @@ const GamePage = () => {
       // }
     };
 
+    // USI communication event handlers
+    const onUsiCommandSent = ({ command }: { command: string }) => {
+      setLastSentCommand(command);
+      const newEntry = {
+        id: `sent-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        direction: 'sent' as const,
+        command
+      };
+      setCommunicationHistory(prev => [...prev, newEntry]);
+    };
+
+    const onUsiCommandReceived = ({ command }: { command: string }) => {
+      setLastReceivedCommand(command);
+      const newEntry = {
+        id: `received-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        direction: 'received' as const,
+        command
+      };
+      setCommunicationHistory(prev => [...prev, newEntry]);
+    };
+
     controller.on('stateChanged', onStateChanged);
+    
+    // Listen to USI events from the engine adapter
+    const engine = (controller as any).engine;
+    if (engine) {
+      engine.on('usiCommandSent', onUsiCommandSent);
+      engine.on('usiCommandReceived', onUsiCommandReceived);
+    }
+    
     setPosition(controller.getPosition());
 
     return () => {
       controller.off('stateChanged', onStateChanged);
+      if (engine) {
+        engine.off('usiCommandSent', onUsiCommandSent);
+        engine.off('usiCommandReceived', onUsiCommandReceived);
+      }
     };
   }, [controller]);
 
@@ -555,6 +602,13 @@ const GamePage = () => {
         {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
         <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
         <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+        <UsiMonitor
+          lastSentCommand={lastSentCommand}
+          lastReceivedCommand={lastReceivedCommand}
+          communicationHistory={communicationHistory}
+          isVisible={isUsiMonitorVisible}
+          onToggle={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+        />
       </div>
     );
   }
@@ -639,6 +693,13 @@ const GamePage = () => {
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
       <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
       <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+      <UsiMonitor
+        lastSentCommand={lastSentCommand}
+        lastReceivedCommand={lastReceivedCommand}
+        communicationHistory={communicationHistory}
+        isVisible={isUsiMonitorVisible}
+        onToggle={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+      />
     </div>
   );
 };

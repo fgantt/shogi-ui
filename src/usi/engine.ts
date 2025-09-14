@@ -107,7 +107,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     this.handler = createWasmUsiHandler();
     
     console.log('WasmUsiEngineAdapter: Sending usi command...');
-    const output = this.handler.process_command('usi');
+    const command = 'usi';
+    this.emit('usiCommandSent', { command });
+    const output = this.handler.process_command(command);
     console.log('WasmUsiEngineAdapter: USI response:', output);
     
     // Process any pending output
@@ -120,7 +122,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     }
     
     console.log('WasmUsiEngineAdapter: Sending isready command...');
-    const output = this.handler.process_command('isready');
+    const command = 'isready';
+    this.emit('usiCommandSent', { command });
+    const output = this.handler.process_command(command);
     console.log('WasmUsiEngineAdapter: isready response:', output);
     
     // Process any pending output
@@ -135,6 +139,7 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     console.log('WasmUsiEngineAdapter: Setting options...', options);
     for (const [name, value] of Object.entries(options)) {
       const command = `setoption name ${name} value ${value}`;
+      this.emit('usiCommandSent', { command });
       this.handler.process_command(command);
     }
     this.processPendingOutput();
@@ -146,7 +151,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     }
     
     console.log('WasmUsiEngineAdapter: Sending usinewgame command...');
-    this.handler.process_command('usinewgame');
+    const command = 'usinewgame';
+    this.emit('usiCommandSent', { command });
+    this.handler.process_command(command);
     this.processPendingOutput();
   }
 
@@ -158,6 +165,7 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     const movesString = moves.length > 0 ? `moves ${moves.join(' ')}` : '';
     const command = `position sfen ${sfen} ${movesString}`;
     console.log('WasmUsiEngineAdapter: Setting position:', command);
+    this.emit('usiCommandSent', { command });
     this.handler.process_command(command);
     this.processPendingOutput();
   }
@@ -175,6 +183,7 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     this.isSearching = true;
     const goCommand = this.buildGoCommand(options);
     console.log('WasmUsiEngineAdapter: Starting search with command:', goCommand);
+    this.emit('usiCommandSent', { command: goCommand });
     
     // Since the search is now synchronous in WASM, we can process it directly
     // Use setTimeout to avoid blocking the main thread
@@ -200,7 +209,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     
     if (this.isSearching && this.handler) {
       console.log('WasmUsiEngineAdapter: Stopping search...');
-      this.handler.process_command('stop');
+      const command = 'stop';
+      this.emit('usiCommandSent', { command });
+      this.handler.process_command(command);
       this.isSearching = false;
       this.processPendingOutput();
     }
@@ -210,7 +221,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     console.log('WasmUsiEngineAdapter: quit() called.');
     await this.stop();
     if (this.handler) {
-      this.handler.process_command('quit');
+      const command = 'quit';
+      this.emit('usiCommandSent', { command });
+      this.handler.process_command(command);
     }
   }
 
@@ -240,6 +253,9 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
 
   private processOutputLine(line: string): void {
     console.log('WasmUsiEngineAdapter: Processing output:', line);
+    
+    // Emit event for received command
+    this.emit('usiCommandReceived', { command: line });
     
     if (line.startsWith('bestmove ')) {
       const move = line.substring(9).trim();
