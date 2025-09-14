@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
+import '../styles/settings.css';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 // PieceThemeType is now dynamic, no need for hardcoded union type
@@ -122,41 +123,53 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         <section>
           <h3>Move Log Notation</h3>
           <div className="setting-group">
-            <label>
+            <label className="notation-option">
               <input
                 type="radio"
                 value="western"
                 checked={notation === 'western'}
                 onChange={() => onNotationChange('western')}
               />
-              English
+              <div className="notation-label">
+                <span className="notation-name">English</span>
+                <span className="notation-example">P-7f, Rx2d</span>
+              </div>
             </label>
-            <label>
+            <label className="notation-option">
               <input
                 type="radio"
                 value="kifu"
                 checked={notation === 'kifu'}
                 onChange={() => onNotationChange('kifu')}
               />
-              KIF
+              <div className="notation-label">
+                <span className="notation-name">KIF</span>
+                <span className="notation-example">７六歩, ２四飛</span>
+              </div>
             </label>
-            <label>
+            <label className="notation-option">
               <input
                 type="radio"
                 value="usi"
                 checked={notation === 'usi'}
                 onChange={() => onNotationChange('usi')}
               />
-              USI
+              <div className="notation-label">
+                <span className="notation-name">USI</span>
+                <span className="notation-example">7g7f, 2d2b</span>
+              </div>
             </label>
-            <label>
+            <label className="notation-option">
               <input
                 type="radio"
                 value="csa"
                 checked={notation === 'csa'}
                 onChange={() => onNotationChange('csa')}
               />
-              CSA
+              <div className="notation-label">
+                <span className="notation-name">CSA</span>
+                <span className="notation-example">+7776FU, -2424HI</span>
+              </div>
             </label>
           </div>
         </section>

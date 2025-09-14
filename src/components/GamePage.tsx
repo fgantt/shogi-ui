@@ -469,6 +469,7 @@ const GamePage = () => {
             boardBackground={boardBackground}
             pieceThemeType={pieceLabelType as any}
             showPieceTooltips={showPieceTooltips}
+            notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
           />
         </div>
         <div className="move-log-container">

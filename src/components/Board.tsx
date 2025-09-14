@@ -19,6 +19,7 @@ interface BoardProps {
   boardBackground?: string;
   pieceThemeType?: string;
   showPieceTooltips?: boolean;
+  notation?: 'western' | 'kifu' | 'usi' | 'csa';
 }
 
 
@@ -28,9 +29,25 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips }) => {
+const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips, notation = 'kifu' }) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
-  const kifuRowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  
+  // Row labels based on notation
+  const getRowLabels = () => {
+    switch (notation) {
+      case 'western':
+        return ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
+      case 'csa':
+        return ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      case 'usi':
+        return ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
+      case 'kifu':
+      default:
+        return ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    }
+  };
+  
+  const rowLabels = getRowLabels();
 
   const isSelected = (row: number, col: number): boolean => {
     if (!selectedSquare) return false;
@@ -183,7 +200,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
           )}
         </div>
         <div className="row-numbers">
-          {kifuRowLabels.map((label) => (
+          {rowLabels.map((label) => (
             <div key={label} className="row-number-cell">
               {label}
             </div>
