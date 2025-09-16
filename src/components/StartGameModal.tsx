@@ -1,11 +1,5 @@
 import React from 'react';
-
-interface GameSettings {
-  difficulty: 'easy' | 'medium' | 'hard';
-  player1Type: 'human' | 'ai-js' | 'ai-wasm';
-  player2Type: 'human' | 'ai-js' | 'ai-wasm';
-  pieceSet: 'kanji' | 'international';
-}
+import { GameSettings } from '../types';
 
 interface StartGameModalProps {
   isOpen: boolean;
@@ -23,7 +17,6 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       difficulty: formData.get('difficulty') as GameSettings['difficulty'],
       player1Type: formData.get('player1Type') as GameSettings['player1Type'],
       player2Type: formData.get('player2Type') as GameSettings['player2Type'],
-      pieceSet: formData.get('pieceSet') as GameSettings['pieceSet'],
     };
     onStartGame(settings);
     onClose();
@@ -45,31 +38,20 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             </div>
           </section>
           <section>
-            <h3>Player 1</h3>
+            <h3>Player 1 (Black)</h3>
             <div className="setting-group">
               <select id="player1Type" name="player1Type" defaultValue="human">
                 <option value="human">Human</option>
-                <option value="ai-js">AI - Jaguar</option>
-                <option value="ai-wasm">AI - Raptor</option>
+                <option value="ai">AI</option>
               </select>
             </div>
           </section>
           <section>
-            <h3>Player 2</h3>
+            <h3>Player 2 (White)</h3>
             <div className="setting-group">
               <select id="player2Type" name="player2Type" defaultValue="ai">
                 <option value="human">Human</option>
-                <option value="ai-js">AI - Jaguar</option>
-                <option value="ai-wasm">AI - Raptor</option>
-              </select>
-            </div>
-          </section>
-          <section>
-            <h3>Piece Set</h3>
-            <div className="setting-group">
-              <select id="pieceSet" name="pieceSet" defaultValue="kanji">
-                <option value="kanji">Kanji</option>
-                <option value="international">International</option>
+                <option value="ai">AI</option>
               </select>
             </div>
           </section>

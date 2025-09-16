@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
 import Board from './Board';
@@ -11,7 +12,9 @@ import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
 import UsiMonitor from './UsiMonitor';
+import StartGameModal from './StartGameModal';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
+import { GameSettings } from '../types';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -27,6 +30,7 @@ const isPiecePromoted = (pieceType: TsshogiPieceType): boolean => {
 };
 
 const GamePage = () => {
+  const location = useLocation();
   const controller = useShogiController();
   const [position, setPosition] = useState<ImmutablePosition | null>(null);
   const [renderKey, setRenderKey] = useState(0); // Force re-render counter
@@ -39,10 +43,15 @@ const GamePage = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+  const [isStartGameModalOpen, setIsStartGameModalOpen] = useState(false);
   const [savedGames, setSavedGames] = useState<{[key: string]: string}>({});
   const [isInCheck, setIsInCheck] = useState(false);
   const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
   const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
+  
+  // Player type state (used for UI display and controller communication)
+  const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>('human');
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>('ai');
   
   // USI Monitor state
   const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
@@ -75,6 +84,24 @@ const GamePage = () => {
     const games = JSON.parse(localStorage.getItem('shogi-saved-games') || '{}');
     setSavedGames(games);
   }, []);
+
+  // Handle initial player types from navigation state
+  useEffect(() => {
+    if (location.state) {
+      const { player1Type, player2Type } = location.state as { player1Type?: 'human' | 'ai'; player2Type?: 'human' | 'ai' };
+      if (player1Type) setPlayer1Type(player1Type);
+      if (player2Type) setPlayer2Type(player2Type);
+      // Set player types in controller
+      controller.setPlayerTypes(
+        player1Type || 'human', 
+        player2Type || 'ai'
+      );
+      // Start a new game with the selected player types
+      controller.newGame();
+    }
+  }, [location.state, controller]);
+
+  // Note: Initial AI move is now handled by the controller's newGame() method
 
   // Settings state
   const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
@@ -433,8 +460,17 @@ const GamePage = () => {
   };
 
   const handleNewGame = () => {
+    setIsStartGameModalOpen(true);
+  };
+
+  const handleStartGame = (settings: GameSettings) => {
+    setPlayer1Type(settings.player1Type);
+    setPlayer2Type(settings.player2Type);
+    setAiDifficulty(settings.difficulty);
+    controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.newGame();
     setWinner(null);
+    setIsStartGameModalOpen(false);
   };
 
   const handleDismiss = () => {
@@ -612,6 +648,11 @@ const GamePage = () => {
         {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
         <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
         <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+        <StartGameModal 
+          isOpen={isStartGameModalOpen} 
+          onClose={() => setIsStartGameModalOpen(false)} 
+          onStartGame={handleStartGame} 
+        />
         
         {/* USI Monitor positioned below the game content */}
         <UsiMonitor
@@ -705,6 +746,11 @@ const GamePage = () => {
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
       <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
       <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+      <StartGameModal 
+        isOpen={isStartGameModalOpen} 
+        onClose={() => setIsStartGameModalOpen(false)} 
+        onStartGame={handleStartGame} 
+      />
       
       {/* USI Monitor positioned below the game content */}
       <UsiMonitor

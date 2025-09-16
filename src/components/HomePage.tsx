@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SettingsPanel from './SettingsPanel';
+import StartGameModal from './StartGameModal';
+import { GameSettings } from '../types';
 import './HomePage.css';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isStartGameModalOpen, setIsStartGameModalOpen] = useState<boolean>(false);
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [pieceLabelType, setPieceLabelType] = useState<string>('kanji');
   const [notation, setNotation] = useState<'western' | 'kifu' | 'usi' | 'csa'>('kifu');
@@ -45,16 +48,22 @@ const HomePage: React.FC = () => {
   }, []);
 
   const handleStartGame = () => {
+    setIsStartGameModalOpen(true);
+  };
+
+  const handleStartGameWithSettings = (settings: GameSettings) => {
     navigate('/game', { 
       state: { 
-        aiDifficulty,
-        pieceLabelType,
+        aiDifficulty: settings.difficulty,
         showAttackedPieces,
         showPieceTooltips,
         currentWallpaper,
-        currentBoardBackground
+        currentBoardBackground,
+        player1Type: settings.player1Type,
+        player2Type: settings.player2Type
       } 
     });
+    setIsStartGameModalOpen(false);
   };
 
   const handleOpenSettings = () => {
@@ -169,6 +178,12 @@ const HomePage: React.FC = () => {
           onShowPieceTooltipsChange={setShowPieceTooltips}
         />
       )}
+      
+      <StartGameModal 
+        isOpen={isStartGameModalOpen} 
+        onClose={() => setIsStartGameModalOpen(false)} 
+        onStartGame={handleStartGameWithSettings} 
+      />
     </div>
   );
 };

@@ -8,6 +8,8 @@ export class ShogiController extends EventEmitter {
   private record: Record;
   private engine: EngineAdapter;
   private initialized = false;
+  private player1Type: 'human' | 'ai' = 'human';
+  private player2Type: 'human' | 'ai' = 'ai';
 
   constructor(engine: EngineAdapter) {
     super();
@@ -21,8 +23,14 @@ export class ShogiController extends EventEmitter {
     this.engine.on('bestmove', ({ move: usiMove }) => {
       if (usiMove && usiMove !== 'resign') {
         this.applyMove(usiMove);
+        this.emitStateChanged();
+        // Check if the next player is also AI
+        if (this.isCurrentPlayerAI()) {
+          this.requestEngineMove();
+        }
+      } else {
+        this.emitStateChanged();
       }
-      this.emitStateChanged();
     });
   }
 
@@ -69,6 +77,21 @@ export class ShogiController extends EventEmitter {
 
   public isInitialized(): boolean {
     return this.initialized;
+  }
+
+  public setPlayerTypes(player1Type: 'human' | 'ai', player2Type: 'human' | 'ai'): void {
+    this.player1Type = player1Type;
+    this.player2Type = player2Type;
+  }
+
+  public getPlayerTypes(): { player1Type: 'human' | 'ai'; player2Type: 'human' | 'ai' } {
+    return { player1Type: this.player1Type, player2Type: this.player2Type };
+  }
+
+  private isCurrentPlayerAI(): boolean {
+    const isPlayer1Turn = this.record.position.sfen.includes(' b ');
+    const currentPlayerType = isPlayer1Turn ? this.player1Type : this.player2Type;
+    return currentPlayerType !== 'human';
   }
 
   public getLegalMovesForSquare(square: Square): Square[] {
@@ -196,7 +219,10 @@ export class ShogiController extends EventEmitter {
     const moveResult = this.applyMove(usiMove);
     if (moveResult) {
       this.emitStateChanged();
-      this.requestEngineMove();
+      // Only request AI move if the next player is AI
+      if (this.isCurrentPlayerAI()) {
+        this.requestEngineMove();
+      }
       return true;
     }
     return false;
@@ -210,7 +236,7 @@ export class ShogiController extends EventEmitter {
     return null;
   }
 
-  private requestEngineMove(): void {
+  public requestEngineMove(): void {
     const sfen = this.record.position.sfen;
     
     this.engine.setPosition(sfen, []);
@@ -225,6 +251,11 @@ export class ShogiController extends EventEmitter {
       this.record = recordResult;
       this.engine.newGame();
       this.emitStateChanged();
+      
+      // Check if the first player is AI and request move
+      if (this.isCurrentPlayerAI()) {
+        this.requestEngineMove();
+      }
   }
 
   public loadSfen(sfen: string): void {
