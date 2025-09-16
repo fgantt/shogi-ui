@@ -64,8 +64,11 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
     const rowIndex = square.rank - 1;
     
     // Scale the Board.tsx calculation to match the actual board size
-    const x = (colIndex * 70 + 35) * scaleX;
-    const y = (rowIndex * 76 + 38) * scaleY;
+    const squareWidth = 70 * scaleX;
+    const squareHeight = 76 * scaleY;
+
+    const x = (colIndex * squareWidth + squareWidth / 2);
+    const y = (rowIndex * squareHeight + squareHeight / 2);
     
     console.log(`Square ${square.usi} (file:${square.file}, rank:${square.rank}) -> col:${colIndex}, row:${rowIndex} -> x:${x}, y:${y}`);
     console.log(`Scale factors: x:${scaleX}, y:${scaleY}`);
@@ -79,6 +82,10 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
   console.log('RecommendationOverlay: Arrow positions:', { from: fromPos, to: toPos });
   console.log('RecommendationOverlay: Board size:', boardSize);
 
+  // Calculate the offset for column labels
+  // The column labels are positioned above the board, so we need to offset down
+  const columnLabelHeight = 35; // Approximate height of column labels
+  
   return (
     <svg 
       className="recommendation-arrow-svg" 
@@ -86,7 +93,7 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
       height={boardSize.height} 
       style={{ 
         position: 'absolute', 
-        top: 0, 
+        top: columnLabelHeight, 
         left: 0, 
         zIndex: 10,
         pointerEvents: 'none' // Allow clicks to pass through to the board
