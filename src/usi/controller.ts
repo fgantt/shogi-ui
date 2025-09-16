@@ -10,6 +10,9 @@ export class ShogiController extends EventEmitter {
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
+  private recommendationsEnabled = false;
+  private currentRecommendation: { from: Square | null; to: Square | null } | null = null;
+  private recommendationTimeout: NodeJS.Timeout | null = null;
 
   constructor(engine: EngineAdapter) {
     super();
@@ -22,11 +25,18 @@ export class ShogiController extends EventEmitter {
 
     this.engine.on('bestmove', ({ move: usiMove }) => {
       if (usiMove && usiMove !== 'resign') {
-        this.applyMove(usiMove);
-        this.emitStateChanged();
-        // Check if the next player is also AI
-        if (this.isCurrentPlayerAI()) {
-          this.requestEngineMove();
+        // Check if this is a recommendation request (when recommendations are enabled and current player is human)
+        if (this.recommendationsEnabled && this.hasHumanPlayer() && !this.isCurrentPlayerAI()) {
+          // This is a recommendation, not an actual move
+          this.parseRecommendation(usiMove);
+        } else {
+          // This is an actual AI move
+          this.applyMove(usiMove);
+          this.emitStateChanged();
+          // Check if the next player is also AI
+          if (this.isCurrentPlayerAI()) {
+            this.requestEngineMove();
+          }
         }
       } else {
         this.emitStateChanged();
@@ -88,7 +98,45 @@ export class ShogiController extends EventEmitter {
     return { player1Type: this.player1Type, player2Type: this.player2Type };
   }
 
-  private isCurrentPlayerAI(): boolean {
+  public setRecommendationsEnabled(enabled: boolean): void {
+    this.recommendationsEnabled = enabled;
+    if (!enabled) {
+      this.currentRecommendation = null;
+      // Clear any pending recommendation timeout
+      if (this.recommendationTimeout) {
+        clearTimeout(this.recommendationTimeout);
+        this.recommendationTimeout = null;
+      }
+    }
+    this.emitStateChanged();
+  }
+
+  public areRecommendationsEnabled(): boolean {
+    return this.recommendationsEnabled;
+  }
+
+  public   getCurrentRecommendation(): { from: Square | null; to: Square | null } | null {
+    console.log('getCurrentRecommendation called, returning:', this.currentRecommendation);
+    console.log('Current recommendation type:', typeof this.currentRecommendation);
+    console.log('Current recommendation is null?', this.currentRecommendation === null);
+    console.log('Current recommendation is undefined?', this.currentRecommendation === undefined);
+    return this.currentRecommendation;
+  }
+
+  public clearRecommendation(): void {
+    console.log('Clearing recommendation - was:', this.currentRecommendation);
+    console.trace('Clear recommendation called from:');
+    this.currentRecommendation = null;
+    console.log('Recommendation cleared, now:', this.currentRecommendation);
+    // Don't emit stateChanged here to avoid circular calls
+    // The state will be updated when the next stateChanged event occurs
+  }
+
+  public hasHumanPlayer(): boolean {
+    return this.player1Type === 'human' || this.player2Type === 'human';
+  }
+
+  public isCurrentPlayerAI(): boolean {
     const isPlayer1Turn = this.record.position.sfen.includes(' b ');
     const currentPlayerType = isPlayer1Turn ? this.player1Type : this.player2Type;
     return currentPlayerType !== 'human';
@@ -216,8 +264,12 @@ export class ShogiController extends EventEmitter {
   }
 
   public handleUserMove(usiMove: string): boolean {
+    console.log('handleUserMove called with:', usiMove);
     const moveResult = this.applyMove(usiMove);
     if (moveResult) {
+      // Clear current recommendation when user makes a move
+      console.log('Clearing recommendation due to user move');
+      this.currentRecommendation = null;
       this.emitStateChanged();
       // Only request AI move if the next player is AI
       if (this.isCurrentPlayerAI()) {
@@ -241,6 +293,28 @@ export class ShogiController extends EventEmitter {
     
     this.engine.setPosition(sfen, []);
     this.engine.go({ btime: 30000, wtime: 30000, byoyomi: 1000 });
+  }
+
+  public async requestRecommendation(): Promise<void> {
+    if (!this.recommendationsEnabled || !this.hasHumanPlayer() || this.isCurrentPlayerAI()) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (this.recommendationTimeout) {
+      clearTimeout(this.recommendationTimeout);
+    }
+
+    const sfen = this.record.position.sfen;
+    this.engine.setPosition(sfen, []);
+    
+    // Request a quick recommendation with shorter time
+    this.engine.go({ btime: 1000, wtime: 1000, byoyomi: 500 });
+    
+    // Set a timeout to clear the recommendation request if it takes too long
+    this.recommendationTimeout = setTimeout(() => {
+      this.emit('recommendationTimeout');
+    }, 5000); // 5 second timeout
   }
   
   public newGame(): void {
@@ -271,7 +345,48 @@ export class ShogiController extends EventEmitter {
     this.engine.quit();
   }
 
+  private parseRecommendation(usiMove: string): void {
+    try {
+      console.log('Parsing recommendation move:', usiMove);
+      
+      // Clear timeout since we got a response
+      if (this.recommendationTimeout) {
+        clearTimeout(this.recommendationTimeout);
+        this.recommendationTimeout = null;
+      }
+
+      // Parse USI move to get from and to squares
+      const move = this.record.position.createMoveByUSI(usiMove);
+      console.log('Parsed move:', move);
+      
+      if (move && 'from' in move && 'to' in move) {
+        const fromSquare = typeof move.from === 'object' && 'x' in move.from 
+          ? move.from as Square 
+          : null;
+        const toSquare = move.to as Square;
+        
+        console.log('Recommendation squares:', { from: fromSquare, to: toSquare });
+        
+        this.currentRecommendation = {
+          from: fromSquare,
+          to: toSquare
+        };
+        console.log('Set current recommendation:', this.currentRecommendation);
+        console.log('Recommendation type after setting:', typeof this.currentRecommendation);
+        console.log('Recommendation is null after setting?', this.currentRecommendation === null);
+        console.log('Recommendation is undefined after setting?', this.currentRecommendation === undefined);
+        this.emitStateChanged();
+        this.emit('recommendationReceived');
+      } else {
+        console.log('Move parsing failed - invalid move structure');
+      }
+    } catch (error) {
+      console.error('Error parsing recommendation move:', error);
+    }
+  }
+
   private emitStateChanged(): void {
+    console.log('Emitting stateChanged event, current recommendation:', this.currentRecommendation);
     // Force a new reference to ensure React re-renders
     this.emit('stateChanged', this.record.position);
   }

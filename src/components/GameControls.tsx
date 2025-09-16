@@ -8,9 +8,12 @@ interface GameControlsProps {
   onOpenLoadModal: () => void;
   onCyclePieceTheme: () => void;
   onCycleBoardBackground: () => void;
+  onToggleRecommendations?: () => void;
+  recommendationsEnabled?: boolean;
+  hasHumanPlayer?: boolean;
 }
 
-const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal, onCyclePieceTheme, onCycleBoardBackground }) => {
+const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal, onCyclePieceTheme, onCycleBoardBackground, onToggleRecommendations, recommendationsEnabled, hasHumanPlayer }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">
@@ -25,6 +28,16 @@ const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, 
         </button>
       </div>
       <div className="game-controls-right">
+        {hasHumanPlayer && onToggleRecommendations && (
+          <button 
+            onClick={onToggleRecommendations}
+            className={recommendationsEnabled ? 'active' : ''}
+            title={recommendationsEnabled ? 'Hide AI recommendations' : 'Show AI recommendations'}
+          >
+            <span role="img" aria-label="AI Recommendations">💡</span> 
+            {recommendationsEnabled ? 'Hide Hints' : 'Show Hints'}
+          </button>
+        )}
         <button onClick={onCyclePieceTheme}>
           <span role="img" aria-label="Cycle Piece Theme">♟️</span> Pieces
         </button>

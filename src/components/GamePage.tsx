@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
 import Board from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
+import RecommendationOverlay from './RecommendationOverlay';
 import SettingsPanel from './SettingsPanel';
 import MoveLog from './MoveLog';
 import PromotionModal from './PromotionModal';
@@ -50,8 +51,22 @@ const GamePage = () => {
   const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
   
   // Player type state (used for UI display and controller communication)
-  const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>('human');
-  const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>('ai');
+  const [, setPlayer1Type] = useState<'human' | 'ai'>('human');
+  const [, setPlayer2Type] = useState<'human' | 'ai'>('ai');
+  
+  // Recommendation state
+  const [recommendationsEnabled, setRecommendationsEnabled] = useState(false);
+  const [currentRecommendation, setCurrentRecommendation] = useState<{ from: Square | null; to: Square | null } | null>(null);
+  const [isRequestingRecommendation, setIsRequestingRecommendation] = useState(false);
+  
+  // Refs for board containers to get actual dimensions
+  const compactBoardRef = useRef<HTMLDivElement | null>(null);
+  const classicBoardRef = useRef<HTMLDivElement | null>(null);
+  
+  // Debug recommendation state changes
+  useEffect(() => {
+    console.log('Recommendation state changed to:', currentRecommendation);
+  }, [currentRecommendation]);
   
   // USI Monitor state
   const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
@@ -220,6 +235,34 @@ const GamePage = () => {
       const lastMoveData = controller.getLastMove();
       setLastMove(lastMoveData);
       
+      // Update recommendation state
+      const newRecommendation = controller.getCurrentRecommendation();
+      console.log('GamePage: Got recommendation from controller:', newRecommendation);
+      console.log('GamePage: Current state before setting:', currentRecommendation);
+      
+      // Always update the recommendation state to match the controller
+      setCurrentRecommendation(newRecommendation);
+      console.log('GamePage: Set recommendation state to:', newRecommendation);
+      
+      // Request recommendation if enabled, it's a human player's turn, and we're not already requesting one
+      console.log('Checking recommendation request conditions:', {
+        enabled: controller.areRecommendationsEnabled(),
+        hasHuman: controller.hasHumanPlayer(),
+        isAI: controller.isCurrentPlayerAI(),
+        requesting: isRequestingRecommendation,
+        hasRecommendation: !!controller.getCurrentRecommendation()
+      });
+      
+      if (controller.areRecommendationsEnabled() && 
+          controller.hasHumanPlayer() && 
+          !controller.isCurrentPlayerAI() && 
+          !isRequestingRecommendation &&
+          !controller.getCurrentRecommendation()) {
+        console.log('Requesting recommendation...');
+        setIsRequestingRecommendation(true);
+        controller.requestRecommendation();
+      }
+      
       // Check for check state
       const checked = newPosition.checked;
       setIsInCheck(checked);
@@ -289,6 +332,12 @@ const GamePage = () => {
     };
 
     controller.on('stateChanged', onStateChanged);
+    controller.on('recommendationReceived', () => {
+      setIsRequestingRecommendation(false);
+    });
+    controller.on('recommendationTimeout', () => {
+      setIsRequestingRecommendation(false);
+    });
     
     // Listen to USI events from the engine adapter
     const engine = (controller as any).engine;
@@ -301,12 +350,30 @@ const GamePage = () => {
 
     return () => {
       controller.off('stateChanged', onStateChanged);
+      controller.off('recommendationReceived', () => {
+        setIsRequestingRecommendation(false);
+      });
+      controller.off('recommendationTimeout', () => {
+        setIsRequestingRecommendation(false);
+      });
       if (engine) {
         engine.off('usiCommandSent', onUsiCommandSent);
         engine.off('usiCommandReceived', onUsiCommandReceived);
       }
     };
   }, [controller]);
+
+  const handleRecommendationToggle = () => {
+    const newEnabled = !recommendationsEnabled;
+    setRecommendationsEnabled(newEnabled);
+    controller.setRecommendationsEnabled(newEnabled);
+    
+    // If enabling recommendations and it's a human player's turn, request recommendation
+    if (newEnabled && controller.hasHumanPlayer() && !controller.isCurrentPlayerAI()) {
+      setIsRequestingRecommendation(true);
+      controller.requestRecommendation();
+    }
+  };
 
   const handleSquareClick = (row: number, col: number) => {
     if (!position) return;
@@ -324,6 +391,10 @@ const GamePage = () => {
         const pieceChar = controller.pieceTypeToUsiChar(selectedCapturedPiece);
         if (pieceChar) {
           const dropMove = `${pieceChar}*${clickedSquare.usi}`;
+          console.log('Drop move handler - clearing recommendation');
+          setIsRequestingRecommendation(false);
+          controller.clearRecommendation();
+          setCurrentRecommendation(null);
           controller.handleUserMove(dropMove);
         }
       }
@@ -368,6 +439,10 @@ const GamePage = () => {
       } else {
         // Make the move directly
         const moveUsi = `${selectedSquare.usi}${clickedSquare.usi}`;
+        console.log('Click move handler - clearing recommendation');
+        setIsRequestingRecommendation(false);
+        controller.clearRecommendation();
+        setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -434,6 +509,9 @@ const GamePage = () => {
       } else {
         // Make the move directly
         const moveUsi = `${selectedSquare.usi}${droppedSquare.usi}`;
+        setIsRequestingRecommendation(false);
+        controller.clearRecommendation();
+        setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
         setSelectedSquare(null);
         setLegalMoves([]);
@@ -455,6 +533,9 @@ const GamePage = () => {
 
     const { from, to } = promotionMove;
     const move = `${from.usi}${to.usi}${promote ? '+' : ''}`;
+    setIsRequestingRecommendation(false);
+    controller.clearRecommendation();
+    setCurrentRecommendation(null);
     controller.handleUserMove(move);
     setPromotionMove(null);
   };
@@ -583,7 +664,7 @@ const GamePage = () => {
             </div>
 
             {/* Center: Board */}
-            <div className="compact-board-area">
+            <div className="compact-board-area" style={{ position: 'relative' }} ref={compactBoardRef}>
               <Board 
                 key={renderKey} 
                 position={position} 
@@ -603,6 +684,10 @@ const GamePage = () => {
                 showPieceTooltips={showPieceTooltips}
                 notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
               />
+              <RecommendationOverlay 
+                recommendation={currentRecommendation}
+                boardRef={compactBoardRef}
+              />
             </div>
 
             {/* Right side: Menu and Sente captured pieces */}
@@ -614,6 +699,9 @@ const GamePage = () => {
                   onOpenSaveModal={() => setIsSaveModalOpen(true)}
                   onOpenLoadModal={() => setIsLoadModalOpen(true)}
                   onCyclePieceTheme={handleCyclePieceTheme}
+                  onToggleRecommendations={handleRecommendationToggle}
+                  recommendationsEnabled={recommendationsEnabled}
+                  hasHumanPlayer={controller.hasHumanPlayer()}
                   onCycleBoardBackground={handleCycleBoardBackground}
                 />
               </div>
@@ -677,6 +765,9 @@ const GamePage = () => {
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
           onOpenLoadModal={() => setIsLoadModalOpen(true)}
           onCyclePieceTheme={handleCyclePieceTheme}
+          onToggleRecommendations={handleRecommendationToggle}
+          recommendationsEnabled={recommendationsEnabled}
+          hasHumanPlayer={controller.hasHumanPlayer()}
           onCycleBoardBackground={handleCycleBoardBackground}
         />
       </div>
@@ -688,7 +779,7 @@ const GamePage = () => {
 
       {/* Board and Move Log side by side */}
       <div className="board-and-move-log">
-        <div className="board-container">
+        <div className="board-container" style={{ position: 'relative' }} ref={classicBoardRef}>
           <Board 
             key={renderKey} 
             position={position} 
@@ -707,6 +798,10 @@ const GamePage = () => {
             pieceThemeType={pieceLabelType as any}
             showPieceTooltips={showPieceTooltips}
             notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+          />
+          <RecommendationOverlay 
+            recommendation={currentRecommendation}
+            boardRef={classicBoardRef}
           />
         </div>
         <div className="move-log-container">

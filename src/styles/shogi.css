@@ -423,6 +423,15 @@
   background-color: #0000CD;
 }
 
+.game-controls button.active {
+  background-color: #4A90E2;
+  box-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+}
+
+.game-controls button.active:hover {
+  background-color: #357ABD;
+}
+
 .difficulty-display {
   font-size: 1.1em;
   font-weight: bold;

@@ -198,6 +198,7 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
               })}
             </svg>
           )}
+          
         </div>
         <div className="row-numbers">
           {rowLabels.map((label) => (
