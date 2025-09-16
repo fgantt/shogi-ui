@@ -687,6 +687,8 @@ const GamePage = () => {
               <RecommendationOverlay 
                 recommendation={currentRecommendation}
                 boardRef={compactBoardRef}
+                pieceThemeType={pieceLabelType as any}
+                currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
               />
             </div>
 
@@ -802,6 +804,8 @@ const GamePage = () => {
           <RecommendationOverlay 
             recommendation={currentRecommendation}
             boardRef={classicBoardRef}
+            pieceThemeType={pieceLabelType as any}
+            currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
           />
         </div>
         <div className="move-log-container">

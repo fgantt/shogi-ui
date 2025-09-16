@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Square } from 'tsshogi';
+import { Square, PieceType } from 'tsshogi';
+import SvgPiece from './SvgPiece';
 
 interface RecommendationOverlayProps {
-  recommendation: { from: Square | null; to: Square | null } | null;
+  recommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string } | null;
   boardRef: React.RefObject<HTMLDivElement | null>;
+  pieceThemeType?: string;
+  currentPlayer?: 'black' | 'white';
 }
 
 const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({ 
   recommendation, 
-  boardRef
+  boardRef,
+  pieceThemeType = 'kanji',
+  currentPlayer = 'black'
 }) => {
   const [boardSize, setBoardSize] = useState({ width: 630, height: 684 });
 
@@ -42,12 +47,27 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
 
   console.log('RecommendationOverlay received recommendation:', recommendation);
   
-  if (!recommendation || !recommendation.from || !recommendation.to) {
+  if (!recommendation || !recommendation.to) {
     console.log('RecommendationOverlay: No valid recommendation to render');
     return null;
   }
 
   console.log('RecommendationOverlay: Rendering arrow for recommendation:', recommendation);
+
+  // Convert piece type string to PieceType enum
+  const getPieceTypeFromString = (pieceTypeStr: string): PieceType | null => {
+    const pieceMap: { [key: string]: PieceType } = {
+      'P': PieceType.PAWN,
+      'L': PieceType.LANCE, 
+      'N': PieceType.KNIGHT,
+      'S': PieceType.SILVER,
+      'G': PieceType.GOLD,
+      'B': PieceType.BISHOP,
+      'R': PieceType.ROOK,
+      'K': PieceType.KING
+    };
+    return pieceMap[pieceTypeStr] || null;
+  };
 
   // Convert square coordinates to pixel positions
   // Match Board.tsx calculation exactly but scaled to actual board size
@@ -76,15 +96,71 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
     return { x, y };
   };
 
-  const fromPos = squareToPixel(recommendation.from);
   const toPos = squareToPixel(recommendation.to);
   
-  console.log('RecommendationOverlay: Arrow positions:', { from: fromPos, to: toPos });
+  console.log('RecommendationOverlay: Arrow positions:', { to: toPos, isDrop: recommendation.isDrop });
   console.log('RecommendationOverlay: Board size:', boardSize);
 
   // Calculate the offset for column labels
   // The column labels are positioned above the board, so we need to offset down
   const columnLabelHeight = 35; // Approximate height of column labels
+  
+  // For drop moves, show a green-tinted piece image instead of a line
+  if (recommendation.isDrop) {
+    const squareSize = boardSize.width / 9;
+    const pieceSize = squareSize * 0.8; // Make piece slightly smaller than square
+    const scaleY = boardSize.height / 684; // Scale factor for vertical positioning
+    const pieceType = getPieceTypeFromString(recommendation.pieceType || '');
+    const player = currentPlayer === 'black' ? 'player1' : 'player2';
+    
+    if (!pieceType) {
+      console.log('RecommendationOverlay: Unknown piece type:', recommendation.pieceType);
+      return null;
+    }
+    
+    return (
+      <div
+        className="recommendation-drop-overlay"
+        style={{
+          position: 'absolute',
+          top: columnLabelHeight + toPos.y - pieceSize / scaleY,
+          left: toPos.x - pieceSize / 2,
+          width: pieceSize,
+          height: pieceSize,
+          zIndex: 10,
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(34, 197, 94, 0.3)', // Green tint
+          borderRadius: '4px',
+          border: '2px solid #22C55E',
+          filter: 'hue-rotate(0deg) saturate(1.5) brightness(1.2)', // Green tint filter
+        }}
+      >
+        <div style={{ 
+          width: pieceSize * 0.7, 
+          height: pieceSize * 0.7,
+          filter: 'hue-rotate(120deg) saturate(1.5) brightness(1.2)', // Additional green tint
+        }}>
+          <SvgPiece 
+            type={pieceType} 
+            player={player} 
+            pieceThemeType={pieceThemeType}
+            size={pieceSize * 0.7}
+          />
+        </div>
+      </div>
+    );
+  }
+  
+  // For regular moves, show an arrow from source to destination
+  if (!recommendation.from) {
+    console.log('RecommendationOverlay: Invalid recommendation - no from square and not a drop');
+    return null;
+  }
+  
+  const fromPos = squareToPixel(recommendation.from);
   
   return (
     <svg 

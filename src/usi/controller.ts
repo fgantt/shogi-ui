@@ -11,7 +11,7 @@ export class ShogiController extends EventEmitter {
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
   private recommendationsEnabled = false;
-  private currentRecommendation: { from: Square | null; to: Square | null } | null = null;
+  private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
 
   constructor(engine: EngineAdapter) {
@@ -359,17 +359,29 @@ export class ShogiController extends EventEmitter {
       const move = this.record.position.createMoveByUSI(usiMove);
       console.log('Parsed move:', move);
       
-      if (move && 'from' in move && 'to' in move) {
+      if (move && 'to' in move) {
         const fromSquare = typeof move.from === 'object' && 'x' in move.from 
           ? move.from as Square 
           : null;
         const toSquare = move.to as Square;
         
-        console.log('Recommendation squares:', { from: fromSquare, to: toSquare });
+        // Check if this is a drop move (from is null or not a Square)
+        const isDrop = fromSquare === null;
+        let pieceType = '';
+        
+        if (isDrop) {
+          // Extract piece type from USI move string (e.g., "P*5d" -> "P")
+          const match = usiMove.match(/^([A-Z])\*/);
+          pieceType = match ? match[1] : '';
+        }
+        
+        console.log('Recommendation squares:', { from: fromSquare, to: toSquare, isDrop, pieceType });
         
         this.currentRecommendation = {
           from: fromSquare,
-          to: toSquare
+          to: toSquare,
+          isDrop,
+          pieceType
         };
         console.log('Set current recommendation:', this.currentRecommendation);
         console.log('Recommendation type after setting:', typeof this.currentRecommendation);
