@@ -209,9 +209,9 @@ export class ShogiController extends EventEmitter {
     });
     
     const isAttacked = opposingAttackers.length > 0;
-    if (isAttacked) {
-      console.log(`Square ${square.usi} (${targetPiece.color}) is attacked by ${opposingAttackers.length} opposing pieces:`, opposingAttackers.map(a => a.usi));
-    }
+    // if (isAttacked) {
+    //   console.log(`Square ${square.usi} (${targetPiece.color}) is attacked by ${opposingAttackers.length} opposing pieces:`, opposingAttackers.map(a => a.usi));
+    // }
     return isAttacked;
   }
 
