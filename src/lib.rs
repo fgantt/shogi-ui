@@ -622,3 +622,14 @@ impl WasmUsiHandler {
         serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
     }
 }
+
+// Debug control functions
+#[wasm_bindgen]
+pub fn set_debug_enabled(enabled: bool) {
+    debug_utils::set_debug_enabled(enabled);
+}
+
+#[wasm_bindgen]
+pub fn is_debug_enabled() -> bool {
+    debug_utils::is_debug_enabled()
+}
