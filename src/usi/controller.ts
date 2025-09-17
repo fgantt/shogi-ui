@@ -11,7 +11,7 @@ export class ShogiController extends EventEmitter {
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
   private recommendationsEnabled = false;
-  private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string } | null = null;
+  private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
 
   constructor(engine: EngineAdapter) {
@@ -375,13 +375,17 @@ export class ShogiController extends EventEmitter {
           pieceType = match ? match[1] : '';
         }
         
-        console.log('Recommendation squares:', { from: fromSquare, to: toSquare, isDrop, pieceType });
+        // Check if this is a promotion move (USI move ends with '+')
+        const isPromotion = usiMove.endsWith('+');
+        
+        console.log('Recommendation squares:', { from: fromSquare, to: toSquare, isDrop, pieceType, isPromotion });
         
         this.currentRecommendation = {
           from: fromSquare,
           to: toSquare,
           isDrop,
-          pieceType
+          pieceType,
+          isPromotion
         };
         console.log('Set current recommendation:', this.currentRecommendation);
         console.log('Recommendation type after setting:', typeof this.currentRecommendation);

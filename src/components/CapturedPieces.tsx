@@ -30,9 +30,27 @@ interface CapturedPiecesProps {
   boardBackground?: string;
   pieceThemeType?: string;
   showTooltips?: boolean;
+  highlightedPiece?: string | null;
 }
 
-const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceThemeType, showTooltips }) => {
+const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPieceClick, selectedCapturedPiece, isAttacked, boardBackground, pieceThemeType, showTooltips, highlightedPiece }) => {
+  // Convert piece type string to TsshogiPieceType for highlighting
+  const getPieceTypeFromString = (pieceTypeStr: string): TsshogiPieceType | null => {
+    const pieceMap: { [key: string]: TsshogiPieceType } = {
+      'P': TsshogiPieceType.PAWN,
+      'L': TsshogiPieceType.LANCE, 
+      'N': TsshogiPieceType.KNIGHT,
+      'S': TsshogiPieceType.SILVER,
+      'G': TsshogiPieceType.GOLD,
+      'B': TsshogiPieceType.BISHOP,
+      'R': TsshogiPieceType.ROOK,
+      'K': TsshogiPieceType.KING
+    };
+    return pieceMap[pieceTypeStr] || null;
+  };
+
+  const highlightedPieceType = highlightedPiece ? getPieceTypeFromString(highlightedPiece) : null;
+
   const pieces = captured.counts
     .filter(({ count }) => count > 0)
     .map(({ type, count }) => ({ type, count }));
@@ -57,17 +75,31 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
       </h3>
       <div className={`pieces-list ${player}`}>
         {sortedPieces.map(({ type, count }) => (
-          <PieceComponent
+          <div
             key={type}
-            type={type}
-            player={player}
-            onClick={() => onPieceClick && onPieceClick(type)}
-            pieceThemeType={pieceThemeType || 'kanji'}
-            count={count}
-            isSelected={selectedCapturedPiece === type}
-            isAttacked={isAttacked || false}
-            showTooltips={showTooltips || false}
-          />
+            style={{
+              position: 'relative',
+              display: 'inline-block',
+              ...(highlightedPieceType === type ? {
+                backgroundColor: 'rgba(34, 197, 94, 0.3)',
+                borderRadius: '4px',
+                border: '2px solid #22C55E',
+                padding: '1px',
+                margin: '-1px'
+              } : {})
+            }}
+          >
+            <PieceComponent
+              type={type}
+              player={player}
+              onClick={() => onPieceClick && onPieceClick(type)}
+              pieceThemeType={pieceThemeType || 'kanji'}
+              count={count}
+              isSelected={selectedCapturedPiece === type}
+              isAttacked={isAttacked || false}
+              showTooltips={showTooltips || false}
+            />
+          </div>
         ))}
       </div>
     </div>

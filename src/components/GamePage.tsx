@@ -58,6 +58,7 @@ const GamePage = () => {
   const [recommendationsEnabled, setRecommendationsEnabled] = useState(false);
   const [currentRecommendation, setCurrentRecommendation] = useState<{ from: Square | null; to: Square | null } | null>(null);
   const [isRequestingRecommendation, setIsRequestingRecommendation] = useState(false);
+  const [highlightedCapturedPiece, setHighlightedCapturedPiece] = useState<string | null>(null);
   
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
@@ -375,6 +376,10 @@ const GamePage = () => {
     }
   };
 
+  const handleHighlightCapturedPiece = (pieceType: string | null) => {
+    setHighlightedCapturedPiece(pieceType);
+  };
+
   const handleSquareClick = (row: number, col: number) => {
     if (!position) return;
     const clickedSquare = Square.newByXY(col, row);
@@ -653,7 +658,7 @@ const GamePage = () => {
             {/* Left side: Gote captured pieces and move log */}
             <div className="compact-left-side">
               <div className="compact-gote-captured">
-                <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+                <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
               </div>
               <div className="compact-move-log">
                 <MoveLog 
@@ -689,6 +694,7 @@ const GamePage = () => {
                 boardRef={compactBoardRef}
                 pieceThemeType={pieceLabelType as any}
                 currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
+                onHighlightCapturedPiece={handleHighlightCapturedPiece}
               />
             </div>
 
@@ -708,7 +714,7 @@ const GamePage = () => {
                 />
               </div>
               <div className="compact-sente-captured">
-                <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+                <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
               </div>
             </div>
           </div>
@@ -776,7 +782,7 @@ const GamePage = () => {
 
       {/* Gote captured pieces */}
       <div className="gote-captured-pieces">
-        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
       </div>
 
       {/* Board and Move Log side by side */}
@@ -806,6 +812,7 @@ const GamePage = () => {
             boardRef={classicBoardRef}
             pieceThemeType={pieceLabelType as any}
             currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
+            onHighlightCapturedPiece={handleHighlightCapturedPiece}
           />
         </div>
         <div className="move-log-container">
@@ -818,7 +825,7 @@ const GamePage = () => {
 
       {/* Sente captured pieces */}
       <div className="sente-captured-pieces">
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceThemeType={pieceLabelType as any}

@@ -213,26 +213,28 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
       {/* Add promotion indicator if this is a promotion move */}
       {recommendation.isPromotion && (
         <g>
-          {/* Add a green filled circle with white plus symbol */}
-          <circle
-            cx={toPos.x + 20}
-            cy={toPos.y - 15}
-            r="12"
-            fill="#22C55E"
-            stroke="#ffffff"
-            strokeWidth="2"
-          />
+          {/* Add a "+" symbol near the destination */}
           <text
-            x={toPos.x + 20}
+            x={toPos.x + 15}
             y={toPos.y - 10}
-            fontSize="14"
+            fontSize="16"
             fontWeight="bold"
-            fill="#ffffff"
+            fill="#22C55E"
             textAnchor="middle"
             style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
           >
             +
           </text>
+          {/* Add a small circle around the destination to emphasize promotion */}
+          <circle
+            cx={toPos.x}
+            cy={toPos.y}
+            r="12"
+            fill="none"
+            stroke="#22C55E"
+            strokeWidth="2"
+            strokeDasharray="3,3"
+          />
         </g>
       )}
     </svg>
