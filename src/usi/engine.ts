@@ -6,6 +6,7 @@ export interface EngineAdapter extends EventEmitter {
   init(): Promise<void>;
   isReady(): Promise<void>;
   setOptions(options: { [key: string]: string | number | boolean }): Promise<void>;
+  setDifficulty?(difficulty: 'easy' | 'medium' | 'hard'): Promise<void>;
   newGame(): Promise<void>;
   setPosition(sfen: string, moves: string[]): Promise<void>;
   go(options: { btime?: number; wtime?: number; byoyomi?: number; infinite?: boolean }): Promise<void>;
@@ -170,6 +171,24 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
     this.processPendingOutput();
   }
 
+  async setDifficulty(difficulty: 'easy' | 'medium' | 'hard'): Promise<void> {
+    if (!this.handler) {
+      throw new Error('Handler not initialized. Call init() first.');
+    }
+    
+    // Convert difficulty string to number
+    const difficultyMap = {
+      'easy': 3,
+      'medium': 5, 
+      'hard': 8
+    };
+    
+    const difficultyNumber = difficultyMap[difficulty];
+    this.handler.set_difficulty(difficultyNumber);
+    
+    console.log('WasmUsiEngineAdapter: Set difficulty to', difficulty, '(', difficultyNumber, ')');
+  }
+
   async go(options: { btime?: number; wtime?: number; byoyomi?: number; infinite?: boolean }): Promise<void> {
     if (!this.handler) {
       throw new Error('Handler not initialized. Call init() first.');
@@ -192,6 +211,10 @@ export class WasmUsiEngineAdapter extends EventEmitter implements EngineAdapter 
         this.handler.process_command(goCommand);
         // Process output after successful command
         this.processPendingOutput();
+        // Process output again after a small delay to catch any remaining output
+        setTimeout(() => {
+          this.processPendingOutput();
+        }, 10);
       } catch (error) {
         console.error('WasmUsiEngineAdapter: Error in process_command:', error);
         // Don't process output on error to avoid circular reference

@@ -10,6 +10,7 @@ export class ShogiController extends EventEmitter {
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
+  private difficulty: 'easy' | 'medium' | 'hard' = 'medium';
   private recommendationsEnabled = false;
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
@@ -51,7 +52,13 @@ export class ShogiController extends EventEmitter {
     await this.engine.isReady();
     console.log('ShogiController: Engine ready. Starting new game...');
     await this.engine.newGame();
-    console.log('ShogiController: New game started. Emitting stateChanged...');
+    console.log('ShogiController: New game started. Setting difficulty...');
+    // Set difficulty on the engine now that it's initialized
+    if (this.engine.setDifficulty) {
+      this.engine.setDifficulty(this.difficulty);
+      console.log('ShogiController: Difficulty set to', this.difficulty);
+    }
+    console.log('ShogiController: Emitting stateChanged...');
     this.emitStateChanged();
     console.log('ShogiController: State changed emitted.');
     this.initialized = true;
@@ -92,6 +99,17 @@ export class ShogiController extends EventEmitter {
   public setPlayerTypes(player1Type: 'human' | 'ai', player2Type: 'human' | 'ai'): void {
     this.player1Type = player1Type;
     this.player2Type = player2Type;
+  }
+
+  public setDifficulty(difficulty: 'easy' | 'medium' | 'hard'): void {
+    this.difficulty = difficulty;
+    console.log('ShogiController: Setting difficulty to', difficulty);
+    // Set difficulty on the engine only if initialized
+    if (this.initialized && this.engine && this.engine.setDifficulty) {
+      this.engine.setDifficulty(difficulty);
+    } else {
+      console.log('ShogiController: Engine not initialized yet, difficulty will be set after initialization');
+    }
   }
 
   public getPlayerTypes(): { player1Type: 'human' | 'ai'; player2Type: 'human' | 'ai' } {
@@ -291,8 +309,29 @@ export class ShogiController extends EventEmitter {
   public requestEngineMove(): void {
     const sfen = this.record.position.sfen;
     
+    // Set time limits based on difficulty
+    const timeLimits = this.getTimeLimitsForDifficulty();
+    console.log('ShogiController: Requesting engine move with difficulty:', this.difficulty, 'timeLimits:', timeLimits);
+    
     this.engine.setPosition(sfen, []);
-    this.engine.go({ btime: 30000, wtime: 30000, byoyomi: 1000 });
+    this.engine.go({ 
+      btime: timeLimits.totalTime, 
+      wtime: timeLimits.totalTime, 
+      byoyomi: timeLimits.byoyomi 
+    });
+  }
+
+  private getTimeLimitsForDifficulty(): { totalTime: number; byoyomi: number } {
+    switch (this.difficulty) {
+      case 'easy':
+        return { totalTime: 10000, byoyomi: 10000 }; // 10 seconds per move
+      case 'medium':
+        return { totalTime: 20000, byoyomi: 20000 }; // 20 seconds per move
+      case 'hard':
+        return { totalTime: 30000, byoyomi: 30000 }; // 30 seconds per move
+      default:
+        return { totalTime: 20000, byoyomi: 20000 }; // Default to medium
+    }
   }
 
   public async requestRecommendation(): Promise<void> {

@@ -52,6 +52,7 @@ pub struct ShogiEngine {
     debug_mode: bool,
     pondering: bool,
     output_buffer: Arc<Mutex<Vec<String>>>,
+    difficulty: u8,
 }
 
 #[wasm_bindgen]
@@ -68,6 +69,7 @@ impl ShogiEngine {
             debug_mode: false,
             pondering: false,
             output_buffer: Arc::new(Mutex::new(Vec::new())),
+            difficulty: 5, // Default to medium difficulty
         }
     }
 
@@ -99,6 +101,11 @@ impl ShogiEngine {
 
     pub fn set_current_player(&mut self, player: &str) {
         self.current_player = if player == "Black" { Player::Black } else { Player::White };
+    }
+
+    pub fn set_difficulty(&mut self, difficulty: u8) {
+        self.difficulty = difficulty;
+        crate::debug_utils::debug_log(&format!("Set difficulty to: {}", difficulty));
     }
 
     pub fn get_pending_output(&mut self) -> Vec<String> {
@@ -160,8 +167,8 @@ impl ShogiEngine {
         }
 
         let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        crate::debug_utils::debug_log("Creating searcher");
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, None);
+        crate::debug_utils::debug_log(&format!("Creating searcher with difficulty: {}, time_limit: {}ms", actual_difficulty, time_limit_ms));
+        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, output_buffer.clone());
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         
@@ -352,14 +359,14 @@ impl ShogiEngine {
         } else {
             let time_for_player = if self.current_player == Player::Black { btime } else { wtime };
             if time_for_player > 0 {
-                time_for_player / 40
+                time_for_player // Use the full time instead of dividing by 40
             } else {
                 5000 // Default to 5 seconds if no time control is given
             }
         };
 
         if let Ok(mut buffer) = self.output_buffer.lock() {
-            buffer.push(format!("info string DEBUG: Time to use: {}ms", time_to_use));
+            buffer.push(format!("info string DEBUG: Time to use: {}ms, Difficulty: {}", time_to_use, self.difficulty));
         }
 
         crate::debug_utils::debug_log(&format!("Time to use: {}ms", time_to_use));
@@ -393,7 +400,7 @@ impl ShogiEngine {
                 engine.captured_pieces = captured_pieces;
                 engine.current_player = current_player;
                 
-                if let Some(mv) = engine.get_best_move(5, time_to_use, Some(stop_flag), Some(output_buffer.clone())) {
+                if let Some(mv) = engine.get_best_move(engine.difficulty, time_to_use, Some(stop_flag), Some(output_buffer.clone())) {
                     if let Ok(mut buffer) = output_buffer.lock() {
                         buffer.push(format!("bestmove {}", mv.to_usi_string()));
                         buffer.push("info string DEBUG: Best move found and sent".to_string());
@@ -410,7 +417,7 @@ impl ShogiEngine {
         #[cfg(target_arch = "wasm32")]
         {
             // For WASM, we need to do the search synchronously since threads aren't supported
-            let best_move = self.get_best_move(5, time_to_use, Some(self.stop_flag.clone()), Some(self.output_buffer.clone()));
+            let best_move = self.get_best_move(self.difficulty, time_to_use, Some(self.stop_flag.clone()), Some(self.output_buffer.clone()));
             
             if let Ok(mut buffer) = self.output_buffer.lock() {
                 if let Some(mv) = best_move {
@@ -620,6 +627,10 @@ impl WasmUsiHandler {
     pub fn get_pending_output(&mut self) -> JsValue {
         let output = self.handler.engine.get_pending_output();
         serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
+    }
+
+    pub fn set_difficulty(&mut self, difficulty: u8) {
+        self.handler.engine.set_difficulty(difficulty);
     }
 }
 

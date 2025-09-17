@@ -104,14 +104,20 @@ const GamePage = () => {
   // Handle initial player types from navigation state
   useEffect(() => {
     if (location.state) {
-      const { player1Type, player2Type } = location.state as { player1Type?: 'human' | 'ai'; player2Type?: 'human' | 'ai' };
+      const { player1Type, player2Type, aiDifficulty } = location.state as { 
+        player1Type?: 'human' | 'ai'; 
+        player2Type?: 'human' | 'ai';
+        aiDifficulty?: 'easy' | 'medium' | 'hard';
+      };
       if (player1Type) setPlayer1Type(player1Type);
       if (player2Type) setPlayer2Type(player2Type);
-      // Set player types in controller
+      if (aiDifficulty) setAiDifficulty(aiDifficulty);
+      // Set player types and difficulty in controller
       controller.setPlayerTypes(
         player1Type || 'human', 
         player2Type || 'ai'
       );
+      controller.setDifficulty(aiDifficulty || 'medium');
       // Start a new game with the selected player types
       controller.newGame();
     }
@@ -121,6 +127,11 @@ const GamePage = () => {
 
   // Settings state
   const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
+
+  // Set initial difficulty on controller when component mounts
+  useEffect(() => {
+    controller.setDifficulty(aiDifficulty as 'easy' | 'medium' | 'hard');
+  }, [controller, aiDifficulty]);
   const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'kifu');
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
@@ -566,6 +577,11 @@ const GamePage = () => {
   const handleSettingChange = (setter: (value: any) => void, key: string) => (value: any) => {
     setter(value);
     localStorage.setItem(key, value.toString());
+    
+    // Update controller difficulty when AI difficulty changes
+    if (key === 'shogi-ai-difficulty') {
+      controller.setDifficulty(value);
+    }
     
     // Dispatch custom event for same-tab theme updates
     if (key === 'shogi-piece-label-type') {
