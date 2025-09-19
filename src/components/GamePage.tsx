@@ -30,7 +30,28 @@ const isPiecePromoted = (pieceType: TsshogiPieceType): boolean => {
   ].includes(pieceType);
 };
 
-const GamePage = () => {
+interface GamePageProps {
+  isUsiMonitorVisible: boolean;
+  lastSentCommand: string;
+  lastReceivedCommand: string;
+  communicationHistory: Array<{
+    id: string;
+    timestamp: Date;
+    direction: 'sent' | 'received';
+    command: string;
+  }>;
+  onToggleUsiMonitor: () => void;
+  clearUsiHistory: () => void;
+}
+
+const GamePage: React.FC<GamePageProps> = ({ 
+  isUsiMonitorVisible,
+  lastSentCommand,
+  lastReceivedCommand,
+  communicationHistory,
+  onToggleUsiMonitor,
+  clearUsiHistory
+}) => {
   const location = useLocation();
   const controller = useShogiController();
   const [position, setPosition] = useState<ImmutablePosition | null>(null);
@@ -69,16 +90,6 @@ const GamePage = () => {
     console.log('Recommendation state changed to:', currentRecommendation);
   }, [currentRecommendation]);
   
-  // USI Monitor state
-  const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
-  const [lastSentCommand, setLastSentCommand] = useState<string>('');
-  const [lastReceivedCommand, setLastReceivedCommand] = useState<string>('');
-  const [communicationHistory, setCommunicationHistory] = useState<Array<{
-    id: string;
-    timestamp: Date;
-    direction: 'sent' | 'received';
-    command: string;
-  }>>([]);
 
   // Helper function to find the king square for a given player
   const findKingSquare = (position: ImmutablePosition, player: 'black' | 'white'): Square | null => {
@@ -311,37 +322,6 @@ const GamePage = () => {
       // }
     };
 
-    // USI communication event handlers
-    const onUsiCommandSent = ({ command }: { command: string }) => {
-      setLastSentCommand(command);
-      
-      // Clear history and last sent when usinewgame is sent
-      if (command === 'usinewgame') {
-        setCommunicationHistory([]);
-        setLastSentCommand('');
-        setLastReceivedCommand('');
-        return;
-      }
-      
-      const newEntry = {
-        id: `sent-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        direction: 'sent' as const,
-        command
-      };
-      setCommunicationHistory(prev => [...prev, newEntry]);
-    };
-
-    const onUsiCommandReceived = ({ command }: { command: string }) => {
-      setLastReceivedCommand(command);
-      const newEntry = {
-        id: `received-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        direction: 'received' as const,
-        command
-      };
-      setCommunicationHistory(prev => [...prev, newEntry]);
-    };
 
     controller.on('stateChanged', onStateChanged);
     controller.on('recommendationReceived', () => {
@@ -351,12 +331,6 @@ const GamePage = () => {
       setIsRequestingRecommendation(false);
     });
     
-    // Listen to USI events from the engine adapter
-    const engine = (controller as any).engine;
-    if (engine) {
-      engine.on('usiCommandSent', onUsiCommandSent);
-      engine.on('usiCommandReceived', onUsiCommandReceived);
-    }
     
     setPosition(controller.getPosition());
 
@@ -368,10 +342,6 @@ const GamePage = () => {
       controller.off('recommendationTimeout', () => {
         setIsRequestingRecommendation(false);
       });
-      if (engine) {
-        engine.off('usiCommandSent', onUsiCommandSent);
-        engine.off('usiCommandReceived', onUsiCommandReceived);
-      }
     };
   }, [controller]);
 
@@ -561,6 +531,7 @@ const GamePage = () => {
   };
 
   const handleStartGame = (settings: GameSettings) => {
+    clearUsiHistory();
     setPlayer1Type(settings.player1Type);
     setPlayer2Type(settings.player2Type);
     setAiDifficulty(settings.difficulty);
@@ -772,7 +743,7 @@ const GamePage = () => {
           lastReceivedCommand={lastReceivedCommand}
           communicationHistory={communicationHistory}
           isVisible={isUsiMonitorVisible}
-          onToggle={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+          onToggle={onToggleUsiMonitor}
         />
       </div>
     );

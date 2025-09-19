@@ -38,13 +38,14 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
     };
   }
 
-  private postCommand(command: string, args: Record<string, unknown> = {}): void {
-    this.worker.postMessage({ command, ...args });
+  private sendUsiCommand(command: string): void {
+    this.emit('usiCommandSent', { command });
+    this.worker.postMessage({ command });
   }
 
   async init(): Promise<void> {
     console.log('WasmEngineAdapter: Sending usi command...');
-    this.postCommand('usi');
+    this.sendUsiCommand('usi');
     return new Promise(resolve => {
       this.once('usiok', () => {
         console.log('WasmEngineAdapter: Received usiok.');
@@ -55,7 +56,7 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
 
   async isReady(): Promise<void> {
     console.log('WasmEngineAdapter: Sending isready command...');
-    this.postCommand('isready');
+    this.sendUsiCommand('isready');
     return new Promise(resolve => {
       this.once('readyok', () => {
         console.log('WasmEngineAdapter: Received readyok.');
@@ -67,7 +68,7 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   async setOptions(options: { [key: string]: string | number | boolean }): Promise<void> {
       console.log('WasmEngineAdapter: Setting options...', options);
       for (const [name, value] of Object.entries(options)) {
-          this.postCommand(`setoption name ${name} value ${value}`);
+          this.sendUsiCommand(`setoption name ${name} value ${value}`);
       }
   }
 
@@ -78,30 +79,31 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
       'medium': 5, 
       'hard': 8
     };
-    this.postCommand(`setoption name difficulty value ${difficultyMap[difficulty]}`);
+    this.sendUsiCommand(`setoption name difficulty value ${difficultyMap[difficulty]}`);
   }
 
   async newGame(): Promise<void> {
     console.log('WasmEngineAdapter: Sending usinewgame command...');
-    this.postCommand('usinewgame');
+    this.sendUsiCommand('usinewgame');
   }
 
   async setPosition(sfen: string, moves: string[]): Promise<void> {
     const movesString = moves.length > 0 ? `moves ${moves.join(' ')}` : '';
-    this.postCommand(`position sfen ${sfen} ${movesString}`);
+    this.sendUsiCommand(`position sfen ${sfen} ${movesString}`);
   }
 
   async go(options: { btime?: number; wtime?: number; byoyomi?: number; infinite?: boolean }): Promise<void> {
-    this.postCommand('go', options);
+    const goCommand = `go ${Object.entries(options).map(([key, value]) => `${key} ${value}`).join(' ')}`;
+    this.sendUsiCommand(goCommand);
   }
 
   async stop(): Promise<void> {
-    this.postCommand('stop');
+    this.sendUsiCommand('stop');
   }
 
   async quit(): Promise<void> {
     console.log('WasmEngineAdapter: quit() called. Terminating worker.');
-    this.postCommand('quit');
+    this.sendUsiCommand('quit');
     this.worker.terminate();
   }
 

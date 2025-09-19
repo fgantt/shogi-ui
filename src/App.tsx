@@ -24,7 +24,47 @@ const shogiController = new ShogiController(wasmEngineAdapter);
 function App() {
   const [isControllerInitialized, setIsControllerInitialized] = useState(shogiController.isInitialized());
 
+  // USI Monitor state
+  const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
+  const [lastSentCommand, setLastSentCommand] = useState<string>('');
+  const [lastReceivedCommand, setLastReceivedCommand] = useState<string>('');
+  const [communicationHistory, setCommunicationHistory] = useState<Array<{
+    id: string;
+    timestamp: Date;
+    direction: 'sent' | 'received';
+    command: string;
+  }>>([]);
+
   useEffect(() => {
+    // USI communication event handlers
+    const onUsiCommandSent = ({ command }: { command: string }) => {
+      setLastSentCommand(command);
+      const newEntry = {
+        id: `sent-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        direction: 'sent' as const,
+        command
+      };
+      setCommunicationHistory(prev => [...prev, newEntry]);
+    };
+
+    const onUsiCommandReceived = ({ command }: { command: string }) => {
+      setLastReceivedCommand(command);
+      const newEntry = {
+        id: `received-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        direction: 'received' as const,
+        command
+      };
+      setCommunicationHistory(prev => [...prev, newEntry]);
+    };
+
+    const engine = (shogiController as any).engine;
+    if (engine) {
+      engine.on('usiCommandSent', onUsiCommandSent);
+      engine.on('usiCommandReceived', onUsiCommandReceived);
+    }
+
     if (!shogiController.isInitialized()) {
       shogiController.initialize().then(() => {
         setIsControllerInitialized(true);
@@ -49,7 +89,12 @@ function App() {
     
     initializeDefaultWallpaper();
 
-    // No cleanup needed for the singleton controller
+    return () => {
+      if (engine) {
+        engine.off('usiCommandSent', onUsiCommandSent);
+        engine.off('usiCommandReceived', onUsiCommandReceived);
+      }
+    };
   }, []); // Empty dependency array to run only once
 
   if (!isControllerInitialized) {
@@ -63,7 +108,18 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route 
             path="/game" 
-            element={<GamePage />} 
+            element={<GamePage 
+              isUsiMonitorVisible={isUsiMonitorVisible}
+              lastSentCommand={lastSentCommand}
+              lastReceivedCommand={lastReceivedCommand}
+              communicationHistory={communicationHistory}
+              onToggleUsiMonitor={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+              clearUsiHistory={() => {
+                setCommunicationHistory([]);
+                setLastSentCommand('');
+                setLastReceivedCommand('');
+              }}
+            />} 
           />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />

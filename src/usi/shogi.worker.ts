@@ -21,15 +21,16 @@ self.onmessage = async (e: MessageEvent) => {
         return;
     }
 
-    const { command, ...args } = e.data;
+    const { command } = e.data;
+    const commandParts = command.split(' ');
+    const baseCommand = commandParts[0];
 
     const postInfoToMainThread = (info: string) => {
         self.postMessage(info);
     };
 
-    if (command === 'go') {
-        const goCommand = `go ${Object.entries(args).map(([key, value]) => `${key} ${value}`).join(' ')}`;
-        handler.go_with_callback(goCommand, postInfoToMainThread);
+    if (baseCommand === 'go') {
+        handler.go_with_callback(command, postInfoToMainThread);
     } else {
         const result = handler.process_command(command);
         self.postMessage(result);
