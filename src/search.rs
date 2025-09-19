@@ -5,6 +5,7 @@ use crate::moves::*;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
+use wasm_bindgen::prelude::*;
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -290,20 +291,22 @@ impl SearchEngine {
 }
 
 
+use js_sys::Function;
+
 pub struct IterativeDeepening {
     max_depth: u8,
     time_limit_ms: u32,
     stop_flag: Option<Arc<AtomicBool>>,
-    output_buffer: Option<Arc<Mutex<Vec<String>>>>,
+    on_info: Option<Function>,
 }
 
 impl IterativeDeepening {
-    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, output_buffer: Option<Arc<Mutex<Vec<String>>>>) -> Self {
+    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<Function>) -> Self {
         Self {
             max_depth,
             time_limit_ms,
             stop_flag,
-            output_buffer,
+            on_info,
         }
     }
 
@@ -339,12 +342,13 @@ impl IterativeDeepening {
                 let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
-                if let Some(buffer) = &self.output_buffer {
-                    if let Ok(mut buffer_guard) = buffer.lock() {
-                        buffer_guard.push(info_string);
+                if let Some(on_info) = &self.on_info {
+                    let this = wasm_bindgen::JsValue::NULL;
+                    let s = wasm_bindgen::JsValue::from_str(&info_string);
+                    if let Err(e) = on_info.call1(&this, &s) {
+                        crate::debug_utils::debug_log(&format!("Error calling on_info callback: {:?}", e));
                     }
                 }
-                // Note: println! removed for WASM compatibility - output goes through buffer
 
                 if score > 10000 && depth >= 3 { break; } 
             } else {

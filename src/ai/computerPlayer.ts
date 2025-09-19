@@ -1,14 +1,14 @@
-import { WasmUsiEngineAdapter } from '../usi/engine';
+import { WasmEngineAdapter } from '../usi/engine';
 
-let engineAdapter: WasmUsiEngineAdapter | null = null;
+let engineAdapter: WasmEngineAdapter | null = null;
 
 export async function initializeWasm(): Promise<void> {
   if (!engineAdapter) {
     try {
-      engineAdapter = new WasmUsiEngineAdapter();
+      engineAdapter = new WasmEngineAdapter();
       await engineAdapter.init();
       await engineAdapter.isReady();
-      console.log('WasmUsiEngineAdapter initialized successfully');
+      console.log('WasmEngineAdapter initialized successfully');
     } catch (error) {
       console.error("Failed to initialize wasm engine on startup", error);
       throw error;
@@ -16,7 +16,7 @@ export async function initializeWasm(): Promise<void> {
   }
 }
 
-export function getEngineAdapter(): WasmUsiEngineAdapter {
+export function getEngineAdapter(): WasmEngineAdapter {
   if (!engineAdapter) {
     throw new Error('Engine adapter not initialized. Call initializeWasm() first.');
   }

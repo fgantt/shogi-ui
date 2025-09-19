@@ -8,7 +8,7 @@ import AboutPage from './components/AboutPage';
 import EngineSettings from './components/EngineSettings';
 
 import { ShogiController } from './usi/controller';
-import { WasmUsiEngineAdapter } from './usi/engine';
+import { WasmEngineAdapter } from './usi/engine';
 import { ShogiControllerProvider } from './context/ShogiControllerContext';
 
 import './App.css';
@@ -17,7 +17,7 @@ import './styles/settings.css';
 import { useEffect, useState } from 'react';
 
 // --- Singleton ShogiController ---
-const wasmEngineAdapter = new WasmUsiEngineAdapter();
+const wasmEngineAdapter = new WasmEngineAdapter();
 const shogiController = new ShogiController(wasmEngineAdapter);
 // ---------------------------------
 
