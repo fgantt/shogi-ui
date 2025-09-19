@@ -259,31 +259,23 @@ const GamePage: React.FC<GamePageProps> = ({
       setLastMove(lastMoveData);
       
       // Update recommendation state
-      const newRecommendation = controller.getCurrentRecommendation();
-      console.log('GamePage: Got recommendation from controller:', newRecommendation);
-      console.log('GamePage: Current state before setting:', currentRecommendation);
-      
-      // Always update the recommendation state to match the controller
-      setCurrentRecommendation(newRecommendation);
-      console.log('GamePage: Set recommendation state to:', newRecommendation);
+      if (controller.areRecommendationsEnabled()) {
+        const newRecommendation = controller.getCurrentRecommendation();
+        setCurrentRecommendation(newRecommendation);
+      } else {
+        setCurrentRecommendation(null);
+      }
       
       // Request recommendation if enabled, it's a human player's turn, and we're not already requesting one
-      console.log('Checking recommendation request conditions:', {
-        enabled: controller.areRecommendationsEnabled(),
-        hasHuman: controller.hasHumanPlayer(),
-        isAI: controller.isCurrentPlayerAI(),
-        requesting: isRequestingRecommendation,
-        hasRecommendation: !!controller.getCurrentRecommendation()
-      });
-      
-      if (controller.areRecommendationsEnabled() && 
-          controller.hasHumanPlayer() && 
-          !controller.isCurrentPlayerAI() && 
-          !isRequestingRecommendation &&
-          !controller.getCurrentRecommendation()) {
-        console.log('Requesting recommendation...');
-        setIsRequestingRecommendation(true);
-        controller.requestRecommendation();
+      if (controller.areRecommendationsEnabled()) {
+        if (
+            controller.hasHumanPlayer() && 
+            !controller.isCurrentPlayerAI() && 
+            !isRequestingRecommendation &&
+            !controller.getCurrentRecommendation()) {
+          setIsRequestingRecommendation(true);
+          controller.requestRecommendation();
+        }
       }
       
       // Check for check state

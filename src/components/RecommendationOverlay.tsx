@@ -56,10 +56,7 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
     }
   }, [recommendation, onHighlightCapturedPiece]);
 
-  console.log('RecommendationOverlay received recommendation:', recommendation);
-  
   if (!recommendation || !recommendation.to) {
-    console.log('RecommendationOverlay: No valid recommendation to render');
     return null;
   }
 
