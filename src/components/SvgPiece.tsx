@@ -3,46 +3,40 @@ import { KANJI_MAP, ENGLISH_MAP } from "../utils/pieceMaps";
 import { PieceType } from 'tsshogi';
 import { getSvgPathForPiece, isSvgTheme } from "../utils/pieceThemes";
 
-const PIECE_PATHS: { [key in PieceType]?: string } = {
-  king: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
-  rook: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  bishop: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  gold: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  silver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  knight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
-  lance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+const PIECE_PATHS: { [key: string]: string } = {
   pawn: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
-  dragon: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  horse: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
-  promSilver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
-  promKnight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
-  promLance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  lance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  knight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
+  silver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  gold: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  bishop: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  rook: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  king: "M35 4 L62 10 L65 72 L5 72 L8 10 Z",
   promPawn: "M35 9 L55 16 L59 67 L11 67 L16 16 Z",
+  promLance: "M35 8 L56 15 L60 68 L10 68 L15 15 Z",
+  promKnight: "M35 7 L57 14 L62 69 L8 69 L13 14 Z",
+  promSilver: "M35 6 L58 13 L63 70 L7 70 L12 13 Z",
+  horse: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
+  dragon: "M35 5 L60 12 L64 71 L6 71 L10 12 Z",
 };
 
 interface SvgPieceProps {
-  type?: PieceType;
+  type: string;
   player?: 'player1' | 'player2';
   pieceThemeType?: string;
-  piece?: { type: PieceType; player: 'player1' | 'player2' };
   size?: number;
   hideText?: boolean;
   isSelected?: boolean;
 }
 
-const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceThemeType, piece, size = 70, hideText = false, isSelected = false }) => {
-  const pieceType: PieceType | undefined = type || (piece && piece.type);
-  const piecePlayer = player || (piece && piece.player);
+const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceThemeType, size = 70, hideText = false, isSelected = false }) => {
+  const pieceType: string = type;
+  const piecePlayer = player;
   const themeType = pieceThemeType || 'kanji';
   
-  if (!pieceType) {
-    console.warn('SvgPiece: type prop is required');
-    return null;
-  }
-
   // Handle SVG themes
   if (isSvgTheme(themeType) && piecePlayer) {
-    const svgPath = getSvgPathForPiece(pieceType, piecePlayer, themeType);
+    const svgPath = getSvgPathForPiece(pieceType as PieceType, piecePlayer, themeType);
     
     return (
       <div

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import { ImmutablePosition, Square } from 'tsshogi';
 import PieceComponent from './Piece';
 import '../styles/shogi.css';
@@ -20,17 +20,28 @@ interface BoardProps {
   pieceThemeType?: string;
   showPieceTooltips?: boolean;
   notation?: 'western' | 'kifu' | 'usi' | 'csa';
+  promotionModalContent?: React.ReactNode;
+  promotionTargetUsi?: string;
 }
 
-
+// Define the ref type that will be exposed
+export interface BoardRef {
+  getSquareRef: (usi: string) => HTMLDivElement | undefined;
+}
 
 // Helper to map tsshogi color to our Player type
 function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips, notation = 'kifu' }) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips, notation = 'kifu', promotionModalContent, promotionTargetUsi }, ref) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
+  const squareRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Expose a method to get a specific square ref
+  useImperativeHandle(ref, () => ({
+    getSquareRef: (usi: string) => squareRefs.current.get(usi),
+  }));
   
   // Row labels based on notation
   const getRowLabels = () => {
@@ -138,6 +149,17 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                 return (
                   <div
                     key={colIndex}
+                    ref={el => {
+                      const square = Square.newByXY(colIndex, rowIndex);
+                      const usi = square?.usi;
+                      if (usi) {
+                        if (el) {
+                          squareRefs.current.set(usi, el);
+                        } else {
+                          squareRefs.current.delete(usi);
+                        }
+                      }
+                    }}
                     data-testid={`square-${rowIndex}-${colIndex}`}
                     className={classNames}
                     onClick={() => onSquareClick(rowIndex, colIndex)}
@@ -165,6 +187,8 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
                         }}
                       />
                     )}
+                    {/* Render promotion modal content if this is the target square */}
+                    {promotionTargetUsi && square?.usi === promotionTargetUsi && promotionModalContent}
                     {/* Promotion zone intersection dots */}
                     {((rowIndex === 2 && (colIndex === 2 || colIndex === 5)) || 
                       (rowIndex === 5 && (colIndex === 2 || colIndex === 5))) && (
@@ -210,6 +234,6 @@ const Board: React.FC<BoardProps> = ({ position, onSquareClick, onDragStart, onD
       </div>
     </div>
   );
-};
+});
 
 export default Board;

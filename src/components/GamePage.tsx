@@ -52,6 +52,11 @@ const GamePage: React.FC<GamePageProps> = ({
   onToggleUsiMonitor,
   clearUsiHistory
 }) => {
+  const SQUARE_WIDTH = 70;
+  const SQUARE_HEIGHT = 76;
+  const PROMOTION_MODAL_WIDTH = SQUARE_WIDTH * 2;
+  const PROMOTION_MODAL_HEIGHT = SQUARE_HEIGHT * 1;
+
   const location = useLocation();
   const controller = useShogiController();
   const [position, setPosition] = useState<ImmutablePosition | null>(null);
@@ -60,7 +65,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [lastMove, setLastMove] = useState<{ from: Square | null; to: Square | null } | null>(null);
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
-  const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square; pieceType: TsshogiPieceType; player: 'player1' | 'player2'; destinationSquareUsi: string } | null>(null);
   const [winner, setWinner] = useState<'player1' | 'player2' | 'draw' | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -84,6 +89,7 @@ const GamePage: React.FC<GamePageProps> = ({
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
   const classicBoardRef = useRef<HTMLDivElement | null>(null);
+  const boardComponentRef = useRef<BoardRef>(null);
   
   // Debug recommendation state changes
   useEffect(() => {
@@ -410,8 +416,15 @@ const GamePage: React.FC<GamePageProps> = ({
                         (isFromPromotable || isToPromotable);
 
       if (canPromote) {
+        console.log('GamePage: piece.type before setPromotionMove:', piece.type);
         // Show promotion modal instead of making the move directly
-        setPromotionMove({ from: selectedSquare, to: clickedSquare });
+        setPromotionMove({
+          from: selectedSquare,
+          to: clickedSquare,
+          pieceType: piece.type,
+          player: currentColor === Color.BLACK ? 'player1' : 'player2',
+          destinationSquareUsi: clickedSquare.usi,
+        });
         setSelectedSquare(null);
         setLegalMoves([]);
       } else {
@@ -481,7 +494,13 @@ const GamePage: React.FC<GamePageProps> = ({
 
       if (canPromote) {
         // Show promotion modal instead of making the move directly
-        setPromotionMove({ from: selectedSquare, to: droppedSquare });
+        setPromotionMove({
+          from: selectedSquare,
+          to: droppedSquare,
+          pieceType: piece.type,
+          player: currentColor === Color.BLACK ? 'player1' : 'player2',
+          destinationSquareUsi: droppedSquare.usi,
+        });
         setSelectedSquare(null);
         setLegalMoves([]);
       } else {
@@ -650,6 +669,7 @@ const GamePage: React.FC<GamePageProps> = ({
             {/* Center: Board */}
             <div className="compact-board-area" style={{ position: 'relative' }} ref={compactBoardRef}>
               <Board 
+                ref={boardComponentRef}
                 key={renderKey} 
                 position={position} 
                 onSquareClick={handleSquareClick} 
@@ -667,6 +687,19 @@ const GamePage: React.FC<GamePageProps> = ({
                 pieceThemeType={pieceLabelType as any}
                 showPieceTooltips={showPieceTooltips}
                 notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+                promotionTargetUsi={promotionMove?.to.usi}
+                promotionModalContent={promotionMove && boardComponentRef.current && <PromotionModal 
+                  onPromote={handlePromotion} 
+                  pieceType={promotionMove.pieceType}
+                  player={promotionMove.player}
+                  pieceThemeType={pieceLabelType}
+                  modalWidth={PROMOTION_MODAL_WIDTH}
+                  modalHeight={PROMOTION_MODAL_HEIGHT}
+                  pieceSize={SQUARE_WIDTH}
+                  destinationSquareUsi={promotionMove.destinationSquareUsi}
+                  boardRef={boardComponentRef}
+                  boardContainerRef={compactBoardRef}
+                />}
               />
               <RecommendationOverlay 
                 recommendation={currentRecommendation}
@@ -719,7 +752,6 @@ const GamePage: React.FC<GamePageProps> = ({
           gameLayout={gameLayout}
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
         />}
-        {promotionMove && <PromotionModal onPromote={handlePromotion} />}
         {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
         <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
         <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
@@ -768,6 +800,7 @@ const GamePage: React.FC<GamePageProps> = ({
       <div className="board-and-move-log">
         <div className="board-container" style={{ position: 'relative' }} ref={classicBoardRef}>
           <Board 
+            ref={boardComponentRef}
             key={renderKey} 
             position={position} 
             onSquareClick={handleSquareClick} 
@@ -785,6 +818,19 @@ const GamePage: React.FC<GamePageProps> = ({
             pieceThemeType={pieceLabelType as any}
             showPieceTooltips={showPieceTooltips}
             notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+            promotionTargetUsi={promotionMove?.to.usi}
+            promotionModalContent={promotionMove && boardComponentRef.current && <PromotionModal 
+              onPromote={handlePromotion} 
+              pieceType={promotionMove.pieceType}
+              player={promotionMove.player}
+              pieceThemeType={pieceLabelType}
+              modalWidth={PROMOTION_MODAL_WIDTH}
+              modalHeight={PROMOTION_MODAL_HEIGHT}
+              pieceSize={SQUARE_WIDTH}
+              destinationSquareUsi={promotionMove.destinationSquareUsi}
+              boardRef={boardComponentRef}
+              boardContainerRef={classicBoardRef}
+            />}
           />
           <RecommendationOverlay 
             recommendation={currentRecommendation}
