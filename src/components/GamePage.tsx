@@ -704,6 +704,7 @@ const GamePage: React.FC<GamePageProps> = ({
               <RecommendationOverlay 
                 recommendation={currentRecommendation}
                 boardRef={compactBoardRef}
+                boardComponentRef={boardComponentRef}
                 pieceThemeType={pieceLabelType as any}
                 currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
                 onHighlightCapturedPiece={handleHighlightCapturedPiece}
@@ -835,6 +836,7 @@ const GamePage: React.FC<GamePageProps> = ({
           <RecommendationOverlay 
             recommendation={currentRecommendation}
             boardRef={classicBoardRef}
+            boardComponentRef={boardComponentRef}
             pieceThemeType={pieceLabelType as any}
             currentPlayer={position.sfen.includes(' b ') ? 'black' : 'white'}
             onHighlightCapturedPiece={handleHighlightCapturedPiece}

@@ -1,23 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Square, PieceType } from 'tsshogi';
 import SvgPiece from './SvgPiece';
+import { BoardRef } from './Board';
 
 interface RecommendationOverlayProps {
   recommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null;
   boardRef: React.RefObject<HTMLDivElement | null>;
+  boardComponentRef: React.RefObject<BoardRef>; // Added
   pieceThemeType?: string;
   currentPlayer?: 'black' | 'white';
   onHighlightCapturedPiece?: (pieceType: string | null) => void;
 }
 
-const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({ 
+const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
   recommendation, 
   boardRef,
+  boardComponentRef,
   pieceThemeType = 'kanji',
   currentPlayer = 'black',
   onHighlightCapturedPiece
 }) => {
   const [boardSize, setBoardSize] = useState({ width: 630, height: 684 });
+  const [dropOverlayStyle, setDropOverlayStyle] = useState({});
+  const [arrowPositions, setArrowPositions] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
 
   useEffect(() => {
     const updateBoardSize = () => {
@@ -26,28 +31,76 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
         if (boardElement) {
           const rect = boardElement.getBoundingClientRect();
           setBoardSize({ width: rect.width, height: rect.height });
-          console.log('RecommendationOverlay: Updated board size:', { width: rect.width, height: rect.height });
         } else {
-          // Fallback to container size if board element not found
           const rect = boardRef.current.getBoundingClientRect();
           setBoardSize({ width: rect.width, height: rect.height });
-          console.log('RecommendationOverlay: Using container size as fallback:', { width: rect.width, height: rect.height });
         }
       }
     };
 
-    // Update size on mount and when recommendation changes
     updateBoardSize();
-
-    // Listen for window resize events
     window.addEventListener('resize', updateBoardSize);
-    
     return () => {
       window.removeEventListener('resize', updateBoardSize);
     };
   }, [boardRef, recommendation]);
 
-  // Handle captured piece highlighting for drop recommendations
+  useEffect(() => {
+    if (recommendation?.isDrop && recommendation.to && boardComponentRef.current && boardRef.current) {
+      const squareElement = boardComponentRef.current.getSquareRef(recommendation.to.usi);
+      if (squareElement) {
+        const squareRect = squareElement.getBoundingClientRect();
+        const boardRect = boardRef.current.getBoundingClientRect();
+        const squareSize = boardSize.width / 9;
+        const pieceSize = squareRect.width * 0.8;
+
+        setDropOverlayStyle({
+          position: 'absolute',
+          top: squareRect.top - boardRect.top,
+          left: squareRect.left - boardRect.left,
+          width: squareRect.width,
+          height: squareRect.height,
+          zIndex: 10,
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(34, 197, 94, 0.3)',
+          borderRadius: '4px',
+          border: '2px solid #22C55E',
+        });
+      }
+    } else {
+      setDropOverlayStyle({});
+    }
+  }, [recommendation, boardComponentRef, boardRef, boardSize]);
+
+  useEffect(() => {
+    if (!recommendation?.isDrop && recommendation?.from && recommendation?.to && boardComponentRef.current && boardRef.current) {
+      const fromSquareElement = boardComponentRef.current.getSquareRef(recommendation.from.usi);
+      const toSquareElement = boardComponentRef.current.getSquareRef(recommendation.to.usi);
+      const boardRect = boardRef.current.getBoundingClientRect();
+
+      if (fromSquareElement && toSquareElement) {
+        const fromRect = fromSquareElement.getBoundingClientRect();
+        const toRect = toSquareElement.getBoundingClientRect();
+
+        setArrowPositions({
+          from: {
+            x: fromRect.left - boardRect.left + fromRect.width / 2,
+            y: fromRect.top - boardRect.top + fromRect.height / 2,
+          },
+          to: {
+            x: toRect.left - boardRect.left + toRect.width / 2,
+            y: toRect.top - boardRect.top + toRect.height / 2,
+          },
+        });
+      }
+    } else {
+      setArrowPositions(null);
+    }
+  }, [recommendation, boardComponentRef, boardRef]);
+
   useEffect(() => {
     if (recommendation?.isDrop && onHighlightCapturedPiece) {
       onHighlightCapturedPiece(recommendation.pieceType || null);
@@ -60,9 +113,6 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
     return null;
   }
 
-  console.log('RecommendationOverlay: Rendering arrow for recommendation:', recommendation);
-
-  // Convert piece type string to PieceType enum
   const getPieceTypeFromString = (pieceTypeStr: string): PieceType | null => {
     const pieceMap: { [key: string]: PieceType } = {
       'P': PieceType.PAWN,
@@ -77,76 +127,25 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
     return pieceMap[pieceTypeStr] || null;
   };
 
-  // Convert square coordinates to pixel positions
-  // Match Board.tsx calculation exactly but scaled to actual board size
-  const squareToPixel = (square: Square) => {
-    // Board.tsx uses fixed values: colIndex * 70 + 35, rowIndex * 76 + 38
-    // We need to scale these to the actual board size
-    const scaleX = boardSize.width / 630; // 630 is the standard board width
-    const scaleY = boardSize.height / 684; // 684 is the standard board height
-    
-    // Use the same coordinate system as the Board component:
-    // colIndex = 9 - file (file 1 -> col 8, file 9 -> col 0)
-    // rowIndex = rank - 1 (rank 1 -> row 0, rank 9 -> row 8)
-    const colIndex = 9 - square.file;
-    const rowIndex = square.rank - 1;
-    
-    // Scale the Board.tsx calculation to match the actual board size
-    const x = (colIndex * 70 + 35) * scaleX;
-    const y = (rowIndex * 76 + 38) * scaleY;
-    
-    console.log(`Square ${square.usi} (file:${square.file}, rank:${square.rank}) -> col:${colIndex}, row:${rowIndex} -> x:${x}, y:${y}`);
-    console.log(`Scale factors: x:${scaleX}, y:${scaleY}`);
-    
-    return { x, y };
-  };
-
-  const toPos = squareToPixel(recommendation.to);
-  
-  console.log('RecommendationOverlay: Arrow positions:', { to: toPos, isDrop: recommendation.isDrop });
-  console.log('RecommendationOverlay: Board size:', boardSize);
-
-  // Calculate the offset for column labels
-  // The column labels are positioned above the board, so we need to offset down
-  const columnLabelHeight = 35; // Approximate height of column labels
-  
-  // For drop moves, show a green-tinted piece image instead of a line
   if (recommendation.isDrop) {
     const squareSize = boardSize.width / 9;
-    const pieceSize = squareSize * 0.8; // Make piece slightly smaller than square
-    const scaleY = boardSize.height / 684; // Scale factor for vertical positioning
+    const pieceSize = squareSize * 0.8;
     const pieceType = getPieceTypeFromString(recommendation.pieceType || '');
     const player = currentPlayer === 'black' ? 'player1' : 'player2';
     
     if (!pieceType) {
-      console.log('RecommendationOverlay: Unknown piece type:', recommendation.pieceType);
       return null;
     }
     
     return (
       <div
         className="recommendation-drop-overlay"
-        style={{
-          position: 'absolute',
-          top: columnLabelHeight + toPos.y - pieceSize / scaleY,
-          left: toPos.x - pieceSize / 2,
-          width: pieceSize,
-          height: pieceSize,
-          zIndex: 10,
-          pointerEvents: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(34, 197, 94, 0.3)', // Green tint
-          borderRadius: '4px',
-          border: '2px solid #22C55E',
-          filter: 'hue-rotate(0deg) saturate(1.5) brightness(1.2)', // Green tint filter
-        }}
+        style={dropOverlayStyle}
       >
         <div style={{ 
           width: pieceSize * 0.7, 
           height: pieceSize * 0.7,
-          filter: 'hue-rotate(120deg) saturate(1.5) brightness(1.2)', // Additional green tint
+          animation: 'breathing 2s ease-in-out infinite',
         }}>
           <SvgPiece 
             type={pieceType} 
@@ -157,83 +156,75 @@ const RecommendationOverlay: React.FC<RecommendationOverlayProps> = ({
         </div>
       </div>
     );
-  }
-  
-  // For regular moves, show an arrow from source to destination
-  if (!recommendation.from) {
-    console.log('RecommendationOverlay: Invalid recommendation - no from square and not a drop');
-    return null;
-  }
-  
-  const fromPos = squareToPixel(recommendation.from);
-  
-  return (
-    <svg 
-      className="recommendation-arrow-svg" 
-      width={boardSize.width} 
-      height={boardSize.height} 
-      style={{ 
-        position: 'absolute', 
-        top: columnLabelHeight, 
-        left: 0, 
-        zIndex: 10,
-        pointerEvents: 'none' // Allow clicks to pass through to the board
-      }}
-    >
-      <defs>
-        <marker
-          id="arrowhead"
-          markerWidth="8"
-          markerHeight="6"
-          refX="7"
-          refY="3"
-          orient="auto"
-        >
-          <path
-            d="M 0 0 L 8 3 L 0 6"
-            fill="none"
-            stroke="#22C55E"
-            strokeWidth="2"
-          />
-        </marker>
-      </defs>
-      <line
-        x1={fromPos.x}
-        y1={fromPos.y}
-        x2={toPos.x}
-        y2={toPos.y}
-        stroke="#22C55E"
-        strokeWidth="3"
-        strokeOpacity="0.9"
-        markerEnd="url(#arrowhead)"
-      />
-      {/* Add promotion indicator if this is a promotion move */}
-      {recommendation.isPromotion && (
-        <g>
-          {/* Add a green filled circle with white plus symbol */}
-          <circle
-            cx={toPos.x + 20}
-            cy={toPos.y - 15}
-            r="12"
-            fill="#22C55E"
-            stroke="#ffffff"
-            strokeWidth="2"
-          />
-          <text
-            x={toPos.x + 20}
-            y={toPos.y - 10}
-            fontSize="14"
-            fontWeight="bold"
-            fill="#ffffff"
-            textAnchor="middle"
-            style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+  } else if (arrowPositions) {
+    return (
+      <svg 
+        className="recommendation-arrow-svg" 
+        width={boardSize.width} 
+        height={boardSize.height} 
+        style={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          zIndex: 10,
+          pointerEvents: 'none'
+        }}
+      >
+        <defs>
+          <marker
+            id="arrowhead"
+            markerWidth="8"
+            markerHeight="6"
+            refX="7"
+            refY="3"
+            orient="auto"
           >
-            +
-          </text>
-        </g>
-      )}
-    </svg>
-  );
+            <path
+              d="M 0 0 L 8 3 L 0 6"
+              fill="none"
+              stroke="#22C55E"
+              strokeWidth="2"
+            />
+          </marker>
+        </defs>
+        <line
+          x1={arrowPositions.from.x}
+          y1={arrowPositions.from.y}
+          x2={arrowPositions.to.x}
+          y2={arrowPositions.to.y}
+          stroke="#22C55E"
+          strokeWidth="3"
+          strokeOpacity="0.9"
+          markerEnd="url(#arrowhead)"
+        />
+        {recommendation.isPromotion && (
+          <g>
+            <circle
+              cx={arrowPositions.to.x + 20}
+              cy={arrowPositions.to.y - 15}
+              r="12"
+              fill="#22C55E"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+            <text
+              x={arrowPositions.to.x + 20}
+              y={arrowPositions.to.y - 10}
+              fontSize="14"
+              fontWeight="bold"
+              fill="#ffffff"
+              textAnchor="middle"
+              style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+            >
+              +
+            </text>
+          </g>
+        )}
+      </svg>
+    );
+  }
+  
+  return null;
 };
 
 export default RecommendationOverlay;
