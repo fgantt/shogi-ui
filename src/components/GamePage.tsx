@@ -873,7 +873,6 @@ const GamePage: React.FC<GamePageProps> = ({
         gameLayout={gameLayout}
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
       />}
-      {promotionMove && <PromotionModal onPromote={handlePromotion} />}
       {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
       <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
       <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
@@ -889,7 +888,7 @@ const GamePage: React.FC<GamePageProps> = ({
         lastReceivedCommand={lastReceivedCommand}
         communicationHistory={communicationHistory}
         isVisible={isUsiMonitorVisible}
-        onToggle={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+        onToggle={onToggleUsiMonitor}
       />
     </div>
   );
