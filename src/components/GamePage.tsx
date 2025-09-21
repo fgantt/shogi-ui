@@ -154,7 +154,9 @@ const GamePage: React.FC<GamePageProps> = ({
         }
         
         // Start a new game
-        controller.newGame();
+        controller.newGame().catch(error => {
+          console.error('Failed to start new game:', error);
+        });
       }
     }
   }, [location.state, controller]);
@@ -569,7 +571,9 @@ const GamePage: React.FC<GamePageProps> = ({
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.setAILevels(settings.player1Level, settings.player2Level);
     controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
-    controller.newGame();
+    controller.newGame().catch(error => {
+      console.error('Failed to start new game:', error);
+    });
     setWinner(null);
     setIsStartGameModalOpen(false);
   };
@@ -633,7 +637,9 @@ const GamePage: React.FC<GamePageProps> = ({
   const handleLoadGame = (name: string) => {
     const sfen = savedGames[name];
     if (sfen) {
-      controller.loadSfen(sfen);
+      controller.loadSfen(sfen).catch(error => {
+        console.error('Failed to load game:', error);
+      });
     }
     setIsLoadModalOpen(false);
   };

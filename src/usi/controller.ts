@@ -33,6 +33,10 @@ export class ShogiController extends EventEmitter {
       engine = new WasmEngineAdapter(sessionId);
       this.sessions.set(sessionId, engine);
       this.emit('sessionCreated', { sessionId, engine });
+      
+      // Initialize the engine asynchronously
+      this.initializeEngine(engine);
+      
       engine.on('bestmove', ({ move: usiMove, sessionId: bestmoveSessionId }) => {
         if (usiMove && usiMove !== 'resign') {
           if (bestmoveSessionId === 'sente' || bestmoveSessionId === 'gote') {
@@ -52,6 +56,42 @@ export class ShogiController extends EventEmitter {
       });
     }
     return engine;
+  }
+
+  private async initializeEngine(engine: EngineAdapter): Promise<void> {
+    try {
+      await engine.init();
+      await engine.isReady();
+      
+      // Now set the engine to the current position
+      engine.newGame();
+      const currentSfen = this.record.position.sfen;
+      const moves = this.record.moves.map(move => {
+        if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
+          return (move.move as any).toUSI();
+        }
+        return '';
+      }).filter(move => move !== '');
+      engine.setPosition(currentSfen, moves);
+    } catch (error) {
+      console.error('Failed to initialize engine:', error);
+    }
+  }
+
+  private async synchronizeAllEngines(currentSfen: string, moves: string[]): Promise<void> {
+    // Synchronize all existing engines with the current position
+    const syncPromises = Array.from(this.sessions.values()).map(async (engine) => {
+      try {
+        await engine.init();
+        await engine.isReady();
+        engine.newGame();
+        engine.setPosition(currentSfen, moves);
+      } catch (error) {
+        console.error('Failed to synchronize engine:', error);
+      }
+    });
+    
+    await Promise.all(syncPromises);
   }
 
   async initialize(): Promise<void> {
@@ -315,11 +355,19 @@ export class ShogiController extends EventEmitter {
     const isPlayer1Turn = this.record.position.sfen.includes(' b ');
     const sessionId = isPlayer1Turn ? 'sente' : 'gote';
     const engine = this.getEngine(sessionId);
-    const sfen = this.record.position.sfen;
     const level = isPlayer1Turn ? this.player1Level : this.player2Level;
     
+    // Get the current position SFEN and all moves from the record
+    const currentSfen = this.record.position.sfen;
+    const moves = this.record.moves.map(move => {
+      if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
+        return (move.move as any).toUSI();
+      }
+      return '';
+    }).filter(move => move !== '');
+    
     engine.setSearchDepth(level);
-    engine.setPosition(sfen, []);
+    engine.setPosition(currentSfen, moves);
     engine.go({ 
       btime: this.btime, 
       wtime: this.btime, 
@@ -340,8 +388,27 @@ export class ShogiController extends EventEmitter {
     const isPlayer1Turn = this.record.position.sfen.includes(' b ');
     const sessionId = isPlayer1Turn ? 'sente' : 'gote';
     const engine = this.getEngine(sessionId);
-    const sfen = this.record.position.sfen;
-    engine.setPosition(sfen, []);
+    
+    // Get the current position SFEN and all moves from the record
+    const currentSfen = this.record.position.sfen;
+    const moves = this.record.moves.map(move => {
+      if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
+        return (move.move as any).toUSI();
+      }
+      return '';
+    }).filter(move => move !== '');
+    
+    console.log('RequestRecommendation Debug:');
+    console.log('- Session ID:', sessionId);
+    console.log('- Is Player 1 Turn:', isPlayer1Turn);
+    console.log('- Current SFEN:', currentSfen);
+    console.log('- SFEN indicates turn:', currentSfen.includes(' b ') ? 'Player 1 (Black)' : 'Player 2 (White)');
+    console.log('- Move History:', moves);
+    console.log('- Total Moves:', this.record.moves.length);
+    console.log('- Record position turn:', this.record.position.sfen.includes(' b ') ? 'Player 1 (Black)' : 'Player 2 (White)');
+    
+    // Ensure both engines are synchronized with the current position
+    await this.synchronizeAllEngines(currentSfen, moves);
     
     // Request a quick recommendation with shorter time
     engine.go({ btime: 1000, wtime: 1000, byoyomi: 500 });
@@ -352,15 +419,23 @@ export class ShogiController extends EventEmitter {
     }, 5000); // 5 second timeout
   }
   
-  public newGame(): void {
+  public async newGame(): Promise<void> {
       const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
       if (recordResult instanceof Error) {
         throw new Error(`Failed to create new game record: ${recordResult.message}`);
       }
       this.record = recordResult;
-      for (const engine of this.sessions.values()) {
+      
+      // Reset all engines and set them to the starting position
+      const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
+        await engine.init();
+        await engine.isReady();
         engine.newGame();
-      }
+        // Set the engine to the starting position
+        engine.setPosition(this.record.position.sfen, []);
+      });
+      
+      await Promise.all(engineUpdates);
       this.emitStateChanged();
       
       // Check if the first player is AI and request move
@@ -369,12 +444,30 @@ export class ShogiController extends EventEmitter {
       }
   }
 
-  public loadSfen(sfen: string): void {
+  public async loadSfen(sfen: string): Promise<void> {
     const recordResult = Record.newByUSI(`sfen ${sfen}`);
     if (recordResult instanceof Error) {
       throw new Error(`Failed to load SFEN: ${recordResult.message}`);
     }
     this.record = recordResult;
+    
+    // Reset all engines and set them to the loaded position
+    const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
+      await engine.init();
+      await engine.isReady();
+      engine.newGame();
+      // Set the engine to the loaded position
+      const currentSfen = this.record.position.sfen;
+      const moves = this.record.moves.map(move => {
+        if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
+          return (move.move as any).toUSI();
+        }
+        return '';
+      }).filter(move => move !== '');
+      engine.setPosition(currentSfen, moves);
+    });
+    
+    await Promise.all(engineUpdates);
     this.emitStateChanged();
   }
 
@@ -387,6 +480,8 @@ export class ShogiController extends EventEmitter {
   private parseRecommendation(usiMove: string): void {
     try {
       console.log('Parsing recommendation move:', usiMove);
+      console.log('Current position SFEN:', this.record.position.sfen);
+      console.log('Current player turn:', this.record.position.sfen.includes(' b ') ? 'Player 1 (Black)' : 'Player 2 (White)');
       
       // Clear timeout since we got a response
       if (this.recommendationTimeout) {
@@ -434,6 +529,8 @@ export class ShogiController extends EventEmitter {
         this.emit('recommendationReceived');
       } else {
         console.log('Move parsing failed - invalid move structure');
+        console.log('Move object:', move);
+        console.log('Move has "to" property:', move && 'to' in move);
       }
     } catch (error) {
       console.error('Error parsing recommendation move:', error);

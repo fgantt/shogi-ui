@@ -86,7 +86,9 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
 
   async setPosition(sfen: string, moves: string[]): Promise<void> {
     const movesString = moves.length > 0 ? `moves ${moves.join(' ')}` : '';
-    this.sendUsiCommand(`position sfen ${sfen} ${movesString}`);
+    const positionCommand = `position sfen ${sfen} ${movesString}`;
+    console.log('WasmEngineAdapter: Setting position:', positionCommand);
+    this.sendUsiCommand(positionCommand);
   }
 
   async go(options: { btime?: number; wtime?: number; byoyomi?: number; infinite?: boolean }): Promise<void> {

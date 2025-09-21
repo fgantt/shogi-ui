@@ -53,6 +53,11 @@ impl SearchEngine {
         
         crate::debug_utils::debug_log(&format!("Found {} legal moves", legal_moves.len()));
         
+        // Debug: log the first few moves
+        for (i, mv) in legal_moves.iter().take(5).enumerate() {
+            crate::debug_utils::debug_log(&format!("Move {}: {}", i, mv.to_usi_string()));
+        }
+        
         crate::debug_utils::debug_log("About to sort moves");
         
         let sorted_moves = self.sort_moves(&legal_moves, board);

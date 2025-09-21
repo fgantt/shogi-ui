@@ -543,8 +543,13 @@ impl WasmUsiHandler {
         );
 
         if let Some(mv) = best_move {
-            let best_move_message = format!("bestmove {}", mv.to_usi_string());
+            let move_usi = mv.to_usi_string();
+            let debug_msg = format!("info string DEBUG: Generated move '{}' for player {:?}", move_usi, self.handler.engine.current_player);
             let this = wasm_bindgen::JsValue::NULL;
+            let s = wasm_bindgen::JsValue::from_str(&debug_msg);
+            let _ = on_info.call1(&this, &s);
+            
+            let best_move_message = format!("bestmove {}", move_usi);
             let s = wasm_bindgen::JsValue::from_str(&best_move_message);
             let _ = on_info.call1(&this, &s);
         } else {
