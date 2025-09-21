@@ -2,6 +2,7 @@ import { EventEmitter } from '../utils/events';
 
 // An interface for any USI-compliant engine adapter
 export interface EngineAdapter extends EventEmitter {
+  sessionId: string;
   init(): Promise<void>;
   isReady(): Promise<void>;
   setOptions(options: { [key: string]: string | number | boolean }): Promise<void>;
@@ -16,9 +17,11 @@ export interface EngineAdapter extends EventEmitter {
 // An adapter for a WASM engine running in a Web Worker
 export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   private worker: Worker;
+  public sessionId: string;
 
-  constructor() {
+  constructor(sessionId: string) {
     super();
+    this.sessionId = sessionId;
     this.worker = new Worker(new URL('./shogi.worker.ts', import.meta.url), { type: 'module' });
 
     this.worker.onmessage = (e: MessageEvent) => {
@@ -39,7 +42,7 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   }
 
   private sendUsiCommand(command: string): void {
-    this.emit('usiCommandSent', { command });
+    this.emit('usiCommandSent', { command, sessionId: this.sessionId });
     this.worker.postMessage({ command });
   }
 
@@ -111,15 +114,15 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
     console.log('WasmEngineAdapter: Processing output:', line);
 
     // Emit event for received command
-    this.emit('usiCommandReceived', { command: line });
+    this.emit('usiCommandReceived', { command: line, sessionId: this.sessionId });
 
     if (line.startsWith('bestmove ')) {
       const move = line.substring(9).trim();
-      this.emit('bestmove', { move });
+      this.emit('bestmove', { move, sessionId: this.sessionId });
     } else if (line.startsWith('info ')) {
       // Parse info line and emit appropriate events
       const infoContent = line.substring(5);
-      this.emit('info', { content: infoContent });
+      this.emit('info', { content: infoContent, sessionId: this.sessionId });
     } else if (line === 'readyok') {
       this.emit('readyok');
     } else if (line === 'usiok') {

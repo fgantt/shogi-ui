@@ -1,12 +1,12 @@
 import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType } from 'tsshogi';
-import { EngineAdapter } from './engine';
+import { EngineAdapter, WasmEngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
 
 
 export class ShogiController extends EventEmitter {
   private record: Record;
-  private engine: EngineAdapter;
+  private sessions: Map<string, EngineAdapter> = new Map();
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
@@ -15,49 +15,60 @@ export class ShogiController extends EventEmitter {
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
 
-  constructor(engine: EngineAdapter) {
+  constructor() {
     super();
-    this.engine = engine;
     const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
     if (recordResult instanceof Error) {
       throw new Error(`Failed to create initial record: ${recordResult.message}`);
     }
     this.record = recordResult;
+  }
 
-    this.engine.on('bestmove', ({ move: usiMove }) => {
-      if (usiMove && usiMove !== 'resign') {
-        // Check if this is a recommendation request (when recommendations are enabled and current player is human)
-        if (this.recommendationsEnabled && this.hasHumanPlayer() && !this.isCurrentPlayerAI()) {
-          // This is a recommendation, not an actual move
-          this.parseRecommendation(usiMove);
-        } else {
-          // This is an actual AI move
-          this.applyMove(usiMove);
-          this.emitStateChanged();
-          // Check if the next player is also AI
-          if (this.isCurrentPlayerAI()) {
-            this.requestEngineMove();
+  private getEngine(sessionId: string): EngineAdapter {
+    let engine = this.sessions.get(sessionId);
+    if (!engine) {
+      engine = new WasmEngineAdapter(sessionId);
+      this.sessions.set(sessionId, engine);
+      this.emit('sessionCreated', { sessionId, engine });
+      engine.on('bestmove', ({ move: usiMove, sessionId: bestmoveSessionId }) => {
+        if (usiMove && usiMove !== 'resign') {
+          if (bestmoveSessionId === 'sente' || bestmoveSessionId === 'gote') {
+            if (this.recommendationsEnabled && this.hasHumanPlayer() && !this.isCurrentPlayerAI()) {
+              this.parseRecommendation(usiMove);
+            } else {
+              this.applyMove(usiMove);
+              this.emitStateChanged();
+              if (this.isCurrentPlayerAI()) {
+                this.requestEngineMove();
+              }
+            }
           }
+        } else {
+          this.emitStateChanged();
         }
-      } else {
-        this.emitStateChanged();
-      }
-    });
+      });
+    }
+    return engine;
   }
 
   async initialize(): Promise<void> {
-    console.log('ShogiController: Initializing engine...');
-    await this.engine.init();
-    console.log('ShogiController: Engine initialized. Checking readiness...');
-    await this.engine.isReady();
-    console.log('ShogiController: Engine ready. Starting new game...');
-    await this.engine.newGame();
+    console.log('ShogiController: Initializing engines...');
+    const initializers = Array.from(this.sessions.values()).map(engine => engine.init());
+    await Promise.all(initializers);
+    console.log('ShogiController: Engines initialized. Checking readiness...');
+    const readinessCheckers = Array.from(this.sessions.values()).map(engine => engine.isReady());
+    await Promise.all(readinessCheckers);
+    console.log('ShogiController: Engines ready. Starting new game...');
+    const newGameStarters = Array.from(this.sessions.values()).map(engine => engine.newGame());
+    await Promise.all(newGameStarters);
     console.log('ShogiController: New game started. Setting difficulty...');
-    // Set difficulty on the engine now that it's initialized
-    if (this.engine.setDifficulty) {
-      this.engine.setDifficulty(this.difficulty);
-      console.log('ShogiController: Difficulty set to', this.difficulty);
+    // Set difficulty on the engines now that they're initialized
+    for (const engine of this.sessions.values()) {
+      if (engine.setDifficulty) {
+        engine.setDifficulty(this.difficulty);
+      }
     }
+    console.log('ShogiController: Difficulty set to', this.difficulty);
     console.log('ShogiController: Emitting stateChanged...');
     this.emitStateChanged();
     console.log('ShogiController: State changed emitted.');
@@ -104,11 +115,15 @@ export class ShogiController extends EventEmitter {
   public setDifficulty(difficulty: 'easy' | 'medium' | 'hard'): void {
     this.difficulty = difficulty;
     console.log('ShogiController: Setting difficulty to', difficulty);
-    // Set difficulty on the engine only if initialized
-    if (this.initialized && this.engine && this.engine.setDifficulty) {
-      this.engine.setDifficulty(difficulty);
+    // Set difficulty on all engines
+    if (this.initialized) {
+      for (const engine of this.sessions.values()) {
+        if (engine.setDifficulty) {
+          engine.setDifficulty(difficulty);
+        }
+      }
     } else {
-      console.log('ShogiController: Engine not initialized yet, difficulty will be set after initialization');
+      console.log('ShogiController: Engines not initialized yet, difficulty will be set after initialization');
     }
   }
 
@@ -307,14 +322,17 @@ export class ShogiController extends EventEmitter {
   }
 
   public requestEngineMove(): void {
+    const isPlayer1Turn = this.record.position.sfen.includes(' b ');
+    const sessionId = isPlayer1Turn ? 'sente' : 'gote';
+    const engine = this.getEngine(sessionId);
     const sfen = this.record.position.sfen;
     
     // Set time limits based on difficulty
     const timeLimits = this.getTimeLimitsForDifficulty();
     console.log('ShogiController: Requesting engine move with difficulty:', this.difficulty, 'timeLimits:', timeLimits);
     
-    this.engine.setPosition(sfen, []);
-    this.engine.go({ 
+    engine.setPosition(sfen, []);
+    engine.go({ 
       btime: timeLimits.totalTime, 
       wtime: timeLimits.totalTime, 
       byoyomi: timeLimits.byoyomi 
@@ -344,11 +362,14 @@ export class ShogiController extends EventEmitter {
       clearTimeout(this.recommendationTimeout);
     }
 
+    const isPlayer1Turn = this.record.position.sfen.includes(' b ');
+    const sessionId = isPlayer1Turn ? 'sente' : 'gote';
+    const engine = this.getEngine(sessionId);
     const sfen = this.record.position.sfen;
-    this.engine.setPosition(sfen, []);
+    engine.setPosition(sfen, []);
     
     // Request a quick recommendation with shorter time
-    this.engine.go({ btime: 1000, wtime: 1000, byoyomi: 500 });
+    engine.go({ btime: 1000, wtime: 1000, byoyomi: 500 });
     
     // Set a timeout to clear the recommendation request if it takes too long
     this.recommendationTimeout = setTimeout(() => {
@@ -362,7 +383,9 @@ export class ShogiController extends EventEmitter {
         throw new Error(`Failed to create new game record: ${recordResult.message}`);
       }
       this.record = recordResult;
-      this.engine.newGame();
+      for (const engine of this.sessions.values()) {
+        engine.newGame();
+      }
       this.emitStateChanged();
       
       // Check if the first player is AI and request move
@@ -381,7 +404,9 @@ export class ShogiController extends EventEmitter {
   }
 
   public quit(): void {
-    this.engine.quit();
+    for (const engine of this.sessions.values()) {
+      engine.quit();
+    }
   }
 
   private parseRecommendation(usiMove: string): void {

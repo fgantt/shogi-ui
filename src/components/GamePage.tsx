@@ -39,7 +39,9 @@ interface GamePageProps {
     timestamp: Date;
     direction: 'sent' | 'received';
     command: string;
+    sessionId: string;
   }>;
+  sessions: string[];
   onToggleUsiMonitor: () => void;
   clearUsiHistory: () => void;
 }
@@ -49,6 +51,7 @@ const GamePage: React.FC<GamePageProps> = ({
   lastSentCommand,
   lastReceivedCommand,
   communicationHistory,
+  sessions,
   onToggleUsiMonitor,
   clearUsiHistory
 }) => {
@@ -767,6 +770,7 @@ const GamePage: React.FC<GamePageProps> = ({
           lastSentCommand={lastSentCommand}
           lastReceivedCommand={lastReceivedCommand}
           communicationHistory={communicationHistory}
+          sessions={sessions}
           isVisible={isUsiMonitorVisible}
           onToggle={onToggleUsiMonitor}
         />
@@ -889,6 +893,7 @@ const GamePage: React.FC<GamePageProps> = ({
         lastSentCommand={lastSentCommand}
         lastReceivedCommand={lastReceivedCommand}
         communicationHistory={communicationHistory}
+        sessions={sessions}
         isVisible={isUsiMonitorVisible}
         onToggle={onToggleUsiMonitor}
       />

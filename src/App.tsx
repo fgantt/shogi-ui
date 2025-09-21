@@ -8,7 +8,6 @@ import AboutPage from './components/AboutPage';
 import EngineSettings from './components/EngineSettings';
 
 import { ShogiController } from './usi/controller';
-import { WasmEngineAdapter } from './usi/engine';
 import { ShogiControllerProvider } from './context/ShogiControllerContext';
 
 import './App.css';
@@ -17,8 +16,7 @@ import './styles/settings.css';
 import { useEffect, useState } from 'react';
 
 // --- Singleton ShogiController ---
-const wasmEngineAdapter = new WasmEngineAdapter();
-const shogiController = new ShogiController(wasmEngineAdapter);
+const shogiController = new ShogiController();
 // ---------------------------------
 
 function App() {
@@ -33,37 +31,43 @@ function App() {
     timestamp: Date;
     direction: 'sent' | 'received';
     command: string;
+    sessionId: string;
   }>>([]);
+  const [sessions, setSessions] = useState<string[]>([]);
 
   useEffect(() => {
     // USI communication event handlers
-    const onUsiCommandSent = ({ command }: { command: string }) => {
+    const onUsiCommandSent = ({ command, sessionId }: { command: string, sessionId: string }) => {
       setLastSentCommand(command);
       const newEntry = {
         id: `sent-${Date.now()}-${Math.random()}`,
         timestamp: new Date(),
         direction: 'sent' as const,
-        command
+        command,
+        sessionId,
       };
       setCommunicationHistory(prev => [...prev, newEntry]);
     };
 
-    const onUsiCommandReceived = ({ command }: { command: string }) => {
+    const onUsiCommandReceived = ({ command, sessionId }: { command: string, sessionId: string }) => {
       setLastReceivedCommand(command);
       const newEntry = {
         id: `received-${Date.now()}-${Math.random()}`,
         timestamp: new Date(),
         direction: 'received' as const,
-        command
+        command,
+        sessionId,
       };
       setCommunicationHistory(prev => [...prev, newEntry]);
     };
 
-    const engine = (shogiController as any).engine;
-    if (engine) {
+    const onSessionCreated = ({ sessionId, engine }: { sessionId: string, engine: any }) => {
+      setSessions(prev => [...prev, sessionId]);
       engine.on('usiCommandSent', onUsiCommandSent);
       engine.on('usiCommandReceived', onUsiCommandReceived);
-    }
+    };
+
+    shogiController.on('sessionCreated', onSessionCreated);
 
     if (!shogiController.isInitialized()) {
       shogiController.initialize().then(() => {
@@ -90,7 +94,9 @@ function App() {
     initializeDefaultWallpaper();
 
     return () => {
-      if (engine) {
+      shogiController.off('sessionCreated', onSessionCreated);
+      const engines = (shogiController as any).sessions as Map<string, any>;
+      for (const engine of engines.values()) {
         engine.off('usiCommandSent', onUsiCommandSent);
         engine.off('usiCommandReceived', onUsiCommandReceived);
       }
@@ -113,6 +119,7 @@ function App() {
               lastSentCommand={lastSentCommand}
               lastReceivedCommand={lastReceivedCommand}
               communicationHistory={communicationHistory}
+              sessions={sessions}
               onToggleUsiMonitor={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
               clearUsiHistory={() => {
                 setCommunicationHistory([]);

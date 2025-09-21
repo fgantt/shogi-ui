@@ -9,7 +9,9 @@ interface UsiMonitorProps {
     timestamp: Date;
     direction: 'sent' | 'received';
     command: string;
+    sessionId: string;
   }>;
+  sessions: string[];
   isVisible: boolean;
   onToggle: () => void;
 }
@@ -18,16 +20,20 @@ const UsiMonitor: React.FC<UsiMonitorProps> = ({
   lastSentCommand,
   lastReceivedCommand,
   communicationHistory,
+  sessions,
   isVisible,
   onToggle
 }) => {
   const historyRef = useRef<HTMLDivElement>(null);
   const [showDebugMessages, setShowDebugMessages] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<string>('all');
 
-  // Filter communication history based on debug toggle
-  const filteredHistory = showDebugMessages 
-    ? communicationHistory 
-    : communicationHistory.filter(entry => !entry.command.includes('DEBUG:'));
+  // Filter communication history based on debug toggle and selected session
+  const filteredHistory = communicationHistory.filter(entry => {
+    const isDebug = entry.command.includes('DEBUG:');
+    const sessionMatch = selectedSession === 'all' || entry.sessionId === selectedSession;
+    return (!isDebug || showDebugMessages) && sessionMatch;
+  });
 
   // Get the last non-debug received command for display
   const lastNonDebugReceivedCommand = showDebugMessages 
@@ -57,6 +63,15 @@ const UsiMonitor: React.FC<UsiMonitorProps> = ({
     <div className="usi-monitor">
       <div className="usi-monitor-header">
         <h3>USI Communication Monitor</h3>
+        <div className="session-selector">
+          <label htmlFor="session-select">Session:</label>
+          <select id="session-select" value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)}>
+            <option value="all">All</option>
+            {sessions.map(session => (
+              <option key={session} value={session}>{session}</option>
+            ))}
+          </select>
+        </div>
         <button onClick={onToggle} className="close-button">
           ×
         </button>
@@ -105,6 +120,9 @@ const UsiMonitor: React.FC<UsiMonitorProps> = ({
                   </span>
                   <span className="timestamp">
                     {entry.timestamp.toLocaleTimeString()}
+                  </span>
+                  <span className="session-id">
+                    [{entry.sessionId}]
                   </span>
                   <span className="command">
                     {entry.command}
