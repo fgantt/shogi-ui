@@ -4,13 +4,9 @@ import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
 import '../styles/settings.css';
 
-type Difficulty = 'easy' | 'medium' | 'hard';
-// PieceThemeType is now dynamic, no need for hardcoded union type
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
 
 interface SettingsPanelProps {
-  aiDifficulty: Difficulty;
-  onDifficultyChange: (difficulty: Difficulty) => void;
   pieceThemeType: string;
   onPieceThemeTypeChange: (type: string) => void;
   notation: Notation;
@@ -31,8 +27,6 @@ interface SettingsPanelProps {
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
-  aiDifficulty,
-  onDifficultyChange,
   pieceThemeType,
   onPieceThemeTypeChange,
   notation,
@@ -72,39 +66,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     <div className="settings-overlay">
       <div className="settings-panel">
         <h2>Settings</h2>
-
-        <section>
-          <h3>AI Difficulty</h3>
-          <div className="setting-group">
-            <label>
-              <input
-                type="radio"
-                value="easy"
-                checked={aiDifficulty === 'easy'}
-                onChange={() => onDifficultyChange('easy')}
-              />
-              Easy
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="medium"
-                checked={aiDifficulty === 'medium'}
-                onChange={() => onDifficultyChange('medium')}
-              />
-              Medium
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="hard"
-                checked={aiDifficulty === 'hard'}
-                onChange={() => onDifficultyChange('hard')}
-              />
-              Hard
-            </label>
-          </div>
-        </section>
 
         <section>
           <h3>Engine</h3>

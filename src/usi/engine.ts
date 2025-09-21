@@ -6,7 +6,7 @@ export interface EngineAdapter extends EventEmitter {
   init(): Promise<void>;
   isReady(): Promise<void>;
   setOptions(options: { [key: string]: string | number | boolean }): Promise<void>;
-  setDifficulty?(difficulty: 'easy' | 'medium' | 'hard'): Promise<void>;
+  setSearchDepth(depth: number): Promise<void>;
   newGame(): Promise<void>;
   setPosition(sfen: string, moves: string[]): Promise<void>;
   go(options: { btime?: number; wtime?: number; byoyomi?: number; infinite?: boolean }): Promise<void>;
@@ -75,14 +75,8 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
       }
   }
 
-  async setDifficulty(difficulty: 'easy' | 'medium' | 'hard'): Promise<void> {
-    console.log('WasmEngineAdapter: Setting difficulty...', difficulty);
-    const difficultyMap = {
-      'easy': 3,
-      'medium': 5, 
-      'hard': 8
-    };
-    this.sendUsiCommand(`setoption name difficulty value ${difficultyMap[difficulty]}`);
+  async setSearchDepth(depth: number): Promise<void> {
+    this.sendUsiCommand(`setoption name depth value ${depth}`);
   }
 
   async newGame(): Promise<void> {

@@ -51,7 +51,7 @@ pub struct ShogiEngine {
     search_engine: Arc<Mutex<SearchEngine>>,
     debug_mode: bool,
     pondering: bool,
-    difficulty: u8,
+    depth: u8,
 }
 
 #[wasm_bindgen]
@@ -67,7 +67,7 @@ impl ShogiEngine {
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
             debug_mode: false,
             pondering: false,
-            difficulty: 5, // Default to medium difficulty
+            depth: 5, // Default to medium depth
         }
     }
 
@@ -98,9 +98,9 @@ impl ShogiEngine {
         self.current_player = if player == "Black" { Player::Black } else { Player::White };
     }
 
-    pub fn set_difficulty(&mut self, difficulty: u8) {
-        self.difficulty = difficulty;
-        crate::debug_utils::debug_log(&format!("Set difficulty to: {}", difficulty));
+    pub fn set_depth(&mut self, depth: u8) {
+        self.depth = depth;
+        crate::debug_utils::debug_log(&format!("Set depth to: {}", depth));
     }
 
 
@@ -127,7 +127,7 @@ impl ShogiEngine {
 }
 
 impl ShogiEngine {
-    pub fn get_best_move(&mut self, difficulty: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
         crate::debug_utils::debug_log("Starting get_best_move");
         
         if let Some(on_info) = &on_info {
@@ -152,9 +152,9 @@ impl ShogiEngine {
             let _ = on_info.call1(&this, &s);
         }
 
-        let actual_difficulty = if difficulty == 0 { 1 } else { difficulty };
-        crate::debug_utils::debug_log(&format!("Creating searcher with difficulty: {}, time_limit: {}ms", actual_difficulty, time_limit_ms));
-        let mut searcher = search::IterativeDeepening::new(actual_difficulty, time_limit_ms, stop_flag, on_info.clone());
+        let actual_depth = if depth == 0 { 1 } else { depth };
+        crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
+        let mut searcher = search::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         
@@ -299,12 +299,20 @@ impl ShogiEngine {
 
     pub fn handle_setoption(&mut self, parts: &[&str]) -> Vec<String> {
         if parts.len() >= 4 && parts[0] == "name" && parts[2] == "value" {
-            if parts[1] == "USI_Hash" {
-                if let Ok(size) = parts[3].parse::<usize>() {
-                    if let Ok(mut search_engine_guard) = self.search_engine.lock() {
-                        *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+            match parts[1] {
+                "USI_Hash" => {
+                    if let Ok(size) = parts[3].parse::<usize>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+                        }
                     }
                 }
+                "depth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        self.set_depth(depth);
+                    }
+                }
+                _ => {}
             }
         }
         Vec::new()
@@ -452,6 +460,7 @@ impl UsiHandler {
             "id name Shogi Engine".to_string(),
             "id author Gemini".to_string(),
             "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
+            "option name depth type spin default 5 min 1 max 8".to_string(),
             "usiok".to_string(),
         ]
     }
@@ -527,7 +536,7 @@ impl WasmUsiHandler {
         self.handler.engine.stop_flag.store(false, Ordering::Relaxed);
 
         let best_move = self.handler.engine.get_best_move(
-            self.handler.engine.difficulty,
+            self.handler.engine.depth,
             time_to_use,
             Some(self.handler.engine.stop_flag.clone()),
             Some(on_info.clone()),
@@ -546,8 +555,8 @@ impl WasmUsiHandler {
         }
     }
 
-    pub fn set_difficulty(&mut self, difficulty: u8) {
-        self.handler.engine.set_difficulty(difficulty);
+    pub fn set_depth(&mut self, depth: u8) {
+        self.handler.engine.set_depth(depth);
     }
 }
 

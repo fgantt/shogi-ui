@@ -10,7 +10,10 @@ export class ShogiController extends EventEmitter {
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'ai';
-  private difficulty: 'easy' | 'medium' | 'hard' = 'medium';
+  private player1Level: number = 5;
+  private player2Level: number = 5;
+  private btime: number = 30 * 60 * 1000;
+  private byoyomi: number = 10 * 1000;
   private recommendationsEnabled = false;
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
@@ -61,14 +64,6 @@ export class ShogiController extends EventEmitter {
     console.log('ShogiController: Engines ready. Starting new game...');
     const newGameStarters = Array.from(this.sessions.values()).map(engine => engine.newGame());
     await Promise.all(newGameStarters);
-    console.log('ShogiController: New game started. Setting difficulty...');
-    // Set difficulty on the engines now that they're initialized
-    for (const engine of this.sessions.values()) {
-      if (engine.setDifficulty) {
-        engine.setDifficulty(this.difficulty);
-      }
-    }
-    console.log('ShogiController: Difficulty set to', this.difficulty);
     console.log('ShogiController: Emitting stateChanged...');
     this.emitStateChanged();
     console.log('ShogiController: State changed emitted.');
@@ -112,19 +107,14 @@ export class ShogiController extends EventEmitter {
     this.player2Type = player2Type;
   }
 
-  public setDifficulty(difficulty: 'easy' | 'medium' | 'hard'): void {
-    this.difficulty = difficulty;
-    console.log('ShogiController: Setting difficulty to', difficulty);
-    // Set difficulty on all engines
-    if (this.initialized) {
-      for (const engine of this.sessions.values()) {
-        if (engine.setDifficulty) {
-          engine.setDifficulty(difficulty);
-        }
-      }
-    } else {
-      console.log('ShogiController: Engines not initialized yet, difficulty will be set after initialization');
-    }
+  public setAILevels(player1Level: number, player2Level: number): void {
+    this.player1Level = player1Level;
+    this.player2Level = player2Level;
+  }
+
+  public setTimeControls(btime: number, byoyomi: number): void {
+    this.btime = btime;
+    this.byoyomi = byoyomi;
   }
 
   public getPlayerTypes(): { player1Type: 'human' | 'ai'; player2Type: 'human' | 'ai' } {
@@ -326,30 +316,15 @@ export class ShogiController extends EventEmitter {
     const sessionId = isPlayer1Turn ? 'sente' : 'gote';
     const engine = this.getEngine(sessionId);
     const sfen = this.record.position.sfen;
+    const level = isPlayer1Turn ? this.player1Level : this.player2Level;
     
-    // Set time limits based on difficulty
-    const timeLimits = this.getTimeLimitsForDifficulty();
-    console.log('ShogiController: Requesting engine move with difficulty:', this.difficulty, 'timeLimits:', timeLimits);
-    
+    engine.setSearchDepth(level);
     engine.setPosition(sfen, []);
     engine.go({ 
-      btime: timeLimits.totalTime, 
-      wtime: timeLimits.totalTime, 
-      byoyomi: timeLimits.byoyomi 
+      btime: this.btime, 
+      wtime: this.btime, 
+      byoyomi: this.byoyomi 
     });
-  }
-
-  private getTimeLimitsForDifficulty(): { totalTime: number; byoyomi: number } {
-    switch (this.difficulty) {
-      case 'easy':
-        return { totalTime: 10000, byoyomi: 10000 }; // 10 seconds per move
-      case 'medium':
-        return { totalTime: 20000, byoyomi: 20000 }; // 20 seconds per move
-      case 'hard':
-        return { totalTime: 30000, byoyomi: 30000 }; // 30 seconds per move
-      default:
-        return { totalTime: 20000, byoyomi: 20000 }; // Default to medium
-    }
   }
 
   public async requestRecommendation(): Promise<void> {

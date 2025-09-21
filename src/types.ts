@@ -1,7 +1,10 @@
 export interface GameSettings {
-  difficulty: 'easy' | 'medium' | 'hard';
   player1Type: 'human' | 'ai';
   player2Type: 'human' | 'ai';
+  player1Level: number;
+  player2Level: number;
+  minutesPerSide: number;
+  byoyomiInSeconds: number;
 }
 
 export interface GameState {

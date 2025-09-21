@@ -121,37 +121,8 @@ const GamePage: React.FC<GamePageProps> = ({
     setSavedGames(games);
   }, []);
 
-  // Handle initial player types from navigation state
-  useEffect(() => {
-    if (location.state) {
-      const { player1Type, player2Type, aiDifficulty } = location.state as { 
-        player1Type?: 'human' | 'ai'; 
-        player2Type?: 'human' | 'ai';
-        aiDifficulty?: 'easy' | 'medium' | 'hard';
-      };
-      if (player1Type) setPlayer1Type(player1Type);
-      if (player2Type) setPlayer2Type(player2Type);
-      if (aiDifficulty) setAiDifficulty(aiDifficulty);
-      // Set player types and difficulty in controller
-      controller.setPlayerTypes(
-        player1Type || 'human', 
-        player2Type || 'ai'
-      );
-      controller.setDifficulty(aiDifficulty || 'medium');
-      // Start a new game with the selected player types
-      controller.newGame();
-    }
-  }, [location.state, controller]);
-
   // Note: Initial AI move is now handled by the controller's newGame() method
 
-  // Settings state
-  const [aiDifficulty, setAiDifficulty] = useState(localStorage.getItem('shogi-ai-difficulty') || 'medium');
-
-  // Set initial difficulty on controller when component mounts
-  useEffect(() => {
-    controller.setDifficulty(aiDifficulty as 'easy' | 'medium' | 'hard');
-  }, [controller, aiDifficulty]);
   const [pieceLabelType, setPieceLabelType] = useState(localStorage.getItem('shogi-piece-label-type') || 'kanji');
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'kifu');
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
@@ -544,12 +515,22 @@ const GamePage: React.FC<GamePageProps> = ({
     setIsStartGameModalOpen(true);
   };
 
+  const [player1Level, setPlayer1Level] = useState(5);
+  const [player2Level, setPlayer2Level] = useState(5);
+  const [minutesPerSide, setMinutesPerSide] = useState(30);
+  const [byoyomiInSeconds, setByoyomiInSeconds] = useState(10);
+
   const handleStartGame = (settings: GameSettings) => {
     clearUsiHistory();
     setPlayer1Type(settings.player1Type);
     setPlayer2Type(settings.player2Type);
-    setAiDifficulty(settings.difficulty);
+    setPlayer1Level(settings.player1Level);
+    setPlayer2Level(settings.player2Level);
+    setMinutesPerSide(settings.minutesPerSide);
+    setByoyomiInSeconds(settings.byoyomiInSeconds);
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
+    controller.setAILevels(settings.player1Level, settings.player2Level);
+    controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
     controller.newGame();
     setWinner(null);
     setIsStartGameModalOpen(false);
@@ -562,11 +543,6 @@ const GamePage: React.FC<GamePageProps> = ({
   const handleSettingChange = (setter: (value: any) => void, key: string) => (value: any) => {
     setter(value);
     localStorage.setItem(key, value.toString());
-    
-    // Update controller difficulty when AI difficulty changes
-    if (key === 'shogi-ai-difficulty') {
-      controller.setDifficulty(value);
-    }
     
     // Dispatch custom event for same-tab theme updates
     if (key === 'shogi-piece-label-type') {
@@ -751,12 +727,9 @@ const GamePage: React.FC<GamePageProps> = ({
           onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
           showPieceTooltips={showPieceTooltips}
           onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
-          aiDifficulty={aiDifficulty as any}
-          onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
           gameLayout={gameLayout}
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
         />}
-        {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
         <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
         <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
         <StartGameModal 
@@ -874,12 +847,9 @@ const GamePage: React.FC<GamePageProps> = ({
         onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
         showPieceTooltips={showPieceTooltips}
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
-        aiDifficulty={aiDifficulty as any}
-        onDifficultyChange={handleSettingChange(setAiDifficulty, 'shogi-ai-difficulty')}
         gameLayout={gameLayout}
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
       />}
-      {winner && <CheckmateModal winner={winner} onNewGame={handleNewGame} onDismiss={handleDismiss} />}
       <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
       <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
       <StartGameModal 
