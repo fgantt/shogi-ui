@@ -5,6 +5,7 @@ export interface GameSettings {
   player2Level: number;
   minutesPerSide: number;
   byoyomiInSeconds: number;
+  initialSfen?: string;
 }
 
 export interface GameState {

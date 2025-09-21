@@ -158,3 +158,45 @@
   font-family: monospace;
   font-weight: 500;
 }
+
+/* SFEN input styling */
+.settings-panel input[name="initialSfen"] {
+  width: 100%;
+  min-width: 400px;
+  font-family: monospace;
+  font-size: 0.9em;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.settings-panel select {
+  width: 100%;
+  min-width: 200px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.settings-panel input.error {
+  border: 2px solid #dc3545;
+  background-color: #f8d7da;
+}
+
+.settings-panel .error-message {
+  color: #dc3545;
+  font-size: 0.9em;
+  margin-top: 5px;
+  padding: 5px 10px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+.settings-panel .help-text {
+  color: #666;
+  font-size: 0.8em;
+  margin-top: 5px;
+  font-style: italic;
+}

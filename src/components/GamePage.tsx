@@ -124,26 +124,47 @@ const GamePage: React.FC<GamePageProps> = ({
   // Handle navigation state from HomePage
   useEffect(() => {
     if (location.state && controller.isInitialized()) {
-      const { player1Type, player2Type, aiDifficulty, showAttackedPieces: stateShowAttackedPieces, showPieceTooltips: stateShowPieceTooltips } = location.state as any;
+      const { 
+        player1Type, 
+        player2Type, 
+        aiDifficulty, 
+        showAttackedPieces: stateShowAttackedPieces, 
+        showPieceTooltips: stateShowPieceTooltips,
+        player1Level: statePlayer1Level,
+        player2Level: statePlayer2Level,
+        minutesPerSide: stateMinutesPerSide,
+        byoyomiInSeconds: stateByoyomiInSeconds,
+        initialSfen: stateInitialSfen
+      } = location.state as any;
       
       if (player1Type && player2Type) {
-        console.log('Initializing game from navigation state:', { player1Type, player2Type, aiDifficulty });
+        console.log('Initializing game from navigation state:', { 
+          player1Type, 
+          player2Type, 
+          aiDifficulty, 
+          initialSfen: stateInitialSfen 
+        });
         
         // Set player types in controller
         controller.setPlayerTypes(player1Type, player2Type);
         
-        // Set AI levels based on difficulty
-        const aiLevel = aiDifficulty === 'easy' ? 3 : aiDifficulty === 'medium' ? 5 : 7;
-        controller.setAILevels(aiLevel, aiLevel);
+        // Set AI levels from navigation state or fallback to difficulty
+        const player1Level = statePlayer1Level || (aiDifficulty === 'easy' ? 3 : aiDifficulty === 'medium' ? 5 : 7);
+        const player2Level = statePlayer2Level || (aiDifficulty === 'easy' ? 3 : aiDifficulty === 'medium' ? 5 : 7);
+        controller.setAILevels(player1Level, player2Level);
         
-        // Set time controls (default values)
-        controller.setTimeControls(30 * 60 * 1000, 10 * 1000);
+        // Set time controls from navigation state or use defaults
+        const minutesPerSide = stateMinutesPerSide || 30;
+        const byoyomiInSeconds = stateByoyomiInSeconds || 10;
+        controller.setTimeControls(minutesPerSide * 60 * 1000, byoyomiInSeconds * 1000);
         
         // Update local state
         setPlayer1Type(player1Type);
         setPlayer2Type(player2Type);
-        setPlayer1Level(aiLevel);
-        setPlayer2Level(aiLevel);
+        setPlayer1Level(player1Level);
+        setPlayer2Level(player2Level);
+        setMinutesPerSide(minutesPerSide);
+        setByoyomiInSeconds(byoyomiInSeconds);
         
         // Set other settings from navigation state
         if (stateShowAttackedPieces !== undefined) {
@@ -153,8 +174,8 @@ const GamePage: React.FC<GamePageProps> = ({
           setShowPieceTooltips(stateShowPieceTooltips);
         }
         
-        // Start a new game
-        controller.newGame().catch(error => {
+        // Start a new game with the custom SFEN if provided
+        controller.newGame(stateInitialSfen).catch(error => {
           console.error('Failed to start new game:', error);
         });
       }
@@ -571,7 +592,7 @@ const GamePage: React.FC<GamePageProps> = ({
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.setAILevels(settings.player1Level, settings.player2Level);
     controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
-    controller.newGame().catch(error => {
+    controller.newGame(settings.initialSfen).catch(error => {
       console.error('Failed to start new game:', error);
     });
     setWinner(null);

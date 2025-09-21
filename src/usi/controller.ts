@@ -419,8 +419,9 @@ export class ShogiController extends EventEmitter {
     }, 5000); // 5 second timeout
   }
   
-  public async newGame(): Promise<void> {
-      const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
+  public async newGame(customSfen?: string): Promise<void> {
+      const sfenToUse = customSfen || InitialPositionSFEN.STANDARD;
+      const recordResult = Record.newByUSI(`sfen ${sfenToUse}`);
       if (recordResult instanceof Error) {
         throw new Error(`Failed to create new game record: ${recordResult.message}`);
       }
