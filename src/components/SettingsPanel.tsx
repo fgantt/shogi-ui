@@ -67,14 +67,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       <div className="settings-panel">
         <h2>Settings</h2>
 
-        <section>
-          <h3>Engine</h3>
-          <div className="setting-group">
-            <Link to="/settings/engine" className="button-link">
-              Manage Engines
-            </Link>
-          </div>
-        </section>
+
 
         <section>
           <h3>Piece Themes</h3>
