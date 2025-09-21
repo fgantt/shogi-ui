@@ -9,7 +9,7 @@ export class ShogiController extends EventEmitter {
   private sessions: Map<string, EngineAdapter> = new Map();
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
-  private player2Type: 'human' | 'ai' = 'ai';
+  private player2Type: 'human' | 'ai' = 'human';
   private player1Level: number = 5;
   private player2Level: number = 5;
   private btime: number = 30 * 60 * 1000;

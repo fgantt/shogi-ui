@@ -13,7 +13,7 @@ interface PromotionModalProps {
   modalHeight: number;
   pieceSize: number;
   destinationSquareUsi: string;
-  boardRef: React.RefObject<BoardRef>; // Changed type
+  boardRef: React.RefObject<BoardRef | null>; // Changed type
   boardContainerRef: React.RefObject<HTMLDivElement | null>; // Added
 }
 

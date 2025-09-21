@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
-import Board from './Board';
+import Board, { BoardRef } from './Board';
 import CapturedPieces from './CapturedPieces';
 import GameControls from './GameControls';
 import RecommendationOverlay from './RecommendationOverlay';
@@ -92,7 +92,7 @@ const GamePage: React.FC<GamePageProps> = ({
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
   const classicBoardRef = useRef<HTMLDivElement | null>(null);
-  const boardComponentRef = useRef<BoardRef>(null);
+  const boardComponentRef = useRef<BoardRef | null>(null);
   
   // Debug recommendation state changes
   useEffect(() => {
@@ -120,6 +120,44 @@ const GamePage: React.FC<GamePageProps> = ({
     const games = JSON.parse(localStorage.getItem('shogi-saved-games') || '{}');
     setSavedGames(games);
   }, []);
+
+  // Handle navigation state from HomePage
+  useEffect(() => {
+    if (location.state && controller.isInitialized()) {
+      const { player1Type, player2Type, aiDifficulty, showAttackedPieces: stateShowAttackedPieces, showPieceTooltips: stateShowPieceTooltips } = location.state as any;
+      
+      if (player1Type && player2Type) {
+        console.log('Initializing game from navigation state:', { player1Type, player2Type, aiDifficulty });
+        
+        // Set player types in controller
+        controller.setPlayerTypes(player1Type, player2Type);
+        
+        // Set AI levels based on difficulty
+        const aiLevel = aiDifficulty === 'easy' ? 3 : aiDifficulty === 'medium' ? 5 : 7;
+        controller.setAILevels(aiLevel, aiLevel);
+        
+        // Set time controls (default values)
+        controller.setTimeControls(30 * 60 * 1000, 10 * 1000);
+        
+        // Update local state
+        setPlayer1Type(player1Type);
+        setPlayer2Type(player2Type);
+        setPlayer1Level(aiLevel);
+        setPlayer2Level(aiLevel);
+        
+        // Set other settings from navigation state
+        if (stateShowAttackedPieces !== undefined) {
+          setShowAttackedPieces(stateShowAttackedPieces);
+        }
+        if (stateShowPieceTooltips !== undefined) {
+          setShowPieceTooltips(stateShowPieceTooltips);
+        }
+        
+        // Start a new game
+        controller.newGame();
+      }
+    }
+  }, [location.state, controller]);
 
   // Note: Initial AI move is now handled by the controller's newGame() method
 
@@ -676,7 +714,7 @@ const GamePage: React.FC<GamePageProps> = ({
                   modalHeight={PROMOTION_MODAL_HEIGHT}
                   pieceSize={SQUARE_WIDTH}
                   destinationSquareUsi={promotionMove.destinationSquareUsi}
-                  boardRef={boardComponentRef}
+                  boardRef={boardComponentRef as React.RefObject<BoardRef>}
                   boardContainerRef={compactBoardRef}
                 />}
               />
@@ -806,7 +844,7 @@ const GamePage: React.FC<GamePageProps> = ({
               modalHeight={PROMOTION_MODAL_HEIGHT}
               pieceSize={SQUARE_WIDTH}
               destinationSquareUsi={promotionMove.destinationSquareUsi}
-              boardRef={boardComponentRef}
+              boardRef={boardComponentRef as React.RefObject<BoardRef>}
               boardContainerRef={classicBoardRef}
             />}
           />

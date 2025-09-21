@@ -6,7 +6,7 @@ import { BoardRef } from './Board';
 interface RecommendationOverlayProps {
   recommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null;
   boardRef: React.RefObject<HTMLDivElement | null>;
-  boardComponentRef: React.RefObject<BoardRef>; // Added
+  boardComponentRef: React.RefObject<BoardRef | null>; // Added
   pieceThemeType?: string;
   currentPlayer?: 'black' | 'white';
   onHighlightCapturedPiece?: (pieceType: string | null) => void;
