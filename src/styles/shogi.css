@@ -247,28 +247,49 @@
 
 .captured-pieces.player2 h3 {
   order: 1; /* Place heading before pieces-list */
-  display: inline-block;
-  position: relative;
-  clip-path: polygon(0% 0%, 100% 0%, calc(100% - 20px) 100%, 0% 100%);
   padding-right: 2rem;
+  clip-path: polygon(0% 0%, 100% 0%, calc(100% - 20px) 100%, 0% 100%);
 }
 
-.captured-pieces .pieces-list {
+.captured-piece-highlighted {
+  animation: capturedPiecePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes capturedPiecePulse {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.3);
+  }
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+}
+
+.captured-piece-highlighted .piece {
+  transition: transform 0.2s ease-out;
+}
+
+/* Captured pieces layout */
+.pieces-list {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  flex-grow: 1; /* Allow pieces-list to take available space */
+  padding: 5px;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 1;
 }
 
 .captured-pieces.player1 .pieces-list {
-  order: 1; /* Place pieces-list before heading */
-  justify-content: flex-start;
+  order: 1;
 }
 
 .captured-pieces.player2 .pieces-list {
-  order: 2; /* Place pieces-list after heading */
-  justify-content: flex-end;
+  order: 2;
 }
+
 
 
 

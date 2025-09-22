@@ -165,6 +165,8 @@
   order: 2;
   width: 100%;
   justify-content: flex-start;
+  align-items: flex-start !important;
+  align-content: flex-start;
   padding-top: 0;
 }
 

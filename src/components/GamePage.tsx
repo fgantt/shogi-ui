@@ -394,6 +394,18 @@ const GamePage: React.FC<GamePageProps> = ({
     setHighlightedCapturedPiece(pieceType);
   };
 
+  // Determine which player should get the highlight based on current turn
+  const getHighlightedPieceForPlayer = (player: 'player1' | 'player2') => {
+    if (!highlightedCapturedPiece || !position) return null;
+    
+    // Current player is determined by the SFEN notation
+    const currentPlayerIsBlack = position.sfen.includes(' b ');
+    const currentPlayer = currentPlayerIsBlack ? 'player1' : 'player2';
+    
+    // Only highlight for the current player
+    return player === currentPlayer ? highlightedCapturedPiece : null;
+  };
+
   const handleSquareClick = (row: number, col: number) => {
     if (!position) return;
     const clickedSquare = Square.newByXY(col, row);
@@ -700,7 +712,7 @@ const GamePage: React.FC<GamePageProps> = ({
             {/* Left side: Gote captured pieces and move log */}
             <div className="compact-left-side">
               <div className="compact-gote-captured">
-                <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
+                <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player2')} />
               </div>
               <div className="compact-move-log">
                 <MoveLog 
@@ -771,7 +783,7 @@ const GamePage: React.FC<GamePageProps> = ({
                 />
               </div>
               <div className="compact-sente-captured">
-                <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
+                <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player1')} />
               </div>
             </div>
           </div>
@@ -836,7 +848,7 @@ const GamePage: React.FC<GamePageProps> = ({
 
       {/* Gote captured pieces */}
       <div className="gote-captured-pieces">
-        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
+        <CapturedPieces captured={position.whiteHand as any} player={'player2'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player2')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player2')} />
       </div>
 
       {/* Board and Move Log side by side */}
@@ -894,7 +906,7 @@ const GamePage: React.FC<GamePageProps> = ({
 
       {/* Sente captured pieces */}
       <div className="sente-captured-pieces">
-        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={highlightedCapturedPiece} />
+        <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player1')} />
       </div>
       {isSettingsOpen && <SettingsPanel 
         pieceThemeType={pieceLabelType as any}

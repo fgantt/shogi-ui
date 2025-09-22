@@ -77,16 +77,10 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ captured, player, onPie
         {sortedPieces.map(({ type, count }) => (
           <div
             key={type}
+            className={highlightedPieceType === type ? 'captured-piece-highlighted' : ''}
             style={{
               position: 'relative',
-              display: 'inline-block',
-              ...(highlightedPieceType === type ? {
-                backgroundColor: 'rgba(34, 197, 94, 0.3)',
-                borderRadius: '4px',
-                border: '2px solid #22C55E',
-                padding: '1px',
-                margin: '-1px'
-              } : {})
+              display: 'inline-block'
             }}
           >
             <PieceComponent
