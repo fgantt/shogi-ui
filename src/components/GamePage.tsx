@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
 import Board, { BoardRef } from './Board';
@@ -8,6 +8,7 @@ import GameControls from './GameControls';
 import RecommendationOverlay from './RecommendationOverlay';
 import SettingsPanel from './SettingsPanel';
 import MoveLog from './MoveLog';
+import ConfirmExitModal from './ConfirmExitModal';
 import PromotionModal from './PromotionModal';
 import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
@@ -61,6 +62,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const PROMOTION_MODAL_HEIGHT = SQUARE_HEIGHT * 1;
 
   const location = useLocation();
+  const navigate = useNavigate();
   const controller = useShogiController();
   const [position, setPosition] = useState<ImmutablePosition | null>(null);
   const [renderKey, setRenderKey] = useState(0); // Force re-render counter
@@ -74,6 +76,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
   const [isStartGameModalOpen, setIsStartGameModalOpen] = useState(false);
+  const [isExitConfirmModalOpen, setIsExitConfirmModalOpen] = useState(false);
   const [savedGames, setSavedGames] = useState<{[key: string]: string}>({});
   const [isInCheck, setIsInCheck] = useState(false);
   const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
@@ -394,6 +397,30 @@ const GamePage: React.FC<GamePageProps> = ({
     setHighlightedCapturedPiece(pieceType);
   };
 
+  const handleExitGame = () => {
+    // Check if game is in progress by looking at moves
+    const moves = controller.getRecord().moves;
+    const isGameInProgress = moves.length > 0;
+    
+    if (isGameInProgress) {
+      // Show confirmation modal
+      setIsExitConfirmModalOpen(true);
+    } else {
+      // Navigate back to home page immediately if no game in progress
+      navigate('/');
+    }
+  };
+
+  const handleConfirmExit = () => {
+    setIsExitConfirmModalOpen(false);
+    navigate('/');
+  };
+
+  const handleCancelExit = () => {
+    setIsExitConfirmModalOpen(false);
+  };
+
+
   // Determine which player should get the highlight based on current turn
   const getHighlightedPieceForPlayer = (player: 'player1' | 'player2') => {
     if (!highlightedCapturedPiece || !position) return null;
@@ -705,6 +732,87 @@ const GamePage: React.FC<GamePageProps> = ({
   if (gameLayout === 'compact') {
     return (
       <div className={`game-page game-page-${gameLayout}`}>
+        {/* Exit Confirmation Modal - COMPACT LAYOUT */}
+        {isExitConfirmModalOpen && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            backdropFilter: 'blur(2px)'
+          }}>
+            <div style={{
+              background: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+              width: '90%',
+              maxWidth: '400px',
+              overflow: 'hidden',
+              animation: 'modalSlideIn 0.2s ease-out'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '24px 24px 16px 24px',
+                borderBottom: '1px solid #e0e0e0'
+              }}>
+                <h2 style={{ margin: 0, color: '#333', fontSize: '1.5rem', fontWeight: 600 }}>Exit Game</h2>
+              </div>
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+                <p style={{ margin: 0, color: '#555', fontSize: '16px', lineHeight: 1.5 }}>
+                  Are you sure you want to exit? Your current game will be lost.
+                </p>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '12px',
+                padding: '16px 24px 24px 24px'
+              }}>
+                <button 
+                  onClick={handleCancelExit}
+                  style={{
+                    padding: '12px 24px',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    backgroundColor: '#f5f5f5',
+                    color: '#666',
+                    minWidth: '100px'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmExit}
+                  style={{
+                    padding: '12px 24px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    minWidth: '100px'
+                  }}
+                >
+                  Exit Game
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Compact Layout */}
         <div className="compact-layout">
           {/* Main content area */}
@@ -771,6 +879,7 @@ const GamePage: React.FC<GamePageProps> = ({
             <div className="compact-right-side">
               <div className="compact-menu-area">
                 <GameControls 
+                  onExitGame={handleExitGame}
                   onNewGame={handleNewGame} 
                   onOpenSettings={() => setIsSettingsOpen(true)} 
                   onOpenSaveModal={() => setIsSaveModalOpen(true)}
@@ -831,9 +940,91 @@ const GamePage: React.FC<GamePageProps> = ({
   // Classic Layout
   return (
     <div className={`game-page game-page-${gameLayout}`}>
+      {/* Exit Confirmation Modal - CLASSIC LAYOUT */}
+      {isExitConfirmModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+            width: '90%',
+            maxWidth: '400px',
+            overflow: 'hidden',
+            animation: 'modalSlideIn 0.2s ease-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '24px 24px 16px 24px',
+              borderBottom: '1px solid #e0e0e0'
+            }}>
+              <h2 style={{ margin: 0, color: '#333', fontSize: '1.5rem', fontWeight: 600 }}>Exit Game</h2>
+            </div>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <p style={{ margin: 0, color: '#555', fontSize: '16px', lineHeight: 1.5 }}>
+                Are you sure you want to exit? Your current game will be lost.
+              </p>
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              padding: '16px 24px 24px 24px'
+            }}>
+              <button 
+                onClick={handleCancelExit}
+                style={{
+                  padding: '12px 24px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  backgroundColor: '#f5f5f5',
+                  color: '#666',
+                  minWidth: '100px'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmExit}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  minWidth: '100px'
+                }}
+              >
+                Exit Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Control Panel at the top */}
       <div className="control-panel">
         <GameControls 
+          onExitGame={handleExitGame}
           onNewGame={handleNewGame} 
           onOpenSettings={() => setIsSettingsOpen(true)} 
           onOpenSaveModal={() => setIsSaveModalOpen(true)}
@@ -934,6 +1125,38 @@ const GamePage: React.FC<GamePageProps> = ({
         onClose={() => setIsStartGameModalOpen(false)} 
         onStartGame={handleStartGame} 
       />
+      {/* Debug modal state */}
+      <div style={{ position: 'fixed', top: '10px', left: '10px', background: 'yellow', padding: '10px', zIndex: 10000 }}>
+        Modal State: {isExitConfirmModalOpen ? 'TRUE' : 'FALSE'}
+      </div>
+      
+      {/* Simple modal test */}
+      {isExitConfirmModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 0, 0, 0.8)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            <h2>EXIT MODAL TEST</h2>
+            <p>This should be visible!</p>
+            <button onClick={handleCancelExit}>Cancel</button>
+            <button onClick={handleConfirmExit}>Exit</button>
+          </div>
+        </div>
+      )}
       
       {/* USI Monitor positioned below the game content */}
       <UsiMonitor

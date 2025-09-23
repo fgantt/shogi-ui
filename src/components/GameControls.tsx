@@ -2,6 +2,7 @@ import React from 'react';
 import '../styles/shogi.css';
 
 interface GameControlsProps {
+  onExitGame: () => void;
   onNewGame: () => void;
   onOpenSettings: () => void;
   onOpenSaveModal: () => void;
@@ -13,10 +14,13 @@ interface GameControlsProps {
   hasHumanPlayer?: boolean;
 }
 
-const GameControls: React.FC<GameControlsProps> = ({ onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal, onCyclePieceTheme, onCycleBoardBackground, onToggleRecommendations, recommendationsEnabled, hasHumanPlayer }) => {
+const GameControls: React.FC<GameControlsProps> = ({ onExitGame, onNewGame, onOpenSettings, onOpenSaveModal, onOpenLoadModal, onCyclePieceTheme, onCycleBoardBackground, onToggleRecommendations, recommendationsEnabled, hasHumanPlayer }) => {
   return (
     <div className="game-controls">
       <div className="game-controls-left">
+        <button onClick={onExitGame} className="exit-game-btn">
+          <span role="img" aria-label="Exit Game">🏠</span> Exit
+        </button>
         <button onClick={onNewGame} className="new-game-btn">
           <span role="img" aria-label="New Game">🔄</span> New Game
         </button>
