@@ -81,6 +81,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [isInCheck, setIsInCheck] = useState(false);
   const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
   const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
+  const [startColor, setStartColor] = useState<'black' | 'white'>('black');
   
   // Player type state (used for UI display and controller communication)
   const [, setPlayer1Type] = useState<'human' | 'ai'>('human');
@@ -177,6 +178,14 @@ const GamePage: React.FC<GamePageProps> = ({
           setShowPieceTooltips(stateShowPieceTooltips);
         }
         
+        // Determine start color from SFEN
+        if (stateInitialSfen) {
+          const turn = stateInitialSfen.split(' ')[1];
+          setStartColor(turn === 'w' ? 'white' : 'black');
+        } else {
+          setStartColor('black');
+        }
+
         // Start a new game with the custom SFEN if provided
         controller.newGame(stateInitialSfen).catch(error => {
           console.error('Failed to start new game:', error);
@@ -631,6 +640,15 @@ const GamePage: React.FC<GamePageProps> = ({
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.setAILevels(settings.player1Level, settings.player2Level);
     controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
+    
+    // Determine start color from SFEN
+    if (settings.initialSfen) {
+      const turn = settings.initialSfen.split(' ')[1];
+      setStartColor(turn === 'w' ? 'white' : 'black');
+    } else {
+      setStartColor('black');
+    }
+
     controller.newGame(settings.initialSfen).catch(error => {
       console.error('Failed to start new game:', error);
     });
@@ -697,6 +715,8 @@ const GamePage: React.FC<GamePageProps> = ({
   const handleLoadGame = (name: string) => {
     const sfen = savedGames[name];
     if (sfen) {
+      const turn = sfen.split(' ')[1];
+      setStartColor(turn === 'w' ? 'white' : 'black');
       controller.loadSfen(sfen).catch(error => {
         console.error('Failed to load game:', error);
       });
@@ -826,6 +846,7 @@ const GamePage: React.FC<GamePageProps> = ({
                 <MoveLog 
                   moves={controller.getRecord().moves} 
                   notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+                  startColor={startColor}
                 />
               </div>
             </div>
@@ -1091,6 +1112,7 @@ const GamePage: React.FC<GamePageProps> = ({
           <MoveLog 
             moves={controller.getRecord().moves} 
             notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
+            startColor={startColor}
           />
         </div>
       </div>
