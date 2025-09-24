@@ -4,8 +4,7 @@ use crate::evaluation::*;
 use crate::moves::*;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
-use wasm_bindgen::prelude::*;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -37,11 +36,11 @@ impl SearchEngine {
         
         self.nodes_searched = 0;
         let start_time = TimeSource::now();
-        let mut alpha = i32::MIN + 1;
-        let beta = i32::MAX - 1;
+        let mut alpha = -200000;
         
-        let mut best_move = None;
-        let mut best_score = i32::MIN;
+        let mut best_move: Option<Move> = None;
+        crate::debug_utils::debug_log(&format!("Initial best_move: {:?}", best_move));
+        let mut best_score = -200000;
         
         crate::debug_utils::debug_log("About to generate legal moves");
         
@@ -78,6 +77,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
+            let beta = 200000;
                 let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history);
             
             if score > best_score {
@@ -117,11 +117,11 @@ impl SearchEngine {
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
-            return if board.is_king_in_check(player, captured_pieces) { i32::MIN + 1 } else { 0 };
+            return if board.is_king_in_check(player, captured_pieces) { -100000 } else { 0 };
         }
         
         let sorted_moves = self.sort_moves(&legal_moves, board);
-        let mut best_score = i32::MIN;
+        let mut best_score = -200000;
         let mut best_move_for_tt = None;
         
         history.push(fen_key.clone());
@@ -321,9 +321,8 @@ impl IterativeDeepening {
         crate::debug_utils::debug_log("About to get start time");
         let start_time = TimeSource::now();
         
-        crate::debug_utils::debug_log("About to initialize variables");
-        let mut best_move = None;
-        let mut best_score = i32::MIN;
+        let mut best_move: Option<Move> = None;
+        let mut best_score = -200000;
         
         crate::debug_utils::debug_log("About to calculate search time limit");
         let search_time_limit = self.time_limit_ms.saturating_sub(100);

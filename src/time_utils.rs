@@ -1,7 +1,6 @@
 // Time utilities that work in both WASM and standalone environments
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+
 
 /// A time source that works in both WASM and standalone environments
 pub struct TimeSource {

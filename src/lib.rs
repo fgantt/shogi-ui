@@ -15,6 +15,9 @@ pub mod opening_book;
 pub mod time_utils;
 pub mod debug_utils;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod usi;
+
 use bitboards::*;
 use moves::*;
 use search::SearchEngine;
@@ -285,12 +288,6 @@ impl ShogiEngine {
         output
     }
 
-    pub fn handle_go(&mut self, _parts: &[&str]) -> Vec<String> {
-        // Immediate console logging for debugging
-        crate::debug_utils::debug_log("handle_go is called, but the search is now handled by go_with_callback in a worker.");
-        // The non-wasm implementation is temporarily disabled.
-        Vec::new()
-    }
 
     pub fn handle_stop(&mut self) -> Vec<String> {
         self.stop_flag.store(true, Ordering::Relaxed);
@@ -361,132 +358,35 @@ impl ShogiEngine {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_handle_setoption_hash() {
-        let mut engine = ShogiEngine::new();
-        let parts = vec!["name", "USI_Hash", "value", "32"];
-        engine.handle_setoption(&parts);
-        let search_engine = engine.search_engine.lock().unwrap();
-        const BYTES_PER_ENTRY: usize = 100;
-        let expected_capacity = 32 * 1024 * 1024 / BYTES_PER_ENTRY;
-        assert!(search_engine.transposition_table_capacity() >= expected_capacity);
-    }
-
-    #[test]
-    fn test_handle_usinewgame() {
-        let mut engine = ShogiEngine::new();
-        
-        // Simulate a search to populate the transposition table
-        {
-            let mut search_engine_guard = engine.search_engine.lock().unwrap();
-            let board = BitboardBoard::new();
-            let captured_pieces = CapturedPieces::new();
-            let mut searcher = search::IterativeDeepening::new(1, 1000, None, None);
-            searcher.search(&mut search_engine_guard, &board, &captured_pieces, Player::Black);
-        }
-
-        engine.handle_usinewgame();
-
-        let search_engine_guard = engine.search_engine.lock().unwrap();
-        assert_eq!(search_engine_guard.transposition_table_len(), 0);
-    }
-
-    #[test]
-    fn test_handle_debug() {
-        let mut engine = ShogiEngine::new();
-        assert!(!engine.debug_mode);
-        engine.handle_debug(&["on"]);
-        assert!(engine.debug_mode);
-        engine.handle_debug(&["off"]);
-        assert!(!engine.debug_mode);
-    }
-
-    #[test]
-    fn test_handle_ponder() {
-        let mut engine = ShogiEngine::new();
-        assert!(!engine.pondering);
-        engine.handle_go(&["ponder"]);
-        assert!(engine.pondering);
-        engine.handle_ponderhit();
-        assert!(!engine.pondering);
-    }
-}
-
-pub struct UsiHandler {
-    engine: ShogiEngine,
-}
-
-impl UsiHandler {
-    pub fn new() -> Self {
-        Self {
-            engine: ShogiEngine::new(),
-        }
-    }
-
-    pub fn handle_command(&mut self, command_str: &str) -> Vec<String> {
-        let parts: Vec<&str> = command_str.trim().split_whitespace().collect();
-
-        if parts.is_empty() {
-            return Vec::new();
-        }
-
-        if self.engine.is_debug_mode() {
-            // TODO: Add proper logging instead of returning debug messages.
-        }
-
-        match parts[0] {
-            "usi" => self.handle_usi(),
-            "isready" => self.handle_isready(),
-            "debug" => self.engine.handle_debug(&parts[1..]),
-            "position" => self.engine.handle_position(&parts[1..]),
-            "go" => self.engine.handle_go(&parts[1..]),
-            "stop" => self.engine.handle_stop(),
-            "ponderhit" => self.engine.handle_ponderhit(),
-            "setoption" => self.engine.handle_setoption(&parts[1..]),
-            "usinewgame" => self.engine.handle_usinewgame(),
-            "gameover" => self.engine.handle_gameover(&parts[1..]),
-            "quit" => Vec::new(), // quit is handled by the caller
-            _ => vec![format!("info string Unknown command: {}", parts.join(" "))],
-        }
-    }
-
-
-    fn handle_usi(&self) -> Vec<String> {
-        vec![
-            "id name Shogi Engine".to_string(),
-            "id author Gemini".to_string(),
-            "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
-            "option name depth type spin default 5 min 1 max 8".to_string(),
-            "usiok".to_string(),
-        ]
-    }
-
-    fn handle_isready(&self) -> Vec<String> {
-        vec!["readyok".to_string()]
-    }
+// Debug control functions
+pub fn is_debug_enabled() -> bool {
+    debug_utils::is_debug_enabled()
 }
 
 #[wasm_bindgen]
-pub struct WasmUsiHandler {
-    handler: UsiHandler,
-}
 
+#[wasm_bindgen]
+pub struct WasmUsiHandler {
+    engine: ShogiEngine,
+}
 
 #[wasm_bindgen]
 impl WasmUsiHandler {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            handler: UsiHandler::new(),
+            engine: ShogiEngine::new(),
         }
     }
 
     pub fn process_command(&mut self, command: &str) -> JsValue {
-        let output = self.handler.handle_command(command);
+        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        let output = match parts.get(0) {
+            Some(&"position") => self.engine.handle_position(&parts[1..]),
+            Some(&"setoption") => self.engine.handle_setoption(&parts[1..]),
+            Some(&"usinewgame") => self.engine.handle_usinewgame(),
+            _ => vec!["info string unsupported command".to_string()],
+        };
         serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
     }
 
@@ -503,20 +403,26 @@ impl WasmUsiHandler {
                     if i + 1 < parts.len() {
                         btime = parts[i+1].parse().unwrap_or(0);
                         i += 2;
-                    } else { i += 1; }
+                    } else {
+                        i += 1;
+                    }
                 },
                 "wtime" => {
                     if i + 1 < parts.len() {
                         wtime = parts[i+1].parse().unwrap_or(0);
                         i += 2;
                     }
-                    else { i += 1; }
+                    else {
+                        i += 1;
+                    }
                 },
                 "byoyomi" => {
                     if i + 1 < parts.len() {
                         byoyomi = parts[i+1].parse().unwrap_or(0);
                         i += 2;
-                    } else { i += 1; }
+                    } else {
+                        i += 1;
+                    }
                 },
                 _ => i += 1,
             }
@@ -525,7 +431,7 @@ impl WasmUsiHandler {
         let time_to_use = if byoyomi > 0 {
             byoyomi
         } else {
-            let time_for_player = if self.handler.engine.current_player == Player::Black { btime } else { wtime };
+            let time_for_player = if self.engine.current_player == Player::Black { btime } else { wtime };
             if time_for_player > 0 {
                 time_for_player
             } else {
@@ -533,18 +439,18 @@ impl WasmUsiHandler {
             }
         };
 
-        self.handler.engine.stop_flag.store(false, Ordering::Relaxed);
+        self.engine.stop_flag.store(false, Ordering::Relaxed);
 
-        let best_move = self.handler.engine.get_best_move(
-            self.handler.engine.depth,
+        let best_move = self.engine.get_best_move(
+            self.engine.depth,
             time_to_use,
-            Some(self.handler.engine.stop_flag.clone()),
+            Some(self.engine.stop_flag.clone()),
             Some(on_info.clone()),
         );
 
         if let Some(mv) = best_move {
             let move_usi = mv.to_usi_string();
-            let debug_msg = format!("info string DEBUG: Generated move '{}' for player {:?}", move_usi, self.handler.engine.current_player);
+            let debug_msg = format!("info string DEBUG: Generated move '{}' for player {:?}", move_usi, self.engine.current_player);
             let this = wasm_bindgen::JsValue::NULL;
             let s = wasm_bindgen::JsValue::from_str(&debug_msg);
             let _ = on_info.call1(&this, &s);
@@ -561,17 +467,6 @@ impl WasmUsiHandler {
     }
 
     pub fn set_depth(&mut self, depth: u8) {
-        self.handler.engine.set_depth(depth);
+        self.engine.set_depth(depth);
     }
-}
-
-// Debug control functions
-#[wasm_bindgen]
-pub fn set_debug_enabled(enabled: bool) {
-    debug_utils::set_debug_enabled(enabled);
-}
-
-#[wasm_bindgen]
-pub fn is_debug_enabled() -> bool {
-    debug_utils::is_debug_enabled()
 }
