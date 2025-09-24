@@ -1,0 +1,9 @@
+[package]
+name = "usi-test-harness"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+shogi-engine = { path = ".." }
+anyhow = "1.0"
+regex = "1.10"
