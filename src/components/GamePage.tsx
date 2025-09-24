@@ -88,6 +88,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [byoyomi, setByoyomi] = useState(0);
   const [isByoyomiBlack, setIsByoyomiBlack] = useState(false);
   const [isByoyomiWhite, setIsByoyomiWhite] = useState(false);
+  const [moves, setMoves] = useState<any[]>([]);
   
   // Player type state (used for UI display and controller communication)
   const [, setPlayer1Type] = useState<'human' | 'ai'>('human');
@@ -298,10 +299,26 @@ const GamePage: React.FC<GamePageProps> = ({
     loadAssets();
   }, []);
 
+  // Timer for clock counting - only start after first move
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (!position) return;
+    if (!position) return;
 
+    // Don't start the clock until after the first move is made
+    // Use the same filtering logic as MoveLog component to check for actual moves
+    const actualMoves = moves.filter(move => {
+      if ('move' in move && typeof move.move === 'object' && 'type' in move.move) {
+        // This is a special move, check if it's the START type
+        return move.move.type !== 'start';
+      }
+      return true; // Keep regular moves
+    });
+    
+    if (actualMoves.length === 0) {
+      return () => {}; // Return empty cleanup function
+    }
+
+    // Only create timer when moves exist
+    const timer = setInterval(() => {
       const isBlackTurn = position.sfen.includes(' b ');
 
       if (isBlackTurn) {
@@ -330,7 +347,20 @@ const GamePage: React.FC<GamePageProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [position, blackTime, whiteTime, byoyomi, isByoyomiBlack, isByoyomiWhite]);
+  }, [position, controller, moves]); // Added moves dependency
+
+  // Handle byoyomi state changes
+  useEffect(() => {
+    if (isByoyomiBlack) {
+      setBlackTime(byoyomi);
+    }
+  }, [isByoyomiBlack, byoyomi]);
+
+  useEffect(() => {
+    if (isByoyomiWhite) {
+      setWhiteTime(byoyomi);
+    }
+  }, [isByoyomiWhite, byoyomi]);
 
   // Update controller with current clock times
   useEffect(() => {
@@ -360,6 +390,9 @@ const GamePage: React.FC<GamePageProps> = ({
       // Update last move for highlighting
       const lastMoveData = controller.getLastMove();
       setLastMove(lastMoveData);
+      
+      // Update moves state for timer dependency
+      setMoves(controller.getRecord().moves);
       
       // Update recommendation state
       if (controller.areRecommendationsEnabled()) {
