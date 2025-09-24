@@ -32,7 +32,9 @@ vi.mock('tsshogi', async () => {
     Record: {
       ...actualTsshogi.Record,
       newBySFEN: vi.fn(() => mockRecord),
+      newByUSI: vi.fn(() => mockRecord),
     },
+    PieceType: actualTsshogi.PieceType,
   };
 });
 

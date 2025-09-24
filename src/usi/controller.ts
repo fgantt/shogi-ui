@@ -13,6 +13,7 @@ export class ShogiController extends EventEmitter {
   private player1Level: number = 5;
   private player2Level: number = 5;
   private btime: number = 30 * 60 * 1000;
+  private wtime: number = 30 * 60 * 1000;
   private byoyomi: number = 10 * 1000;
   private recommendationsEnabled = false;
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
@@ -152,9 +153,15 @@ export class ShogiController extends EventEmitter {
     this.player2Level = player2Level;
   }
 
-  public setTimeControls(btime: number, byoyomi: number): void {
+  public setTimeControls(btime: number, wtime: number, byoyomi: number): void {
     this.btime = btime;
+    this.wtime = wtime;
     this.byoyomi = byoyomi;
+  }
+
+  public updateCurrentTimes(blackTime: number, whiteTime: number): void {
+    this.btime = blackTime;
+    this.wtime = whiteTime;
   }
 
   public getPlayerTypes(): { player1Type: 'human' | 'ai'; player2Type: 'human' | 'ai' } {
@@ -351,7 +358,7 @@ export class ShogiController extends EventEmitter {
     return null;
   }
 
-  public requestEngineMove(): void {
+  public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
     const isPlayer1Turn = this.record.position.sfen.includes(' b ');
     const sessionId = isPlayer1Turn ? 'sente' : 'gote';
     const engine = this.getEngine(sessionId);
@@ -366,11 +373,15 @@ export class ShogiController extends EventEmitter {
       return '';
     }).filter(move => move !== '');
     
+    // Use current clock times if provided, otherwise fall back to stored values
+    const btime = currentBlackTime !== undefined ? currentBlackTime : this.btime;
+    const wtime = currentWhiteTime !== undefined ? currentWhiteTime : this.wtime;
+    
     engine.setSearchDepth(level);
     engine.setPosition(currentSfen, moves);
     engine.go({ 
-      btime: this.btime, 
-      wtime: this.btime, 
+      btime: btime, 
+      wtime: wtime, 
       byoyomi: this.byoyomi 
     });
   }

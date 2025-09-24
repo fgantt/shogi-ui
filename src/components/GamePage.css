@@ -70,6 +70,7 @@
   align-items: flex-start;
   justify-content: flex-start; /* Left align with captured pieces */
   margin-left: 0; /* Ensure it starts at the left edge */
+  margin-top: 0; /* Align with captured pieces */
 }
 
 .board-container {
@@ -79,8 +80,11 @@
 
 .move-log-container {
   display: flex;
+  flex-direction: column;
   justify-content: flex-start; /* Left align the move log */
   align-items: flex-start;
+  align-self: flex-start; /* Align with top of board */
+  margin-top: -110px; /* Adjust to align with Gote captured area */
 }
 
 /* Responsive adjustments */
@@ -230,10 +234,58 @@
   width: 100%;
 }
 
+.compact-clock-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  order: 2;
+  margin: 10px 0;
+  padding: 10px;
+  background-color: green;
+  color: black;
+  border-radius: 8px;
+}
+
+.classic-clock-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 10px;
+  background-color: green;
+  color: black;
+  border-radius: 8px;
+}
+
+.clock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.clock-label {
+  font-weight: bold;
+  color: black;
+  min-width: 60px;
+  text-align: left;
+}
+
+/* Style for the clock times to be goldenrod */
+.clock-row > div {
+  color: goldenrod;
+}
+
 .compact-sente-captured {
   height: 304px; /* 4 squares tall - same as Gote */
   width: 100%;
-  order: 2;
+  order: 3;
   margin-top: auto; /* Push to bottom */
 }
 

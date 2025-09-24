@@ -15,6 +15,7 @@ import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
 import UsiMonitor from './UsiMonitor';
 import StartGameModal from './StartGameModal';
+import Clock from './Clock';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
 import { GameSettings } from '../types';
 import './GamePage.css';
@@ -82,6 +83,11 @@ const GamePage: React.FC<GamePageProps> = ({
   const [kingInCheckSquare, setKingInCheckSquare] = useState<Square | null>(null);
   const [attackingPieces, setAttackingPieces] = useState<Square[]>([]);
   const [startColor, setStartColor] = useState<'black' | 'white'>('black');
+  const [blackTime, setBlackTime] = useState(0);
+  const [whiteTime, setWhiteTime] = useState(0);
+  const [byoyomi, setByoyomi] = useState(0);
+  const [isByoyomiBlack, setIsByoyomiBlack] = useState(false);
+  const [isByoyomiWhite, setIsByoyomiWhite] = useState(false);
   
   // Player type state (used for UI display and controller communication)
   const [, setPlayer1Type] = useState<'human' | 'ai'>('human');
@@ -160,7 +166,10 @@ const GamePage: React.FC<GamePageProps> = ({
         // Set time controls from navigation state or use defaults
         const minutesPerSide = stateMinutesPerSide || 30;
         const byoyomiInSeconds = stateByoyomiInSeconds || 10;
-        controller.setTimeControls(minutesPerSide * 60 * 1000, byoyomiInSeconds * 1000);
+        controller.setTimeControls(minutesPerSide * 60 * 1000, minutesPerSide * 60 * 1000, byoyomiInSeconds * 1000);
+        setBlackTime(minutesPerSide * 60 * 1000);
+        setWhiteTime(minutesPerSide * 60 * 1000);
+        setByoyomi(byoyomiInSeconds * 1000);
         
         // Update local state
         setPlayer1Type(player1Type);
@@ -288,6 +297,47 @@ const GamePage: React.FC<GamePageProps> = ({
 
     loadAssets();
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!position) return;
+
+      const isBlackTurn = position.sfen.includes(' b ');
+
+      if (isBlackTurn) {
+        if (isByoyomiWhite) {
+          setWhiteTime(byoyomi);
+          setIsByoyomiWhite(false);
+        }
+        if (blackTime > 0) {
+          setBlackTime(prev => prev - 1000);
+        } else {
+          setIsByoyomiBlack(true);
+          setBlackTime(byoyomi);
+        }
+      } else {
+        if (isByoyomiBlack) {
+          setBlackTime(byoyomi);
+          setIsByoyomiBlack(false);
+        }
+        if (whiteTime > 0) {
+          setWhiteTime(prev => prev - 1000);
+        } else {
+          setIsByoyomiWhite(true);
+          setWhiteTime(byoyomi);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [position, blackTime, whiteTime, byoyomi, isByoyomiBlack, isByoyomiWhite]);
+
+  // Update controller with current clock times
+  useEffect(() => {
+    if (controller.isInitialized()) {
+      controller.updateCurrentTimes(blackTime, whiteTime);
+    }
+  }, [blackTime, whiteTime, controller]);
 
   // Apply wallpaper to document body when wallpaper changes
   useEffect(() => {
@@ -639,7 +689,12 @@ const GamePage: React.FC<GamePageProps> = ({
     setByoyomiInSeconds(settings.byoyomiInSeconds);
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.setAILevels(settings.player1Level, settings.player2Level);
-    controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
+    controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
+    setBlackTime(settings.minutesPerSide * 60 * 1000);
+    setWhiteTime(settings.minutesPerSide * 60 * 1000);
+    setByoyomi(settings.byoyomiInSeconds * 1000);
+    setIsByoyomiBlack(false);
+    setIsByoyomiWhite(false);
     
     // Determine start color from SFEN
     if (settings.initialSfen) {
@@ -912,6 +967,20 @@ const GamePage: React.FC<GamePageProps> = ({
                   onCycleBoardBackground={handleCycleBoardBackground}
                 />
               </div>
+              <div className="compact-clock-area">
+                <div className="clock-row">
+                  <span className="clock-label">
+                    {position.sfen.includes(' w ') ? '▶' : ' '} Gote
+                  </span>
+                  <Clock time={whiteTime} isByoyomi={isByoyomiWhite} />
+                </div>
+                <div className="clock-row">
+                  <span className="clock-label">
+                    {position.sfen.includes(' b ') ? '▶' : ' '} Sente
+                  </span>
+                  <Clock time={blackTime} isByoyomi={isByoyomiBlack} />
+                </div>
+              </div>
               <div className="compact-sente-captured">
                 <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player1')} />
               </div>
@@ -954,7 +1023,7 @@ const GamePage: React.FC<GamePageProps> = ({
           isVisible={isUsiMonitorVisible}
           onToggle={onToggleUsiMonitor}
         />
-      </div>
+    </div>
     );
   }
 
@@ -1109,6 +1178,20 @@ const GamePage: React.FC<GamePageProps> = ({
           />
         </div>
         <div className="move-log-container">
+          <div className="classic-clock-area">
+            <div className="clock-row">
+              <span className="clock-label">
+                {position.sfen.includes(' w ') ? '▶' : ' '} Gote
+              </span>
+              <Clock time={whiteTime} isByoyomi={isByoyomiWhite} />
+            </div>
+            <div className="clock-row">
+              <span className="clock-label">
+                {position.sfen.includes(' b ') ? '▶' : ' '} Sente
+              </span>
+              <Clock time={blackTime} isByoyomi={isByoyomiBlack} />
+            </div>
+          </div>
           <MoveLog 
             moves={controller.getRecord().moves} 
             notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}

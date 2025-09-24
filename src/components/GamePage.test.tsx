@@ -7,8 +7,8 @@ import { Position, Record, Square } from 'tsshogi';
 import GamePage from './GamePage';
 
 // Mock tsshogi since it cannot be used in vitest
-vi.mock('tsshogi', () => {
-  const original = vi.importActual('tsshogi');
+vi.mock('tsshogi', async () => {
+  const original = await vi.importActual('tsshogi');
   const Position = vi.fn();
   Position.prototype.get = vi.fn();
   Position.prototype.moves = vi.fn();
@@ -28,6 +28,7 @@ vi.mock('tsshogi', () => {
     Position,
     Square,
     Record,
+    PieceType: original.PieceType,
   };
 });
 
