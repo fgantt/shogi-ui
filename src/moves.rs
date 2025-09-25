@@ -499,13 +499,21 @@ impl MoveGenerator {
             _ => {}
         }
         
-        // 2. MVV-LVA for captures
-        if a.is_capture && b.is_capture {
-            let a_value = a.captured_piece_value() - a.piece_value();
-            let b_value = b.captured_piece_value() - b.piece_value();
-            let capture_cmp = b_value.cmp(&a_value);
-            if capture_cmp != std::cmp::Ordering::Equal {
-                return capture_cmp;
+        // 2. Captures vs non-captures (captures have higher priority)
+        match (a.is_capture, b.is_capture) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            (true, true) => {
+                // Both are captures - use MVV-LVA
+                let a_value = a.captured_piece_value() - a.piece_value();
+                let b_value = b.captured_piece_value() - b.piece_value();
+                let capture_cmp = b_value.cmp(&a_value);
+                if capture_cmp != std::cmp::Ordering::Equal {
+                    return capture_cmp;
+                }
+            },
+            (false, false) => {
+                // Neither is a capture - continue to other criteria
             }
         }
         
@@ -653,7 +661,7 @@ impl MoveGenerator {
 mod tests {
     use super::*;
     use crate::bitboards::BitboardBoard;
-    use crate::types::{Player, PieceType, CapturedPieces, Position};
+    use crate::types::{Player, PieceType, CapturedPieces, Position, Piece};
 
     #[test]
     fn test_white_pawn_promotion() {
@@ -665,6 +673,79 @@ mod tests {
         for m in &moves {
             if m.to_usi_string().contains("+") {
                 assert!(m.to.is_in_promotion_zone(player) || m.from.unwrap().is_in_promotion_zone(player));
+            }
+        }
+    }
+
+    #[test]
+    fn test_quiescence_move_sorting_total_order() {
+        let move_generator = MoveGenerator::new();
+        
+        // Create test moves with different properties
+        let mut test_moves = vec![
+            // Non-capture move
+            Move {
+                from: Some(Position { row: 1, col: 1 }),
+                to: Position { row: 2, col: 1 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: false,
+                is_promotion: false,
+                gives_check: false,
+                is_recapture: false,
+                captured_piece: None,
+            },
+            // Capture move
+            Move {
+                from: Some(Position { row: 1, col: 2 }),
+                to: Position { row: 2, col: 2 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: true,
+                is_promotion: false,
+                gives_check: false,
+                is_recapture: false,
+                captured_piece: Some(Piece {
+                    piece_type: PieceType::Pawn,
+                    player: Player::White,
+                }),
+            },
+            // Check move
+            Move {
+                from: Some(Position { row: 1, col: 3 }),
+                to: Position { row: 2, col: 3 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: false,
+                is_promotion: false,
+                gives_check: true,
+                is_recapture: false,
+                captured_piece: None,
+            },
+        ];
+        
+        // Test that sorting doesn't panic and produces consistent results
+        test_moves.sort_by(|a, b| move_generator.compare_quiescence_moves_simple(a, b));
+        
+        // Verify the ordering is correct
+        // Check should be first, then capture, then non-capture
+        assert!(test_moves[0].gives_check, "Check move should be first");
+        assert!(test_moves[1].is_capture, "Capture move should be second");
+        assert!(!test_moves[2].is_capture && !test_moves[2].gives_check, "Non-capture move should be last");
+        
+        // Test that the comparison is transitive and consistent
+        for i in 0..test_moves.len() {
+            for j in 0..test_moves.len() {
+                let cmp_ij = move_generator.compare_quiescence_moves_simple(&test_moves[i], &test_moves[j]);
+                let cmp_ji = move_generator.compare_quiescence_moves_simple(&test_moves[j], &test_moves[i]);
+                
+                // Test antisymmetry: if a < b, then b > a
+                match (cmp_ij, cmp_ji) {
+                    (std::cmp::Ordering::Less, std::cmp::Ordering::Greater) => {},
+                    (std::cmp::Ordering::Greater, std::cmp::Ordering::Less) => {},
+                    (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal) => {},
+                    _ => panic!("Comparison is not antisymmetric: {} vs {}", i, j),
+                }
             }
         }
     }
