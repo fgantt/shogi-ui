@@ -364,6 +364,12 @@ pub fn is_debug_enabled() -> bool {
 }
 
 #[wasm_bindgen]
+pub fn init_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
+
+#[wasm_bindgen]
 
 #[wasm_bindgen]
 pub struct WasmUsiHandler {

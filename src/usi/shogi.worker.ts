@@ -1,4 +1,4 @@
-import init, { WasmUsiHandler } from '../../pkg/shogi_engine.js';
+import init, { WasmUsiHandler, init_panic_hook } from '../../pkg/shogi_engine.js';
 
 let handler: WasmUsiHandler | null = null;
 
@@ -6,6 +6,7 @@ async function initWasm() {
     if (!handler) {
         try {
             await init();
+            init_panic_hook();
             handler = new WasmUsiHandler();
         } catch (error) {
             console.error('Failed to initialize WebAssembly module in worker:', error);

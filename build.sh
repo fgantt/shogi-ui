@@ -17,11 +17,11 @@ rm -rf target/
 
 # Build for web target
 echo "Building for web target..."
-wasm-pack build --target web --out-dir pkg
+wasm-pack build --target web --dev --out-dir pkg
 
 # Build for bundler target (for use with webpack/vite)
 echo "Building for bundler target..."
-wasm-pack build --target bundler --out-dir pkg-bundler
+wasm-pack build --target bundler --dev --out-dir pkg-bundler
 
 echo "Build complete!"
 echo "Web target: pkg/"
