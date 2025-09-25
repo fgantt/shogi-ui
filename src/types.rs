@@ -279,6 +279,8 @@ pub struct Move {
     pub is_promotion: bool,
     pub is_capture: bool,
     pub captured_piece: Option<Piece>,
+    pub gives_check: bool,       // Whether this move gives check
+    pub is_recapture: bool,      // Whether this is a recapture move
 }
 
 impl Move {
@@ -291,6 +293,8 @@ impl Move {
             is_promotion: promote,
             is_capture: false,
             captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
         }
     }
 
@@ -303,6 +307,8 @@ impl Move {
             is_promotion: false,
             is_capture: false,
             captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
         }
     }
 
@@ -380,6 +386,36 @@ impl Move {
             format!("{}*{}", piece_char, to_str)
         }
     }
+
+    /// Get the value of the captured piece in this move
+    pub fn captured_piece_value(&self) -> i32 {
+        if let Some(ref captured) = self.captured_piece {
+            captured.piece_type.base_value()
+        } else {
+            0
+        }
+    }
+
+    /// Get the value of the piece being moved
+    pub fn piece_value(&self) -> i32 {
+        self.piece_type.base_value()
+    }
+
+    /// Get the promotion value bonus for this move
+    pub fn promotion_value(&self) -> i32 {
+        if self.is_promotion {
+            // Calculate the difference between promoted and unpromoted piece values
+            let promoted_value = self.piece_type.base_value();
+            if let Some(unpromoted_type) = self.piece_type.unpromoted_version() {
+                let unpromoted_value = unpromoted_type.base_value();
+                promoted_value - unpromoted_value
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -441,6 +477,15 @@ pub enum TranspositionFlag {
     UpperBound,
 }
 
+/// Transposition table entry specifically for quiescence search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuiescenceEntry {
+    pub score: i32,
+    pub depth: u8,
+    pub flag: TranspositionFlag,
+    pub best_move: Option<Move>,
+}
+
 // Bitboard representation for efficient operations
 pub type Bitboard = u128;  // 81 squares need 81 bits, u128 gives us 128 bits
 
@@ -479,6 +524,310 @@ pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
         Some(pos)
     } else {
         None
+    }
+}
+
+/// Configuration for quiescence search parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuiescenceConfig {
+    pub max_depth: u8,                    // Maximum quiescence depth
+    pub enable_delta_pruning: bool,       // Enable delta pruning
+    pub enable_futility_pruning: bool,    // Enable futility pruning
+    pub enable_selective_extensions: bool, // Enable selective extensions
+    pub enable_tt: bool,                 // Enable transposition table
+    pub futility_margin: i32,            // Futility pruning margin
+    pub delta_margin: i32,               // Delta pruning margin
+    pub tt_size_mb: usize,               // Quiescence TT size in MB
+    pub tt_cleanup_threshold: usize,     // Threshold for TT cleanup
+}
+
+impl Default for QuiescenceConfig {
+    fn default() -> Self {
+        Self {
+            max_depth: 8,
+            enable_delta_pruning: true,
+            enable_futility_pruning: true,
+            enable_selective_extensions: true,
+            enable_tt: true,
+            futility_margin: 200,
+            delta_margin: 100,
+            tt_size_mb: 4,                // 4MB for quiescence TT
+            tt_cleanup_threshold: 10000,  // Clean up when TT has 10k entries
+        }
+    }
+}
+
+impl QuiescenceConfig {
+    /// Validate the configuration parameters and return any errors
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_depth == 0 {
+            return Err("max_depth must be greater than 0".to_string());
+        }
+        if self.max_depth > 20 {
+            return Err("max_depth should not exceed 20 for performance reasons".to_string());
+        }
+        if self.futility_margin < 0 {
+            return Err("futility_margin must be non-negative".to_string());
+        }
+        if self.futility_margin > 1000 {
+            return Err("futility_margin should not exceed 1000".to_string());
+        }
+        if self.delta_margin < 0 {
+            return Err("delta_margin must be non-negative".to_string());
+        }
+        if self.delta_margin > 1000 {
+            return Err("delta_margin should not exceed 1000".to_string());
+        }
+        if self.tt_size_mb == 0 {
+            return Err("tt_size_mb must be greater than 0".to_string());
+        }
+        if self.tt_size_mb > 1024 {
+            return Err("tt_size_mb should not exceed 1024MB".to_string());
+        }
+        if self.tt_cleanup_threshold == 0 {
+            return Err("tt_cleanup_threshold must be greater than 0".to_string());
+        }
+        if self.tt_cleanup_threshold > 1000000 {
+            return Err("tt_cleanup_threshold should not exceed 1,000,000".to_string());
+        }
+        Ok(())
+    }
+
+    /// Create a validated configuration, clamping values to valid ranges
+    pub fn new_validated(mut self) -> Self {
+        self.max_depth = self.max_depth.clamp(1, 20);
+        self.futility_margin = self.futility_margin.clamp(0, 1000);
+        self.delta_margin = self.delta_margin.clamp(0, 1000);
+        self.tt_size_mb = self.tt_size_mb.clamp(1, 1024);
+        self.tt_cleanup_threshold = self.tt_cleanup_threshold.clamp(1, 1000000);
+        self
+    }
+
+    /// Get a summary of the configuration
+    pub fn summary(&self) -> String {
+        format!(
+            "QuiescenceConfig: depth={}, delta_pruning={}, futility_pruning={}, extensions={}, tt={}, tt_size={}MB, cleanup_threshold={}",
+            self.max_depth,
+            self.enable_delta_pruning,
+            self.enable_futility_pruning,
+            self.enable_selective_extensions,
+            self.enable_tt,
+            self.tt_size_mb,
+            self.tt_cleanup_threshold
+        )
+    }
+}
+
+/// Performance statistics for quiescence search
+#[derive(Debug, Clone, Default)]
+pub struct QuiescenceStats {
+    pub nodes_searched: u64,
+    pub delta_prunes: u64,
+    pub futility_prunes: u64,
+    pub extensions: u64,
+    pub tt_hits: u64,
+    pub tt_misses: u64,
+    pub moves_ordered: u64,
+    pub check_moves_found: u64,
+    pub capture_moves_found: u64,
+    pub promotion_moves_found: u64,
+}
+
+impl QuiescenceStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = QuiescenceStats::default();
+    }
+
+    /// Get the total number of pruning operations
+    pub fn total_prunes(&self) -> u64 {
+        self.delta_prunes + self.futility_prunes
+    }
+
+    /// Get the pruning efficiency as a percentage
+    pub fn pruning_efficiency(&self) -> f64 {
+        if self.nodes_searched == 0 {
+            return 0.0;
+        }
+        (self.total_prunes() as f64 / self.nodes_searched as f64) * 100.0
+    }
+
+    /// Get the transposition table hit rate as a percentage
+    pub fn tt_hit_rate(&self) -> f64 {
+        let total_tt_attempts = self.tt_hits + self.tt_misses;
+        if total_tt_attempts == 0 {
+            return 0.0;
+        }
+        (self.tt_hits as f64 / total_tt_attempts as f64) * 100.0
+    }
+
+    /// Get the extension rate as a percentage
+    pub fn extension_rate(&self) -> f64 {
+        if self.nodes_searched == 0 {
+            return 0.0;
+        }
+        (self.extensions as f64 / self.nodes_searched as f64) * 100.0
+    }
+
+    /// Get move type distribution
+    pub fn move_type_distribution(&self) -> (f64, f64, f64) {
+        let total_moves = self.check_moves_found + self.capture_moves_found + self.promotion_moves_found;
+        if total_moves == 0 {
+            return (0.0, 0.0, 0.0);
+        }
+        let check_pct = (self.check_moves_found as f64 / total_moves as f64) * 100.0;
+        let capture_pct = (self.capture_moves_found as f64 / total_moves as f64) * 100.0;
+        let promotion_pct = (self.promotion_moves_found as f64 / total_moves as f64) * 100.0;
+        (check_pct, capture_pct, promotion_pct)
+    }
+
+    /// Get a comprehensive performance report
+    pub fn performance_report(&self) -> String {
+        let (check_pct, capture_pct, promotion_pct) = self.move_type_distribution();
+        format!(
+            "Quiescence Performance Report:\n\
+            - Nodes searched: {}\n\
+            - Pruning efficiency: {:.2}% ({} prunes)\n\
+            - TT hit rate: {:.2}% ({} hits, {} misses)\n\
+            - Extension rate: {:.2}% ({} extensions)\n\
+            - Move distribution: {:.1}% checks, {:.1}% captures, {:.1}% promotions\n\
+            - Moves ordered: {}",
+            self.nodes_searched,
+            self.pruning_efficiency(),
+            self.total_prunes(),
+            self.tt_hit_rate(),
+            self.tt_hits,
+            self.tt_misses,
+            self.extension_rate(),
+            self.extensions,
+            check_pct,
+            capture_pct,
+            promotion_pct,
+            self.moves_ordered
+        )
+    }
+
+    /// Get a summary of key metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "QSearch: {} nodes, {:.1}% pruned, {:.1}% TT hits, {:.1}% extended",
+            self.nodes_searched,
+            self.pruning_efficiency(),
+            self.tt_hit_rate(),
+            self.extension_rate()
+        )
+    }
+}
+
+/// Performance sample for quiescence search profiling
+#[derive(Debug, Clone)]
+pub struct QuiescenceSample {
+    pub iteration: usize,
+    pub duration_ms: u64,
+    pub nodes_searched: u64,
+    pub moves_ordered: u64,
+    pub delta_prunes: u64,
+    pub futility_prunes: u64,
+    pub extensions: u64,
+    pub tt_hits: u64,
+    pub tt_misses: u64,
+    pub check_moves: u64,
+    pub capture_moves: u64,
+    pub promotion_moves: u64,
+}
+
+/// Performance profile for quiescence search
+#[derive(Debug, Clone)]
+pub struct QuiescenceProfile {
+    pub samples: Vec<QuiescenceSample>,
+    pub average_duration_ms: f64,
+    pub average_nodes_searched: f64,
+    pub average_pruning_efficiency: f64,
+    pub average_tt_hit_rate: f64,
+    pub average_extension_rate: f64,
+}
+
+impl QuiescenceProfile {
+    pub fn new() -> Self {
+        Self {
+            samples: Vec::new(),
+            average_duration_ms: 0.0,
+            average_nodes_searched: 0.0,
+            average_pruning_efficiency: 0.0,
+            average_tt_hit_rate: 0.0,
+            average_extension_rate: 0.0,
+        }
+    }
+
+    pub fn add_sample(&mut self, sample: QuiescenceSample) {
+        self.samples.push(sample);
+        self.update_averages();
+    }
+
+    fn update_averages(&mut self) {
+        if self.samples.is_empty() {
+            return;
+        }
+
+        let total_duration: u64 = self.samples.iter().map(|s| s.duration_ms).sum();
+        let total_nodes: u64 = self.samples.iter().map(|s| s.nodes_searched).sum();
+        let total_prunes: u64 = self.samples.iter().map(|s| s.delta_prunes + s.futility_prunes).sum();
+        let total_tt_attempts: u64 = self.samples.iter().map(|s| s.tt_hits + s.tt_misses).sum();
+        let total_extensions: u64 = self.samples.iter().map(|s| s.extensions).sum();
+
+        self.average_duration_ms = total_duration as f64 / self.samples.len() as f64;
+        self.average_nodes_searched = total_nodes as f64 / self.samples.len() as f64;
+        self.average_pruning_efficiency = if total_nodes > 0 {
+            (total_prunes as f64 / total_nodes as f64) * 100.0
+        } else { 0.0 };
+        self.average_tt_hit_rate = if total_tt_attempts > 0 {
+            (self.samples.iter().map(|s| s.tt_hits).sum::<u64>() as f64 / total_tt_attempts as f64) * 100.0
+        } else { 0.0 };
+        self.average_extension_rate = if total_nodes > 0 {
+            (total_extensions as f64 / total_nodes as f64) * 100.0
+        } else { 0.0 };
+    }
+
+    pub fn get_performance_report(&self) -> String {
+        format!(
+            "Quiescence Performance Profile:\n\
+            - Samples: {}\n\
+            - Average Duration: {:.2}ms\n\
+            - Average Nodes: {:.0}\n\
+            - Average Pruning Efficiency: {:.2}%\n\
+            - Average TT Hit Rate: {:.2}%\n\
+            - Average Extension Rate: {:.2}%",
+            self.samples.len(),
+            self.average_duration_ms,
+            self.average_nodes_searched,
+            self.average_pruning_efficiency,
+            self.average_tt_hit_rate,
+            self.average_extension_rate
+        )
+    }
+}
+
+/// Detailed performance metrics for quiescence search
+#[derive(Debug, Clone)]
+pub struct QuiescencePerformanceMetrics {
+    pub nodes_per_second: f64,
+    pub pruning_efficiency: f64,
+    pub tt_hit_rate: f64,
+    pub extension_rate: f64,
+    pub move_ordering_efficiency: f64,
+    pub tactical_move_ratio: f64,
+}
+
+impl QuiescencePerformanceMetrics {
+    pub fn summary(&self) -> String {
+        format!(
+            "Performance Metrics: {:.0} nodes/s, {:.1}% pruned, {:.1}% TT hits, {:.1}% extended, {:.1}% tactical",
+            self.nodes_per_second,
+            self.pruning_efficiency,
+            self.tt_hit_rate,
+            self.extension_rate,
+            self.tactical_move_ratio
+        )
     }
 }
 

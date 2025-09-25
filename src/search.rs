@@ -10,24 +10,35 @@ pub struct SearchEngine {
     evaluator: PositionEvaluator,
     move_generator: MoveGenerator,
     transposition_table: HashMap<String, TranspositionEntry>,
+    quiescence_tt: HashMap<String, QuiescenceEntry>,
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
     nodes_searched: u64,
     stop_flag: Option<Arc<AtomicBool>>,
+    quiescence_config: QuiescenceConfig,
+    quiescence_stats: QuiescenceStats,
 }
 
 impl SearchEngine {
     pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
+        Self::new_with_config(stop_flag, hash_size_mb, QuiescenceConfig::default())
+    }
+
+    pub fn new_with_config(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize, quiescence_config: QuiescenceConfig) -> Self {
         const BYTES_PER_ENTRY: usize = 100; // Approximate size of a TT entry
         let capacity = hash_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
+        let quiescence_capacity = quiescence_config.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
             transposition_table: HashMap::with_capacity(capacity),
+            quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
             stop_flag,
+            quiescence_config,
+            quiescence_stats: QuiescenceStats::default(),
         }
     }
 
@@ -112,7 +123,7 @@ impl SearchEngine {
         }
         
         if depth == 0 {
-            return self.quiescence_search(board, captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
+            return self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
         }
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
@@ -161,11 +172,37 @@ impl SearchEngine {
         best_score
     }
 
-    fn quiescence_search(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
+    fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { return 0; }
 
-        if depth == 0 {
+        // Update statistics
+        self.quiescence_stats.nodes_searched += 1;
+
+        // Check depth limit
+        if depth == 0 || depth > self.quiescence_config.max_depth {
             return self.evaluator.evaluate(board, player, captured_pieces);
+        }
+
+        // Transposition table lookup
+        if self.quiescence_config.enable_tt {
+            // Clean up TT if it's getting too large
+            if self.quiescence_tt.len() > self.quiescence_config.tt_cleanup_threshold {
+                self.cleanup_quiescence_tt(self.quiescence_config.tt_cleanup_threshold / 2);
+            }
+            
+            let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
+            if let Some(entry) = self.quiescence_tt.get(&fen_key) {
+                if entry.depth >= depth {
+                    self.quiescence_stats.tt_hits += 1;
+                    match entry.flag {
+                        TranspositionFlag::Exact => return entry.score,
+                        TranspositionFlag::LowerBound => if entry.score >= beta { return entry.score; },
+                        TranspositionFlag::UpperBound => if entry.score <= alpha { return entry.score; },
+                    }
+                }
+            } else {
+                self.quiescence_stats.tt_misses += 1;
+            }
         }
         
         let stand_pat = self.evaluator.evaluate(board, player, captured_pieces);
@@ -173,10 +210,36 @@ impl SearchEngine {
         if alpha < stand_pat { alpha = stand_pat; }
         
         let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
-        let sorted_noisy_moves = self.sort_moves(&noisy_moves, board);
+        
+        // Track move type statistics
+        for move_ in &noisy_moves {
+            if move_.gives_check {
+                self.quiescence_stats.check_moves_found += 1;
+            }
+            if move_.is_capture {
+                self.quiescence_stats.capture_moves_found += 1;
+            }
+            if move_.is_promotion {
+                self.quiescence_stats.promotion_moves_found += 1;
+            }
+        }
+        
+        let sorted_noisy_moves = self.sort_quiescence_moves(&noisy_moves);
+        self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
 
         for move_ in sorted_noisy_moves {
             if self.should_stop(&start_time, time_limit_ms) { break; }
+            
+            // Apply pruning checks
+            if self.should_prune_delta(&move_, stand_pat, alpha) {
+                self.quiescence_stats.delta_prunes += 1;
+                continue;
+            }
+            
+            if self.should_prune_futility(&move_, stand_pat, alpha, depth) {
+                self.quiescence_stats.futility_prunes += 1;
+                continue;
+            }
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -184,10 +247,45 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-                let score = -self.quiescence_search(&new_board, &new_captured, player.opposite(), -beta, -alpha, &start_time, time_limit_ms, depth - 1);
+            // Check for selective extension
+            let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
+                self.quiescence_stats.extensions += 1;
+                depth - 1 // Still reduce depth but less aggressively
+            } else {
+                depth - 1
+            };
             
-            if score >= beta { return beta; }
+            let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), -beta, -alpha, &start_time, time_limit_ms, search_depth);
+            
+            if score >= beta { 
+                // Store result in transposition table
+                if self.quiescence_config.enable_tt {
+                    let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
+                    let flag = TranspositionFlag::LowerBound;
+                    self.quiescence_tt.insert(fen_key, QuiescenceEntry {
+                        score: beta,
+                        depth,
+                        flag,
+                        best_move: Some(move_),
+                    });
+                }
+                return beta; 
+            }
             if score > alpha { alpha = score; }
+        }
+        
+        // Store result in transposition table
+        if self.quiescence_config.enable_tt {
+            let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
+            let flag = if alpha <= -beta { TranspositionFlag::UpperBound } 
+                      else if alpha >= beta { TranspositionFlag::LowerBound } 
+                      else { TranspositionFlag::Exact };
+            self.quiescence_tt.insert(fen_key, QuiescenceEntry {
+                score: alpha,
+                depth,
+                flag,
+                best_move: None, // We don't store best move for quiescence search
+            });
         }
         
         alpha
@@ -202,8 +300,8 @@ impl SearchEngine {
         start_time.has_exceeded_limit(time_limit_ms)
     }
 
-    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> Vec<Move> {
-        self.move_generator.generate_legal_captures(board, player, _captured_pieces)
+    fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        self.move_generator.generate_quiescence_moves(board, player, captured_pieces)
     }
 
     
@@ -293,6 +391,576 @@ impl SearchEngine {
         }
         pv
     }
+
+    /// Check if a move should be pruned using delta pruning
+    fn should_prune_delta(&self, move_: &Move, stand_pat: i32, alpha: i32) -> bool {
+        if !self.quiescence_config.enable_delta_pruning {
+            return false;
+        }
+
+        let material_gain = move_.captured_piece_value();
+        let promotion_bonus = move_.promotion_value();
+        let total_gain = material_gain + promotion_bonus;
+        
+        // If the best possible outcome is still worse than alpha, prune
+        stand_pat + total_gain + self.quiescence_config.delta_margin <= alpha
+    }
+
+    /// Adaptive delta pruning based on position characteristics
+    fn should_prune_delta_adaptive(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8, move_count: usize) -> bool {
+        if !self.quiescence_config.enable_delta_pruning {
+            return false;
+        }
+
+        let material_gain = move_.captured_piece_value();
+        let promotion_bonus = move_.promotion_value();
+        let total_gain = material_gain + promotion_bonus;
+        
+        // Adaptive margin based on depth and move count
+        let mut adaptive_margin = self.quiescence_config.delta_margin;
+        
+        // Increase margin at deeper depths (more aggressive pruning)
+        if depth > 3 {
+            adaptive_margin += (depth as i32 - 3) * 50;
+        }
+        
+        // Increase margin when there are many moves (more selective)
+        if move_count > 8 {
+            adaptive_margin += (move_count as i32 - 8) * 25;
+        }
+        
+        // Decrease margin for high-value captures (less aggressive pruning)
+        if total_gain > 200 {
+            adaptive_margin = adaptive_margin / 2;
+        }
+        
+        // If the best possible outcome is still worse than alpha, prune
+        stand_pat + total_gain + adaptive_margin <= alpha
+    }
+
+    /// Check if a move should be pruned using futility pruning
+    fn should_prune_futility(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8) -> bool {
+        if !self.quiescence_config.enable_futility_pruning {
+            return false;
+        }
+
+        let futility_margin = match depth {
+            1 => self.quiescence_config.futility_margin / 2,
+            2 => self.quiescence_config.futility_margin,
+            _ => self.quiescence_config.futility_margin * 2,
+        };
+        
+        let material_gain = move_.captured_piece_value();
+        stand_pat + material_gain + futility_margin <= alpha
+    }
+
+    /// Adaptive futility pruning based on position characteristics
+    fn should_prune_futility_adaptive(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8, move_count: usize) -> bool {
+        if !self.quiescence_config.enable_futility_pruning {
+            return false;
+        }
+
+        let mut futility_margin = match depth {
+            1 => self.quiescence_config.futility_margin / 2,
+            2 => self.quiescence_config.futility_margin,
+            _ => self.quiescence_config.futility_margin * 2,
+        };
+        
+        // Adaptive adjustments based on position characteristics
+        if move_count > 10 {
+            futility_margin += 50; // More aggressive pruning with many moves
+        }
+        
+        if depth > 4 {
+            futility_margin += (depth as i32 - 4) * 25; // More aggressive at deeper depths
+        }
+        
+        let material_gain = move_.captured_piece_value();
+        stand_pat + material_gain + futility_margin <= alpha
+    }
+
+    /// Check if a move should be extended in quiescence search
+    fn should_extend(&self, move_: &Move, _depth: u8) -> bool {
+        if !self.quiescence_config.enable_selective_extensions {
+            return false;
+        }
+
+        // Extend for checks
+        if move_.gives_check {
+            return true;
+        }
+        
+        // Extend for recaptures
+        if move_.is_recapture {
+            return true;
+        }
+        
+        // Extend for promotions
+        if move_.is_promotion {
+            return true;
+        }
+        
+        // Extend for captures of high-value pieces
+        if move_.is_capture && move_.captured_piece_value() > 500 {
+            return true;
+        }
+        
+        false
+    }
+
+    /// Reset quiescence statistics
+    pub fn reset_quiescence_stats(&mut self) {
+        self.quiescence_stats = QuiescenceStats::default();
+    }
+
+    /// Get quiescence statistics
+    pub fn get_quiescence_stats(&self) -> &QuiescenceStats {
+        &self.quiescence_stats
+    }
+
+    /// Update quiescence configuration
+    pub fn update_quiescence_config(&mut self, config: QuiescenceConfig) {
+        self.quiescence_config = config;
+    }
+
+    /// Update quiescence configuration with validation
+    pub fn update_quiescence_config_validated(&mut self, config: QuiescenceConfig) -> Result<(), String> {
+        config.validate()?;
+        self.quiescence_config = config;
+        Ok(())
+    }
+
+    /// Update quiescence configuration with automatic validation and clamping
+    pub fn update_quiescence_config_safe(&mut self, config: QuiescenceConfig) {
+        self.quiescence_config = config.new_validated();
+    }
+
+    /// Get current quiescence configuration
+    pub fn get_quiescence_config(&self) -> &QuiescenceConfig {
+        &self.quiescence_config
+    }
+
+    /// Update specific configuration parameters
+    pub fn update_quiescence_depth(&mut self, depth: u8) -> Result<(), String> {
+        if depth == 0 || depth > 20 {
+            return Err("Depth must be between 1 and 20".to_string());
+        }
+        self.quiescence_config.max_depth = depth;
+        Ok(())
+    }
+
+    /// Update TT size and reinitialize if needed
+    pub fn update_quiescence_tt_size(&mut self, size_mb: usize) -> Result<(), String> {
+        if size_mb == 0 || size_mb > 1024 {
+            return Err("TT size must be between 1 and 1024 MB".to_string());
+        }
+        self.quiescence_config.tt_size_mb = size_mb;
+        // Reinitialize TT with new size
+        const BYTES_PER_ENTRY: usize = 100;
+        let new_capacity = size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
+        self.quiescence_tt = HashMap::with_capacity(new_capacity);
+        Ok(())
+    }
+
+    /// Compare two moves for quiescence search ordering
+    fn compare_quiescence_moves(&self, a: &Move, b: &Move) -> std::cmp::Ordering {
+        // Use a simple, guaranteed total order based on move properties
+        // This ensures we never have equal moves that are actually different
+        
+        // 1. Checks first (highest priority)
+        match (a.gives_check, b.gives_check) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 2. MVV-LVA for captures
+        if a.is_capture && b.is_capture {
+            let a_value = a.captured_piece_value() - a.piece_value();
+            let b_value = b.captured_piece_value() - b.piece_value();
+            let capture_cmp = b_value.cmp(&a_value);
+            if capture_cmp != std::cmp::Ordering::Equal {
+                return capture_cmp;
+            }
+        }
+        
+        // 3. Promotions
+        match (a.is_promotion, b.is_promotion) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 4. Use a simple hash-based comparison to ensure total order
+        let a_hash = self.move_hash(a);
+        let b_hash = self.move_hash(b);
+        a_hash.cmp(&b_hash)
+    }
+
+    /// Create a simple hash for move comparison
+    fn move_hash(&self, move_: &Move) -> u64 {
+        let mut hash = 0u64;
+        
+        // Hash the to position
+        hash = hash.wrapping_mul(31).wrapping_add(move_.to.row as u64);
+        hash = hash.wrapping_mul(31).wrapping_add(move_.to.col as u64);
+        
+        // Hash the from position (if exists)
+        if let Some(from) = move_.from {
+            hash = hash.wrapping_mul(31).wrapping_add(from.row as u64);
+            hash = hash.wrapping_mul(31).wrapping_add(from.col as u64);
+        }
+        
+        // Hash the piece type
+        hash = hash.wrapping_mul(31).wrapping_add(move_.piece_type as u64);
+        
+        // Hash the player
+        hash = hash.wrapping_mul(31).wrapping_add(move_.player as u64);
+        
+        hash
+    }
+
+    /// Enhanced move ordering with position-specific heuristics
+    fn compare_quiescence_moves_enhanced(&self, a: &Move, b: &Move, board: &BitboardBoard, player: Player) -> std::cmp::Ordering {
+        // 1. Checks first (highest priority)
+        match (a.gives_check, b.gives_check) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 2. MVV-LVA for captures with position awareness
+        if a.is_capture && b.is_capture {
+            let a_value = self.assess_capture_value(a, board, player);
+            let b_value = self.assess_capture_value(b, board, player);
+            return b_value.cmp(&a_value);
+        }
+        
+        // 3. Promotions with position awareness
+        match (a.is_promotion, b.is_promotion) {
+            (true, false) => {
+                let a_promotion_value = self.assess_promotion_value(a, board, player);
+                let b_promotion_value = self.assess_promotion_value(b, board, player);
+                return b_promotion_value.cmp(&a_promotion_value);
+            },
+            (false, true) => {
+                let a_promotion_value = self.assess_promotion_value(a, board, player);
+                let b_promotion_value = self.assess_promotion_value(b, board, player);
+                return b_promotion_value.cmp(&a_promotion_value);
+            },
+            _ => {}
+        }
+        
+        // 4. Tactical threat assessment with position awareness
+        let a_threat_value = self.assess_tactical_threat_enhanced(a, board, player);
+        let b_threat_value = self.assess_tactical_threat_enhanced(b, board, player);
+        if a_threat_value != b_threat_value {
+            return b_threat_value.cmp(&a_threat_value);
+        }
+        
+        // 5. Position-specific ordering
+        let a_position_value = self.assess_position_value(a, board, player);
+        let b_position_value = self.assess_position_value(b, board, player);
+        if a_position_value != b_position_value {
+            return b_position_value.cmp(&a_position_value);
+        }
+        
+        // 6. Default ordering (by piece value)
+        b.piece_value().cmp(&a.piece_value())
+    }
+
+    /// Assess capture value with position awareness
+    fn assess_capture_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = move_.captured_piece_value() - move_.piece_value();
+        
+        // Bonus for capturing pieces that are attacking our pieces
+        if let Some(captured_piece) = &move_.captured_piece {
+            if self.is_piece_attacking_our_king(captured_piece, move_.to, board, player) {
+                value += 200; // Bonus for capturing attacking pieces
+            }
+        }
+        
+        // Bonus for capturing pieces in the center
+        if self.is_center_square(move_.to) {
+            value += 50;
+        }
+        
+        value
+    }
+
+    /// Assess promotion value with position awareness
+    fn assess_promotion_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = move_.promotion_value();
+        
+        // Bonus for promoting in the center
+        if self.is_center_square(move_.to) {
+            value += 100;
+        }
+        
+        // Bonus for promoting pieces that are attacking
+        if self.is_piece_attacking_opponent(move_, board, player) {
+            value += 150;
+        }
+        
+        value
+    }
+
+    /// Enhanced tactical threat assessment
+    fn assess_tactical_threat_enhanced(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut threat_value = 0;
+        
+        // High value for captures
+        if move_.is_capture {
+            threat_value += move_.captured_piece_value();
+        }
+        
+        // High value for checks
+        if move_.gives_check {
+            threat_value += 1000;
+        }
+        
+        // High value for promotions
+        if move_.is_promotion {
+            threat_value += move_.promotion_value();
+        }
+        
+        // High value for recaptures
+        if move_.is_recapture {
+            threat_value += 500;
+        }
+        
+        // Bonus for threats to opponent's king
+        if self.is_threatening_opponent_king(move_, board, player) {
+            threat_value += 300;
+        }
+        
+        // Bonus for threats in the center
+        if self.is_center_square(move_.to) {
+            threat_value += 50;
+        }
+        
+        threat_value
+    }
+
+    /// Assess position-specific value of a move
+    fn assess_position_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = 0;
+        
+        // Center control bonus
+        if self.is_center_square(move_.to) {
+            value += 30;
+        }
+        
+        // Development bonus for pieces moving forward
+        if self.is_forward_move(move_, player) {
+            value += 20;
+        }
+        
+        // Mobility bonus
+        value += self.assess_mobility_gain(move_, board, player);
+        
+        value
+    }
+
+    /// Check if a square is in the center
+    fn is_center_square(&self, pos: Position) -> bool {
+        pos.row >= 3 && pos.row <= 5 && pos.col >= 3 && pos.col <= 5
+    }
+
+    /// Check if a piece is attacking our king
+    fn is_piece_attacking_our_king(&self, piece: &Piece, _pos: Position, _board: &BitboardBoard, player: Player) -> bool {
+        // Simplified check - in a real implementation, this would check actual attack patterns
+        piece.player == player.opposite()
+    }
+
+    /// Check if a move is attacking the opponent
+    fn is_piece_attacking_opponent(&self, move_: &Move, _board: &BitboardBoard, _player: Player) -> bool {
+        // Simplified check - in a real implementation, this would check actual attack patterns
+        move_.is_capture || move_.gives_check
+    }
+
+    /// Check if a move threatens the opponent's king
+    fn is_threatening_opponent_king(&self, move_: &Move, _board: &BitboardBoard, _player: Player) -> bool {
+        // Simplified check - in a real implementation, this would check actual attack patterns
+        move_.gives_check
+    }
+
+    /// Check if a move is forward for the player
+    fn is_forward_move(&self, move_: &Move, player: Player) -> bool {
+        if let Some(from) = move_.from {
+            match player {
+                Player::Black => move_.to.row > from.row,
+                Player::White => move_.to.row < from.row,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Assess mobility gain from a move
+    fn assess_mobility_gain(&self, move_: &Move, _board: &BitboardBoard, _player: Player) -> i32 {
+        // Simplified mobility assessment
+        if self.is_center_square(move_.to) {
+            10
+        } else {
+            5
+        }
+    }
+
+    /// Assess the tactical threat value of a move
+    fn assess_tactical_threat(&self, move_: &Move) -> i32 {
+        let mut threat_value = 0;
+        
+        // High value for captures
+        if move_.is_capture {
+            threat_value += move_.captured_piece_value();
+        }
+        
+        // High value for checks
+        if move_.gives_check {
+            threat_value += 1000;
+        }
+        
+        // High value for promotions
+        if move_.is_promotion {
+            threat_value += move_.promotion_value();
+        }
+        
+        // High value for recaptures
+        if move_.is_recapture {
+            threat_value += 500;
+        }
+        
+        threat_value
+    }
+
+    /// Sort moves specifically for quiescence search
+    fn sort_quiescence_moves(&self, moves: &[Move]) -> Vec<Move> {
+        let mut sorted_moves = moves.to_vec();
+        sorted_moves.sort_by(|a, b| self.compare_quiescence_moves(a, b));
+        sorted_moves
+    }
+
+    /// Clear the quiescence transposition table
+    pub fn clear_quiescence_tt(&mut self) {
+        self.quiescence_tt.clear();
+    }
+
+    /// Get the size of the quiescence transposition table
+    pub fn quiescence_tt_size(&self) -> usize {
+        self.quiescence_tt.len()
+    }
+
+    /// Clean up old entries from the quiescence transposition table
+    pub fn cleanup_quiescence_tt(&mut self, max_entries: usize) {
+        if self.quiescence_tt.len() > max_entries {
+            // Simple cleanup: clear half the entries
+            let entries_to_remove = self.quiescence_tt.len() / 2;
+            let keys_to_remove: Vec<String> = self.quiescence_tt.keys()
+                .take(entries_to_remove)
+                .cloned()
+                .collect();
+            
+            for key in keys_to_remove {
+                self.quiescence_tt.remove(&key);
+            }
+        }
+    }
+
+    /// Get a comprehensive performance report for quiescence search
+    pub fn get_quiescence_performance_report(&self) -> String {
+        self.quiescence_stats.performance_report()
+    }
+
+    /// Get a summary of quiescence performance
+    pub fn get_quiescence_summary(&self) -> String {
+        self.quiescence_stats.summary()
+    }
+
+    /// Get configuration and performance summary
+    pub fn get_quiescence_status(&self) -> String {
+        format!(
+            "{}\n{}\nTT Size: {} entries",
+            self.quiescence_config.summary(),
+            self.quiescence_stats.summary(),
+            self.quiescence_tt.len()
+        )
+    }
+
+    /// Reset quiescence statistics
+    pub fn reset_quiescence_performance(&mut self) {
+        self.quiescence_stats.reset();
+    }
+
+    /// Get quiescence efficiency metrics
+    pub fn get_quiescence_efficiency(&self) -> (f64, f64, f64) {
+        (
+            self.quiescence_stats.pruning_efficiency(),
+            self.quiescence_stats.tt_hit_rate(),
+            self.quiescence_stats.extension_rate()
+        )
+    }
+
+    /// Profile quiescence search performance
+    pub fn profile_quiescence_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iterations: usize) -> QuiescenceProfile {
+        let mut profile = QuiescenceProfile::new();
+        let time_source = TimeSource::now();
+        
+        for i in 0..iterations {
+            self.reset_quiescence_stats();
+            let start_time = std::time::Instant::now();
+            
+            let _result = self.quiescence_search(
+                board,
+                captured_pieces,
+                player,
+                -10000,
+                10000,
+                &time_source,
+                1000,
+                depth
+            );
+            
+            let duration = start_time.elapsed();
+            let stats = self.get_quiescence_stats().clone();
+            
+            profile.add_sample(QuiescenceSample {
+                iteration: i,
+                duration_ms: duration.as_millis() as u64,
+                nodes_searched: stats.nodes_searched,
+                moves_ordered: stats.moves_ordered,
+                delta_prunes: stats.delta_prunes,
+                futility_prunes: stats.futility_prunes,
+                extensions: stats.extensions,
+                tt_hits: stats.tt_hits,
+                tt_misses: stats.tt_misses,
+                check_moves: stats.check_moves_found,
+                capture_moves: stats.capture_moves_found,
+                promotion_moves: stats.promotion_moves_found,
+            });
+        }
+        
+        profile
+    }
+
+    /// Get detailed performance metrics
+    pub fn get_quiescence_performance_metrics(&self) -> QuiescencePerformanceMetrics {
+        let stats = self.get_quiescence_stats();
+        QuiescencePerformanceMetrics {
+            nodes_per_second: if stats.nodes_searched > 0 { 
+                stats.nodes_searched as f64 / 1.0 // Placeholder - would need timing info
+            } else { 0.0 },
+            pruning_efficiency: stats.pruning_efficiency(),
+            tt_hit_rate: stats.tt_hit_rate(),
+            extension_rate: stats.extension_rate(),
+            move_ordering_efficiency: if stats.moves_ordered > 0 {
+                (stats.nodes_searched as f64 / stats.moves_ordered as f64) * 100.0
+            } else { 0.0 },
+            tactical_move_ratio: if stats.nodes_searched > 0 {
+                ((stats.check_moves_found + stats.capture_moves_found + stats.promotion_moves_found) as f64 / stats.nodes_searched as f64) * 100.0
+            } else { 0.0 },
+        }
+    }
 }
 
 
@@ -370,4 +1038,5 @@ impl IterativeDeepening {
         }
         start_time.has_exceeded_limit(time_limit_ms)
     }
+
 }

@@ -63,6 +63,8 @@ impl OpeningBook {
             captured_piece: None,
             is_capture: false,
             player: Player::Black, // This is not correct, but it will be fixed later
+            gives_check: false,
+            is_recapture: false,
         }
     }
 }

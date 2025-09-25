@@ -4,12 +4,19 @@ use std::collections::HashSet;
 
 
 pub struct MoveGenerator {
-    // In a more advanced engine, this could hold precomputed attack tables.
+    // Cache for move generation to avoid redundant work
+    move_cache: std::collections::HashMap<String, Vec<Move>>,
+    cache_hits: u64,
+    cache_misses: u64,
 }
 
 impl MoveGenerator {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            move_cache: std::collections::HashMap::new(),
+            cache_hits: 0,
+            cache_misses: 0,
+        }
     }
 
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
@@ -283,6 +290,362 @@ impl MoveGenerator {
             }
         }
         moves
+    }
+
+    /// Generate all moves that give check to the opponent
+    pub fn generate_checks(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        let mut check_moves = Vec::new();
+        let opponent = player.opposite();
+        
+        // Generate all pseudo-legal moves
+        let all_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+        
+        for mut move_ in all_moves {
+            // Make the move on a temporary board
+            let mut temp_board = board.clone();
+            let mut temp_captured = captured_pieces.clone();
+            
+            if let Some(captured) = temp_board.make_move(&move_) {
+                temp_captured.add_piece(captured.piece_type, player);
+            }
+            
+            // Check if this move gives check to the opponent
+            if temp_board.is_king_in_check(opponent, &temp_captured) {
+                move_.gives_check = true;
+                check_moves.push(move_);
+            }
+        }
+        
+        check_moves
+    }
+
+    /// Generate all promotion moves
+    pub fn generate_promotions(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        let mut promotion_moves = Vec::new();
+        
+        // Generate all pseudo-legal moves
+        let all_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+        
+        for move_ in all_moves {
+            if move_.is_promotion {
+                promotion_moves.push(move_);
+            }
+        }
+        
+        promotion_moves
+    }
+
+    /// Generate moves that create tactical threats
+    pub fn generate_tactical_threats(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        let mut threat_moves = Vec::new();
+        let _opponent = player.opposite();
+        
+        // Generate all pseudo-legal moves
+        let all_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+        
+        for move_ in all_moves {
+            // Check if this move creates a threat (attacks opponent pieces or creates tactical patterns)
+            if self.is_tactical_threat(&move_, board, player) {
+                threat_moves.push(move_);
+            }
+        }
+        
+        threat_moves
+    }
+
+    /// Check if a move creates a tactical threat
+    fn is_tactical_threat(&self, move_: &Move, board: &BitboardBoard, player: Player) -> bool {
+        // For now, we'll consider moves that attack opponent pieces as threats
+        // This can be expanded to include more sophisticated threat detection
+        if move_.is_capture {
+            return true;
+        }
+        
+        // Check if the move attacks opponent pieces
+        if let Some(from) = move_.from {
+            if let Some(piece) = board.get_piece(from) {
+                // Check if this piece can attack opponent pieces from the new position
+                let opponent = player.opposite();
+                let mut temp_board = board.clone();
+                temp_board.remove_piece(from);
+                temp_board.place_piece(*piece, move_.to);
+                
+                // Check if the piece can attack any opponent pieces from this position
+                for r in 0..9 {
+                    for c in 0..9 {
+                        let pos = Position::new(r, c);
+                        if let Some(target_piece) = board.get_piece(pos) {
+                            if target_piece.player == opponent {
+                                // This is a simplified threat detection
+                                // In a more sophisticated implementation, we would check
+                                // if the piece can actually attack the target
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        false
+    }
+
+    /// Generate all quiescence moves (captures, checks, promotions, threats)
+    pub fn generate_quiescence_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        // Pre-allocate with estimated capacity to reduce allocations
+        let mut moves = Vec::with_capacity(32);
+        
+        // 1. Generate captures (highest priority) - most important for quiescence
+        let captures = self.generate_legal_captures(board, player, captured_pieces);
+        moves.extend(captures);
+        
+        // 2. Generate checks - high priority for tactical positions
+        let checks = self.generate_checks(board, player, captured_pieces);
+        moves.extend(checks);
+        
+        // 3. Generate promotions - important for endgame tactics
+        let promotions = self.generate_promotions(board, player, captured_pieces);
+        moves.extend(promotions);
+        
+        // 4. Generate tactical threats - only if we have few moves so far
+        if moves.len() < 16 { // Only generate threats if we don't have many tactical moves
+            let threats = self.generate_tactical_threats(board, player, captured_pieces);
+            moves.extend(threats);
+        }
+        
+        // Remove duplicates efficiently and sort by priority
+        self.deduplicate_and_sort_quiescence_moves(&mut moves);
+        moves
+    }
+
+    /// Optimized deduplication and sorting for quiescence moves
+    fn deduplicate_and_sort_quiescence_moves(&self, moves: &mut Vec<Move>) {
+        if moves.is_empty() {
+            return;
+        }
+        
+        // Sort first to group duplicates together
+        moves.sort_by(|a, b| self.compare_quiescence_moves_simple(a, b));
+        
+        // Remove duplicates (moves with same from, to, and piece_type)
+        let mut write_index = 0;
+        for read_index in 1..moves.len() {
+            if !self.moves_equal(&moves[write_index], &moves[read_index]) {
+                write_index += 1;
+                if write_index != read_index {
+                    moves[write_index] = moves[read_index].clone();
+                }
+            }
+        }
+        moves.truncate(write_index + 1);
+    }
+
+    /// Check if two moves are equal (for deduplication)
+    fn moves_equal(&self, a: &Move, b: &Move) -> bool {
+        a.from == b.from && a.to == b.to && a.piece_type == b.piece_type && a.player == b.player
+    }
+
+    /// Generate quiescence moves with caching
+    pub fn generate_quiescence_moves_cached(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+        // Create cache key from board state
+        let cache_key = format!("q_{}_{}", board.to_fen(player, captured_pieces), player as u8);
+        
+        // Check cache first
+        if let Some(cached_moves) = self.move_cache.get(&cache_key) {
+            self.cache_hits += 1;
+            return cached_moves.clone();
+        }
+        
+        self.cache_misses += 1;
+        
+        // Generate moves if not in cache
+        let moves = self.generate_quiescence_moves(board, player, captured_pieces);
+        
+        // Cache the result (limit cache size)
+        if self.move_cache.len() < 1000 {
+            self.move_cache.insert(cache_key, moves.clone());
+        }
+        
+        moves
+    }
+
+    /// Clear the move cache
+    pub fn clear_cache(&mut self) {
+        self.move_cache.clear();
+        self.cache_hits = 0;
+        self.cache_misses = 0;
+    }
+
+    /// Get cache statistics
+    pub fn get_cache_stats(&self) -> (u64, u64, f64) {
+        let total_attempts = self.cache_hits + self.cache_misses;
+        let hit_rate = if total_attempts > 0 {
+            (self.cache_hits as f64 / total_attempts as f64) * 100.0
+        } else {
+            0.0
+        };
+        (self.cache_hits, self.cache_misses, hit_rate)
+    }
+
+    /// Simple comparison function for quiescence moves (used in MoveGenerator)
+    pub fn compare_quiescence_moves_simple(&self, a: &Move, b: &Move) -> std::cmp::Ordering {
+        // Create a simple, guaranteed total order by using a hash-based comparison
+        // This ensures we never have equal moves that are actually different
+        
+        // 1. Checks first
+        match (a.gives_check, b.gives_check) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 2. MVV-LVA for captures
+        if a.is_capture && b.is_capture {
+            let a_value = a.captured_piece_value() - a.piece_value();
+            let b_value = b.captured_piece_value() - b.piece_value();
+            let capture_cmp = b_value.cmp(&a_value);
+            if capture_cmp != std::cmp::Ordering::Equal {
+                return capture_cmp;
+            }
+        }
+        
+        // 3. Promotions
+        match (a.is_promotion, b.is_promotion) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 4. Tactical threat assessment
+        let a_threat_value = self.assess_tactical_threat_value(a);
+        let b_threat_value = self.assess_tactical_threat_value(b);
+        let threat_cmp = b_threat_value.cmp(&a_threat_value);
+        if threat_cmp != std::cmp::Ordering::Equal {
+            return threat_cmp;
+        }
+        
+        // 5. Piece value ordering
+        let piece_cmp = b.piece_value().cmp(&a.piece_value());
+        if piece_cmp != std::cmp::Ordering::Equal {
+            return piece_cmp;
+        }
+        
+        // 6. Use a simple hash-based comparison to ensure total order
+        // This guarantees that different moves will always have different orderings
+        let a_hash = self.move_hash(a);
+        let b_hash = self.move_hash(b);
+        a_hash.cmp(&b_hash)
+    }
+
+    /// Create a simple hash for move comparison
+    fn move_hash(&self, move_: &Move) -> u64 {
+        let mut hash = 0u64;
+        
+        // Hash the to position
+        hash = hash.wrapping_mul(31).wrapping_add(move_.to.row as u64);
+        hash = hash.wrapping_mul(31).wrapping_add(move_.to.col as u64);
+        
+        // Hash the from position (if exists)
+        if let Some(from) = move_.from {
+            hash = hash.wrapping_mul(31).wrapping_add(from.row as u64);
+            hash = hash.wrapping_mul(31).wrapping_add(from.col as u64);
+        }
+        
+        // Hash the piece type
+        hash = hash.wrapping_mul(31).wrapping_add(move_.piece_type as u64);
+        
+        // Hash the player
+        hash = hash.wrapping_mul(31).wrapping_add(move_.player as u64);
+        
+        hash
+    }
+
+    /// Compare two moves for quiescence search ordering
+    fn compare_quiescence_moves(&self, a: &Move, b: &Move) -> std::cmp::Ordering {
+        // 1. Checks first
+        match (a.gives_check, b.gives_check) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 2. MVV-LVA for captures
+        if a.is_capture && b.is_capture {
+            let a_value = a.captured_piece_value() - a.piece_value();
+            let b_value = b.captured_piece_value() - b.piece_value();
+            let capture_cmp = b_value.cmp(&a_value);
+            if capture_cmp != std::cmp::Ordering::Equal {
+                return capture_cmp;
+            }
+        }
+        
+        // 3. Promotions
+        match (a.is_promotion, b.is_promotion) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        
+        // 4. Tactical threat assessment
+        let a_threat_value = self.assess_tactical_threat_value(a);
+        let b_threat_value = self.assess_tactical_threat_value(b);
+        let threat_cmp = b_threat_value.cmp(&a_threat_value);
+        if threat_cmp != std::cmp::Ordering::Equal {
+            return threat_cmp;
+        }
+        
+        // 5. Piece value ordering
+        let piece_cmp = b.piece_value().cmp(&a.piece_value());
+        if piece_cmp != std::cmp::Ordering::Equal {
+            return piece_cmp;
+        }
+        
+        // 6. Position-based ordering (to ensure total order)
+        let a_pos_value = (a.to.row as i32 * 9 + a.to.col as i32) as i32;
+        let b_pos_value = (b.to.row as i32 * 9 + b.to.col as i32) as i32;
+        let pos_cmp = a_pos_value.cmp(&b_pos_value);
+        if pos_cmp != std::cmp::Ordering::Equal {
+            return pos_cmp;
+        }
+        
+        // 7. From position ordering
+        match (a.from, b.from) {
+            (Some(a_from), Some(b_from)) => {
+                let a_from_value = (a_from.row as i32 * 9 + a_from.col as i32) as i32;
+                let b_from_value = (b_from.row as i32 * 9 + b_from.col as i32) as i32;
+                a_from_value.cmp(&b_from_value)
+            },
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        }
+    }
+
+    /// Assess tactical threat value for move ordering
+    fn assess_tactical_threat_value(&self, move_: &Move) -> i32 {
+        let mut threat_value = 0;
+        
+        // High value for captures
+        if move_.is_capture {
+            threat_value += move_.captured_piece_value();
+        }
+        
+        // High value for checks
+        if move_.gives_check {
+            threat_value += 1000;
+        }
+        
+        // High value for promotions
+        if move_.is_promotion {
+            threat_value += move_.promotion_value();
+        }
+        
+        // High value for recaptures
+        if move_.is_recapture {
+            threat_value += 500;
+        }
+        
+        threat_value
     }
 }
 
