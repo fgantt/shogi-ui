@@ -12,6 +12,7 @@ pub mod evaluation;
 pub mod search;
 pub mod types;
 pub mod opening_book;
+pub mod opening_book_converter;
 pub mod time_utils;
 pub mod debug_utils;
 
@@ -61,7 +62,7 @@ pub struct ShogiEngine {
 impl ShogiEngine {
     pub fn new() -> Self {
         let stop_flag = Arc::new(AtomicBool::new(false));
-        Self {
+        let mut engine = Self {
             board: BitboardBoard::new(),
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
@@ -71,6 +72,148 @@ impl ShogiEngine {
             debug_mode: false,
             pondering: false,
             depth: 5, // Default to medium depth
+        };
+        
+        // Try to load default opening book if available
+        engine.load_default_opening_book();
+        
+        engine
+    }
+
+    /// Load default opening book from embedded data
+    fn load_default_opening_book(&mut self) {
+        // Try to load from embedded JSON data first
+        let json_data = include_str!("ai/openingBook.json");
+        if self.load_opening_book_from_json(json_data).is_ok() {
+            crate::debug_utils::debug_log("Loaded default opening book from JSON");
+            return;
+        }
+        
+        // If JSON loading fails, try to load from binary if available
+        // This would be implemented when binary opening books are generated
+        crate::debug_utils::debug_log("No default opening book available");
+    }
+
+    /// Load opening book from binary data
+    pub fn load_opening_book_from_binary(&mut self, data: &[u8]) -> Result<(), String> {
+        self.opening_book.load_from_binary(data)
+            .map_err(|e| format!("Failed to load opening book: {:?}", e))
+    }
+
+    /// Load opening book from JSON data
+    pub fn load_opening_book_from_json(&mut self, json_data: &str) -> Result<(), String> {
+        self.opening_book.load_from_json(json_data)
+            .map_err(|e| format!("Failed to load opening book: {:?}", e))
+    }
+
+    /// Check if opening book is loaded
+    pub fn is_opening_book_loaded(&self) -> bool {
+        self.opening_book.is_loaded()
+    }
+
+    /// Get opening book statistics
+    pub fn get_opening_book_stats(&self) -> String {
+        let stats = self.opening_book.get_stats();
+        format!(
+            "Positions: {}, Moves: {}, Version: {}, Loaded: {}",
+            stats.position_count, stats.move_count, stats.version, self.opening_book.is_loaded()
+        )
+    }
+
+    /// Get detailed opening book information
+    pub fn get_opening_book_info(&mut self) -> String {
+        if !self.opening_book.is_loaded() {
+            return "Opening book not loaded".to_string();
+        }
+        
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        let available_moves = self.opening_book.get_moves(&fen);
+        let stats = self.opening_book.get_stats();
+        
+        let mut info = format!(
+            "Opening Book Info:\n\
+            - Positions: {}\n\
+            - Total Moves: {}\n\
+            - Version: {}\n\
+            - Current Position: {}\n",
+            stats.position_count, stats.move_count, stats.version, fen
+        );
+        
+        if let Some(moves) = available_moves {
+            info.push_str(&format!("- Available Moves: {}\n", moves.len()));
+            for (i, book_move) in moves.iter().enumerate().take(3) {
+                info.push_str(&format!(
+                    "  {}. {} (weight: {}, eval: {})\n",
+                    i + 1,
+                    book_move.move_notation.as_ref().unwrap_or(&"N/A".to_string()),
+                    book_move.weight,
+                    book_move.evaluation
+                ));
+            }
+            if moves.len() > 3 {
+                info.push_str(&format!("  ... and {} more moves\n", moves.len() - 3));
+            }
+        } else {
+            info.push_str("- No moves available in opening book\n");
+        }
+        
+        info
+    }
+
+    /// Get opening book move for current position with detailed info
+    pub fn get_opening_book_move_info(&mut self) -> Option<String> {
+        if !self.opening_book.is_loaded() {
+            return None;
+        }
+        
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        if let Some(book_moves) = self.opening_book.get_moves(&fen) {
+            if let Some(best_book_move) = book_moves.iter().max_by(|a, b| a.weight.cmp(&b.weight)) {
+                Some(format!(
+                    "Opening book move: {} (weight: {}, eval: {}, opening: {})",
+                    best_book_move.move_notation.as_ref().unwrap_or(&"N/A".to_string()),
+                    best_book_move.weight,
+                    best_book_move.evaluation,
+                    best_book_move.opening_name.as_ref().unwrap_or(&"Unknown".to_string())
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get a random opening book move for variety
+    pub fn get_random_opening_book_move(&mut self) -> Option<Move> {
+        if !self.opening_book.is_loaded() {
+            return None;
+        }
+        
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        self.opening_book.get_random_move(&fen)
+    }
+
+    /// Get all available opening book moves for current position
+    pub fn get_all_opening_book_moves(&mut self) -> Vec<String> {
+        if !self.opening_book.is_loaded() {
+            return vec!["Opening book not loaded".to_string()];
+        }
+        
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        if let Some(moves) = self.opening_book.get_moves(&fen) {
+            moves.iter().enumerate().map(|(i, book_move)| {
+                format!(
+                    "{}. {} (weight: {}, eval: {}, opening: {})",
+                    i + 1,
+                    book_move.move_notation.as_ref().unwrap_or(&"N/A".to_string()),
+                    book_move.weight,
+                    book_move.evaluation,
+                    book_move.opening_name.as_ref().unwrap_or(&"Unknown".to_string())
+                )
+            }).collect()
+        } else {
+            vec!["No moves available in opening book".to_string()]
         }
     }
 
@@ -130,7 +273,7 @@ impl ShogiEngine {
 }
 
 impl ShogiEngine {
-    pub fn get_best_move(&self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
         crate::debug_utils::debug_log("Starting get_best_move");
         
         if let Some(on_info) = &on_info {
@@ -140,13 +283,27 @@ impl ShogiEngine {
         }
 
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
-        if let Some(book_move) = self.opening_book.get_move(&fen) {
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Found opening book move");
-                let _ = on_info.call1(&this, &s);
+        
+        // Check opening book first
+        if self.opening_book.is_loaded() {
+            if let Some(book_move) = self.opening_book.get_best_move(&fen) {
+                if let Some(on_info) = &on_info {
+                    let this = wasm_bindgen::JsValue::NULL;
+                    let move_info = format!(
+                        "info string Opening book move: {}",
+                        book_move.to_usi_string()
+                    );
+                    let s = wasm_bindgen::JsValue::from_str(&move_info);
+                    let _ = on_info.call1(&this, &s);
+                }
+                
+                crate::debug_utils::debug_log(&format!(
+                    "Found opening book move: {}",
+                    book_move.to_usi_string()
+                ));
+                
+                return Some(book_move);
             }
-            return Some(book_move);
         }
 
         if let Some(on_info) = &on_info {

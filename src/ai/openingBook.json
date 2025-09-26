@@ -1,143 +1,569 @@
-[
-  {
-    "name": "Aggressive Rook",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "27", "to": "26" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "83", "to": "84" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "26", "to": "25" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/7P1/9/PPPPPPP1P/1B5R1/LNSGKGSNL w - 4": [
-        { "from": "84", "to": "85" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/9/1p5P1/9/PPPPPPP1P/1B5R1/LNSGKGSNL b - 5": [
-        { "from": "25", "to": "24" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/7P1/1p7/9/PPPPPPP1P/1B5R1/LNSGKGSNL w - 6": [
-        { "from": "85", "to": "86" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/7P1/9/1p7/PPPPPPP1P/1B5R1/LNSGKGSNL b - 7": [
-        { "from": "24", "to": "23" }
-      ],
-      "lnsgkgsnl/1r5b1/p1pppppPp/9/9/1p7/PPPPPPP1P/1B5R1/LNSGKGSNL w P 8": [
-        { "from": "86", "to": "87" }
-      ],
-      "lnsgkgsnl/1r5b1/p1pppppPp/6P2/9/1p7/PPPPPPP1P/1B5R1/LNSGKGSNL b P 9": [
-        { "from": "23", "to": "22" }
-      ],
-      "lnsgkgsnl/1r5P1/p1ppppp1p/9/9/9/PpPPPPP1P/1B5R1/LNSGKGSNL w BPp 10": [
-        { "from": "87", "to": "88" }
+{
+  "positions": [
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+      "moves": [
+        {
+          "from": "7g",
+          "to": "6g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 30,
+          "opening_name": "Yagura",
+          "move_notation": "7g7f"
+        },
+        {
+          "from": "3c",
+          "to": "4c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 25,
+          "opening_name": "Yagura",
+          "move_notation": "3c4c"
+        },
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 800,
+          "evaluation": 20,
+          "opening_name": "Ranging Rook",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 750,
+          "evaluation": 15,
+          "opening_name": "Ranging Rook",
+          "move_notation": "8c8d"
+        },
+        {
+          "from": "6g",
+          "to": "5g",
+          "piece": "pawn",
+          "weight": 700,
+          "evaluation": 10,
+          "opening_name": "Central Pawn",
+          "move_notation": "6g6f"
+        },
+        {
+          "from": "4c",
+          "to": "5c",
+          "piece": "pawn",
+          "weight": 650,
+          "evaluation": 5,
+          "opening_name": "Central Pawn",
+          "move_notation": "4c4d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "3c",
+          "to": "4c",
+          "piece": "pawn",
+          "weight": 950,
+          "evaluation": 35,
+          "opening_name": "Yagura",
+          "move_notation": "3c4c"
+        },
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 800,
+          "evaluation": 20,
+          "opening_name": "Yagura",
+          "move_notation": "2g2f"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "7g",
+          "to": "6g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 30,
+          "opening_name": "Yagura",
+          "move_notation": "7g7f"
+        },
+        {
+          "from": "8g",
+          "to": "7g",
+          "piece": "silver",
+          "weight": 850,
+          "evaluation": 25,
+          "opening_name": "Yagura",
+          "move_notation": "8g7g"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 30,
+          "opening_name": "Ranging Rook",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 25,
+          "opening_name": "Ranging Rook",
+          "move_notation": "8c8d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "3h",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Ranging Rook",
+          "move_notation": "2h3h"
+        },
+        {
+          "from": "8h",
+          "to": "7h",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ranging Rook",
+          "move_notation": "8h7h"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "6g",
+          "to": "5g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 30,
+          "opening_name": "Central Pawn",
+          "move_notation": "6g6f"
+        },
+        {
+          "from": "4c",
+          "to": "5c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 25,
+          "opening_name": "Central Pawn",
+          "move_notation": "4c4d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "3i",
+          "piece": "bishop",
+          "weight": 800,
+          "evaluation": 20,
+          "opening_name": "Bishop Exchange",
+          "move_notation": "2h3i"
+        },
+        {
+          "from": "8h",
+          "to": "7i",
+          "piece": "bishop",
+          "weight": 750,
+          "evaluation": 15,
+          "opening_name": "Bishop Exchange",
+          "move_notation": "8h7i"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 5",
+      "moves": [
+        {
+          "from": "8g",
+          "to": "7g",
+          "piece": "silver",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Yagura",
+          "move_notation": "8g7g"
+        },
+        {
+          "from": "6g",
+          "to": "5g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Yagura",
+          "move_notation": "6g6f"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 6",
+      "moves": [
+        {
+          "from": "7g",
+          "to": "6g",
+          "piece": "silver",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Yagura",
+          "move_notation": "7g6g"
+        },
+        {
+          "from": "8g",
+          "to": "7g",
+          "piece": "gold",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Yagura",
+          "move_notation": "8g7g"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 5",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "3h",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Ranging Rook",
+          "move_notation": "2h3h"
+        },
+        {
+          "from": "8h",
+          "to": "7h",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ranging Rook",
+          "move_notation": "8h7h"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 6",
+      "moves": [
+        {
+          "from": "3h",
+          "to": "4h",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ranging Rook",
+          "move_notation": "3h4h"
+        },
+        {
+          "from": "7h",
+          "to": "6h",
+          "piece": "rook",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Ranging Rook",
+          "move_notation": "7h6h"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 5",
+      "moves": [
+        {
+          "from": "6g",
+          "to": "5g",
+          "piece": "pawn",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Central Pawn",
+          "move_notation": "6g6f"
+        },
+        {
+          "from": "4c",
+          "to": "5c",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Central Pawn",
+          "move_notation": "4c4d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 6",
+      "moves": [
+        {
+          "from": "5g",
+          "to": "4g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Central Pawn",
+          "move_notation": "5g4g"
+        },
+        {
+          "from": "5c",
+          "to": "4c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Central Pawn",
+          "move_notation": "5c4c"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Quick Attack",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Quick Attack",
+          "move_notation": "8c8d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "2g",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Quick Attack",
+          "move_notation": "2h2g"
+        },
+        {
+          "from": "8h",
+          "to": "8g",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Quick Attack",
+          "move_notation": "8h8g"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "7g",
+          "to": "6g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Anaguma",
+          "move_notation": "7g7f"
+        },
+        {
+          "from": "3c",
+          "to": "4c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Anaguma",
+          "move_notation": "3c4c"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "8g",
+          "to": "7g",
+          "piece": "silver",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Anaguma",
+          "move_notation": "8g7g"
+        },
+        {
+          "from": "6g",
+          "to": "5g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Anaguma",
+          "move_notation": "6g6f"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ibisha",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Ibisha",
+          "move_notation": "8c8d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "2g",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Ibisha",
+          "move_notation": "2h2g"
+        },
+        {
+          "from": "8h",
+          "to": "8g",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ibisha",
+          "move_notation": "8h8g"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ai Funibisha",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Ai Funibisha",
+          "move_notation": "8c8d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "3h",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Ai Funibisha",
+          "move_notation": "2h3h"
+        },
+        {
+          "from": "8h",
+          "to": "7h",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Ai Funibisha",
+          "move_notation": "8h7h"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 2",
+      "moves": [
+        {
+          "from": "2g",
+          "to": "3g",
+          "piece": "pawn",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Side Pawn",
+          "move_notation": "2g2f"
+        },
+        {
+          "from": "8c",
+          "to": "7c",
+          "piece": "pawn",
+          "weight": 850,
+          "evaluation": 30,
+          "opening_name": "Side Pawn",
+          "move_notation": "8c8d"
+        }
+      ]
+    },
+    {
+      "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 3",
+      "moves": [
+        {
+          "from": "2h",
+          "to": "2g",
+          "piece": "rook",
+          "weight": 950,
+          "evaluation": 40,
+          "opening_name": "Side Pawn",
+          "move_notation": "2h2g"
+        },
+        {
+          "from": "8h",
+          "to": "8g",
+          "piece": "rook",
+          "weight": 900,
+          "evaluation": 35,
+          "opening_name": "Side Pawn",
+          "move_notation": "8h8g"
+        }
       ]
     }
-  },
-  {
-    "name": "Yagura",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "77", "to": "76" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "33", "to": "34" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "69", "to": "78" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1BG4R1/LNS1KGSNL w - 4": [
-        { "from": "41", "to": "42" }
-      ],
-      "lnsgk1snl/1r3g1b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1BG4R1/LNS1KGSNL b - 5": [
-        { "from": "59", "to": "68" }
-      ]
-    }
-  },
-  {
-    "name": "Kakugawari (Bishop Exchange)",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "27", "to": "26" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "83", "to": "84" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "22", "to": "88" }
-      ],
-      "lnsgkgsnl/1r7/p1ppppppp/1p7/9/7P1/PPPPPPP1P/1b5R1/LNSGKGSNL w B 4": [
-        { "from": "88", "to": "22" }
-      ]
-    }
-  },
-  {
-    "name": "Shikenbisya (Fourth File Rook)",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "27", "to": "26" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "83", "to": "84" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "28", "to": "58" }
-      ]
-    }
-  },
-  {
-    "name": "Aigakari (Double Wing Attack)",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "27", "to": "26" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "83", "to": "84" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/9/7P1/PPPPPPP1P/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "26", "to": "25" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/1p7/7P1/9/PPPPPPP1P/1B5R1/LNSGKGSNL w - 4": [
-        { "from": "84", "to": "85" }
-      ],
-      "lnsgkgsnl/1r5b1/p1ppppppp/9/1p5P1/9/PPPPPPP1P/1B5R1/LNSGKGSNL b - 5": [
-        { "from": "39", "to": "28" }
-      ]
-    }
-  },
-  {
-    "name": "Side Pawn Picker (Yokofudori)",
-    "moves": {
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1": [
-        { "from": "77", "to": "76" }
-      ],
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 2": [
-        { "from": "33", "to": "34" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL b - 3": [
-        { "from": "27", "to": "26" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P4P1/PP1PPPP1P/1B5R1/LNSGKGSNL w - 4": [
-        { "from": "34", "to": "35" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/9/6p2/2P4P1/PP1PPPP1P/1B5R1/LNSGKGSNL b - 5": [
-        { "from": "26", "to": "25" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/9/6pP1/2P6/PP1PPPP1P/1B5R1/LNSGKGSNL w - 6": [
-        { "from": "23", "to": "24" }
-      ],
-      "lnsgkgsnl/1r5b1/pppppp1pp/9/6pP1/2P6/PP1PPPP1P/1B5R1/LNSGKGSNL b - 7": [
-        { "from": "88", "to": "24", "promote": true }
-      ],
-      "lnsgkgsnl/1r5+B1/pppppp1pp/9/6pP1/2P6/PP1PPPP1P/7R1/LNSGKGSNL w b 8": [
-        { "from": "31", "to": "42" }
-      ],
-      "lnsgkg1nl/1r3s1+B1/pppppp1pp/9/6pP1/2P6/PP1PPPP1P/7R1/LNSGKGSNL b b 9": [
-        { "from": "drop", "to": "23", "pieceType": "P" }
-      ],
-      "lnsgkgsnl/1r5+B1/pppppp1pP/9/6p2/2P6/PP1PPPP1P/7R1/LNSGKGSNL w bp 10": [
-        { "from": "24", "to": "23", "promote": true }
-      ]
-    }
-  }
-]
+  ]
+}

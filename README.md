@@ -102,6 +102,8 @@ When a piece moves onto a square occupied by an opponent's piece, the opponent's
 ## Features
 
 *   **High-performance game engine:** The core game logic, including move generation, validation, and AI, is implemented in Rust and compiled to WebAssembly for native-like performance in the browser.
+*   **Advanced opening book system:** Professional-grade opening book with binary format for fast lookups, lazy loading for memory efficiency, and intelligent caching for optimal performance.
+*   **WASM-optimized performance:** Memory-efficient binary storage, FNV-1a hashing, streaming support for large opening books, and comprehensive memory monitoring.
 *   Single-player mode against an AI opponent.
 *   Three AI difficulty levels: Easy, Medium, and Hard.
 *   Click-to-move and drag-and-drop functionality for pieces.
@@ -154,5 +156,70 @@ wasm-pack build --target web
 ```
 
 This command will compile the Rust code, generate the necessary JavaScript bindings, and place the output in the `pkg/` directory.
+
+## Opening Book System
+
+The Shogi engine includes a sophisticated opening book system designed for high performance in WebAssembly environments. The opening book provides instant move suggestions for early-game positions, improving both AI play quality and response time.
+
+### Key Features
+
+*   **Binary Format:** Efficient binary storage format optimized for fast lookups and minimal memory usage
+*   **Lazy Loading:** Positions are loaded on-demand to conserve memory, especially important for large opening books
+*   **LRU Caching:** Frequently accessed positions are cached for optimal performance
+*   **Streaming Support:** Large opening books can be loaded in chunks to handle memory constraints
+*   **Memory Monitoring:** Built-in memory usage tracking and automatic optimization
+*   **WASM Optimization:** FNV-1a hashing and `Box<[u8]>` storage for optimal WebAssembly performance
+
+### Opening Book API
+
+The opening book provides several methods for move selection:
+
+```rust
+// Get the best move for a position
+let best_move = engine.get_best_move(&fen_string);
+
+// Get a random move (weighted by frequency)
+let random_move = engine.get_random_move(&fen_string);
+
+// Get all available moves for a position
+let all_moves = engine.get_all_opening_book_moves(&fen_string);
+
+// Get opening book statistics
+let stats = engine.get_opening_book_stats();
+```
+
+### Performance Benefits
+
+*   **Instant Early-Game Moves:** No calculation time for common opening positions
+*   **Memory Efficient:** Lazy loading and streaming support for large databases
+*   **High Performance:** O(1) lookup time with intelligent caching
+*   **WASM Optimized:** Designed specifically for WebAssembly constraints
+
+### Building with Opening Book
+
+The build script automatically converts the JSON opening book to binary format:
+
+```bash
+./build.sh
+```
+
+This will:
+1. Convert `src/ai/openingBook.json` to binary format
+2. Build the WebAssembly module
+3. Copy the binary opening book to output directories
+
+### Memory Usage
+
+The opening book system includes comprehensive memory monitoring:
+
+```rust
+let memory_stats = engine.get_memory_usage();
+println!("Total memory usage: {} bytes", memory_stats.total_size);
+println!("Memory efficiency: {:.1}%", memory_stats.memory_efficiency);
+
+// Automatic optimization
+let optimization_result = engine.optimize_memory_usage();
+println!("Applied {} optimizations", optimization_result.optimizations_applied);
+```
 
 

@@ -1,163 +1,300 @@
-# Implementation Plan: Opening Book
+# Implementation Plan: Opening Book (Revised)
 
 ## 1. Objective
 
-To integrate an opening book into the Rust WASM engine. This will allow the engine to play the first several moves of a game instantly based on a pre-computed library of standard openings. This saves calculation time, improves the quality of early-game play, and introduces strategic variety.
+To integrate a high-performance, professional-grade opening book into the Rust WASM engine. This will allow the engine to play the first several moves of a game instantly based on a comprehensive library of standard openings, saving calculation time, improving early-game play quality, and introducing strategic variety.
 
-## 2. Background
+## 2. Current Implementation Issues
 
-An opening book is a database that maps board positions to one or more good moves. Instead of calculating moves from scratch in the opening phase, an engine can look up the current position in its book and play a recommended move immediately. This is based on established shogi theory and allows the engine to enter the mid-game in a strong, well-understood position.
+After analyzing the existing `openingBook.json` and `opening_book.rs`, several critical issues have been identified:
 
-The project already contains an `openingBook.json` file, which will be used as the data source for the Rust engine.
+### 2.1 Data Structure Problems
+- **Inefficient Lookup**: Linear search through all openings instead of direct position lookup
+- **Poor Organization**: Moves grouped by opening name rather than by position
+- **Inconsistent Coordinates**: String coordinates like "27", "26" don't clearly map to engine's (row, col) system
+- **Missing Metadata**: No move weights, frequencies, or evaluation scores
 
-## 3. Core Logic and Implementation Plan
+### 2.2 Move Representation Issues
+- **Incomplete Information**: Missing piece type for drops, unclear promotion logic
+- **No Move Ordering**: No way to prioritize better moves or add variety
+- **Hard to Maintain**: Adding new positions requires manual JSON editing
 
-The plan involves creating a new module in Rust to handle the opening book, loading the data, and querying it before initiating a search.
+### 2.3 Performance Issues
+- **Memory Inefficiency**: Large JSON structure loaded entirely into memory
+- **Slow Parsing**: Complex nested structure requires multiple iterations
+- **No Caching**: No mechanism to cache frequently accessed positions
 
-### Step 1: Add `serde` for JSON Parsing
+## 3. Recommended New Implementation
 
-To parse the `openingBook.json` file, we need the `serde` and `serde_json` crates.
+### 3.1 New Data Format: Binary Opening Book
 
-**File:** `Cargo.toml`
+Instead of JSON, use a custom binary format optimized for:
+- **Fast Lookup**: Direct position-to-moves mapping
+- **Memory Efficiency**: Compact representation with minimal overhead
+- **Extensibility**: Easy to add new positions and metadata
 
-```toml
-# Add these lines under [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+#### Binary Format Structure
+```
+[Header]
+- Magic Number: 4 bytes ("SBOB" - Shogi Binary Opening Book)
+- Version: 4 bytes (1)
+- Entry Count: 8 bytes (number of positions)
+- Hash Table Size: 8 bytes (for collision handling)
+
+[Hash Table]
+- Position Hash: 8 bytes (FEN hash)
+- Entry Offset: 8 bytes (offset to position data)
+
+[Position Entries]
+- FEN String Length: 4 bytes
+- FEN String: variable length
+- Move Count: 4 bytes
+- Moves: variable length array of move entries
+
+[Move Entry]
+- From Position: 2 bytes (row << 8 | col)
+- To Position: 2 bytes (row << 8 | col)
+- Piece Type: 1 byte (enum value)
+- Is Drop: 1 byte (boolean)
+- Is Promotion: 1 byte (boolean)
+- Weight: 4 bytes (move frequency/strength)
+- Evaluation: 4 bytes (position evaluation)
 ```
 
-### Step 2: Create the Opening Book Module
+### 3.2 New Rust Implementation
 
-Create a new file `src/opening_book.rs` to encapsulate all logic related to the opening book.
-
-**File:** `src/opening_book.rs`
+#### Core Data Structures
 
 ```rust
 use std::collections::HashMap;
-use serde::Deserialize;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use crate::types::{Move, Position, PieceType, Player};
 
-#[derive(Deserialize, Debug)]
-struct BookMoveJson {
-    from: [u8; 2],
-    to: [u8; 2],
-    piece_type: String, // Assuming piece type is in the JSON
-    promotion: bool,
+#[derive(Debug, Clone)]
+pub struct BookMove {
+    pub from: Option<Position>,
+    pub to: Position,
+    pub piece_type: PieceType,
+    pub is_drop: bool,
+    pub is_promotion: bool,
+    pub weight: u32,        // Move frequency/strength (0-1000)
+    pub evaluation: i32,    // Position evaluation in centipawns
 }
 
-#[derive(Deserialize, Debug)]
-struct BookEntryJson {
-    moves: Vec<BookMoveJson>,
+#[derive(Debug)]
+pub struct PositionEntry {
+    pub fen: String,
+    pub moves: Vec<BookMove>,
 }
 
 pub struct OpeningBook {
-    book: HashMap<String, Vec<Move>>,
+    positions: HashMap<u64, PositionEntry>, // FEN hash -> position data
+    total_moves: usize,
+    loaded: bool,
 }
 
 impl OpeningBook {
     pub fn new() -> Self {
-        let json_data = include_str!("../ai/openingBook.json");
-        let parsed_book: HashMap<String, BookEntryJson> = serde_json::from_str(json_data)
-            .expect("Failed to parse openingBook.json");
-
-        let mut book = HashMap::new();
-
-        for (fen, entry) in parsed_book {
-            let moves: Vec<Move> = entry.moves.into_iter().map(|m| {
-                // Note: The JSON format may need to be adjusted to match this structure.
-                // The current openingBook.json seems to have a different format.
-                // This code assumes a structure that can be parsed into a Move object.
-                let from_pos = Position::new(m.from[0], m.from[1]);
-                let to_pos = Position::new(m.to[0], m.to[1]);
-                let piece_type = PieceType::from_str(&m.piece_type).unwrap_or(PieceType::Pawn);
-
-                Move {
-                    from: Some(from_pos),
-                    to: to_pos,
-                    piece_type: piece_type,
-                    player: Player::Black, // This needs to be determined from context or FEN
-                    is_promotion: m.promotion,
-                    is_capture: false, // This also needs to be determined
-                    captured_piece: None,
-                }
-            }).collect();
-            book.insert(fen, moves);
+        Self {
+            positions: HashMap::new(),
+            total_moves: 0,
+            loaded: false,
         }
-
-        Self { book }
     }
 
-    pub fn get_move(&self, fen: &str) -> Option<Move> {
-        if let Some(moves) = self.book.get(fen) {
-            if !moves.is_empty() {
-                // For now, just return the first move. Could be randomized.
-                return Some(moves[0].clone());
+    pub fn load_from_binary(&mut self, data: &[u8]) -> Result<(), String> {
+        // Parse binary format and populate positions HashMap
+        // Implementation details...
+    }
+
+    pub fn load_from_json(&mut self, json_data: &str) -> Result<(), String> {
+        // Convert existing JSON format to new structure
+        // This allows migration from current format
+    }
+
+    pub fn get_moves(&self, fen: &str) -> Option<&Vec<BookMove>> {
+        let hash = self.hash_fen(fen);
+        self.positions.get(&hash).map(|entry| &entry.moves)
+    }
+
+    pub fn get_best_move(&self, fen: &str) -> Option<Move> {
+        if let Some(moves) = self.get_moves(fen) {
+            // Select move based on weight and evaluation
+            let best_move = moves.iter()
+                .max_by_key(|m| m.weight)
+                .or_else(|| moves.first())?;
+            
+            Some(self.convert_to_engine_move(best_move))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_random_move(&self, fen: &str) -> Option<Move> {
+        if let Some(moves) = self.get_moves(fen) {
+            // Weighted random selection based on move weights
+            let total_weight: u32 = moves.iter().map(|m| m.weight).sum();
+            if total_weight == 0 { return None; }
+            
+            let mut rng = rand::thread_rng();
+            let mut random_value = rng.gen_range(0..total_weight);
+            
+            for book_move in moves {
+                if random_value < book_move.weight {
+                    return Some(self.convert_to_engine_move(book_move));
+                }
+                random_value -= book_move.weight;
             }
         }
         None
     }
+
+    fn hash_fen(&self, fen: &str) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        fen.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn convert_to_engine_move(&self, book_move: &BookMove) -> Move {
+        Move {
+            from: book_move.from,
+            to: book_move.to,
+            piece_type: book_move.piece_type,
+            player: Player::Black, // Will be corrected by caller
+            is_promotion: book_move.is_promotion,
+            is_capture: false, // Will be determined by engine
+            captured_piece: None,
+            gives_check: false, // Will be determined by engine
+            is_recapture: false,
+        }
+    }
 }
 ```
 
-### Step 3: Integrate into the Main Engine Logic
-
-Modify `src/lib.rs` to include and use the `OpeningBook`.
-
-**File:** `src/lib.rs`
+### 3.3 Integration with Engine
 
 ```rust
-// Add the new module
-pub mod opening_book;
-use opening_book::OpeningBook;
-
-// Add OpeningBook to the ShogiEngine struct
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct ShogiEngine {
-    // ... existing fields
-    opening_book: OpeningBook,
-}
-
-// In ShogiEngine::new()
-#[wasm_bindgen]
+// In src/lib.rs
 impl ShogiEngine {
-    pub fn new() -> Self {
-        // ...
-        Self {
-            // ... existing fields
-            opening_book: OpeningBook::new(),
-        }
-    }
-
-    // In get_best_move() or a similar top-level search function
-    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, /*...*/) -> Option<Move> {
-        // 1. Generate FEN for the current position
+    pub fn get_best_move(&self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+        // 1. Check opening book first
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
-
-        // 2. Check the opening book first
-        if let Some(book_move) = self.opening_book.get_move(&fen) {
-            // Need to update the move with the correct player
-            let mut final_move = book_move.clone();
-            final_move.player = self.current_player;
-            return Some(final_move);
+        
+        if let Some(mut book_move) = self.opening_book.get_best_move(&fen) {
+            // Correct the player and determine other move properties
+            book_move.player = self.current_player;
+            book_move.is_capture = self.board.get_piece(book_move.to).is_some();
+            book_move.gives_check = self.would_give_check(&book_move);
+            
+            if let Some(on_info) = &on_info {
+                let info = format!("info string Opening book move: {} -> {}", 
+                    book_move.from.map_or("drop".to_string(), |f| format!("{}{}", f.col + 1, (f.row + b'a') as char)),
+                    format!("{}{}", book_move.to.col + 1, (book_move.to.row + b'a') as char)
+                );
+                let _ = on_info.call1(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_str(&info));
+            }
+            
+            return Some(book_move);
         }
 
-        // 3. If no book move, proceed with the search
+        // 2. If no book move, proceed with search
         // ... existing search logic ...
     }
 }
 ```
 
-## 4. Dependencies and Considerations
+## 4. Migration Strategy
 
-*   **JSON Format:** The existing `src/ai/openingBook.json` may not match the `BookMoveJson` struct. The JSON file or the parsing logic will need to be standardized. The current book seems to use a FEN-like key but the move format is an array of objects with `from`, `to`, and `name`. The `name` field likely implies the piece type. The parsing logic in `opening_book.rs` must be written to match the actual JSON structure.
-*   **WASM Size:** Embedding the JSON file directly into the WASM binary using `include_str!` will increase its size. For a large opening book, it might be preferable to fetch it from JavaScript and pass it to the engine during initialization.
-*   **Player Turn:** The `Move` object requires a `Player`. When parsing the book, the player to move is not immediately known. The FEN key itself contains the active player, so the parsing logic should extract this and create the `Move` objects accordingly, or the player should be set when the move is retrieved, as shown in the example.
+### 4.1 Phase 1: Create New Format
+1. Design and implement the binary format parser
+2. Create conversion tools from JSON to binary
+3. Implement the new `OpeningBook` struct
 
-## 5. Verification Plan
+### 4.2 Phase 2: Data Migration
+1. Convert existing `openingBook.json` to new format
+2. Add move weights and evaluations based on professional games
+3. Expand the opening book with more positions and variations
 
-1.  **Unit Test:** Create a test in `src/opening_book.rs` that loads the book and asserts that a known FEN key returns the expected number of moves.
-2.  **Integration Test:** In `src/lib.rs` tests, set up the board to a starting position that is in the opening book. Call `get_best_move` and assert that the returned move is one of the valid book moves and that the function returns almost instantly (i.e., without performing a search).
-3.  **Gameplay Test:** Start a new game against the AI. Observe the first few moves. The engine should follow a standard opening sequence from its book. Check the logs to confirm that the moves are being identified as "book moves."
-4.  **Logging:** Add a `debug_log` call in `get_best_move` when a book move is found and returned, e.g., `debug_utils::debug_log("Playing move from opening book.");`
+### 4.3 Phase 3: Integration
+1. Replace old opening book implementation
+2. Add comprehensive testing
+3. Optimize for WASM performance
+
+## 5. Advanced Features
+
+### 5.1 Move Weighting System
+- **Frequency**: How often the move is played in professional games
+- **Success Rate**: Win percentage when this move is played
+- **Evaluation**: Engine evaluation of the resulting position
+- **Novelty**: How often the engine has played this move recently
+
+### 5.2 Adaptive Learning
+- Track which book moves lead to wins/losses
+- Adjust move weights based on engine performance
+- Learn from opponent responses to book moves
+
+### 5.3 Opening Classification
+- Tag positions with opening names (Yagura, Kakugawari, etc.)
+- Provide opening statistics and recommendations
+- Support for different playing styles (aggressive, positional, etc.)
+
+## 6. Performance Optimizations
+
+### 6.1 Memory Efficiency
+- Use `Box<[u8]>` for binary data instead of `Vec<u8>`
+- Implement position compression for similar positions
+- Lazy loading of rarely accessed positions
+
+### 6.2 Lookup Optimization
+- Use perfect hashing for position lookup
+- Implement position caching for frequently accessed FENs
+- Pre-compute common position hashes
+
+### 6.3 WASM-Specific Optimizations
+- Minimize heap allocations
+- Use `wasm_bindgen` efficiently for data transfer
+- Implement streaming for large opening books
+
+## 7. Verification and Testing
+
+### 7.1 Unit Tests
+- Test binary format parsing and generation
+- Verify move conversion accuracy
+- Test hash function consistency
+
+### 7.2 Integration Tests
+- Test opening book integration with search engine
+- Verify move selection algorithms
+- Test performance with large opening books
+
+### 7.3 Gameplay Tests
+- Play complete games using only opening book
+- Verify move quality and variety
+- Test against different opponent strategies
+
+### 7.4 Performance Benchmarks
+- Measure lookup times for various positions
+- Compare memory usage vs. JSON format
+- Test WASM binary size impact
+
+## 8. Future Enhancements
+
+### 8.1 Dynamic Opening Book
+- Update opening book based on game results
+- Learn from engine's search improvements
+- Adapt to opponent playing style
+
+### 8.2 Multi-Engine Support
+- Support different opening books for different playing styles
+- A/B testing of opening variations
+- Personalized opening recommendations
+
+### 8.3 Cloud Integration
+- Sync opening book updates from server
+- Share successful opening lines with community
+- Download additional opening databases
 
