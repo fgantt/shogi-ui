@@ -486,6 +486,163 @@ pub struct QuiescenceEntry {
     pub best_move: Option<Move>,
 }
 
+/// Represents a dual-phase evaluation score for tapered evaluation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TaperedScore {
+    /// Middlegame score (0-256 phase)
+    pub mg: i32,
+    /// Endgame score (0-256 phase)
+    pub eg: i32,
+}
+
+impl TaperedScore {
+    /// Create a new TaperedScore with both values equal
+    pub fn new(value: i32) -> Self {
+        Self { mg: value, eg: value }
+    }
+    
+    /// Create a TaperedScore with different mg and eg values
+    pub fn new_tapered(mg: i32, eg: i32) -> Self {
+        Self { mg, eg }
+    }
+    
+    /// Interpolate between mg and eg based on game phase
+    /// phase: 0 = endgame, GAME_PHASE_MAX = opening
+    pub fn interpolate(&self, phase: i32) -> i32 {
+        (self.mg * phase + self.eg * (GAME_PHASE_MAX - phase)) / GAME_PHASE_MAX
+    }
+}
+
+impl Default for TaperedScore {
+    fn default() -> Self {
+        Self { mg: 0, eg: 0 }
+    }
+}
+
+impl std::ops::AddAssign for TaperedScore {
+    fn add_assign(&mut self, other: Self) {
+        self.mg += other.mg;
+        self.eg += other.eg;
+    }
+}
+
+impl std::ops::SubAssign for TaperedScore {
+    fn sub_assign(&mut self, other: Self) {
+        self.mg -= other.mg;
+        self.eg -= other.eg;
+    }
+}
+
+impl std::ops::Add for TaperedScore {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            mg: self.mg + other.mg,
+            eg: self.eg + other.eg,
+        }
+    }
+}
+
+impl std::ops::Sub for TaperedScore {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self {
+            mg: self.mg - other.mg,
+            eg: self.eg - other.eg,
+        }
+    }
+}
+
+impl std::ops::Neg for TaperedScore {
+    type Output = Self;
+    fn neg(self) -> Self {
+        Self {
+            mg: -self.mg,
+            eg: -self.eg,
+        }
+    }
+}
+
+/// Maximum game phase value (opening)
+pub const GAME_PHASE_MAX: i32 = 256;
+
+/// Phase values for different piece types
+pub const PIECE_PHASE_VALUES: [(PieceType, i32); 6] = [
+    (PieceType::Knight, 1),
+    (PieceType::Silver, 1),
+    (PieceType::Gold, 2),
+    (PieceType::Bishop, 2),
+    (PieceType::Rook, 3),
+    (PieceType::Lance, 1),
+];
+
+/// Configuration options for tapered evaluation
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaperedEvaluationConfig {
+    /// Enable or disable tapered evaluation
+    pub enabled: bool,
+    /// Cache game phase calculation per search node
+    pub cache_game_phase: bool,
+    /// Use SIMD optimizations (future feature)
+    pub use_simd: bool,
+    /// Memory pool size for TaperedScore objects
+    pub memory_pool_size: usize,
+    /// Enable performance monitoring
+    pub enable_performance_monitoring: bool,
+}
+
+impl Default for TaperedEvaluationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cache_game_phase: true,
+            use_simd: false,
+            memory_pool_size: 1000,
+            enable_performance_monitoring: false,
+        }
+    }
+}
+
+impl TaperedEvaluationConfig {
+    /// Create a new configuration with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Create a configuration with tapered evaluation disabled
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            cache_game_phase: false,
+            use_simd: false,
+            memory_pool_size: 0,
+            enable_performance_monitoring: false,
+        }
+    }
+    
+    /// Create a configuration optimized for performance
+    pub fn performance_optimized() -> Self {
+        Self {
+            enabled: true,
+            cache_game_phase: true,
+            use_simd: false,
+            memory_pool_size: 2000,
+            enable_performance_monitoring: true,
+        }
+    }
+    
+    /// Create a configuration optimized for memory usage
+    pub fn memory_optimized() -> Self {
+        Self {
+            enabled: true,
+            cache_game_phase: false,
+            use_simd: false,
+            memory_pool_size: 100,
+            enable_performance_monitoring: false,
+        }
+    }
+}
+
 // Bitboard representation for efficient operations
 pub type Bitboard = u128;  // 81 squares need 81 bits, u128 gives us 128 bits
 
@@ -1126,5 +1283,179 @@ mod tests {
         assert!(summary.contains("NMP"));
         assert!(summary.contains("50 attempts"));
         assert!(summary.contains("20.0% cutoffs"));
+    }
+
+    #[test]
+    fn test_tapered_score_new() {
+        let score = TaperedScore::new(100);
+        assert_eq!(score.mg, 100);
+        assert_eq!(score.eg, 100);
+    }
+
+    #[test]
+    fn test_tapered_score_new_tapered() {
+        let score = TaperedScore::new_tapered(200, 150);
+        assert_eq!(score.mg, 200);
+        assert_eq!(score.eg, 150);
+    }
+
+    #[test]
+    fn test_tapered_score_default() {
+        let score = TaperedScore::default();
+        assert_eq!(score.mg, 0);
+        assert_eq!(score.eg, 0);
+    }
+
+    #[test]
+    fn test_tapered_score_interpolation() {
+        let score = TaperedScore::new_tapered(100, 200);
+        
+        // At phase 0 (endgame), should return eg value
+        assert_eq!(score.interpolate(0), 200);
+        
+        // At phase 256 (opening), should return mg value
+        assert_eq!(score.interpolate(GAME_PHASE_MAX), 100);
+        
+        // At phase 128 (middlegame), should return average
+        assert_eq!(score.interpolate(128), 150);
+        
+        // Test edge cases
+        assert_eq!(score.interpolate(64), 175);  // 100 * 64 + 200 * 192 / 256
+        assert_eq!(score.interpolate(192), 125); // 100 * 192 + 200 * 64 / 256
+    }
+
+    #[test]
+    fn test_tapered_score_add() {
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(50, 75);
+        let result = score1 + score2;
+        
+        assert_eq!(result.mg, 150);
+        assert_eq!(result.eg, 275);
+    }
+
+    #[test]
+    fn test_tapered_score_sub() {
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(30, 50);
+        let result = score1 - score2;
+        
+        assert_eq!(result.mg, 70);
+        assert_eq!(result.eg, 150);
+    }
+
+    #[test]
+    fn test_tapered_score_neg() {
+        let score = TaperedScore::new_tapered(100, -200);
+        let neg_score = -score;
+        
+        assert_eq!(neg_score.mg, -100);
+        assert_eq!(neg_score.eg, 200);
+    }
+
+    #[test]
+    fn test_tapered_score_add_assign() {
+        let mut score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(50, 75);
+        score1 += score2;
+        
+        assert_eq!(score1.mg, 150);
+        assert_eq!(score1.eg, 275);
+    }
+
+    #[test]
+    fn test_tapered_score_equality() {
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(100, 200);
+        let score3 = TaperedScore::new_tapered(100, 201);
+        
+        assert_eq!(score1, score2);
+        assert_ne!(score1, score3);
+    }
+
+    #[test]
+    fn test_tapered_score_clone_copy() {
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = score1; // Copy
+        let score3 = score1.clone(); // Clone
+        
+        assert_eq!(score1, score2);
+        assert_eq!(score1, score3);
+        assert_eq!(score2, score3);
+    }
+
+    #[test]
+    fn test_tapered_score_hash() {
+        use std::collections::HashMap;
+        
+        let mut map = HashMap::new();
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(100, 200);
+        
+        map.insert(score1, "first");
+        assert_eq!(map.get(&score2), Some(&"first"));
+    }
+
+    #[test]
+    fn test_tapered_score_serialization() {
+        let score = TaperedScore::new_tapered(100, 200);
+        
+        // Test JSON serialization
+        let json = serde_json::to_string(&score).unwrap();
+        let deserialized: TaperedScore = serde_json::from_str(&json).unwrap();
+        assert_eq!(score, deserialized);
+    }
+
+    #[test]
+    fn test_game_phase_constants() {
+        assert_eq!(GAME_PHASE_MAX, 256);
+        assert_eq!(PIECE_PHASE_VALUES.len(), 6);
+        
+        // Test that all piece types have phase values
+        let piece_types = [
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::Lance,
+        ];
+        
+        for piece_type in &piece_types {
+            assert!(PIECE_PHASE_VALUES.iter().any(|(pt, _)| *pt == *piece_type));
+        }
+    }
+
+    #[test]
+    fn test_tapered_score_interpolation_edge_cases() {
+        let score = TaperedScore::new_tapered(100, 200);
+        
+        // Test with negative phase (should still work)
+        // 100 * (-1) + 200 * (256 - (-1)) / 256 = -100 + 200 * 257 / 256 = -100 + 51400 / 256 = 51300 / 256 = 200
+        assert_eq!(score.interpolate(-1), 200);
+        
+        // Test with phase > GAME_PHASE_MAX
+        // 100 * 300 + 200 * (256 - 300) / 256 = 30000 + 200 * (-44) / 256 = (30000 - 8800) / 256 = 21200 / 256 = 82
+        assert_eq!(score.interpolate(300), 82);
+        
+        // Test with zero values
+        let zero_score = TaperedScore::new_tapered(0, 0);
+        assert_eq!(zero_score.interpolate(128), 0);
+    }
+
+    #[test]
+    fn test_tapered_score_arithmetic_consistency() {
+        let score1 = TaperedScore::new_tapered(100, 200);
+        let score2 = TaperedScore::new_tapered(50, 75);
+        
+        // Test that (a + b) - b = a
+        let sum = score1 + score2;
+        let diff = sum - score2;
+        assert_eq!(diff, score1);
+        
+        // Test that a + (-a) = 0
+        let neg_score1 = -score1;
+        let zero = score1 + neg_score1;
+        assert_eq!(zero, TaperedScore::default());
     }
 }
