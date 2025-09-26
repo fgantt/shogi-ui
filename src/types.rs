@@ -831,6 +831,153 @@ impl QuiescencePerformanceMetrics {
     }
 }
 
+/// Configuration for null move pruning parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NullMoveConfig {
+    pub enabled: bool,                      // Enable null move pruning
+    pub min_depth: u8,                      // Minimum depth to use NMP
+    pub reduction_factor: u8,               // Static reduction factor (R)
+    pub max_pieces_threshold: u8,           // Disable NMP when pieces < threshold
+    pub enable_dynamic_reduction: bool,     // Use dynamic R = 2 + depth/6
+    pub enable_endgame_detection: bool,     // Disable NMP in endgame
+}
+
+impl Default for NullMoveConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_depth: 3,
+            reduction_factor: 2,
+            max_pieces_threshold: 12,       // Disable when < 12 pieces
+            enable_dynamic_reduction: true,
+            enable_endgame_detection: true,
+        }
+    }
+}
+
+impl NullMoveConfig {
+    /// Validate the configuration parameters and return any errors
+    pub fn validate(&self) -> Result<(), String> {
+        if self.min_depth == 0 {
+            return Err("min_depth must be greater than 0".to_string());
+        }
+        if self.min_depth > 10 {
+            return Err("min_depth should not exceed 10 for performance reasons".to_string());
+        }
+        if self.reduction_factor == 0 {
+            return Err("reduction_factor must be greater than 0".to_string());
+        }
+        if self.reduction_factor > 5 {
+            return Err("reduction_factor should not exceed 5".to_string());
+        }
+        if self.max_pieces_threshold == 0 {
+            return Err("max_pieces_threshold must be greater than 0".to_string());
+        }
+        if self.max_pieces_threshold > 40 {
+            return Err("max_pieces_threshold should not exceed 40".to_string());
+        }
+        Ok(())
+    }
+
+    /// Create a validated configuration, clamping values to valid ranges
+    pub fn new_validated(mut self) -> Self {
+        self.min_depth = self.min_depth.clamp(1, 10);
+        self.reduction_factor = self.reduction_factor.clamp(1, 5);
+        self.max_pieces_threshold = self.max_pieces_threshold.clamp(1, 40);
+        self
+    }
+
+    /// Get a summary of the configuration
+    pub fn summary(&self) -> String {
+        format!(
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}",
+            self.enabled,
+            self.min_depth,
+            self.reduction_factor,
+            self.max_pieces_threshold,
+            self.enable_dynamic_reduction,
+            self.enable_endgame_detection
+        )
+    }
+}
+
+/// Performance statistics for null move pruning
+#[derive(Debug, Clone, Default)]
+pub struct NullMoveStats {
+    pub attempts: u64,                      // Number of null move attempts
+    pub cutoffs: u64,                       // Number of successful cutoffs
+    pub depth_reductions: u64,              // Total depth reductions applied
+    pub disabled_in_check: u64,             // Times disabled due to check
+    pub disabled_endgame: u64,              // Times disabled due to endgame
+}
+
+impl NullMoveStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = NullMoveStats::default();
+    }
+
+    /// Get the cutoff rate as a percentage
+    pub fn cutoff_rate(&self) -> f64 {
+        if self.attempts == 0 {
+            return 0.0;
+        }
+        (self.cutoffs as f64 / self.attempts as f64) * 100.0
+    }
+
+    /// Get the average reduction factor
+    pub fn average_reduction_factor(&self) -> f64 {
+        if self.attempts == 0 {
+            return 0.0;
+        }
+        self.depth_reductions as f64 / self.attempts as f64
+    }
+
+    /// Get the total number of disabled attempts
+    pub fn total_disabled(&self) -> u64 {
+        self.disabled_in_check + self.disabled_endgame
+    }
+
+    /// Get the efficiency of null move pruning as a percentage
+    pub fn efficiency(&self) -> f64 {
+        if self.attempts == 0 {
+            return 0.0;
+        }
+        (self.cutoffs as f64 / (self.attempts + self.total_disabled()) as f64) * 100.0
+    }
+
+    /// Get a comprehensive performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "Null Move Pruning Performance Report:\n\
+            - Attempts: {}\n\
+            - Cutoffs: {} ({:.2}%)\n\
+            - Total disabled: {} ({} in check, {} endgame)\n\
+            - Average reduction: {:.2}\n\
+            - Efficiency: {:.2}%",
+            self.attempts,
+            self.cutoffs,
+            self.cutoff_rate(),
+            self.total_disabled(),
+            self.disabled_in_check,
+            self.disabled_endgame,
+            self.average_reduction_factor(),
+            self.efficiency()
+        )
+    }
+
+    /// Get a summary of key metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "NMP: {} attempts, {:.1}% cutoffs, {:.1}% efficiency, {:.1} avg reduction",
+            self.attempts,
+            self.cutoff_rate(),
+            self.efficiency(),
+            self.average_reduction_factor()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -877,5 +1024,107 @@ mod tests {
         assert_eq!(mv2.piece_type, PieceType::Pawn);
         assert_eq!(mv2.to, Position::new(4, 4));
         assert_eq!(mv2.is_drop(), true);
+    }
+
+    #[test]
+    fn test_null_move_config_default() {
+        let config = NullMoveConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.reduction_factor, 2);
+        assert_eq!(config.max_pieces_threshold, 12);
+        assert!(config.enable_dynamic_reduction);
+        assert!(config.enable_endgame_detection);
+    }
+
+    #[test]
+    fn test_null_move_config_validation() {
+        let mut config = NullMoveConfig::default();
+        
+        // Valid configuration should pass
+        assert!(config.validate().is_ok());
+        
+        // Test invalid configurations
+        config.min_depth = 0;
+        assert!(config.validate().is_err());
+        
+        config.min_depth = 3;
+        config.reduction_factor = 0;
+        assert!(config.validate().is_err());
+        
+        config.reduction_factor = 2;
+        config.max_pieces_threshold = 0;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_null_move_config_new_validated() {
+        let config = NullMoveConfig {
+            enabled: true,
+            min_depth: 0,  // Invalid
+            reduction_factor: 10,  // Invalid
+            max_pieces_threshold: 50,  // Invalid
+            enable_dynamic_reduction: true,
+            enable_endgame_detection: true,
+        };
+        
+        let validated = config.new_validated();
+        assert_eq!(validated.min_depth, 1);
+        assert_eq!(validated.reduction_factor, 5);
+        assert_eq!(validated.max_pieces_threshold, 40);
+    }
+
+    #[test]
+    fn test_null_move_stats_default() {
+        let stats = NullMoveStats::default();
+        assert_eq!(stats.attempts, 0);
+        assert_eq!(stats.cutoffs, 0);
+        assert_eq!(stats.depth_reductions, 0);
+        assert_eq!(stats.disabled_in_check, 0);
+        assert_eq!(stats.disabled_endgame, 0);
+    }
+
+    #[test]
+    fn test_null_move_stats_calculations() {
+        let mut stats = NullMoveStats {
+            attempts: 100,
+            cutoffs: 25,
+            depth_reductions: 200,
+            disabled_in_check: 10,
+            disabled_endgame: 5,
+        };
+        
+        assert_eq!(stats.cutoff_rate(), 25.0);
+        assert_eq!(stats.average_reduction_factor(), 2.0);
+        assert_eq!(stats.total_disabled(), 15);
+        assert!((stats.efficiency() - 21.74).abs() < 0.01); // 25 / (100 + 15) * 100
+        
+        stats.reset();
+        assert_eq!(stats.attempts, 0);
+        assert_eq!(stats.cutoff_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_null_move_config_summary() {
+        let config = NullMoveConfig::default();
+        let summary = config.summary();
+        assert!(summary.contains("NullMoveConfig"));
+        assert!(summary.contains("enabled=true"));
+        assert!(summary.contains("min_depth=3"));
+    }
+
+    #[test]
+    fn test_null_move_stats_summary() {
+        let stats = NullMoveStats {
+            attempts: 50,
+            cutoffs: 10,
+            depth_reductions: 100,
+            disabled_in_check: 5,
+            disabled_endgame: 2,
+        };
+        let summary = stats.summary();
+        assert!(summary.contains("NMP"));
+        assert!(summary.contains("50 attempts"));
+        assert!(summary.contains("20.0% cutoffs"));
     }
 }

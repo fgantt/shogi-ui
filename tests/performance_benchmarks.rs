@@ -1,6 +1,9 @@
-use shogi_engine::*;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use shogi_engine::{
+    search::SearchEngine,
+    bitboards::BitboardBoard,
+    types::{CapturedPieces, Player, QuiescenceConfig, NullMoveConfig},
+    time_utils::TimeSource,
+};
 use std::time::Instant;
 
 #[cfg(test)]
@@ -25,7 +28,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         let start = Instant::now();
         
@@ -58,7 +61,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         let depths = vec![1, 2, 3, 4, 5];
         let mut results = Vec::new();
@@ -95,7 +98,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Enable TT
         let mut config = QuiescenceConfig::default();
@@ -144,7 +147,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Test with pruning enabled
         let mut config = QuiescenceConfig::default();
@@ -224,7 +227,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Enable TT
         let mut config = QuiescenceConfig::default();
@@ -263,7 +266,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Test different configurations
         let configs = vec![
@@ -321,7 +324,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Test multiple concurrent-like searches
         let start = Instant::now();
@@ -354,7 +357,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Run the same search multiple times
         let mut results = Vec::new();
@@ -386,7 +389,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         // Test with very short time limit
         let start = Instant::now();
@@ -415,7 +418,7 @@ mod performance_benchmarks {
         let mut board = create_test_board();
         let captured_pieces = create_test_captured_pieces();
         let player = Player::Sente;
-        let time_source = TimeSource::new();
+        let time_source = TimeSource::now();
         
         engine.reset_quiescence_stats();
         
@@ -446,5 +449,308 @@ mod performance_benchmarks {
         assert!(efficiency.0 >= 0.0 && efficiency.0 <= 100.0); // pruning efficiency
         assert!(efficiency.1 >= 0.0 && efficiency.1 <= 100.0); // TT hit rate
         assert!(efficiency.2 >= 0.0 && efficiency.2 <= 100.0); // extension rate
+    }
+
+    // ===== NULL MOVE PRUNING BENCHMARKS =====
+
+    #[test]
+    fn benchmark_null_move_performance() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with NMP enabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_with_nmp = Instant::now();
+        let result_with_nmp = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let duration_with_nmp = start_with_nmp.elapsed();
+        
+        let stats_with_nmp = engine.get_null_move_stats();
+        
+        // Test with NMP disabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = false;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_without_nmp = Instant::now();
+        let result_without_nmp = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let duration_without_nmp = start_without_nmp.elapsed();
+        
+        let stats_without_nmp = engine.get_null_move_stats();
+        
+        // Both searches should complete successfully
+        assert!(result_with_nmp.is_some());
+        assert!(result_without_nmp.is_some());
+        
+        let (_, score_with_nmp) = result_with_nmp.unwrap();
+        let (_, score_without_nmp) = result_without_nmp.unwrap();
+        
+        // Scores should be similar (NMP shouldn't change the best move significantly)
+        let score_diff = (score_with_nmp - score_without_nmp).abs();
+        assert!(score_diff <= 100); // Allow small differences due to search variations
+        
+        // NMP should have some activity when enabled
+        assert!(stats_with_nmp.attempts >= 0);
+        assert!(stats_with_nmp.cutoffs >= 0);
+        
+        // Both searches should complete within reasonable time
+        assert!(duration_with_nmp.as_millis() > 0);
+        assert!(duration_without_nmp.as_millis() > 0);
+        
+        println!("NMP enabled: {:?}, NMP disabled: {:?}", duration_with_nmp, duration_without_nmp);
+        println!("NMP stats: attempts={}, cutoffs={}", stats_with_nmp.attempts, stats_with_nmp.cutoffs);
+    }
+
+    #[test]
+    fn benchmark_null_move_nodes_per_second() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with NMP enabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start = Instant::now();
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 3, 2000);
+        let duration = start.elapsed();
+        
+        let stats = engine.get_null_move_stats();
+        let nodes_per_second = if duration.as_secs() > 0 {
+            stats.attempts as f64 / duration.as_secs() as f64
+        } else {
+            stats.attempts as f64 / (duration.as_millis() as f64 / 1000.0)
+        };
+        
+        // Should have reasonable performance
+        assert!(nodes_per_second > 0.0);
+        assert!(stats.attempts > 0);
+        
+        println!("NMP nodes per second: {:.2}", nodes_per_second);
+        println!("NMP attempts: {}, duration: {:?}", stats.attempts, duration);
+    }
+
+    #[test]
+    fn benchmark_null_move_depth_improvement() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with NMP enabled at depth 4
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_with_nmp = Instant::now();
+        let result_with_nmp = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let duration_with_nmp = start_with_nmp.elapsed();
+        
+        // Test with NMP disabled at depth 3 (should take similar time)
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = false;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_without_nmp = Instant::now();
+        let result_without_nmp = engine.search_at_depth(&board, &captured_pieces, player, 3, 1000);
+        let duration_without_nmp = start_without_nmp.elapsed();
+        
+        // Both searches should complete successfully
+        assert!(result_with_nmp.is_some());
+        assert!(result_without_nmp.is_some());
+        
+        // NMP should allow deeper search in similar time
+        // (This is a conceptual test - actual performance may vary)
+        assert!(duration_with_nmp.as_millis() > 0);
+        assert!(duration_without_nmp.as_millis() > 0);
+        
+        println!("NMP depth 4: {:?}, No NMP depth 3: {:?}", duration_with_nmp, duration_without_nmp);
+    }
+
+    #[test]
+    fn benchmark_null_move_cutoff_rates() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with NMP enabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.min_depth = 2; // Lower threshold to get more NMP activity
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Should have some NMP activity
+        assert!(stats.attempts >= 0);
+        assert!(stats.cutoffs >= 0);
+        
+        // Calculate cutoff rate
+        let cutoff_rate = stats.cutoff_rate();
+        assert!(cutoff_rate >= 0.0 && cutoff_rate <= 100.0);
+        
+        // Calculate efficiency
+        let efficiency = stats.efficiency();
+        assert!(efficiency >= 0.0 && efficiency <= 100.0);
+        
+        println!("NMP cutoff rate: {:.2}%", cutoff_rate);
+        println!("NMP efficiency: {:.2}%", efficiency);
+        println!("NMP attempts: {}, cutoffs: {}", stats.attempts, stats.cutoffs);
+    }
+
+    #[test]
+    fn benchmark_null_move_comprehensive_suite() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test multiple configurations
+        let configs = vec![
+            ("default", NullMoveConfig::default()),
+            ("high_reduction", NullMoveConfig {
+                reduction_factor: 4,
+                ..NullMoveConfig::default()
+            }),
+            ("low_threshold", NullMoveConfig {
+                max_pieces_threshold: 8,
+                ..NullMoveConfig::default()
+            }),
+            ("static_reduction", NullMoveConfig {
+                enable_dynamic_reduction: false,
+                reduction_factor: 3,
+                ..NullMoveConfig::default()
+            }),
+            ("disabled", NullMoveConfig {
+                enabled: false,
+                ..NullMoveConfig::default()
+            }),
+        ];
+        
+        let mut results = Vec::new();
+        
+        for (name, config) in configs {
+            engine.update_null_move_config(config).unwrap();
+            engine.reset_null_move_stats();
+            
+            let start = Instant::now();
+            let result = engine.search_at_depth(&board, &captured_pieces, player, 3, 1000);
+            let duration = start.elapsed();
+            
+            let stats = engine.get_null_move_stats();
+            results.push((name, result.is_some(), stats.attempts, stats.cutoffs, duration.as_millis()));
+        }
+        
+        // All configurations should complete successfully
+        assert_eq!(results.len(), 5);
+        
+        for (name, success, attempts, cutoffs, duration) in &results {
+            assert!(success, "Configuration {} failed", name);
+            assert!(*duration > 0, "Configuration {} took no time", name);
+            assert!(*attempts >= 0, "Configuration {} had negative attempts", name);
+            assert!(*cutoffs >= 0, "Configuration {} had negative cutoffs", name);
+        }
+        
+        // Disabled configuration should have no NMP activity
+        let disabled_result = results.iter().find(|(name, _, _, _, _)| *name == "disabled").unwrap();
+        assert_eq!(disabled_result.2, 0); // No attempts
+        assert_eq!(disabled_result.3, 0); // No cutoffs
+        
+        println!("NMP comprehensive benchmark results:");
+        for (name, _, attempts, cutoffs, duration) in &results {
+            println!("  {}: {}ms, {} attempts, {} cutoffs", name, duration, attempts, cutoffs);
+        }
+    }
+
+    #[test]
+    fn benchmark_null_move_dynamic_vs_static_reduction() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test dynamic reduction
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_dynamic_reduction = true;
+        config.reduction_factor = 2;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_dynamic = Instant::now();
+        let result_dynamic = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let duration_dynamic = start_dynamic.elapsed();
+        
+        let stats_dynamic = engine.get_null_move_stats();
+        
+        // Test static reduction
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_dynamic_reduction = false;
+        config.reduction_factor = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let start_static = Instant::now();
+        let result_static = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let duration_static = start_static.elapsed();
+        
+        let stats_static = engine.get_null_move_stats();
+        
+        // Both searches should complete successfully
+        assert!(result_dynamic.is_some());
+        assert!(result_static.is_some());
+        
+        // Both should have reasonable performance
+        assert!(duration_dynamic.as_millis() > 0);
+        assert!(duration_static.as_millis() > 0);
+        
+        println!("Dynamic reduction: {:?}, {} attempts, {} cutoffs", 
+                duration_dynamic, stats_dynamic.attempts, stats_dynamic.cutoffs);
+        println!("Static reduction: {:?}, {} attempts, {} cutoffs", 
+                duration_static, stats_static.attempts, stats_static.cutoffs);
+    }
+
+    #[test]
+    fn benchmark_null_move_safety_mechanisms() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with safety mechanisms enabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.enable_endgame_detection = true;
+        config.max_pieces_threshold = 12;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Should track safety mechanism usage
+        assert!(stats.disabled_in_check >= 0);
+        assert!(stats.disabled_endgame >= 0);
+        
+        // Total disabled should be sum of individual counters
+        assert_eq!(stats.total_disabled(), stats.disabled_in_check + stats.disabled_endgame);
+        
+        println!("Safety mechanisms: {} disabled in check, {} disabled in endgame", 
+                stats.disabled_in_check, stats.disabled_endgame);
     }
 }

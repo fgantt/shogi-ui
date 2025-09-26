@@ -17,6 +17,8 @@ pub struct SearchEngine {
     stop_flag: Option<Arc<AtomicBool>>,
     quiescence_config: QuiescenceConfig,
     quiescence_stats: QuiescenceStats,
+    null_move_config: NullMoveConfig,
+    null_move_stats: NullMoveStats,
 }
 
 impl SearchEngine {
@@ -39,6 +41,8 @@ impl SearchEngine {
             stop_flag,
             quiescence_config,
             quiescence_stats: QuiescenceStats::default(),
+            null_move_config: NullMoveConfig::default(),
+            null_move_stats: NullMoveStats::default(),
         }
     }
 
@@ -89,7 +93,7 @@ impl SearchEngine {
             }
             
             let beta = 200000;
-                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history);
+                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history, true);
             
             if score > best_score {
                 best_score = score;
@@ -104,7 +108,7 @@ impl SearchEngine {
         best_move.map(|m| (m, best_score))
     }
 
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { return 0; }
         self.nodes_searched += 1;
         let fen_key = board.to_fen(player, captured_pieces);
@@ -121,6 +125,20 @@ impl SearchEngine {
                 }
             }
         }
+        
+        // === NULL MOVE PRUNING ===
+        if self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
+            let null_move_score = self.perform_null_move_search(
+                board, captured_pieces, player, depth, beta, start_time, time_limit_ms, history
+            );
+            
+            if null_move_score >= beta {
+                // Beta cutoff - position is too good, prune this branch
+                self.null_move_stats.cutoffs += 1;
+                return beta;
+            }
+        }
+        // === END NULL MOVE PRUNING ===
         
         if depth == 0 {
             return self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
@@ -146,7 +164,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
-                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, history);
+                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, history, true);
 
             if score > best_score {
                 best_score = score;
@@ -977,6 +995,176 @@ impl SearchEngine {
             } else { 0.0 },
         }
     }
+
+    // ===== NULL MOVE PRUNING METHODS =====
+
+    /// Check if null move pruning should be attempted in the current position
+    fn should_attempt_null_move(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
+                               player: Player, depth: u8, can_null_move: bool) -> bool {
+        if !self.null_move_config.enabled || !can_null_move {
+            return false;
+        }
+        
+        // Must have sufficient depth
+        if depth < self.null_move_config.min_depth {
+            return false;
+        }
+        
+        // Cannot be in check
+        if board.is_king_in_check(player, captured_pieces) {
+            self.null_move_stats.disabled_in_check += 1;
+            return false;
+        }
+        
+        // Endgame detection
+        if self.null_move_config.enable_endgame_detection {
+            let piece_count = self.count_pieces_on_board(board);
+            if piece_count < self.null_move_config.max_pieces_threshold {
+                self.null_move_stats.disabled_endgame += 1;
+                return false;
+            }
+        }
+        
+        true
+    }
+    
+    /// Count the number of pieces on the board for endgame detection
+    fn count_pieces_on_board(&self, board: &BitboardBoard) -> u8 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                if board.is_square_occupied(Position::new(row, col)) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+    
+    /// Perform a null move search with reduced depth
+    fn perform_null_move_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces,
+                               player: Player, depth: u8, beta: i32, start_time: &TimeSource,
+                               time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+        self.null_move_stats.attempts += 1;
+        
+        // Calculate reduction factor
+        let reduction = if self.null_move_config.enable_dynamic_reduction {
+            2 + depth / 6  // Dynamic reduction
+        } else {
+            self.null_move_config.reduction_factor as u8  // Static reduction
+        };
+        
+        let search_depth = depth - 1 - reduction;
+        self.null_move_stats.depth_reductions += reduction as u64;
+        
+        // Perform null move search with zero-width window
+        let null_move_score = -self.negamax(
+            board, captured_pieces, player.opposite(), 
+            search_depth, -beta, -beta + 1, 
+            start_time, time_limit_ms, history, 
+            false  // Prevent recursive null moves
+        );
+        
+        null_move_score
+    }
+
+    // ===== NULL MOVE CONFIGURATION MANAGEMENT =====
+
+    /// Create default null move configuration
+    pub fn new_null_move_config() -> NullMoveConfig {
+        NullMoveConfig::default()
+    }
+    
+    /// Update null move configuration with validation
+    pub fn update_null_move_config(&mut self, config: NullMoveConfig) -> Result<(), String> {
+        config.validate()?;
+        self.null_move_config = config;
+        Ok(())
+    }
+    
+    /// Get current null move configuration
+    pub fn get_null_move_config(&self) -> &NullMoveConfig {
+        &self.null_move_config
+    }
+    
+    /// Get current null move statistics
+    pub fn get_null_move_stats(&self) -> &NullMoveStats {
+        &self.null_move_stats
+    }
+    
+    /// Reset null move statistics
+    pub fn reset_null_move_stats(&mut self) {
+        self.null_move_stats = NullMoveStats::default();
+    }
+
+    /// Log null move attempt for debugging
+    fn log_null_move_attempt(&self, depth: u8, reduction: u8, score: i32, cutoff: bool) {
+        crate::debug_utils::debug_log(&format!(
+            "NMP: depth={}, reduction={}, score={}, cutoff={}",
+            depth, reduction, score, cutoff
+        ));
+    }
+
+    /// Check if position is safe for null move pruning with additional safety checks
+    fn is_safe_for_null_move(&self, board: &BitboardBoard, _captured_pieces: &CapturedPieces, player: Player) -> bool {
+        // Basic safety checks are already in should_attempt_null_move
+        // Additional safety checks can be added here
+        
+        // Check if we have major pieces (rooks, bishops, golds) - more conservative in endgame
+        let major_piece_count = self.count_major_pieces(board, player);
+        if major_piece_count < 2 {
+            return false; // Too few major pieces - potential zugzwang risk
+        }
+        
+        // Check if position is in late endgame (very few pieces)
+        if self.is_late_endgame(board) {
+            return false; // Late endgame - high zugzwang risk
+        }
+        
+        true
+    }
+
+    /// Check if position is in late endgame where zugzwang is common
+    fn is_late_endgame(&self, board: &BitboardBoard) -> bool {
+        let total_pieces = self.count_pieces_on_board(board);
+        total_pieces <= 8 // Very conservative threshold for late endgame
+    }
+
+    /// Count major pieces for a player (rooks, bishops, golds)
+    fn count_major_pieces(&self, board: &BitboardBoard, player: Player) -> u8 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    if piece.player == player {
+                        match piece.piece_type {
+                            PieceType::Rook | PieceType::Bishop | PieceType::Gold => count += 1,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    /// Enhanced safety check for null move pruning
+    fn is_enhanced_safe_for_null_move(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> bool {
+        // Basic safety checks
+        if !self.is_safe_for_null_move(board, captured_pieces, player) {
+            return false;
+        }
+        
+        // Additional tactical safety checks
+        // Check if opponent has strong attacking pieces
+        let opponent = player.opposite();
+        let opponent_major_pieces = self.count_major_pieces(board, opponent);
+        if opponent_major_pieces >= 3 {
+            return false; // Opponent has strong pieces - potential tactical danger
+        }
+        
+        true
+    }
 }
 
 
@@ -1132,5 +1320,47 @@ mod search_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_null_move_configuration_management() {
+        let mut engine = SearchEngine::new(None, 16);
+        
+        // Test get_null_move_config
+        let config = engine.get_null_move_config();
+        assert!(config.enabled);
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.reduction_factor, 2);
+        
+        // Test update_null_move_config with valid config
+        let mut new_config = NullMoveConfig::default();
+        new_config.min_depth = 4;
+        new_config.reduction_factor = 3;
+        assert!(engine.update_null_move_config(new_config.clone()).is_ok());
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.min_depth, 4);
+        assert_eq!(updated_config.reduction_factor, 3);
+        
+        // Test update_null_move_config with invalid config
+        let mut invalid_config = NullMoveConfig::default();
+        invalid_config.min_depth = 0; // Invalid
+        assert!(engine.update_null_move_config(invalid_config).is_err());
+        
+        // Test reset_null_move_stats
+        engine.null_move_stats.attempts = 100;
+        engine.null_move_stats.cutoffs = 25;
+        assert_eq!(engine.get_null_move_stats().attempts, 100);
+        assert_eq!(engine.get_null_move_stats().cutoffs, 25);
+        
+        engine.reset_null_move_stats();
+        assert_eq!(engine.get_null_move_stats().attempts, 0);
+        assert_eq!(engine.get_null_move_stats().cutoffs, 0);
+        
+        // Test new_null_move_config
+        let default_config = SearchEngine::new_null_move_config();
+        assert_eq!(default_config.min_depth, 3);
+        assert_eq!(default_config.reduction_factor, 2);
+        assert!(default_config.enabled);
     }
 }
