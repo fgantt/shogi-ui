@@ -130,7 +130,7 @@ impl ShogiEngine {
 }
 
 impl ShogiEngine {
-    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+    pub fn get_best_move(&self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
         crate::debug_utils::debug_log("Starting get_best_move");
         
         if let Some(on_info) = &on_info {

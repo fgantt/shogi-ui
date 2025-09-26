@@ -30,8 +30,16 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
         this.processOutputLine(message);
       } else if (Array.isArray(message)) {
         message.forEach(line => this.processOutputLine(line));
+      } else if (message && typeof message === 'object') {
+        // Handle new message format from worker
+        if (message.info) {
+          this.processOutputLine(message.info);
+        } else if (message.result && Array.isArray(message.result)) {
+          message.result.forEach((line: string) => this.processOutputLine(line));
+        } else {
+          console.log("Received non-string message from worker:", message);
+        }
       } else {
-        // For now, log non-string messages
         console.log("Received non-string message from worker:", message);
       }
     };
@@ -43,7 +51,7 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
 
   private sendUsiCommand(command: string): void {
     this.emit('usiCommandSent', { command, sessionId: this.sessionId });
-    this.worker.postMessage({ command });
+    this.worker.postMessage({ command, playerId: this.sessionId });
   }
 
   async init(): Promise<void> {
