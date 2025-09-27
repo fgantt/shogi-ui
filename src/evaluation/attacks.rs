@@ -447,6 +447,11 @@ impl ThreatEvaluator {
     
     /// Evaluate tactical threats to the king for the given player
     pub fn evaluate_threats(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        self.evaluate_threats_with_mode(board, player, false)
+    }
+    
+    /// Evaluate threats with fast mode support
+    pub fn evaluate_threats_with_mode(&self, board: &BitboardBoard, player: Player, fast_mode: bool) -> TaperedScore {
         if !self.config.enabled {
             return TaperedScore::default();
         }
@@ -455,6 +460,13 @@ impl ThreatEvaluator {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
+        
+        // In fast mode, only check basic pins for performance
+        if fast_mode {
+            let opponent = player.opposite();
+            let pin_threats = self.detect_pins(board, king_pos, opponent);
+            return TaperedScore::new_tapered(-pin_threats, -pin_threats / 3);
+        }
         
         let opponent = player.opposite();
         let mut total_threats = 0;
@@ -599,23 +611,34 @@ impl ThreatEvaluator {
         forks * self.config.fork_penalty / 100
     }
     
-    /// Detect knight forks
+    /// Detect knight forks - optimized version
     fn detect_knight_forks(&self, board: &BitboardBoard, king_pos: Position, opponent: Player) -> i32 {
         let mut forks = 0;
         
-        for row in 0..9 {
-            for col in 0..9 {
+        // Only check knights in a reasonable area around the king
+        let min_row = king_pos.row.saturating_sub(3);
+        let max_row = (king_pos.row + 3).min(8);
+        let min_col = king_pos.col.saturating_sub(3);
+        let max_col = (king_pos.col + 3).min(8);
+        
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == opponent && piece.piece_type == PieceType::Knight {
                         let knight_attacks = self.attack_tables.get_piece_attacks(PieceType::Knight, pos);
                         let mut targets = 0;
                         
-                        // Count valuable targets
-                        for target_row in 0..9 {
-                            for target_col in 0..9 {
+                        // Check if knight attacks the king
+                        if is_bit_set(knight_attacks, king_pos) {
+                            targets += 1;
+                        }
+                        
+                        // Check only pieces near the king for other targets
+                        for target_row in min_row..=max_row {
+                            for target_col in min_col..=max_col {
                                 let target_pos = Position::new(target_row, target_col);
-                                if is_bit_set(knight_attacks, target_pos) {
+                                if target_pos != king_pos && is_bit_set(knight_attacks, target_pos) {
                                     if let Some(target_piece) = board.get_piece(target_pos) {
                                         if target_piece.player != opponent {
                                             targets += 1;
@@ -636,34 +659,53 @@ impl ThreatEvaluator {
         forks
     }
     
-    /// Detect forks with other pieces
+    /// Detect forks with other pieces - optimized version
     fn detect_piece_forks(&self, board: &BitboardBoard, king_pos: Position, opponent: Player) -> i32 {
         let mut forks = 0;
         
-        for row in 0..9 {
-            for col in 0..9 {
+        // Only check pieces in a reasonable area around the king
+        let min_row = king_pos.row.saturating_sub(3);
+        let max_row = (king_pos.row + 3).min(8);
+        let min_col = king_pos.col.saturating_sub(3);
+        let max_col = (king_pos.col + 3).min(8);
+        
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == opponent {
-                        let piece_attacks = self.attack_tables.get_piece_attacks(piece.piece_type, pos);
-                        let mut targets = 0;
-                        
-                        // Count valuable targets
-                        for target_row in 0..9 {
-                            for target_col in 0..9 {
-                                let target_pos = Position::new(target_row, target_col);
-                                if is_bit_set(piece_attacks, target_pos) {
-                                    if let Some(target_piece) = board.get_piece(target_pos) {
-                                        if target_piece.player != opponent {
-                                            targets += 1;
+                        // Only check pieces that can create meaningful forks
+                        match piece.piece_type {
+                            PieceType::Rook | PieceType::PromotedRook | 
+                            PieceType::Bishop | PieceType::PromotedBishop |
+                            PieceType::Silver | PieceType::Gold => {
+                                let piece_attacks = self.attack_tables.get_piece_attacks(piece.piece_type, pos);
+                                let mut targets = 0;
+                                
+                                // Check if piece attacks the king
+                                if is_bit_set(piece_attacks, king_pos) {
+                                    targets += 1;
+                                }
+                                
+                                // Check only pieces near the king for other targets
+                                for target_row in min_row..=max_row {
+                                    for target_col in min_col..=max_col {
+                                        let target_pos = Position::new(target_row, target_col);
+                                        if target_pos != king_pos && is_bit_set(piece_attacks, target_pos) {
+                                            if let Some(target_piece) = board.get_piece(target_pos) {
+                                                if target_piece.player != opponent {
+                                                    targets += 1;
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                                
+                                if targets >= 2 {
+                                    forks += targets - 1;
+                                }
                             }
-                        }
-                        
-                        if targets >= 2 {
-                            forks += targets - 1;
+                            _ => {} // Skip other pieces for performance
                         }
                     }
                 }
@@ -673,21 +715,31 @@ impl ThreatEvaluator {
         forks
     }
     
-    /// Detect discovered attacks
+    /// Detect discovered attacks - optimized version
     fn detect_discovered_attacks(&self, board: &BitboardBoard, king_pos: Position, opponent: Player) -> i32 {
         let mut discovered_attacks = 0;
         
-        // Look for pieces that can move to reveal attacks
-        for row in 0..9 {
-            for col in 0..9 {
+        // Only check pieces in a 5x5 area around the king for performance
+        let min_row = king_pos.row.saturating_sub(2);
+        let max_row = (king_pos.row + 2).min(8);
+        let min_col = king_pos.col.saturating_sub(2);
+        let max_col = (king_pos.col + 2).min(8);
+        
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == opponent {
-                        // Check if moving this piece would reveal an attack
-                        let piece_attacks = self.attack_tables.get_piece_attacks(piece.piece_type, pos);
-                        if is_bit_set(piece_attacks, king_pos) {
-                            // This piece attacks the king, check if it's blocking another attacker
-                            discovered_attacks += 1;
+                        // Only check long-range pieces that could create discovered attacks
+                        match piece.piece_type {
+                            PieceType::Rook | PieceType::PromotedRook | 
+                            PieceType::Bishop | PieceType::PromotedBishop => {
+                                let piece_attacks = self.attack_tables.get_piece_attacks(piece.piece_type, pos);
+                                if is_bit_set(piece_attacks, king_pos) {
+                                    discovered_attacks += 1;
+                                }
+                            }
+                            _ => {} // Skip other pieces for performance
                         }
                     }
                 }

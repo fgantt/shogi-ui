@@ -89,13 +89,14 @@ impl KingSafetyEvaluator {
                 let castle_score = self.castle_recognizer.evaluate_castle_structure(board, player, king_pos);
                 total_score += castle_score * self.config.castle_weight;
             }
-            
+
             // Attack analysis
             let attack_score = self.attack_analyzer.evaluate_attacks(board, player);
             total_score += attack_score * self.config.attack_weight;
-            
-            // Threat evaluation
-            let threat_score = self.threat_evaluator.evaluate_threats(board, player);
+
+            // Threat evaluation - use fast mode for depths >= 2
+            let use_threat_fast_mode = depth >= 2;
+            let threat_score = self.threat_evaluator.evaluate_threats_with_mode(board, player, use_threat_fast_mode);
             total_score += threat_score * self.config.threat_weight;
         }
         
@@ -121,6 +122,10 @@ impl KingSafetyEvaluator {
         
         // Simplified attack evaluation (only count major pieces near king)
         score += self.evaluate_basic_attacks(board, player);
+        
+        // Basic threat evaluation (pins only) with reduced weight
+        let threat_score = self.threat_evaluator.evaluate_threats_with_mode(board, player, true);
+        score += threat_score * 0.3;
         
         score
     }
