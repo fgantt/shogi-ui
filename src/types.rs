@@ -1368,12 +1368,374 @@ pub enum MoveType {
 }
 
 /// Position complexity levels for adaptive LMR
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PositionComplexity {
     Low,
     Medium,
     High,
     Unknown,
+}
+
+/// Efficient board state representation for IID search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDBoardState {
+    /// Compact position key for quick comparison
+    pub key: u64,
+    /// Material balance (Black - White)
+    pub material_balance: i32,
+    /// Total number of pieces on board
+    pub piece_count: u8,
+    /// King positions (Black, White)
+    pub king_positions: (Option<Position>, Option<Position>),
+    /// Cached move generation results
+    pub move_cache: Option<Vec<Move>>,
+}
+
+/// Statistics for IID overhead monitoring
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDOverheadStats {
+    /// Total number of IID searches performed
+    pub total_searches: u64,
+    /// Number of searches skipped due to time pressure
+    pub time_pressure_skips: u64,
+    /// Current overhead threshold percentage
+    pub current_threshold: f64,
+    /// Average overhead percentage
+    pub average_overhead: f64,
+    /// Number of threshold adjustments made
+    pub threshold_adjustments: u32,
+}
+
+/// Result of a multi-PV IID search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDPVResult {
+    /// The best move for this PV
+    pub move_: Move,
+    /// Evaluation score for this PV
+    pub score: i32,
+    /// Search depth used
+    pub depth: u8,
+    /// Complete principal variation
+    pub principal_variation: Vec<Move>,
+    /// Index of this PV (0 = best, 1 = second best, etc.)
+    pub pv_index: usize,
+    /// Time taken for this PV search in milliseconds
+    pub search_time_ms: u32,
+}
+
+/// Analysis of multiple principal variations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiPVAnalysis {
+    /// Total number of PVs found
+    pub total_pvs: usize,
+    /// Spread between best and worst PV scores
+    pub score_spread: f64,
+    /// Tactical themes identified across PVs
+    pub tactical_themes: Vec<TacticalTheme>,
+    /// Diversity of moves across PVs (0.0 to 1.0)
+    pub move_diversity: f64,
+    /// Overall complexity assessment
+    pub complexity_assessment: PositionComplexity,
+}
+
+/// Tactical themes in chess positions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum TacticalTheme {
+    /// Capture moves
+    Capture,
+    /// Check moves
+    Check,
+    /// Promotion moves
+    Promotion,
+    /// Piece development
+    Development,
+    /// Positional moves
+    Positional,
+}
+
+/// A move identified as promising in shallow IID search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromisingMove {
+    /// The promising move
+    pub move_: Move,
+    /// Score from shallow search
+    pub shallow_score: i32,
+    /// Improvement over current alpha
+    pub improvement_over_alpha: i32,
+    /// Tactical indicators for this move
+    pub tactical_indicators: TacticalIndicators,
+}
+
+/// Result of IID probing with deeper verification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDProbeResult {
+    /// The verified move
+    pub move_: Move,
+    /// Score from shallow search
+    pub shallow_score: i32,
+    /// Score from deeper search
+    pub deep_score: i32,
+    /// Difference between shallow and deep scores
+    pub score_difference: i32,
+    /// Confidence in the verification (0.0 to 1.0)
+    pub verification_confidence: f64,
+    /// Tactical indicators for this move
+    pub tactical_indicators: TacticalIndicators,
+    /// Depth used for probing
+    pub probe_depth: u8,
+    /// Time taken for probing in milliseconds
+    pub search_time_ms: u32,
+}
+
+/// Tactical indicators for move assessment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TacticalIndicators {
+    /// Whether the move is a capture
+    pub is_capture: bool,
+    /// Whether the move is a promotion
+    pub is_promotion: bool,
+    /// Whether the move gives check
+    pub gives_check: bool,
+    /// Whether the move is a recapture
+    pub is_recapture: bool,
+    /// Piece value involved in the move
+    pub piece_value: i32,
+    /// Estimated mobility impact
+    pub mobility_impact: i32,
+    /// Estimated king safety impact
+    pub king_safety_impact: i32,
+}
+
+/// Performance benchmark results for IID vs non-IID search
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDPerformanceBenchmark {
+    /// Number of benchmark iterations
+    pub iterations: usize,
+    /// Search depth used
+    pub depth: u8,
+    /// Time limit per search in milliseconds
+    pub time_limit_ms: u32,
+    /// IID search times for each iteration
+    pub iid_times: Vec<u32>,
+    /// Non-IID search times for each iteration
+    pub non_iid_times: Vec<u32>,
+    /// IID nodes searched for each iteration
+    pub iid_nodes: Vec<u64>,
+    /// Score differences between IID and non-IID results
+    pub score_differences: Vec<i32>,
+    /// Average IID search time
+    pub avg_iid_time: f64,
+    /// Average non-IID search time
+    pub avg_non_iid_time: f64,
+    /// Average IID nodes searched
+    pub avg_iid_nodes: f64,
+    /// Average score difference
+    pub avg_score_difference: f64,
+    /// Time efficiency percentage (positive = IID faster)
+    pub time_efficiency: f64,
+    /// Node efficiency (nodes per millisecond)
+    pub node_efficiency: f64,
+    /// Accuracy assessment
+    pub accuracy: String,
+}
+
+impl Default for IIDPerformanceBenchmark {
+    fn default() -> Self {
+        Self {
+            iterations: 0,
+            depth: 0,
+            time_limit_ms: 0,
+            iid_times: Vec::new(),
+            non_iid_times: Vec::new(),
+            iid_nodes: Vec::new(),
+            score_differences: Vec::new(),
+            avg_iid_time: 0.0,
+            avg_non_iid_time: 0.0,
+            avg_iid_nodes: 0.0,
+            avg_score_difference: 0.0,
+            time_efficiency: 0.0,
+            node_efficiency: 0.0,
+            accuracy: "Unknown".to_string(),
+        }
+    }
+}
+
+/// Detailed performance analysis for IID
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDPerformanceAnalysis {
+    /// Overall efficiency metric
+    pub overall_efficiency: f64,
+    /// Cutoff rate achieved
+    pub cutoff_rate: f64,
+    /// Overhead percentage
+    pub overhead_percentage: f64,
+    /// Success rate of IID moves
+    pub success_rate: f64,
+    /// Performance recommendations
+    pub recommendations: Vec<String>,
+    /// Identified bottlenecks
+    pub bottleneck_analysis: Vec<String>,
+    /// Optimization potential assessment
+    pub optimization_potential: String,
+}
+
+/// Game result for strength testing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GameResult {
+    /// Win for the player
+    Win,
+    /// Loss for the player
+    Loss,
+    /// Draw
+    Draw,
+}
+
+/// Position difficulty for strength testing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PositionDifficulty {
+    /// Easy position
+    Easy,
+    /// Medium difficulty
+    Medium,
+    /// Hard position
+    Hard,
+}
+
+/// Confidence level for strength test analysis
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConfidenceLevel {
+    /// Low confidence
+    Low,
+    /// Medium confidence
+    Medium,
+    /// High confidence
+    High,
+}
+
+/// Test position for strength testing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrengthTestPosition {
+    /// FEN string of the position
+    pub fen: String,
+    /// Description of the position
+    pub description: String,
+    /// Expected game result
+    pub expected_result: GameResult,
+    /// Difficulty level
+    pub difficulty: PositionDifficulty,
+}
+
+/// Result for a single position in strength testing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PositionStrengthResult {
+    /// Index of the position
+    pub position_index: usize,
+    /// FEN string of the position
+    pub position_fen: String,
+    /// Expected result
+    pub expected_result: GameResult,
+    /// Number of wins with IID enabled
+    pub iid_wins: usize,
+    /// Number of wins with IID disabled
+    pub non_iid_wins: usize,
+    /// Win rate with IID enabled
+    pub iid_win_rate: f64,
+    /// Win rate with IID disabled
+    pub non_iid_win_rate: f64,
+    /// Improvement (IID win rate - non-IID win rate)
+    pub improvement: f64,
+}
+
+impl Default for PositionStrengthResult {
+    fn default() -> Self {
+        Self {
+            position_index: 0,
+            position_fen: String::new(),
+            expected_result: GameResult::Draw,
+            iid_wins: 0,
+            non_iid_wins: 0,
+            iid_win_rate: 0.0,
+            non_iid_win_rate: 0.0,
+            improvement: 0.0,
+        }
+    }
+}
+
+/// Overall strength test result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IIDStrengthTestResult {
+    /// Total number of test positions
+    pub total_positions: usize,
+    /// Number of games per position
+    pub games_per_position: usize,
+    /// Time per move in milliseconds
+    pub time_per_move_ms: u32,
+    /// Results for each position
+    pub position_results: Vec<PositionStrengthResult>,
+    /// Overall improvement across all positions
+    pub overall_improvement: f64,
+    /// Average IID win rate
+    pub average_iid_win_rate: f64,
+    /// Average non-IID win rate
+    pub average_non_iid_win_rate: f64,
+    /// Statistical significance
+    pub statistical_significance: f64,
+}
+
+impl Default for IIDStrengthTestResult {
+    fn default() -> Self {
+        Self {
+            total_positions: 0,
+            games_per_position: 0,
+            time_per_move_ms: 0,
+            position_results: Vec::new(),
+            overall_improvement: 0.0,
+            average_iid_win_rate: 0.0,
+            average_non_iid_win_rate: 0.0,
+            statistical_significance: 0.0,
+        }
+    }
+}
+
+impl IIDStrengthTestResult {
+    /// Calculate overall statistics
+    pub fn calculate_overall_statistics(&mut self) {
+        if self.position_results.is_empty() {
+            return;
+        }
+
+        let total_iid_wins: usize = self.position_results.iter().map(|r| r.iid_wins).sum();
+        let total_non_iid_wins: usize = self.position_results.iter().map(|r| r.non_iid_wins).sum();
+        let total_games = self.position_results.len() * self.games_per_position;
+
+        self.average_iid_win_rate = total_iid_wins as f64 / total_games as f64;
+        self.average_non_iid_win_rate = total_non_iid_wins as f64 / total_games as f64;
+        self.overall_improvement = self.average_iid_win_rate - self.average_non_iid_win_rate;
+
+        // Calculate statistical significance (simplified)
+        let variance = self.position_results.iter()
+            .map(|r| (r.improvement - self.overall_improvement).powi(2))
+            .sum::<f64>() / self.position_results.len() as f64;
+        let standard_error = (variance / self.position_results.len() as f64).sqrt();
+        self.statistical_significance = if standard_error > 0.0 {
+            self.overall_improvement / standard_error
+        } else {
+            0.0
+        };
+    }
+}
+
+/// Analysis of strength test results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrengthTestAnalysis {
+    /// Overall improvement observed
+    pub overall_improvement: f64,
+    /// Positions with significant improvement/regression
+    pub significant_positions: Vec<usize>,
+    /// Recommendations based on results
+    pub recommendations: Vec<String>,
+    /// Confidence level in the analysis
+    pub confidence_level: ConfidenceLevel,
 }
 
 /// LMR playing style presets
@@ -1797,6 +2159,293 @@ mod tests {
         let neg_score1 = -score1;
         let zero = score1 + neg_score1;
         assert_eq!(zero, TaperedScore::default());
+    }
+}
+
+/// Depth selection strategy for Internal Iterative Deepening
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum IIDDepthStrategy {
+    /// Use a fixed depth for IID search
+    Fixed,
+    /// Use a depth relative to the main search depth (depth - 2)
+    Relative,
+    /// Adapt depth based on position complexity and time remaining
+    Adaptive,
+}
+
+impl Default for IIDDepthStrategy {
+    fn default() -> Self {
+        IIDDepthStrategy::Fixed
+    }
+}
+
+
+/// Configuration for Internal Iterative Deepening (IID) parameters
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IIDConfig {
+    /// Enable or disable Internal Iterative Deepening
+    pub enabled: bool,
+    /// Minimum depth to apply IID
+    pub min_depth: u8,
+    /// Fixed depth for IID search (when using Fixed strategy)
+    pub iid_depth_ply: u8,
+    /// Maximum number of legal moves to apply IID (avoid in tactical positions)
+    pub max_legal_moves: usize,
+    /// Maximum time overhead threshold (0.0 to 1.0)
+    pub time_overhead_threshold: f64,
+    /// Depth selection strategy
+    pub depth_strategy: IIDDepthStrategy,
+    /// Enable time pressure detection to skip IID
+    pub enable_time_pressure_detection: bool,
+    /// Enable adaptive tuning based on performance metrics
+    pub enable_adaptive_tuning: bool,
+}
+
+impl Default for IIDConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_depth: 4,                    // Apply IID at depth 4+
+            iid_depth_ply: 2,               // 2-ply IID search
+            max_legal_moves: 35,            // Skip IID in tactical positions
+            time_overhead_threshold: 0.15,  // Max 15% time overhead
+            depth_strategy: IIDDepthStrategy::Fixed,
+            enable_time_pressure_detection: true,
+            enable_adaptive_tuning: false,   // Disabled by default
+        }
+    }
+}
+
+impl IIDConfig {
+    /// Validate the configuration parameters and return any errors
+    pub fn validate(&self) -> Result<(), String> {
+        if self.min_depth < 2 {
+            return Err("min_depth must be at least 2".to_string());
+        }
+        if self.min_depth > 15 {
+            return Err("min_depth should not exceed 15 for performance reasons".to_string());
+        }
+        if self.iid_depth_ply == 0 {
+            return Err("iid_depth_ply must be greater than 0".to_string());
+        }
+        if self.iid_depth_ply > 5 {
+            return Err("iid_depth_ply should not exceed 5 for performance reasons".to_string());
+        }
+        if self.max_legal_moves == 0 {
+            return Err("max_legal_moves must be greater than 0".to_string());
+        }
+        if self.max_legal_moves > 100 {
+            return Err("max_legal_moves should not exceed 100".to_string());
+        }
+        if self.time_overhead_threshold < 0.0 || self.time_overhead_threshold > 1.0 {
+            return Err("time_overhead_threshold must be between 0.0 and 1.0".to_string());
+        }
+        Ok(())
+    }
+
+    /// Get a summary of the configuration
+    pub fn summary(&self) -> String {
+        format!(
+            "IIDConfig: enabled={}, min_depth={}, iid_depth_ply={}, max_moves={}, overhead_threshold={:.2}, strategy={:?}",
+            self.enabled,
+            self.min_depth,
+            self.iid_depth_ply,
+            self.max_legal_moves,
+            self.time_overhead_threshold,
+            self.depth_strategy
+        )
+    }
+}
+
+/// Performance statistics for Internal Iterative Deepening
+#[derive(Debug, Clone, Default)]
+pub struct IIDStats {
+    /// Number of IID searches performed
+    pub iid_searches_performed: u64,
+    /// Number of times IID move was first to improve alpha
+    pub iid_move_first_improved_alpha: u64,
+    /// Number of times IID move caused a cutoff
+    pub iid_move_caused_cutoff: u64,
+    /// Total nodes searched in IID searches
+    pub total_iid_nodes: u64,
+    /// Total time spent in IID searches (milliseconds)
+    pub iid_time_ms: u64,
+    /// Positions skipped due to transposition table move
+    pub positions_skipped_tt_move: u64,
+    /// Positions skipped due to insufficient depth
+    pub positions_skipped_depth: u64,
+    /// Positions skipped due to too many legal moves
+    pub positions_skipped_move_count: u64,
+    /// Positions skipped due to time pressure
+    pub positions_skipped_time_pressure: u64,
+    /// IID searches that failed to find a move
+    pub iid_searches_failed: u64,
+    /// IID searches that found a move but it didn't improve alpha
+    pub iid_moves_ineffective: u64,
+}
+
+impl IIDStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = IIDStats::default();
+    }
+
+    /// Get the IID efficiency rate as a percentage
+    pub fn efficiency_rate(&self) -> f64 {
+        if self.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        (self.iid_move_first_improved_alpha as f64 / self.iid_searches_performed as f64) * 100.0
+    }
+
+    /// Get the IID cutoff rate as a percentage
+    pub fn cutoff_rate(&self) -> f64 {
+        if self.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        (self.iid_move_caused_cutoff as f64 / self.iid_searches_performed as f64) * 100.0
+    }
+
+    /// Get the skip rate for each condition
+    pub fn skip_rate_tt_move(&self) -> f64 {
+        let total_skips = self.positions_skipped_tt_move + self.positions_skipped_depth + 
+                         self.positions_skipped_move_count + self.positions_skipped_time_pressure;
+        if total_skips == 0 {
+            return 0.0;
+        }
+        (self.positions_skipped_tt_move as f64 / total_skips as f64) * 100.0
+    }
+
+    /// Get the average nodes per IID search
+    pub fn average_nodes_per_iid(&self) -> f64 {
+        if self.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        self.total_iid_nodes as f64 / self.iid_searches_performed as f64
+    }
+
+    /// Get the average time per IID search
+    pub fn average_time_per_iid(&self) -> f64 {
+        if self.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        self.iid_time_ms as f64 / self.iid_searches_performed as f64
+    }
+
+    /// Get the success rate of IID searches
+    pub fn success_rate(&self) -> f64 {
+        if self.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        let successful = self.iid_searches_performed - self.iid_searches_failed;
+        (successful as f64 / self.iid_searches_performed as f64) * 100.0
+    }
+
+    /// Get a comprehensive performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "Internal Iterative Deepening Performance Report:\n\
+            - IID searches performed: {}\n\
+            - Success rate: {:.2}%\n\
+            - Efficiency rate: {:.2}%\n\
+            - Cutoff rate: {:.2}%\n\
+            - Average nodes per IID: {:.1}\n\
+            - Average time per IID: {:.1}ms\n\
+            - Positions skipped (TT): {} ({:.1}%)\n\
+            - Positions skipped (depth): {} ({:.1}%)\n\
+            - Positions skipped (moves): {} ({:.1}%)\n\
+            - Positions skipped (time): {} ({:.1}%)",
+            self.iid_searches_performed,
+            self.success_rate(),
+            self.efficiency_rate(),
+            self.cutoff_rate(),
+            self.average_nodes_per_iid(),
+            self.average_time_per_iid(),
+            self.positions_skipped_tt_move,
+            self.skip_rate_tt_move(),
+            self.positions_skipped_depth,
+            (self.positions_skipped_depth as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0,
+            self.positions_skipped_move_count,
+            (self.positions_skipped_move_count as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0,
+            self.positions_skipped_time_pressure,
+            (self.positions_skipped_time_pressure as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0
+        )
+    }
+
+    /// Get a summary of key metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "IID: {} searches, {:.1}% efficient, {:.1}% cutoffs, {:.1} avg nodes, {:.1}ms avg time",
+            self.iid_searches_performed,
+            self.efficiency_rate(),
+            self.cutoff_rate(),
+            self.average_nodes_per_iid(),
+            self.average_time_per_iid()
+        )
+    }
+}
+
+/// Performance metrics for Internal Iterative Deepening
+#[derive(Debug, Clone)]
+pub struct IIDPerformanceMetrics {
+    /// Alpha improvements per IID search
+    pub iid_efficiency: f64,
+    /// Percentage of IID moves causing cutoffs
+    pub cutoff_rate: f64,
+    /// Time overhead vs total search time
+    pub overhead_percentage: f64,
+    /// Average nodes saved per IID search
+    pub nodes_saved_per_iid: f64,
+    /// Success rate of IID searches
+    pub success_rate: f64,
+    /// Average time per IID search in milliseconds
+    pub average_iid_time: f64,
+    /// Skip rate for various conditions
+    pub tt_skip_rate: f64,
+    pub depth_skip_rate: f64,
+    pub move_count_skip_rate: f64,
+    pub time_pressure_skip_rate: f64,
+}
+
+impl IIDPerformanceMetrics {
+    /// Create performance metrics from IID statistics
+    pub fn from_stats(stats: &IIDStats, total_search_time_ms: u64) -> Self {
+        let total_skips = stats.positions_skipped_tt_move + stats.positions_skipped_depth + 
+                         stats.positions_skipped_move_count + stats.positions_skipped_time_pressure;
+        
+        Self {
+            iid_efficiency: stats.efficiency_rate(),
+            cutoff_rate: stats.cutoff_rate(),
+            overhead_percentage: if total_search_time_ms > 0 {
+                (stats.iid_time_ms as f64 / total_search_time_ms as f64) * 100.0
+            } else { 0.0 },
+            nodes_saved_per_iid: stats.average_nodes_per_iid(),
+            success_rate: stats.success_rate(),
+            average_iid_time: stats.average_time_per_iid(),
+            tt_skip_rate: if total_skips > 0 {
+                (stats.positions_skipped_tt_move as f64 / total_skips as f64) * 100.0
+            } else { 0.0 },
+            depth_skip_rate: if total_skips > 0 {
+                (stats.positions_skipped_depth as f64 / total_skips as f64) * 100.0
+            } else { 0.0 },
+            move_count_skip_rate: if total_skips > 0 {
+                (stats.positions_skipped_move_count as f64 / total_skips as f64) * 100.0
+            } else { 0.0 },
+            time_pressure_skip_rate: if total_skips > 0 {
+                (stats.positions_skipped_time_pressure as f64 / total_skips as f64) * 100.0
+            } else { 0.0 },
+        }
+    }
+
+    /// Get a summary of the performance metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "IID Performance: {:.1}% efficient, {:.1}% cutoffs, {:.1}% overhead, {:.1} avg nodes saved",
+            self.iid_efficiency,
+            self.cutoff_rate,
+            self.overhead_percentage,
+            self.nodes_saved_per_iid
+        )
     }
 }
 
@@ -2683,6 +3332,8 @@ pub struct EngineConfig {
     pub lmr: LMRConfig,
     /// Aspiration windows configuration
     pub aspiration_windows: AspirationWindowConfig,
+    /// Internal Iterative Deepening configuration
+    pub iid: IIDConfig,
     /// Transposition table size in MB
     pub tt_size_mb: usize,
     /// Enable debug logging
@@ -2700,6 +3351,7 @@ impl Default for EngineConfig {
             null_move: NullMoveConfig::default(),
             lmr: LMRConfig::default(),
             aspiration_windows: AspirationWindowConfig::default(),
+            iid: IIDConfig::default(),
             tt_size_mb: 64,
             debug_logging: false,
             max_depth: 20,
@@ -2720,6 +3372,7 @@ impl EngineConfig {
         null_move: NullMoveConfig,
         lmr: LMRConfig,
         aspiration_windows: AspirationWindowConfig,
+        iid: IIDConfig,
         tt_size_mb: usize,
         debug_logging: bool,
         max_depth: u8,
@@ -2730,6 +3383,7 @@ impl EngineConfig {
             null_move,
             lmr,
             aspiration_windows,
+            iid,
             tt_size_mb,
             debug_logging,
             max_depth,
@@ -2744,6 +3398,7 @@ impl EngineConfig {
         self.null_move.validate()?;
         self.lmr.validate()?;
         self.aspiration_windows.validate()?;
+        self.iid.validate()?;
         self.time_management.validate()?;
 
         // Validate global settings
@@ -2802,6 +3457,16 @@ impl EngineConfig {
                     max_researches: 2,
                     enable_statistics: true,
                 },
+                iid: IIDConfig {
+                    enabled: true,
+                    min_depth: 3,
+                    iid_depth_ply: 2,
+                    max_legal_moves: 40,
+                    time_overhead_threshold: 0.20,
+                    depth_strategy: IIDDepthStrategy::Fixed,
+                    enable_time_pressure_detection: true,
+                    enable_adaptive_tuning: false,
+                },
                 tt_size_mb: 128,
                 debug_logging: false,
                 max_depth: 25,
@@ -2847,6 +3512,16 @@ impl EngineConfig {
                     max_researches: 3,
                     enable_statistics: true,
                 },
+                iid: IIDConfig {
+                    enabled: true,
+                    min_depth: 5,
+                    iid_depth_ply: 3,
+                    max_legal_moves: 30,
+                    time_overhead_threshold: 0.10,
+                    depth_strategy: IIDDepthStrategy::Fixed,
+                    enable_time_pressure_detection: true,
+                    enable_adaptive_tuning: false,
+                },
                 tt_size_mb: 256,
                 debug_logging: false,
                 max_depth: 30,
@@ -2857,6 +3532,7 @@ impl EngineConfig {
                 null_move: NullMoveConfig::default(),
                 lmr: LMRConfig::default(),
                 aspiration_windows: AspirationWindowConfig::default(),
+                iid: IIDConfig::default(),
                 tt_size_mb: 128,
                 debug_logging: false,
                 max_depth: 25,
@@ -2873,13 +3549,14 @@ impl EngineConfig {
     /// Get configuration summary
     pub fn summary(&self) -> String {
         format!(
-            "Engine Config: TT={}MB, MaxDepth={}, Quiescence={}, NMP={}, LMR={}, Aspiration={}",
+            "Engine Config: TT={}MB, MaxDepth={}, Quiescence={}, NMP={}, LMR={}, Aspiration={}, IID={}",
             self.tt_size_mb,
             self.max_depth,
             if self.quiescence.enable_tt { "ON" } else { "OFF" },
             if self.null_move.enabled { "ON" } else { "OFF" },
             if self.lmr.enabled { "ON" } else { "OFF" },
-            if self.aspiration_windows.enabled { "ON" } else { "OFF" }
+            if self.aspiration_windows.enabled { "ON" } else { "OFF" },
+            if self.iid.enabled { "ON" } else { "OFF" }
         )
     }
 }
@@ -2988,6 +3665,7 @@ impl ConfigMigration {
             null_move: null_move_config,
             lmr: lmr_config,
             aspiration_windows: aspiration_config,
+            iid: IIDConfig::default(),
             tt_size_mb,
             debug_logging: false,
             max_depth: 20,
@@ -3001,6 +3679,7 @@ impl ConfigMigration {
         null_move: NullMoveConfig,
         lmr: LMRConfig,
         aspiration_windows: AspirationWindowConfig,
+        iid: IIDConfig,
         tt_size_mb: usize,
         debug_logging: bool,
         max_depth: u8,
@@ -3011,6 +3690,7 @@ impl ConfigMigration {
             null_move,
             lmr,
             aspiration_windows,
+            iid,
             tt_size_mb,
             debug_logging,
             max_depth,

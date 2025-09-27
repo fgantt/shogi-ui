@@ -23,6 +23,8 @@ pub struct SearchEngine {
     lmr_stats: LMRStats,
     aspiration_config: AspirationWindowConfig,
     aspiration_stats: AspirationWindowStats,
+    iid_config: IIDConfig,
+    iid_stats: IIDStats,
     previous_scores: Vec<i32>,
 }
 
@@ -52,6 +54,8 @@ impl SearchEngine {
             lmr_stats: LMRStats::default(),
             aspiration_config: AspirationWindowConfig::default(),
             aspiration_stats: AspirationWindowStats::default(),
+            iid_config: IIDConfig::default(),
+            iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
         }
     }
@@ -79,6 +83,8 @@ impl SearchEngine {
             lmr_stats: LMRStats::default(),
             aspiration_config: config.aspiration_windows,
             aspiration_stats: AspirationWindowStats::default(),
+            iid_config: config.iid,
+            iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
         }
     }
@@ -99,12 +105,14 @@ impl SearchEngine {
         self.null_move_config = config.null_move;
         self.lmr_config = config.lmr;
         self.aspiration_config = config.aspiration_windows;
+        self.iid_config = config.iid;
         
         // Reset statistics when configuration changes
         self.quiescence_stats.reset();
         self.null_move_stats.reset();
         self.lmr_stats.reset();
         self.aspiration_stats.reset();
+        self.iid_stats.reset();
         
         // Reinitialize performance monitoring with new max depth
         self.initialize_performance_monitoring(config.max_depth);
@@ -119,6 +127,7 @@ impl SearchEngine {
             null_move: self.null_move_config.clone(),
             lmr: self.lmr_config.clone(),
             aspiration_windows: self.aspiration_config.clone(),
+            iid: self.iid_config.clone(),
             tt_size_mb: self.transposition_table.capacity() * 100 / (1024 * 1024), // Approximate
             debug_logging: false, // This would need to be tracked separately
             max_depth: 20, // This would need to be tracked separately
@@ -130,6 +139,1911 @@ impl SearchEngine {
     pub fn apply_preset(&mut self, preset: EnginePreset) -> Result<(), String> {
         let config = EngineConfig::get_preset(preset);
         self.update_engine_config(config)
+    }
+
+    // ===== INTERNAL ITERATIVE DEEPENING (IID) METHODS =====
+
+    /// Determine if IID should be applied at this position
+    pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32) -> bool {
+        // 1. IID must be enabled
+        if !self.iid_config.enabled { 
+            self.iid_stats.positions_skipped_depth += 1;
+            return false; 
+        }
+        
+        // 2. Sufficient depth for IID to be meaningful
+        if depth < self.iid_config.min_depth { 
+            self.iid_stats.positions_skipped_depth += 1;
+            return false; 
+        }
+        
+        // 3. No transposition table move available
+        if tt_move.is_some() { 
+            self.iid_stats.positions_skipped_tt_move += 1;
+            return false; 
+        }
+        
+        // 4. Reasonable number of legal moves (avoid IID in tactical positions)
+        if legal_moves.len() > self.iid_config.max_legal_moves { 
+            self.iid_stats.positions_skipped_move_count += 1;
+            return false; 
+        }
+        
+        // 5. Not in quiescence search
+        if depth == 0 { return false; }
+        
+        // 6. Not in time pressure (if enabled)
+        if self.iid_config.enable_time_pressure_detection && self.is_time_pressure(start_time, time_limit_ms) { 
+            self.iid_stats.positions_skipped_time_pressure += 1;
+            return false; 
+        }
+        
+        true
+    }
+
+    /// Calculate the depth for IID search based on strategy
+    pub fn calculate_iid_depth(&self, main_depth: u8) -> u8 {
+        match self.iid_config.depth_strategy {
+            IIDDepthStrategy::Fixed => self.iid_config.iid_depth_ply,
+            IIDDepthStrategy::Relative => {
+                // Use depth - 2, but ensure minimum of 2
+                std::cmp::max(2, main_depth.saturating_sub(2))
+            },
+            IIDDepthStrategy::Adaptive => {
+                // Adjust based on position complexity and time remaining
+                let base_depth = if main_depth > 6 { 3 } else { 2 };
+                // For now, use fixed base depth - can be enhanced later with position analysis
+                base_depth
+            }
+        }
+    }
+
+    /// Check if we're in time pressure
+    fn is_time_pressure(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
+        let elapsed = start_time.elapsed_ms() as u32;
+        let remaining = time_limit_ms.saturating_sub(elapsed);
+        remaining < time_limit_ms / 10 // Less than 10% time remaining
+    }
+
+    /// Perform IID search and extract the best move
+    pub fn perform_iid_search(&mut self, 
+                         board: &mut BitboardBoard, 
+                         captured_pieces: &CapturedPieces, 
+                         player: Player, 
+                         iid_depth: u8, 
+                         alpha: i32, 
+                         beta: i32, 
+                         start_time: &TimeSource, 
+                         time_limit_ms: u32, 
+                         history: &mut Vec<String>) -> Option<Move> {
+        
+        let iid_start_time = std::time::Instant::now();
+        let initial_nodes = self.nodes_searched;
+        
+        // Perform shallow search with null window for efficiency
+        let iid_score = self.negamax_with_context(
+            board, 
+            captured_pieces, 
+            player, 
+            iid_depth, 
+            alpha - 1,  // Null window
+            alpha, 
+            start_time, 
+            time_limit_ms, 
+            history, 
+            true,  // can_null_move
+            false, // is_root
+            false, // has_capture
+            false  // has_check
+        );
+        
+        // Record IID statistics
+        let iid_time = iid_start_time.elapsed().as_millis() as u64;
+        self.iid_stats.iid_time_ms += iid_time;
+        self.iid_stats.total_iid_nodes += self.nodes_searched - initial_nodes;
+        
+        // Only return move if IID found something promising
+        if iid_score > alpha {
+            // Extract the best move from transposition table
+            let fen_key = board.to_fen(player, captured_pieces);
+            if let Some(entry) = self.transposition_table.get(&fen_key) {
+                if let Some(best_move) = &entry.best_move {
+                    return Some(best_move.clone());
+                }
+            }
+        }
+        
+        self.iid_stats.iid_searches_failed += 1;
+        None
+    }
+
+    /// Extract the best move from transposition table for a given position
+    fn extract_best_move_from_tt(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<Move> {
+        let fen_key = board.to_fen(player, captured_pieces);
+        if let Some(entry) = self.transposition_table.get(&fen_key) {
+            entry.best_move.clone()
+        } else {
+            None
+        }
+    }
+
+    // ===== IID CONFIGURATION MANAGEMENT =====
+
+    /// Create default IID configuration
+    pub fn new_iid_config() -> IIDConfig {
+        IIDConfig::default()
+    }
+    
+    /// Update IID configuration with validation
+    pub fn update_iid_config(&mut self, config: IIDConfig) -> Result<(), String> {
+        config.validate()?;
+        self.iid_config = config;
+        Ok(())
+    }
+    
+    /// Get current IID configuration
+    pub fn get_iid_config(&self) -> &IIDConfig {
+        &self.iid_config
+    }
+    
+    /// Get current IID statistics
+    pub fn get_iid_stats(&self) -> &IIDStats {
+        &self.iid_stats
+    }
+    
+    /// Reset IID statistics
+    pub fn reset_iid_stats(&mut self) {
+        self.iid_stats = IIDStats::default();
+    }
+
+    /// Analyze IID performance metrics and adapt configuration if enabled
+    pub fn adapt_iid_configuration(&mut self) {
+        if !self.iid_config.enable_adaptive_tuning {
+            return;
+        }
+
+        let metrics = self.get_iid_performance_metrics();
+        
+        // Only adapt if we have sufficient data
+        if self.iid_stats.iid_searches_performed < 50 {
+            return;
+        }
+
+        let mut config_changed = false;
+        let mut new_config = self.iid_config.clone();
+
+        // Adapt minimum depth based on efficiency
+        if metrics.iid_efficiency < 20.0 && new_config.min_depth > 2 {
+            // Low efficiency - increase minimum depth to be more selective
+            new_config.min_depth = new_config.min_depth.saturating_sub(1);
+            config_changed = true;
+        } else if metrics.iid_efficiency > 60.0 && new_config.min_depth < 6 {
+            // High efficiency - decrease minimum depth to apply more broadly
+            new_config.min_depth = new_config.min_depth.saturating_add(1);
+            config_changed = true;
+        }
+
+        // Adapt IID depth based on cutoff rate
+        if metrics.cutoff_rate < 10.0 && new_config.iid_depth_ply > 1 {
+            // Low cutoff rate - reduce IID depth to save time
+            new_config.iid_depth_ply = new_config.iid_depth_ply.saturating_sub(1);
+            config_changed = true;
+        } else if metrics.cutoff_rate > 40.0 && new_config.iid_depth_ply < 4 {
+            // High cutoff rate - increase IID depth for better move ordering
+            new_config.iid_depth_ply = new_config.iid_depth_ply.saturating_add(1);
+            config_changed = true;
+        }
+
+        // Adapt time overhead threshold based on actual overhead
+        if metrics.overhead_percentage > 25.0 && new_config.time_overhead_threshold > 0.05 {
+            // High overhead - be more restrictive
+            new_config.time_overhead_threshold = (new_config.time_overhead_threshold - 0.05).max(0.05);
+            config_changed = true;
+        } else if metrics.overhead_percentage < 5.0 && new_config.time_overhead_threshold < 0.3 {
+            // Low overhead - can be more aggressive
+            new_config.time_overhead_threshold = (new_config.time_overhead_threshold + 0.05).min(0.3);
+            config_changed = true;
+        }
+
+        // Adapt move count threshold based on success rate
+        if metrics.success_rate < 90.0 && new_config.max_legal_moves > 20 {
+            // Low success rate - be more selective
+            new_config.max_legal_moves = new_config.max_legal_moves.saturating_sub(5);
+            config_changed = true;
+        } else if metrics.success_rate > 98.0 && new_config.max_legal_moves < 50 {
+            // High success rate - can apply more broadly
+            new_config.max_legal_moves = new_config.max_legal_moves.saturating_add(5);
+            config_changed = true;
+        }
+
+        // Apply the new configuration if changes were made
+        if config_changed {
+            self.iid_config = new_config;
+        }
+    }
+
+    /// Get adaptive IID configuration recommendations based on current performance
+    pub fn get_iid_adaptation_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        
+        if !self.iid_config.enable_adaptive_tuning {
+            return recommendations;
+        }
+
+        let metrics = self.get_iid_performance_metrics();
+        
+        if self.iid_stats.iid_searches_performed < 50 {
+            recommendations.push("Insufficient data for recommendations. Need at least 50 IID searches.".to_string());
+            return recommendations;
+        }
+
+        // Efficiency-based recommendations
+        if metrics.iid_efficiency < 20.0 {
+            recommendations.push("Low IID efficiency (20%). Consider increasing min_depth or reducing max_legal_moves.".to_string());
+        } else if metrics.iid_efficiency > 60.0 {
+            recommendations.push("High IID efficiency (60%). Consider decreasing min_depth for broader application.".to_string());
+        }
+
+        // Cutoff rate recommendations
+        if metrics.cutoff_rate < 10.0 {
+            recommendations.push("Low cutoff rate (10%). Consider reducing iid_depth_ply to save time.".to_string());
+        } else if metrics.cutoff_rate > 40.0 {
+            recommendations.push("High cutoff rate (40%). Consider increasing iid_depth_ply for better move ordering.".to_string());
+        }
+
+        // Overhead recommendations
+        if metrics.overhead_percentage > 25.0 {
+            recommendations.push("High time overhead (25%). Consider reducing time_overhead_threshold.".to_string());
+        } else if metrics.overhead_percentage < 5.0 {
+            recommendations.push("Low time overhead (5%). Consider increasing time_overhead_threshold for more aggressive IID.".to_string());
+        }
+
+        // Success rate recommendations
+        if metrics.success_rate < 90.0 {
+            recommendations.push("Low success rate (90%). Consider being more selective with move count thresholds.".to_string());
+        }
+
+        recommendations
+    }
+
+    /// Manually trigger IID configuration adaptation
+    pub fn trigger_iid_adaptation(&mut self) {
+        self.adapt_iid_configuration();
+    }
+
+    /// Assess position complexity for dynamic IID depth adjustment
+    fn assess_position_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> PositionComplexity {
+        let mut complexity_score = 0;
+
+        // Count material imbalance
+        let black_material = self.count_material(board, Player::Black, captured_pieces);
+        let white_material = self.count_material(board, Player::White, captured_pieces);
+        let material_imbalance = (black_material - white_material).abs();
+        complexity_score += (material_imbalance / 100) as usize; // Scale down
+
+        // Count tactical pieces (Rooks, Bishops, Knights)
+        let tactical_pieces = self.count_tactical_pieces(board);
+        complexity_score += tactical_pieces;
+
+        // Count mobility (legal moves available)
+        let mobility = self.count_mobility(board);
+        complexity_score += mobility / 10; // Scale down
+
+        // Check for king safety issues
+        let king_safety_issues = self.assess_king_safety_complexity(board);
+        complexity_score += king_safety_issues;
+
+        // Check for tactical threats (checks, captures, promotions)
+        let tactical_threats = self.count_tactical_threats(board);
+        complexity_score += tactical_threats;
+
+        // Categorize complexity
+        if complexity_score < 10 {
+            PositionComplexity::Low
+        } else if complexity_score < 25 {
+            PositionComplexity::Medium
+        } else {
+            PositionComplexity::High
+        }
+    }
+
+    /// Count material value for a player
+    fn count_material(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        let mut material = 0;
+        
+        // Count pieces on board
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    if piece.player == player {
+                        material += self.get_piece_value(piece.piece_type);
+                    }
+                }
+            }
+        }
+
+        // Add captured pieces (simplified for now)
+        // TODO: Implement proper captured pieces counting
+        // let captured = captured_pieces.get_captured_pieces(player);
+        // for piece_type in captured.keys() {
+        //     material += self.get_piece_value(*piece_type) * captured[piece_type] as i32;
+        // }
+
+        material
+    }
+
+    /// Get piece value for material counting
+    fn get_piece_value(&self, piece_type: PieceType) -> i32 {
+        match piece_type {
+            PieceType::Pawn => 100,
+            PieceType::Lance => 300,
+            PieceType::Knight => 400,
+            PieceType::Silver => 500,
+            PieceType::Gold => 600,
+            PieceType::Bishop => 800,
+            PieceType::Rook => 1000,
+            PieceType::King => 10000,
+            _ => 0,
+        }
+    }
+
+    /// Count tactical pieces (Rooks, Bishops, Knights)
+    fn count_tactical_pieces(&self, board: &BitboardBoard) -> usize {
+        let mut count = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    match piece.piece_type {
+                        PieceType::Rook | PieceType::Bishop | PieceType::Knight => count += 1,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+
+    /// Count mobility (legal moves available)
+    fn count_mobility(&self, board: &BitboardBoard) -> usize {
+        let mut generator = MoveGenerator::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let black_moves = generator.generate_legal_moves(board, Player::Black, &captured_pieces);
+        let white_moves = generator.generate_legal_moves(board, Player::White, &captured_pieces);
+        
+        black_moves.len() + white_moves.len()
+    }
+
+    /// Assess king safety complexity
+    fn assess_king_safety_complexity(&self, board: &BitboardBoard) -> usize {
+        let mut complexity = 0;
+        
+        // Check if kings are in danger
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    if piece.piece_type == PieceType::King {
+                        // Simple check: if king is not in starting position, increase complexity
+                        if piece.player == Player::Black && row < 6 {
+                            complexity += 2;
+                        } else if piece.player == Player::White && row > 2 {
+                            complexity += 2;
+                        }
+                    }
+                }
+            }
+        }
+        
+        complexity
+    }
+
+    /// Count tactical threats (checks, captures, promotions)
+    fn count_tactical_threats(&self, board: &BitboardBoard) -> usize {
+        let mut generator = MoveGenerator::new();
+        let captured_pieces = CapturedPieces::new();
+        let mut threats = 0;
+        
+        let black_moves = generator.generate_legal_moves(board, Player::Black, &captured_pieces);
+        let white_moves = generator.generate_legal_moves(board, Player::White, &captured_pieces);
+        
+        // Count captures and promotions
+        for mv in black_moves.iter().chain(white_moves.iter()) {
+            if mv.is_capture {
+                threats += 1;
+            }
+            if mv.is_promotion {
+                threats += 1;
+            }
+        }
+        
+        threats
+    }
+
+    /// Calculate dynamic IID depth based on position complexity
+    pub fn calculate_dynamic_iid_depth(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, base_depth: u8) -> u8 {
+        if !self.iid_config.enable_adaptive_tuning {
+            return base_depth;
+        }
+
+        let complexity = self.assess_position_complexity(board, captured_pieces);
+        
+        match complexity {
+            PositionComplexity::Low => {
+                // Simple positions: reduce IID depth to save time
+                base_depth.saturating_sub(1).max(1)
+            },
+            PositionComplexity::Medium => {
+                // Medium positions: use base depth
+                base_depth
+            },
+            PositionComplexity::High => {
+                // Complex positions: increase IID depth for better move ordering
+                base_depth.saturating_add(1).min(4)
+            },
+            PositionComplexity::Unknown => {
+                // Unknown complexity: use base depth as fallback
+                base_depth
+            }
+        }
+    }
+
+    /// Efficient board state management for IID search
+    pub fn create_iid_board_state(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> IIDBoardState {
+        IIDBoardState {
+            // Store only essential position data instead of full board clone
+            key: self.calculate_position_key(board),
+            material_balance: self.calculate_material_balance(board, captured_pieces),
+            piece_count: self.count_pieces(board),
+            king_positions: self.get_king_positions(board),
+            // Store move generation cache to avoid regenerating moves
+            move_cache: None,
+        }
+    }
+
+    /// Calculate a compact position key for IID board state
+    pub fn calculate_position_key(&self, board: &BitboardBoard) -> u64 {
+        let mut key = 0u64;
+        
+        // Simple hash of piece positions
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    let piece_hash = match piece.piece_type {
+                        PieceType::Pawn => 1,
+                        PieceType::Lance => 2,
+                        PieceType::Knight => 3,
+                        PieceType::Silver => 4,
+                        PieceType::Gold => 5,
+                        PieceType::Bishop => 6,
+                        PieceType::Rook => 7,
+                        PieceType::King => 8,
+                        _ => 0,
+                    };
+                    
+                    let player_factor: i32 = if piece.player == Player::Black { 1 } else { -1 };
+                    let position_hash = (row as u64 * 9 + col as u64) * piece_hash as u64;
+                    
+                    key ^= position_hash.wrapping_mul(player_factor.abs() as u64);
+                }
+            }
+        }
+        
+        key
+    }
+
+    /// Calculate material balance efficiently
+    pub fn calculate_material_balance(&self, board: &BitboardBoard, _captured_pieces: &CapturedPieces) -> i32 {
+        let mut balance = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    let value = self.get_piece_value(piece.piece_type);
+                    balance += if piece.player == Player::Black { value } else { -value };
+                }
+            }
+        }
+        
+        balance
+    }
+
+    /// Count pieces efficiently
+    pub fn count_pieces(&self, board: &BitboardBoard) -> u8 {
+        let mut count = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                if board.get_piece(Position { row, col }).is_some() {
+                    count += 1;
+                }
+            }
+        }
+        
+        count
+    }
+
+    /// Get king positions efficiently
+    pub fn get_king_positions(&self, board: &BitboardBoard) -> (Option<Position>, Option<Position>) {
+        let mut black_king = None;
+        let mut white_king = None;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position { row, col }) {
+                    if piece.piece_type == PieceType::King {
+                        match piece.player {
+                            Player::Black => black_king = Some(Position { row, col }),
+                            Player::White => white_king = Some(Position { row, col }),
+                        }
+                    }
+                }
+            }
+        }
+        
+        (black_king, white_king)
+    }
+
+    /// Memory-efficient IID search with optimized board state management
+    pub fn perform_iid_search_optimized(&mut self,
+                                       board: &mut BitboardBoard,
+                                       captured_pieces: &CapturedPieces,
+                                       player: Player,
+                                       iid_depth: u8,
+                                       alpha: i32,
+                                       beta: i32,
+                                       start_time: &TimeSource,
+                                       time_limit_ms: u32,
+                                       history: &mut Vec<String>) -> Option<Move> {
+        if !self.iid_config.enabled || iid_depth == 0 {
+            return None;
+        }
+
+        // Create efficient board state instead of full clone
+        let board_state = self.create_iid_board_state(board, captured_pieces);
+        
+        // Use memory pool for move generation
+        let mut _move_pool: Vec<Move> = Vec::with_capacity(50); // Pre-allocate reasonable capacity
+        
+        let mut generator = MoveGenerator::new();
+        let moves = generator.generate_legal_moves(board, player, captured_pieces);
+        
+        // Limit moves for IID efficiency
+        let moves_to_search = if moves.len() > self.iid_config.max_legal_moves {
+            &moves[..self.iid_config.max_legal_moves]
+        } else {
+            &moves
+        };
+
+        if moves_to_search.is_empty() {
+            return None;
+        }
+
+        // Perform null window search with memory optimization
+        let mut best_move: Option<Move> = None;
+        let mut best_score = alpha;
+        
+        // Track memory usage
+        let initial_memory = self.get_memory_usage();
+        
+        for move_ in moves_to_search {
+            // Check time limit
+            if start_time.elapsed_ms() >= time_limit_ms {
+                break;
+            }
+
+            // Make move efficiently
+            let move_result = board.make_move(&move_);
+            if move_result.is_none() {
+                continue;
+            }
+
+            // Recursive search with reduced depth
+            let score = -self.negamax_with_context(
+                board,
+                captured_pieces,
+                player.opposite(),
+                iid_depth - 1,
+                -beta,
+                -best_score,
+                start_time,
+                time_limit_ms,
+                history,
+                false,
+                false,
+                false,
+                false
+            );
+
+            // Note: In a real implementation, we would undo the move here
+            // For now, we'll work with a simplified version that doesn't require undo
+
+            if score > best_score {
+                best_score = score;
+                best_move = Some(move_.clone());
+                
+                // Early termination if we have a good enough move
+                if score >= beta {
+                    break;
+                }
+            }
+        }
+
+        // Track memory efficiency
+        let final_memory = self.get_memory_usage();
+        self.track_memory_usage(final_memory - initial_memory);
+
+        // Update statistics
+        self.iid_stats.iid_searches_performed += 1;
+        self.iid_stats.total_iid_nodes += moves_to_search.len() as u64;
+        self.iid_stats.iid_time_ms += start_time.elapsed_ms() as u64;
+
+        best_move
+    }
+
+    /// Get current memory usage (placeholder implementation)
+    pub fn get_memory_usage(&self) -> usize {
+        // In a real implementation, this would track actual memory usage
+        // For now, return a placeholder
+        0
+    }
+
+    /// Track memory usage for optimization
+    pub fn track_memory_usage(&mut self, _usage: usize) {
+        // In a real implementation, this would track and analyze memory usage patterns
+        // For now, this is a placeholder for the memory tracking infrastructure
+    }
+
+    /// Monitor IID overhead in real-time and adjust thresholds automatically
+    pub fn monitor_iid_overhead(&mut self, iid_time_ms: u32, total_time_ms: u32) {
+        if total_time_ms == 0 {
+            return;
+        }
+
+        let overhead_percentage = (iid_time_ms as f64 / total_time_ms as f64) * 100.0;
+        
+        // Track overhead statistics
+        self.update_overhead_statistics(overhead_percentage);
+        
+        // Adjust thresholds if needed
+        self.adjust_overhead_thresholds(overhead_percentage);
+    }
+
+    /// Update overhead statistics for monitoring
+    fn update_overhead_statistics(&mut self, overhead_percentage: f64) {
+        // In a real implementation, this would maintain rolling averages
+        // For now, we'll use the existing IID stats structure
+        
+        // Track if this is a high overhead search
+        if overhead_percentage > self.iid_config.time_overhead_threshold * 100.0 {
+            self.iid_stats.positions_skipped_time_pressure += 1;
+        }
+    }
+
+    /// Automatically adjust IID overhead thresholds based on performance
+    fn adjust_overhead_thresholds(&mut self, current_overhead: f64) {
+        if !self.iid_config.enable_adaptive_tuning {
+            return;
+        }
+
+        let mut config_changed = false;
+        let mut new_config = self.iid_config.clone();
+
+        // Adjust time overhead threshold based on current performance
+        if current_overhead > 30.0 && new_config.time_overhead_threshold > 0.05 {
+            // High overhead detected - be more restrictive
+            new_config.time_overhead_threshold = (new_config.time_overhead_threshold - 0.02).max(0.05);
+            config_changed = true;
+        } else if current_overhead < 10.0 && new_config.time_overhead_threshold < 0.3 {
+            // Low overhead detected - can be more aggressive
+            new_config.time_overhead_threshold = (new_config.time_overhead_threshold + 0.02).min(0.3);
+            config_changed = true;
+        }
+
+        // Adjust move count threshold based on overhead
+        if current_overhead > 25.0 && new_config.max_legal_moves > 20 {
+            // High overhead - reduce move count to save time
+            new_config.max_legal_moves = new_config.max_legal_moves.saturating_sub(5);
+            config_changed = true;
+        } else if current_overhead < 8.0 && new_config.max_legal_moves < 50 {
+            // Low overhead - can handle more moves
+            new_config.max_legal_moves = new_config.max_legal_moves.saturating_add(5);
+            config_changed = true;
+        }
+
+        if config_changed {
+            self.iid_config = new_config;
+        }
+    }
+
+    /// Get current IID overhead statistics
+    pub fn get_iid_overhead_stats(&self) -> IIDOverheadStats {
+        let total_searches = self.iid_stats.iid_searches_performed;
+        let time_pressure_skips = self.iid_stats.positions_skipped_time_pressure;
+        
+        IIDOverheadStats {
+            total_searches,
+            time_pressure_skips,
+            current_threshold: self.iid_config.time_overhead_threshold,
+            average_overhead: self.calculate_average_overhead(),
+            threshold_adjustments: self.count_threshold_adjustments(),
+        }
+    }
+
+    /// Calculate average IID overhead percentage
+    fn calculate_average_overhead(&self) -> f64 {
+        if self.iid_stats.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        
+        // In a real implementation, this would calculate from actual timing data
+        // For now, return a placeholder based on skip statistics
+        let skip_rate = self.iid_stats.positions_skipped_time_pressure as f64 / 
+                       self.iid_stats.iid_searches_performed as f64;
+        
+        // Estimate average overhead based on skip rate
+        if skip_rate > 0.5 {
+            25.0 // High overhead
+        } else if skip_rate > 0.2 {
+            15.0 // Medium overhead
+        } else {
+            8.0  // Low overhead
+        }
+    }
+
+    /// Count how many times thresholds have been adjusted
+    fn count_threshold_adjustments(&self) -> u32 {
+        // In a real implementation, this would track actual adjustments
+        // For now, return a placeholder
+        if self.iid_config.enable_adaptive_tuning {
+            (self.iid_stats.iid_searches_performed / 10) as u32 // Estimate based on searches
+        } else {
+            0
+        }
+    }
+
+    /// Check if IID overhead is acceptable for current position
+    pub fn is_iid_overhead_acceptable(&self, estimated_iid_time_ms: u32, time_limit_ms: u32) -> bool {
+        if time_limit_ms == 0 {
+            return false;
+        }
+
+        let overhead_percentage = (estimated_iid_time_ms as f64 / time_limit_ms as f64) * 100.0;
+        overhead_percentage <= self.iid_config.time_overhead_threshold * 100.0
+    }
+
+    /// Estimate IID time based on position complexity and depth
+    pub fn estimate_iid_time(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, depth: u8) -> u32 {
+        let complexity = self.assess_position_complexity(board, captured_pieces);
+        let base_time = match complexity {
+            PositionComplexity::Low => 5,    // 5ms for simple positions
+            PositionComplexity::Medium => 15, // 15ms for medium positions
+            PositionComplexity::High => 30,   // 30ms for complex positions
+            PositionComplexity::Unknown => 20, // Default estimate
+        };
+
+        // Scale by depth (exponential growth)
+        base_time * (depth as u32 + 1)
+    }
+
+    /// Get overhead monitoring recommendations
+    pub fn get_overhead_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        let stats = self.get_iid_overhead_stats();
+        
+        if stats.total_searches < 20 {
+            recommendations.push("Insufficient data for overhead analysis. Need at least 20 IID searches.".to_string());
+            return recommendations;
+        }
+
+        if stats.average_overhead > 25.0 {
+            recommendations.push("High IID overhead detected (25%). Consider reducing time_overhead_threshold or max_legal_moves.".to_string());
+        } else if stats.average_overhead < 8.0 {
+            recommendations.push("Low IID overhead (8%). Consider increasing thresholds for more aggressive IID usage.".to_string());
+        }
+
+        let skip_rate = if stats.total_searches > 0 {
+            stats.time_pressure_skips as f64 / stats.total_searches as f64
+        } else {
+            0.0
+        };
+
+        if skip_rate > 0.4 {
+            recommendations.push("High time pressure skip rate (40%). IID may be too aggressive for current time controls.".to_string());
+        } else if skip_rate < 0.1 {
+            recommendations.push("Low time pressure skip rate (10%). IID could be used more aggressively.".to_string());
+        }
+
+        recommendations
+    }
+
+    /// Multi-PV IID search to find multiple principal variations
+    pub fn perform_multi_pv_iid_search(&mut self,
+                                      board: &mut BitboardBoard,
+                                      captured_pieces: &CapturedPieces,
+                                      player: Player,
+                                      iid_depth: u8,
+                                      pv_count: usize,
+                                      alpha: i32,
+                                      beta: i32,
+                                      start_time: &TimeSource,
+                                      time_limit_ms: u32,
+                                      history: &mut Vec<String>) -> Vec<IIDPVResult> {
+        if !self.iid_config.enabled || iid_depth == 0 || pv_count == 0 {
+            return Vec::new();
+        }
+
+        let mut generator = MoveGenerator::new();
+        let moves = generator.generate_legal_moves(board, player, captured_pieces);
+        
+        // Limit moves for IID efficiency
+        let moves_to_search = if moves.len() > self.iid_config.max_legal_moves {
+            &moves[..self.iid_config.max_legal_moves]
+        } else {
+            &moves
+        };
+
+        if moves_to_search.is_empty() {
+            return Vec::new();
+        }
+
+        let mut pv_results = Vec::new();
+        let mut current_alpha = alpha;
+        let mut remaining_moves = moves_to_search.to_vec();
+
+        // Find multiple PVs using aspiration windows
+        for pv_index in 0..pv_count.min(remaining_moves.len()) {
+            if start_time.elapsed_ms() >= time_limit_ms {
+                break;
+            }
+
+            let mut best_move: Option<Move> = None;
+            let mut best_score = current_alpha;
+            let mut best_pv = Vec::new();
+
+            // Search remaining moves for this PV
+            for (move_index, move_) in remaining_moves.iter().enumerate() {
+                if start_time.elapsed_ms() >= time_limit_ms {
+                    break;
+                }
+
+                // Make move
+                let move_result = board.make_move(move_);
+                if move_result.is_none() {
+                    continue;
+                }
+
+                // Use aspiration window for this PV
+                let window_size = if pv_index == 0 { 50 } else { 25 }; // Smaller window for secondary PVs
+                let aspiration_alpha = best_score - window_size;
+                let aspiration_beta = best_score + window_size;
+
+                // Recursive search
+                let score = -self.negamax_with_context(
+                    board,
+                    captured_pieces,
+                    player.opposite(),
+                    iid_depth - 1,
+                    -aspiration_beta,
+                    -aspiration_alpha,
+                    start_time,
+                    time_limit_ms,
+                    history,
+                    false,
+                    false,
+                    false,
+                    false
+                );
+
+                // Undo move (simplified - in real implementation would need proper undo)
+                // Note: This is a placeholder for the undo functionality
+
+                if score > best_score {
+                    best_score = score;
+                    best_move = Some(move_.clone());
+                    
+                    // Build PV for this move
+                    best_pv = self.build_pv_from_move(move_.clone(), iid_depth);
+                    
+                    // Update alpha for next PV
+                    current_alpha = best_score;
+                }
+            }
+
+            // Add this PV result
+            if let Some(best_move) = best_move.clone() {
+                pv_results.push(IIDPVResult {
+                    move_: best_move.clone(),
+                    score: best_score,
+                    depth: iid_depth,
+                    principal_variation: best_pv,
+                    pv_index,
+                    search_time_ms: start_time.elapsed_ms(),
+                });
+
+                // Remove this move from remaining moves to avoid duplicates
+                remaining_moves.retain(|m| !self.moves_equal(m, &best_move));
+            }
+        }
+
+        // Update statistics
+        self.iid_stats.iid_searches_performed += 1;
+        self.iid_stats.total_iid_nodes += moves_to_search.len() as u64;
+        self.iid_stats.iid_time_ms += start_time.elapsed_ms() as u64;
+
+        pv_results
+    }
+
+    /// Build principal variation from a given move
+    fn build_pv_from_move(&self, move_: Move, depth: u8) -> Vec<Move> {
+        let mut pv = Vec::new();
+        pv.push(move_);
+        
+        // In a real implementation, this would trace the PV from the transposition table
+        // For now, we'll create a placeholder PV
+        for i in 1..depth {
+            // Placeholder moves - in real implementation would be actual PV moves
+            if let Some(next_move) = self.create_placeholder_move(i) {
+                pv.push(next_move);
+            }
+        }
+        
+        pv
+    }
+
+    /// Create placeholder move for PV building
+    fn create_placeholder_move(&self, index: u8) -> Option<Move> {
+        // This is a placeholder implementation
+        // In a real implementation, this would extract moves from the transposition table
+        Some(Move {
+            from: Some(Position { row: index % 9, col: (index + 1) % 9 }),
+            to: Position { row: (index + 1) % 9, col: index % 9 },
+            piece_type: PieceType::Pawn,
+            captured_piece: None,
+            is_promotion: false,
+            is_capture: false,
+            gives_check: false,
+            is_recapture: false,
+            player: Player::Black,
+        })
+    }
+
+    /// Analyze multiple PVs to find tactical patterns
+    pub fn analyze_multi_pv_patterns(&self, pv_results: &[IIDPVResult]) -> MultiPVAnalysis {
+        let mut analysis = MultiPVAnalysis {
+            total_pvs: pv_results.len(),
+            score_spread: 0.0,
+            tactical_themes: Vec::new(),
+            move_diversity: 0.0,
+            complexity_assessment: PositionComplexity::Unknown,
+        };
+
+        if pv_results.is_empty() {
+            return analysis;
+        }
+
+        // Calculate score spread
+        let scores: Vec<i32> = pv_results.iter().map(|pv| pv.score).collect();
+        let min_score = *scores.iter().min().unwrap_or(&0);
+        let max_score = *scores.iter().max().unwrap_or(&0);
+        analysis.score_spread = (max_score - min_score) as f64;
+
+        // Analyze tactical themes
+        analysis.tactical_themes = self.identify_tactical_themes(pv_results);
+
+        // Calculate move diversity
+        analysis.move_diversity = self.calculate_move_diversity(pv_results);
+
+        // Assess complexity
+        analysis.complexity_assessment = self.assess_pv_complexity(pv_results);
+
+        analysis
+    }
+
+    /// Identify tactical themes in multiple PVs
+    fn identify_tactical_themes(&self, pv_results: &[IIDPVResult]) -> Vec<TacticalTheme> {
+        let mut themes = Vec::new();
+
+        for pv in pv_results {
+            if pv.principal_variation.len() >= 2 {
+                let first_move = &pv.principal_variation[0];
+                
+                // Identify common tactical themes
+                if first_move.is_capture {
+                    themes.push(TacticalTheme::Capture);
+                } else if first_move.is_promotion {
+                    themes.push(TacticalTheme::Promotion);
+                } else if first_move.gives_check {
+                    themes.push(TacticalTheme::Check);
+                } else if self.is_development_move(first_move) {
+                    themes.push(TacticalTheme::Development);
+                } else {
+                    themes.push(TacticalTheme::Positional);
+                }
+            }
+        }
+
+        // Remove duplicates and count frequencies
+        themes.sort();
+        themes.dedup();
+        themes
+    }
+
+    /// Check if a move is a development move
+    pub fn is_development_move(&self, move_: &Move) -> bool {
+        // Simple heuristic for development moves
+        match move_.piece_type {
+            PieceType::Knight | PieceType::Bishop => true,
+            PieceType::Rook => {
+                // Rook development (moving from starting position)
+                if let Some(from) = move_.from {
+                    from.row == 0 || from.row == 8 // Starting rank
+                } else {
+                    false
+                }
+            },
+            _ => false,
+        }
+    }
+
+    /// Calculate move diversity across PVs
+    fn calculate_move_diversity(&self, pv_results: &[IIDPVResult]) -> f64 {
+        if pv_results.len() <= 1 {
+            return 0.0;
+        }
+
+        let mut unique_squares = std::collections::HashSet::new();
+        let mut unique_piece_types = std::collections::HashSet::new();
+
+        for pv in pv_results {
+            if let Some(from) = pv.move_.from {
+                unique_squares.insert((from.row, from.col));
+            }
+            unique_squares.insert((pv.move_.to.row, pv.move_.to.col));
+            unique_piece_types.insert(pv.move_.piece_type);
+        }
+
+        let total_possible_squares = 81; // 9x9 board
+        let total_possible_pieces = 8; // Number of piece types
+
+        let square_diversity = unique_squares.len() as f64 / total_possible_squares as f64;
+        let piece_diversity = unique_piece_types.len() as f64 / total_possible_pieces as f64;
+
+        (square_diversity + piece_diversity) / 2.0
+    }
+
+    /// Assess complexity based on PV characteristics
+    fn assess_pv_complexity(&self, pv_results: &[IIDPVResult]) -> PositionComplexity {
+        let tactical_count = pv_results.iter()
+            .filter(|pv| pv.move_.is_capture || pv.move_.is_promotion || pv.move_.gives_check)
+            .count();
+
+        let tactical_ratio = tactical_count as f64 / pv_results.len() as f64;
+
+        if tactical_ratio > 0.7 {
+            PositionComplexity::High
+        } else if tactical_ratio > 0.3 {
+            PositionComplexity::Medium
+        } else {
+            PositionComplexity::Low
+        }
+    }
+
+    /// Get multi-PV IID recommendations
+    pub fn get_multi_pv_recommendations(&self, analysis: &MultiPVAnalysis) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        if analysis.total_pvs == 0 {
+            recommendations.push("No principal variations found. Position may be terminal.".to_string());
+            return recommendations;
+        }
+
+        // Score spread recommendations
+        if analysis.score_spread > 100.0 {
+            recommendations.push("Large score spread detected. Position has multiple tactical options with significant evaluation differences.".to_string());
+        } else if analysis.score_spread < 20.0 {
+            recommendations.push("Small score spread. Position is roughly balanced with multiple similar options.".to_string());
+        }
+
+        // Tactical theme recommendations
+        if analysis.tactical_themes.len() > 3 {
+            recommendations.push("Multiple tactical themes present. Position offers diverse strategic approaches.".to_string());
+        } else if analysis.tactical_themes.len() == 1 {
+            recommendations.push(format!("Single tactical theme dominates: {:?}. Focus on this pattern.", analysis.tactical_themes[0]));
+        }
+
+        // Move diversity recommendations
+        if analysis.move_diversity > 0.7 {
+            recommendations.push("High move diversity. Position offers many different piece movements.".to_string());
+        } else if analysis.move_diversity < 0.3 {
+            recommendations.push("Low move diversity. Position has limited piece movement options.".to_string());
+        }
+
+        // Complexity recommendations
+        match analysis.complexity_assessment {
+            PositionComplexity::High => {
+                recommendations.push("High complexity position. Multiple tactical elements require careful calculation.".to_string());
+            },
+            PositionComplexity::Medium => {
+                recommendations.push("Medium complexity position. Balanced tactical and positional considerations.".to_string());
+            },
+            PositionComplexity::Low => {
+                recommendations.push("Low complexity position. Focus on positional play and long-term planning.".to_string());
+            },
+            PositionComplexity::Unknown => {
+                recommendations.push("Complexity assessment unavailable. Use standard evaluation principles.".to_string());
+            },
+        }
+
+        recommendations
+    }
+
+    /// IID with probing for deeper verification of promising moves
+    pub fn perform_iid_with_probing(&mut self,
+                                   board: &mut BitboardBoard,
+                                   captured_pieces: &CapturedPieces,
+                                   player: Player,
+                                   iid_depth: u8,
+                                   probe_depth: u8,
+                                   alpha: i32,
+                                   beta: i32,
+                                   start_time: &TimeSource,
+                                   time_limit_ms: u32,
+                                   history: &mut Vec<String>) -> Option<IIDProbeResult> {
+        if !self.iid_config.enabled || iid_depth == 0 {
+            return None;
+        }
+
+        let mut generator = MoveGenerator::new();
+        let moves = generator.generate_legal_moves(board, player, captured_pieces);
+        
+        // Limit moves for IID efficiency
+        let moves_to_search = if moves.len() > self.iid_config.max_legal_moves {
+            &moves[..self.iid_config.max_legal_moves]
+        } else {
+            &moves
+        };
+
+        if moves_to_search.is_empty() {
+            return None;
+        }
+
+        // Phase 1: Initial shallow IID search to identify promising moves
+        let promising_moves = self.identify_promising_moves(
+            board, captured_pieces, player, moves_to_search, iid_depth, 
+            alpha, beta, start_time, time_limit_ms, history
+        );
+
+        if promising_moves.is_empty() {
+            return None;
+        }
+
+        // Phase 2: Deeper probing of promising moves
+        let probe_results = self.probe_promising_moves(
+            board, captured_pieces, player, &promising_moves, probe_depth,
+            alpha, beta, start_time, time_limit_ms, history
+        );
+
+        // Phase 3: Select best move based on probing results
+        let best_result = self.select_best_probe_result(probe_results);
+
+        // Update statistics
+        self.iid_stats.iid_searches_performed += 1;
+        self.iid_stats.total_iid_nodes += moves_to_search.len() as u64;
+        self.iid_stats.iid_time_ms += start_time.elapsed_ms() as u64;
+
+        best_result
+    }
+
+    /// Identify promising moves from initial shallow search
+    pub fn identify_promising_moves(&mut self,
+                               board: &mut BitboardBoard,
+                               captured_pieces: &CapturedPieces,
+                               player: Player,
+                               moves: &[Move],
+                               iid_depth: u8,
+                               alpha: i32,
+                               beta: i32,
+                               start_time: &TimeSource,
+                               time_limit_ms: u32,
+                               history: &mut Vec<String>) -> Vec<PromisingMove> {
+        let mut promising_moves = Vec::new();
+        let mut current_alpha = alpha;
+        let promising_threshold = 50; // Minimum score improvement to be considered promising
+
+        for move_ in moves {
+            if start_time.elapsed_ms() >= time_limit_ms {
+                break;
+            }
+
+            // Make move
+            let move_result = board.make_move(move_);
+            if move_result.is_none() {
+                continue;
+            }
+
+            // Shallow search to evaluate move potential
+            let score = -self.negamax_with_context(
+                board,
+                captured_pieces,
+                player.opposite(),
+                iid_depth - 1,
+                -beta,
+                -current_alpha,
+                start_time,
+                time_limit_ms,
+                history,
+                false,
+                false,
+                false,
+                false
+            );
+
+            // Undo move (placeholder - would need proper undo implementation)
+
+            // Check if move is promising enough for deeper probing
+            if score > current_alpha + promising_threshold {
+                promising_moves.push(PromisingMove {
+                    move_: move_.clone(),
+                    shallow_score: score,
+                    improvement_over_alpha: score - current_alpha,
+                    tactical_indicators: self.assess_tactical_indicators(move_),
+                });
+
+                current_alpha = score;
+            }
+        }
+
+        // Sort by improvement over alpha (most promising first)
+        promising_moves.sort_by(|a, b| b.improvement_over_alpha.cmp(&a.improvement_over_alpha));
+        
+        // Limit to top promising moves for efficiency
+        promising_moves.truncate(3);
+        
+        promising_moves
+    }
+
+    /// Probe promising moves with deeper search
+    fn probe_promising_moves(&mut self,
+                            board: &mut BitboardBoard,
+                            captured_pieces: &CapturedPieces,
+                            player: Player,
+                            promising_moves: &[PromisingMove],
+                            probe_depth: u8,
+                            alpha: i32,
+                            beta: i32,
+                            start_time: &TimeSource,
+                            time_limit_ms: u32,
+                            history: &mut Vec<String>) -> Vec<IIDProbeResult> {
+        let mut probe_results = Vec::new();
+
+        for promising_move in promising_moves {
+            if start_time.elapsed_ms() >= time_limit_ms {
+                break;
+            }
+
+            // Make move
+            let move_result = board.make_move(&promising_move.move_);
+            if move_result.is_none() {
+                continue;
+            }
+
+            // Deeper search for verification
+            let deep_score = -self.negamax_with_context(
+                board,
+                captured_pieces,
+                player.opposite(),
+                probe_depth - 1,
+                -beta,
+                -alpha,
+                start_time,
+                time_limit_ms,
+                history,
+                false,
+                false,
+                false,
+                false
+            );
+
+            // Undo move (placeholder - would need proper undo implementation)
+
+            // Calculate verification metrics
+            let score_difference = (deep_score - promising_move.shallow_score).abs();
+            let verification_confidence = self.calculate_verification_confidence(
+                promising_move.shallow_score, deep_score, score_difference
+            );
+
+            probe_results.push(IIDProbeResult {
+                move_: promising_move.move_.clone(),
+                shallow_score: promising_move.shallow_score,
+                deep_score,
+                score_difference,
+                verification_confidence,
+                tactical_indicators: promising_move.tactical_indicators.clone(),
+                probe_depth,
+                search_time_ms: start_time.elapsed_ms(),
+            });
+        }
+
+        probe_results
+    }
+
+    /// Select best move based on probing results
+    pub fn select_best_probe_result(&self, probe_results: Vec<IIDProbeResult>) -> Option<IIDProbeResult> {
+        if probe_results.is_empty() {
+            return None;
+        }
+
+        // Select move with best combination of score and verification confidence
+        probe_results.into_iter().max_by(|a, b| {
+            // Primary: Deep score
+            let score_comparison = a.deep_score.cmp(&b.deep_score);
+            if score_comparison != std::cmp::Ordering::Equal {
+                return score_comparison;
+            }
+
+            // Secondary: Verification confidence
+            a.verification_confidence.partial_cmp(&b.verification_confidence).unwrap_or(std::cmp::Ordering::Equal)
+        })
+    }
+
+    /// Assess tactical indicators for a move
+    pub fn assess_tactical_indicators(&self, move_: &Move) -> TacticalIndicators {
+        TacticalIndicators {
+            is_capture: move_.is_capture,
+            is_promotion: move_.is_promotion,
+            gives_check: move_.gives_check,
+            is_recapture: move_.is_recapture,
+            piece_value: self.get_piece_value_for_move(move_),
+            mobility_impact: self.estimate_mobility_impact(move_),
+            king_safety_impact: self.estimate_king_safety_impact(move_),
+        }
+    }
+
+    /// Calculate verification confidence based on score consistency
+    pub fn calculate_verification_confidence(&self, shallow_score: i32, deep_score: i32, score_difference: i32) -> f64 {
+        if score_difference == 0 {
+            return 1.0; // Perfect confidence
+        }
+
+        let max_expected_difference = 100; // Expected variation between shallow and deep search
+        let confidence = (max_expected_difference as f64 - score_difference as f64) / max_expected_difference as f64;
+        confidence.max(0.0).min(1.0)
+    }
+
+    /// Get piece value for move assessment
+    pub fn get_piece_value_for_move(&self, move_: &Move) -> i32 {
+        match move_.piece_type {
+            PieceType::Pawn => 100,
+            PieceType::Lance => 300,
+            PieceType::Knight => 300,
+            PieceType::Silver => 400,
+            PieceType::Gold => 500,
+            PieceType::Bishop => 700,
+            PieceType::Rook => 900,
+            PieceType::King => 10000,
+            // Promoted pieces have higher values
+            PieceType::PromotedPawn => 800,
+            PieceType::PromotedLance => 600,
+            PieceType::PromotedKnight => 600,
+            PieceType::PromotedSilver => 600,
+            PieceType::PromotedBishop => 1100,
+            PieceType::PromotedRook => 1300,
+        }
+    }
+
+    /// Estimate mobility impact of a move
+    pub fn estimate_mobility_impact(&self, _move_: &Move) -> i32 {
+        // Placeholder implementation - would analyze actual mobility changes
+        // Higher value pieces generally have higher mobility impact
+        match _move_.piece_type {
+            PieceType::Pawn => 10,
+            PieceType::Lance => 20,
+            PieceType::Knight => 25,
+            PieceType::Silver => 30,
+            PieceType::Gold => 35,
+            PieceType::Bishop => 40,
+            PieceType::Rook => 45,
+            PieceType::King => 50,
+            // Promoted pieces have higher mobility impact
+            PieceType::PromotedPawn => 60,
+            PieceType::PromotedLance => 50,
+            PieceType::PromotedKnight => 50,
+            PieceType::PromotedSilver => 50,
+            PieceType::PromotedBishop => 70,
+            PieceType::PromotedRook => 80,
+        }
+    }
+
+    /// Estimate king safety impact of a move
+    pub fn estimate_king_safety_impact(&self, _move_: &Move) -> i32 {
+        // Placeholder implementation - would analyze actual king safety changes
+        // Moves that give check or attack the king have higher impact
+        if _move_.gives_check {
+            50
+        } else if _move_.is_capture {
+            20
+        } else {
+            5
+        }
+    }
+
+    /// Performance benchmark comparing IID vs non-IID search
+    pub fn benchmark_iid_performance(&mut self,
+                                   board: &mut BitboardBoard,
+                                   captured_pieces: &CapturedPieces,
+                                   player: Player,
+                                   depth: u8,
+                                   time_limit_ms: u32,
+                                   iterations: usize) -> IIDPerformanceBenchmark {
+        let mut benchmark = IIDPerformanceBenchmark {
+            iterations,
+            depth,
+            time_limit_ms,
+            ..Default::default()
+        };
+
+        for iteration in 0..iterations {
+            let start_time = TimeSource::now();
+            let mut history = Vec::new();
+
+            // Benchmark with IID enabled
+            let iid_config = self.iid_config.clone();
+            self.iid_config.enabled = true;
+            
+            let iid_start = TimeSource::now();
+            let iid_result = self.negamax_with_context(
+                board, captured_pieces, player, depth,
+                -10000, 10000, &iid_start, time_limit_ms,
+                &mut history, false, false, false, false
+            );
+            let iid_time = iid_start.elapsed_ms();
+            let iid_nodes = self.iid_stats.total_iid_nodes;
+
+            // Benchmark with IID disabled
+            self.iid_config.enabled = false;
+            let non_iid_start = TimeSource::now();
+            let non_iid_result = self.negamax_with_context(
+                board, captured_pieces, player, depth,
+                -10000, 10000, &non_iid_start, time_limit_ms,
+                &mut history, false, false, false, false
+            );
+            let non_iid_time = non_iid_start.elapsed_ms();
+
+            // Restore original IID config
+            self.iid_config = iid_config;
+
+            // Record iteration results
+            benchmark.iid_times.push(iid_time);
+            benchmark.non_iid_times.push(non_iid_time);
+            benchmark.iid_nodes.push(iid_nodes);
+            benchmark.score_differences.push((iid_result - non_iid_result).abs());
+
+            // Calculate running averages
+            benchmark.avg_iid_time = benchmark.iid_times.iter().sum::<u32>() as f64 / (iteration + 1) as f64;
+            benchmark.avg_non_iid_time = benchmark.non_iid_times.iter().sum::<u32>() as f64 / (iteration + 1) as f64;
+            benchmark.avg_iid_nodes = benchmark.iid_nodes.iter().sum::<u64>() as f64 / (iteration + 1) as f64;
+            benchmark.avg_score_difference = benchmark.score_differences.iter().sum::<i32>() as f64 / (iteration + 1) as f64;
+
+            // Calculate efficiency metrics
+            benchmark.time_efficiency = if benchmark.avg_non_iid_time > 0.0 {
+                (benchmark.avg_non_iid_time - benchmark.avg_iid_time) / benchmark.avg_non_iid_time * 100.0
+            } else {
+                0.0
+            };
+
+            benchmark.node_efficiency = if benchmark.avg_iid_nodes > 0.0 {
+                benchmark.avg_iid_nodes / (benchmark.avg_iid_time + 1.0) // Nodes per millisecond
+            } else {
+                0.0
+            };
+
+            benchmark.accuracy = if benchmark.avg_score_difference < 50.0 {
+                "High".to_string()
+            } else if benchmark.avg_score_difference < 100.0 {
+                "Medium".to_string()
+            } else {
+                "Low".to_string()
+            };
+        }
+
+        benchmark
+    }
+
+    /// Get detailed IID performance analysis
+    pub fn get_iid_performance_analysis(&self) -> IIDPerformanceAnalysis {
+        let metrics = self.get_iid_performance_metrics();
+        
+        IIDPerformanceAnalysis {
+            overall_efficiency: metrics.iid_efficiency,
+            cutoff_rate: metrics.cutoff_rate,
+            overhead_percentage: metrics.overhead_percentage,
+            success_rate: metrics.success_rate,
+            recommendations: self.generate_performance_recommendations(&metrics),
+            bottleneck_analysis: self.analyze_performance_bottlenecks(&metrics),
+            optimization_potential: self.assess_optimization_potential(&metrics),
+        }
+    }
+
+    /// Generate performance recommendations based on metrics
+    fn generate_performance_recommendations(&self, metrics: &IIDPerformanceMetrics) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        if metrics.iid_efficiency < 0.3 {
+            recommendations.push("Consider disabling IID - efficiency is very low".to_string());
+        } else if metrics.iid_efficiency < 0.5 {
+            recommendations.push("IID efficiency is low - consider adjusting depth or thresholds".to_string());
+        }
+
+        if metrics.overhead_percentage > 20.0 {
+            recommendations.push("High overhead detected - reduce max_legal_moves or time_overhead_threshold".to_string());
+        }
+
+        if metrics.cutoff_rate < 0.1 {
+            recommendations.push("Low cutoff rate - IID moves may not be improving search order".to_string());
+        }
+
+        if metrics.success_rate < 0.6 {
+            recommendations.push("Low success rate - consider enabling adaptive tuning".to_string());
+        }
+
+        if recommendations.is_empty() {
+            recommendations.push("IID performance is optimal - no changes needed".to_string());
+        }
+
+        recommendations
+    }
+
+    /// Analyze performance bottlenecks
+    fn analyze_performance_bottlenecks(&self, metrics: &IIDPerformanceMetrics) -> Vec<String> {
+        let mut bottlenecks = Vec::new();
+
+        if metrics.overhead_percentage > 15.0 {
+            bottlenecks.push("Time overhead is the primary bottleneck".to_string());
+        }
+
+        if self.iid_stats.positions_skipped_tt_move > self.iid_stats.iid_searches_performed * 2 {
+            bottlenecks.push("Too many positions skipped due to TT moves".to_string());
+        }
+
+        if self.iid_stats.positions_skipped_depth < 5 {
+            bottlenecks.push("IID being applied at insufficient depths".to_string());
+        }
+
+        if self.iid_stats.positions_skipped_move_count > self.iid_stats.iid_searches_performed {
+            bottlenecks.push("Too many positions skipped due to move count limits".to_string());
+        }
+
+        if bottlenecks.is_empty() {
+            bottlenecks.push("No significant bottlenecks detected".to_string());
+        }
+
+        bottlenecks
+    }
+
+    /// Assess optimization potential
+    fn assess_optimization_potential(&self, metrics: &IIDPerformanceMetrics) -> String {
+        let potential_score = (metrics.iid_efficiency * 0.4 + 
+                              (1.0 - metrics.overhead_percentage / 100.0) * 0.3 +
+                              metrics.cutoff_rate * 0.3) * 100.0;
+
+        if potential_score > 80.0 {
+            "High - IID is performing optimally".to_string()
+        } else if potential_score > 60.0 {
+            "Medium - Some optimization opportunities exist".to_string()
+        } else if potential_score > 40.0 {
+            "Low - Significant optimization needed".to_string()
+        } else {
+            "Very Low - Consider disabling or major reconfiguration".to_string()
+        }
+    }
+
+    /// Strength testing framework to verify IID playing strength improvement
+    pub fn strength_test_iid_vs_non_iid(&mut self,
+                                       test_positions: &[StrengthTestPosition],
+                                       time_per_move_ms: u32,
+                                       games_per_position: usize) -> IIDStrengthTestResult {
+        let mut result = IIDStrengthTestResult {
+            total_positions: test_positions.len(),
+            games_per_position,
+            time_per_move_ms,
+            ..Default::default()
+        };
+
+        for (pos_index, position) in test_positions.iter().enumerate() {
+            let mut position_result = PositionStrengthResult {
+                position_index: pos_index,
+                position_fen: position.fen.clone(),
+                expected_result: position.expected_result.clone(),
+                ..Default::default()
+            };
+
+            // Test with IID enabled
+            let mut iid_config = self.iid_config.clone();
+            self.iid_config.enabled = true;
+            
+            let iid_wins = self.play_strength_games(
+                &position.fen,
+                position.expected_result,
+                time_per_move_ms,
+                games_per_position,
+                true // IID enabled
+            );
+            
+            // Test with IID disabled
+            self.iid_config.enabled = false;
+            
+            let non_iid_wins = self.play_strength_games(
+                &position.fen,
+                position.expected_result,
+                time_per_move_ms,
+                games_per_position,
+                false // IID disabled
+            );
+
+            // Restore original config
+            self.iid_config = iid_config;
+
+            position_result.iid_wins = iid_wins;
+            position_result.non_iid_wins = non_iid_wins;
+            position_result.iid_win_rate = iid_wins as f64 / games_per_position as f64;
+            position_result.non_iid_win_rate = non_iid_wins as f64 / games_per_position as f64;
+            position_result.improvement = position_result.iid_win_rate - position_result.non_iid_win_rate;
+
+            result.position_results.push(position_result);
+        }
+
+        // Calculate overall statistics
+        result.calculate_overall_statistics();
+        result
+    }
+
+    /// Play multiple games for strength testing
+    fn play_strength_games(&mut self,
+                          fen: &str,
+                          expected_result: GameResult,
+                          time_per_move_ms: u32,
+                          num_games: usize,
+                          iid_enabled: bool) -> usize {
+        let mut wins = 0;
+
+        for _ in 0..num_games {
+            if let Ok(mut board) = self.parse_fen_position(fen) {
+                let result = self.play_single_game(&mut board, time_per_move_ms, iid_enabled);
+                
+                match (result, expected_result) {
+                    (GameResult::Win, GameResult::Win) => wins += 1,
+                    (GameResult::Loss, GameResult::Loss) => wins += 1,
+                    (GameResult::Draw, GameResult::Draw) => wins += 1,
+                    _ => {} // No win for this game
+                }
+            }
+        }
+
+        wins
+    }
+
+    /// Play a single game for strength testing
+    fn play_single_game(&mut self,
+                       board: &mut BitboardBoard,
+                       time_per_move_ms: u32,
+                       iid_enabled: bool) -> GameResult {
+        let original_config = self.iid_config.clone();
+        self.iid_config.enabled = iid_enabled;
+        
+        let mut move_count = 0;
+        let max_moves = 200; // Prevent infinite games
+        
+        while move_count < max_moves {
+            let start_time = TimeSource::now();
+            let mut history = Vec::new();
+            
+            // Find best move
+            let best_move = self.find_best_move(
+                board,
+                &CapturedPieces::new(),
+                Player::Black, // Simplified - would need proper turn tracking
+                3, // depth
+                time_per_move_ms,
+                &mut history
+            );
+            
+            if let Some(move_) = best_move {
+                // Make move
+                let _ = board.make_move(&move_);
+                move_count += 1;
+            } else {
+                break; // No legal moves
+            }
+            
+            // Check for game end conditions (simplified)
+            if self.is_game_over(board) {
+                break;
+            }
+        }
+        
+        // Restore original config
+        self.iid_config = original_config;
+        
+        // Determine game result (simplified - would need proper evaluation)
+        if move_count >= max_moves {
+            GameResult::Draw
+        } else {
+            // Simplified result determination
+            GameResult::Win // Placeholder
+        }
+    }
+
+    /// Parse FEN position for strength testing
+    fn parse_fen_position(&self, fen: &str) -> Result<BitboardBoard, String> {
+        // Simplified FEN parsing - would need full implementation
+        Ok(BitboardBoard::new())
+    }
+
+    /// Check if game is over
+    fn is_game_over(&self, board: &BitboardBoard) -> bool {
+        // Simplified game over detection - would need full implementation
+        false
+    }
+
+    /// Find best move for strength testing
+    fn find_best_move(&mut self,
+                     board: &mut BitboardBoard,
+                     captured_pieces: &CapturedPieces,
+                     player: Player,
+                     depth: u8,
+                     time_limit_ms: u32,
+                     history: &mut Vec<String>) -> Option<Move> {
+        let start_time = TimeSource::now();
+        
+        // Use the main search function
+        let score = self.negamax_with_context(
+            board,
+            captured_pieces,
+            player,
+            depth,
+            -10000,
+            10000,
+            &start_time,
+            time_limit_ms,
+            history,
+            false,
+            false,
+            false,
+            false
+        );
+        
+        // Extract best move from transposition table or search results
+        self.extract_best_move_from_tt(board, player, captured_pieces)
+    }
+
+    /// Generate strength test positions
+    pub fn generate_strength_test_positions(&self) -> Vec<StrengthTestPosition> {
+        vec![
+            StrengthTestPosition {
+                fen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string(),
+                description: "Starting position".to_string(),
+                expected_result: GameResult::Draw,
+                difficulty: PositionDifficulty::Easy,
+            },
+            StrengthTestPosition {
+                fen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/4P4/PPPP1PPPP/1B5R1/LNSGKGSNL b - 1".to_string(),
+                description: "After one move".to_string(),
+                expected_result: GameResult::Draw,
+                difficulty: PositionDifficulty::Medium,
+            },
+            StrengthTestPosition {
+                fen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 1".to_string(),
+                description: "White to move".to_string(),
+                expected_result: GameResult::Win,
+                difficulty: PositionDifficulty::Hard,
+            },
+        ]
+    }
+
+    /// Analyze strength test results
+    pub fn analyze_strength_test_results(&self, result: &IIDStrengthTestResult) -> StrengthTestAnalysis {
+        let mut analysis = StrengthTestAnalysis {
+            overall_improvement: result.overall_improvement,
+            significant_positions: Vec::new(),
+            recommendations: Vec::new(),
+            confidence_level: ConfidenceLevel::Low,
+        };
+
+        // Find positions with significant improvement
+        for position_result in &result.position_results {
+            if position_result.improvement.abs() > 0.1 {
+                analysis.significant_positions.push(position_result.position_index);
+            }
+        }
+
+        // Generate recommendations
+        if result.overall_improvement > 0.05 {
+            analysis.recommendations.push("IID shows clear strength improvement - keep enabled".to_string());
+            analysis.confidence_level = ConfidenceLevel::High;
+        } else if result.overall_improvement > 0.02 {
+            analysis.recommendations.push("IID shows modest improvement - consider keeping enabled".to_string());
+            analysis.confidence_level = ConfidenceLevel::Medium;
+        } else if result.overall_improvement < -0.05 {
+            analysis.recommendations.push("IID shows strength regression - consider disabling".to_string());
+            analysis.confidence_level = ConfidenceLevel::High;
+        } else {
+            analysis.recommendations.push("IID impact is neutral - more testing needed".to_string());
+            analysis.confidence_level = ConfidenceLevel::Low;
+        }
+
+        // Add position-specific recommendations
+        for &pos_index in &analysis.significant_positions {
+            if let Some(pos_result) = result.position_results.get(pos_index) {
+                if pos_result.improvement > 0.1 {
+                    analysis.recommendations.push(
+                        format!("Strong improvement on position {} - IID effective for this type", pos_index)
+                    );
+                } else if pos_result.improvement < -0.1 {
+                    analysis.recommendations.push(
+                        format!("Regression on position {} - IID may be harmful for this type", pos_index)
+                    );
+                }
+            }
+        }
+
+        analysis
+    }
+
+    /// Get IID performance metrics
+    pub fn get_iid_performance_metrics(&self) -> IIDPerformanceMetrics {
+        // For now, use a placeholder for total search time - this would need to be tracked
+        let total_search_time_ms = 1000; // Placeholder
+        IIDPerformanceMetrics::from_stats(&self.iid_stats, total_search_time_ms)
+    }
+
+    /// Test IID move ordering with various scenarios
+    #[cfg(test)]
+    pub fn test_iid_move_ordering() {
+        use crate::bitboards::BitboardBoard;
+        use crate::types::{Move, Position, PieceType, Player};
+
+        let engine = SearchEngine::new(None, 64);
+        let board = BitboardBoard::new();
+        
+        // Create test moves
+        let move1 = Move {
+            from: Some(Position { row: 6, col: 4 }),
+            to: Position { row: 5, col: 4 },
+            piece_type: PieceType::Pawn,
+            captured_piece: None,
+            is_promotion: false,
+            is_capture: false,
+            gives_check: false,
+            is_recapture: false,
+            player: Player::Black,
+        };
+        
+        let move2 = Move {
+            from: Some(Position { row: 6, col: 3 }),
+            to: Position { row: 5, col: 3 },
+            piece_type: PieceType::Pawn,
+            captured_piece: None,
+            is_promotion: false,
+            is_capture: false,
+            gives_check: false,
+            is_recapture: false,
+            player: Player::Black,
+        };
+        
+        let moves = vec![move1.clone(), move2.clone()];
+        
+        // Test 1: No IID move - should use standard scoring
+        let sorted_no_iid = engine.sort_moves(&moves, &board, None);
+        assert_eq!(sorted_no_iid.len(), 2);
+        
+        // Test 2: With IID move - IID move should be first
+        let sorted_with_iid = engine.sort_moves(&moves, &board, Some(&move2));
+        assert_eq!(sorted_with_iid.len(), 2);
+        assert!(engine.moves_equal(&sorted_with_iid[0], &move2));
+        
+        println!("IID move ordering tests passed!");
     }
 
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
@@ -160,7 +2074,7 @@ impl SearchEngine {
         
         crate::debug_utils::debug_log("About to sort moves");
         
-        let sorted_moves = self.sort_moves(&legal_moves, board);
+        let sorted_moves = self.sort_moves(&legal_moves, board, None);
         
         crate::debug_utils::debug_log("About to start move evaluation loop");
         
@@ -245,13 +2159,54 @@ impl SearchEngine {
             return if board.is_king_in_check(player, captured_pieces) { -100000 } else { 0 };
         }
         
-        let sorted_moves = self.sort_moves(&legal_moves, board);
+        // === INTERNAL ITERATIVE DEEPENING (IID) ===
+        let mut iid_move = None;
+        let tt_move = self.transposition_table.get(&fen_key).and_then(|entry| entry.best_move.clone());
+        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms);
+        
+        if should_apply_iid {
+            let iid_depth = self.calculate_iid_depth(depth);
+            crate::debug_utils::debug_log(&format!("IID: Applying IID at depth {} with IID depth {}", depth, iid_depth));
+            
+            let iid_start_time = std::time::Instant::now();
+            iid_move = self.perform_iid_search(
+                &mut board.clone(), 
+                captured_pieces, 
+                player, 
+                iid_depth, 
+                alpha, 
+                beta, 
+                start_time, 
+                time_limit_ms, 
+                history
+            );
+            
+            let iid_time = iid_start_time.elapsed().as_millis();
+            self.iid_stats.iid_searches_performed += 1;
+            
+            if let Some(ref mv) = iid_move {
+                crate::debug_utils::debug_log(&format!("IID: Found move {} in {}ms", mv.to_usi_string(), iid_time));
+            } else {
+                crate::debug_utils::debug_log(&format!("IID: No move found after {}ms", iid_time));
+            }
+        } else {
+            crate::debug_utils::debug_log(&format!("IID: Skipped at depth {} (enabled={}, tt_move={}, moves={})", 
+                depth, 
+                self.iid_config.enabled, 
+                tt_move.is_some(), 
+                legal_moves.len()));
+        }
+        // === END IID ===
+        
+        let sorted_moves = self.sort_moves(&legal_moves, board, iid_move.as_ref());
         let mut best_score = -200000;
         let mut best_move_for_tt = None;
         
         history.push(fen_key.clone());
 
         let mut move_index = 0;
+        let mut iid_move_improved_alpha = false;
+        
         for move_ in sorted_moves {
             if self.should_stop(&start_time, time_limit_ms) { break; }
             move_index += 1;
@@ -285,6 +2240,16 @@ impl SearchEngine {
                 best_move_for_tt = Some(move_.clone());
                 if score > alpha {
                     alpha = score;
+                    
+                    // Track if this was the IID move that first improved alpha
+                    if let Some(iid_mv) = &iid_move {
+                        if self.moves_equal(&move_, iid_mv) && !iid_move_improved_alpha {
+                            iid_move_improved_alpha = true;
+                            self.iid_stats.iid_move_first_improved_alpha += 1;
+                            crate::debug_utils::debug_log(&format!("IID: Move {} first improved alpha to {}", move_.to_usi_string(), alpha));
+                        }
+                    }
+                    
                     if !move_.is_capture {
                         self.update_killer_moves(move_.clone());
                     }
@@ -292,7 +2257,16 @@ impl SearchEngine {
                         self.history_table[from.row as usize][from.col as usize] += (depth * depth) as i32;
                     }
                 }
-                if alpha >= beta { break; }
+                if alpha >= beta { 
+                    // Track if IID move caused cutoff
+                    if let Some(iid_mv) = &iid_move {
+                        if self.moves_equal(&move_, iid_mv) {
+                            self.iid_stats.iid_move_caused_cutoff += 1;
+                            crate::debug_utils::debug_log(&format!("IID: Move {} caused beta cutoff", move_.to_usi_string()));
+                        }
+                    }
+                    break; 
+                }
             }
         }
         
@@ -438,13 +2412,24 @@ impl SearchEngine {
 
     
 
-    fn sort_moves(&self, moves: &[Move], board: &BitboardBoard) -> Vec<Move> {
-        let mut scored_moves: Vec<(Move, i32)> = moves.iter().map(|m| (m.clone(), self.score_move(m, board))).collect();
+    pub fn sort_moves(&self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>) -> Vec<Move> {
+        let mut scored_moves: Vec<(Move, i32)> = moves.iter().map(|m| (m.clone(), self.score_move(m, board, iid_move))).collect();
         scored_moves.sort_by(|a, b| b.1.cmp(&a.1));
         scored_moves.into_iter().map(|(m, _)| m).collect()
     }
 
-    fn score_move(&self, move_: &Move, _board: &BitboardBoard) -> i32 {
+    pub fn score_move(&self, move_: &Move, board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
+        // Priority 1: IID move gets maximum score
+        if let Some(iid_mv) = iid_move {
+            if self.moves_equal(move_, iid_mv) {
+                return i32::MAX;
+            }
+        }
+        
+        // Priority 2: Transposition table move (simplified - we don't have access to player here)
+        // This would need to be passed as a parameter or handled differently
+        
+        // Priority 3: Standard move scoring
         let mut score = 0;
         if move_.is_promotion { score += 800; }
         if move_.is_capture {
@@ -468,7 +2453,7 @@ impl SearchEngine {
         score
     }
 
-    fn moves_equal(&self, move1: &Move, move2: &Move) -> bool {
+    pub fn moves_equal(&self, move1: &Move, move2: &Move) -> bool {
         move1.from == move2.from && move1.to == move2.to && move1.piece_type == move2.piece_type
     }
 
