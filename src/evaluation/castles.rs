@@ -37,7 +37,7 @@ impl CastleRecognizer {
                 get_yagura_castle(),
             ],
             pattern_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
-            early_termination_threshold: 0.7, // Stop if match quality is below 70%
+                early_termination_threshold: 0.8, // Stop if match quality is below 80% (more aggressive)
         }
     }
     
@@ -84,8 +84,8 @@ impl CastleRecognizer {
                 continue;
             }
 
-            // Only consider if it's a reasonable match (at least 60% quality)
-            if match_quality >= 0.6 {
+                // Only consider if it's a reasonable match (at least 70% quality) - more aggressive
+                if match_quality >= 0.7 {
                 let adjusted_score = self.adjust_score_for_quality(pattern.score, match_quality);
 
                 // Take the best match
@@ -97,8 +97,8 @@ impl CastleRecognizer {
             }
         }
 
-        // Cache the result (limit cache size)
-        if self.pattern_cache.borrow().len() < 500 {
+        // Cache the result (limit cache size) - very small for performance
+        if self.pattern_cache.borrow().len() < 50 { // Reduced from 500 to 50
             self.pattern_cache.borrow_mut().insert((board_hash, player, king_pos), best_pattern_index);
         }
 

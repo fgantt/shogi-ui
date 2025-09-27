@@ -606,12 +606,12 @@ pub struct KingSafetyConfig {
 impl Default for KingSafetyConfig {
     fn default() -> Self {
         Self {
-            enabled: false,  // Temporarily disabled for performance testing
-            castle_weight: 1.0,
-            attack_weight: 1.0,
-            threat_weight: 1.0,
+            enabled: true,  // Re-enabled with aggressive optimizations
+            castle_weight: 0.3,  // Reduced weights for performance
+            attack_weight: 0.3,
+            threat_weight: 0.2,  // Lowest weight since threats are most expensive
             phase_adjustment: 0.8,
-            performance_mode: false,
+            performance_mode: true,  // Enable performance mode by default
         }
     }
 }

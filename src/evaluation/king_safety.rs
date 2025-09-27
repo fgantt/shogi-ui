@@ -29,7 +29,7 @@ impl KingSafetyEvaluator {
             attack_analyzer: AttackAnalyzer::new(),
             threat_evaluator: ThreatEvaluator::new(),
             evaluation_cache: std::cell::RefCell::new(HashMap::new()),
-            fast_mode_threshold: 3, // Use fast mode for depth >= 3
+            fast_mode_threshold: 1, // Use fast mode for depth >= 1 (very aggressive)
             config,
         }
     }
@@ -49,13 +49,13 @@ impl KingSafetyEvaluator {
         self.evaluate_with_depth(board, player, 0)
     }
     
-    /// Evaluate only at root and key nodes for performance
+    /// Evaluate only at root and key nodes for performance - very aggressive
     pub fn evaluate_selective(&self, board: &BitboardBoard, player: Player, depth: u8, is_root: bool, has_capture: bool, has_check: bool) -> TaperedScore {
         // Only evaluate king safety at:
-        // - Root node (depth 0)
+        // - Root node (depth 0) 
         // - Nodes with captures or checks
-        // - Shallow nodes (depth <= 2)
-        if is_root || has_capture || has_check || depth <= 2 {
+        // - Very shallow nodes (depth <= 1) - more aggressive
+        if is_root || has_capture || has_check || depth <= 1 {
             self.evaluate_with_depth(board, player, depth)
         } else {
             TaperedScore::default()
@@ -74,7 +74,7 @@ impl KingSafetyEvaluator {
             return *cached_score;
         }
         
-        // Determine if we should use fast mode
+        // Determine if we should use fast mode - very aggressive for performance
         let use_fast_mode = self.config.performance_mode || depth >= self.fast_mode_threshold;
         
         let mut total_score = TaperedScore::default();
@@ -94,8 +94,8 @@ impl KingSafetyEvaluator {
             let attack_score = self.attack_analyzer.evaluate_attacks(board, player);
             total_score += attack_score * self.config.attack_weight;
 
-            // Threat evaluation - use fast mode for depths >= 2
-            let use_threat_fast_mode = depth >= 2;
+            // Threat evaluation - use fast mode for depths >= 1 (very aggressive)
+            let use_threat_fast_mode = depth >= 1;
             let threat_score = self.threat_evaluator.evaluate_threats_with_mode(board, player, use_threat_fast_mode);
             total_score += threat_score * self.config.threat_weight;
         }
@@ -103,8 +103,8 @@ impl KingSafetyEvaluator {
         // Apply phase adjustment
         let final_score = total_score * self.config.phase_adjustment;
         
-        // Cache the result (limit cache size)
-        if self.evaluation_cache.borrow().len() < 1000 {
+        // Cache the result (limit cache size) - very small for performance
+        if self.evaluation_cache.borrow().len() < 100 { // Reduced from 1000 to 100
             self.evaluation_cache.borrow_mut().insert((board_hash, player), final_score);
         }
         
@@ -123,9 +123,9 @@ impl KingSafetyEvaluator {
         // Simplified attack evaluation (only count major pieces near king)
         score += self.evaluate_basic_attacks(board, player);
         
-        // Basic threat evaluation (pins only) with reduced weight
+        // Basic threat evaluation (pins only) with very reduced weight
         let threat_score = self.threat_evaluator.evaluate_threats_with_mode(board, player, true);
-        score += threat_score * 0.3;
+        score += threat_score * 0.1; // Reduced from 0.3 to 0.1
         
         score
     }
