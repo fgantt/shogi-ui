@@ -19,6 +19,8 @@ pub struct SearchEngine {
     quiescence_stats: QuiescenceStats,
     null_move_config: NullMoveConfig,
     null_move_stats: NullMoveStats,
+    lmr_config: LMRConfig,
+    lmr_stats: LMRStats,
 }
 
 impl SearchEngine {
@@ -43,6 +45,8 @@ impl SearchEngine {
             quiescence_stats: QuiescenceStats::default(),
             null_move_config: NullMoveConfig::default(),
             null_move_stats: NullMoveStats::default(),
+            lmr_config: LMRConfig::default(),
+            lmr_stats: LMRStats::default(),
         }
     }
 
@@ -155,8 +159,11 @@ impl SearchEngine {
         
         history.push(fen_key.clone());
 
+        let mut move_index = 0;
         for move_ in sorted_moves {
             if self.should_stop(&start_time, time_limit_ms) { break; }
+            move_index += 1;
+            
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
 
@@ -164,7 +171,19 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
-                let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, history, true);
+            let score = self.search_move_with_lmr(
+                &mut new_board, 
+                &new_captured, 
+                player, 
+                depth, 
+                alpha, 
+                beta, 
+                &start_time, 
+                time_limit_ms, 
+                history, 
+                &move_, 
+                move_index
+            );
 
             if score > best_score {
                 best_score = score;
@@ -373,6 +392,7 @@ impl SearchEngine {
         self.transposition_table.clear();
         self.history_table = [[0; 9]; 9];
         self.killer_moves = [None, None];
+        self.lmr_stats.reset();
     }
 
     #[cfg(test)]
@@ -1095,6 +1115,691 @@ impl SearchEngine {
     /// Reset null move statistics
     pub fn reset_null_move_stats(&mut self) {
         self.null_move_stats = NullMoveStats::default();
+    }
+
+    // ===== LATE MOVE REDUCTIONS CONFIGURATION MANAGEMENT =====
+
+    /// Create default LMR configuration
+    pub fn new_lmr_config() -> LMRConfig {
+        LMRConfig::default()
+    }
+    
+    /// Update LMR configuration with validation
+    pub fn update_lmr_config(&mut self, config: LMRConfig) -> Result<(), String> {
+        config.validate()?;
+        self.lmr_config = config;
+        Ok(())
+    }
+    
+    /// Get current LMR configuration
+    pub fn get_lmr_config(&self) -> &LMRConfig {
+        &self.lmr_config
+    }
+    
+    /// Get current LMR statistics
+    pub fn get_lmr_stats(&self) -> &LMRStats {
+        &self.lmr_stats
+    }
+    
+    /// Reset LMR statistics
+    pub fn reset_lmr_stats(&mut self) {
+        self.lmr_stats = LMRStats::default();
+    }
+
+    // ===== LATE MOVE REDUCTIONS CORE LOGIC =====
+
+    /// Search a move with Late Move Reductions applied
+    fn search_move_with_lmr(&mut self, 
+                           board: &mut BitboardBoard, 
+                           captured_pieces: &CapturedPieces, 
+                           player: Player, 
+                           depth: u8, 
+                           alpha: i32, 
+                           beta: i32, 
+                           start_time: &TimeSource, 
+                           time_limit_ms: u32, 
+                           history: &mut Vec<String>, 
+                           move_: &Move, 
+                           move_index: usize) -> i32 {
+        
+        self.lmr_stats.moves_considered += 1;
+        
+        // Check if LMR should be applied
+        if self.should_apply_lmr(move_, depth, move_index) {
+            self.lmr_stats.reductions_applied += 1;
+            
+            // Calculate reduction amount (use optimized version)
+            let reduction = self.calculate_reduction_optimized(move_, depth, move_index);
+            self.lmr_stats.total_depth_saved += reduction as u64;
+            
+            // Perform reduced-depth search with null window
+            let reduced_depth = depth - 1 - reduction;
+            let score = -self.negamax(
+                board, 
+                captured_pieces, 
+                player.opposite(), 
+                reduced_depth, 
+                -alpha - 1, 
+                -alpha, 
+                start_time, 
+                time_limit_ms, 
+                history, 
+                true
+            );
+            
+            // Check if re-search is needed
+            if score > alpha {
+                self.lmr_stats.researches_triggered += 1;
+                
+                // Re-search at full depth
+                let full_score = -self.negamax(
+                    board, 
+                    captured_pieces, 
+                    player.opposite(), 
+                    depth - 1, 
+                    -beta, 
+                    -alpha, 
+                    start_time, 
+                    time_limit_ms, 
+                    history, 
+                    true
+                );
+                
+                if full_score >= beta {
+                    self.lmr_stats.cutoffs_after_research += 1;
+                }
+                
+                return full_score;
+            } else {
+                if score >= beta {
+                    self.lmr_stats.cutoffs_after_reduction += 1;
+                }
+                return score;
+            }
+        } else {
+            // No reduction - perform full-depth search
+            -self.negamax(
+                board, 
+                captured_pieces, 
+                player.opposite(), 
+                depth - 1, 
+                -beta, 
+                -alpha, 
+                start_time, 
+                time_limit_ms, 
+                history, 
+                true
+            )
+        }
+    }
+
+    /// Check if LMR should be applied to a move
+    fn should_apply_lmr(&self, move_: &Move, depth: u8, move_index: usize) -> bool {
+        if !self.lmr_config.enabled {
+            return false;
+        }
+        
+        // Must meet minimum depth requirement
+        if depth < self.lmr_config.min_depth {
+            return false;
+        }
+        
+        // Must be beyond minimum move index
+        if move_index < self.lmr_config.min_move_index as usize {
+            return false;
+        }
+        
+        // Apply exemption rules (use optimized version)
+        if self.is_move_exempt_from_lmr_optimized(move_) {
+            return false;
+        }
+        
+        true
+    }
+
+    /// Check if a move is exempt from LMR
+    fn is_move_exempt_from_lmr(&self, move_: &Move) -> bool {
+        // Basic exemptions
+        if move_.is_capture || move_.is_promotion || move_.gives_check {
+            return true;
+        }
+        
+        if self.lmr_config.enable_extended_exemptions {
+            // Extended exemptions
+            if self.is_killer_move(move_) {
+                return true;
+            }
+            
+            if self.is_transposition_table_move(move_) {
+                return true;
+            }
+            
+            if self.is_escape_move(move_) {
+                return true;
+            }
+        }
+        
+        false
+    }
+
+    /// Calculate reduction amount for LMR
+    fn calculate_reduction(&self, move_: &Move, depth: u8, move_index: usize) -> u8 {
+        if !self.lmr_config.enable_dynamic_reduction {
+            return self.lmr_config.base_reduction;
+        }
+        
+        let mut reduction = self.lmr_config.base_reduction;
+        
+        // Dynamic reduction based on depth
+        if depth >= 6 {
+            reduction += 1;
+        }
+        if depth >= 10 {
+            reduction += 1;
+        }
+        
+        // Dynamic reduction based on move index
+        if move_index >= 8 {
+            reduction += 1;
+        }
+        if move_index >= 16 {
+            reduction += 1;
+        }
+        
+        // Adaptive reduction based on position characteristics
+        if self.lmr_config.enable_adaptive_reduction {
+            reduction = self.apply_adaptive_reduction(reduction, move_, depth);
+        }
+        
+        // Ensure reduction doesn't exceed maximum
+        reduction.min(self.lmr_config.max_reduction)
+            .min(depth.saturating_sub(2)) // Don't reduce to zero or negative
+    }
+
+    /// Apply adaptive reduction based on position characteristics
+    fn apply_adaptive_reduction(&self, base_reduction: u8, move_: &Move, _depth: u8) -> u8 {
+        let mut reduction = base_reduction;
+        
+        // More conservative reduction in tactical positions
+        if self.is_tactical_position() {
+            reduction = reduction.saturating_sub(1);
+        }
+        
+        // More aggressive reduction in quiet positions
+        if self.is_quiet_position() {
+            reduction += 1;
+        }
+        
+        // Adjust based on move characteristics
+        if self.is_center_move(move_) {
+            reduction = reduction.saturating_sub(1);
+        }
+        
+        reduction
+    }
+
+    /// Check if a move is a killer move
+    fn is_killer_move(&self, move_: &Move) -> bool {
+        self.killer_moves.iter().any(|killer| {
+            killer.as_ref().map_or(false, |k| self.moves_equal(move_, k))
+        })
+    }
+
+    /// Check if a move is from transposition table
+    fn is_transposition_table_move(&self, move_: &Move) -> bool {
+        // This is a simplified implementation
+        // In a full implementation, we would track the best move from TT lookup
+        // For now, we'll use a heuristic based on move characteristics
+        move_.is_capture && move_.captured_piece_value() > 500
+    }
+
+    /// Check if a move is an escape move
+    fn is_escape_move(&self, move_: &Move) -> bool {
+        // Check if this move escapes from a threat
+        // This is a simplified implementation based on move characteristics
+        if let Some(from) = move_.from {
+            // Check if moving away from center (potential escape)
+            let from_center = self.is_center_square(from);
+            let to_center = self.is_center_move(move_);
+            if from_center && !to_center {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if position is tactical
+    fn is_tactical_position(&self) -> bool {
+        // Determine if position has tactical characteristics
+        // This is a simplified implementation based on recent statistics
+        let stats = &self.lmr_stats;
+        if stats.moves_considered > 0 {
+            // If we've seen many captures or checks recently, it's tactical
+            let capture_ratio = stats.cutoffs_after_reduction as f64 / stats.moves_considered as f64;
+            return capture_ratio > 0.3; // More than 30% of moves are cutoffs
+        }
+        false
+    }
+
+    /// Check if position is quiet
+    fn is_quiet_position(&self) -> bool {
+        // Determine if position is quiet (few captures, checks)
+        // This is a simplified implementation based on recent statistics
+        let stats = &self.lmr_stats;
+        if stats.moves_considered > 0 {
+            // If we've seen few cutoffs recently, it's quiet
+            let cutoff_ratio = stats.total_cutoffs() as f64 / stats.moves_considered as f64;
+            return cutoff_ratio < 0.1; // Less than 10% of moves are cutoffs
+        }
+        true // Default to quiet if no data
+    }
+
+    /// Check if a move targets center squares
+    fn is_center_move(&self, move_: &Move) -> bool {
+        self.is_center_square(move_.to)
+    }
+
+
+    // ===== ADDITIONAL LMR HELPER METHODS =====
+
+    /// Get the tactical value of a move for LMR decisions
+    fn get_move_tactical_value(&self, move_: &Move) -> i32 {
+        let mut value = 0;
+        
+        // High value for captures
+        if move_.is_capture {
+            value += move_.captured_piece_value();
+        }
+        
+        // High value for checks
+        if move_.gives_check {
+            value += 1000;
+        }
+        
+        // High value for promotions
+        if move_.is_promotion {
+            value += move_.promotion_value();
+        }
+        
+        // Medium value for center moves
+        if self.is_center_move(move_) {
+            value += 50;
+        }
+        
+        // Medium value for killer moves
+        if self.is_killer_move(move_) {
+            value += 200;
+        }
+        
+        value
+    }
+
+    /// Classify a move type for LMR exemption decisions
+    fn classify_move_type(&self, move_: &Move) -> MoveType {
+        if move_.gives_check {
+            MoveType::Check
+        } else if move_.is_capture {
+            MoveType::Capture
+        } else if move_.is_promotion {
+            MoveType::Promotion
+        } else if self.is_killer_move(move_) {
+            MoveType::Killer
+        } else if self.is_transposition_table_move(move_) {
+            MoveType::TranspositionTable
+        } else if self.is_escape_move(move_) {
+            MoveType::Escape
+        } else if self.is_center_move(move_) {
+            MoveType::Center
+        } else {
+            MoveType::Quiet
+        }
+    }
+
+    /// Get the position complexity for adaptive LMR
+    fn get_position_complexity(&self) -> PositionComplexity {
+        let stats = &self.lmr_stats;
+        
+        if stats.moves_considered == 0 {
+            return PositionComplexity::Unknown;
+        }
+        
+        let cutoff_rate = stats.total_cutoffs() as f64 / stats.moves_considered as f64;
+        let research_rate = stats.research_rate() / 100.0;
+        
+        if cutoff_rate > 0.4 || research_rate > 0.3 {
+            PositionComplexity::High
+        } else if cutoff_rate > 0.2 || research_rate > 0.15 {
+            PositionComplexity::Medium
+        } else {
+            PositionComplexity::Low
+        }
+    }
+
+    /// Check if LMR is effective in current position
+    fn is_lmr_effective(&self) -> bool {
+        let stats = &self.lmr_stats;
+        
+        if stats.moves_considered < 10 {
+            return true; // Not enough data, assume effective
+        }
+        
+        let efficiency = stats.efficiency();
+        let research_rate = stats.research_rate() / 100.0;
+        
+        // LMR is effective if we're reducing many moves but not re-searching too many
+        efficiency > 20.0 && research_rate < 0.4
+    }
+
+    /// Get recommended LMR parameters based on position
+    fn get_adaptive_lmr_params(&self) -> (u8, u8) {
+        let complexity = self.get_position_complexity();
+        let is_effective = self.is_lmr_effective();
+        
+        let base_reduction = match complexity {
+            PositionComplexity::High => if is_effective { 2 } else { 1 },
+            PositionComplexity::Medium => 1,
+            PositionComplexity::Low => 2,
+            PositionComplexity::Unknown => 1,
+        };
+        
+        let max_reduction = match complexity {
+            PositionComplexity::High => 4,
+            PositionComplexity::Medium => 3,
+            PositionComplexity::Low => 5,
+            PositionComplexity::Unknown => 3,
+        };
+        
+        (base_reduction, max_reduction)
+    }
+
+    // ===== LMR PERFORMANCE OPTIMIZATION =====
+
+    /// Optimized move exemption check with early returns
+    fn is_move_exempt_from_lmr_optimized(&self, move_: &Move) -> bool {
+        // Early return for most common exemptions (captures, promotions, checks)
+        if move_.is_capture || move_.is_promotion || move_.gives_check {
+            return true;
+        }
+        
+        // Only check extended exemptions if enabled
+        if !self.lmr_config.enable_extended_exemptions {
+            return false;
+        }
+        
+        // Check killer moves (most common extended exemption)
+        if self.is_killer_move(move_) {
+            return true;
+        }
+        
+        // Check other exemptions only if needed
+        self.is_transposition_table_move(move_) || self.is_escape_move(move_)
+    }
+
+    /// Optimized reduction calculation with cached values
+    fn calculate_reduction_optimized(&self, move_: &Move, depth: u8, move_index: usize) -> u8 {
+        if !self.lmr_config.enable_dynamic_reduction {
+            return self.lmr_config.base_reduction;
+        }
+        
+        let mut reduction = self.lmr_config.base_reduction;
+        
+        // Pre-calculate depth-based reductions
+        if depth >= 10 {
+            reduction += 2;
+        } else if depth >= 6 {
+            reduction += 1;
+        }
+        
+        // Pre-calculate move index-based reductions
+        if move_index >= 16 {
+            reduction += 2;
+        } else if move_index >= 8 {
+            reduction += 1;
+        }
+        
+        // Apply adaptive reduction only if enabled and needed
+        if self.lmr_config.enable_adaptive_reduction && reduction < self.lmr_config.max_reduction {
+            reduction = self.apply_adaptive_reduction_optimized(reduction, move_, depth);
+        }
+        
+        // Ensure reduction doesn't exceed maximum
+        reduction.min(self.lmr_config.max_reduction)
+            .min(depth.saturating_sub(2))
+    }
+
+    /// Optimized adaptive reduction with early returns
+    fn apply_adaptive_reduction_optimized(&self, base_reduction: u8, move_: &Move, _depth: u8) -> u8 {
+        let mut reduction = base_reduction;
+        
+        // Quick center move check (most common case)
+        if self.is_center_move(move_) {
+            reduction = reduction.saturating_sub(1);
+            return reduction; // Early return for center moves
+        }
+        
+        // Only check position characteristics if we have enough data
+        if self.lmr_stats.moves_considered < 5 {
+            return reduction;
+        }
+        
+        // Check tactical position (more expensive, do last)
+        if self.is_tactical_position() {
+            reduction = reduction.saturating_sub(1);
+        } else if self.is_quiet_position() {
+            reduction += 1;
+        }
+        
+        reduction
+    }
+
+    /// Get LMR performance metrics for tuning
+    pub fn get_lmr_performance_metrics(&self) -> LMRPerformanceMetrics {
+        let stats = &self.lmr_stats;
+        
+        LMRPerformanceMetrics {
+            moves_considered: stats.moves_considered,
+            reductions_applied: stats.reductions_applied,
+            researches_triggered: stats.researches_triggered,
+            efficiency: stats.efficiency(),
+            research_rate: stats.research_rate(),
+            cutoff_rate: stats.cutoff_rate(),
+            average_depth_saved: stats.average_depth_saved(),
+            total_depth_saved: stats.total_depth_saved,
+            nodes_per_second: if stats.moves_considered > 0 {
+                // This would need timing information in a real implementation
+                stats.moves_considered as f64 * 1000.0 // Placeholder
+            } else {
+                0.0
+            },
+        }
+    }
+
+    /// Auto-tune LMR parameters based on performance
+    pub fn auto_tune_lmr_parameters(&mut self) -> Result<(), String> {
+        let metrics = self.get_lmr_performance_metrics();
+        
+        // Only auto-tune if we have enough data
+        if metrics.moves_considered < 100 {
+            return Err("Insufficient data for auto-tuning".to_string());
+        }
+        
+        let mut new_config = self.lmr_config.clone();
+        
+        // Adjust parameters based on performance
+        if metrics.research_rate > 40.0 {
+            // Too many researches - reduce aggressiveness
+            new_config.base_reduction = new_config.base_reduction.saturating_sub(1);
+            new_config.max_reduction = new_config.max_reduction.saturating_sub(1);
+        } else if metrics.research_rate < 10.0 && metrics.efficiency > 30.0 {
+            // Too few researches - increase aggressiveness
+            new_config.base_reduction = (new_config.base_reduction + 1).min(5);
+            new_config.max_reduction = (new_config.max_reduction + 1).min(8);
+        }
+        
+        // Adjust move index threshold based on efficiency
+        if metrics.efficiency > 50.0 {
+            // High efficiency - can be more aggressive
+            new_config.min_move_index = new_config.min_move_index.saturating_sub(1);
+        } else if metrics.efficiency < 20.0 {
+            // Low efficiency - be more conservative
+            new_config.min_move_index = (new_config.min_move_index + 1).min(10);
+        }
+        
+        // Apply the new configuration
+        self.update_lmr_config(new_config)
+    }
+
+    /// Get LMR configuration presets for different playing styles
+    pub fn get_lmr_preset(&self, style: LMRPlayingStyle) -> LMRConfig {
+        match style {
+            LMRPlayingStyle::Aggressive => LMRConfig {
+                enabled: true,
+                min_depth: 2,
+                min_move_index: 3,
+                base_reduction: 2,
+                max_reduction: 4,
+                enable_dynamic_reduction: true,
+                enable_adaptive_reduction: true,
+                enable_extended_exemptions: true,
+            },
+            LMRPlayingStyle::Conservative => LMRConfig {
+                enabled: true,
+                min_depth: 4,
+                min_move_index: 6,
+                base_reduction: 1,
+                max_reduction: 2,
+                enable_dynamic_reduction: true,
+                enable_adaptive_reduction: true,
+                enable_extended_exemptions: true,
+            },
+            LMRPlayingStyle::Balanced => LMRConfig {
+                enabled: true,
+                min_depth: 3,
+                min_move_index: 4,
+                base_reduction: 1,
+                max_reduction: 3,
+                enable_dynamic_reduction: true,
+                enable_adaptive_reduction: true,
+                enable_extended_exemptions: true,
+            },
+        }
+    }
+
+    /// Apply LMR configuration preset
+    pub fn apply_lmr_preset(&mut self, style: LMRPlayingStyle) -> Result<(), String> {
+        let preset = self.get_lmr_preset(style);
+        self.update_lmr_config(preset)
+    }
+
+    /// Optimize LMR memory usage by clearing old statistics
+    pub fn optimize_lmr_memory(&mut self) {
+        // Reset statistics if they get too large
+        if self.lmr_stats.moves_considered > 1_000_000 {
+            self.lmr_stats.reset();
+        }
+        
+        // Clear transposition table if it gets too large
+        if self.transposition_table.len() > 100_000 {
+            self.transposition_table.clear();
+        }
+    }
+
+    /// Get LMR performance report with optimization suggestions
+    pub fn get_lmr_performance_report(&self) -> String {
+        let metrics = self.get_lmr_performance_metrics();
+        let recommendations = metrics.get_optimization_recommendations();
+        
+        let mut report = format!(
+            "LMR Performance Report:\n\
+            - Moves considered: {}\n\
+            - Reductions applied: {}\n\
+            - Researches triggered: {}\n\
+            - Efficiency: {:.1}%\n\
+            - Research rate: {:.1}%\n\
+            - Cutoff rate: {:.1}%\n\
+            - Average depth saved: {:.2}\n\
+            - Total depth saved: {}\n\
+            - Performance status: {}\n\n\
+            Optimization Recommendations:",
+            metrics.moves_considered,
+            metrics.reductions_applied,
+            metrics.researches_triggered,
+            metrics.efficiency,
+            metrics.research_rate,
+            metrics.cutoff_rate,
+            metrics.average_depth_saved,
+            metrics.total_depth_saved,
+            if metrics.is_performing_well() { "Good" } else { "Needs tuning" }
+        );
+        
+        for (i, rec) in recommendations.iter().enumerate() {
+            report.push_str(&format!("\n{}. {}", i + 1, rec));
+        }
+        
+        report
+    }
+
+    /// Profile LMR overhead and return timing information
+    pub fn profile_lmr_overhead(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                               player: Player, depth: u8, iterations: usize) -> LMRProfileResult {
+        let mut total_time = std::time::Duration::new(0, 0);
+        let mut total_moves = 0u64;
+        let mut total_reductions = 0u64;
+        let mut total_researches = 0u64;
+        
+        for _ in 0..iterations {
+            self.reset_lmr_stats();
+            let start_time = std::time::Instant::now();
+            
+            let _result = self.search_at_depth(board, captured_pieces, player, depth, 5000);
+            
+            let elapsed = start_time.elapsed();
+            total_time += elapsed;
+            
+            let stats = self.get_lmr_stats();
+            total_moves += stats.moves_considered;
+            total_reductions += stats.reductions_applied;
+            total_researches += stats.researches_triggered;
+        }
+        
+        LMRProfileResult {
+            total_time,
+            average_time_per_search: total_time / iterations as u32,
+            total_moves_processed: total_moves,
+            total_reductions_applied: total_reductions,
+            total_researches_triggered: total_researches,
+            moves_per_second: if total_time.as_secs_f64() > 0.0 {
+                total_moves as f64 / total_time.as_secs_f64()
+            } else {
+                0.0
+            },
+            reduction_rate: if total_moves > 0 {
+                (total_reductions as f64 / total_moves as f64) * 100.0
+            } else {
+                0.0
+            },
+            research_rate: if total_reductions > 0 {
+                (total_researches as f64 / total_reductions as f64) * 100.0
+            } else {
+                0.0
+            },
+        }
+    }
+
+    /// Get hardware-optimized LMR configuration
+    pub fn get_hardware_optimized_config(&self) -> LMRConfig {
+        // This would analyze system capabilities in a real implementation
+        // For now, return a balanced configuration
+        LMRConfig {
+            enabled: true,
+            min_depth: 3,
+            min_move_index: 4,
+            base_reduction: 1,
+            max_reduction: 3,
+            enable_dynamic_reduction: true,
+            enable_adaptive_reduction: true,
+            enable_extended_exemptions: true,
+        }
     }
 
     /// Log null move attempt for debugging

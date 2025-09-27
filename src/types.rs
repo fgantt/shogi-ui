@@ -1135,6 +1135,300 @@ impl NullMoveStats {
     }
 }
 
+/// Configuration for Late Move Reductions (LMR) parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LMRConfig {
+    pub enabled: bool,                        // Enable late move reductions
+    pub min_depth: u8,                        // Minimum depth to apply LMR
+    pub min_move_index: u8,                   // Minimum move index to consider for reduction
+    pub base_reduction: u8,                   // Base reduction amount
+    pub max_reduction: u8,                    // Maximum reduction allowed
+    pub enable_dynamic_reduction: bool,       // Use dynamic vs static reduction
+    pub enable_adaptive_reduction: bool,      // Use position-based adaptation
+    pub enable_extended_exemptions: bool,     // Extended move exemption rules
+}
+
+impl Default for LMRConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_depth: 3,
+            min_move_index: 4,
+            base_reduction: 1,
+            max_reduction: 3,
+            enable_dynamic_reduction: true,
+            enable_adaptive_reduction: true,
+            enable_extended_exemptions: true,
+        }
+    }
+}
+
+impl LMRConfig {
+    /// Validate the configuration parameters and return any errors
+    pub fn validate(&self) -> Result<(), String> {
+        if self.min_depth == 0 {
+            return Err("min_depth must be greater than 0".to_string());
+        }
+        if self.min_depth > 15 {
+            return Err("min_depth should not exceed 15 for performance reasons".to_string());
+        }
+        if self.min_move_index == 0 {
+            return Err("min_move_index must be greater than 0".to_string());
+        }
+        if self.min_move_index > 20 {
+            return Err("min_move_index should not exceed 20".to_string());
+        }
+        if self.base_reduction == 0 {
+            return Err("base_reduction must be greater than 0".to_string());
+        }
+        if self.base_reduction > 5 {
+            return Err("base_reduction should not exceed 5".to_string());
+        }
+        if self.max_reduction < self.base_reduction {
+            return Err("max_reduction must be >= base_reduction".to_string());
+        }
+        if self.max_reduction > 8 {
+            return Err("max_reduction should not exceed 8".to_string());
+        }
+        Ok(())
+    }
+
+    /// Create a validated configuration, clamping values to valid ranges
+    pub fn new_validated(mut self) -> Self {
+        self.min_depth = self.min_depth.clamp(1, 15);
+        self.min_move_index = self.min_move_index.clamp(1, 20);
+        self.base_reduction = self.base_reduction.clamp(1, 5);
+        self.max_reduction = self.max_reduction.clamp(self.base_reduction, 8);
+        self
+    }
+
+    /// Get a summary of the configuration
+    pub fn summary(&self) -> String {
+        format!(
+            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}",
+            self.enabled,
+            self.min_depth,
+            self.min_move_index,
+            self.base_reduction,
+            self.max_reduction,
+            self.enable_dynamic_reduction,
+            self.enable_adaptive_reduction,
+            self.enable_extended_exemptions
+        )
+    }
+}
+
+/// Performance statistics for Late Move Reductions
+#[derive(Debug, Clone, Default)]
+pub struct LMRStats {
+    pub moves_considered: u64,                // Total moves considered for LMR
+    pub reductions_applied: u64,              // Number of reductions applied
+    pub researches_triggered: u64,            // Number of full-depth re-searches
+    pub cutoffs_after_reduction: u64,         // Cutoffs after reduced search
+    pub cutoffs_after_research: u64,          // Cutoffs after full re-search
+    pub total_depth_saved: u64,               // Total depth reduction applied
+    pub average_reduction: f64,               // Average reduction applied
+}
+
+impl LMRStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = LMRStats::default();
+    }
+
+    /// Get the research rate as a percentage
+    pub fn research_rate(&self) -> f64 {
+        if self.reductions_applied == 0 {
+            return 0.0;
+        }
+        (self.researches_triggered as f64 / self.reductions_applied as f64) * 100.0
+    }
+
+    /// Get the efficiency of LMR as a percentage
+    pub fn efficiency(&self) -> f64 {
+        if self.moves_considered == 0 {
+            return 0.0;
+        }
+        (self.reductions_applied as f64 / self.moves_considered as f64) * 100.0
+    }
+
+    /// Get the total number of cutoffs
+    pub fn total_cutoffs(&self) -> u64 {
+        self.cutoffs_after_reduction + self.cutoffs_after_research
+    }
+
+    /// Get the cutoff rate as a percentage
+    pub fn cutoff_rate(&self) -> f64 {
+        if self.moves_considered == 0 {
+            return 0.0;
+        }
+        (self.total_cutoffs() as f64 / self.moves_considered as f64) * 100.0
+    }
+
+    /// Get the average depth saved per reduction
+    pub fn average_depth_saved(&self) -> f64 {
+        if self.reductions_applied == 0 {
+            return 0.0;
+        }
+        self.total_depth_saved as f64 / self.reductions_applied as f64
+    }
+
+    /// Get a comprehensive performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "Late Move Reductions Performance Report:\n\
+            - Moves considered: {}\n\
+            - Reductions applied: {} ({:.2}%)\n\
+            - Re-searches triggered: {} ({:.2}%)\n\
+            - Total cutoffs: {} ({:.2}%)\n\
+            - Average depth saved: {:.2}\n\
+            - Total depth saved: {}",
+            self.moves_considered,
+            self.reductions_applied,
+            self.efficiency(),
+            self.researches_triggered,
+            self.research_rate(),
+            self.total_cutoffs(),
+            self.cutoff_rate(),
+            self.average_depth_saved(),
+            self.total_depth_saved
+        )
+    }
+
+    /// Get a summary of key metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "LMR: {} considered, {:.1}% reduced, {:.1}% researched, {:.1}% cutoffs, {:.1} avg saved",
+            self.moves_considered,
+            self.efficiency(),
+            self.research_rate(),
+            self.cutoff_rate(),
+            self.average_depth_saved()
+        )
+    }
+}
+
+/// Move type classification for LMR decisions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveType {
+    Check,
+    Capture,
+    Promotion,
+    Killer,
+    TranspositionTable,
+    Escape,
+    Center,
+    Quiet,
+}
+
+/// Position complexity levels for adaptive LMR
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PositionComplexity {
+    Low,
+    Medium,
+    High,
+    Unknown,
+}
+
+/// LMR playing style presets
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LMRPlayingStyle {
+    Aggressive,
+    Conservative,
+    Balanced,
+}
+
+/// Performance metrics for LMR optimization
+#[derive(Debug, Clone)]
+pub struct LMRPerformanceMetrics {
+    pub moves_considered: u64,
+    pub reductions_applied: u64,
+    pub researches_triggered: u64,
+    pub efficiency: f64,
+    pub research_rate: f64,
+    pub cutoff_rate: f64,
+    pub average_depth_saved: f64,
+    pub total_depth_saved: u64,
+    pub nodes_per_second: f64,
+}
+
+impl LMRPerformanceMetrics {
+    /// Get a summary of performance metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "LMR Performance: {:.1}% efficiency, {:.1}% research rate, {:.1}% cutoffs, {:.0} NPS",
+            self.efficiency,
+            self.research_rate,
+            self.cutoff_rate,
+            self.nodes_per_second
+        )
+    }
+
+    /// Check if LMR is performing well
+    pub fn is_performing_well(&self) -> bool {
+        self.efficiency > 20.0 && self.research_rate < 40.0 && self.cutoff_rate > 5.0
+    }
+
+    /// Get optimization recommendations
+    pub fn get_optimization_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        
+        if self.research_rate > 40.0 {
+            recommendations.push("Consider reducing LMR aggressiveness (too many re-searches)".to_string());
+        }
+        
+        if self.efficiency < 20.0 {
+            recommendations.push("Consider increasing LMR aggressiveness (low efficiency)".to_string());
+        }
+        
+        if self.cutoff_rate < 5.0 {
+            recommendations.push("Consider improving move ordering (low cutoff rate)".to_string());
+        }
+        
+        if self.average_depth_saved < 1.0 {
+            recommendations.push("Consider increasing base reduction (low depth savings)".to_string());
+        }
+        
+        if recommendations.is_empty() {
+            recommendations.push("LMR performance is optimal".to_string());
+        }
+        
+        recommendations
+    }
+}
+
+/// Profile result for LMR performance analysis
+#[derive(Debug, Clone)]
+pub struct LMRProfileResult {
+    pub total_time: std::time::Duration,
+    pub average_time_per_search: std::time::Duration,
+    pub total_moves_processed: u64,
+    pub total_reductions_applied: u64,
+    pub total_researches_triggered: u64,
+    pub moves_per_second: f64,
+    pub reduction_rate: f64,
+    pub research_rate: f64,
+}
+
+impl LMRProfileResult {
+    /// Get a summary of the profile results
+    pub fn summary(&self) -> String {
+        format!(
+            "LMR Profile: {:.2}s total, {:.2}s avg/search, {:.0} moves/sec, {:.1}% reduced, {:.1}% researched",
+            self.total_time.as_secs_f64(),
+            self.average_time_per_search.as_secs_f64(),
+            self.moves_per_second,
+            self.reduction_rate,
+            self.research_rate
+        )
+    }
+
+    /// Check if LMR is performing efficiently
+    pub fn is_efficient(&self) -> bool {
+        self.reduction_rate > 20.0 && self.research_rate < 30.0 && self.moves_per_second > 1000.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
