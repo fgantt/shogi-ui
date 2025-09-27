@@ -606,7 +606,7 @@ pub struct KingSafetyConfig {
 impl Default for KingSafetyConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,  // Temporarily disabled for performance testing
             castle_weight: 1.0,
             attack_weight: 1.0,
             threat_weight: 1.0,
