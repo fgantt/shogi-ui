@@ -685,7 +685,7 @@ pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
 }
 
 /// Configuration for quiescence search parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct QuiescenceConfig {
     pub max_depth: u8,                    // Maximum quiescence depth
     pub enable_delta_pruning: bool,       // Enable delta pruning
@@ -989,7 +989,7 @@ impl QuiescencePerformanceMetrics {
 }
 
 /// Configuration for null move pruning parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NullMoveConfig {
     pub enabled: bool,                      // Enable null move pruning
     pub min_depth: u8,                      // Minimum depth to use NMP
@@ -1136,7 +1136,7 @@ impl NullMoveStats {
 }
 
 /// Configuration for Late Move Reductions (LMR) parameters
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LMRConfig {
     pub enabled: bool,                        // Enable late move reductions
     pub min_depth: u8,                        // Minimum depth to apply LMR
@@ -1751,5 +1751,1349 @@ mod tests {
         let neg_score1 = -score1;
         let zero = score1 + neg_score1;
         assert_eq!(zero, TaperedScore::default());
+    }
+}
+
+/// Configuration for Aspiration Windows parameters
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AspirationWindowConfig {
+    /// Enable aspiration windows
+    pub enabled: bool,
+    /// Base window size in centipawns
+    pub base_window_size: i32,
+    /// Dynamic window scaling factor
+    pub dynamic_scaling: bool,
+    /// Maximum window size (safety limit)
+    pub max_window_size: i32,
+    /// Minimum depth to apply aspiration windows
+    pub min_depth: u8,
+    /// Enable adaptive window sizing
+    pub enable_adaptive_sizing: bool,
+    /// Maximum number of re-searches per depth
+    pub max_researches: u8,
+    /// Enable fail-high/fail-low statistics
+    pub enable_statistics: bool,
+}
+
+impl Default for AspirationWindowConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_window_size: 50,        // 50 centipawns
+            dynamic_scaling: true,
+            max_window_size: 200,        // 200 centipawns
+            min_depth: 2,                // Start at depth 2
+            enable_adaptive_sizing: true,
+            max_researches: 2,           // Allow up to 2 re-searches
+            enable_statistics: true,
+        }
+    }
+}
+
+impl AspirationWindowConfig {
+    /// Validate the configuration parameters and return any errors
+    pub fn validate(&self) -> Result<(), String> {
+        if self.base_window_size <= 0 {
+            return Err("base_window_size must be greater than 0".to_string());
+        }
+        if self.base_window_size > 1000 {
+            return Err("base_window_size should not exceed 1000 centipawns".to_string());
+        }
+        if self.max_window_size < self.base_window_size {
+            return Err("max_window_size must be >= base_window_size".to_string());
+        }
+        if self.max_window_size > 2000 {
+            return Err("max_window_size should not exceed 2000 centipawns".to_string());
+        }
+        if self.min_depth == 0 {
+            return Err("min_depth must be greater than 0".to_string());
+        }
+        if self.min_depth > 10 {
+            return Err("min_depth should not exceed 10 for performance reasons".to_string());
+        }
+        if self.max_researches == 0 {
+            return Err("max_researches must be greater than 0".to_string());
+        }
+        if self.max_researches > 5 {
+            return Err("max_researches should not exceed 5".to_string());
+        }
+        Ok(())
+    }
+
+    /// Create a validated configuration, clamping values to valid ranges
+    pub fn new_validated(mut self) -> Self {
+        self.base_window_size = self.base_window_size.clamp(1, 1000);
+        self.max_window_size = self.max_window_size.clamp(self.base_window_size, 2000);
+        self.min_depth = self.min_depth.clamp(1, 10);
+        self.max_researches = self.max_researches.clamp(1, 5);
+        self
+    }
+
+    /// Get a summary of the configuration
+    pub fn summary(&self) -> String {
+        format!(
+            "AspirationWindowConfig: enabled={}, base_window_size={}, max_window_size={}, min_depth={}, dynamic_scaling={}, adaptive_sizing={}, max_researches={}, statistics={}",
+            self.enabled,
+            self.base_window_size,
+            self.max_window_size,
+            self.min_depth,
+            self.dynamic_scaling,
+            self.enable_adaptive_sizing,
+            self.max_researches,
+            self.enable_statistics
+        )
+    }
+}
+
+/// Performance statistics for Aspiration Windows
+#[derive(Debug, Clone, Default)]
+pub struct AspirationWindowStats {
+    /// Total searches performed
+    pub total_searches: u64,
+    /// Successful searches (no re-search needed)
+    pub successful_searches: u64,
+    /// Fail-low occurrences
+    pub fail_lows: u64,
+    /// Fail-high occurrences  
+    pub fail_highs: u64,
+    /// Total re-searches performed
+    pub total_researches: u64,
+    /// Average window size used
+    pub average_window_size: f64,
+    /// Time saved (estimated)
+    pub estimated_time_saved_ms: u64,
+    /// Nodes saved (estimated)
+    pub estimated_nodes_saved: u64,
+    /// Maximum window size used
+    pub max_window_size_used: i32,
+    /// Minimum window size used
+    pub min_window_size_used: i32,
+    /// Total time spent in aspiration window searches (ms)
+    pub total_search_time_ms: u64,
+    /// Total time spent in re-searches (ms)
+    pub total_research_time_ms: u64,
+    /// Average search time per depth (ms)
+    pub average_search_time_ms: f64,
+    /// Average re-search time per depth (ms)
+    pub average_research_time_ms: f64,
+    /// Window size variance (for tuning analysis)
+    pub window_size_variance: f64,
+    /// Success rate by depth (for depth analysis)
+    pub success_rate_by_depth: Vec<f64>,
+    /// Re-search rate by depth (for depth analysis)
+    pub research_rate_by_depth: Vec<f64>,
+    /// Average window size by depth (for depth analysis)
+    pub window_size_by_depth: Vec<f64>,
+    /// Performance trend over time (last 100 searches)
+    pub recent_performance: Vec<f64>,
+    /// Configuration effectiveness score (0.0 to 1.0)
+    pub configuration_effectiveness: f64,
+    /// Memory usage statistics
+    pub memory_usage_bytes: u64,
+    /// Peak memory usage bytes
+    pub peak_memory_usage_bytes: u64,
+    /// Cache hit rate for window size calculations
+    pub cache_hit_rate: f64,
+    /// Adaptive tuning success rate
+    pub adaptive_tuning_success_rate: f64,
+}
+
+impl AspirationWindowStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = AspirationWindowStats::default();
+    }
+
+    /// Initialize depth-based tracking vectors
+    pub fn initialize_depth_tracking(&mut self, max_depth: u8) {
+        self.success_rate_by_depth = vec![0.0; max_depth as usize + 1];
+        self.research_rate_by_depth = vec![0.0; max_depth as usize + 1];
+        self.window_size_by_depth = vec![0.0; max_depth as usize + 1];
+    }
+
+    /// Update depth-based statistics
+    pub fn update_depth_stats(&mut self, depth: u8, success: bool, had_research: bool, window_size: i32) {
+        if depth < self.success_rate_by_depth.len() as u8 {
+            let depth_idx = depth as usize;
+            
+            // Update success rate
+            if success {
+                self.success_rate_by_depth[depth_idx] += 1.0;
+            }
+            
+            // Update research rate
+            if had_research {
+                self.research_rate_by_depth[depth_idx] += 1.0;
+            }
+            
+            // Update window size
+            self.window_size_by_depth[depth_idx] = window_size as f64;
+        }
+    }
+
+    /// Calculate comprehensive performance metrics
+    pub fn calculate_performance_metrics(&mut self) -> AspirationWindowPerformanceMetrics {
+        let success_rate = if self.total_searches > 0 {
+            self.successful_searches as f64 / self.total_searches as f64
+        } else {
+            0.0
+        };
+
+        let research_rate = if self.total_searches > 0 {
+            self.total_researches as f64 / self.total_searches as f64
+        } else {
+            0.0
+        };
+
+        let _fail_low_rate = if self.total_searches > 0 {
+            self.fail_lows as f64 / self.total_searches as f64
+        } else {
+            0.0
+        };
+
+        let _fail_high_rate = if self.total_searches > 0 {
+            self.fail_highs as f64 / self.total_searches as f64
+        } else {
+            0.0
+        };
+
+        // Calculate efficiency based on success rate and research rate
+        let efficiency = if research_rate > 0.0 {
+            success_rate / (1.0 + research_rate)
+        } else {
+            success_rate
+        };
+
+        // Update average times
+        if self.total_searches > 0 {
+            self.average_search_time_ms = self.total_search_time_ms as f64 / self.total_searches as f64;
+        }
+        if self.total_researches > 0 {
+            self.average_research_time_ms = self.total_research_time_ms as f64 / self.total_researches as f64;
+        }
+
+        // Calculate configuration effectiveness
+        self.configuration_effectiveness = self.calculate_configuration_effectiveness();
+
+        AspirationWindowPerformanceMetrics {
+            total_searches: self.total_searches,
+            successful_searches: self.successful_searches,
+            fail_lows: self.fail_lows,
+            fail_highs: self.fail_highs,
+            total_researches: self.total_researches,
+            success_rate,
+            research_rate,
+            efficiency,
+            average_window_size: self.average_window_size,
+            estimated_time_saved_ms: self.estimated_time_saved_ms,
+            estimated_nodes_saved: self.estimated_nodes_saved,
+        }
+    }
+
+    /// Calculate configuration effectiveness score
+    fn calculate_configuration_effectiveness(&self) -> f64 {
+        if self.total_searches < 10 {
+            return 0.5; // Neutral score for insufficient data
+        }
+
+        let success_rate = self.successful_searches as f64 / self.total_searches as f64;
+        let research_rate = self.total_researches as f64 / self.total_searches as f64;
+        let fail_rate = (self.fail_lows + self.fail_highs) as f64 / self.total_searches as f64;
+
+        // Effectiveness based on high success rate, low research rate, and low fail rate
+        let effectiveness = success_rate * (1.0 - research_rate * 0.5) * (1.0 - fail_rate * 0.3);
+        effectiveness.max(0.0).min(1.0)
+    }
+
+    /// Update window size statistics
+    pub fn update_window_size_stats(&mut self, window_size: i32) {
+        // Update min/max
+        if window_size > self.max_window_size_used {
+            self.max_window_size_used = window_size;
+        }
+        if window_size < self.min_window_size_used || self.min_window_size_used == 0 {
+            self.min_window_size_used = window_size;
+        }
+
+        // Update average (exponential moving average)
+        if self.total_searches == 0 {
+            self.average_window_size = window_size as f64;
+        } else {
+            let alpha = 0.1; // Smoothing factor
+            self.average_window_size = alpha * window_size as f64 + (1.0 - alpha) * self.average_window_size;
+        }
+    }
+
+    /// Update time statistics
+    pub fn update_time_stats(&mut self, search_time_ms: u64, research_time_ms: u64) {
+        self.total_search_time_ms += search_time_ms;
+        self.total_research_time_ms += research_time_ms;
+    }
+
+    /// Update memory usage statistics
+    pub fn update_memory_stats(&mut self, current_usage: u64) {
+        self.memory_usage_bytes = current_usage;
+        if current_usage > self.peak_memory_usage_bytes {
+            self.peak_memory_usage_bytes = current_usage;
+        }
+    }
+
+    /// Add performance data point for trend analysis
+    pub fn add_performance_data_point(&mut self, performance: f64) {
+        self.recent_performance.push(performance);
+        
+        // Keep only last 100 data points
+        if self.recent_performance.len() > 100 {
+            self.recent_performance.remove(0);
+        }
+    }
+
+    /// Calculate performance trend
+    pub fn get_performance_trend(&self) -> f64 {
+        if self.recent_performance.len() < 10 {
+            return 0.0; // Not enough data
+        }
+
+        let mid = self.recent_performance.len() / 2;
+        let recent_avg = self.recent_performance[mid..].iter().sum::<f64>() / (self.recent_performance.len() - mid) as f64;
+        let early_avg = self.recent_performance[..mid].iter().sum::<f64>() / mid as f64;
+        
+        recent_avg - early_avg
+    }
+
+    /// Get depth-based analysis
+    pub fn get_depth_analysis(&self) -> DepthAnalysis {
+        DepthAnalysis {
+            success_rate_by_depth: self.success_rate_by_depth.clone(),
+            research_rate_by_depth: self.research_rate_by_depth.clone(),
+            window_size_by_depth: self.window_size_by_depth.clone(),
+        }
+    }
+
+    /// Get performance summary
+    pub fn get_performance_summary(&self) -> PerformanceSummary {
+        PerformanceSummary {
+            total_searches: self.total_searches,
+            success_rate: if self.total_searches > 0 {
+                self.successful_searches as f64 / self.total_searches as f64
+            } else {
+                0.0
+            },
+            research_rate: if self.total_searches > 0 {
+                self.total_researches as f64 / self.total_searches as f64
+            } else {
+                0.0
+            },
+            average_window_size: self.average_window_size,
+            configuration_effectiveness: self.configuration_effectiveness,
+            performance_trend: self.get_performance_trend(),
+            memory_efficiency: if self.peak_memory_usage_bytes > 0 {
+                self.memory_usage_bytes as f64 / self.peak_memory_usage_bytes as f64
+            } else {
+                1.0
+            },
+        }
+    }
+
+    /// Get the success rate as a percentage
+    pub fn success_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.successful_searches as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get the re-search rate as a percentage
+    pub fn research_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.total_researches as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get the efficiency of aspiration windows
+    pub fn efficiency(&self) -> f64 {
+        // Higher is better: more time saved, fewer re-searches
+        let time_savings = self.estimated_time_saved_ms as f64;
+        let research_penalty = self.total_researches as f64 * 10.0; // Penalty for re-searches
+        time_savings - research_penalty
+    }
+
+    /// Get the fail-low rate as a percentage
+    pub fn fail_low_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.fail_lows as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get the fail-high rate as a percentage
+    pub fn fail_high_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.fail_highs as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get a comprehensive performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "Aspiration Windows Performance Report:\n\
+            - Total searches: {}\n\
+            - Successful searches: {} ({:.2}%)\n\
+            - Fail-lows: {} ({:.2}%)\n\
+            - Fail-highs: {} ({:.2}%)\n\
+            - Total re-searches: {} ({:.2}%)\n\
+            - Average window size: {:.2}\n\
+            - Estimated time saved: {} ms\n\
+            - Estimated nodes saved: {}",
+            self.total_searches,
+            self.successful_searches,
+            self.success_rate(),
+            self.fail_lows,
+            self.fail_low_rate(),
+            self.fail_highs,
+            self.fail_high_rate(),
+            self.total_researches,
+            self.research_rate(),
+            self.average_window_size,
+            self.estimated_time_saved_ms,
+            self.estimated_nodes_saved
+        )
+    }
+
+    /// Get a summary of key metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "Aspiration: {} searches, {:.1}% success, {:.1}% re-search, {:.1}% fail-low, {:.1}% fail-high, {:.1} avg window",
+            self.total_searches,
+            self.success_rate(),
+            self.research_rate(),
+            self.fail_low_rate(),
+            self.fail_high_rate(),
+            self.average_window_size
+        )
+    }
+}
+
+/// Aspiration window playing style presets
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AspirationWindowPlayingStyle {
+    Aggressive,
+    Conservative,
+    Balanced,
+}
+
+/// Performance metrics for Aspiration Windows optimization
+#[derive(Debug, Clone)]
+pub struct AspirationWindowPerformanceMetrics {
+    pub total_searches: u64,
+    pub successful_searches: u64,
+    pub fail_lows: u64,
+    pub fail_highs: u64,
+    pub total_researches: u64,
+    pub success_rate: f64,
+    pub research_rate: f64,
+    pub efficiency: f64,
+    pub average_window_size: f64,
+    pub estimated_time_saved_ms: u64,
+    pub estimated_nodes_saved: u64,
+}
+
+impl AspirationWindowPerformanceMetrics {
+    /// Get a summary of performance metrics
+    pub fn summary(&self) -> String {
+        format!(
+            "Aspiration Windows Performance: {:.1}% success, {:.1}% re-search, {:.1}% fail-low, {:.1}% fail-high, {:.0} ms saved",
+            self.success_rate,
+            self.research_rate,
+            self.fail_lows as f64 / self.total_searches as f64 * 100.0,
+            self.fail_highs as f64 / self.total_searches as f64 * 100.0,
+            self.estimated_time_saved_ms
+        )
+    }
+
+    /// Check if aspiration windows are performing well
+    pub fn is_performing_well(&self) -> bool {
+        self.success_rate > 70.0 && self.research_rate < 30.0 && self.efficiency > 0.0
+    }
+
+    /// Get optimization recommendations
+    pub fn get_optimization_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        
+        if self.research_rate > 30.0 {
+            recommendations.push("Consider increasing window size (too many re-searches)".to_string());
+        }
+        
+        if self.success_rate < 70.0 {
+            recommendations.push("Consider decreasing window size (too many failures)".to_string());
+        }
+        
+        if self.fail_lows > self.fail_highs * 2 {
+            recommendations.push("Consider asymmetric window sizing (more fail-lows than fail-highs)".to_string());
+        }
+        
+        if self.fail_highs > self.fail_lows * 2 {
+            recommendations.push("Consider asymmetric window sizing (more fail-highs than fail-lows)".to_string());
+        }
+        
+        if recommendations.is_empty() {
+            recommendations.push("Aspiration windows are performing well".to_string());
+        }
+        
+        recommendations
+    }
+}
+
+/// Statistics for window size analysis and tuning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowSizeStatistics {
+    /// Average window size used
+    pub average_window_size: f64,
+    /// Minimum window size enforced
+    pub min_window_size: i32,
+    /// Maximum window size allowed
+    pub max_window_size: i32,
+    /// Total number of window size calculations
+    pub total_calculations: u64,
+    /// Success rate of aspiration windows
+    pub success_rate: f64,
+    /// Fail-low rate
+    pub fail_low_rate: f64,
+    /// Fail-high rate
+    pub fail_high_rate: f64,
+}
+
+impl Default for WindowSizeStatistics {
+    fn default() -> Self {
+        Self {
+            average_window_size: 0.0,
+            min_window_size: 10,
+            max_window_size: 200,
+            total_calculations: 0,
+            success_rate: 0.0,
+            fail_low_rate: 0.0,
+            fail_high_rate: 0.0,
+        }
+    }
+}
+
+impl WindowSizeStatistics {
+    /// Get a summary of window size statistics
+    pub fn summary(&self) -> String {
+        format!(
+            "Window Size Stats: avg={:.1}, min={}, max={}, calculations={}, success={:.1}%, fail_low={:.1}%, fail_high={:.1}%",
+            self.average_window_size,
+            self.min_window_size,
+            self.max_window_size,
+            self.total_calculations,
+            self.success_rate * 100.0,
+            self.fail_low_rate * 100.0,
+            self.fail_high_rate * 100.0
+        )
+    }
+
+    /// Check if window size is well-tuned
+    pub fn is_well_tuned(&self) -> bool {
+        self.success_rate > 0.7 && self.fail_low_rate < 0.2 && self.fail_high_rate < 0.2
+    }
+
+    /// Get tuning recommendations
+    pub fn get_tuning_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        
+        if self.success_rate < 0.6 {
+            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+        }
+        if self.fail_low_rate > 0.3 {
+            recommendations.push("High fail-low rate: consider larger base_window_size".to_string());
+        }
+        if self.fail_high_rate > 0.3 {
+            recommendations.push("High fail-high rate: consider larger base_window_size".to_string());
+        }
+        if self.average_window_size < (self.min_window_size as f64) * 1.5 {
+            recommendations.push("Very small average window: consider increasing base_window_size".to_string());
+        }
+        if self.average_window_size > (self.max_window_size as f64) * 0.8 {
+            recommendations.push("Very large average window: consider decreasing base_window_size".to_string());
+        }
+        
+        recommendations
+    }
+}
+
+/// Metrics for re-search efficiency analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResearchEfficiencyMetrics {
+    /// Total searches performed
+    pub total_searches: u64,
+    /// Successful searches (no re-search needed)
+    pub successful_searches: u64,
+    /// Fail-low occurrences
+    pub fail_lows: u64,
+    /// Fail-high occurrences
+    pub fail_highs: u64,
+    /// Total re-searches performed
+    pub total_researches: u64,
+    /// Success rate (0.0 to 1.0)
+    pub success_rate: f64,
+    /// Re-search rate (average re-searches per search)
+    pub research_rate: f64,
+    /// Fail-low rate (0.0 to 1.0)
+    pub fail_low_rate: f64,
+    /// Fail-high rate (0.0 to 1.0)
+    pub fail_high_rate: f64,
+}
+
+impl Default for ResearchEfficiencyMetrics {
+    fn default() -> Self {
+        Self {
+            total_searches: 0,
+            successful_searches: 0,
+            fail_lows: 0,
+            fail_highs: 0,
+            total_researches: 0,
+            success_rate: 0.0,
+            research_rate: 0.0,
+            fail_low_rate: 0.0,
+            fail_high_rate: 0.0,
+        }
+    }
+}
+
+impl ResearchEfficiencyMetrics {
+    /// Get a summary of re-search efficiency
+    pub fn summary(&self) -> String {
+        format!(
+            "Re-search Efficiency: {} searches, {:.1}% success, {:.2} re-search rate, {:.1}% fail-low, {:.1}% fail-high",
+            self.total_searches,
+            self.success_rate * 100.0,
+            self.research_rate,
+            self.fail_low_rate * 100.0,
+            self.fail_high_rate * 100.0
+        )
+    }
+
+    /// Check if re-search efficiency is good
+    pub fn is_efficient(&self) -> bool {
+        self.success_rate > 0.7 && self.research_rate < 1.5 && self.fail_low_rate < 0.3 && self.fail_high_rate < 0.3
+    }
+
+    /// Get efficiency recommendations
+    pub fn get_efficiency_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+        
+        if self.success_rate < 0.6 {
+            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+        }
+        if self.research_rate > 2.0 {
+            recommendations.push("High re-search rate: consider increasing base_window_size or max_researches".to_string());
+        }
+        if self.fail_low_rate > 0.4 {
+            recommendations.push("High fail-low rate: consider larger base_window_size".to_string());
+        }
+        if self.fail_high_rate > 0.4 {
+            recommendations.push("High fail-high rate: consider larger base_window_size".to_string());
+        }
+        if self.fail_lows > self.fail_highs * 2 {
+            recommendations.push("Asymmetric failures: consider asymmetric window sizing".to_string());
+        }
+        if self.fail_highs > self.fail_lows * 2 {
+            recommendations.push("Asymmetric failures: consider asymmetric window sizing".to_string());
+        }
+        
+        if recommendations.is_empty() {
+            recommendations.push("Re-search efficiency is good".to_string());
+        }
+        
+        recommendations
+    }
+}
+
+/// Depth-based analysis for aspiration windows
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthAnalysis {
+    /// Success rate by depth
+    pub success_rate_by_depth: Vec<f64>,
+    /// Re-search rate by depth
+    pub research_rate_by_depth: Vec<f64>,
+    /// Average window size by depth
+    pub window_size_by_depth: Vec<f64>,
+}
+
+impl DepthAnalysis {
+    /// Get analysis summary
+    pub fn summary(&self) -> String {
+        format!(
+            "Depth Analysis: {} depths analyzed, avg success rate: {:.1}%, avg research rate: {:.1}%",
+            self.success_rate_by_depth.len(),
+            self.get_average_success_rate() * 100.0,
+            self.get_average_research_rate() * 100.0
+        )
+    }
+
+    /// Get average success rate across all depths
+    pub fn get_average_success_rate(&self) -> f64 {
+        if self.success_rate_by_depth.is_empty() {
+            return 0.0;
+        }
+        self.success_rate_by_depth.iter().sum::<f64>() / self.success_rate_by_depth.len() as f64
+    }
+
+    /// Get average research rate across all depths
+    pub fn get_average_research_rate(&self) -> f64 {
+        if self.research_rate_by_depth.is_empty() {
+            return 0.0;
+        }
+        self.research_rate_by_depth.iter().sum::<f64>() / self.research_rate_by_depth.len() as f64
+    }
+
+    /// Get optimal depth range for aspiration windows
+    pub fn get_optimal_depth_range(&self) -> (u8, u8) {
+        let mut best_start = 0;
+        let mut best_end = 0;
+        let mut best_score = 0.0;
+
+        for start in 0..self.success_rate_by_depth.len() {
+            for end in start..self.success_rate_by_depth.len() {
+                let range_success = self.success_rate_by_depth[start..=end].iter().sum::<f64>() / (end - start + 1) as f64;
+                let range_research = self.research_rate_by_depth[start..=end].iter().sum::<f64>() / (end - start + 1) as f64;
+                let score = range_success * (1.0 - range_research * 0.5);
+                
+                if score > best_score {
+                    best_score = score;
+                    best_start = start;
+                    best_end = end;
+                }
+            }
+        }
+
+        (best_start as u8, best_end as u8)
+    }
+}
+
+/// Performance summary for aspiration windows
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceSummary {
+    /// Total searches performed
+    pub total_searches: u64,
+    /// Success rate (0.0 to 1.0)
+    pub success_rate: f64,
+    /// Re-search rate (0.0 to 1.0)
+    pub research_rate: f64,
+    /// Average window size used
+    pub average_window_size: f64,
+    /// Configuration effectiveness (0.0 to 1.0)
+    pub configuration_effectiveness: f64,
+    /// Performance trend (positive = improving, negative = declining)
+    pub performance_trend: f64,
+    /// Memory efficiency (0.0 to 1.0)
+    pub memory_efficiency: f64,
+}
+
+impl PerformanceSummary {
+    /// Get performance grade (A+ to F)
+    pub fn get_performance_grade(&self) -> String {
+        let score = (self.success_rate * 0.4 + 
+                    (1.0 - self.research_rate) * 0.3 + 
+                    self.configuration_effectiveness * 0.2 + 
+                    self.memory_efficiency * 0.1) * 100.0;
+
+        match score as u8 {
+            95..=100 => "A+".to_string(),
+            90..=94 => "A".to_string(),
+            85..=89 => "A-".to_string(),
+            80..=84 => "B+".to_string(),
+            75..=79 => "B".to_string(),
+            70..=74 => "B-".to_string(),
+            65..=69 => "C+".to_string(),
+            60..=64 => "C".to_string(),
+            55..=59 => "C-".to_string(),
+            50..=54 => "D".to_string(),
+            _ => "F".to_string(),
+        }
+    }
+
+    /// Get performance recommendations
+    pub fn get_recommendations(&self) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        if self.success_rate < 0.7 {
+            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+        }
+        if self.research_rate > 1.5 {
+            recommendations.push("High research rate: consider increasing base_window_size or max_researches".to_string());
+        }
+        if self.configuration_effectiveness < 0.6 {
+            recommendations.push("Poor configuration effectiveness: consider tuning parameters".to_string());
+        }
+        if self.performance_trend < -0.1 {
+            recommendations.push("Declining performance: consider resetting or retuning".to_string());
+        }
+        if self.memory_efficiency < 0.5 {
+            recommendations.push("Low memory efficiency: consider optimizing memory usage".to_string());
+        }
+        if self.average_window_size < 20.0 {
+            recommendations.push("Very small average window: consider increasing base_window_size".to_string());
+        }
+        if self.average_window_size > 150.0 {
+            recommendations.push("Very large average window: consider decreasing base_window_size".to_string());
+        }
+
+        if recommendations.is_empty() {
+            recommendations.push("Performance is good, no recommendations needed".to_string());
+        }
+
+        recommendations
+    }
+
+    /// Check if performance is acceptable
+    pub fn is_acceptable(&self) -> bool {
+        self.success_rate > 0.6 && 
+        self.research_rate < 2.0 && 
+        self.configuration_effectiveness > 0.5 &&
+        self.memory_efficiency > 0.3
+    }
+}
+
+/// Real-time performance monitoring data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealTimePerformance {
+    /// Current number of searches performed
+    pub current_searches: u64,
+    /// Current success rate (0.0 to 1.0)
+    pub current_success_rate: f64,
+    /// Current research rate (0.0 to 1.0)
+    pub current_research_rate: f64,
+    /// Current average window size
+    pub current_window_size: f64,
+    /// Performance trend (positive = improving, negative = declining)
+    pub performance_trend: f64,
+    /// Current memory usage in bytes
+    pub memory_usage: u64,
+    /// Current configuration effectiveness (0.0 to 1.0)
+    pub configuration_effectiveness: f64,
+}
+
+impl RealTimePerformance {
+    /// Get performance status
+    pub fn get_status(&self) -> String {
+        if self.current_searches < 10 {
+            "Insufficient data".to_string()
+        } else if self.current_success_rate > 0.8 && self.current_research_rate < 1.0 {
+            "Excellent".to_string()
+        } else if self.current_success_rate > 0.7 && self.current_research_rate < 1.5 {
+            "Good".to_string()
+        } else if self.current_success_rate > 0.6 && self.current_research_rate < 2.0 {
+            "Fair".to_string()
+        } else {
+            "Poor".to_string()
+        }
+    }
+
+    /// Get performance alerts
+    pub fn get_alerts(&self) -> Vec<String> {
+        let mut alerts = Vec::new();
+        
+        if self.current_searches > 50 {
+            if self.current_success_rate < 0.5 {
+                alerts.push("Low success rate detected".to_string());
+            }
+            if self.current_research_rate > 2.0 {
+                alerts.push("High research rate detected".to_string());
+            }
+            if self.performance_trend < -0.1 {
+                alerts.push("Performance declining".to_string());
+            }
+            if self.configuration_effectiveness < 0.4 {
+                alerts.push("Poor configuration effectiveness".to_string());
+            }
+        }
+        
+        alerts
+    }
+
+    /// Get performance summary
+    pub fn summary(&self) -> String {
+        format!(
+            "Real-time Performance: {} searches, {:.1}% success, {:.2} research rate, {} status",
+            self.current_searches,
+            self.current_success_rate * 100.0,
+            self.current_research_rate,
+            self.get_status()
+        )
+    }
+}
+
+/// Main engine configuration containing all search optimization settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineConfig {
+    /// Quiescence search configuration
+    pub quiescence: QuiescenceConfig,
+    /// Null move pruning configuration
+    pub null_move: NullMoveConfig,
+    /// Late move reductions configuration
+    pub lmr: LMRConfig,
+    /// Aspiration windows configuration
+    pub aspiration_windows: AspirationWindowConfig,
+    /// Transposition table size in MB
+    pub tt_size_mb: usize,
+    /// Enable debug logging
+    pub debug_logging: bool,
+    /// Maximum search depth
+    pub max_depth: u8,
+    /// Time management settings
+    pub time_management: TimeManagementConfig,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            quiescence: QuiescenceConfig::default(),
+            null_move: NullMoveConfig::default(),
+            lmr: LMRConfig::default(),
+            aspiration_windows: AspirationWindowConfig::default(),
+            tt_size_mb: 64,
+            debug_logging: false,
+            max_depth: 20,
+            time_management: TimeManagementConfig::default(),
+        }
+    }
+}
+
+impl EngineConfig {
+    /// Create a new engine configuration with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new engine configuration with custom settings
+    pub fn new_custom(
+        quiescence: QuiescenceConfig,
+        null_move: NullMoveConfig,
+        lmr: LMRConfig,
+        aspiration_windows: AspirationWindowConfig,
+        tt_size_mb: usize,
+        debug_logging: bool,
+        max_depth: u8,
+        time_management: TimeManagementConfig,
+    ) -> Self {
+        Self {
+            quiescence,
+            null_move,
+            lmr,
+            aspiration_windows,
+            tt_size_mb,
+            debug_logging,
+            max_depth,
+            time_management,
+        }
+    }
+
+    /// Validate the entire configuration
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate individual components
+        self.quiescence.validate()?;
+        self.null_move.validate()?;
+        self.lmr.validate()?;
+        self.aspiration_windows.validate()?;
+        self.time_management.validate()?;
+
+        // Validate global settings
+        if self.tt_size_mb == 0 || self.tt_size_mb > 1024 {
+            return Err("TT size must be between 1 and 1024 MB".to_string());
+        }
+
+        if self.max_depth == 0 || self.max_depth > 50 {
+            return Err("Max depth must be between 1 and 50".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Get a configuration preset
+    pub fn get_preset(preset: EnginePreset) -> Self {
+        match preset {
+            EnginePreset::Default => Self::default(),
+            EnginePreset::Aggressive => Self {
+                quiescence: QuiescenceConfig {
+                    max_depth: 6,
+                    enable_delta_pruning: true,
+                    enable_futility_pruning: true,
+                    enable_selective_extensions: true,
+                    enable_tt: true,
+                    futility_margin: 200,
+                    delta_margin: 200,
+                    tt_size_mb: 32,
+                    tt_cleanup_threshold: 100000,
+                },
+                null_move: NullMoveConfig {
+                    enabled: true,
+                    min_depth: 3,
+                    reduction_factor: 2,
+                    max_pieces_threshold: 8,
+                    enable_dynamic_reduction: true,
+                    enable_endgame_detection: true,
+                },
+                lmr: LMRConfig {
+                    enabled: true,
+                    min_depth: 3,
+                    min_move_index: 4,
+                    base_reduction: 1,
+                    max_reduction: 3,
+                    enable_dynamic_reduction: true,
+                    enable_adaptive_reduction: true,
+                    enable_extended_exemptions: true,
+                },
+                aspiration_windows: AspirationWindowConfig {
+                    enabled: true,
+                    base_window_size: 25,
+                    dynamic_scaling: true,
+                    max_window_size: 150,
+                    min_depth: 2,
+                    enable_adaptive_sizing: true,
+                    max_researches: 2,
+                    enable_statistics: true,
+                },
+                tt_size_mb: 128,
+                debug_logging: false,
+                max_depth: 25,
+                time_management: TimeManagementConfig::default(),
+            },
+            EnginePreset::Conservative => Self {
+                quiescence: QuiescenceConfig {
+                    max_depth: 8,
+                    enable_delta_pruning: true,
+                    enable_futility_pruning: true,
+                    enable_selective_extensions: true,
+                    enable_tt: true,
+                    futility_margin: 100,
+                    delta_margin: 100,
+                    tt_size_mb: 64,
+                    tt_cleanup_threshold: 200000,
+                },
+                null_move: NullMoveConfig {
+                    enabled: true,
+                    min_depth: 4,
+                    reduction_factor: 1,
+                    max_pieces_threshold: 6,
+                    enable_dynamic_reduction: false,
+                    enable_endgame_detection: true,
+                },
+                lmr: LMRConfig {
+                    enabled: true,
+                    min_depth: 4,
+                    min_move_index: 6,
+                    base_reduction: 1,
+                    max_reduction: 2,
+                    enable_dynamic_reduction: false,
+                    enable_adaptive_reduction: false,
+                    enable_extended_exemptions: true,
+                },
+                aspiration_windows: AspirationWindowConfig {
+                    enabled: true,
+                    base_window_size: 100,
+                    dynamic_scaling: true,
+                    max_window_size: 300,
+                    min_depth: 3,
+                    enable_adaptive_sizing: true,
+                    max_researches: 3,
+                    enable_statistics: true,
+                },
+                tt_size_mb: 256,
+                debug_logging: false,
+                max_depth: 30,
+                time_management: TimeManagementConfig::default(),
+            },
+            EnginePreset::Balanced => Self {
+                quiescence: QuiescenceConfig::default(),
+                null_move: NullMoveConfig::default(),
+                lmr: LMRConfig::default(),
+                aspiration_windows: AspirationWindowConfig::default(),
+                tt_size_mb: 128,
+                debug_logging: false,
+                max_depth: 25,
+                time_management: TimeManagementConfig::default(),
+            },
+        }
+    }
+
+    /// Apply a configuration preset
+    pub fn apply_preset(&mut self, preset: EnginePreset) {
+        *self = Self::get_preset(preset);
+    }
+
+    /// Get configuration summary
+    pub fn summary(&self) -> String {
+        format!(
+            "Engine Config: TT={}MB, MaxDepth={}, Quiescence={}, NMP={}, LMR={}, Aspiration={}",
+            self.tt_size_mb,
+            self.max_depth,
+            if self.quiescence.enable_tt { "ON" } else { "OFF" },
+            if self.null_move.enabled { "ON" } else { "OFF" },
+            if self.lmr.enabled { "ON" } else { "OFF" },
+            if self.aspiration_windows.enabled { "ON" } else { "OFF" }
+        )
+    }
+}
+
+/// Engine configuration presets
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnginePreset {
+    /// Default balanced configuration
+    Default,
+    /// Aggressive configuration for fast play
+    Aggressive,
+    /// Conservative configuration for careful analysis
+    Conservative,
+    /// Balanced configuration
+    Balanced,
+}
+
+/// Time management configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimeManagementConfig {
+    /// Enable time management
+    pub enabled: bool,
+    /// Time buffer percentage (0.0 to 1.0)
+    pub buffer_percentage: f64,
+    /// Minimum time per move in milliseconds
+    pub min_time_ms: u32,
+    /// Maximum time per move in milliseconds
+    pub max_time_ms: u32,
+    /// Time increment per move in milliseconds
+    pub increment_ms: u32,
+    /// Enable time pressure detection
+    pub enable_pressure_detection: bool,
+    /// Time pressure threshold (0.0 to 1.0)
+    pub pressure_threshold: f64,
+}
+
+impl Default for TimeManagementConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            buffer_percentage: 0.1,
+            min_time_ms: 100,
+            max_time_ms: 30000,
+            increment_ms: 0,
+            enable_pressure_detection: true,
+            pressure_threshold: 0.2,
+        }
+    }
+}
+
+impl TimeManagementConfig {
+    /// Validate time management configuration
+    pub fn validate(&self) -> Result<(), String> {
+        if self.buffer_percentage < 0.0 || self.buffer_percentage > 1.0 {
+            return Err("Buffer percentage must be between 0.0 and 1.0".to_string());
+        }
+
+        if self.min_time_ms > self.max_time_ms {
+            return Err("Min time cannot be greater than max time".to_string());
+        }
+
+        if self.pressure_threshold < 0.0 || self.pressure_threshold > 1.0 {
+            return Err("Pressure threshold must be between 0.0 and 1.0".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Calculate time allocation for a move
+    pub fn calculate_time_allocation(&self, total_time_ms: u32, moves_remaining: u32) -> u32 {
+        if !self.enabled || moves_remaining == 0 {
+            return self.min_time_ms;
+        }
+
+        let base_time = total_time_ms / moves_remaining;
+        let buffered_time = (base_time as f64 * (1.0 - self.buffer_percentage)) as u32;
+        
+        buffered_time.max(self.min_time_ms).min(self.max_time_ms)
+    }
+
+    /// Check if in time pressure
+    pub fn is_time_pressure(&self, time_remaining_ms: u32, total_time_ms: u32) -> bool {
+        if !self.enable_pressure_detection || total_time_ms == 0 {
+            return false;
+        }
+
+        let time_ratio = time_remaining_ms as f64 / total_time_ms as f64;
+        time_ratio < self.pressure_threshold
+    }
+}
+
+/// Configuration migration utilities
+pub struct ConfigMigration;
+
+impl ConfigMigration {
+    /// Migrate from old configuration format to new EngineConfig
+    pub fn migrate_from_legacy(
+        quiescence_config: QuiescenceConfig,
+        null_move_config: NullMoveConfig,
+        lmr_config: LMRConfig,
+        aspiration_config: AspirationWindowConfig,
+        tt_size_mb: usize,
+    ) -> EngineConfig {
+        EngineConfig {
+            quiescence: quiescence_config,
+            null_move: null_move_config,
+            lmr: lmr_config,
+            aspiration_windows: aspiration_config,
+            tt_size_mb,
+            debug_logging: false,
+            max_depth: 20,
+            time_management: TimeManagementConfig::default(),
+        }
+    }
+
+    /// Create a configuration from individual components
+    pub fn create_from_components(
+        quiescence: QuiescenceConfig,
+        null_move: NullMoveConfig,
+        lmr: LMRConfig,
+        aspiration_windows: AspirationWindowConfig,
+        tt_size_mb: usize,
+        debug_logging: bool,
+        max_depth: u8,
+        time_management: TimeManagementConfig,
+    ) -> EngineConfig {
+        EngineConfig::new_custom(
+            quiescence,
+            null_move,
+            lmr,
+            aspiration_windows,
+            tt_size_mb,
+            debug_logging,
+            max_depth,
+            time_management,
+        )
+    }
+
+    /// Validate and fix configuration issues
+    pub fn validate_and_fix(mut config: EngineConfig) -> Result<EngineConfig, String> {
+        // Fix common issues
+        if config.tt_size_mb == 0 {
+            config.tt_size_mb = 64;
+        }
+        if config.max_depth == 0 {
+            config.max_depth = 20;
+        }
+        if config.max_depth > 50 {
+            config.max_depth = 50;
+        }
+
+        // Validate the fixed configuration
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Get configuration recommendations based on system resources
+    pub fn get_recommendations_for_system(available_memory_mb: usize) -> EngineConfig {
+        let mut config = EngineConfig::default();
+        
+        // Adjust TT size based on available memory
+        if available_memory_mb >= 1024 {
+            config.tt_size_mb = 256;
+            config.quiescence.tt_size_mb = 64;
+        } else if available_memory_mb >= 512 {
+            config.tt_size_mb = 128;
+            config.quiescence.tt_size_mb = 32;
+        } else {
+            config.tt_size_mb = 64;
+            config.quiescence.tt_size_mb = 16;
+        }
+
+        // Adjust max depth based on available memory
+        if available_memory_mb >= 2048 {
+            config.max_depth = 30;
+        } else if available_memory_mb >= 1024 {
+            config.max_depth = 25;
+        } else {
+            config.max_depth = 20;
+        }
+
+        config
+    }
+
+    /// Export configuration to JSON
+    pub fn export_to_json(config: &EngineConfig) -> Result<String, String> {
+        serde_json::to_string_pretty(config)
+            .map_err(|e| format!("Failed to serialize configuration: {}", e))
+    }
+
+    /// Import configuration from JSON
+    pub fn import_from_json(json: &str) -> Result<EngineConfig, String> {
+        serde_json::from_str(json)
+            .map_err(|e| format!("Failed to deserialize configuration: {}", e))
+    }
+
+    /// Compare two configurations
+    pub fn compare_configs(config1: &EngineConfig, config2: &EngineConfig) -> ConfigComparison {
+        ConfigComparison {
+            quiescence_different: config1.quiescence != config2.quiescence,
+            null_move_different: config1.null_move != config2.null_move,
+            lmr_different: config1.lmr != config2.lmr,
+            aspiration_different: config1.aspiration_windows != config2.aspiration_windows,
+            tt_size_different: config1.tt_size_mb != config2.tt_size_mb,
+            max_depth_different: config1.max_depth != config2.max_depth,
+            time_management_different: config1.time_management != config2.time_management,
+        }
+    }
+}
+
+/// Configuration comparison result
+#[derive(Debug, Clone)]
+pub struct ConfigComparison {
+    pub quiescence_different: bool,
+    pub null_move_different: bool,
+    pub lmr_different: bool,
+    pub aspiration_different: bool,
+    pub tt_size_different: bool,
+    pub max_depth_different: bool,
+    pub time_management_different: bool,
+}
+
+impl ConfigComparison {
+    /// Check if any configuration is different
+    pub fn has_differences(&self) -> bool {
+        self.quiescence_different ||
+        self.null_move_different ||
+        self.lmr_different ||
+        self.aspiration_different ||
+        self.tt_size_different ||
+        self.max_depth_different ||
+        self.time_management_different
+    }
+
+    /// Get summary of differences
+    pub fn get_differences_summary(&self) -> Vec<String> {
+        let mut differences = Vec::new();
+        
+        if self.quiescence_different {
+            differences.push("Quiescence configuration".to_string());
+        }
+        if self.null_move_different {
+            differences.push("Null move configuration".to_string());
+        }
+        if self.lmr_different {
+            differences.push("LMR configuration".to_string());
+        }
+        if self.aspiration_different {
+            differences.push("Aspiration windows configuration".to_string());
+        }
+        if self.tt_size_different {
+            differences.push("Transposition table size".to_string());
+        }
+        if self.max_depth_different {
+            differences.push("Maximum depth".to_string());
+        }
+        if self.time_management_different {
+            differences.push("Time management configuration".to_string());
+        }
+        
+        differences
     }
 }
