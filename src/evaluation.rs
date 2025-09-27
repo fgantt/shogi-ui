@@ -68,6 +68,11 @@ impl PositionEvaluator {
 
     /// Evaluate the current position from the perspective of the given player
     pub fn evaluate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
+    }
+    
+    /// Evaluate with search context for performance optimization
+    pub fn evaluate_with_context(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces, depth: u8, is_root: bool, has_capture: bool, has_check: bool, is_quiescence: bool) -> i32 {
         // Check if tapered evaluation is enabled
         if !self.config.enabled {
             // Fall back to simple evaluation (just material and basic positional)
@@ -89,8 +94,8 @@ impl PositionEvaluator {
         // Pawn structure
         total_score += self.evaluate_pawn_structure(board, player);
         
-        // King safety
-        total_score += self.evaluate_king_safety(board, player);
+        // King safety with context
+        total_score += self.evaluate_king_safety_with_context(board, player, depth, is_root, has_capture, has_check, is_quiescence);
         
         // Mobility
         total_score += self.evaluate_mobility(board, player, captured_pieces);
@@ -266,6 +271,11 @@ impl PositionEvaluator {
 
     /// Evaluate king safety using advanced evaluation system
     fn evaluate_king_safety(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        self.evaluate_king_safety_with_context(board, player, 0, false, false, false, false)
+    }
+    
+    /// Evaluate king safety with search context for performance optimization
+    fn evaluate_king_safety_with_context(&self, board: &BitboardBoard, player: Player, depth: u8, is_root: bool, has_capture: bool, has_check: bool, is_quiescence: bool) -> TaperedScore {
         // Use advanced king safety evaluation if enabled
         if self.config.king_safety.enabled {
             let start_time = if self.config.enable_performance_monitoring {
@@ -274,7 +284,13 @@ impl PositionEvaluator {
                 None
             };
             
-            let result = self.king_safety_evaluator.evaluate(board, player);
+            let result = if is_quiescence {
+                // Skip king safety in quiescence search
+                self.king_safety_evaluator.evaluate_quiescence(board, player)
+            } else {
+                // Use selective evaluation for better performance
+                self.king_safety_evaluator.evaluate_selective(board, player, depth, is_root, has_capture, has_check)
+            };
             
             // Log performance if monitoring is enabled
             if let Some(start) = start_time {

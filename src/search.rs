@@ -199,6 +199,10 @@ impl SearchEngine {
     }
 
     fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool) -> i32 {
+        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, history, can_null_move, false, false, false)
+    }
+    
+    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, has_capture: bool, has_check: bool) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { return 0; }
         self.nodes_searched += 1;
         let fen_key = board.to_fen(player, captured_pieces);
@@ -234,6 +238,8 @@ impl SearchEngine {
             return self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
         }
         
+        // Use the passed context parameters
+        
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
             return if board.is_king_in_check(player, captured_pieces) { -100000 } else { 0 };
@@ -268,7 +274,10 @@ impl SearchEngine {
                 time_limit_ms, 
                 history, 
                 &move_, 
-                move_index
+                move_index,
+                is_root,
+                move_.is_capture,
+                has_check
             );
 
             if score > best_score {
@@ -303,7 +312,7 @@ impl SearchEngine {
 
         // Check depth limit
         if depth == 0 || depth > self.quiescence_config.max_depth {
-            return self.evaluator.evaluate(board, player, captured_pieces);
+            return self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
         }
 
         // Transposition table lookup
@@ -328,7 +337,7 @@ impl SearchEngine {
             }
         }
         
-        let stand_pat = self.evaluator.evaluate(board, player, captured_pieces);
+        let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
         if stand_pat >= beta { return beta; }
         if alpha < stand_pat { alpha = stand_pat; }
         
@@ -1164,11 +1173,11 @@ impl SearchEngine {
         self.null_move_stats.depth_reductions += reduction as u64;
         
         // Perform null move search with zero-width window
-        let null_move_score = -self.negamax(
+        let null_move_score = -self.negamax_with_context(
             board, captured_pieces, player.opposite(), 
             search_depth, -beta, -beta + 1, 
             start_time, time_limit_ms, history, 
-            false  // Prevent recursive null moves
+            false, false, false, false  // Prevent recursive null moves
         );
         
         null_move_score
@@ -2048,7 +2057,10 @@ impl SearchEngine {
                            time_limit_ms: u32, 
                            history: &mut Vec<String>, 
                            move_: &Move, 
-                           move_index: usize) -> i32 {
+                           move_index: usize,
+                           is_root: bool,
+                           has_capture: bool,
+                           has_check: bool) -> i32 {
         
         self.lmr_stats.moves_considered += 1;
         
@@ -2062,7 +2074,7 @@ impl SearchEngine {
             
             // Perform reduced-depth search with null window
             let reduced_depth = depth - 1 - reduction;
-            let score = -self.negamax(
+            let score = -self.negamax_with_context(
                 board, 
                 captured_pieces, 
                 player.opposite(), 
@@ -2072,7 +2084,10 @@ impl SearchEngine {
                 start_time, 
                 time_limit_ms, 
                 history, 
-                true
+                true,
+                false, // not root
+                has_capture,
+                has_check
             );
             
             // Check if re-search is needed
@@ -2080,7 +2095,7 @@ impl SearchEngine {
                 self.lmr_stats.researches_triggered += 1;
                 
                 // Re-search at full depth
-                let full_score = -self.negamax(
+                let full_score = -self.negamax_with_context(
                     board, 
                     captured_pieces, 
                     player.opposite(), 
@@ -2090,7 +2105,10 @@ impl SearchEngine {
                     start_time, 
                     time_limit_ms, 
                     history, 
-                    true
+                    true,
+                    false, // not root
+                    has_capture,
+                    has_check
                 );
                 
                 if full_score >= beta {
@@ -2106,7 +2124,7 @@ impl SearchEngine {
             }
         } else {
             // No reduction - perform full-depth search
-            -self.negamax(
+            -self.negamax_with_context(
                 board, 
                 captured_pieces, 
                 player.opposite(), 
@@ -2116,7 +2134,10 @@ impl SearchEngine {
                 start_time, 
                 time_limit_ms, 
                 history, 
-                true
+                true,
+                false, // not root
+                has_capture,
+                has_check
             )
         }
     }
