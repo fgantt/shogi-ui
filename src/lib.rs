@@ -16,6 +16,20 @@ pub mod opening_book_converter;
 pub mod time_utils;
 pub mod debug_utils;
 
+// Advanced evaluation modules
+pub mod king_safety {
+    pub use crate::evaluation::king_safety::*;
+}
+pub mod castles {
+    pub use crate::evaluation::castles::*;
+}
+pub mod attacks {
+    pub use crate::evaluation::attacks::*;
+}
+pub mod patterns {
+    pub use crate::evaluation::patterns::*;
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub mod usi;
 

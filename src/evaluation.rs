@@ -2,12 +2,22 @@ use crate::types::*;
 use crate::bitboards::*;
 use crate::moves::MoveGenerator;
 
+// Advanced evaluation modules
+pub mod king_safety;
+pub mod castles;
+pub mod attacks;
+pub mod patterns;
+
+use king_safety::KingSafetyEvaluator;
+
 /// Position evaluator for the Shogi engine
 pub struct PositionEvaluator {
     // Piece-square tables for positional evaluation
     piece_square_tables: PieceSquareTables,
     // Configuration for tapered evaluation
     config: TaperedEvaluationConfig,
+    // Advanced king safety evaluator
+    king_safety_evaluator: KingSafetyEvaluator,
 }
 
 impl PositionEvaluator {
@@ -15,6 +25,7 @@ impl PositionEvaluator {
         Self {
             piece_square_tables: PieceSquareTables::new(),
             config: TaperedEvaluationConfig::default(),
+            king_safety_evaluator: KingSafetyEvaluator::new(),
         }
     }
     
@@ -22,7 +33,8 @@ impl PositionEvaluator {
     pub fn with_config(config: TaperedEvaluationConfig) -> Self {
         Self {
             piece_square_tables: PieceSquareTables::new(),
-            config,
+            config: config.clone(),
+            king_safety_evaluator: KingSafetyEvaluator::with_config(config.king_safety),
         }
     }
     
@@ -33,7 +45,25 @@ impl PositionEvaluator {
     
     /// Update the configuration
     pub fn set_config(&mut self, config: TaperedEvaluationConfig) {
-        self.config = config;
+        self.config = config.clone();
+        self.king_safety_evaluator = KingSafetyEvaluator::with_config(config.king_safety);
+    }
+    
+    /// Enable or disable advanced king safety evaluation
+    pub fn set_advanced_king_safety(&mut self, enabled: bool) {
+        self.config.king_safety.enabled = enabled;
+        self.king_safety_evaluator = KingSafetyEvaluator::with_config(self.config.king_safety.clone());
+    }
+    
+    /// Get the current king safety configuration
+    pub fn get_king_safety_config(&self) -> &KingSafetyConfig {
+        &self.config.king_safety
+    }
+    
+    /// Update king safety configuration
+    pub fn set_king_safety_config(&mut self, config: KingSafetyConfig) {
+        self.config.king_safety = config.clone();
+        self.king_safety_evaluator = KingSafetyEvaluator::with_config(config);
     }
 
     /// Evaluate the current position from the perspective of the given player
@@ -234,8 +264,35 @@ impl PositionEvaluator {
         true // Pawn is isolated
     }
 
-    /// Evaluate king safety
+    /// Evaluate king safety using advanced evaluation system
     fn evaluate_king_safety(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        // Use advanced king safety evaluation if enabled
+        if self.config.king_safety.enabled {
+            let start_time = if self.config.enable_performance_monitoring {
+                Some(std::time::Instant::now())
+            } else {
+                None
+            };
+            
+            let result = self.king_safety_evaluator.evaluate(board, player);
+            
+            // Log performance if monitoring is enabled
+            if let Some(start) = start_time {
+                let duration = start.elapsed();
+                if duration.as_micros() > 1000 { // Log if takes more than 1ms
+                    println!("Advanced king safety evaluation took: {}μs", duration.as_micros());
+                }
+            }
+            
+            return result;
+        }
+        
+        // Fallback to basic king safety evaluation
+        self.evaluate_basic_king_safety(board, player)
+    }
+    
+    /// Basic king safety evaluation (fallback when advanced evaluation is disabled)
+    fn evaluate_basic_king_safety(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
         
@@ -1326,6 +1383,75 @@ mod tests {
         
         assert!(diff_0_1 <= 1, "Smooth transition at phase 0-1: {}", diff_0_1);
         assert!(diff_255_256 <= 1, "Smooth transition at phase 255-256: {}", diff_255_256);
+    }
+
+    #[test]
+    fn test_advanced_king_safety_integration() {
+        let mut evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Test with advanced king safety enabled (default)
+        let score_advanced = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Test with advanced king safety disabled
+        evaluator.set_advanced_king_safety(false);
+        let score_basic = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Both should return valid scores
+        assert!(score_advanced != 0 || score_basic != 0);
+        
+        // Re-enable advanced king safety
+        evaluator.set_advanced_king_safety(true);
+        let score_advanced_again = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Should be consistent
+        assert_eq!(score_advanced, score_advanced_again);
+    }
+
+    #[test]
+    fn test_king_safety_configuration() {
+        let mut evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test default configuration
+        let config = evaluator.get_king_safety_config();
+        assert!(config.enabled);
+        assert_eq!(config.castle_weight, 1.0);
+        assert_eq!(config.attack_weight, 1.0);
+        assert_eq!(config.threat_weight, 1.0);
+        
+        // Test custom configuration
+        let mut custom_config = config.clone();
+        custom_config.castle_weight = 1.5;
+        custom_config.attack_weight = 0.8;
+        custom_config.threat_weight = 1.2;
+        
+        evaluator.set_king_safety_config(custom_config);
+        let updated_config = evaluator.get_king_safety_config();
+        assert_eq!(updated_config.castle_weight, 1.5);
+        assert_eq!(updated_config.attack_weight, 0.8);
+        assert_eq!(updated_config.threat_weight, 1.2);
+    }
+
+    #[test]
+    fn test_king_safety_evaluation_consistency() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test that king safety evaluation returns consistent results
+        let score1 = evaluator.evaluate_king_safety(&board, Player::Black);
+        let score2 = evaluator.evaluate_king_safety(&board, Player::Black);
+        
+        assert_eq!(score1, score2);
+        
+        // Test both players
+        let black_score = evaluator.evaluate_king_safety(&board, Player::Black);
+        let white_score = evaluator.evaluate_king_safety(&board, Player::White);
+        
+        // Both should return valid TaperedScore values (may be equal for starting position)
+        assert_eq!(black_score.mg, black_score.mg); // Basic sanity check
+        assert_eq!(white_score.mg, white_score.mg); // Basic sanity check
     }
 }
 

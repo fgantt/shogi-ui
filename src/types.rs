@@ -563,6 +563,16 @@ impl std::ops::Neg for TaperedScore {
     }
 }
 
+impl std::ops::Mul<f32> for TaperedScore {
+    type Output = Self;
+    fn mul(self, rhs: f32) -> Self {
+        Self {
+            mg: (self.mg as f32 * rhs) as i32,
+            eg: (self.eg as f32 * rhs) as i32,
+        }
+    }
+}
+
 /// Maximum game phase value (opening)
 pub const GAME_PHASE_MAX: i32 = 256;
 
@@ -575,6 +585,36 @@ pub const PIECE_PHASE_VALUES: [(PieceType, i32); 6] = [
     (PieceType::Rook, 3),
     (PieceType::Lance, 1),
 ];
+
+/// Configuration for advanced king safety evaluation
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KingSafetyConfig {
+    /// Enable or disable advanced king safety evaluation
+    pub enabled: bool,
+    /// Weight for castle structure evaluation
+    pub castle_weight: f32,
+    /// Weight for attack analysis
+    pub attack_weight: f32,
+    /// Weight for threat evaluation
+    pub threat_weight: f32,
+    /// Phase adjustment factor for endgame
+    pub phase_adjustment: f32,
+    /// Enable performance mode for fast evaluation
+    pub performance_mode: bool,
+}
+
+impl Default for KingSafetyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            castle_weight: 1.0,
+            attack_weight: 1.0,
+            threat_weight: 1.0,
+            phase_adjustment: 0.8,
+            performance_mode: false,
+        }
+    }
+}
 
 /// Configuration options for tapered evaluation
 #[derive(Debug, Clone, PartialEq)]
@@ -589,6 +629,8 @@ pub struct TaperedEvaluationConfig {
     pub memory_pool_size: usize,
     /// Enable performance monitoring
     pub enable_performance_monitoring: bool,
+    /// King safety evaluation configuration
+    pub king_safety: KingSafetyConfig,
 }
 
 impl Default for TaperedEvaluationConfig {
@@ -599,6 +641,7 @@ impl Default for TaperedEvaluationConfig {
             use_simd: false,
             memory_pool_size: 1000,
             enable_performance_monitoring: false,
+            king_safety: KingSafetyConfig::default(),
         }
     }
 }
@@ -617,6 +660,7 @@ impl TaperedEvaluationConfig {
             use_simd: false,
             memory_pool_size: 0,
             enable_performance_monitoring: false,
+            king_safety: KingSafetyConfig::default(),
         }
     }
     
@@ -628,6 +672,7 @@ impl TaperedEvaluationConfig {
             use_simd: false,
             memory_pool_size: 2000,
             enable_performance_monitoring: true,
+            king_safety: KingSafetyConfig::default(),
         }
     }
     
@@ -639,6 +684,7 @@ impl TaperedEvaluationConfig {
             use_simd: false,
             memory_pool_size: 100,
             enable_performance_monitoring: false,
+            king_safety: KingSafetyConfig::default(),
         }
     }
 }
