@@ -29,7 +29,7 @@ impl KingSafetyEvaluator {
             attack_analyzer: AttackAnalyzer::new(),
             threat_evaluator: ThreatEvaluator::new(),
             evaluation_cache: std::cell::RefCell::new(HashMap::new()),
-            fast_mode_threshold: 6, // Use fast mode for depth >= 6
+            fast_mode_threshold: 3, // Use fast mode for depth >= 3
             config,
         }
     }
@@ -47,6 +47,19 @@ impl KingSafetyEvaluator {
     /// Main evaluation function that combines all king safety components
     pub fn evaluate(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         self.evaluate_with_depth(board, player, 0)
+    }
+    
+    /// Evaluate only at root and key nodes for performance
+    pub fn evaluate_selective(&self, board: &BitboardBoard, player: Player, depth: u8, is_root: bool, has_capture: bool, has_check: bool) -> TaperedScore {
+        // Only evaluate king safety at:
+        // - Root node (depth 0)
+        // - Nodes with captures or checks
+        // - Shallow nodes (depth <= 2)
+        if is_root || has_capture || has_check || depth <= 2 {
+            self.evaluate_with_depth(board, player, depth)
+        } else {
+            TaperedScore::default()
+        }
     }
     
     /// Evaluate with depth information for performance optimization
@@ -90,7 +103,7 @@ impl KingSafetyEvaluator {
         let final_score = total_score * self.config.phase_adjustment;
         
         // Cache the result (limit cache size)
-        if self.evaluation_cache.borrow().len() < 10000 {
+        if self.evaluation_cache.borrow().len() < 1000 {
             self.evaluation_cache.borrow_mut().insert((board_hash, player), final_score);
         }
         
@@ -201,7 +214,7 @@ impl KingSafetyEvaluator {
     /// Get cache statistics
     pub fn get_cache_stats(&self) -> (usize, usize) {
         let cache = self.evaluation_cache.borrow();
-        (cache.len(), 10000) // current size, max size
+        (cache.len(), 1000) // current size, max size
     }
     
     /// Evaluate castle structure for the given player
@@ -235,6 +248,12 @@ impl KingSafetyEvaluator {
         self.evaluate_fast_mode(board, player)
     }
     
+    /// Skip king safety evaluation in quiescence search
+    pub fn evaluate_quiescence(&self, _board: &BitboardBoard, _player: Player) -> TaperedScore {
+        // Return zero for quiescence search to avoid expensive evaluation
+        TaperedScore::default()
+    }
+    
     /// Find king position for a player
     fn find_king_position(&self, board: &BitboardBoard, player: Player) -> Option<Position> {
         for row in 0..9 {
@@ -248,6 +267,49 @@ impl KingSafetyEvaluator {
             }
         }
         None
+    }
+    
+    /// Check if king safety evaluation needs to be updated
+    pub fn needs_update(&self, board: &BitboardBoard, player: Player, last_king_pos: Option<Position>, last_material_count: u8) -> bool {
+        // Check if king moved
+        let current_king_pos = self.find_king_position(board, player);
+        if current_king_pos != last_king_pos {
+            return true;
+        }
+        
+        // Check if material count changed significantly (captures)
+        let current_material = self.count_material_near_king(board, player, current_king_pos);
+        if current_material != last_material_count {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Count material near the king for incremental updates
+    fn count_material_near_king(&self, board: &BitboardBoard, player: Player, king_pos: Option<Position>) -> u8 {
+        if let Some(king_pos) = king_pos {
+            let mut count = 0;
+            // Count pieces in 3x3 area around king
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    let new_row = king_pos.row as i8 + dr;
+                    let new_col = king_pos.col as i8 + dc;
+                    
+                    if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                        let pos = Position::new(new_row as u8, new_col as u8);
+                        if let Some(piece) = board.get_piece(pos) {
+                            if piece.player == player {
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            count
+        } else {
+            0
+        }
     }
 }
 

@@ -98,7 +98,7 @@ impl CastleRecognizer {
         }
 
         // Cache the result (limit cache size)
-        if self.pattern_cache.borrow().len() < 5000 {
+        if self.pattern_cache.borrow().len() < 500 {
             self.pattern_cache.borrow_mut().insert((board_hash, player, king_pos), best_pattern_index);
         }
 
@@ -134,7 +134,7 @@ impl CastleRecognizer {
     /// Get cache statistics
     pub fn get_cache_stats(&self) -> (usize, usize) {
         let cache = self.pattern_cache.borrow();
-        (cache.len(), 5000) // current size, max size
+        (cache.len(), 500) // current size, max size
     }
     
     /// Check if a pattern matches the current board position
