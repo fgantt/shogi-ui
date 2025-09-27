@@ -1226,7 +1226,9 @@ impl IterativeDeepening {
                     }
                 }
 
-                if score > 10000 && depth >= 3 { break; } 
+                // Only break early for extremely winning positions (king capture level)
+                // and only at higher depths to allow deeper search logging for higher AI levels
+                if score > 50000 && depth >= 6 { break; } 
             } else {
                 break;
             }

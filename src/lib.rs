@@ -247,6 +247,7 @@ impl ShogiEngine {
     pub fn set_depth(&mut self, depth: u8) {
         self.depth = depth;
         crate::debug_utils::debug_log(&format!("Set depth to: {}", depth));
+        println!("DEBUG: Set depth to: {}", depth);
     }
 
 
@@ -314,6 +315,7 @@ impl ShogiEngine {
 
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
+        println!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
         let mut searcher = search::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
@@ -591,12 +593,15 @@ impl WasmUsiHandler {
             }
         }
 
-        let time_to_use = if byoyomi > 0 {
-            byoyomi
-        } else {
+        let time_to_use = {
             let time_for_player = if self.engine.current_player == Player::Black { btime } else { wtime };
             if time_for_player > 0 {
-                time_for_player
+                // During regular game time, don't restrict by time - let it search to full depth
+                // Use a very large time limit to allow full depth search
+                300000 // 5 minutes should be enough for any reasonable depth
+            } else if byoyomi > 0 {
+                // Only use byoyomi when main time is exhausted
+                byoyomi as u32
             } else {
                 5000 // Default to 5 seconds if no time control is given
             }
@@ -631,5 +636,10 @@ impl WasmUsiHandler {
 
     pub fn set_depth(&mut self, depth: u8) {
         self.engine.set_depth(depth);
+    }
+
+    #[wasm_bindgen]
+    pub fn get_depth(&self) -> u8 {
+        self.engine.depth
     }
 }

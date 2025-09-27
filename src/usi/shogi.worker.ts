@@ -33,12 +33,6 @@ async function processMessage(e: MessageEvent) {
     // Create a new handler for each message to avoid borrow checker issues
     const handler = new WasmUsiHandler();
     
-    // Restore game state if it exists
-    if (gameState) {
-        handler.process_command(`position sfen ${gameState.position}`);
-        handler.set_depth(gameState.depth);
-    }
-    
     const { command, playerId } = e.data;
     const commandParts = command.split(' ');
     const baseCommand = commandParts[0];
@@ -48,6 +42,15 @@ async function processMessage(e: MessageEvent) {
     };
 
     if (baseCommand === 'go') {
+        // Restore game state if it exists before starting search
+        if (gameState) {
+            console.log('Worker: Restoring game state, depth:', gameState.depth);
+            handler.process_command(`position sfen ${gameState.position}`);
+            handler.set_depth(gameState.depth);
+            console.log('Worker: Handler depth after restoration:', handler.get_depth());
+        } else {
+            console.log('Worker: No game state, using default depth');
+        }
         handler.go_with_callback(command, postInfoToMainThread);
     } else {
         const result = handler.process_command(command);
@@ -61,6 +64,27 @@ async function processMessage(e: MessageEvent) {
                     currentPlayer: command.includes(' b ') ? 'black' : 'white',
                     depth: gameState?.depth || 3
                 };
+            }
+        }
+        
+        // Update game state for setoption commands (especially depth)
+        if (baseCommand === 'setoption') {
+            console.log('Worker: Processing setoption command:', command);
+            const depthMatch = command.match(/setoption name depth value (\d+)/);
+            if (depthMatch) {
+                const newDepth = parseInt(depthMatch[1], 10);
+                console.log('Worker: Setting depth to:', newDepth);
+                if (gameState) {
+                    gameState.depth = newDepth;
+                } else {
+                    gameState = {
+                        position: '',
+                        currentPlayer: 'black',
+                        depth: newDepth
+                    };
+                }
+                console.log('Worker: Updated gameState.depth to:', gameState.depth);
+                console.log('Worker: Handler depth after setoption:', handler.get_depth());
             }
         }
         
