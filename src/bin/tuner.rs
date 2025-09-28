@@ -365,6 +365,7 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
         checkpoint_frequency: 100,
         enable_logging: cli.progress,
         max_batch_size: 1000,
+        max_iterations: Some(1000),
     };
 
     Ok(TuningConfig {

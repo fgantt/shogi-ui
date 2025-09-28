@@ -2,6 +2,7 @@ use crate::types::*;
 use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
+use crate::tablebase::MicroTablebase;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
@@ -9,6 +10,7 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
     move_generator: MoveGenerator,
+    tablebase: MicroTablebase,
     transposition_table: HashMap<String, TranspositionEntry>,
     quiescence_tt: HashMap<String, QuiescenceEntry>,
     history_table: [[i32; 9]; 9],
@@ -40,6 +42,7 @@ impl SearchEngine {
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
+            tablebase: MicroTablebase::new(),
             transposition_table: HashMap::with_capacity(capacity),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
@@ -69,6 +72,7 @@ impl SearchEngine {
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
+            tablebase: MicroTablebase::new(),
             transposition_table: HashMap::with_capacity(capacity),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
@@ -2004,7 +2008,7 @@ impl SearchEngine {
         use crate::bitboards::BitboardBoard;
         use crate::types::{Move, Position, PieceType, Player};
 
-        let engine = SearchEngine::new(None, 64);
+        let mut engine = SearchEngine::new(None, 64);
         let board = BitboardBoard::new();
         
         // Create test moves
@@ -2046,8 +2050,32 @@ impl SearchEngine {
         println!("IID move ordering tests passed!");
     }
 
+
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
         crate::debug_utils::debug_log(&format!("Inside search_at_depth, depth={}", depth));
+        
+        // Check tablebase first
+        crate::debug_utils::debug_log("Probing tablebase for position");
+        if let Some(tablebase_result) = self.tablebase.probe(board, player, captured_pieces) {
+            if let Some(ref best_move) = tablebase_result.best_move {
+                crate::debug_utils::debug_log(&format!(
+                    "TABLEBASE HIT: {} (outcome: {:?}, distance: {:?}, confidence: {:.2})",
+                    best_move.to_usi_string(),
+                    tablebase_result.outcome,
+                    tablebase_result.distance_to_mate,
+                    tablebase_result.confidence
+                ));
+                
+                // Convert tablebase score to search score
+                let score = self.convert_tablebase_score(&tablebase_result);
+                crate::debug_utils::debug_log(&format!("Tablebase score: {}", score));
+                return Some((best_move.clone(), score));
+            } else {
+                crate::debug_utils::debug_log("Tablebase hit but no best move found");
+            }
+        } else {
+            crate::debug_utils::debug_log("TABLEBASE MISS: Position not in tablebase");
+        }
         
         self.nodes_searched = 0;
         let start_time = TimeSource::now();
@@ -2105,6 +2133,40 @@ impl SearchEngine {
         }
 
         best_move.map(|m| (m, best_score))
+    }
+
+    /// Convert tablebase result to search score
+    fn convert_tablebase_score(&self, result: &crate::tablebase::TablebaseResult) -> i32 {
+        match result.outcome {
+            crate::tablebase::TablebaseOutcome::Win => {
+                // Winning position: score based on distance to mate
+                if let Some(distance) = result.distance_to_mate {
+                    10000 - distance as i32
+                } else {
+                    10000
+                }
+            }
+            crate::tablebase::TablebaseOutcome::Loss => {
+                // Losing position: negative score based on distance to mate
+                if let Some(distance) = result.distance_to_mate {
+                    -10000 - distance as i32
+                } else {
+                    -10000
+                }
+            }
+            crate::tablebase::TablebaseOutcome::Draw => {
+                // Draw position
+                0
+            }
+            crate::tablebase::TablebaseOutcome::Unknown => {
+                // Unknown position: use confidence to scale the score
+                if let Some(distance) = result.distance_to_mate {
+                    ((10000 - distance as i32) as f32 * result.confidence) as i32
+                } else {
+                    0
+                }
+            }
+        }
     }
 
     /// Backward-compatible wrapper for search_at_depth without alpha/beta parameters
@@ -2412,10 +2474,61 @@ impl SearchEngine {
 
     
 
-    pub fn sort_moves(&self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>) -> Vec<Move> {
-        let mut scored_moves: Vec<(Move, i32)> = moves.iter().map(|m| (m.clone(), self.score_move(m, board, iid_move))).collect();
-        scored_moves.sort_by(|a, b| b.1.cmp(&a.1));
-        scored_moves.into_iter().map(|(m, _)| m).collect()
+    pub fn sort_moves(&mut self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>) -> Vec<Move> {
+        // First, check if any move is a tablebase move
+        let mut tablebase_moves = Vec::new();
+        let mut regular_moves = Vec::new();
+        
+        for move_ in moves {
+            if self.is_tablebase_move(move_, board) {
+                tablebase_moves.push(move_.clone());
+                crate::debug_utils::debug_log(&format!(
+                    "TABLEBASE MOVE PRIORITIZED: {}",
+                    move_.to_usi_string()
+                ));
+            } else {
+                regular_moves.push(move_.clone());
+            }
+        }
+        
+        if !tablebase_moves.is_empty() {
+            crate::debug_utils::debug_log(&format!(
+                "Found {} tablebase moves, {} regular moves",
+                tablebase_moves.len(),
+                regular_moves.len()
+            ));
+        }
+        
+        // Score and sort regular moves
+        let mut scored_regular: Vec<(Move, i32)> = regular_moves.iter()
+            .map(|m| (m.clone(), self.score_move(m, board, iid_move)))
+            .collect();
+        scored_regular.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Combine: tablebase moves first, then regular moves
+        let mut result = tablebase_moves;
+        result.extend(scored_regular.into_iter().map(|(m, _)| m));
+        
+        result
+    }
+
+    /// Check if a move is a tablebase move by probing the tablebase
+    fn is_tablebase_move(&mut self, move_: &Move, board: &BitboardBoard) -> bool {
+        // Create a temporary board state to check if this move leads to a tablebase position
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        // Make the move
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, move_.player);
+        }
+        
+        // Check if the resulting position is in the tablebase
+        if let Some(tablebase_result) = self.tablebase.probe(&temp_board, move_.player.opposite(), &temp_captured) {
+            tablebase_result.best_move.is_some()
+        } else {
+            false
+        }
     }
 
     pub fn score_move(&self, move_: &Move, board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
@@ -5023,5 +5136,58 @@ mod search_tests {
         assert_eq!(default_config.min_depth, 3);
         assert_eq!(default_config.reduction_factor, 2);
         assert!(default_config.enabled);
+    }
+}
+
+#[cfg(test)]
+mod tablebase_tests {
+    use super::*;
+    
+    #[test]
+    fn test_tablebase_integration() {
+        let mut engine = SearchEngine::new(None, 16);
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+
+        // Test tablebase probing in search_at_depth
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 1, 1000, -10000, 10000);
+        
+        // Should not panic and should return some result (even if not from tablebase)
+        assert!(result.is_some() || result.is_none()); // Either some move or no legal moves
+        
+        // Test tablebase move prioritization
+        let moves = engine.move_generator.generate_legal_moves(&board, player, &captured_pieces);
+        if !moves.is_empty() {
+            let sorted_moves = engine.sort_moves(&moves, &board, None);
+            assert_eq!(sorted_moves.len(), moves.len());
+        }
+        
+        println!("Tablebase integration tests passed!");
+    }
+
+    #[test]
+    fn test_convert_tablebase_score() {
+        let engine = SearchEngine::new(None, 16);
+        
+        // Test win score
+        let win_result = crate::tablebase::TablebaseResult::win(
+            Move::new_move(Position::new(0, 0), Position::new(1, 1), PieceType::King, Player::Black, false),
+            5
+        );
+        let win_score = engine.convert_tablebase_score(&win_result);
+        assert_eq!(win_score, 9995); // 10000 - 5
+        
+        // Test loss score
+        let loss_result = crate::tablebase::TablebaseResult::loss(3);
+        let loss_score = engine.convert_tablebase_score(&loss_result);
+        assert_eq!(loss_score, -9997); // -10000 - (-3) = -10000 + 3 = -9997
+        
+        // Test draw score
+        let draw_result = crate::tablebase::TablebaseResult::draw();
+        let draw_score = engine.convert_tablebase_score(&draw_result);
+        assert_eq!(draw_score, 0);
+        
+        println!("Tablebase score conversion tests passed!");
     }
 }

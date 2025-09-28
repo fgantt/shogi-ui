@@ -17,6 +17,7 @@ pub mod time_utils;
 pub mod debug_utils;
 pub mod tuning;
 pub mod weights;
+pub mod tablebase;
 
 // Advanced evaluation modules
 pub mod king_safety {
@@ -40,6 +41,7 @@ use moves::*;
 use search::SearchEngine;
 use types::*;
 use opening_book::OpeningBook;
+use tablebase::MicroTablebase;
 
 #[derive(Serialize, Deserialize)]
 struct PieceJson {
@@ -67,6 +69,7 @@ pub struct ShogiEngine {
     captured_pieces: CapturedPieces,
     current_player: Player,
     opening_book: OpeningBook,
+    tablebase: MicroTablebase,
     stop_flag: Arc<AtomicBool>,
     search_engine: Arc<Mutex<SearchEngine>>,
     debug_mode: bool,
@@ -83,6 +86,7 @@ impl ShogiEngine {
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
             opening_book: OpeningBook::new(),
+            tablebase: MicroTablebase::new(),
             stop_flag: stop_flag.clone(),
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
             debug_mode: false,
@@ -301,7 +305,32 @@ impl ShogiEngine {
 
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
         
-        // Check opening book first
+        // Check tablebase first
+        if let Some(tablebase_result) = self.tablebase.probe(&self.board, self.current_player, &self.captured_pieces) {
+            if let Some(best_move) = tablebase_result.best_move {
+                if let Some(on_info) = &on_info {
+                    let this = wasm_bindgen::JsValue::NULL;
+                    let move_info = format!(
+                        "info string Tablebase move: {} (outcome: {:?}, distance: {:?})",
+                        best_move.to_usi_string(),
+                        tablebase_result.outcome,
+                        tablebase_result.distance_to_mate
+                    );
+                    let s = wasm_bindgen::JsValue::from_str(&move_info);
+                    let _ = on_info.call1(&this, &s);
+                }
+                
+                crate::debug_utils::debug_log(&format!(
+                    "Found tablebase move: {} (outcome: {:?})",
+                    best_move.to_usi_string(),
+                    tablebase_result.outcome
+                ));
+                
+                return Some(best_move);
+            }
+        }
+        
+        // Check opening book second
         if self.opening_book.is_loaded() {
             if let Some(book_move) = self.opening_book.get_best_move(&fen) {
                 if let Some(on_info) = &on_info {
@@ -325,7 +354,7 @@ impl ShogiEngine {
 
         if let Some(on_info) = &on_info {
             let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: No opening book move, starting search");
+            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: No tablebase or opening book move, starting search");
             let _ = on_info.call1(&this, &s);
         }
 
@@ -530,6 +559,38 @@ impl ShogiEngine {
         } else {
             vec!["info string game over command received without a result".to_string()]
         }
+    }
+
+    // Tablebase methods
+    pub fn enable_tablebase(&mut self) {
+        self.tablebase.enable();
+    }
+
+    pub fn disable_tablebase(&mut self) {
+        self.tablebase.disable();
+    }
+
+    pub fn is_tablebase_enabled(&self) -> bool {
+        self.tablebase.is_enabled()
+    }
+
+    pub fn get_tablebase_stats(&self) -> String {
+        let stats = self.tablebase.get_stats();
+        format!(
+            "Tablebase Stats: Probes={}, Cache Hits={}, Solver Hits={}, Misses={}, Cache Hit Rate={:.2}%, Solver Hit Rate={:.2}%, Overall Hit Rate={:.2}%, Avg Probe Time={:.2}ms",
+            stats.total_probes,
+            stats.cache_hits,
+            stats.solver_hits,
+            stats.misses,
+            stats.cache_hit_rate() * 100.0,
+            stats.solver_hit_rate() * 100.0,
+            stats.overall_hit_rate() * 100.0,
+            stats.average_probe_time_ms
+        )
+    }
+
+    pub fn reset_tablebase_stats(&mut self) {
+        self.tablebase.reset_stats();
     }
 }
 
