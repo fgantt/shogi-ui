@@ -92,8 +92,13 @@ function usiToCsaMove(usiMove: string): string {
  * Convert CSA move to USI format
  */
 function csaToUsiMove(csaMove: string): string {
+  // Handle resignation
+  if (csaMove === 'TORYO') {
+    return 'resign';
+  }
+  
   if (csaMove.includes('*')) {
-    // Drop move
+    // Drop move like "B*56"
     const match = csaMove.match(/^([A-Z]+)\*(\d{2})$/);
     if (match) {
       const piece = csaToUsiPiece(match[1]);
@@ -101,14 +106,13 @@ function csaToUsiMove(csaMove: string): string {
       return `${piece}*${destination}`;
     }
   } else {
-    // Normal move
-    const match = csaMove.match(/^([A-Z]+)(\d{2})(\+?)(\d{2})$/);
+    // Normal move like "2726FU" or "2277UM"
+    const match = csaMove.match(/^(\d{4})([A-Z]+)$/);
     if (match) {
-      const piece = csaToUsiPiece(match[1]);
-      const from = match[2];
-      const to = match[4];
-      const promotion = match[3] ? '+' : '';
-      return `${from}${to}${promotion}`;
+      const coordinates = match[1]; // "2726"
+      const piece = match[2]; // "FU", "UM", etc.
+      const promotion = piece.includes('UM') || piece.includes('RY') || piece.includes('NG') || piece.includes('TO') || piece.includes('NY') || piece.includes('NK') ? '+' : '';
+      return `${coordinates}${promotion}`;
     }
   }
   
@@ -129,6 +133,18 @@ export function kifToUsiMove(kifMove: string): string {
   if (kifMove === '同　飛成(76)') return '7677+';
   if (kifMove === '同　桂成(85)') return '8577+';
   
+  // Handle "同" (same square) moves - these require game context
+  // For now, we'll skip these as they're complex to resolve without full game state
+  if (kifMove.startsWith('同　')) {
+    const match = kifMove.match(/同　([歩香桂銀金角飛玉王と])(\((\d)(\d)\))/);
+    if (match) {
+      const fromFile = parseInt(match[3]);
+      const fromRank = parseInt(match[4]);
+      // Return a placeholder - in a full implementation, we'd need game context
+      return `同${fromFile}${fromRank}`;
+    }
+  }
+  
   const sameSquarePromotionMatch = kifMove.match(/同　([歩香桂銀金角飛玉王])成(\((\d)(\d)\))/);
   if (sameSquarePromotionMatch) {
     const fromFile = parseInt(sameSquarePromotionMatch[3]);
@@ -146,6 +162,17 @@ export function kifToUsiMove(kifMove: string): string {
     const fromFile = parseInt(promotionMatch[5]);
     const fromRank = parseInt(promotionMatch[6]);
     return `${fromFile}${fromRank}${toFile}${toRank}+`;
+  }
+
+  // Handle promoted piece moves (e.g., "２二と(13)")
+  const promotedMatch = kifMove.match(/([１２３４５６７８９])([一二三四五六七八九])([と杏圭全金馬龍])(\((\d)(\d)\))/);
+  if (promotedMatch) {
+    const toFile = kifMoveToNumber(promotedMatch[1]);
+    const toRank = kifRankToNumber(promotedMatch[2]);
+    const fromFile = parseInt(promotedMatch[5]);
+    const fromRank = parseInt(promotedMatch[6]);
+    // Promoted pieces don't have + suffix in USI when they're already promoted
+    return `${fromFile}${fromRank}${toFile}${toRank}`;
   }
 
   // Handle normal moves (e.g., "２六歩(27)")
@@ -378,16 +405,27 @@ export function parseCSA(csaText: string): ParsedGame {
         // Version - skip
         continue;
       } else if (trimmed.startsWith('N+')) {
-        metadata.player1Name = trimmed.substring(2);
+        metadata.blackPlayer = trimmed.substring(2);
       } else if (trimmed.startsWith('N-')) {
-        metadata.player2Name = trimmed.substring(2);
-      } else if (trimmed.startsWith('$TIME:')) {
-        metadata.date = trimmed.substring(6);
+        metadata.whitePlayer = trimmed.substring(2);
+      } else if (trimmed.startsWith('$EVENT:')) {
+        metadata.event = trimmed.substring(7);
+      } else if (trimmed.startsWith('$SITE:')) {
+        metadata.site = trimmed.substring(6);
+      } else if (trimmed.startsWith('$START_TIME:')) {
+        metadata.date = trimmed.substring(12);
+      } else if (trimmed.startsWith('$OPENING:')) {
+        metadata.opening = trimmed.substring(9);
       } else if (trimmed.match(/^P\d+/) || trimmed === '+' || trimmed === '-') {
         // Board position or starting player - simplified handling
         continue;
-      } else if (trimmed.match(/^[+-][A-Z]+\*?\d+/)) {
-        // Move
+      } else if (trimmed.startsWith('%')) {
+        // Special command like %TORYO (resignation)
+        if (trimmed === '%TORYO') {
+          moves.push('resign');
+        }
+      } else if (trimmed.match(/^[+-].+/) && !trimmed.startsWith('$')) {
+        // Move - CSA format is like +2726FU, -8384FU, etc.
         const usiMove = csaToUsiMove(trimmed.substring(1));
         moves.push(usiMove);
       }
@@ -432,15 +470,15 @@ export function parseKIF(kifText: string): ParsedGame {
       } else if (trimmed.startsWith('終了日時：')) {
         // End date - could be used for game duration
       } else if (trimmed.startsWith('棋戦：')) {
-        metadata.gameType = trimmed.substring(3);
+        metadata.event = trimmed.substring(3);
       } else if (trimmed.startsWith('場所：')) {
-        metadata.location = trimmed.substring(3);
+        metadata.site = trimmed.substring(3);
       } else if (trimmed.startsWith('持ち時間：')) {
         metadata.timeControl = trimmed.substring(5);
       } else if (trimmed.startsWith('先手：')) {
-        metadata.player1Name = trimmed.substring(3);
+        metadata.blackPlayer = trimmed.substring(3);
       } else if (trimmed.startsWith('後手：')) {
-        metadata.player2Name = trimmed.substring(3);
+        metadata.whitePlayer = trimmed.substring(3);
       } else if (trimmed.startsWith('戦型：')) {
         metadata.opening = trimmed.substring(3);
       } else if (trimmed.startsWith('手合割：')) {
@@ -461,6 +499,9 @@ export function parseKIF(kifText: string): ParsedGame {
             const usiMove = kifToUsiMove(moveDesc);
             if (usiMove && usiMove !== moveDesc) {
               moves.push(usiMove);
+            } else if (usiMove === moveDesc) {
+              // This means the move wasn't converted - might be a special case
+              // Skip unconverted moves for now
             }
           }
         }

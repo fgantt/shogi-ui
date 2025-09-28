@@ -365,6 +365,10 @@ describe('Game Formats', () => {
       expect(result.data!.metadata.whitePlayer).toBe('藤井聡太 七段');
       expect(result.data!.metadata.event).toBe('竜王戦');
       expect(result.data!.metadata.site).toBe('関西将棋会館');
+      
+      // console.log(`Parsed ${result.data!.moves.length} moves (expected 97)`);
+      // console.log('Last few moves:', result.data!.moves.slice(-5));
+      
       expect(result.data!.moves.length).toBe(97);
       expect(result.data!.moves[96]).toBe('resign'); // Last move should be resignation
     });
@@ -397,6 +401,10 @@ describe('Game Formats', () => {
       expect(result.data!.metadata.whitePlayer).toBe('藤井聡太 七段');
       expect(result.data!.metadata.event).toBe('竜王戦');
       expect(result.data!.metadata.site).toBe('関西将棋会館');
+      
+      // console.log(`CSA parsed ${result.data!.moves.length} moves (expected 97)`);
+      // console.log('Last few CSA moves:', result.data!.moves.slice(-5));
+      
       expect(result.data!.moves.length).toBe(97);
       expect(result.data!.moves[96]).toBe('resign');
     });
@@ -434,7 +442,7 @@ describe('Game Formats', () => {
       
       // Check first 20 moves for consistency
       for (let i = 0; i < Math.min(20, kifMoves.length); i++) {
-        console.log(`Move ${i + 1}: KIF=${kifMoves[i]}, CSA=${csaMoves[i]}`);
+        // console.log(`Move ${i + 1}: KIF=${kifMoves[i]}, CSA=${csaMoves[i]}`);
         expect(kifMoves[i]).toBe(csaMoves[i]);
       }
     });
