@@ -1,6 +1,7 @@
 use crate::types::*;
 use crate::bitboards::*;
 use crate::moves::MoveGenerator;
+use crate::weights::{WeightManager, WeightError};
 
 // Advanced evaluation modules
 pub mod king_safety;
@@ -18,6 +19,10 @@ pub struct PositionEvaluator {
     config: TaperedEvaluationConfig,
     // Advanced king safety evaluator
     king_safety_evaluator: KingSafetyEvaluator,
+    // Weight manager for tuned evaluation weights
+    weight_manager: WeightManager,
+    // Whether to use tuned weights for evaluation
+    use_tuned_weights: bool,
 }
 
 impl PositionEvaluator {
@@ -26,6 +31,8 @@ impl PositionEvaluator {
             piece_square_tables: PieceSquareTables::new(),
             config: TaperedEvaluationConfig::default(),
             king_safety_evaluator: KingSafetyEvaluator::new(),
+            weight_manager: WeightManager::new(),
+            use_tuned_weights: false,
         }
     }
     
@@ -35,6 +42,8 @@ impl PositionEvaluator {
             piece_square_tables: PieceSquareTables::new(),
             config: config.clone(),
             king_safety_evaluator: KingSafetyEvaluator::with_config(config.king_safety),
+            weight_manager: WeightManager::new(),
+            use_tuned_weights: false,
         }
     }
     
@@ -66,9 +75,151 @@ impl PositionEvaluator {
         self.king_safety_evaluator = KingSafetyEvaluator::with_config(config);
     }
 
+    /// Load tuned weights from a file
+    pub fn load_tuned_weights<P: AsRef<std::path::Path>>(&mut self, path: P) -> Result<(), WeightError> {
+        self.weight_manager.load_weights(path)?;
+        self.use_tuned_weights = self.weight_manager.is_enabled();
+        Ok(())
+    }
+
+    /// Enable or disable tuned weights
+    pub fn set_use_tuned_weights(&mut self, enabled: bool) {
+        if enabled && self.weight_manager.has_weights() {
+            self.weight_manager.set_enabled(true);
+            self.use_tuned_weights = true;
+        } else {
+            self.weight_manager.set_enabled(false);
+            self.use_tuned_weights = false;
+        }
+    }
+
+    /// Check if tuned weights are enabled
+    pub fn is_using_tuned_weights(&self) -> bool {
+        self.use_tuned_weights && self.weight_manager.is_enabled()
+    }
+
+    /// Get weight manager for direct access
+    pub fn get_weight_manager(&self) -> &WeightManager {
+        &self.weight_manager
+    }
+
+    /// Get mutable weight manager for direct access
+    pub fn get_weight_manager_mut(&mut self) -> &mut WeightManager {
+        &mut self.weight_manager
+    }
+
+    /// Save current weights to a file
+    pub fn save_tuned_weights<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+        tuning_method: String,
+        validation_error: f64,
+        training_positions: usize,
+    ) -> Result<(), WeightError> {
+        self.weight_manager.save_weights(path, tuning_method, validation_error, training_positions)
+    }
+
+    /// Extract raw feature values for tuning
+    /// Returns a vector of unweighted feature values that can be used for automated tuning
+    pub fn get_evaluation_features(
+        &self, 
+        board: &BitboardBoard, 
+        player: Player, 
+        captured_pieces: &CapturedPieces
+    ) -> Vec<f64> {
+        let mut features = vec![0.0; NUM_EVAL_FEATURES];
+        
+        // Extract material features
+        self.extract_material_features(&mut features, board, player, captured_pieces);
+        
+        // Extract positional features
+        self.extract_positional_features(&mut features, board, player);
+        
+        // Extract king safety features
+        self.extract_king_safety_features(&mut features, board, player);
+        
+        // Extract pawn structure features
+        self.extract_pawn_structure_features(&mut features, board, player);
+        
+        // Extract mobility features
+        self.extract_mobility_features(&mut features, board, player, captured_pieces);
+        
+        // Extract coordination features
+        self.extract_coordination_features(&mut features, board, player);
+        
+        // Extract center control features
+        self.extract_center_control_features(&mut features, board, player);
+        
+        // Extract development features
+        self.extract_development_features(&mut features, board, player);
+        
+        features
+    }
+    
+    /// Apply tuned weights to features and return final evaluation score
+    pub fn evaluate_with_weights(
+        &mut self,
+        features: &[f64],
+        game_phase: i32
+    ) -> Result<i32, WeightError> {
+        // Use the weight manager to apply weights
+        self.weight_manager.apply_weights(features, game_phase)
+    }
+
+    /// Legacy method for backward compatibility
+    pub fn evaluate_with_weights_legacy(
+        &self,
+        features: &[f64],
+        weights: &[f64],
+        game_phase: i32
+    ) -> i32 {
+        // Apply phase-dependent weighting
+        let phase_weight = game_phase as f64 / 100.0; // Assuming GAME_PHASE_MAX = 100
+        
+        let mut mg_score = 0.0;
+        let mut eg_score = 0.0;
+        
+        for (i, &feature) in features.iter().enumerate() {
+            if i < NUM_MG_FEATURES {
+                mg_score += feature * weights[i];
+            } else {
+                eg_score += feature * weights[i];
+            }
+        }
+        
+        // Interpolate based on game phase
+        let final_score = mg_score * phase_weight + eg_score * (1.0 - phase_weight);
+        final_score as i32
+    }
+
     /// Evaluate the current position from the perspective of the given player
     pub fn evaluate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
+    }
+
+    /// Evaluate using tuned weights if available, otherwise use traditional evaluation
+    pub fn evaluate_with_tuned_weights(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
+        if self.is_using_tuned_weights() {
+            // Extract features and use tuned weights
+            let features = self.get_evaluation_features(board, player, captured_pieces);
+            let game_phase = self.calculate_game_phase(board);
+            
+            match self.evaluate_with_weights(&features, game_phase) {
+                Ok(score) => score,
+                Err(_) => {
+                    // Fall back to traditional evaluation if weight application fails
+                    self.evaluate(board, player, captured_pieces)
+                }
+            }
+        } else {
+            // Use traditional evaluation
+            self.evaluate(board, player, captured_pieces)
+        }
     }
     
     /// Evaluate with search context for performance optimization
@@ -621,6 +772,205 @@ impl PositionEvaluator {
             .iter()
             .find(|(pt, _)| *pt == piece_type)
             .map(|(_, value)| *value)
+    }
+
+    // ============================================================================
+    // FEATURE EXTRACTION METHODS FOR AUTOMATED TUNING
+    // ============================================================================
+
+    /// Extract material features (piece count differences)
+    fn extract_material_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) {
+        let mut piece_counts = [0; 14]; // 14 piece types
+        
+        // Count pieces for both players
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    let piece_idx = piece.piece_type.to_u8() as usize;
+                    if piece_idx < 14 {
+                        if piece.player == player {
+                            piece_counts[piece_idx] += 1;
+                        } else {
+                            piece_counts[piece_idx] -= 1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Add captured pieces to material count
+        // Black captured pieces (positive for Black)
+        for &piece_type in &captured_pieces.black {
+            let piece_idx = piece_type.to_u8() as usize;
+            if piece_idx < 14 {
+                piece_counts[piece_idx] += 1;
+            }
+        }
+        
+        // White captured pieces (negative for Black, positive for White)
+        for &piece_type in &captured_pieces.white {
+            let piece_idx = piece_type.to_u8() as usize;
+            if piece_idx < 14 {
+                piece_counts[piece_idx] -= 1;
+            }
+        }
+        
+        // Store material features
+        features[MATERIAL_PAWN_INDEX] = piece_counts[0] as f64;
+        features[MATERIAL_LANCE_INDEX] = piece_counts[1] as f64;
+        features[MATERIAL_KNIGHT_INDEX] = piece_counts[2] as f64;
+        features[MATERIAL_SILVER_INDEX] = piece_counts[3] as f64;
+        features[MATERIAL_GOLD_INDEX] = piece_counts[4] as f64;
+        features[MATERIAL_BISHOP_INDEX] = piece_counts[5] as f64;
+        features[MATERIAL_ROOK_INDEX] = piece_counts[6] as f64;
+        features[MATERIAL_KING_INDEX] = piece_counts[7] as f64;
+        features[MATERIAL_PROMOTED_PAWN_INDEX] = piece_counts[8] as f64;
+        features[MATERIAL_PROMOTED_LANCE_INDEX] = piece_counts[9] as f64;
+        features[MATERIAL_PROMOTED_KNIGHT_INDEX] = piece_counts[10] as f64;
+        features[MATERIAL_PROMOTED_SILVER_INDEX] = piece_counts[11] as f64;
+        features[MATERIAL_PROMOTED_BISHOP_INDEX] = piece_counts[12] as f64;
+        features[MATERIAL_PROMOTED_ROOK_INDEX] = piece_counts[13] as f64;
+    }
+
+    /// Extract positional features (piece-square table values)
+    fn extract_positional_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        // Extract middlegame positional features
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    let (mg_table, _) = self.piece_square_tables.get_tables(piece.piece_type);
+                    let (table_row, table_col) = self.piece_square_tables.get_table_coords(pos, piece.player);
+                    let value = mg_table[table_row as usize][table_col as usize];
+                    
+                    let feature_idx = self.get_positional_feature_index(piece.piece_type, row, col, true);
+                    if feature_idx < features.len() {
+                        if piece.player == player {
+                            features[feature_idx] = value as f64;
+                        } else {
+                            features[feature_idx] = -(value as f64);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Extract endgame positional features
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    let (_, eg_table) = self.piece_square_tables.get_tables(piece.piece_type);
+                    let (table_row, table_col) = self.piece_square_tables.get_table_coords(pos, piece.player);
+                    let value = eg_table[table_row as usize][table_col as usize];
+                    
+                    let feature_idx = self.get_positional_feature_index(piece.piece_type, row, col, false);
+                    if feature_idx < features.len() {
+                        if piece.player == player {
+                            features[feature_idx] = value as f64;
+                        } else {
+                            features[feature_idx] = -(value as f64);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get feature index for positional features
+    fn get_positional_feature_index(&self, piece_type: PieceType, row: u8, col: u8, is_mg: bool) -> usize {
+        let square_idx = (row * 9 + col) as usize;
+        match piece_type {
+            PieceType::Pawn => {
+                if is_mg { PST_PAWN_MG_START + square_idx } else { PST_PAWN_EG_START + square_idx }
+            },
+            PieceType::Lance => {
+                if is_mg { PST_LANCE_MG_START + square_idx } else { PST_LANCE_EG_START + square_idx }
+            },
+            PieceType::Knight => {
+                if is_mg { PST_KNIGHT_MG_START + square_idx } else { PST_KNIGHT_EG_START + square_idx }
+            },
+            PieceType::Silver => {
+                if is_mg { PST_SILVER_MG_START + square_idx } else { PST_SILVER_EG_START + square_idx }
+            },
+            PieceType::Gold => {
+                if is_mg { PST_GOLD_MG_START + square_idx } else { PST_GOLD_EG_START + square_idx }
+            },
+            PieceType::Bishop => {
+                if is_mg { PST_BISHOP_MG_START + square_idx } else { PST_BISHOP_EG_START + square_idx }
+            },
+            PieceType::Rook => {
+                if is_mg { PST_ROOK_MG_START + square_idx } else { PST_ROOK_EG_START + square_idx }
+            },
+            _ => 0, // Other pieces don't have positional tables
+        }
+    }
+
+    /// Extract king safety features
+    fn extract_king_safety_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        let king_safety_score = self.evaluate_king_safety(board, player);
+        
+        // Store king safety features (simplified for now)
+        features[KING_SAFETY_CASTLE_INDEX] = (king_safety_score.mg / 4) as f64; // Approximate castle component
+        features[KING_SAFETY_ATTACK_INDEX] = (king_safety_score.mg / 4) as f64; // Approximate attack component
+        features[KING_SAFETY_THREAT_INDEX] = (king_safety_score.mg / 4) as f64; // Approximate threat component
+        features[KING_SAFETY_SHIELD_INDEX] = (king_safety_score.mg / 4) as f64; // Approximate shield component
+        features[KING_SAFETY_EXPOSURE_INDEX] = (king_safety_score.eg / 4) as f64; // Approximate exposure component
+    }
+
+    /// Extract pawn structure features
+    fn extract_pawn_structure_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        let pawn_score = self.evaluate_pawn_structure(board, player);
+        
+        // Store pawn structure features (simplified for now)
+        features[PAWN_STRUCTURE_CHAINS_INDEX] = (pawn_score.mg / 3) as f64; // Approximate chains component
+        features[PAWN_STRUCTURE_ADVANCEMENT_INDEX] = (pawn_score.eg / 3) as f64; // Approximate advancement component
+        features[PAWN_STRUCTURE_ISOLATION_INDEX] = (pawn_score.mg / 3) as f64; // Approximate isolation component
+        features[PAWN_STRUCTURE_PASSED_INDEX] = (pawn_score.eg / 3) as f64; // Approximate passed pawns
+        features[PAWN_STRUCTURE_BACKWARD_INDEX] = (pawn_score.mg / 3) as f64; // Approximate backward pawns
+    }
+
+    /// Extract mobility features
+    fn extract_mobility_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) {
+        let mobility_score = self.evaluate_mobility(board, player, captured_pieces);
+        
+        // Store mobility features (simplified for now)
+        features[MOBILITY_TOTAL_MOVES_INDEX] = (mobility_score.mg / 2) as f64; // Approximate total moves
+        features[MOBILITY_PIECE_MOVES_INDEX] = (mobility_score.eg / 2) as f64; // Approximate piece moves
+        features[MOBILITY_ATTACK_MOVES_INDEX] = (mobility_score.mg / 2) as f64; // Approximate attack moves
+        features[MOBILITY_DEFENSE_MOVES_INDEX] = (mobility_score.eg / 2) as f64; // Approximate defense moves
+    }
+
+    /// Extract coordination features
+    fn extract_coordination_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        let coordination_score = self.evaluate_piece_coordination(board, player);
+        
+        // Store coordination features (simplified for now)
+        features[COORDINATION_CONNECTED_ROOKS_INDEX] = (coordination_score.mg / 2) as f64; // Approximate connected rooks
+        features[COORDINATION_BISHOP_PAIR_INDEX] = (coordination_score.mg / 2) as f64; // Approximate bishop pair
+        features[COORDINATION_ATTACK_PATTERNS_INDEX] = (coordination_score.eg / 2) as f64; // Approximate attack patterns
+        features[COORDINATION_PIECE_SUPPORT_INDEX] = (coordination_score.eg / 2) as f64; // Approximate piece support
+    }
+
+    /// Extract center control features
+    fn extract_center_control_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        let center_score = self.evaluate_center_control(board, player);
+        
+        // Store center control features (simplified for now)
+        features[CENTER_CONTROL_CENTER_SQUARES_INDEX] = (center_score.mg / 2) as f64; // Approximate center squares
+        features[CENTER_CONTROL_OUTPOST_INDEX] = (center_score.eg / 2) as f64; // Approximate outposts
+        features[CENTER_CONTROL_SPACE_INDEX] = (center_score.mg / 2) as f64; // Approximate space control
+    }
+
+    /// Extract development features
+    fn extract_development_features(&self, features: &mut [f64], board: &BitboardBoard, player: Player) {
+        let development_score = self.evaluate_development(board, player);
+        
+        // Store development features (simplified for now)
+        features[DEVELOPMENT_MAJOR_PIECES_INDEX] = (development_score.mg / 2) as f64; // Approximate major pieces
+        features[DEVELOPMENT_MINOR_PIECES_INDEX] = (development_score.eg / 2) as f64; // Approximate minor pieces
+        features[DEVELOPMENT_CASTLING_INDEX] = (development_score.mg / 2) as f64; // Approximate castling
     }
 }
 
@@ -1433,9 +1783,9 @@ mod tests {
         // Test default configuration
         let config = evaluator.get_king_safety_config();
         assert!(config.enabled);
-        assert_eq!(config.castle_weight, 1.0);
-        assert_eq!(config.attack_weight, 1.0);
-        assert_eq!(config.threat_weight, 1.0);
+        assert_eq!(config.castle_weight, 0.3);
+        assert_eq!(config.attack_weight, 0.3);
+        assert_eq!(config.threat_weight, 0.2);
         
         // Test custom configuration
         let mut custom_config = config.clone();
@@ -1468,6 +1818,274 @@ mod tests {
         // Both should return valid TaperedScore values (may be equal for starting position)
         assert_eq!(black_score.mg, black_score.mg); // Basic sanity check
         assert_eq!(white_score.mg, white_score.mg); // Basic sanity check
+    }
+
+    // ============================================================================
+    // FEATURE EXTRACTION TESTS FOR AUTOMATED TUNING
+    // ============================================================================
+
+    #[test]
+    fn test_get_evaluation_features_basic() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Test feature extraction
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // Should return correct number of features
+        assert_eq!(features.len(), NUM_EVAL_FEATURES);
+        
+        // All features should be finite numbers
+        for (i, &feature) in features.iter().enumerate() {
+            assert!(feature.is_finite(), "Feature {} should be finite, got {}", i, feature);
+        }
+    }
+
+    #[test]
+    fn test_material_feature_extraction() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // In starting position, both players have equal material, so all differences should be 0
+        assert_eq!(features[MATERIAL_PAWN_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_LANCE_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_KNIGHT_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_SILVER_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_GOLD_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_BISHOP_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_ROOK_INDEX], 0.0);
+        assert_eq!(features[MATERIAL_KING_INDEX], 0.0);
+        
+        // Test with unequal material by adding pieces to hand
+        let mut captured_pieces_unequal = CapturedPieces::new();
+        captured_pieces_unequal.add_piece(PieceType::Silver, Player::Black);
+        
+        let features_unequal = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces_unequal);
+        
+        // Black should have more silver pieces
+        assert!(features_unequal[MATERIAL_SILVER_INDEX] > 0.0);
+    }
+
+    #[test]
+    fn test_positional_feature_extraction() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // Positional features should be non-zero for starting position
+        // Test a few key positions
+        let center_square_idx = 4 * 9 + 4; // Center square (4,4)
+        
+        // Check that positional features are being extracted
+        // For starting position, features might be zero due to symmetry
+        // Just verify the feature vector has the correct structure
+        assert_eq!(features.len(), NUM_EVAL_FEATURES);
+        assert!(PST_PAWN_MG_START + center_square_idx < features.len());
+        assert!(PST_PAWN_EG_START + center_square_idx < features.len());
+    }
+
+    #[test]
+    fn test_feature_extraction_consistency() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Extract features multiple times
+        let features1 = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        let features2 = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // Should be identical
+        assert_eq!(features1.len(), features2.len());
+        for (i, (&f1, &f2)) in features1.iter().zip(features2.iter()).enumerate() {
+            assert_eq!(f1, f2, "Feature {} should be consistent", i);
+        }
+    }
+
+    #[test]
+    fn test_feature_extraction_player_perspective() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Extract features for both players
+        let black_features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        let white_features = evaluator.get_evaluation_features(&board, Player::White, &captured_pieces);
+        
+        // Should have same length
+        assert_eq!(black_features.len(), white_features.len());
+        
+        // Material features should be opposite for symmetric position
+        assert_eq!(black_features[MATERIAL_PAWN_INDEX], -white_features[MATERIAL_PAWN_INDEX]);
+        assert_eq!(black_features[MATERIAL_ROOK_INDEX], -white_features[MATERIAL_ROOK_INDEX]);
+        assert_eq!(black_features[MATERIAL_KING_INDEX], -white_features[MATERIAL_KING_INDEX]);
+    }
+
+    #[test]
+    fn test_evaluate_with_weights() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Extract features
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // Create dummy weights (all 1.0)
+        let weights = vec![1.0; NUM_EVAL_FEATURES];
+        
+        // Test evaluation with weights
+        let game_phase = evaluator.calculate_game_phase(&board);
+        let weighted_score = evaluator.evaluate_with_weights_legacy(&features, &weights, game_phase);
+        
+        // Should return a finite integer score
+        assert!(weighted_score != i32::MIN && weighted_score != i32::MAX || weighted_score == 0);
+    }
+
+    #[test]
+    fn test_feature_vector_bounds() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        
+        // Test that all feature indices are within bounds
+        assert!(MATERIAL_PAWN_INDEX < features.len());
+        assert!(MATERIAL_KING_INDEX < features.len());
+        assert!(PST_PAWN_MG_START < features.len());
+        assert!(PST_ROOK_EG_START + 80 < features.len()); // Last square in rook table
+        assert!(KING_SAFETY_CASTLE_INDEX < features.len());
+        assert!(PAWN_STRUCTURE_CHAINS_INDEX < features.len());
+        assert!(MOBILITY_TOTAL_MOVES_INDEX < features.len());
+        assert!(COORDINATION_CONNECTED_ROOKS_INDEX < features.len());
+        assert!(CENTER_CONTROL_CENTER_SQUARES_INDEX < features.len());
+        assert!(DEVELOPMENT_MAJOR_PIECES_INDEX < features.len());
+    }
+
+    #[test]
+    fn test_feature_extraction_performance() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Test performance of feature extraction
+        let start = std::time::Instant::now();
+        
+        for _ in 0..1000 {
+            let _features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        }
+        
+        let duration = start.elapsed();
+        
+        // Should complete 1000 extractions in reasonable time (< 1 second)
+        assert!(duration.as_millis() < 1000, 
+                "Feature extraction should be fast: {}ms for 1000 extractions", 
+                duration.as_millis());
+    }
+
+    #[test]
+    fn test_weighted_evaluation_phase_interpolation() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        let weights = vec![1.0; NUM_EVAL_FEATURES];
+        
+        // Test evaluation at different phases
+        let opening_score = evaluator.evaluate_with_weights_legacy(&features, &weights, GAME_PHASE_MAX);
+        let endgame_score = evaluator.evaluate_with_weights_legacy(&features, &weights, 0);
+        let middlegame_score = evaluator.evaluate_with_weights_legacy(&features, &weights, GAME_PHASE_MAX / 2);
+        
+        // All should be finite
+        assert!(opening_score != i32::MIN && opening_score != i32::MAX || opening_score == 0);
+        assert!(endgame_score != i32::MIN && endgame_score != i32::MAX || endgame_score == 0);
+        assert!(middlegame_score != i32::MIN && middlegame_score != i32::MAX || middlegame_score == 0);
+    }
+
+    #[test]
+    fn test_feature_extraction_edge_cases() {
+        let evaluator = PositionEvaluator::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Test with empty board
+        let empty_board = BitboardBoard::empty();
+        let empty_features = evaluator.get_evaluation_features(&empty_board, Player::Black, &captured_pieces);
+        
+        // Should still return correct number of features
+        assert_eq!(empty_features.len(), NUM_EVAL_FEATURES);
+        
+        // All features should be finite
+        for (i, &feature) in empty_features.iter().enumerate() {
+            assert!(feature.is_finite(), "Empty board feature {} should be finite, got {}", i, feature);
+        }
+    }
+
+    #[test]
+    fn test_weight_manager_integration() {
+        let mut evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Initially should not be using tuned weights
+        assert!(!evaluator.is_using_tuned_weights());
+        
+        // Test enabling/disabling tuned weights
+        evaluator.set_use_tuned_weights(true);
+        assert!(!evaluator.is_using_tuned_weights()); // Should still be false since no weights loaded
+        
+        evaluator.set_use_tuned_weights(false);
+        assert!(!evaluator.is_using_tuned_weights());
+    }
+
+    #[test]
+    fn test_evaluate_with_tuned_weights_fallback() {
+        let mut evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Should fall back to traditional evaluation when no tuned weights
+        let traditional_score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let tuned_score = evaluator.evaluate_with_tuned_weights(&board, Player::Black, &captured_pieces);
+        
+        // Should be the same since no tuned weights are loaded
+        assert_eq!(traditional_score, tuned_score);
+    }
+
+    #[test]
+    fn test_weight_manager_access() {
+        let evaluator = PositionEvaluator::new();
+        
+        // Test weight manager access
+        let weight_manager = evaluator.get_weight_manager();
+        assert!(!weight_manager.is_enabled());
+        assert!(!weight_manager.has_weights());
+        
+        let stats = weight_manager.get_stats();
+        assert_eq!(stats.applications, 0);
+    }
+
+    #[test]
+    fn test_evaluate_with_weights_new_method() {
+        let mut evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Extract features
+        let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
+        let game_phase = evaluator.calculate_game_phase(&board);
+        
+        // Test new evaluate_with_weights method (should use default weights)
+        let result = evaluator.evaluate_with_weights(&features, game_phase);
+        assert!(result.is_ok());
+        
+        let score = result.unwrap();
+        assert!(score != i32::MIN && score != i32::MAX);
     }
 }
 

@@ -15,6 +15,8 @@ pub mod opening_book;
 pub mod opening_book_converter;
 pub mod time_utils;
 pub mod debug_utils;
+pub mod tuning;
+pub mod weights;
 
 // Advanced evaluation modules
 pub mod king_safety {

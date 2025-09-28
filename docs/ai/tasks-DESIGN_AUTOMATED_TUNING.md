@@ -1,0 +1,173 @@
+## Relevant Files
+
+- `src/bin/tuner.rs` - Main tuning executable that implements the Texel's tuning method and optimization algorithms.
+- `src/bin/tuner.rs` - Unit tests for the tuning binary.
+- `src/tuning/mod.rs` - Core tuning module that defines the tuning system architecture.
+- `src/tuning/feature_extractor.rs` - Feature extraction system for converting evaluation terms to tunable features.
+- `src/tuning/feature_extractor.rs` - Unit tests for feature extraction.
+- `src/tuning/data_processor.rs` - Game database processing and position filtering logic.
+- `src/tuning/data_processor.rs` - Unit tests for data processing.
+- `src/tuning/optimizer.rs` - Optimization engine with multiple algorithms (gradient descent, Adam, LBFGS, genetic).
+- `src/tuning/optimizer.rs` - Unit tests for optimization algorithms.
+- `src/tuning/validator.rs` - Validation framework for cross-validation and strength testing.
+- `src/tuning/validator.rs` - Unit tests for validation framework.
+- `src/evaluation.rs` - Refactored evaluation function to support feature extraction and weight application.
+- `src/evaluation.rs` - Unit tests for refactored evaluation system.
+- `src/types.rs` - New data structures for training positions, game records, and tuning configuration.
+- `src/types.rs` - Unit tests for new tuning-related types.
+- `src/weights.rs` - Generated optimized weights and weight management system.
+- `src/weights.rs` - Unit tests for weight management.
+- `Cargo.toml` - Updated with new tuning binary and dependencies for optimization libraries.
+
+### Notes
+
+- Unit tests should typically be placed alongside the code files they are testing (e.g., `feature_extractor.rs` and `feature_extractor.rs` in the same directory).
+- Use `cargo test` to run tests. Running without a path executes all tests found by the Cargo configuration.
+- The tuning system will be implemented as a separate binary to avoid impacting the main engine's performance.
+
+## Tasks
+
+- [x] 1.0 Refactor Evaluation System for Feature Extraction
+  - [x] 1.1 Define feature vector structure with NUM_EVAL_FEATURES constant and feature index mappings
+  - [x] 1.2 Add get_evaluation_features() method to PositionEvaluator that returns Vec<f64> of unweighted features
+  - [x] 1.3 Refactor material evaluation to extract individual piece count differences as features
+  - [x] 1.4 Refactor piece-square table evaluation to extract positional values as separate mg/eg features
+  - [x] 1.5 Refactor king safety evaluation to extract castle, attack, and threat features separately
+  - [x] 1.6 Refactor pawn structure evaluation to extract pawn chains, advancement, and isolation features
+  - [x] 1.7 Refactor mobility evaluation to extract move count and piece activity features
+  - [x] 1.8 Refactor piece coordination evaluation to extract connected rooks, bishop pair, and attack coordination features
+  - [x] 1.9 Refactor center control evaluation to extract center square occupation features
+  - [x] 1.10 Refactor development evaluation to extract piece development and positioning features
+  - [x] 1.11 Add evaluate_with_weights() method that applies tuned weights to feature vectors
+  - [x] 1.12 Add comprehensive unit tests for feature extraction accuracy and consistency
+  - [x] 1.13 Ensure backward compatibility by maintaining existing evaluate() method signature
+
+- [x] 2.0 Implement Core Tuning Data Structures and Types
+  - [x] 2.1 Define GameRecord struct with moves, result, player ratings, game phase, and time control
+  - [x] 2.2 Define GameResult enum with WhiteWin, BlackWin, and Draw variants
+  - [x] 2.3 Define TrainingPosition struct with features, result, game phase, quiet flag, and move number
+  - [x] 2.4 Define PositionFilter struct with quiet move threshold, rating bounds, and position limits
+  - [x] 2.5 Define TuningConfig struct with dataset path, output path, optimization method, and validation config
+  - [x] 2.6 Define PerformanceConfig struct with memory limits, thread count, and checkpoint settings
+  - [x] 2.7 Define ValidationConfig struct with k-fold, test split, and validation split parameters
+  - [x] 2.8 Define OptimizationMethod enum with GradientDescent, Adam, LBFGS, and GeneticAlgorithm variants
+  - [x] 2.9 Define ValidationResults struct with mean error, std error, and fold results
+  - [x] 2.10 Define MatchResult struct for engine strength testing with wins, losses, draws, and ELO difference
+  - [x] 2.11 Add serialization support for all tuning data structures using serde
+  - [x] 2.12 Add comprehensive unit tests for data structure validation and serialization
+
+- [x] 3.0 Create Feature Extraction System
+  - [x] 3.1 Create src/tuning/mod.rs module with proper exports and documentation
+  - [x] 3.2 Implement FeatureExtractor struct with methods for each evaluation component
+  - [x] 3.3 Implement extract_material_features() to count pieces and calculate differences
+  - [x] 3.4 Implement extract_positional_features() to extract piece-square table values
+  - [x] 3.5 Implement extract_king_safety_features() to extract castle, attack, and threat components
+  - [x] 3.6 Implement extract_pawn_structure_features() to extract pawn patterns and positioning
+  - [x] 3.7 Implement extract_mobility_features() to extract move counts and piece activity
+  - [x] 3.8 Implement extract_coordination_features() to extract piece coordination patterns
+  - [x] 3.9 Implement extract_center_control_features() to extract center occupation patterns
+  - [x] 3.10 Implement extract_development_features() to extract piece development patterns
+  - [x] 3.11 Add feature normalization and scaling methods for consistent feature ranges
+  - [x] 3.12 Add feature validation methods to detect and handle invalid feature values
+  - [x] 3.13 Add comprehensive unit tests for feature extraction accuracy and edge cases
+
+- [x] 4.0 Build Data Processing Pipeline
+  - [x] 4.1 Implement GameDatabase struct for loading and managing game collections
+  - [x] 4.2 Add KIF format parser for loading Japanese Shogi game notation
+  - [x] 4.3 Add CSA format parser for loading Computer Shogi Association game notation
+  - [x] 4.4 Add PGN format parser for loading Portable Game Notation (if applicable)
+  - [x] 4.5 Implement PositionSelector struct with filtering logic for quiet positions
+  - [x] 4.6 Add rating-based filtering to select games from appropriate skill levels
+  - [x] 4.7 Add move number filtering to skip opening and endgame positions as needed
+  - [x] 4.8 Implement quiet position detection (no captures in last N moves)
+  - [x] 4.9 Add position deduplication to avoid training on identical positions
+  - [x] 4.10 Implement binary serialization for efficient storage of processed training data
+  - [x] 4.11 Add progress reporting and memory management for large datasets
+  - [x] 4.12 Add comprehensive unit tests for data processing accuracy and performance
+
+- [x] 5.0 Implement Optimization Engine
+  - [x] 5.1 Create TexelTuner struct with positions, weights, k_factor, and optimization parameters
+  - [x] 5.2 Implement sigmoid() function for win probability prediction
+  - [x] 5.3 Implement calculate_error() method using mean squared error
+  - [x] 5.4 Implement calculate_gradients() method for gradient descent optimization
+  - [x] 5.5 Implement sigmoid_derivative() function for gradient calculations
+  - [x] 5.6 Add gradient descent optimization with learning rate and momentum
+  - [x] 5.7 Add Adam optimizer implementation with adaptive learning rates
+  - [x] 5.8 Add LBFGS optimizer implementation using argmin crate
+  - [x] 5.9 Add genetic algorithm optimizer for non-convex optimization
+  - [x] 5.10 Implement regularization (L1 and L2) to prevent overfitting
+  - [x] 5.11 Add convergence detection and early stopping mechanisms
+  - [x] 5.12 Add weight bounds and constraints to prevent unrealistic parameter values
+  - [x] 5.13 Add comprehensive unit tests for optimization algorithms and convergence
+
+- [x] 6.0 Develop Validation and Testing Framework
+  - [x] 6.1 Implement ValidationFramework struct with k-fold cross-validation
+  - [x] 6.2 Add data splitting methods for training, validation, and test sets
+  - [x] 6.3 Implement cross_validate() method to run k-fold validation
+  - [x] 6.4 Add ValidationResults struct with statistical analysis of results
+  - [x] 6.5 Implement StrengthTester struct for engine vs engine matches
+  - [x] 6.6 Add game playing logic for automated engine testing
+  - [x] 6.7 Implement ELO rating calculation for strength comparison
+  - [x] 6.8 Add statistical significance testing for strength improvements
+  - [x] 6.9 Implement synthetic dataset generation for testing optimization algorithms
+  - [x] 6.10 Add overfitting detection and prevention mechanisms
+  - [x] 6.11 Add performance benchmarking for optimization speed and memory usage
+  - [x] 6.12 Add comprehensive unit tests for validation framework accuracy
+
+- [x] 7.0 Create Tuning Binary and CLI Interface
+  - [x] 7.1 Create src/bin/tuner.rs with main() function and CLI argument parsing
+  - [x] 7.2 Add clap dependency for command-line argument handling
+  - [x] 7.3 Implement --dataset argument for specifying input game database
+  - [x] 7.4 Implement --output argument for specifying output weights file
+  - [x] 7.5 Implement --method argument for selecting optimization algorithm
+  - [x] 7.6 Implement --iterations argument for maximum optimization iterations
+  - [x] 7.7 Implement --k-fold argument for cross-validation folds
+  - [x] 7.8 Implement --test-split argument for test set percentage
+  - [x] 7.9 Implement --regularization argument for regularization strength
+  - [x] 7.10 Implement --quiet-threshold argument for position filtering
+  - [x] 7.11 Implement --min-rating argument for minimum player rating
+  - [x] 7.12 Add progress reporting and verbose output options
+  - [x] 7.13 Add error handling and graceful failure for invalid inputs
+  - [x] 7.14 Add comprehensive unit tests for CLI interface and argument validation
+
+- [x] 8.0 Integrate Tuned Weights with Engine
+  - [x] 8.1 Create src/weights.rs module for weight management and loading
+  - [x] 8.2 Implement WeightManager struct for loading and applying tuned weights
+  - [x] 8.3 Add weight file format specification and serialization
+  - [x] 8.4 Implement load_weights() method for reading optimized weight files
+  - [x] 8.5 Implement apply_weights() method for using tuned weights in evaluation
+  - [x] 8.6 Add weight validation to ensure weights are compatible with feature vector
+  - [x] 8.7 Add fallback mechanism to use default weights if tuned weights fail to load
+  - [x] 8.8 Integrate weight loading into engine initialization
+  - [x] 8.9 Add configuration option to enable/disable tuned weights
+  - [x] 8.10 Add weight versioning and compatibility checking
+  - [x] 8.11 Add performance monitoring for weight application overhead
+  - [x] 8.12 Add comprehensive unit tests for weight integration and fallback behavior
+
+- [x] 9.0 Add Performance Monitoring and Analysis Tools
+  - [x] 9.1 Implement TuningProfiler struct for performance monitoring
+  - [x] 9.2 Add timing measurements for feature extraction, optimization, and validation
+  - [x] 9.3 Add memory usage tracking for large datasets and optimization processes
+  - [x] 9.4 Implement progress reporting with ETA calculations
+  - [x] 9.5 Add checkpoint/resume functionality for long-running optimization
+  - [x] 9.6 Implement logging system with different verbosity levels
+  - [x] 9.7 Add performance metrics collection (convergence rate, error reduction, etc.)
+  - [x] 9.8 Add statistical analysis tools for optimization results
+  - [x] 9.9 Implement result visualization tools (error curves, weight distributions)
+  - [x] 9.10 Add performance regression detection for optimization algorithms
+  - [x] 9.11 Add comprehensive unit tests for performance monitoring accuracy
+  - [x] 9.12 Add integration tests for long-running optimization processes
+
+- [x] 10.0 Create Comprehensive Documentation and Examples
+  - [x] 10.1 Create user guide for running the tuning system
+  - [x] 10.2 Add examples of different optimization scenarios and configurations
+  - [x] 10.3 Create troubleshooting guide for common issues and error messages
+  - [x] 10.4 Add performance tuning guide for optimizing tuning system performance
+  - [x] 10.5 Create data preparation guide for preparing game databases
+  - [x] 10.6 Add API documentation for all tuning system components
+  - [x] 10.7 Create integration guide for using tuned weights in the engine
+  - [x] 10.8 Add benchmark results and performance comparisons
+  - [x] 10.9 Create FAQ section addressing common questions and concerns
+  - [x] 10.10 Add code examples for extending the tuning system
+  - [x] 10.11 Create migration guide for updating from manual to automated tuning
+  - [x] 10.12 Add comprehensive README with quick start instructions

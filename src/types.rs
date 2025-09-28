@@ -586,6 +586,101 @@ pub const PIECE_PHASE_VALUES: [(PieceType, i32); 6] = [
     (PieceType::Lance, 1),
 ];
 
+// ============================================================================
+// FEATURE EXTRACTION CONSTANTS FOR AUTOMATED TUNING
+// ============================================================================
+
+/// Total number of evaluation features for tuning
+pub const NUM_EVAL_FEATURES: usize = 2000;
+
+/// Number of middlegame features (first half of feature vector)
+pub const NUM_MG_FEATURES: usize = NUM_EVAL_FEATURES / 2;
+
+/// Number of endgame features (second half of feature vector)
+pub const NUM_EG_FEATURES: usize = NUM_EVAL_FEATURES / 2;
+
+// Material feature indices (14 piece types × 2 players = 28 features)
+pub const MATERIAL_PAWN_INDEX: usize = 0;
+pub const MATERIAL_LANCE_INDEX: usize = 1;
+pub const MATERIAL_KNIGHT_INDEX: usize = 2;
+pub const MATERIAL_SILVER_INDEX: usize = 3;
+pub const MATERIAL_GOLD_INDEX: usize = 4;
+pub const MATERIAL_BISHOP_INDEX: usize = 5;
+pub const MATERIAL_ROOK_INDEX: usize = 6;
+pub const MATERIAL_KING_INDEX: usize = 7;
+pub const MATERIAL_PROMOTED_PAWN_INDEX: usize = 8;
+pub const MATERIAL_PROMOTED_LANCE_INDEX: usize = 9;
+pub const MATERIAL_PROMOTED_KNIGHT_INDEX: usize = 10;
+pub const MATERIAL_PROMOTED_SILVER_INDEX: usize = 11;
+pub const MATERIAL_PROMOTED_BISHOP_INDEX: usize = 12;
+pub const MATERIAL_PROMOTED_ROOK_INDEX: usize = 13;
+pub const MATERIAL_WHITE_PAWN_INDEX: usize = 14;
+pub const MATERIAL_WHITE_LANCE_INDEX: usize = 15;
+pub const MATERIAL_WHITE_KNIGHT_INDEX: usize = 16;
+pub const MATERIAL_WHITE_SILVER_INDEX: usize = 17;
+pub const MATERIAL_WHITE_GOLD_INDEX: usize = 18;
+pub const MATERIAL_WHITE_BISHOP_INDEX: usize = 19;
+pub const MATERIAL_WHITE_ROOK_INDEX: usize = 20;
+pub const MATERIAL_WHITE_KING_INDEX: usize = 21;
+pub const MATERIAL_WHITE_PROMOTED_PAWN_INDEX: usize = 22;
+pub const MATERIAL_WHITE_PROMOTED_LANCE_INDEX: usize = 23;
+pub const MATERIAL_WHITE_PROMOTED_KNIGHT_INDEX: usize = 24;
+pub const MATERIAL_WHITE_PROMOTED_SILVER_INDEX: usize = 25;
+pub const MATERIAL_WHITE_PROMOTED_BISHOP_INDEX: usize = 26;
+pub const MATERIAL_WHITE_PROMOTED_ROOK_INDEX: usize = 27;
+
+// Positional features (piece-square tables)
+pub const PST_PAWN_MG_START: usize = 28;
+pub const PST_PAWN_EG_START: usize = PST_PAWN_MG_START + 81;
+pub const PST_LANCE_MG_START: usize = PST_PAWN_EG_START + 81;
+pub const PST_LANCE_EG_START: usize = PST_LANCE_MG_START + 81;
+pub const PST_KNIGHT_MG_START: usize = PST_LANCE_EG_START + 81;
+pub const PST_KNIGHT_EG_START: usize = PST_KNIGHT_MG_START + 81;
+pub const PST_SILVER_MG_START: usize = PST_KNIGHT_EG_START + 81;
+pub const PST_SILVER_EG_START: usize = PST_SILVER_MG_START + 81;
+pub const PST_GOLD_MG_START: usize = PST_SILVER_EG_START + 81;
+pub const PST_GOLD_EG_START: usize = PST_GOLD_MG_START + 81;
+pub const PST_BISHOP_MG_START: usize = PST_GOLD_EG_START + 81;
+pub const PST_BISHOP_EG_START: usize = PST_BISHOP_MG_START + 81;
+pub const PST_ROOK_MG_START: usize = PST_BISHOP_EG_START + 81;
+pub const PST_ROOK_EG_START: usize = PST_ROOK_MG_START + 81;
+
+// King safety features
+pub const KING_SAFETY_CASTLE_INDEX: usize = 500;
+pub const KING_SAFETY_ATTACK_INDEX: usize = 501;
+pub const KING_SAFETY_THREAT_INDEX: usize = 502;
+pub const KING_SAFETY_SHIELD_INDEX: usize = 503;
+pub const KING_SAFETY_EXPOSURE_INDEX: usize = 504;
+
+// Pawn structure features
+pub const PAWN_STRUCTURE_CHAINS_INDEX: usize = 600;
+pub const PAWN_STRUCTURE_ADVANCEMENT_INDEX: usize = 601;
+pub const PAWN_STRUCTURE_ISOLATION_INDEX: usize = 602;
+pub const PAWN_STRUCTURE_PASSED_INDEX: usize = 603;
+pub const PAWN_STRUCTURE_BACKWARD_INDEX: usize = 604;
+
+// Mobility features
+pub const MOBILITY_TOTAL_MOVES_INDEX: usize = 700;
+pub const MOBILITY_PIECE_MOVES_INDEX: usize = 701;
+pub const MOBILITY_ATTACK_MOVES_INDEX: usize = 702;
+pub const MOBILITY_DEFENSE_MOVES_INDEX: usize = 703;
+
+// Coordination features
+pub const COORDINATION_CONNECTED_ROOKS_INDEX: usize = 800;
+pub const COORDINATION_BISHOP_PAIR_INDEX: usize = 801;
+pub const COORDINATION_ATTACK_PATTERNS_INDEX: usize = 802;
+pub const COORDINATION_PIECE_SUPPORT_INDEX: usize = 803;
+
+// Center control features
+pub const CENTER_CONTROL_CENTER_SQUARES_INDEX: usize = 900;
+pub const CENTER_CONTROL_OUTPOST_INDEX: usize = 901;
+pub const CENTER_CONTROL_SPACE_INDEX: usize = 902;
+
+// Development features
+pub const DEVELOPMENT_MAJOR_PIECES_INDEX: usize = 1000;
+pub const DEVELOPMENT_MINOR_PIECES_INDEX: usize = 1001;
+pub const DEVELOPMENT_CASTLING_INDEX: usize = 1002;
+
 /// Configuration for advanced king safety evaluation
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KingSafetyConfig {

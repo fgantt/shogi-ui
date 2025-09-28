@@ -332,9 +332,9 @@ mod tests {
     fn test_king_safety_evaluator_creation() {
         let evaluator = KingSafetyEvaluator::new();
         assert!(evaluator.get_config().enabled);
-        assert_eq!(evaluator.get_config().castle_weight, 1.0);
-        assert_eq!(evaluator.get_config().attack_weight, 1.0);
-        assert_eq!(evaluator.get_config().threat_weight, 1.0);
+        assert_eq!(evaluator.get_config().castle_weight, 0.3);
+        assert_eq!(evaluator.get_config().attack_weight, 0.3);
+        assert_eq!(evaluator.get_config().threat_weight, 0.2);
     }
 
     #[test]
@@ -373,8 +373,9 @@ mod tests {
         let board = BitboardBoard::new();
         let score = evaluator.evaluate(&board, Player::Black);
         
-        // Should return a score (even if placeholder)
-        assert_eq!(score, TaperedScore::default());
+        // Should return a score (king safety evaluation is working)
+        assert_ne!(score, TaperedScore::default());
+        assert!(score.mg >= 0 && score.eg >= 0);
     }
 
     #[test]
