@@ -138,8 +138,6 @@ function csaToUsiMove(csaMove: string): string {
         // Check if this is a promotion move
         // For black pieces: ranks 1-3 are promotion zone
         // For white pieces: ranks 7-9 are promotion zone
-        const fromRank = parseInt(coordinates[1]);
-        const toRank = parseInt(coordinates[3]);
         
         // Determine if this is a promotion move:
         // - Moving FROM outside promotion zone (ranks 4+) TO promotion zone (ranks 1-3)
@@ -456,17 +454,11 @@ export function parseCSA(csaText: string): ParsedGame {
         // Version - skip
         continue;
       } else if (trimmed.startsWith('N+')) {
-        metadata.blackPlayer = trimmed.substring(2);
+        metadata.player1Name = trimmed.substring(2);
       } else if (trimmed.startsWith('N-')) {
-        metadata.whitePlayer = trimmed.substring(2);
-      } else if (trimmed.startsWith('$EVENT:')) {
-        metadata.event = trimmed.substring(7);
-      } else if (trimmed.startsWith('$SITE:')) {
-        metadata.site = trimmed.substring(6);
+        metadata.player2Name = trimmed.substring(2);
       } else if (trimmed.startsWith('$START_TIME:')) {
         metadata.date = trimmed.substring(12);
-      } else if (trimmed.startsWith('$OPENING:')) {
-        metadata.opening = trimmed.substring(9);
       } else if (trimmed.match(/^P\d+/) || trimmed === '+' || trimmed === '-') {
         // Board position or starting player - simplified handling
         continue;
@@ -520,18 +512,14 @@ export function parseKIF(kifText: string): ParsedGame {
         metadata.date = trimmed.substring(5);
       } else if (trimmed.startsWith('終了日時：')) {
         // End date - could be used for game duration
-      } else if (trimmed.startsWith('棋戦：')) {
-        metadata.event = trimmed.substring(3);
-      } else if (trimmed.startsWith('場所：')) {
-        metadata.site = trimmed.substring(3);
       } else if (trimmed.startsWith('持ち時間：')) {
         metadata.timeControl = trimmed.substring(5);
       } else if (trimmed.startsWith('先手：')) {
-        metadata.blackPlayer = trimmed.substring(3);
+        metadata.player1Name = trimmed.substring(3);
       } else if (trimmed.startsWith('後手：')) {
-        metadata.whitePlayer = trimmed.substring(3);
+        metadata.player2Name = trimmed.substring(3);
       } else if (trimmed.startsWith('戦型：')) {
-        metadata.opening = trimmed.substring(3);
+        // Opening type - could be stored in comments if needed
       } else if (trimmed.startsWith('手合割：')) {
         // Game type - usually "平手" (even game)
       } else if (trimmed.startsWith('手数')) {
