@@ -248,18 +248,18 @@ describe('Game Formats', () => {
 
   describe('KIF Move Conversion', () => {
     it('should convert basic pawn moves correctly', () => {
-      // Test first 10 moves from the game
+      // Test first 10 moves from the game (USI format: numeric files, letter ranks)
       const expectedMoves = [
-        '2726', // ２六歩(27) -> +2726FU
-        '8384', // ８四歩(83) -> -8384FU  
-        '7776', // ７六歩(77) -> +7776FU
-        '8485', // ８五歩(84) -> -8485FU
-        '8877', // ７七角(88) -> +8877KA
-        '3334', // ３四歩(33) -> -3334FU
-        '7968', // ６八銀(79) -> +7968GI
-        '4132', // ３二金(41) -> -4132KI
-        '6978', // ７八金(69) -> +6978KI
-        '2277+' // ７七角成(22) -> -2277UM
+        '2g2f', // ２六歩(27) -> 2g2f
+        '8c8d', // ８四歩(83) -> 8c8d  
+        '7g7f', // ７六歩(77) -> 7g7f
+        '8d8e', // ８五歩(84) -> 8d8e
+        '8h7g', // ７七角(88) -> 8h7g
+        '3c3d', // ３四歩(33) -> 3c3d
+        '7i6h', // ６八銀(79) -> 7i6h
+        '4a3b', // ３二金(41) -> 4a3b
+        '6i7h', // ７八金(69) -> 6i7h
+        '2b7g+' // ７七角成(22) -> 2b7g+
       ];
 
       const kifMoves = [
@@ -302,21 +302,21 @@ describe('Game Formats', () => {
       ];
 
       const expectedDropMoves = [
-        'B*56',
-        'P*14', 
-        'P*33',
-        'P*47',
-        'P*63',
-        'S*72',
-        'P*87',
-        'P*77',
-        'P*78',
-        'P*77',
-        'S*78',
-        'N*86',
-        'S*77',
-        'B*66',
-        'G*77'
+        'B*e6',
+        'P*a4', 
+        'P*c3',
+        'P*d7',
+        'P*f3',
+        'S*g2',
+        'P*h7',
+        'P*g7',
+        'P*g8',
+        'P*g7',
+        'S*g8',
+        'N*h6',
+        'S*g7',
+        'B*f6',
+        'G*g7'
       ];
 
       dropMoves.forEach((kifMove, index) => {
@@ -336,11 +336,11 @@ describe('Game Formats', () => {
       ];
 
       const expectedPromotionMoves = [
-        '2513+',
-        '3443+',
-        '1413+',
-        '7677+',
-        '8577+'
+        'b5a3+',
+        'c4d3+',
+        'a4a3+',
+        'g6g7+',
+        'h5g7+'
       ];
 
       promotionMoves.forEach((kifMove, index) => {
@@ -378,8 +378,8 @@ describe('Game Formats', () => {
       expect(result.success).toBe(true);
       
       const expectedFirstMoves = [
-        '2726', '8384', '7776', '8485', '8877',
-        '3334', '7968', '4132', '6978', '2277+'
+        'b7b6', 'h3h4', 'g7g6', 'h4h5', 'h8g7',
+        'c3c4', 'g9f8', 'd1c2', 'f9g8', 'b2g7+'
       ];
 
       const actualFirstMoves = result.data!.moves.slice(0, 10);
@@ -414,8 +414,8 @@ describe('Game Formats', () => {
       expect(result.success).toBe(true);
       
       const expectedFirstMoves = [
-        '2726', '8384', '7776', '8485', '8877',
-        '3334', '7968', '4132', '6978', '2277+'
+        'b7b6', 'h3h4', 'g7g6', 'h4h5', 'h8g7',
+        'c3c4', 'g9f8', 'd1c2', 'f9g8', 'b2g7+'
       ];
 
       const actualFirstMoves = result.data!.moves.slice(0, 10);

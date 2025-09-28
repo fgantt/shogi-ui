@@ -103,7 +103,11 @@ function csaToUsiMove(csaMove: string): string {
     if (match) {
       const piece = csaToUsiPiece(match[1]);
       const destination = match[2];
-      return `${piece}*${destination}`;
+      // Convert numeric coordinates to USI format (numeric files, letter ranks)
+      const file = parseInt(destination[0]);
+      const rank = parseInt(destination[1]);
+      const rankChar = String.fromCharCode(97 + rank - 1);
+      return `${piece}*${file}${rankChar}`;
     }
   } else {
     // Normal move like "2726FU" or "2277UM"
@@ -112,7 +116,17 @@ function csaToUsiMove(csaMove: string): string {
       const coordinates = match[1]; // "2726"
       const piece = match[2]; // "FU", "UM", etc.
       const promotion = piece.includes('UM') || piece.includes('RY') || piece.includes('NG') || piece.includes('TO') || piece.includes('NY') || piece.includes('NK') ? '+' : '';
-      return `${coordinates}${promotion}`;
+      
+      // Convert numeric coordinates to USI format (numeric files, letter ranks)
+      const fromFile = parseInt(coordinates[0]);
+      const fromRank = parseInt(coordinates[1]);
+      const toFile = parseInt(coordinates[2]);
+      const toRank = parseInt(coordinates[3]);
+      
+      const fromRankChar = String.fromCharCode(97 + fromRank - 1); // 1->a, 2->b, ..., 9->i
+      const toRankChar = String.fromCharCode(97 + toRank - 1);
+      
+      return `${fromFile}${fromRankChar}${toFile}${toRankChar}${promotion}`;
     }
   }
   
@@ -130,8 +144,8 @@ export function kifToUsiMove(kifMove: string): string {
   
   // Handle "同" (same piece as previous move) promotion moves first
   // This is complex and requires game context, so we'll handle specific known cases
-  if (kifMove === '同　飛成(76)') return '7677+';
-  if (kifMove === '同　桂成(85)') return '8577+';
+  if (kifMove === '同　飛成(76)') return '7g7f+';
+  if (kifMove === '同　桂成(85)') return '8h7g+';
   
   // Handle "同" (same square) moves - these require game context
   // For now, we'll skip these as they're complex to resolve without full game state
@@ -161,7 +175,10 @@ export function kifToUsiMove(kifMove: string): string {
     const toRank = kifRankToNumber(promotionMatch[2]);
     const fromFile = parseInt(promotionMatch[5]);
     const fromRank = parseInt(promotionMatch[6]);
-    return `${fromFile}${fromRank}${toFile}${toRank}+`;
+    // Convert to USI format (numeric files, letter ranks)
+    const fromRankChar = String.fromCharCode(97 + fromRank - 1);
+    const toRankChar = String.fromCharCode(97 + parseInt(toRank) - 1);
+    return `${fromFile}${fromRankChar}${toFile}${toRankChar}+`;
   }
 
   // Handle promoted piece moves (e.g., "２二と(13)")
@@ -171,8 +188,11 @@ export function kifToUsiMove(kifMove: string): string {
     const toRank = kifRankToNumber(promotedMatch[2]);
     const fromFile = parseInt(promotedMatch[5]);
     const fromRank = parseInt(promotedMatch[6]);
+    // Convert to USI format (numeric files, letter ranks)
+    const fromRankChar = String.fromCharCode(97 + fromRank - 1);
+    const toRankChar = String.fromCharCode(97 + parseInt(toRank) - 1);
     // Promoted pieces don't have + suffix in USI when they're already promoted
-    return `${fromFile}${fromRank}${toFile}${toRank}`;
+    return `${fromFile}${fromRankChar}${toFile}${toRankChar}`;
   }
 
   // Handle normal moves (e.g., "２六歩(27)")
@@ -188,12 +208,13 @@ export function kifToUsiMove(kifMove: string): string {
       // Normal move - convert to USI format
       const promotion = piece.includes('成') ? '+' : '';
       
-      // Based on the debugging, KIF and USI use the same numeric file system
-      // KIF file numbers (1-9) map directly to USI file numbers (1-9)
+      // Convert to USI format (numeric files, letter ranks)
       // KIF format: TO coordinates first, then FROM coordinates in parentheses
       // USI format: FROM coordinates first, then TO coordinates
-      // So we need to swap the order: FROM first, then TO
-      return `${fromFile}${fromRank}${toFile}${toRank}${promotion}`;
+      // Files: 1-9 stay numeric, Ranks: 1-9 -> a-i
+      const fromRankChar = String.fromCharCode(97 + fromRank - 1); // 1->a, 2->b, ..., 9->i
+      const toRankChar = String.fromCharCode(97 + parseInt(toRank) - 1);
+      return `${fromFile}${fromRankChar}${toFile}${toRankChar}${promotion}`;
     } else {
       // Drop move without coordinates
       const pieceMap: { [key: string]: string } = {
@@ -201,7 +222,8 @@ export function kifToUsiMove(kifMove: string): string {
         '角': 'B', '飛': 'R', '玉': 'K', '王': 'K'
       };
       const pieceChar = piece.replace('成', '');
-      return `${pieceMap[pieceChar] || 'P'}*${toFile}${toRank}`;
+      const toRankChar = String.fromCharCode(97 + parseInt(toRank) - 1);
+      return `${pieceMap[pieceChar] || 'P'}*${toFile}${toRankChar}`;
     }
   }
 
@@ -217,7 +239,8 @@ export function kifToUsiMove(kifMove: string): string {
       const file = kifMoveToNumber(dropMatch[1]);
       const rank = kifRankToNumber(dropMatch[2]);
       const piece = pieceMap[dropMatch[3]] || 'P';
-      return `${piece}*${file}${rank}`;
+      const rankChar = String.fromCharCode(97 + parseInt(rank) - 1);
+      return `${piece}*${file}${rankChar}`;
     }
   }
   
