@@ -10,21 +10,21 @@ const PracticePage: React.FC = () => {
       id: 'name-identification',
       title: 'Name Identification',
       description: 'Learn to identify Shogi pieces by their appearance and kanji characters, including promoted pieces.',
-      icon: '🎯',
+      icon: '📜',
       difficulty: 'Beginner'
     },
     {
       id: 'movement-identification',
       title: 'Movement Pattern Recognition',
       description: 'Practice recognizing the movement patterns of different Shogi pieces using only visual diagrams. 10 randomized questions including promoted pieces.',
-      icon: '♟️',
+      icon: '🏯',
       difficulty: 'Beginner'
     },
     {
       id: 'promotion-matching',
       title: 'Promotion Matching',
       description: 'Match Shogi pieces to their promoted versions. Learn which pieces can be promoted and what they become.',
-      icon: '⬆️',
+      icon: '🌸',
       difficulty: 'Beginner'
     }
   ];

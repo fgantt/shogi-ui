@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import SvgPiece from './SvgPiece';
 import { PieceType } from 'tsshogi';
+import { KANJI_MAP, ENGLISH_MAP } from '../utils/pieceMaps';
 import './PracticeExerciseDetail.css';
 
 const PracticeExerciseDetail: React.FC = () => {
@@ -373,14 +374,34 @@ const PracticeExerciseDetail: React.FC = () => {
             
             return (
               <div key={index} className={className}>
-                {isPiece && pieceType && (
-                  <SvgPiece 
-                    type={pieceType}
-                    player="player1"
-                    size={30}
-                    hideText={true}
-                    pieceThemeType={pieceThemeType}
-                  />
+                {isPiece && (
+                  <div className="blank-piece">
+                    <svg width="30" height="32" viewBox="0 0 70 76">
+                      <path
+                        d="M35 6 L58 13 L63 70 L7 70 L12 13 Z"
+                        fill="url(#wood-bambo-pattern)"
+                        stroke="#333"
+                        strokeWidth="1"
+                      />
+                      <defs>
+                        <pattern
+                          id="wood-bambo-pattern"
+                          patternUnits="objectBoundingBox"
+                          width="1"
+                          height="1"
+                        >
+                          <image
+                            href="/boards/wood-ginkgo-1.jpg"
+                            x="0"
+                            y="0"
+                            width="70"
+                            height="76"
+                            preserveAspectRatio="none"
+                          />
+                        </pattern>
+                      </defs>
+                    </svg>
+                  </div>
                 )}
               </div>
             );
@@ -568,13 +589,17 @@ const PracticeExerciseDetail: React.FC = () => {
             {currentQ.options.map((option: any, index: number) => (
               <button
                 key={index}
-                className={`answer-option ${
-                  showFeedback && index === currentQ.correctAnswer ? 'correct' : ''
-                } ${
-                  showFeedback && selectedAnswer === index && index !== currentQ.correctAnswer ? 'incorrect' : ''
-                }`}
-                onClick={() => handleAnswerSelect(index)}
-                disabled={showFeedback}
+          className={`answer-option ${
+            exerciseId === 'name-identification' ? 'small-tile' : ''
+          } ${
+            exerciseId === 'promotion-matching' ? 'extra-small-tile' : ''
+          } ${
+            showFeedback && index === currentQ.correctAnswer ? 'correct' : ''
+          } ${
+            showFeedback && selectedAnswer === index && index !== currentQ.correctAnswer ? 'incorrect' : ''
+          }`}
+          onClick={() => handleAnswerSelect(index)}
+          disabled={showFeedback}
               >
                 {exerciseId === 'movement-identification' ? (
                   renderMovementDiagram(option.diagram)
@@ -614,7 +639,10 @@ const PracticeExerciseDetail: React.FC = () => {
               
               <div className="action-buttons">
                 {currentQuestion < totalQuestions - 1 ? (
-                  <button className="next-button" onClick={handleNextQuestion}>
+                  <button 
+                    className="next-button" 
+                    onClick={handleNextQuestion}
+                  >
                     Next Question
                   </button>
                 ) : (
