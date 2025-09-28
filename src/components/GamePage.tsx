@@ -828,6 +828,7 @@ const GamePage: React.FC<GamePageProps> = ({
             const success = controller.handleUserMove(move);
             if (!success) {
               console.warn(`Failed to apply move ${i + 1}: ${move}`);
+              console.warn(`Current position SFEN: ${controller.getCurrentSfen()}`);
               break;
             }
           }
