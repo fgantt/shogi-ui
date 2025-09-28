@@ -110,23 +110,35 @@ function csaToUsiMove(csaMove: string): string {
       return `${piece}*${file}${rankChar}`;
     }
   } else {
-    // Normal move like "2726FU" or "2277UM"
+    // Normal move like "2726FU" or "2277UM", or drop move like "0056KA"
     const match = csaMove.match(/^(\d{4})([A-Z]+)$/);
     if (match) {
-      const coordinates = match[1]; // "2726"
+      const coordinates = match[1]; // "2726" or "0056"
       const piece = match[2]; // "FU", "UM", etc.
-      const promotion = piece.includes('UM') || piece.includes('RY') || piece.includes('NG') || piece.includes('TO') || piece.includes('NY') || piece.includes('NK') ? '+' : '';
       
-      // Convert numeric coordinates to USI format (numeric files, letter ranks)
-      const fromFile = parseInt(coordinates[0]);
-      const fromRank = parseInt(coordinates[1]);
-      const toFile = parseInt(coordinates[2]);
-      const toRank = parseInt(coordinates[3]);
-      
-      const fromRankChar = String.fromCharCode(97 + fromRank - 1); // 1->a, 2->b, ..., 9->i
-      const toRankChar = String.fromCharCode(97 + toRank - 1);
-      
-      return `${fromFile}${fromRankChar}${toFile}${toRankChar}${promotion}`;
+      // Check if this is a drop move (from coordinates are "00")
+      if (coordinates.substring(0, 2) === '00') {
+        // This is a drop move like "0056KA"
+        const toFile = parseInt(coordinates[2]);
+        const toRank = parseInt(coordinates[3]);
+        const rankChar = String.fromCharCode(97 + toRank - 1);
+        const pieceChar = csaToUsiPiece(piece);
+        return `${pieceChar}*${toFile}${rankChar}`;
+      } else {
+        // Normal move
+        const promotion = piece.includes('UM') || piece.includes('RY') || piece.includes('NG') || piece.includes('TO') || piece.includes('NY') || piece.includes('NK') ? '+' : '';
+        
+        // Convert numeric coordinates to USI format (numeric files, letter ranks)
+        const fromFile = parseInt(coordinates[0]);
+        const fromRank = parseInt(coordinates[1]);
+        const toFile = parseInt(coordinates[2]);
+        const toRank = parseInt(coordinates[3]);
+        
+        const fromRankChar = String.fromCharCode(97 + fromRank - 1); // 1->a, 2->b, ..., 9->i
+        const toRankChar = String.fromCharCode(97 + toRank - 1);
+        
+        return `${fromFile}${fromRankChar}${toFile}${toRankChar}${promotion}`;
+      }
     }
   }
   
