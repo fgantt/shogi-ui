@@ -116,7 +116,7 @@ const HomePage: React.FC = () => {
             className="nav-button primary"
             onClick={handleStartGame}
           >
-            <span className="button-icon">♔</span>
+            <span className="button-icon japanese-game">🎌</span>
             <span className="button-text">Start New Game</span>
           </button>
           
@@ -124,7 +124,7 @@ const HomePage: React.FC = () => {
             className="nav-button"
             onClick={() => navigate('/help')}
           >
-            <span className="button-icon">📖</span>
+            <span className="button-icon japanese-help">📜</span>
             <span className="button-text">Help</span>
           </button>
           
@@ -132,7 +132,7 @@ const HomePage: React.FC = () => {
             className="nav-button"
             onClick={() => navigate('/practice')}
           >
-            <span className="button-icon">🎯</span>
+            <span className="button-icon japanese-practice">🏯</span>
             <span className="button-text">Practice</span>
           </button>
           
@@ -140,7 +140,7 @@ const HomePage: React.FC = () => {
             className="nav-button"
             onClick={handleOpenSettings}
           >
-            <span className="button-icon">⚙️</span>
+            <span className="button-icon japanese-settings">⚙️</span>
             <span className="button-text">Settings</span>
           </button>
           
@@ -148,7 +148,7 @@ const HomePage: React.FC = () => {
             className="nav-button"
             onClick={() => navigate('/about')}
           >
-            <span className="button-icon">ℹ️</span>
+            <span className="button-icon japanese-about">🎋</span>
             <span className="button-text">About</span>
           </button>
           
