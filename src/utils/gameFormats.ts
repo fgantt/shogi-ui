@@ -144,8 +144,9 @@ export function kifToUsiMove(kifMove: string): string {
   
   // Handle "同" (same piece as previous move) promotion moves first
   // This is complex and requires game context, so we'll handle specific known cases
-  if (kifMove === '同　飛成(76)') return '7g7f+';
-  if (kifMove === '同　桂成(85)') return '8h7g+';
+  // Let the normal "同" resolution logic handle these instead of hardcoding
+  // if (kifMove === '同　飛成(76)') return '7g7f+';
+  // if (kifMove === '同　桂成(85)') return '8h7g+';
   
   // Handle "同" (same square) moves - these require game context
   // For now, we'll return a placeholder that indicates we need more context
@@ -154,8 +155,10 @@ export function kifToUsiMove(kifMove: string): string {
     if (match) {
       const fromFile = parseInt(match[3]);
       const fromRank = parseInt(match[4]);
+      const piece = match[1];
+      const isPromotion = piece.includes('成');
       // Return a placeholder - in a full implementation, we'd need game context
-      return `同${fromFile}${fromRank}`;
+      return `同${fromFile}${fromRank}${isPromotion ? '+' : ''}`;
     }
   }
   
@@ -529,13 +532,17 @@ export function parseKIF(kifText: string): ParsedGame {
                 const prevDest = previousMove.substring(2, 4); // Get the "to" part (e.g., "7g")
                 const fromCoords = usiMove.substring(1); // Get the from coordinates from "同XX" (e.g., "68")
                 
+                // Check if this is a promotion move
+                const isPromotion = usiMove.endsWith('+');
+                const fromCoordsOnly = isPromotion ? fromCoords.slice(0, -1) : fromCoords;
+                
                 // Convert from coordinates to proper USI format (numeric file + letter rank)
-                const fromFile = fromCoords[0];
-                const fromRank = parseInt(fromCoords[1]);
+                const fromFile = fromCoordsOnly[0];
+                const fromRank = parseInt(fromCoordsOnly[1]);
                 const fromRankChar = String.fromCharCode(97 + fromRank - 1);
                 const fromUsi = `${fromFile}${fromRankChar}`;
                 
-                usiMove = `${fromUsi}${prevDest}`;
+                usiMove = `${fromUsi}${prevDest}${isPromotion ? '+' : ''}`;
                 console.log(`Resolved "同" move: ${moveDesc} -> ${usiMove} (using previous destination ${prevDest})`);
               } else {
                 console.log(`Cannot resolve "同" move ${moveNum}: "${moveDesc}" - no previous move`);
