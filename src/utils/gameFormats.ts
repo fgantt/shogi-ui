@@ -148,7 +148,7 @@ export function kifToUsiMove(kifMove: string): string {
   if (kifMove === '同　桂成(85)') return '8h7g+';
   
   // Handle "同" (same square) moves - these require game context
-  // For now, we'll skip these as they're complex to resolve without full game state
+  // For now, we'll return a placeholder that indicates we need more context
   if (kifMove.startsWith('同　')) {
     const match = kifMove.match(/同　([歩香桂銀金角飛玉王と])(\((\d)(\d)\))/);
     if (match) {
@@ -519,7 +519,30 @@ export function parseKIF(kifText: string): ParsedGame {
           
           // Skip empty moves or comments
           if (moveDesc && !moveDesc.includes('消費時間') && !moveDesc.includes('指手')) {
-            const usiMove = kifToUsiMove(moveDesc);
+            let usiMove = kifToUsiMove(moveDesc);
+            
+            // Handle "同" moves by resolving them using the previous move's destination
+            if (usiMove && usiMove.startsWith('同')) {
+              const previousMove = moves[moves.length - 1];
+              if (previousMove && previousMove !== 'resign') {
+                // Extract the destination from the previous move
+                const prevDest = previousMove.substring(2, 4); // Get the "to" part (e.g., "7g")
+                const fromCoords = usiMove.substring(1); // Get the from coordinates from "同XX" (e.g., "68")
+                
+                // Convert from coordinates to proper USI format (numeric file + letter rank)
+                const fromFile = fromCoords[0];
+                const fromRank = parseInt(fromCoords[1]);
+                const fromRankChar = String.fromCharCode(97 + fromRank - 1);
+                const fromUsi = `${fromFile}${fromRankChar}`;
+                
+                usiMove = `${fromUsi}${prevDest}`;
+                console.log(`Resolved "同" move: ${moveDesc} -> ${usiMove} (using previous destination ${prevDest})`);
+              } else {
+                console.log(`Cannot resolve "同" move ${moveNum}: "${moveDesc}" - no previous move`);
+                continue; // Skip this move if we can't resolve it
+              }
+            }
+            
             if (usiMove && usiMove !== moveDesc) {
               moves.push(usiMove);
             } else if (usiMove === moveDesc) {
