@@ -126,10 +126,6 @@ function csaToUsiMove(csaMove: string): string {
         return `${pieceChar}*${toFile}${rankChar}`;
       } else {
         // Normal move
-        // Only add + for pieces that are being promoted during the move
-        // TO, NY, NK, NG, UM, RY are already promoted pieces and don't need +
-        const promotion = '';
-        
         // Convert numeric coordinates to USI format (numeric files, letter ranks)
         const fromFile = parseInt(coordinates[0]);
         const fromRank = parseInt(coordinates[1]);
@@ -138,6 +134,21 @@ function csaToUsiMove(csaMove: string): string {
         
         const fromRankChar = String.fromCharCode(97 + fromRank - 1); // 1->a, 2->b, ..., 9->i
         const toRankChar = String.fromCharCode(97 + toRank - 1);
+        
+        // Check if this is a promotion move
+        // For black pieces: ranks 1-3 are promotion zone
+        // For white pieces: ranks 7-9 are promotion zone
+        const fromRank = parseInt(coordinates[1]);
+        const toRank = parseInt(coordinates[3]);
+        
+        // Determine if this is a promotion move:
+        // - Moving FROM outside promotion zone (ranks 4+) TO promotion zone (ranks 1-3)
+        // - AND the piece type indicates promotion (TO, NY, NK, NG, UM, RY)
+        const isMovingIntoPromotionZone = fromRank >= 4 && toRank >= 1 && toRank <= 3;
+        const isPromotionPiece = piece === 'TO' || piece === 'NY' || piece === 'NK' || piece === 'NG' || piece === 'UM' || piece === 'RY';
+        
+        // Only add + if it's a piece moving INTO the promotion zone and becoming promoted
+        const promotion = isPromotionPiece && isMovingIntoPromotionZone ? '+' : '';
         
         return `${fromFile}${fromRankChar}${toFile}${toRankChar}${promotion}`;
       }
