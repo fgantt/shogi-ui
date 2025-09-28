@@ -107,7 +107,7 @@
     - **CRITICAL FINDING**: SIMD implementation provides 40% performance regression
     - **Root Cause**: 81-bit bitboards don't align with SIMD vectorization requirements
     - **Recommendation**: Disable SIMD and focus on scalar optimizations
-    - **Analysis**: See `docs/ai/SIMD_PERFORMANCE_FINAL_ANALYSIS.md` for detailed findings
+    - **Analysis**: See `docs/design/algorithms/SIMD_PERFORMANCE_FINAL_ANALYSIS.md` for detailed findings
   - [ ] 8.4 Test browser compatibility across Chrome, Firefox, Safari, and Edge
   - [ ] 8.5 Implement feature detection and graceful degradation for older browsers
   - [ ] 8.6 Optimize memory layout and cache performance for SIMD operations

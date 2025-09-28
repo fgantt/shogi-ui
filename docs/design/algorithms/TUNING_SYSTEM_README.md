@@ -220,11 +220,11 @@ tuner prepare-data  # Process raw game databases
 
 ## Support
 
-- **Documentation**: Complete guides available in `docs/ai/`
+- **Documentation**: Complete guides available in `docs/user/guides/` and `docs/design/algorithms/`
 - **Examples**: See `examples/` directory for sample configurations
 - **Issues**: Report problems via GitHub issues
 - **FAQ**: Common questions answered in [FAQ](FAQ.md)
 
 ---
 
-*For detailed information, see the complete documentation in the `docs/ai/` directory.*
+*For detailed information, see the complete documentation in the `docs/user/` and `docs/design/` directories.*

@@ -527,8 +527,8 @@ RUST_LOG=debug ./target/release/tuner tune [options]
 
 ### Contact Information
 
-- **Documentation**: Check other guides in `docs/ai/`
-- **Examples**: See `OPTIMIZATION_EXAMPLES.md`
+- **Documentation**: Check other guides in `docs/user/guides/` and `docs/user/api/`
+- **Examples**: See `docs/user/api/CODE_EXAMPLES.md` and `docs/design/algorithms/OPTIMIZATION_EXAMPLES.md`
 - **Issues**: Report bugs via GitHub issues
 - **FAQ**: Common questions in `FAQ.md`
 

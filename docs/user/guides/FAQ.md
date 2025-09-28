@@ -390,8 +390,8 @@ Yes, the system is designed for research:
 
 ### Where can I get help?
 
-- **Documentation**: Check all guides in `docs/ai/`
-- **Examples**: See `OPTIMIZATION_EXAMPLES.md`
+- **Documentation**: Check all guides in `docs/user/guides/` and `docs/user/api/`
+- **Examples**: See `docs/user/api/CODE_EXAMPLES.md` and `docs/design/algorithms/OPTIMIZATION_EXAMPLES.md`
 - **Community**: GitHub discussions and issues
 - **Troubleshooting**: See `TROUBLESHOOTING_GUIDE.md`
 

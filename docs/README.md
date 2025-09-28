@@ -1,0 +1,160 @@
+# Shogi Engine Documentation
+
+This directory contains all documentation for the Shogi game engine, organized by audience and purpose.
+
+## 📁 Directory Structure
+
+### 👥 User Documentation (`user/`)
+Documentation intended for end users, developers using the engine, and API consumers.
+
+- **`guides/`** - How-to guides, tutorials, and user manuals
+  - `USER_GUIDE.md` - Main user guide for the Shogi game
+  - `FAQ.md` - Frequently asked questions
+  - `TROUBLESHOOTING_GUIDE.md` - Common issues and solutions
+  - `USI-tsshogi-usage.md` - USI engine usage guide
+  - `STANDALONE_USI_ENGINE.md` - Standalone engine documentation
+  - `OPENING_BOOK_MIGRATION_GUIDE.md` - Opening book migration guide
+  - `PERFORMANCE_TUNING_GUIDE.md` - Performance tuning for users
+  - `DATA_PREPARATION_GUIDE.md` - Data preparation guide
+  - `USI_MONITOR_FEATURE.md` - USI communication monitor feature guide
+
+- **`api/`** - API references and code examples
+  - `API_DOCUMENTATION.md` - Complete API reference
+  - `CODE_EXAMPLES.md` - Code examples and snippets
+  - `OPENING_BOOK_API_REFERENCE.md` - Opening book API reference
+  - `OPENING_BOOK_EXAMPLES.md` - Opening book usage examples
+  - `OPENING_BOOK_EXAMPLE.md` - Additional opening book examples
+
+- **`reference/`** - Game rules, notation, and reference materials
+  - `kifu_notation.md` - Kifu notation reference
+  - `move-log-notation.md` - Move log notation
+  - `fen_and_coordinates.md` - FEN notation and coordinate system
+  - `Universal-Shogi-Interface.html` - USI protocol specification
+  - `PROMOTION_MATCHING_EXERCISE.md` - Promotion rules exercise
+
+### 🏗️ Design Documentation (`design/`)
+Technical design documents, architecture decisions, and implementation plans.
+
+- **`architecture/`** - System architecture and high-level design
+  - `Universal-Shogi-Interface-Implementation.md` - USI implementation details
+  - `README_WASM_IMPLEMENTATION.md` - WebAssembly implementation guide
+  - `WEBASSEMBLY_BITBOARDS_IMPLEMENTATION.md` - WASM bitboards implementation
+  - `WEBASSEMBLY_INTEGRATION_GUIDE.md` - WASM integration guide
+  - `JS_vs_WASM_engine.md` - JavaScript vs WASM engine comparison
+  - `computer_player_flow_diagram.md` - Computer player architecture
+  - `Streaming between UI and Engine - Gemini.md` - UI-Engine communication
+  - `INTEGRATION_GUIDE.md` - System integration guide
+  - `MIGRATION_GUIDE.md` - Migration guide for system changes
+  - `USI_REFACTOR_SUMMARY.md` - Summary of USI implementation refactor
+
+- **`algorithms/`** - AI algorithms, optimization strategies, and performance analysis
+  - `DESIGN_ADVANCED_KING_SAFETY.md` - King safety algorithm design
+  - `DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design
+  - `DESIGN_AUTOMATED_TUNING.md` - Automated tuning design
+  - `DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design
+  - `DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening
+  - `DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design
+  - `DESIGN_NULL_MOVE_PRUNING.md` - Null move pruning design
+  - `DESIGN_QUIESCENCE_SEARCH.md` - Quiescence search design
+  - `DESIGN_SIMD.md` - SIMD optimization design
+  - `DESIGN_TAPERED_EVALUATION.md` - Tapered evaluation design
+  - `OPTIMIZATION_STRATEGIES_ANALYSIS.md` - Comprehensive optimization analysis
+  - `OPTIMIZATION_EXAMPLES.md` - Optimization examples
+  - `SIMD_OPTIMIZATION_ANALYSIS.md` - SIMD optimization analysis
+  - `SIMD_OPTIMIZATION_PLAN.md` - SIMD optimization plan
+  - `SIMD_PERFORMANCE_ANALYSIS_REPORT.md` - SIMD performance analysis
+  - `SIMD_PERFORMANCE_FINAL_ANALYSIS.md` - Final SIMD performance analysis
+  - `PERFORMANCE_TAPERED_EVALUATION.md` - Tapered evaluation performance
+  - `AI_ENGINE_ANALYSIS.md` - AI engine analysis
+  - `BENCHMARK_RESULTS.md` - Benchmark results
+  - `OPENING_BOOK_PERFORMANCE_BENCHMARKS.md` - Opening book benchmarks
+  - `OPENING_BOOK_POPULATION_SUMMARY.md` - Opening book population analysis
+  - `TABLEBASE_SYSTEM_README.md` - Tablebase system documentation
+  - `TUNING_SYSTEM_README.md` - Tuning system documentation
+
+- **`implementation/`** - Implementation plans and task lists
+  - `IMPLEMENT_ADVANCED_KING_SAFETY.md` - King safety implementation plan
+  - `IMPLEMENT_ASPIRATION_WINDOWS.md` - Aspiration windows implementation
+  - `IMPLEMENT_AUTOMATED_TUNING.md` - Automated tuning implementation
+  - `IMPLEMENT_ENDGAME_TABLEBASES.md` - Endgame tablebases implementation
+  - `IMPLEMENT_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening
+  - `IMPLEMENT_LATE_MOVE_REDUCTIONS.md` - Late move reductions implementation
+  - `IMPLEMENT_NULL_MOVE_PRUNING.md` - Null move pruning implementation
+  - `IMPLEMENT_OPENING_BOOK.md` - Opening book implementation
+  - `IMPLEMENT_QUIESCENCE_SEARCH.md` - Quiescence search implementation
+  - `IMPLEMENT_SIMD.md` - SIMD implementation plan
+  - `IMPLEMENT_TAPERED_EVALUATION.md` - Tapered evaluation implementation
+  - `TASKS_NULL_MOVE_PRUNING.md` - Null move pruning tasks
+  - `TASKS_QUIESCENCE_SEARCH.md` - Quiescence search tasks
+  - `TASKS_TAPERED_EVALUATION.md` - Tapered evaluation tasks
+  - `tasks-DESIGN_ADVANCED_KING_SAFETY.md` - King safety design tasks
+  - `tasks-DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design tasks
+  - `tasks-DESIGN_AUTOMATED_TUNING.md` - Automated tuning design tasks
+  - `tasks-DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design tasks
+  - `tasks-DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening tasks
+  - `tasks-DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design tasks
+  - `tasks-DESIGN_SIMD.md` - SIMD design tasks
+  - `tasks-IMPLEMENT_OPENING_BOOK.md` - Opening book implementation tasks
+
+### 🔧 Development Documentation (`development/`)
+Development processes, project planning, and status tracking.
+
+- **`tasks/`** - Project planning and task management
+  - `create-prd.md` - PRD creation process
+  - `generate-tasks.md` - Task generation process
+  - `opening-book.md` - Opening book development tasks
+  - `prd-multi-tier-architecture-refactor.md` - Architecture refactor PRD
+  - `prd-shogi-game.md` - Main Shogi game PRD
+  - `prd-typescript-conversion.md` - TypeScript conversion PRD
+  - `process-task-list.md` - Task list processing
+  - `shogi-rules.md` - Shogi rules implementation tasks
+  - `tasks-prd-multi-tier-architecture-refactor.md` - Architecture refactor tasks
+  - `tasks-prd-shogi-game.md` - Main game development tasks
+  - `tasks-prd-typescript-conversion.md` - TypeScript conversion tasks
+  - `IMPROVE_MEMORY_EFFICIENCY.md` - Memory efficiency improvements
+
+- **`status/`** - Project status reports
+  - `status_20250729.md` - Status report for July 29, 2025
+  - `status_20250730.md` - Status report for July 30, 2025
+  - `status_20250801.md` - Status report for August 1, 2025
+  - `status_20250804.md` - Status report for August 4, 2025
+  - `status_20250804_updated.md` - Updated status report for August 4, 2025
+  - `status_20250806.md` - Status report for August 6, 2025
+  - `status_20250807.md` - Status report for August 7, 2025
+
+- **`processes/`** - Development processes and workflows
+  - `generate-tasks.md` - Task generation process
+
+### 📦 Archive (`archive/`)
+Deprecated, outdated, or experimental documentation.
+
+- `AI_DROP_IMPROVEMENTS.md` - Legacy AI improvements document
+
+## 🚀 Quick Start
+
+### For End Users
+Start with `user/guides/USER_GUIDE.md` for the main user guide, or check `user/guides/FAQ.md` for common questions.
+
+### For Developers
+Begin with `design/architecture/README_WASM_IMPLEMENTATION.md` for system architecture, then explore `design/algorithms/` for AI implementation details.
+
+### For API Consumers
+Check `user/api/API_DOCUMENTATION.md` for complete API reference and `user/api/CODE_EXAMPLES.md` for usage examples.
+
+### For Contributors
+Review `development/tasks/` for current development tasks and `development/status/` for project status.
+
+## 📝 Documentation Standards
+
+- **User Documentation**: Written for end users with clear, step-by-step instructions
+- **Design Documentation**: Technical documents for developers and architects
+- **Development Documentation**: Project management and process documentation
+- **Archive**: Clearly marked deprecated or experimental content
+
+## 🔄 Maintenance
+
+This documentation structure should be maintained as the project evolves:
+- Move deprecated documents to `archive/`
+- Update status reports regularly in `development/status/`
+- Keep user guides current with feature changes
+- Maintain design documents as architecture evolves
