@@ -19,6 +19,7 @@ import Clock from './Clock';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
 import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
+import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -770,17 +771,36 @@ const GamePage: React.FC<GamePageProps> = ({
     handleSettingChange(setBoardBackground, 'shogi-board-background')(nextBackground);
   };
 
-  const handleSaveGame = (name: string) => {
-    const sfen = controller.getPosition().sfen;
-    const newSavedGames = { ...savedGames, [name]: sfen };
+  const handleSaveGame = (name: string, format: GameFormat) => {
+    const position = controller.getPosition();
+    const gameData: GameData = {
+      position: position.sfen,
+      moves: [], // TODO: Extract move history from controller
+      metadata: {
+        name,
+        date: new Date().toISOString(),
+        player1Name: 'Player 1',
+        player2Name: 'Player 2',
+        result: 'ongoing'
+      }
+    };
+
+    // Save in the specified format
+    const gameText = generateGame(gameData, format);
+    const newSavedGames = { ...savedGames, [name]: gameText };
     setSavedGames(newSavedGames);
     localStorage.setItem('shogi-saved-games', JSON.stringify(newSavedGames));
     setIsSaveModalOpen(false);
   };
 
-  const handleLoadGame = (name: string) => {
-    const sfen = savedGames[name];
-    if (sfen) {
+  const handleLoadGame = (name: string, _format: GameFormat) => {
+    const gameText = savedGames[name];
+    if (gameText) {
+      // For now, assume it's SFEN format for backward compatibility
+      const sfen = gameText.includes('/') && (gameText.includes(' b ') || gameText.includes(' w ')) 
+        ? gameText 
+        : gameText; // Assume it's already SFEN
+      
       const turn = sfen.split(' ')[1];
       setStartColor(turn === 'w' ? 'white' : 'black');
       controller.loadSfen(sfen).catch(error => {
@@ -788,6 +808,50 @@ const GamePage: React.FC<GamePageProps> = ({
       });
     }
     setIsLoadModalOpen(false);
+  };
+
+  const handleLoadFromText = async (gameData: GameData) => {
+    try {
+      const turn = gameData.position.split(' ')[1];
+      setStartColor(turn === 'w' ? 'white' : 'black');
+      
+      // Load the position first
+      await controller.loadSfen(gameData.position);
+      
+      // Apply all moves from the move history
+      if (gameData.moves && gameData.moves.length > 0) {
+        console.log('Applying moves:', gameData.moves);
+        for (let i = 0; i < gameData.moves.length; i++) {
+          const move = gameData.moves[i];
+          if (move !== 'resign') {
+            console.log(`Applying move ${i + 1}: ${move}`);
+            const success = controller.handleUserMove(move);
+            if (!success) {
+              console.warn(`Failed to apply move ${i + 1}: ${move}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      console.log('Game loaded successfully with', gameData.moves?.length || 0, 'moves');
+    } catch (error) {
+      console.error('Failed to load game from text:', error);
+    }
+  };
+
+  const getCurrentGameData = (): GameData => {
+    const position = controller.getPosition();
+    return {
+      position: position.sfen,
+      moves: [], // TODO: Extract move history from controller
+      metadata: {
+        date: new Date().toISOString(),
+        player1Name: 'Player 1',
+        player2Name: 'Player 2',
+        result: 'ongoing'
+      }
+    };
   };
 
   const handleDeleteGame = (name: string) => {
@@ -1017,8 +1081,20 @@ const GamePage: React.FC<GamePageProps> = ({
           gameLayout={gameLayout}
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
         />}
-        <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
-        <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+        <SaveGameModal 
+          isOpen={isSaveModalOpen} 
+          onClose={() => setIsSaveModalOpen(false)} 
+          onSave={handleSaveGame}
+          gameData={getCurrentGameData()}
+        />
+        <LoadGameModal 
+          isOpen={isLoadModalOpen} 
+          onClose={() => setIsLoadModalOpen(false)} 
+          onLoad={handleLoadGame} 
+          onLoadFromText={handleLoadFromText}
+          onDelete={handleDeleteGame} 
+          savedGames={savedGames} 
+        />
         <StartGameModal 
           isOpen={isStartGameModalOpen} 
           onClose={() => setIsStartGameModalOpen(false)} 
@@ -1234,8 +1310,20 @@ const GamePage: React.FC<GamePageProps> = ({
         gameLayout={gameLayout}
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
       />}
-      <SaveGameModal isOpen={isSaveModalOpen} onClose={() => setIsSaveModalOpen(false)} onSave={handleSaveGame} />
-      <LoadGameModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} onLoad={handleLoadGame} onDelete={handleDeleteGame} savedGames={savedGames} />
+      <SaveGameModal 
+        isOpen={isSaveModalOpen} 
+        onClose={() => setIsSaveModalOpen(false)} 
+        onSave={handleSaveGame}
+        gameData={getCurrentGameData()}
+      />
+      <LoadGameModal 
+        isOpen={isLoadModalOpen} 
+        onClose={() => setIsLoadModalOpen(false)} 
+        onLoad={handleLoadGame} 
+        onLoadFromText={handleLoadFromText}
+        onDelete={handleDeleteGame} 
+        savedGames={savedGames} 
+      />
       <StartGameModal 
         isOpen={isStartGameModalOpen} 
         onClose={() => setIsStartGameModalOpen(false)} 

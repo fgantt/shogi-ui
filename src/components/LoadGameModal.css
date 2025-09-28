@@ -16,7 +16,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -53,6 +53,36 @@
 
 .close-button:hover {
   background-color: #f0f0f0;
+}
+
+.load-game-modal-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-button:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.tab-button.active {
+  color: #4a90e2;
+  border-bottom-color: #4a90e2;
+  background-color: white;
 }
 
 .load-game-modal-content {
@@ -185,6 +215,156 @@
   margin-bottom: 0;
 }
 
+/* Import functionality styles */
+.import-controls {
+  margin-bottom: 20px;
+}
+
+.auto-detect-toggle {
+  margin-bottom: 16px;
+}
+
+.auto-detect-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+.auto-detect-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.format-selector {
+  margin-bottom: 16px;
+}
+
+.format-selector label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.format-selector select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.format-selector select:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.detected-format {
+  padding: 12px;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 6px;
+  color: #155724;
+  font-size: 14px;
+}
+
+.import-textarea {
+  margin-bottom: 20px;
+}
+
+.import-textarea label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.import-textarea textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  resize: vertical;
+  min-height: 300px;
+  transition: border-color 0.2s;
+}
+
+.import-textarea textarea:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.parse-error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid #dc3545;
+  font-size: 14px;
+}
+
+/* Saved games list styles */
+.saved-games-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.saved-game-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background-color: #f8f9fa;
+}
+
+.saved-game-item span {
+  font-weight: 500;
+  color: #333;
+}
+
+.saved-game-item .buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.saved-game-item .buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.saved-game-item .buttons button:first-child {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.saved-game-item .buttons button:first-child:hover {
+  background-color: #357abd;
+}
+
+.saved-game-item .buttons button:last-child {
+  background-color: #dc3545;
+  color: white;
+}
+
+.saved-game-item .buttons button:last-child:hover {
+  background-color: #c82333;
+}
+
 .load-game-modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -194,7 +374,8 @@
 }
 
 .cancel-button,
-.load-button {
+.load-button,
+.import-button {
   padding: 12px 24px;
   border: none;
   border-radius: 6px;
@@ -214,21 +395,25 @@
   background-color: #e9ecef;
 }
 
-.load-button {
+.load-button,
+.import-button {
   background-color: #28a745;
   color: white;
 }
 
-.load-button:hover:not(:disabled) {
+.load-button:hover:not(:disabled),
+.import-button:hover:not(:disabled) {
   background-color: #218838;
 }
 
-.load-button:disabled {
+.load-button:disabled,
+.import-button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
 }
 
-.load-button:active:not(:disabled) {
+.load-button:active:not(:disabled),
+.import-button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -257,7 +442,8 @@
   }
   
   .cancel-button,
-  .load-button {
+  .load-button,
+  .import-button {
     width: 100%;
   }
 }

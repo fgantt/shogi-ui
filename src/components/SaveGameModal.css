@@ -16,7 +16,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: 90%;
-  max-width: 500px;
+  max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -55,16 +55,46 @@
   background-color: #f0f0f0;
 }
 
+.save-game-modal-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-button:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.tab-button.active {
+  color: #4a90e2;
+  border-bottom-color: #4a90e2;
+  background-color: white;
+}
+
 .save-game-modal-content {
   padding: 24px;
 }
 
-.format-selection,
+.format-selector,
 .filename-input {
   margin-bottom: 20px;
 }
 
-.format-selection label,
+.format-selector label,
 .filename-input label {
   display: block;
   margin-bottom: 8px;
@@ -72,7 +102,7 @@
   color: #333;
 }
 
-.format-selection select,
+.format-selector select,
 .filename-input input {
   width: 100%;
   padding: 12px;
@@ -82,8 +112,36 @@
   transition: border-color 0.2s;
 }
 
-.format-selection select:focus,
+.format-selector select:focus,
 .filename-input input:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.export-textarea {
+  margin-bottom: 20px;
+}
+
+.export-textarea label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.export-textarea textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  resize: vertical;
+  min-height: 300px;
+  transition: border-color 0.2s;
+}
+
+.export-textarea textarea:focus {
   outline: none;
   border-color: #4a90e2;
 }
@@ -118,7 +176,8 @@
 }
 
 .cancel-button,
-.save-button {
+.save-button,
+.copy-button {
   padding: 12px 24px;
   border: none;
   border-radius: 6px;
@@ -138,16 +197,19 @@
   background-color: #e9ecef;
 }
 
-.save-button {
+.save-button,
+.copy-button {
   background-color: #4a90e2;
   color: white;
 }
 
-.save-button:hover {
+.save-button:hover,
+.copy-button:hover {
   background-color: #357abd;
 }
 
-.save-button:active {
+.save-button:active,
+.copy-button:active {
   transform: translateY(1px);
 }
 
@@ -168,7 +230,8 @@
   }
   
   .cancel-button,
-  .save-button {
+  .save-button,
+  .copy-button {
     width: 100%;
   }
 }
