@@ -35,22 +35,22 @@ const AboutPage: React.FC = () => {
           <h2>Features</h2>
           <div className="features-grid">
             <div className="feature-item">
-              <span className="feature-icon">♔</span>
+              <span className="feature-icon japanese-gameplay">🎌</span>
               <h3>Interactive Gameplay</h3>
               <p>Full Shogi game implementation with drag-and-drop piece movement</p>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">🤖</span>
+              <span className="feature-icon japanese-ai">🤖</span>
               <h3>AI Opponents</h3>
               <p>Multiple difficulty levels with intelligent computer players</p>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">🎨</span>
+              <span className="feature-icon japanese-themes">🌸</span>
               <h3>Customizable Themes</h3>
               <p>Beautiful board backgrounds and wallpapers to personalize your experience</p>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">📚</span>
+              <span className="feature-icon japanese-learning">📜</span>
               <h3>Learning Resources</h3>
               <p>Comprehensive help section and practice exercises</p>
             </div>

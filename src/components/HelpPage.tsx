@@ -217,9 +217,10 @@ const HelpPage: React.FC = () => {
             
             return (
               <div key={index} className={className}>
-                {isPiece && (
+                {isPiece && piece.type && (
                   <SvgPiece 
-                    piece={{ type: piece.type, player: 'player1', promoted: piece.promoted }}
+                    type={piece.type}
+                    player="player1"
                     size={30}
                     hideText={true}
                     pieceThemeType={pieceThemeType}

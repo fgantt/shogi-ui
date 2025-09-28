@@ -373,9 +373,10 @@ const PracticeExerciseDetail: React.FC = () => {
             
             return (
               <div key={index} className={className}>
-                {isPiece && (
+                {isPiece && pieceType && (
                   <SvgPiece 
-                    piece={{ type: pieceType, player: 'player1', promoted: promoted }}
+                    type={pieceType}
+                    player="player1"
                     size={30}
                     hideText={true}
                     pieceThemeType={pieceThemeType}
@@ -436,7 +437,7 @@ const PracticeExerciseDetail: React.FC = () => {
     setIsCorrect(correct);
     
     if (correct) {
-      setScore(score + 1);
+      setScore(prevScore => prevScore + 1);
     }
     
     setShowFeedback(true);
@@ -444,7 +445,7 @@ const PracticeExerciseDetail: React.FC = () => {
 
   const handleNextQuestion = () => {
     if (currentQuestion < totalQuestions - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+      setCurrentQuestion(prev => prev + 1);
       setShowFeedback(false);
       setSelectedAnswer(null);
       setIsCorrect(null);
@@ -549,7 +550,14 @@ const PracticeExerciseDetail: React.FC = () => {
       <div className="exercise-content">
         <div className="question-card">
           <div className="piece-display">
-            <SvgPiece piece={currentQ.piece} size={80} pieceThemeType={pieceThemeType} />
+            {currentQ.piece && (
+              <SvgPiece 
+                type={currentQ.piece.type} 
+                player={currentQ.piece.player} 
+                size={80} 
+                pieceThemeType={pieceThemeType} 
+              />
+            )}
           </div>
           
           <div className="question-text">
@@ -572,7 +580,12 @@ const PracticeExerciseDetail: React.FC = () => {
                   renderMovementDiagram(option.diagram)
                 ) : exerciseId === 'promotion-matching' && option.piece ? (
                   <div className="piece-option">
-                    <SvgPiece piece={option.piece} size={80} pieceThemeType={pieceThemeType} />
+                    <SvgPiece 
+                      type={option.piece.type} 
+                      player={option.piece.player} 
+                      size={80} 
+                      pieceThemeType={pieceThemeType} 
+                    />
                   </div>
                 ) : (
                   option.text

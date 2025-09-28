@@ -13,18 +13,23 @@
   position: absolute;
   top: 2rem;
   left: 2rem;
-  background: rgba(0, 0, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ecf0f1;
-  padding: 0.5rem 1rem;
-  border-radius: 5px;
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.9) 0%, rgba(160, 82, 45, 0.8) 100%);
+  border: 2px solid rgba(210, 180, 140, 0.4);
+  color: #f5f5dc;
+  padding: 0.7rem 1.2rem;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
+  backdrop-filter: blur(2px);
+  font-weight: 500;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .back-button:hover {
-  background: rgba(0, 0, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: linear-gradient(135deg, rgba(160, 82, 45, 0.9) 0%, rgba(139, 69, 19, 0.8) 100%);
+  border-color: rgba(255, 215, 0, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .exercise-header h1 {
@@ -67,19 +72,38 @@
 }
 
 .question-card {
-  background: rgba(0, 0, 255, 0.7);
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.8) 0%, rgba(160, 82, 45, 0.6) 100%);
+  border: 2px solid rgba(210, 180, 140, 0.3);
   border-radius: 15px;
   padding: 2rem;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(2px);
+  position: relative;
+  overflow: hidden;
+}
+
+.question-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.question-card:hover::before {
+  opacity: 1;
 }
 
 .piece-display {
   text-align: center;
   margin-bottom: 2rem;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.3);
   border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .question-text {
@@ -88,6 +112,7 @@
   margin-bottom: 2rem;
   color: #ecf0f1;
   font-weight: 600;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .answer-options {
@@ -98,9 +123,9 @@
 }
 
 .answer-option {
-  background: rgba(0, 0, 255, 0.7);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  color: #ecf0f1;
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.6) 0%, rgba(160, 82, 45, 0.4) 100%);
+  border: 2px solid rgba(210, 180, 140, 0.3);
+  color: #f5f5dc;
   padding: 0.5rem;
   border-radius: 10px;
   cursor: pointer;
@@ -111,26 +136,31 @@
   align-items: center;
   justify-content: center;
   min-height: 120px;
+  backdrop-filter: blur(2px);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
   aspect-ratio: 1;
   overflow: hidden;
 }
 
 .answer-option:hover:not(:disabled) {
-  background: rgba(0, 0, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, rgba(160, 82, 45, 0.8) 0%, rgba(139, 69, 19, 0.6) 100%);
+  border-color: rgba(255, 215, 0, 0.4);
   transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 
 .answer-option.correct {
-  background: rgba(39, 174, 96, 0.3);
+  background: linear-gradient(135deg, rgba(39, 174, 96, 0.6) 0%, rgba(46, 204, 113, 0.4) 100%);
   border-color: #27ae60;
   color: #2ecc71;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
 }
 
 .answer-option.incorrect {
-  background: rgba(231, 76, 60, 0.3);
+  background: linear-gradient(135deg, rgba(231, 76, 60, 0.6) 0%, rgba(192, 57, 43, 0.4) 100%);
   border-color: #e74c3c;
   color: #e74c3c;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
 }
 
 .answer-option:disabled {
@@ -168,14 +198,16 @@
 }
 
 .explanation {
-  background: rgba(52, 152, 219, 0.1);
-  border: 1px solid rgba(52, 152, 219, 0.3);
+  background: linear-gradient(135deg, rgba(139, 69, 19, 0.6) 0%, rgba(160, 82, 45, 0.4) 100%);
+  border: 2px solid rgba(210, 180, 140, 0.3);
   border-radius: 8px;
   padding: 1rem;
   margin: 1rem 0;
-  color: #bdc3c7;
+  color: #f5f5dc;
   font-size: 1rem;
   line-height: 1.4;
+  backdrop-filter: blur(2px);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .action-buttons {
@@ -206,6 +238,7 @@
 .finish-button:hover {
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
 }
+
 
 
 

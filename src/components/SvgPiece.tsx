@@ -30,6 +30,12 @@ interface SvgPieceProps {
 }
 
 const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceThemeType, size = 70, hideText = false, isSelected = false }) => {
+  // Early return if type is undefined
+  if (!type) {
+    console.warn('SvgPiece: type prop is undefined');
+    return null;
+  }
+  
   const pieceType: string = type;
   const piecePlayer = player;
   const themeType = pieceThemeType || 'kanji';
@@ -66,7 +72,7 @@ const SvgPiece: React.FC<SvgPieceProps> = ({ type, player, pieceThemeType, size 
   }
 
   // Handle text-based themes (kanji/english)
-  const isPromoted = pieceType.includes('prom') || pieceType === 'horse' || pieceType === 'dragon';
+  const isPromoted = pieceType && (pieceType.includes('prom') || pieceType === 'horse' || pieceType === 'dragon');
   const label = themeType === "kanji" ? KANJI_MAP[pieceType] : ENGLISH_MAP[pieceType];
 
   const piecePath = PIECE_PATHS[pieceType];
