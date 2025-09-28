@@ -126,7 +126,9 @@ function csaToUsiMove(csaMove: string): string {
         return `${pieceChar}*${toFile}${rankChar}`;
       } else {
         // Normal move
-        const promotion = piece.includes('UM') || piece.includes('RY') || piece.includes('NG') || piece.includes('TO') || piece.includes('NY') || piece.includes('NK') ? '+' : '';
+        // Only add + for pieces that are being promoted during the move
+        // TO, NY, NK, NG, UM, RY are already promoted pieces and don't need +
+        const promotion = '';
         
         // Convert numeric coordinates to USI format (numeric files, letter ranks)
         const fromFile = parseInt(coordinates[0]);
