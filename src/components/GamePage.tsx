@@ -18,6 +18,7 @@ import StartGameModal from './StartGameModal';
 import Clock from './Clock';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
 import { GameSettings } from '../types';
+import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -219,56 +220,33 @@ const GamePage: React.FC<GamePageProps> = ({
 
   useEffect(() => {
     const loadAssets = async () => {
-      // For now, use hardcoded lists since import.meta.glob is not available
-      const wallpaperPaths = [
-        '/wallpapers/beautiful-japanese-garden.jpg',
-        '/wallpapers/beautiful-natural-landscape.jpg',
-        '/wallpapers/fuji1.jpg',
-        '/wallpapers/koi.jpg',
-        '/wallpapers/maple.jpg',
-        '/wallpapers/mountain-house.jpeg',
-        '/wallpapers/photo1.jpg',
-        '/wallpapers/shogi-background-placeholder.svg',
-        '/wallpapers/wave.jpg',
-        '/wallpapers/woman-with-kimono-wagasa-umbrella.jpg'
-      ];
-      
-      const boardPaths = [
-        '/boards/koi-bw.jpg',
-        '/boards/doubutsu.png',
-        '/boards/marble-calacatta.jpg',
-        '/boards/marble.jpg',
-        '/boards/quartz-1.jpg',
-        '/boards/quartz-2.jpg',
-        '/boards/stars-1.jpg',
-        '/boards/stars-2.jpg',
-        '/boards/wood-agathis-1.jpg',
-        '/boards/wood-agathis-2.jpg',
-        '/boards/wood-bambo.jpg',
-        '/boards/wood-boxwood-1.jpg',
-        '/boards/wood-boxwood-2.jpg',
-        '/boards/wood-boxwood-3.jpg',
-        '/boards/wood-boxwood-4.jpg',
-        '/boards/wood-cherry-1.jpg',
-        '/boards/wood-cherry-2.jpg',
-        '/boards/wood-cherry-3.jpg',
-        '/boards/wood-cypress-1.jpg',
-        '/boards/wood-ginkgo-1.jpg',
-        '/boards/wood-ginkgo-2.jpg',
-        '/boards/wood-ginkgo-3.jpg',
-        '/boards/wood-hiba-1.jpeg',
-        '/boards/wood-hickory-1.jpg',
-        '/boards/wood-katsura-1.png',
-        '/boards/wood-mahogany-1.jpg',
-        '/boards/wood-maple-1.jpg',
-        '/boards/wood-maple-2.webp',
-        '/boards/wood-pecan-1.jpg',
-        '/boards/wood-pecan-2.jpg',
-        '/boards/wood-red-spruce-1.jpg'
-      ];
+      let finalWallpaperPaths: string[] = [];
+      let finalBoardPaths: string[] = [];
 
-      setWallpaperList(wallpaperPaths);
-      setBoardBackgroundList(boardPaths);
+      try {
+        // Try to dynamically load images from directories
+        const [wallpaperPaths, boardPaths] = await Promise.all([
+          loadWallpaperImages(),
+          loadBoardImages()
+        ]);
+
+        // If dynamic loading returns empty arrays, fall back to hardcoded lists
+        finalWallpaperPaths = wallpaperPaths.length > 0 ? wallpaperPaths : getFallbackWallpaperImages();
+        finalBoardPaths = boardPaths.length > 0 ? boardPaths : getFallbackBoardImages();
+
+        setWallpaperList(finalWallpaperPaths);
+        setBoardBackgroundList(finalBoardPaths);
+
+        console.log('Loaded wallpapers:', finalWallpaperPaths.length, 'images');
+        console.log('Loaded boards:', finalBoardPaths.length, 'images');
+      } catch (error) {
+        console.error('Error loading images dynamically, using fallback lists:', error);
+        // Fall back to hardcoded lists if dynamic loading fails
+        finalWallpaperPaths = getFallbackWallpaperImages();
+        finalBoardPaths = getFallbackBoardImages();
+        setWallpaperList(finalWallpaperPaths);
+        setBoardBackgroundList(finalBoardPaths);
+      }
 
       // Load available piece themes
       try {
@@ -284,13 +262,13 @@ const GamePage: React.FC<GamePageProps> = ({
 
       // Set random wallpaper and board background if not already set
       if (!wallpaper) {
-        const randomWallpaper = wallpaperPaths[Math.floor(Math.random() * wallpaperPaths.length)];
+        const randomWallpaper = finalWallpaperPaths[Math.floor(Math.random() * finalWallpaperPaths.length)];
         setWallpaper(randomWallpaper);
         localStorage.setItem('shogi-wallpaper', randomWallpaper);
       }
       
       if (!boardBackground) {
-        const randomBoardBackground = boardPaths[Math.floor(Math.random() * boardPaths.length)];
+        const randomBoardBackground = finalBoardPaths[Math.floor(Math.random() * finalBoardPaths.length)];
         setBoardBackground(randomBoardBackground);
         localStorage.setItem('shogi-board-background', randomBoardBackground);
       }
