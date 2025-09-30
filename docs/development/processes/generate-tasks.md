@@ -8,7 +8,7 @@ To guide an AI assistant in creating a detailed, step-by-step task list in Markd
 
 - **Format:** Markdown (`.md`)
 - **Location:** Same loaction as design document
-- **Filename:** `tasks-[file-name].md` (e.g., `DESIGN_QUIESCENCE_SEARCH.md` becomes `TASKS_QUIESCENCE_SEARCH.md`)
+- **Filename:** `[file-name]_tasks.md` (e.g., `DESIGN_QUIESCENCE_SEARCH.md` becomes `QUIESCENCE_SEARCH_TASKS.md`)
 
 ## Process
 
