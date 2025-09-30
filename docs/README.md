@@ -47,54 +47,66 @@ Technical design documents, architecture decisions, and implementation plans.
   - `MIGRATION_GUIDE.md` - Migration guide for system changes
   - `USI_REFACTOR_SUMMARY.md` - Summary of USI implementation refactor
 
-- **`algorithms/`** - AI algorithms, optimization strategies, and performance analysis
-  - `DESIGN_ADVANCED_KING_SAFETY.md` - King safety algorithm design
-  - `DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design
-  - `DESIGN_AUTOMATED_TUNING.md` - Automated tuning design
-  - `DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design
-  - `DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening
-  - `DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design
-  - `DESIGN_NULL_MOVE_PRUNING.md` - Null move pruning design
-  - `DESIGN_QUIESCENCE_SEARCH.md` - Quiescence search design
-  - `DESIGN_SIMD.md` - SIMD optimization design
-  - `DESIGN_TAPERED_EVALUATION.md` - Tapered evaluation design
-  - `OPTIMIZATION_STRATEGIES_ANALYSIS.md` - Comprehensive optimization analysis
-  - `OPTIMIZATION_EXAMPLES.md` - Optimization examples
-  - `SIMD_OPTIMIZATION_ANALYSIS.md` - SIMD optimization analysis
-  - `SIMD_OPTIMIZATION_PLAN.md` - SIMD optimization plan
-  - `SIMD_PERFORMANCE_ANALYSIS_REPORT.md` - SIMD performance analysis
-  - `SIMD_PERFORMANCE_FINAL_ANALYSIS.md` - Final SIMD performance analysis
-  - `PERFORMANCE_TAPERED_EVALUATION.md` - Tapered evaluation performance
-  - `AI_ENGINE_ANALYSIS.md` - AI engine analysis
-  - `BENCHMARK_RESULTS.md` - Benchmark results
-  - `OPENING_BOOK_PERFORMANCE_BENCHMARKS.md` - Opening book benchmarks
-  - `OPENING_BOOK_POPULATION_SUMMARY.md` - Opening book population analysis
-  - `TABLEBASE_SYSTEM_README.md` - Tablebase system documentation
-  - `TUNING_SYSTEM_README.md` - Tuning system documentation
-
-- **`implementation/`** - Implementation plans and task lists
-  - `IMPLEMENT_ADVANCED_KING_SAFETY.md` - King safety implementation plan
-  - `IMPLEMENT_ASPIRATION_WINDOWS.md` - Aspiration windows implementation
-  - `IMPLEMENT_AUTOMATED_TUNING.md` - Automated tuning implementation
-  - `IMPLEMENT_ENDGAME_TABLEBASES.md` - Endgame tablebases implementation
-  - `IMPLEMENT_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening
-  - `IMPLEMENT_LATE_MOVE_REDUCTIONS.md` - Late move reductions implementation
-  - `IMPLEMENT_NULL_MOVE_PRUNING.md` - Null move pruning implementation
-  - `IMPLEMENT_OPENING_BOOK.md` - Opening book implementation
-  - `IMPLEMENT_QUIESCENCE_SEARCH.md` - Quiescence search implementation
-  - `IMPLEMENT_SIMD.md` - SIMD implementation plan
-  - `IMPLEMENT_TAPERED_EVALUATION.md` - Tapered evaluation implementation
-  - `TASKS_NULL_MOVE_PRUNING.md` - Null move pruning tasks
-  - `TASKS_QUIESCENCE_SEARCH.md` - Quiescence search tasks
-  - `TASKS_TAPERED_EVALUATION.md` - Tapered evaluation tasks
-  - `tasks-DESIGN_ADVANCED_KING_SAFETY.md` - King safety design tasks
-  - `tasks-DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design tasks
-  - `tasks-DESIGN_AUTOMATED_TUNING.md` - Automated tuning design tasks
-  - `tasks-DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design tasks
-  - `tasks-DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening tasks
-  - `tasks-DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design tasks
-  - `tasks-DESIGN_SIMD.md` - SIMD design tasks
-  - `tasks-IMPLEMENT_OPENING_BOOK.md` - Opening book implementation tasks
+- **`implementation/`** - AI algorithms, optimization strategies, and implementation plans organized by subject
+  - **`advanced-king-safety/`** - King safety algorithm design and implementation
+    - `DESIGN_ADVANCED_KING_SAFETY.md` - King safety algorithm design
+    - `IMPLEMENT_ADVANCED_KING_SAFETY.md` - King safety implementation plan
+    - `tasks-DESIGN_ADVANCED_KING_SAFETY.md` - King safety design tasks
+  - **`aspiration-windows/`** - Aspiration windows design and implementation
+    - `DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design
+    - `IMPLEMENT_ASPIRATION_WINDOWS.md` - Aspiration windows implementation
+    - `tasks-DESIGN_ASPIRATION_WINDOWS.md` - Aspiration windows design tasks
+  - **`automated-tuning/`** - Automated tuning design and implementation
+    - `DESIGN_AUTOMATED_TUNING.md` - Automated tuning design
+    - `IMPLEMENT_AUTOMATED_TUNING.md` - Automated tuning implementation
+    - `tasks-DESIGN_AUTOMATED_TUNING.md` - Automated tuning design tasks
+    - `TUNING_SYSTEM_README.md` - Tuning system documentation
+  - **`endgame-tablebases/`** - Endgame tablebases design and implementation
+    - `DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design
+    - `IMPLEMENT_ENDGAME_TABLEBASES.md` - Endgame tablebases implementation
+    - `tasks-DESIGN_ENDGAME_TABLEBASES.md` - Endgame tablebases design tasks
+    - `TABLEBASE_SYSTEM_README.md` - Tablebase system documentation
+  - **`internal-iterative-deepening/`** - Internal iterative deepening design and implementation
+    - `DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening design
+    - `IMPLEMENT_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening implementation
+    - `tasks-DESIGN_INTERNAL_ITERATIVE_DEEPENING.md` - Internal iterative deepening design tasks
+  - **`late-move-reductions/`** - Late move reductions design and implementation
+    - `DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design
+    - `IMPLEMENT_LATE_MOVE_REDUCTIONS.md` - Late move reductions implementation
+    - `tasks-DESIGN_LATE_MOVE_REDUCTIONS.md` - Late move reductions design tasks
+  - **`null-move-pruning/`** - Null move pruning design and implementation
+    - `DESIGN_NULL_MOVE_PRUNING.md` - Null move pruning design
+    - `IMPLEMENT_NULL_MOVE_PRUNING.md` - Null move pruning implementation
+    - `TASKS_NULL_MOVE_PRUNING.md` - Null move pruning tasks
+  - **`opening-book/`** - Opening book design and implementation
+    - `IMPLEMENT_OPENING_BOOK.md` - Opening book implementation
+    - `tasks-IMPLEMENT_OPENING_BOOK.md` - Opening book implementation tasks
+    - `OPENING_BOOK_PERFORMANCE_BENCHMARKS.md` - Opening book benchmarks
+    - `OPENING_BOOK_POPULATION_SUMMARY.md` - Opening book population analysis
+  - **`optimization-strategies/`** - General optimization strategies and analysis
+    - `OPTIMIZATION_STRATEGIES_ANALYSIS.md` - Comprehensive optimization analysis
+    - `OPTIMIZATION_EXAMPLES.md` - Optimization examples
+  - **`performance-analysis/`** - Performance analysis and benchmarking
+    - `AI_ENGINE_ANALYSIS.md` - AI engine analysis
+    - `BENCHMARK_RESULTS.md` - Benchmark results
+    - `PERFORMANCE_TAPERED_EVALUATION.md` - Tapered evaluation performance
+    - `PERFORMANCE_TUNING_GUIDE.md` - Performance tuning guide
+  - **`quiescence-search/`** - Quiescence search design and implementation
+    - `DESIGN_QUIESCENCE_SEARCH.md` - Quiescence search design
+    - `IMPLEMENT_QUIESCENCE_SEARCH.md` - Quiescence search implementation
+    - `TASKS_QUIESCENCE_SEARCH.md` - Quiescence search tasks
+  - **`simd-optimization/`** - SIMD optimization design and implementation
+    - `DESIGN_SIMD.md` - SIMD optimization design
+    - `IMPLEMENT_SIMD.md` - SIMD implementation plan
+    - `tasks-DESIGN_SIMD.md` - SIMD design tasks
+    - `SIMD_OPTIMIZATION_ANALYSIS.md` - SIMD optimization analysis
+    - `SIMD_OPTIMIZATION_PLAN.md` - SIMD optimization plan
+    - `SIMD_PERFORMANCE_ANALYSIS_REPORT.md` - SIMD performance analysis
+    - `SIMD_PERFORMANCE_FINAL_ANALYSIS.md` - Final SIMD performance analysis
+  - **`tapered-evaluation/`** - Tapered evaluation design and implementation
+    - `DESIGN_TAPERED_EVALUATION.md` - Tapered evaluation design
+    - `IMPLEMENT_TAPERED_EVALUATION.md` - Tapered evaluation implementation
+    - `TASKS_TAPERED_EVALUATION.md` - Tapered evaluation tasks
 
 ### 🔧 Development Documentation (`development/`)
 Development processes, project planning, and status tracking.
@@ -136,7 +148,7 @@ Deprecated, outdated, or experimental documentation.
 Start with `user/guides/USER_GUIDE.md` for the main user guide, or check `user/guides/FAQ.md` for common questions.
 
 ### For Developers
-Begin with `design/architecture/README_WASM_IMPLEMENTATION.md` for system architecture, then explore `design/algorithms/` for AI implementation details.
+Begin with `design/architecture/README_WASM_IMPLEMENTATION.md` for system architecture, then explore `design/implementation/` for AI implementation details organized by subject area.
 
 ### For API Consumers
 Check `user/api/API_DOCUMENTATION.md` for complete API reference and `user/api/CODE_EXAMPLES.md` for usage examples.
