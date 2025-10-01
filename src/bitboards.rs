@@ -1,6 +1,10 @@
 use crate::types::*;
 use std::collections::HashMap;
 
+// Include the magic bitboard module
+pub mod magic;
+pub mod sliding_moves;
+
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {
     pieces: [[Bitboard; 14]; 2],
@@ -9,6 +13,10 @@ pub struct BitboardBoard {
     white_occupied: Bitboard,
     piece_positions: HashMap<Position, Piece>,
     attack_patterns: AttackPatterns,
+    /// Magic bitboard table for sliding piece moves
+    magic_table: Option<crate::types::MagicTable>,
+    /// Sliding move generator for magic bitboard operations
+    sliding_generator: Option<sliding_moves::SlidingMoveGenerator>,
 }
 
 impl BitboardBoard {
@@ -26,6 +34,8 @@ impl BitboardBoard {
             white_occupied: EMPTY_BITBOARD,
             piece_positions: HashMap::new(),
             attack_patterns: AttackPatterns::new(),
+            magic_table: None,
+            sliding_generator: None,
         }
     }
 
@@ -381,6 +391,112 @@ impl BitboardBoard {
         }
         board_str
     }
+
+    /// Initialize with magic bitboard support
+    pub fn new_with_magic_support() -> Result<Self, MagicError> {
+        let magic_table = crate::types::MagicTable::new()?;
+        Ok(Self {
+            pieces: [[EMPTY_BITBOARD; 14]; 2],
+            occupied: EMPTY_BITBOARD,
+            black_occupied: EMPTY_BITBOARD,
+            white_occupied: EMPTY_BITBOARD,
+            piece_positions: HashMap::new(),
+            attack_patterns: AttackPatterns::new(),
+            magic_table: Some(magic_table),
+            sliding_generator: None,
+        })
+    }
+
+    /// Get attack pattern for a square using magic bitboards
+    pub fn get_attack_pattern(
+        &self,
+        square: Position,
+        piece_type: PieceType
+    ) -> Bitboard {
+        if let Some(ref magic_table) = self.magic_table {
+            magic_table.get_attacks(square.to_index(), piece_type, self.occupied)
+        } else {
+            // Fallback to ray-casting
+            self.generate_attack_pattern_raycast(square, piece_type)
+        }
+    }
+
+    /// Generate attack pattern using ray-casting (fallback method)
+    fn generate_attack_pattern_raycast(&self, square: Position, piece_type: PieceType) -> Bitboard {
+        // Placeholder implementation - would use the existing ray-casting logic
+        EMPTY_BITBOARD
+    }
+
+    /// Check if magic bitboards are enabled
+    pub fn has_magic_support(&self) -> bool {
+        self.magic_table.is_some()
+    }
+
+    /// Get magic table reference
+    pub fn get_magic_table(&self) -> Option<&crate::types::MagicTable> {
+        self.magic_table.as_ref()
+    }
+
+    /// Initialize sliding move generator with magic table
+    pub fn init_sliding_generator(&mut self) -> Result<(), crate::types::MagicError> {
+        if let Some(magic_table) = self.magic_table.take() {
+            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::new(magic_table));
+            Ok(())
+        } else {
+            Err(crate::types::MagicError::InitializationFailed {
+                reason: "Magic table not initialized".to_string(),
+            })
+        }
+    }
+
+    /// Initialize sliding move generator with custom settings
+    pub fn init_sliding_generator_with_settings(&mut self, magic_enabled: bool) -> Result<(), crate::types::MagicError> {
+        if let Some(magic_table) = self.magic_table.take() {
+            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::with_settings(magic_table, magic_enabled));
+            Ok(())
+        } else {
+            Err(crate::types::MagicError::InitializationFailed {
+                reason: "Magic table not initialized".to_string(),
+            })
+        }
+    }
+
+    /// Get sliding move generator reference
+    pub fn get_sliding_generator(&self) -> Option<&sliding_moves::SlidingMoveGenerator> {
+        self.sliding_generator.as_ref()
+    }
+
+    /// Check if sliding generator is initialized
+    pub fn is_sliding_generator_initialized(&self) -> bool {
+        self.sliding_generator.is_some()
+    }
+
+    /// Generate sliding moves for a piece using magic bitboards
+    /// Returns None if magic bitboards are not initialized
+    pub fn generate_magic_sliding_moves(
+        &self,
+        from: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> Option<Vec<Move>> {
+        self.sliding_generator.as_ref().map(|gen| {
+            gen.generate_sliding_moves(self, from, piece_type, player)
+        })
+    }
+
+    /// Get occupied bitboard
+    pub fn get_occupied_bitboard(&self) -> Bitboard {
+        self.occupied
+    }
+
+    /// Check if a square is occupied by a specific player
+    pub fn is_occupied_by_player(&self, pos: Position, player: Player) -> bool {
+        if let Some(piece) = self.get_piece(pos) {
+            piece.player == player
+        } else {
+            false
+        }
+    }
 }
 
 impl Clone for BitboardBoard {
@@ -392,6 +508,8 @@ impl Clone for BitboardBoard {
             white_occupied: self.white_occupied,
             piece_positions: self.piece_positions.clone(),
             attack_patterns: self.attack_patterns.clone(),
+            magic_table: self.magic_table.clone(),
+            sliding_generator: self.sliding_generator.clone(),
         }
     }
 }

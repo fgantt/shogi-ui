@@ -8,6 +8,14 @@ pub struct MoveGenerator {
     move_cache: std::collections::HashMap<String, Vec<Move>>,
     cache_hits: u64,
     cache_misses: u64,
+    // Feature flags for magic bitboard integration
+    magic_bitboard_enabled: bool,
+    batch_processing_enabled: bool,
+    // Performance metrics
+    magic_move_count: u64,
+    raycast_move_count: u64,
+    magic_generation_time: std::time::Duration,
+    raycast_generation_time: std::time::Duration,
 }
 
 impl MoveGenerator {
@@ -16,7 +24,68 @@ impl MoveGenerator {
             move_cache: std::collections::HashMap::new(),
             cache_hits: 0,
             cache_misses: 0,
+            magic_bitboard_enabled: true,
+            batch_processing_enabled: true,
+            magic_move_count: 0,
+            raycast_move_count: 0,
+            magic_generation_time: std::time::Duration::ZERO,
+            raycast_generation_time: std::time::Duration::ZERO,
         }
+    }
+
+    /// Create a new move generator with custom settings
+    pub fn with_settings(magic_enabled: bool, batch_processing: bool) -> Self {
+        Self {
+            move_cache: std::collections::HashMap::new(),
+            cache_hits: 0,
+            cache_misses: 0,
+            magic_bitboard_enabled: magic_enabled,
+            batch_processing_enabled: batch_processing,
+            magic_move_count: 0,
+            raycast_move_count: 0,
+            magic_generation_time: std::time::Duration::ZERO,
+            raycast_generation_time: std::time::Duration::ZERO,
+        }
+    }
+
+    /// Enable or disable magic bitboards
+    pub fn set_magic_bitboard_enabled(&mut self, enabled: bool) {
+        self.magic_bitboard_enabled = enabled;
+    }
+
+    /// Check if magic bitboards are enabled
+    pub fn is_magic_bitboard_enabled(&self) -> bool {
+        self.magic_bitboard_enabled
+    }
+
+    /// Enable or disable batch processing
+    pub fn set_batch_processing_enabled(&mut self, enabled: bool) {
+        self.batch_processing_enabled = enabled;
+    }
+
+    /// Check if batch processing is enabled
+    pub fn is_batch_processing_enabled(&self) -> bool {
+        self.batch_processing_enabled
+    }
+
+    /// Get performance comparison metrics
+    pub fn get_performance_metrics(&self) -> MoveGenerationMetrics {
+        MoveGenerationMetrics {
+            magic_move_count: self.magic_move_count,
+            raycast_move_count: self.raycast_move_count,
+            magic_generation_time: self.magic_generation_time,
+            raycast_generation_time: self.raycast_generation_time,
+            magic_bitboard_enabled: self.magic_bitboard_enabled,
+            batch_processing_enabled: self.batch_processing_enabled,
+        }
+    }
+
+    /// Reset performance metrics
+    pub fn reset_metrics(&mut self) {
+        self.magic_move_count = 0;
+        self.raycast_move_count = 0;
+        self.magic_generation_time = std::time::Duration::ZERO;
+        self.raycast_generation_time = std::time::Duration::ZERO;
     }
 
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
@@ -770,5 +839,54 @@ fn is_legal_drop_location(board: &BitboardBoard, piece_type: PieceType, pos: Pos
         PieceType::Pawn | PieceType::Lance if pos.row == last_rank => return false,
         PieceType::Knight if pos.row == last_rank || pos.row == second_last_rank => return false,
         _ => true
+    }
+}
+
+/// Performance metrics for move generation
+#[derive(Debug, Clone)]
+pub struct MoveGenerationMetrics {
+    pub magic_move_count: u64,
+    pub raycast_move_count: u64,
+    pub magic_generation_time: std::time::Duration,
+    pub raycast_generation_time: std::time::Duration,
+    pub magic_bitboard_enabled: bool,
+    pub batch_processing_enabled: bool,
+}
+
+impl MoveGenerationMetrics {
+    /// Calculate the speedup ratio of magic bitboards over ray-casting
+    pub fn magic_speedup_ratio(&self) -> f64 {
+        if self.raycast_generation_time.as_nanos() > 0 {
+            self.raycast_generation_time.as_nanos() as f64 / self.magic_generation_time.as_nanos() as f64
+        } else {
+            1.0
+        }
+    }
+
+    /// Calculate the efficiency of magic bitboards
+    pub fn magic_efficiency(&self) -> f64 {
+        if self.magic_move_count + self.raycast_move_count > 0 {
+            self.magic_move_count as f64 / (self.magic_move_count + self.raycast_move_count) as f64
+        } else {
+            0.0
+        }
+    }
+
+    /// Get average time per move for magic bitboards
+    pub fn magic_avg_time_per_move(&self) -> std::time::Duration {
+        if self.magic_move_count > 0 {
+            self.magic_generation_time / self.magic_move_count as u32
+        } else {
+            std::time::Duration::ZERO
+        }
+    }
+
+    /// Get average time per move for ray-casting
+    pub fn raycast_avg_time_per_move(&self) -> std::time::Duration {
+        if self.raycast_move_count > 0 {
+            self.raycast_generation_time / self.raycast_move_count as u32
+        } else {
+            std::time::Duration::ZERO
+        }
     }
 }

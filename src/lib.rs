@@ -43,6 +43,9 @@ use types::*;
 use opening_book::OpeningBook;
 use tablebase::MicroTablebase;
 
+// Re-export BitboardBoard for external use
+pub use bitboards::BitboardBoard;
+
 #[derive(Serialize, Deserialize)]
 struct PieceJson {
     position: PositionJson,

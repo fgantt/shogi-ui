@@ -188,6 +188,18 @@ impl Position {
         self.row * 9 + self.col
     }
 
+    pub fn to_index(self) -> u8 {
+        self.to_u8()
+    }
+
+    /// Create a Position from a 0-based index (0-80)
+    pub fn from_index(index: u8) -> Self {
+        Self {
+            row: index / 9,
+            col: index % 9,
+        }
+    }
+
     pub fn is_valid(self) -> bool {
         self.row < 9 && self.col < 9
     }
@@ -3917,4 +3929,138 @@ impl ConfigComparison {
         
         differences
     }
+}
+
+// ============================================================================
+// Magic Bitboard Types
+// ============================================================================
+
+/// Magic bitboard specific errors
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum MagicError {
+    #[error("Failed to generate magic number for square {square} piece {piece_type:?}")]
+    GenerationFailed { square: u8, piece_type: PieceType },
+    
+    #[error("Magic number validation failed: {reason}")]
+    ValidationFailed { reason: String },
+    
+    #[error("Insufficient memory for magic table: required {required}, available {available}")]
+    InsufficientMemory { required: usize, available: usize },
+    
+    #[error("Magic table initialization failed: {reason}")]
+    InitializationFailed { reason: String },
+    
+    #[error("Invalid square index: {square}")]
+    InvalidSquare { square: u8 },
+    
+    #[error("Invalid piece type for magic bitboards: {piece_type:?}")]
+    InvalidPieceType { piece_type: PieceType },
+    
+    #[error("IO error: {0}")]
+    IoError(String),
+}
+
+/// Represents a magic bitboard entry for a single square
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MagicBitboard {
+    /// The magic number used for hashing
+    pub magic_number: u64,
+    /// Bitmask of relevant occupied squares
+    pub mask: Bitboard,
+    /// Number of bits to shift the hash result
+    pub shift: u8,
+    /// Base address for attack table
+    pub attack_base: usize,
+    /// Number of attack patterns for this square
+    pub table_size: usize,
+}
+
+impl Default for MagicBitboard {
+    fn default() -> Self {
+        Self {
+            magic_number: 0,
+            mask: EMPTY_BITBOARD,
+            shift: 0,
+            attack_base: 0,
+            table_size: 0,
+        }
+    }
+}
+
+/// Complete magic bitboard table for all squares
+#[derive(Clone, Debug)]
+pub struct MagicTable {
+    /// Magic bitboards for rook attacks (81 squares)
+    pub rook_magics: [MagicBitboard; 81],
+    /// Magic bitboards for bishop attacks (81 squares)
+    pub bishop_magics: [MagicBitboard; 81],
+    /// Precomputed attack patterns storage
+    pub attack_storage: Vec<Bitboard>,
+    /// Memory pool for attack tables
+    pub memory_pool: MemoryPool,
+}
+
+impl Default for MagicTable {
+    fn default() -> Self {
+        Self {
+            rook_magics: [MagicBitboard::default(); 81],
+            bishop_magics: [MagicBitboard::default(); 81],
+            attack_storage: Vec::new(),
+            memory_pool: MemoryPool::default(),
+        }
+    }
+}
+
+/// Memory pool for efficient allocation of attack tables
+#[derive(Clone, Debug)]
+pub struct MemoryPool {
+    /// Pre-allocated memory blocks
+    pub blocks: Vec<Vec<Bitboard>>,
+    /// Current allocation index
+    pub current_block: usize,
+    /// Current position in current block
+    pub current_offset: usize,
+    /// Block size for allocation
+    pub block_size: usize,
+}
+
+impl Default for MemoryPool {
+    fn default() -> Self {
+        Self {
+            blocks: Vec::new(),
+            current_block: 0,
+            current_offset: 0,
+            block_size: 4096, // Default block size
+        }
+    }
+}
+
+/// Magic number generation result
+#[derive(Debug, Clone, Copy)]
+pub struct MagicGenerationResult {
+    pub magic_number: u64,
+    pub mask: Bitboard,
+    pub shift: u8,
+    pub table_size: usize,
+    pub generation_time: std::time::Duration,
+}
+
+/// Attack pattern generation configuration
+#[derive(Debug, Clone)]
+pub struct AttackConfig {
+    pub piece_type: PieceType,
+    pub square: u8,
+    pub include_promoted: bool,
+    pub max_distance: Option<u8>,
+}
+
+/// Performance metrics for magic bitboard operations
+#[derive(Debug, Default, Clone)]
+pub struct PerformanceMetrics {
+    pub lookup_count: u64,
+    pub total_lookup_time: std::time::Duration,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub memory_usage: usize,
+    pub fallback_lookups: u64,
 }
