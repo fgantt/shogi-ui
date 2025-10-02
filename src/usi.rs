@@ -41,6 +41,10 @@ impl UsiHandler {
     }
 
     fn handle_go(&mut self, parts: &[&str]) -> Vec<String> {
+        crate::debug_utils::trace_log("USI_GO", "Starting go command processing");
+        crate::debug_utils::set_search_start_time();
+        crate::debug_utils::start_timing("go_command_parsing");
+        
         let mut btime = 0;
         let mut wtime = 0;
         let mut byoyomi = 0;
@@ -71,6 +75,9 @@ impl UsiHandler {
             }
         }
 
+        crate::debug_utils::end_timing("go_command_parsing", "USI_GO");
+        crate::debug_utils::trace_log("USI_GO", &format!("Parsed time controls: btime={}ms wtime={}ms byoyomi={}ms", btime, wtime, byoyomi));
+
         let time_to_use = if byoyomi > 0 {
             byoyomi
         } else {
@@ -82,18 +89,26 @@ impl UsiHandler {
             }
         };
 
+        crate::debug_utils::log_decision("USI_GO", "Time allocation", 
+            &format!("Player: {:?}, Allocated time: {}ms", self.engine.current_player, time_to_use), 
+            Some(time_to_use as i32));
+
         self.engine.stop_flag.store(false, std::sync::atomic::Ordering::Relaxed);
 
+        crate::debug_utils::start_timing("best_move_search");
         let best_move = self.engine.get_best_move(
             self.engine.depth,
             time_to_use,
             Some(self.engine.stop_flag.clone()),
             None, // No callback for native version
         );
+        crate::debug_utils::end_timing("best_move_search", "USI_GO");
 
         if let Some(mv) = best_move {
+            crate::debug_utils::trace_log("USI_GO", &format!("Best move found: {}", mv.to_usi_string()));
             vec![format!("bestmove {}", mv.to_usi_string())]
         } else {
+            crate::debug_utils::trace_log("USI_GO", "No legal moves found, resigning");
             vec!["bestmove resign".to_string()]
         }
     }

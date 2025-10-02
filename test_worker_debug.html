@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Worker Debug Test</title>
+</head>
+<body>
+    <h1>Worker Debug Test</h1>
+    <div id="output"></div>
+    <button onclick="testWorker()">Test Worker</button>
+    
+    <script type="module">
+        import { WasmEngineAdapter } from './src/usi/engine.js';
+        
+        function log(message) {
+            const output = document.getElementById('output');
+            output.innerHTML += '<div>' + message + '</div>';
+            console.log(message);
+        }
+        
+        async function testWorker() {
+            log('Starting worker test...');
+            
+            try {
+                const adapter = new WasmEngineAdapter('test-session');
+                
+                // Add error listener
+                adapter.on('error', (error) => {
+                    log('Adapter error event: ' + JSON.stringify(error));
+                });
+                
+                // Add info listener
+                adapter.on('info', (info) => {
+                    log('Adapter info: ' + info.content);
+                });
+                
+                // Add bestmove listener
+                adapter.on('bestmove', (move) => {
+                    log('Adapter bestmove: ' + move.move);
+                });
+                
+                log('Initializing adapter...');
+                await adapter.init();
+                log('Adapter initialized');
+                
+                log('Checking if ready...');
+                await adapter.isReady();
+                log('Adapter ready');
+                
+                log('Setting position...');
+                await adapter.setPosition('lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1', []);
+                log('Position set');
+                
+                log('Starting search...');
+                await adapter.go({ depth: 2 });
+                log('Search command sent');
+                
+                // Wait a bit for results
+                setTimeout(() => {
+                    log('Test completed');
+                }, 5000);
+                
+            } catch (error) {
+                log('Test failed: ' + error.message);
+                log('Error stack: ' + error.stack);
+            }
+        }
+        
+        // Make testWorker available globally
+        window.testWorker = testWorker;
+    </script>
+</body>
+</html>

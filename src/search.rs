@@ -2052,29 +2052,33 @@ impl SearchEngine {
 
 
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
-        crate::debug_utils::debug_log(&format!("Inside search_at_depth, depth={}", depth));
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Starting search at depth {} (alpha: {}, beta: {})", depth, alpha, beta));
+        crate::debug_utils::start_timing(&format!("search_at_depth_{}", depth));
         
         // Check tablebase first
-        crate::debug_utils::debug_log("Probing tablebase for position");
+        crate::debug_utils::start_timing("tablebase_probe");
         if let Some(tablebase_result) = self.tablebase.probe(board, player, captured_pieces) {
+            crate::debug_utils::end_timing("tablebase_probe", "SEARCH_AT_DEPTH");
             if let Some(ref best_move) = tablebase_result.best_move {
-                crate::debug_utils::debug_log(&format!(
-                    "TABLEBASE HIT: {} (outcome: {:?}, distance: {:?}, confidence: {:.2})",
-                    best_move.to_usi_string(),
-                    tablebase_result.outcome,
-                    tablebase_result.distance_to_mate,
-                    tablebase_result.confidence
-                ));
+                crate::debug_utils::log_decision("SEARCH_AT_DEPTH", "Tablebase hit", 
+                    &format!("Move: {}, outcome: {:?}, distance: {:?}, confidence: {:.2}", 
+                        best_move.to_usi_string(),
+                        tablebase_result.outcome,
+                        tablebase_result.distance_to_mate,
+                        tablebase_result.confidence), 
+                    None);
                 
                 // Convert tablebase score to search score
                 let score = self.convert_tablebase_score(&tablebase_result);
-                crate::debug_utils::debug_log(&format!("Tablebase score: {}", score));
+                crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Tablebase score: {}", score));
+                crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
                 return Some((best_move.clone(), score));
             } else {
-                crate::debug_utils::debug_log("Tablebase hit but no best move found");
+                crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Tablebase hit but no best move found");
             }
         } else {
-            crate::debug_utils::debug_log("TABLEBASE MISS: Position not in tablebase");
+            crate::debug_utils::end_timing("tablebase_probe", "SEARCH_AT_DEPTH");
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "TABLEBASE MISS: Position not in tablebase");
         }
         
         self.nodes_searched = 0;
@@ -2082,36 +2086,44 @@ impl SearchEngine {
         let mut alpha = alpha;
         
         let mut best_move: Option<Move> = None;
-        crate::debug_utils::debug_log(&format!("Initial best_move: {:?}", best_move));
         let mut best_score = alpha;
         
-        crate::debug_utils::debug_log("About to generate legal moves");
-        
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Generating legal moves");
+        crate::debug_utils::start_timing("move_generation");
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
+        crate::debug_utils::end_timing("move_generation", "SEARCH_AT_DEPTH");
+        
         if legal_moves.is_empty() {
-            crate::debug_utils::debug_log("No legal moves found");
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "No legal moves found");
+            crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
             return None;
         }
         
-        crate::debug_utils::debug_log(&format!("Found {} legal moves", legal_moves.len()));
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Found {} legal moves", legal_moves.len()));
         
         // Debug: log the first few moves
         for (i, mv) in legal_moves.iter().take(5).enumerate() {
-            crate::debug_utils::debug_log(&format!("Move {}: {}", i, mv.to_usi_string()));
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Move {}: {}", i, mv.to_usi_string()));
         }
         
-        crate::debug_utils::debug_log("About to sort moves");
-        
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Sorting moves");
+        crate::debug_utils::start_timing("move_sorting");
         let sorted_moves = self.sort_moves(&legal_moves, board, None);
+        crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
-        crate::debug_utils::debug_log("About to start move evaluation loop");
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
         
         let mut history: Vec<String> = vec![board.to_fen(player, captured_pieces)];
 
-        for move_ in sorted_moves {
-            if self.should_stop(&start_time, time_limit_ms) { break; }
+        for (move_index, move_) in sorted_moves.iter().enumerate() {
+            if self.should_stop(&start_time, time_limit_ms) { 
+                crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Time limit reached, stopping move evaluation");
+                break; 
+            }
             
-            crate::debug_utils::debug_log("About to make move");
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
+                move_index + 1, move_.to_usi_string(), alpha, beta));
+            crate::debug_utils::start_timing(&format!("move_eval_{}", move_index));
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -2121,17 +2133,31 @@ impl SearchEngine {
             }
             
             let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history, true);
+            crate::debug_utils::end_timing(&format!("move_eval_{}", move_index), "SEARCH_AT_DEPTH");
+            
+            crate::debug_utils::log_move_eval("SEARCH_AT_DEPTH", &move_.to_usi_string(), score, 
+                &format!("move {} of {}", move_index + 1, sorted_moves.len()));
             
             if score > best_score {
+                crate::debug_utils::log_decision("SEARCH_AT_DEPTH", "New best move", 
+                    &format!("Move {} improved score from {} to {}", move_.to_usi_string(), best_score, score), 
+                    Some(score));
                 best_score = score;
-                best_move = Some(move_);
+                best_move = Some(move_.clone());
             }
             
             if score > alpha {
+                crate::debug_utils::log_decision("SEARCH_AT_DEPTH", "Alpha update", 
+                    &format!("Score {} > alpha {}, updating alpha", score, alpha), 
+                    Some(score));
                 alpha = score;
             }
         }
 
+        crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Search completed: best_move={:?}, best_score={}", 
+            best_move.as_ref().map(|m| m.to_usi_string()), best_score));
+        
         best_move.map(|m| (m, best_score))
     }
 
@@ -2179,47 +2205,79 @@ impl SearchEngine {
     }
     
     fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, has_capture: bool, has_check: bool) -> i32 {
-        if self.should_stop(&start_time, time_limit_ms) { return 0; }
+        if self.should_stop(&start_time, time_limit_ms) { 
+            crate::debug_utils::trace_log("NEGAMAX", "Time limit reached, returning 0");
+            return 0; 
+        }
         self.nodes_searched += 1;
         let fen_key = board.to_fen(player, captured_pieces);
         if history.contains(&fen_key) {
+            crate::debug_utils::trace_log("NEGAMAX", "Repetition detected, returning 0 (draw)");
             return 0; // Repetition is a draw
         }
 
+        // Check transposition table
         if let Some(entry) = self.transposition_table.get(&fen_key) {
             if entry.depth >= depth {
+                crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit: depth={}, score={}, flag={:?}", 
+                    entry.depth, entry.score, entry.flag));
                 match entry.flag {
                     TranspositionFlag::Exact => return entry.score,
-                    TranspositionFlag::LowerBound => if entry.score >= beta { return entry.score; },
-                    TranspositionFlag::UpperBound => if entry.score <= alpha { return entry.score; },
+                    TranspositionFlag::LowerBound => if entry.score >= beta { 
+                        crate::debug_utils::trace_log("NEGAMAX", "TT lower bound cutoff");
+                        return entry.score; 
+                    },
+                    TranspositionFlag::UpperBound => if entry.score <= alpha { 
+                        crate::debug_utils::trace_log("NEGAMAX", "TT upper bound cutoff");
+                        return entry.score; 
+                    },
                 }
             }
         }
         
         // === NULL MOVE PRUNING ===
         if self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
+            crate::debug_utils::trace_log("NULL_MOVE", &format!("Attempting null move pruning at depth {}", depth));
+            crate::debug_utils::start_timing("null_move_search");
             let null_move_score = self.perform_null_move_search(
                 board, captured_pieces, player, depth, beta, start_time, time_limit_ms, history
             );
+            crate::debug_utils::end_timing("null_move_search", "NULL_MOVE");
             
             if null_move_score >= beta {
                 // Beta cutoff - position is too good, prune this branch
+                crate::debug_utils::log_decision("NULL_MOVE", "Beta cutoff", 
+                    &format!("Null move score {} >= beta {}, pruning branch", null_move_score, beta), 
+                    Some(null_move_score));
                 self.null_move_stats.cutoffs += 1;
                 return beta;
+            } else {
+                crate::debug_utils::trace_log("NULL_MOVE", &format!("Null move score {} < beta {}, continuing search", null_move_score, beta));
             }
         }
         // === END NULL MOVE PRUNING ===
         
         if depth == 0 {
-            return self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
+            crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search (alpha: {}, beta: {})", alpha, beta));
+            crate::debug_utils::start_timing("quiescence_search");
+            let result = self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
+            crate::debug_utils::end_timing("quiescence_search", "QUIESCENCE");
+            crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: score={}", result));
+            return result;
         }
         
         // Use the passed context parameters
+        crate::debug_utils::trace_log("NEGAMAX", &format!("Generating moves at depth {} (alpha: {}, beta: {})", depth, alpha, beta));
         
         let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
-            return if board.is_king_in_check(player, captured_pieces) { -100000 } else { 0 };
+            let is_check = board.is_king_in_check(player, captured_pieces);
+            let score = if is_check { -100000 } else { 0 };
+            crate::debug_utils::trace_log("NEGAMAX", &format!("No legal moves: check={}, score={}", is_check, score));
+            return score;
         }
+        
+        crate::debug_utils::trace_log("NEGAMAX", &format!("Found {} legal moves", legal_moves.len()));
         
         // === INTERNAL ITERATIVE DEEPENING (IID) ===
         let mut iid_move = None;
@@ -2227,8 +2285,10 @@ impl SearchEngine {
         let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms);
         
         if should_apply_iid {
+            crate::debug_utils::trace_log("IID", &format!("Applying Internal Iterative Deepening at depth {}", depth));
+            crate::debug_utils::start_timing("iid_search");
             let iid_depth = self.calculate_iid_depth(depth);
-            crate::debug_utils::debug_log(&format!("IID: Applying IID at depth {} with IID depth {}", depth, iid_depth));
+            crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
             let iid_start_time = std::time::Instant::now();
             iid_move = self.perform_iid_search(
@@ -2245,14 +2305,15 @@ impl SearchEngine {
             
             let iid_time = iid_start_time.elapsed().as_millis();
             self.iid_stats.iid_searches_performed += 1;
+            crate::debug_utils::end_timing("iid_search", "IID");
             
             if let Some(ref mv) = iid_move {
-                crate::debug_utils::debug_log(&format!("IID: Found move {} in {}ms", mv.to_usi_string(), iid_time));
+                crate::debug_utils::trace_log("IID", &format!("Found move {} in {}ms", mv.to_usi_string(), iid_time));
             } else {
-                crate::debug_utils::debug_log(&format!("IID: No move found after {}ms", iid_time));
+                crate::debug_utils::trace_log("IID", &format!("No move found after {}ms", iid_time));
             }
         } else {
-            crate::debug_utils::debug_log(&format!("IID: Skipped at depth {} (enabled={}, tt_move={}, moves={})", 
+            crate::debug_utils::trace_log("IID", &format!("Skipped at depth {} (enabled={}, tt_move={}, moves={})", 
                 depth, 
                 self.iid_config.enabled, 
                 tt_move.is_some(), 
@@ -2260,6 +2321,7 @@ impl SearchEngine {
         }
         // === END IID ===
         
+        crate::debug_utils::trace_log("NEGAMAX", "Sorting moves for evaluation");
         let sorted_moves = self.sort_moves(&legal_moves, board, iid_move.as_ref());
         let mut best_score = -200000;
         let mut best_move_for_tt = None;
@@ -2269,17 +2331,26 @@ impl SearchEngine {
         let mut move_index = 0;
         let mut iid_move_improved_alpha = false;
         
-        for move_ in sorted_moves {
-            if self.should_stop(&start_time, time_limit_ms) { break; }
+        crate::debug_utils::trace_log("NEGAMAX", &format!("Starting move evaluation loop with {} moves", sorted_moves.len()));
+        
+        for move_ in &sorted_moves {
+            if self.should_stop(&start_time, time_limit_ms) { 
+                crate::debug_utils::trace_log("NEGAMAX", "Time limit reached, stopping move evaluation");
+                break; 
+            }
             move_index += 1;
+            
+            crate::debug_utils::trace_log("NEGAMAX", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
+                move_index, move_.to_usi_string(), alpha, beta));
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
 
-            if let Some(captured) = new_board.make_move(&move_) {
+            if let Some(captured) = new_board.make_move(move_) {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
+            crate::debug_utils::start_timing(&format!("move_search_{}", move_index));
             let score = self.search_move_with_lmr(
                 &mut new_board, 
                 &new_captured, 
@@ -2290,25 +2361,35 @@ impl SearchEngine {
                 &start_time, 
                 time_limit_ms, 
                 history, 
-                &move_, 
+                move_, 
                 move_index,
                 is_root,
                 move_.is_capture,
                 has_check
             );
+            crate::debug_utils::end_timing(&format!("move_search_{}", move_index), "NEGAMAX");
+
+            crate::debug_utils::log_move_eval("NEGAMAX", &move_.to_usi_string(), score, 
+                &format!("move {} of {}", move_index, sorted_moves.len()));
 
             if score > best_score {
+                crate::debug_utils::log_decision("NEGAMAX", "New best move", 
+                    &format!("Move {} improved score from {} to {}", move_.to_usi_string(), best_score, score), 
+                    Some(score));
                 best_score = score;
                 best_move_for_tt = Some(move_.clone());
                 if score > alpha {
+                    crate::debug_utils::log_decision("NEGAMAX", "Alpha update", 
+                        &format!("Score {} > alpha {}, updating alpha", score, alpha), 
+                        Some(score));
                     alpha = score;
                     
                     // Track if this was the IID move that first improved alpha
                     if let Some(iid_mv) = &iid_move {
-                        if self.moves_equal(&move_, iid_mv) && !iid_move_improved_alpha {
+                        if self.moves_equal(move_, iid_mv) && !iid_move_improved_alpha {
                             iid_move_improved_alpha = true;
                             self.iid_stats.iid_move_first_improved_alpha += 1;
-                            crate::debug_utils::debug_log(&format!("IID: Move {} first improved alpha to {}", move_.to_usi_string(), alpha));
+                            crate::debug_utils::trace_log("IID", &format!("Move {} first improved alpha to {}", move_.to_usi_string(), alpha));
                         }
                     }
                     
@@ -2320,11 +2401,14 @@ impl SearchEngine {
                     }
                 }
                 if alpha >= beta { 
+                    crate::debug_utils::log_decision("NEGAMAX", "Beta cutoff", 
+                        &format!("Alpha {} >= beta {}, cutting off search", alpha, beta), 
+                        Some(alpha));
                     // Track if IID move caused cutoff
                     if let Some(iid_mv) = &iid_move {
-                        if self.moves_equal(&move_, iid_mv) {
+                        if self.moves_equal(move_, iid_mv) {
                             self.iid_stats.iid_move_caused_cutoff += 1;
-                            crate::debug_utils::debug_log(&format!("IID: Move {} caused beta cutoff", move_.to_usi_string()));
+                            crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
                         }
                     }
                     break; 
@@ -2337,24 +2421,35 @@ impl SearchEngine {
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
         self.transposition_table.insert(fen_key, TranspositionEntry { score: best_score, depth, flag, best_move: best_move_for_tt });
         
+        crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
+        
         best_score
     }
 
     fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
-        if self.should_stop(&start_time, time_limit_ms) { return 0; }
+        if self.should_stop(&start_time, time_limit_ms) { 
+            crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, returning 0");
+            return 0; 
+        }
+        
+        crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search: depth={}, alpha={}, beta={}", depth, alpha, beta));
 
         // Update statistics
         self.quiescence_stats.nodes_searched += 1;
 
         // Check depth limit
         if depth == 0 || depth > self.quiescence_config.max_depth {
-            return self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
+            crate::debug_utils::trace_log("QUIESCENCE", &format!("Depth limit reached (depth={}), evaluating position", depth));
+            let score = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
+            crate::debug_utils::trace_log("QUIESCENCE", &format!("Position evaluation: {}", score));
+            return score;
         }
 
         // Transposition table lookup
         if self.quiescence_config.enable_tt {
             // Clean up TT if it's getting too large
             if self.quiescence_tt.len() > self.quiescence_config.tt_cleanup_threshold {
+                crate::debug_utils::trace_log("QUIESCENCE", "Cleaning up quiescence TT");
                 self.cleanup_quiescence_tt(self.quiescence_config.tt_cleanup_threshold / 2);
             }
             
@@ -2362,22 +2457,46 @@ impl SearchEngine {
             if let Some(entry) = self.quiescence_tt.get(&fen_key) {
                 if entry.depth >= depth {
                     self.quiescence_stats.tt_hits += 1;
+                    crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence TT hit: depth={}, score={}, flag={:?}", 
+                        entry.depth, entry.score, entry.flag));
                     match entry.flag {
                         TranspositionFlag::Exact => return entry.score,
-                        TranspositionFlag::LowerBound => if entry.score >= beta { return entry.score; },
-                        TranspositionFlag::UpperBound => if entry.score <= alpha { return entry.score; },
+                        TranspositionFlag::LowerBound => if entry.score >= beta { 
+                            crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT lower bound cutoff");
+                            return entry.score; 
+                        },
+                        TranspositionFlag::UpperBound => if entry.score <= alpha { 
+                            crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT upper bound cutoff");
+                            return entry.score; 
+                        },
                     }
                 }
             } else {
                 self.quiescence_stats.tt_misses += 1;
+                crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT miss");
             }
         }
         
+        crate::debug_utils::trace_log("QUIESCENCE", "Evaluating stand-pat position");
         let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
-        if stand_pat >= beta { return beta; }
-        if alpha < stand_pat { alpha = stand_pat; }
+        crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {}", stand_pat));
         
+        if stand_pat >= beta { 
+            crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat beta cutoff", 
+                &format!("Stand-pat {} >= beta {}, returning beta", stand_pat, beta), 
+                Some(stand_pat));
+            return beta; 
+        }
+        if alpha < stand_pat { 
+            crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat alpha update", 
+                &format!("Stand-pat {} > alpha {}, updating alpha", stand_pat, alpha), 
+                Some(stand_pat));
+            alpha = stand_pat; 
+        }
+        
+        crate::debug_utils::trace_log("QUIESCENCE", "Generating noisy moves");
         let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
+        crate::debug_utils::trace_log("QUIESCENCE", &format!("Found {} noisy moves", noisy_moves.len()));
         
         // Track move type statistics
         for move_ in &noisy_moves {
@@ -2392,19 +2511,30 @@ impl SearchEngine {
             }
         }
         
+        crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
         let sorted_noisy_moves = self.sort_quiescence_moves(&noisy_moves);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
 
-        for move_ in sorted_noisy_moves {
-            if self.should_stop(&start_time, time_limit_ms) { break; }
+        crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
+
+        for (move_index, move_) in sorted_noisy_moves.iter().enumerate() {
+            if self.should_stop(&start_time, time_limit_ms) { 
+                crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, stopping move evaluation");
+                break; 
+            }
+            
+            crate::debug_utils::trace_log("QUIESCENCE", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
+                move_index + 1, move_.to_usi_string(), alpha, beta));
             
             // Apply pruning checks
             if self.should_prune_delta(&move_, stand_pat, alpha) {
+                crate::debug_utils::trace_log("QUIESCENCE", &format!("Delta pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.delta_prunes += 1;
                 continue;
             }
             
             if self.should_prune_futility(&move_, stand_pat, alpha, depth) {
+                crate::debug_utils::trace_log("QUIESCENCE", &format!("Futility pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.futility_prunes += 1;
                 continue;
             }
@@ -2417,15 +2547,24 @@ impl SearchEngine {
             
             // Check for selective extension
             let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
+                crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
                 self.quiescence_stats.extensions += 1;
                 depth - 1 // Still reduce depth but less aggressively
             } else {
                 depth - 1
             };
             
+            crate::debug_utils::start_timing(&format!("quiescence_move_{}", move_index));
             let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), -beta, -alpha, &start_time, time_limit_ms, search_depth);
+            crate::debug_utils::end_timing(&format!("quiescence_move_{}", move_index), "QUIESCENCE");
+            
+            crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
+                &format!("move {} of {}", move_index + 1, sorted_noisy_moves.len()));
             
             if score >= beta { 
+                crate::debug_utils::log_decision("QUIESCENCE", "Beta cutoff", 
+                    &format!("Score {} >= beta {}, cutting off search", score, beta), 
+                    Some(score));
                 // Store result in transposition table
                 if self.quiescence_config.enable_tt {
                     let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
@@ -2434,13 +2573,20 @@ impl SearchEngine {
                         score: beta,
                         depth,
                         flag,
-                        best_move: Some(move_),
+                        best_move: Some(move_.clone()),
                     });
                 }
                 return beta; 
             }
-            if score > alpha { alpha = score; }
+            if score > alpha { 
+                crate::debug_utils::log_decision("QUIESCENCE", "Alpha update", 
+                    &format!("Score {} > alpha {}, updating alpha", score, alpha), 
+                    Some(score));
+                alpha = score; 
+            }
         }
+        
+        crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: depth={}, score={}", depth, alpha));
         
         // Store result in transposition table
         if self.quiescence_config.enable_tt {
@@ -4900,35 +5046,42 @@ impl IterativeDeepening {
     }
 
     pub fn search(&mut self, search_engine: &mut SearchEngine, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Option<(Move, i32)> {
-        crate::debug_utils::debug_log("Inside search method");
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Starting iterative deepening search");
+        crate::debug_utils::start_timing("iterative_deepening_total");
         
-        crate::debug_utils::debug_log("About to get start time");
         let start_time = TimeSource::now();
         
         let mut best_move: Option<Move> = None;
         let mut best_score = 0;
         let mut previous_scores = Vec::new();
         
-        crate::debug_utils::debug_log("About to calculate search time limit");
         let search_time_limit = self.time_limit_ms.saturating_sub(100);
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Search time limit: {}ms, max depth: {}", search_time_limit, self.max_depth));
 
-        crate::debug_utils::debug_log("Starting search loop");
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Starting depth iteration loop");
 
         for depth in 1..=self.max_depth {
-            if self.should_stop(&start_time, search_time_limit) { break; }
+            if self.should_stop(&start_time, search_time_limit) { 
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Time limit reached, stopping search");
+                break; 
+            }
             let elapsed_ms = start_time.elapsed_ms();
             let remaining_time = search_time_limit.saturating_sub(elapsed_ms);
 
-            crate::debug_utils::debug_log(&format!("Searching at depth {}", depth));
+            crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Searching at depth {} (elapsed: {}ms, remaining: {}ms)", depth, elapsed_ms, remaining_time));
+            crate::debug_utils::start_timing(&format!("depth_{}", depth));
 
             // Calculate aspiration window parameters
             let (alpha, beta) = if depth == 1 || !search_engine.aspiration_config.enabled {
                 // First depth or disabled: use full-width window
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using full-width window", depth));
                 (i32::MIN + 1, i32::MAX - 1)
             } else {
                 // Use aspiration window based on previous score
                 let previous_score = previous_scores.last().copied().unwrap_or(0);
                 let window_size = search_engine.calculate_window_size(depth, previous_score, 0);
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window (prev_score: {}, window_size: {}, alpha: {}, beta: {})", 
+                    depth, previous_score, window_size, previous_score - window_size, previous_score + window_size));
                 (previous_score - window_size, previous_score + window_size)
             };
 
@@ -4938,21 +5091,32 @@ impl IterativeDeepening {
             let mut current_alpha = alpha;
             let mut current_beta = beta;
 
+            crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Starting aspiration window search at depth {} (alpha: {}, beta: {})", depth, current_alpha, current_beta));
+
             loop {
                 if researches >= search_engine.aspiration_config.max_researches {
                     // Fall back to full-width search
+                    crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Max researches ({}) reached, falling back to full-width search", researches));
                     current_alpha = i32::MIN + 1;
                     current_beta = i32::MAX - 1;
                 }
 
+                crate::debug_utils::start_timing(&format!("aspiration_search_{}_{}", depth, researches));
                 if let Some((move_, score)) = search_engine.search_at_depth(
                     board, captured_pieces, player, depth, remaining_time,
                     current_alpha, current_beta
                 ) {
+                    crate::debug_utils::end_timing(&format!("aspiration_search_{}_{}", depth, researches), "ASPIRATION_WINDOW");
                     search_result = Some((move_.clone(), score));
+                    
+                    crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Search result: move={}, score={}, alpha={}, beta={}", 
+                        move_.to_usi_string(), score, current_alpha, current_beta));
                     
                     if score <= current_alpha {
                         // Fail-low: widen window downward
+                        crate::debug_utils::log_decision("ASPIRATION_WINDOW", "Fail-low", 
+                            &format!("Score {} <= alpha {}, widening window downward", score, current_alpha), 
+                            Some(score));
                         search_engine.handle_fail_low(&mut current_alpha, &mut current_beta, 
                                                     previous_scores.last().copied().unwrap_or(0), 
                                                     search_engine.calculate_window_size(depth, 0, 0));
@@ -4962,6 +5126,9 @@ impl IterativeDeepening {
                     
                     if score >= current_beta {
                         // Fail-high: widen window upward
+                        crate::debug_utils::log_decision("ASPIRATION_WINDOW", "Fail-high", 
+                            &format!("Score {} >= beta {}, widening window upward", score, current_beta), 
+                            Some(score));
                         search_engine.handle_fail_high(&mut current_alpha, &mut current_beta,
                                                      previous_scores.last().copied().unwrap_or(0),
                                                      search_engine.calculate_window_size(depth, 0, 0));
@@ -4970,24 +5137,32 @@ impl IterativeDeepening {
                     }
                     
                     // Success: score within window
+                    crate::debug_utils::log_decision("ASPIRATION_WINDOW", "Success", 
+                        &format!("Score {} within window [{}, {}]", score, current_alpha, current_beta), 
+                        Some(score));
                     best_move = Some(move_);
                     best_score = score;
                     previous_scores.push(score);
                     break;
                 } else {
                     // Search failed completely
+                    crate::debug_utils::end_timing(&format!("aspiration_search_{}_{}", depth, researches), "ASPIRATION_WINDOW");
+                    crate::debug_utils::trace_log("ASPIRATION_WINDOW", "Search failed completely");
                     break;
                 }
             }
 
             // Update statistics
             search_engine.update_aspiration_stats(researches > 0, researches);
+            crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
             if let Some((_move_, score)) = search_result {
                 let pv = search_engine.get_pv(board, captured_pieces, player, depth);
                 let pv_string = pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ");
                 let time_searched = start_time.elapsed_ms();
                 let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
+
+                crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, search_engine.nodes_searched, score, &pv_string);
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
                 if let Some(on_info) = &self.on_info {
@@ -5000,11 +5175,20 @@ impl IterativeDeepening {
 
                 // Only break early for extremely winning positions (king capture level)
                 // and only at higher depths to allow deeper search logging for higher AI levels
-                if score > 50000 && depth >= 6 { break; } 
+                if score > 50000 && depth >= 6 { 
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Extremely winning position (score: {}), breaking early at depth {}", score, depth));
+                    break; 
+                } 
             } else {
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("No result at depth {}, breaking", depth));
                 break;
             }
         }
+        
+        crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Search completed: best_move={:?}, best_score={}", 
+            best_move.as_ref().map(|m| m.to_usi_string()), best_score));
+        
         best_move.map(|m| (m, best_score))
     }
 

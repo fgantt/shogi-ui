@@ -92,7 +92,7 @@ impl ShogiEngine {
             tablebase: MicroTablebase::new(),
             stop_flag: stop_flag.clone(),
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
-            debug_mode: false,
+            debug_mode: true,
             pondering: false,
             depth: 5, // Default to medium depth
         };
@@ -297,8 +297,20 @@ impl ShogiEngine {
 }
 
 impl ShogiEngine {
+    /// Enable or disable debug logging
+    pub fn set_debug_enabled(&self, enabled: bool) {
+        crate::debug_utils::set_debug_enabled(enabled);
+    }
+    
+    /// Check if debug logging is enabled
+    pub fn is_debug_enabled(&self) -> bool {
+        crate::debug_utils::is_debug_enabled()
+    }
+
     pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
-        crate::debug_utils::debug_log("Starting get_best_move");
+        crate::debug_utils::set_search_start_time();
+        crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Starting search: depth={}, time_limit={}ms", depth, time_limit_ms));
+        crate::debug_utils::start_timing("tablebase_check");
         
         if let Some(on_info) = &on_info {
             let this = wasm_bindgen::JsValue::NULL;
@@ -307,9 +319,11 @@ impl ShogiEngine {
         }
 
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Position FEN: {}", fen));
         
         // Check tablebase first
         if let Some(tablebase_result) = self.tablebase.probe(&self.board, self.current_player, &self.captured_pieces) {
+            crate::debug_utils::end_timing("tablebase_check", "GET_BEST_MOVE");
             if let Some(best_move) = tablebase_result.best_move {
                 if let Some(on_info) = &on_info {
                     let this = wasm_bindgen::JsValue::NULL;
@@ -323,17 +337,21 @@ impl ShogiEngine {
                     let _ = on_info.call1(&this, &s);
                 }
                 
-                crate::debug_utils::debug_log(&format!(
-                    "Found tablebase move: {} (outcome: {:?})",
-                    best_move.to_usi_string(),
-                    tablebase_result.outcome
-                ));
+                crate::debug_utils::log_decision("GET_BEST_MOVE", "Tablebase hit", 
+                    &format!("Move: {}, outcome: {:?}, distance: {:?}", 
+                        best_move.to_usi_string(), 
+                        tablebase_result.outcome, 
+                        tablebase_result.distance_to_mate), 
+                    None);
                 
                 return Some(best_move);
             }
+        } else {
+            crate::debug_utils::end_timing("tablebase_check", "GET_BEST_MOVE");
         }
         
         // Check opening book second
+        crate::debug_utils::start_timing("opening_book_check");
         if self.opening_book.is_loaded() {
             if let Some(book_move) = self.opening_book.get_best_move(&fen) {
                 if let Some(on_info) = &on_info {
@@ -386,8 +404,7 @@ impl ShogiEngine {
             searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player)
         });
         
-        crate::debug_utils::debug_log("Search completed, checking result
-");
+        crate::debug_utils::debug_log("Search completed, checking result");
         
         if let Some(on_info) = &on_info {
             let this = wasm_bindgen::JsValue::NULL;
@@ -535,16 +552,26 @@ impl ShogiEngine {
             match *part {
                 "on" => {
                     self.debug_mode = true;
+                    self.set_debug_enabled(true);
                     output.push("info string debug mode enabled".to_string());
                 },
                 "off" => {
                     self.debug_mode = false;
+                    self.set_debug_enabled(false);
                     output.push("info string debug mode disabled".to_string());
                 },
-                _ => output.push(format!("info string unknown debug command {}", part)),
+                "trace" => {
+                    self.set_debug_enabled(true);
+                    output.push("info string trace logging enabled".to_string());
+                },
+                "notrace" => {
+                    self.set_debug_enabled(false);
+                    output.push("info string trace logging disabled".to_string());
+                },
+                _ => output.push(format!("info string unknown debug command {} (use: on/off/trace/notrace)", part)),
             }
         } else {
-            output.push("info string debug command needs an argument (on/off)".to_string());
+            output.push("info string debug command needs an argument (on/off/trace/notrace)".to_string());
         }
         output
     }
@@ -630,6 +657,7 @@ impl WasmUsiHandler {
             Some(&"position") => self.engine.handle_position(&parts[1..]),
             Some(&"setoption") => self.engine.handle_setoption(&parts[1..]),
             Some(&"usinewgame") => self.engine.handle_usinewgame(),
+            Some(&"debug") => self.engine.handle_debug(&parts[1..]),
             _ => vec!["info string unsupported command".to_string()],
         };
         serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
@@ -721,5 +749,15 @@ impl WasmUsiHandler {
     #[wasm_bindgen]
     pub fn get_depth(&self) -> u8 {
         self.engine.depth
+    }
+
+    #[wasm_bindgen]
+    pub fn set_debug_enabled(&self, enabled: bool) {
+        self.engine.set_debug_enabled(enabled);
+    }
+
+    #[wasm_bindgen]
+    pub fn is_debug_enabled(&self) -> bool {
+        self.engine.is_debug_enabled()
     }
 }

@@ -36,6 +36,9 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
           this.processOutputLine(message.info);
         } else if (message.result && Array.isArray(message.result)) {
           message.result.forEach((line: string) => this.processOutputLine(line));
+        } else if (message.error) {
+          console.error('Worker reported error:', message.error);
+          this.emit('error', { error: message.error, sessionId: this.sessionId });
         } else {
           console.log("Received non-string message from worker:", message);
         }
@@ -45,7 +48,15 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
     };
 
     this.worker.onerror = (e: ErrorEvent) => {
-      console.error('AI Worker Error:', e.message, e.filename, e.lineno);
+      console.error('AI Worker Error:', {
+        message: e.message,
+        filename: e.filename,
+        lineno: e.lineno,
+        colno: e.colno,
+        type: e.type,
+        error: e.error,
+        event: e
+      });
     };
   }
 
