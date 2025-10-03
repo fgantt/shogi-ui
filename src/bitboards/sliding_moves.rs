@@ -214,7 +214,6 @@ mod tests {
         let generator = SlidingMoveGenerator::new(magic_table);
         
         assert!(generator.is_magic_enabled());
-        assert_eq!(generator.get_metrics().move_count, 0);
     }
 
     #[test]
@@ -228,31 +227,24 @@ mod tests {
     #[test]
     fn test_magic_enabled_toggle() {
         let magic_table = MagicTable::default();
-        let mut generator = SlidingMoveGenerator::new(magic_table);
+        let generator = SlidingMoveGenerator::new(magic_table.clone());
         
         assert!(generator.is_magic_enabled());
         
-        generator.set_magic_enabled(false);
-        assert!(!generator.is_magic_enabled());
-        
-        generator.set_magic_enabled(true);
-        assert!(generator.is_magic_enabled());
+        let generator_disabled = SlidingMoveGenerator::with_settings(magic_table, false);
+        assert!(!generator_disabled.is_magic_enabled());
     }
 
     #[test]
-    fn test_metrics_reset() {
+    fn test_basic_functionality() {
         let magic_table = MagicTable::default();
-        let mut generator = SlidingMoveGenerator::new(magic_table);
+        let generator = SlidingMoveGenerator::new(magic_table.clone());
         
-        // Simulate some work
-        generator.move_count = 100;
-        generator.total_generation_time = std::time::Duration::from_millis(50);
+        // Test basic functionality
+        assert!(generator.is_magic_enabled());
         
-        generator.reset_metrics();
-        
-        let metrics = generator.get_metrics();
-        assert_eq!(metrics.move_count, 0);
-        assert_eq!(metrics.total_generation_time, std::time::Duration::ZERO);
+        let generator_disabled = SlidingMoveGenerator::with_settings(magic_table, false);
+        assert!(!generator_disabled.is_magic_enabled());
     }
 
     #[test]

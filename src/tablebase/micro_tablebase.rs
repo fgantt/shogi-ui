@@ -389,7 +389,6 @@ impl MicroTablebase {
     pub fn set_enabled(&mut self, enabled: bool) {
         self.config.enabled = enabled;
     }
-
 }
 
 impl Default for MicroTablebase {
@@ -570,7 +569,7 @@ mod tests {
             false,
         );
 
-        let result = TablebaseResult::win(move_, 5);
+        let result = TablebaseResult::win(Some(move_), 5);
         tablebase.position_cache.put(&board, player, &captured_pieces, result);
 
         // Should be able to get from cache
@@ -606,131 +605,5 @@ mod tests {
         tablebase.reset_stats();
         let stats = tablebase.get_stats();
         assert_eq!(stats.total_probes, 0);
-    }
-
-    /// Get memory usage summary
-    pub fn get_memory_summary(&self) -> String {
-        self.stats.memory_summary(self.config.memory.max_memory_bytes)
-    }
-
-    /// Check if memory monitoring is enabled
-    pub fn is_memory_monitoring_enabled(&self) -> bool {
-        self.config.memory.enable_monitoring
-    }
-
-    /// Get current memory usage in bytes
-    pub fn get_current_memory_usage(&self) -> usize {
-        self.stats.current_memory_bytes
-    }
-
-    /// Get peak memory usage in bytes
-    pub fn get_peak_memory_usage(&self) -> usize {
-        self.stats.peak_memory_bytes
-    }
-
-    /// Check if WASM optimizations are enabled
-    pub fn is_wasm_optimized(&self) -> bool {
-        self.config.wasm.enable_wasm_optimizations
-    }
-
-    /// Get WASM-specific configuration
-    pub fn get_wasm_config(&self) -> &WasmConfig {
-        &self.config.wasm
-    }
-
-    /// Check if running in WASM environment
-    pub fn is_wasm_environment(&self) -> bool {
-        WasmConfig::is_wasm_environment()
-    }
-
-    /// Get WASM-compatible memory usage summary
-    pub fn get_wasm_memory_summary(&self) -> String {
-        if self.config.wasm.use_simple_logging {
-            format!("Memory: {} bytes", self.stats.current_memory_bytes)
-        } else {
-            self.get_memory_summary()
-        }
-    }
-
-    /// Create a WASM-optimized tablebase
-    pub fn new_wasm_optimized() -> Self {
-        Self::with_config(TablebaseConfig::wasm_optimized())
-    }
-
-    /// Analyze position complexity for adaptive solver selection
-    pub fn analyze_position(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> PositionAnalysis {
-        self.position_analyzer.analyze_position(board, player, captured_pieces)
-    }
-
-    /// Get position analysis cache statistics
-    pub fn get_analysis_cache_stats(&self) -> (usize, usize) {
-        self.position_analyzer.get_cache_stats()
-    }
-
-    /// Clear position analysis cache
-    pub fn clear_analysis_cache(&mut self) {
-        self.position_analyzer.clear_cache();
-    }
-
-    /// Get recommended solver priority for a position
-    pub fn get_recommended_solver_priority(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> u8 {
-        let analysis = self.analyze_position(board, player, captured_pieces);
-        analysis.recommended_solver_priority
-    }
-
-    /// Check if a position is suitable for a specific solver
-    pub fn is_position_suitable_for_solver(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces, solver_priority: u8) -> bool {
-        let analysis = self.analyze_position(board, player, captured_pieces);
-        analysis.complexity.is_suitable_for_priority(solver_priority)
-    }
-
-    /// Get performance profiler
-    pub fn get_profiler(&self) -> &TablebaseProfiler {
-        &self.profiler
-    }
-
-    /// Get performance profiler mutably
-    pub fn get_profiler_mut(&mut self) -> &mut TablebaseProfiler {
-        &mut self.profiler
-    }
-
-    /// Get performance summary
-    pub fn get_performance_summary(&self) -> String {
-        self.profiler.get_summary()
-    }
-
-    /// Get the most expensive operations
-    pub fn get_most_expensive_operations(&self, count: usize) -> Vec<(&String, &PerformanceMetrics)> {
-        self.profiler.get_most_expensive_operations(count)
-    }
-
-    /// Get the slowest operations by average time
-    pub fn get_slowest_operations(&self, count: usize) -> Vec<(&String, &PerformanceMetrics)> {
-        self.profiler.get_slowest_operations(count)
-    }
-
-    /// Get the most frequently called operations
-    pub fn get_most_frequent_operations(&self, count: usize) -> Vec<(&String, &PerformanceMetrics)> {
-        self.profiler.get_most_frequent_operations(count)
-    }
-
-    /// Reset performance profiler
-    pub fn reset_profiler(&mut self) {
-        self.profiler.reset();
-    }
-
-    /// Enable or disable performance profiling
-    pub fn set_profiling_enabled(&mut self, enabled: bool) {
-        self.profiler.set_enabled(enabled);
-    }
-
-    /// Check if performance profiling is enabled
-    pub fn is_profiling_enabled(&self) -> bool {
-        self.profiler.is_enabled()
-    }
-
-    /// Get profiler memory usage
-    pub fn get_profiler_memory_usage(&self) -> usize {
-        self.profiler.get_memory_usage()
     }
 }

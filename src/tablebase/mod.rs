@@ -240,6 +240,7 @@ impl TablebaseOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Player, Position, PieceType, Move};
 
     #[test]
     fn test_tablebase_result_creation() {

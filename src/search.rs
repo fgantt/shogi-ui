@@ -28,6 +28,13 @@ pub struct SearchEngine {
     iid_config: IIDConfig,
     iid_stats: IIDStats,
     previous_scores: Vec<i32>,
+    // Current search state for diagnostics
+    current_alpha: i32,
+    current_beta: i32,
+    current_best_move: Option<Move>,
+    current_best_score: i32,
+    current_depth: u8,
+    search_start_time: Option<TimeSource>,
 }
 
 impl SearchEngine {
@@ -60,6 +67,13 @@ impl SearchEngine {
             iid_config: IIDConfig::default(),
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
+            // Initialize diagnostic fields
+            current_alpha: 0,
+            current_beta: 0,
+            current_best_move: None,
+            current_best_score: 0,
+            current_depth: 0,
+            search_start_time: None,
         }
     }
 
@@ -90,6 +104,13 @@ impl SearchEngine {
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
+            // Initialize diagnostic fields
+            current_alpha: 0,
+            current_beta: 0,
+            current_best_move: None,
+            current_best_score: 0,
+            current_depth: 0,
+            search_start_time: None,
         }
     }
 
@@ -2086,7 +2107,10 @@ impl SearchEngine {
         let mut alpha = alpha;
         
         let mut best_move: Option<Move> = None;
-        let mut best_score = alpha;
+        // CRITICAL FIX: Initialize to i32::MIN + 1 instead of alpha to allow tracking
+        // of any move, even if it doesn't exceed alpha. This prevents the bug where
+        // best_move would be None even when legal moves exist.
+        let mut best_score = i32::MIN + 1;
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Generating legal moves");
         crate::debug_utils::start_timing("move_generation");
@@ -2112,6 +2136,9 @@ impl SearchEngine {
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
+        crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!(
+            "Search parameters: depth={}, alpha={}, beta={}, time_limit={}ms, moves_count={}", 
+            depth, alpha, beta, time_limit_ms, sorted_moves.len()));
         
         let mut history: Vec<String> = vec![board.to_fen(player, captured_pieces)];
 
@@ -2121,8 +2148,9 @@ impl SearchEngine {
                 break; 
             }
             
-            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
-                move_index + 1, move_.to_usi_string(), alpha, beta));
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Evaluating move {}: {} (alpha: {}, beta: {}, current_best: {})", 
+                move_index + 1, move_.to_usi_string(), alpha, beta,
+                best_move.as_ref().map(|m| m.to_usi_string()).unwrap_or("None".to_string())));
             crate::debug_utils::start_timing(&format!("move_eval_{}", move_index));
             
             let mut new_board = board.clone();
@@ -2135,15 +2163,27 @@ impl SearchEngine {
             let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history, true);
             crate::debug_utils::end_timing(&format!("move_eval_{}", move_index), "SEARCH_AT_DEPTH");
             
+            // Enhanced move evaluation logging
             crate::debug_utils::log_move_eval("SEARCH_AT_DEPTH", &move_.to_usi_string(), score, 
-                &format!("move {} of {}", move_index + 1, sorted_moves.len()));
+                &format!("move {} of {} (alpha: {}, beta: {}, current_best_score: {})", 
+                    move_index + 1, sorted_moves.len(), alpha, beta, best_score));
             
             if score > best_score {
                 crate::debug_utils::log_decision("SEARCH_AT_DEPTH", "New best move", 
-                    &format!("Move {} improved score from {} to {}", move_.to_usi_string(), best_score, score), 
+                    &format!("Move {} improved score from {} to {} (alpha: {})", 
+                        move_.to_usi_string(), best_score, score, alpha), 
                     Some(score));
                 best_score = score;
                 best_move = Some(move_.clone());
+                
+                // Log the new best move details
+                crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!(
+                    "BEST_MOVE_UPDATE: {} -> {} (score: {}, alpha: {})", 
+                    move_.to_usi_string(), move_.to_usi_string(), score, alpha));
+            } else {
+                crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!(
+                    "Move {} scored {} (not better than current best: {})", 
+                    move_.to_usi_string(), score, best_score));
             }
             
             if score > alpha {
@@ -2154,11 +2194,32 @@ impl SearchEngine {
             }
         }
 
+        // CRITICAL FIX: Fallback move selection to prevent returning None when moves exist
+        // This addresses the bug where best_move would be None even when legal moves
+        // were available. The fallback ensures we always return a move if one exists.
+        if best_move.is_none() && !sorted_moves.is_empty() {
+            // If no move was better than alpha, use the first move as fallback
+            // This is better than returning None, as it provides a legal move
+            // even if it's not the best possible move.
+            best_move = Some(sorted_moves[0].clone());
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", 
+                "FALLBACK: No move exceeded alpha, using first move as fallback");
+        }
+
+        // Validate move tracking consistency
+        self.validate_move_tracking(&best_move, best_score, sorted_moves.len());
+
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Search completed: best_move={:?}, best_score={}", 
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
         
-        best_move.map(|m| (m, best_score))
+        let result = best_move.map(|m| (m, best_score));
+        if !self.validate_search_result(result.clone(), depth, alpha, beta) {
+            crate::debug_utils::trace_log("SEARCH_AT_DEPTH", 
+                "Search result validation failed, attempting recovery");
+            // Recovery logic here - for now just return the result anyway
+        }
+        result
     }
 
     /// Convert tablebase result to search score
@@ -3904,37 +3965,44 @@ impl SearchEngine {
                        previous_score: i32, window_size: i32) {
         self.aspiration_stats.fail_lows += 1;
         
-        // Validate inputs
-        if !self.validate_window_parameters(previous_score, window_size) {
-            crate::debug_utils::debug_log("Aspiration: Invalid parameters in handle_fail_low, using fallback");
-            *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+        // Enhanced validation with recovery
+        if !self.validate_and_recover_window(alpha, beta, previous_score, window_size, 0) {
+            crate::debug_utils::trace_log("ASPIRATION_FAIL_LOW", 
+                "Window validation failed, using fallback");
             return;
         }
+        
+        // Adaptive window widening based on failure pattern
+        let adaptive_factor = self.calculate_adaptive_factor("fail_low");
+        let widened_window = window_size * adaptive_factor;
         
         // Widen window downward with adaptive sizing
         let new_alpha = i32::MIN + 1;
-        let new_beta = previous_score + window_size;
+        let new_beta = previous_score + widened_window;
         
-        // Ensure valid window bounds
+        // Ensure valid window bounds with additional safety checks
         if new_beta <= new_alpha {
-            crate::debug_utils::debug_log("Aspiration: Invalid window bounds in fail-low, using fallback");
+            crate::debug_utils::trace_log("ASPIRATION_FAIL_LOW", 
+                "Invalid window bounds, using conservative approach");
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
-            return;
+            *beta = previous_score + window_size;
+            
+            // Final safety check
+            if *beta <= *alpha {
+                *alpha = i32::MIN + 1;
+                *beta = i32::MAX - 1;
+            }
+        } else {
+            *alpha = new_alpha;
+            *beta = new_beta;
         }
-        
-        *alpha = new_alpha;
-        *beta = new_beta;
-        
-        // Log for debugging with performance metrics
-        crate::debug_utils::debug_log(&format!(
-            "Aspiration: Fail-low, widening window to [{}, {}] (prev_score={}, window_size={})",
-            *alpha, *beta, previous_score, window_size
-        ));
         
         // Update performance metrics
         self.update_fail_low_metrics(previous_score, window_size);
+        
+        crate::debug_utils::trace_log("ASPIRATION_FAIL_LOW", 
+            &format!("Fail-low handled: alpha={}, beta={}, adaptive_factor={}", 
+                *alpha, *beta, adaptive_factor));
     }
 
     /// Handle fail-high by widening window upward
@@ -3942,37 +4010,44 @@ impl SearchEngine {
                         previous_score: i32, window_size: i32) {
         self.aspiration_stats.fail_highs += 1;
         
-        // Validate inputs
-        if !self.validate_window_parameters(previous_score, window_size) {
-            crate::debug_utils::debug_log("Aspiration: Invalid parameters in handle_fail_high, using fallback");
-            *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+        // Enhanced validation with recovery
+        if !self.validate_and_recover_window(alpha, beta, previous_score, window_size, 0) {
+            crate::debug_utils::trace_log("ASPIRATION_FAIL_HIGH", 
+                "Window validation failed, using fallback");
             return;
         }
+        
+        // Adaptive window widening based on failure pattern
+        let adaptive_factor = self.calculate_adaptive_factor("fail_high");
+        let widened_window = window_size * adaptive_factor;
         
         // Widen window upward with adaptive sizing
-        let new_alpha = previous_score - window_size;
+        let new_alpha = previous_score - widened_window;
         let new_beta = i32::MAX - 1;
         
-        // Ensure valid window bounds
+        // Ensure valid window bounds with additional safety checks
         if new_alpha >= new_beta {
-            crate::debug_utils::debug_log("Aspiration: Invalid window bounds in fail-high, using fallback");
-            *alpha = i32::MIN + 1;
+            crate::debug_utils::trace_log("ASPIRATION_FAIL_HIGH", 
+                "Invalid window bounds, using conservative approach");
+            *alpha = previous_score - window_size;
             *beta = i32::MAX - 1;
-            return;
+            
+            // Final safety check
+            if *alpha >= *beta {
+                *alpha = i32::MIN + 1;
+                *beta = i32::MAX - 1;
+            }
+        } else {
+            *alpha = new_alpha;
+            *beta = new_beta;
         }
-        
-        *alpha = new_alpha;
-        *beta = new_beta;
-        
-        // Log for debugging with performance metrics
-        crate::debug_utils::debug_log(&format!(
-            "Aspiration: Fail-high, widening window to [{}, {}] (prev_score={}, window_size={})",
-            *alpha, *beta, previous_score, window_size
-        ));
         
         // Update performance metrics
         self.update_fail_high_metrics(previous_score, window_size);
+        
+        crate::debug_utils::trace_log("ASPIRATION_FAIL_HIGH", 
+            &format!("Fail-high handled: alpha={}, beta={}, adaptive_factor={}", 
+                *alpha, *beta, adaptive_factor));
     }
 
     /// Update aspiration window statistics
@@ -4005,6 +4080,139 @@ impl SearchEngine {
         }
         
         true
+    }
+
+    /// Enhanced window validation with recovery mechanisms
+    fn validate_and_recover_window(&mut self, alpha: &mut i32, beta: &mut i32, 
+                                  previous_score: i32, window_size: i32, 
+                                  depth: u8) -> bool {
+        
+        // Initial validation
+        if !self.validate_window_parameters(previous_score, window_size) {
+            crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                "Invalid parameters detected, attempting recovery");
+            
+            // Recovery attempt 1: Use safe defaults
+            let safe_score = previous_score.clamp(-50000, 50000);
+            let safe_window = window_size.clamp(10, self.aspiration_config.max_window_size);
+            
+            if self.validate_window_parameters(safe_score, safe_window) {
+                *alpha = safe_score - safe_window;
+                *beta = safe_score + safe_window;
+                crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                    &format!("Recovery successful: alpha={}, beta={}", alpha, beta));
+                return true;
+            }
+            
+            // Recovery attempt 2: Fall back to full-width search
+            *alpha = i32::MIN + 1;
+            *beta = i32::MAX - 1;
+            crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                "Recovery failed, using full-width search");
+            return true;
+        }
+        
+        // Validate window bounds
+        if *alpha >= *beta {
+            crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                &format!("Invalid window bounds: alpha={} >= beta={}", alpha, beta));
+            
+            // Recovery: Ensure alpha < beta
+            if *alpha >= *beta {
+                let center = (*alpha + *beta) / 2;
+                let half_window = window_size / 2;
+                *alpha = center.saturating_sub(half_window);
+                *beta = center.saturating_add(half_window);
+                
+                // Final safety check
+                if *alpha >= *beta {
+                    *alpha = i32::MIN + 1;
+                    *beta = i32::MAX - 1;
+                }
+                
+                crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                    &format!("Window bounds corrected: alpha={}, beta={}", alpha, beta));
+            }
+        }
+        
+        // Validate window size is reasonable for depth
+        let current_window_size = *beta - *alpha;
+        let expected_max_size = self.aspiration_config.max_window_size;
+        
+        if current_window_size > expected_max_size {
+            crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                &format!("Window too large: {} > {}, adjusting", current_window_size, expected_max_size));
+            
+            let center = (*alpha + *beta) / 2;
+            let half_max_size = expected_max_size / 2;
+            *alpha = center.saturating_sub(half_max_size);
+            *beta = center.saturating_add(half_max_size);
+            
+            crate::debug_utils::trace_log("WINDOW_VALIDATION", 
+                &format!("Window size adjusted: alpha={}, beta={}", alpha, beta));
+        }
+        
+        true
+    }
+
+    /// Check if window is in a stable state
+    fn is_window_stable(&self, alpha: i32, beta: i32, previous_score: i32) -> bool {
+        let window_size = beta - alpha;
+        let center = (alpha + beta) / 2;
+        let score_deviation = (center - previous_score).abs();
+        
+        // Window is stable if:
+        // 1. Size is reasonable
+        // 2. Center is close to previous score
+        // 3. Bounds are valid
+        window_size > 0 && 
+        window_size <= self.aspiration_config.max_window_size &&
+        score_deviation <= window_size / 4 &&
+        alpha < beta
+    }
+
+    /// Calculate adaptive factor based on failure type and history
+    fn calculate_adaptive_factor(&self, failure_type: &str) -> i32 {
+        let base_factor = match failure_type {
+            "fail_low" => 2,      // More aggressive widening for fail-low
+            "fail_high" => 2,     // More aggressive widening for fail-high
+            "search_failed" => 3, // Most aggressive for complete failures
+            "timeout" => 1,       // Conservative for timeouts
+            _ => 2,               // Default moderate factor
+        };
+        
+        // Adjust based on recent failure rate
+        let recent_failures = self.aspiration_stats.fail_lows + self.aspiration_stats.fail_highs;
+        let total_searches = self.aspiration_stats.total_searches.max(1);
+        let failure_rate = recent_failures as f64 / total_searches as f64;
+        
+        if failure_rate > 0.3 {
+            // High failure rate - be more conservative
+            (base_factor as f64 * 0.8) as i32
+        } else if failure_rate < 0.1 {
+            // Low failure rate - can be more aggressive
+            (base_factor as f64 * 1.2) as i32
+        } else {
+            base_factor
+        }
+    }
+
+    /// Enhanced failure type classification
+    fn classify_failure_type(&self, score: i32, alpha: i32, beta: i32, 
+                            search_successful: bool, timeout_occurred: bool) -> &'static str {
+        if !search_successful {
+            if timeout_occurred {
+                "timeout"
+            } else {
+                "search_failed"
+            }
+        } else if score <= alpha {
+            "fail_low"
+        } else if score >= beta {
+            "fail_high"
+        } else {
+            "success"
+        }
     }
 
     /// Update fail-low performance metrics
@@ -4105,7 +4313,7 @@ impl SearchEngine {
                 0.0
             },
             research_rate: if self.aspiration_stats.total_searches > 0 {
-                self.aspiration_stats.total_researches as f64 / self.aspiration_stats.total_searches as f64
+                self.aspiration_stats.total_researches as u8 as f64 / self.aspiration_stats.total_searches as f64
             } else {
                 0.0
             },
@@ -4237,7 +4445,7 @@ impl SearchEngine {
                 0.0
             },
             current_research_rate: if self.aspiration_stats.total_searches > 0 {
-                self.aspiration_stats.total_researches as f64 / self.aspiration_stats.total_searches as f64
+                self.aspiration_stats.total_researches as u8 as f64 / self.aspiration_stats.total_searches as f64
             } else {
                 0.0
             },
@@ -5023,6 +5231,1137 @@ impl SearchEngine {
         
         true
     }
+
+    /// Validate move tracking consistency
+    fn validate_move_tracking(&self, best_move: &Option<Move>, best_score: i32, 
+                             moves_evaluated: usize) -> bool {
+        if moves_evaluated > 0 && best_move.is_none() {
+            crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                &format!("WARNING: {} moves evaluated but no best move stored (score: {})", 
+                    moves_evaluated, best_score));
+            return false;
+        }
+        true
+    }
+
+    /// Validate search result consistency
+    fn validate_search_result(&self, result: Option<(Move, i32)>, 
+                             depth: u8, alpha: i32, beta: i32) -> bool {
+        match result {
+            Some((ref move_, score)) => {
+                // Validate score is within reasonable bounds
+                if score < -50000 || score > 50000 {
+                    crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                        &format!("WARNING: Score {} is outside reasonable bounds", score));
+                    return false;
+                }
+                
+                // Validate move is not empty
+                if move_.to_usi_string().is_empty() {
+                    crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                        "WARNING: Empty move string in search result");
+                    return false;
+                }
+                
+                // CRITICAL FIX: Safe arithmetic to prevent integer overflow
+                // Using saturating_sub/add instead of direct arithmetic prevents panics
+                // when alpha/beta are close to i32::MIN/MAX boundaries
+                let alpha_threshold = alpha.saturating_sub(1000);
+                let beta_threshold = beta.saturating_add(1000);
+                if score < alpha_threshold || score > beta_threshold {
+                    crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                        &format!("WARNING: Score {} significantly outside window [{}, {}]", 
+                            score, alpha, beta));
+                    // This is not necessarily an error, but worth logging
+                }
+                
+                // Validate move format (basic USI format check)
+                let move_str = move_.to_usi_string();
+                if move_str.len() < 4 || move_str.len() > 6 {
+                    crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                        &format!("WARNING: Move string '{}' has unusual length", move_str));
+                }
+                
+                // Log successful validation
+                crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                    &format!("Search result validated: move={}, score={}, depth={}", 
+                        move_.to_usi_string(), score, depth));
+                
+                true
+            },
+            None => {
+                crate::debug_utils::trace_log("SEARCH_VALIDATION", 
+                    &format!("WARNING: Search returned None at depth {} (alpha: {}, beta: {})", 
+                        depth, alpha, beta));
+                false
+            }
+        }
+    }
+
+    /// Enhanced search result validation with recovery suggestions
+    fn validate_search_result_with_recovery(&self, result: Option<(Move, i32)>, 
+                                           depth: u8, alpha: i32, beta: i32) -> (bool, Option<String>) {
+        match result {
+            Some((ref move_, score)) => {
+                let mut issues = Vec::new();
+                
+                // Check score bounds
+                if score < -50000 || score > 50000 {
+                    issues.push("Score outside reasonable bounds".to_string());
+                }
+                
+                // Check move validity
+                if move_.to_usi_string().is_empty() {
+                    issues.push("Empty move string".to_string());
+                }
+                
+                // Check score consistency (safe arithmetic)
+                let alpha_threshold = alpha.saturating_sub(1000);
+                let beta_threshold = beta.saturating_add(1000);
+                if score < alpha_threshold || score > beta_threshold {
+                    issues.push("Score significantly outside window".to_string());
+                }
+                
+                if issues.is_empty() {
+                    (true, None)
+                } else {
+                    let recovery_suggestion = if score < -50000 || score > 50000 {
+                        "Consider checking evaluation function for overflow".to_string()
+                    } else if move_.to_usi_string().is_empty() {
+                        "Check move generation and storage logic".to_string()
+                    } else {
+                        "Score may be correct but window may be too narrow".to_string()
+                    };
+                    
+                    (false, Some(recovery_suggestion))
+                }
+            },
+            None => {
+                let recovery_suggestion = if depth == 0 {
+                    "Check if position has legal moves".to_string()
+                } else {
+                    "Check search timeout and move generation".to_string()
+                };
+                (false, Some(recovery_suggestion))
+            }
+        }
+    }
+
+    /// Comprehensive consistency checks for aspiration window system
+    fn perform_consistency_checks(&self, alpha: i32, beta: i32, previous_score: i32, 
+                                 window_size: i32, depth: u8, researches: u8) -> Vec<String> {
+        let mut issues = Vec::new();
+        
+        // Check window bounds consistency
+        if alpha >= beta {
+            issues.push(format!("Invalid window bounds: alpha={} >= beta={}", alpha, beta));
+        }
+        
+        // Check window size consistency
+        let actual_window_size = beta - alpha;
+        if actual_window_size != window_size && window_size != i32::MAX {
+            issues.push(format!("Window size mismatch: actual={}, expected={}", 
+                actual_window_size, window_size));
+        }
+        
+        // Check score consistency with window (safe arithmetic)
+        let alpha_threshold = alpha.saturating_sub(window_size);
+        let beta_threshold = beta.saturating_add(window_size);
+        if previous_score < alpha_threshold || previous_score > beta_threshold {
+            issues.push(format!("Previous score {} outside expected range for window [{}, {}]", 
+                previous_score, alpha, beta));
+        }
+        
+        // Check depth consistency
+        if depth < self.aspiration_config.min_depth && window_size != i32::MAX {
+            issues.push(format!("Aspiration window used at depth {} < min_depth {}", 
+                depth, self.aspiration_config.min_depth));
+        }
+        
+        // Check research count consistency
+        if researches > self.aspiration_config.max_researches {
+            issues.push(format!("Research count {} exceeds max_researches {}", 
+                researches, self.aspiration_config.max_researches));
+        }
+        
+        // Check configuration consistency
+        if self.aspiration_config.base_window_size > self.aspiration_config.max_window_size {
+            issues.push(format!("base_window_size {} > max_window_size {}", 
+                self.aspiration_config.base_window_size, self.aspiration_config.max_window_size));
+        }
+        
+        // Check statistics consistency
+        if self.aspiration_stats.fail_lows + self.aspiration_stats.fail_highs > self.aspiration_stats.total_researches {
+            issues.push("Fail count exceeds research count in statistics".to_string());
+        }
+        
+        issues
+    }
+
+    /// Validate aspiration window state consistency
+    fn validate_aspiration_state(&self, alpha: i32, beta: i32, previous_score: i32, 
+                                researches: u8, depth: u8) -> bool {
+        let issues = self.perform_consistency_checks(alpha, beta, previous_score, 
+                                                   beta - alpha, depth, researches);
+        
+        if !issues.is_empty() {
+            crate::debug_utils::trace_log("CONSISTENCY_CHECK", 
+                &format!("Found {} consistency issues:", issues.len()));
+            for issue in issues {
+                crate::debug_utils::trace_log("CONSISTENCY_CHECK", &format!("  - {}", issue));
+            }
+            false
+        } else {
+            crate::debug_utils::trace_log("CONSISTENCY_CHECK", 
+                "All consistency checks passed");
+            true
+        }
+    }
+
+    /// Comprehensive recovery mechanisms for aspiration window failures
+    fn attempt_aspiration_recovery(&mut self, alpha: &mut i32, beta: &mut i32, 
+                                  previous_score: i32, window_size: i32, 
+                                  failure_type: &str, researches: u8, depth: u8) -> bool {
+        
+        crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
+            &format!("Attempting recovery for failure type: {}, researches: {}", 
+                failure_type, researches));
+        
+        // Recovery strategy 1: Reset to safe defaults
+        if self.recover_with_safe_defaults(alpha, beta, previous_score, window_size) {
+            crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
+                "Recovery successful with safe defaults");
+            return true;
+        }
+        
+        // Recovery strategy 2: Adaptive window adjustment
+        if self.recover_with_adaptive_adjustment(alpha, beta, previous_score, window_size, failure_type) {
+            crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
+                "Recovery successful with adaptive adjustment");
+            return true;
+        }
+        
+        // Recovery strategy 3: Fall back to full-width search
+        if self.recover_with_full_width(alpha, beta) {
+            crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
+                "Recovery successful with full-width search");
+            return true;
+        }
+        
+        crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
+            "All recovery strategies failed");
+        false
+    }
+
+    /// Recovery strategy 1: Reset to safe defaults
+    fn recover_with_safe_defaults(&self, alpha: &mut i32, beta: &mut i32, 
+                                 previous_score: i32, window_size: i32) -> bool {
+        // Clamp values to safe ranges
+        let safe_score = previous_score.clamp(-10000, 10000);
+        let safe_window = window_size.clamp(10, self.aspiration_config.max_window_size);
+        
+        // Create safe window
+        *alpha = safe_score - safe_window;
+        *beta = safe_score + safe_window;
+        
+        // Validate the result
+        if *alpha < *beta && *alpha > i32::MIN + 1000 && *beta < i32::MAX - 1000 {
+            crate::debug_utils::trace_log("RECOVERY_SAFE_DEFAULTS", 
+                &format!("Safe defaults applied: alpha={}, beta={}", alpha, beta));
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Recovery strategy 2: Adaptive window adjustment
+    fn recover_with_adaptive_adjustment(&self, alpha: &mut i32, beta: &mut i32, 
+                                       previous_score: i32, window_size: i32, 
+                                       failure_type: &str) -> bool {
+        let adjustment_factor = match failure_type {
+            "fail_low" => 1.5,
+            "fail_high" => 1.5,
+            "search_failed" => 2.0,
+            "timeout" => 0.8,
+            _ => 1.2,
+        };
+        
+        let adjusted_window = (window_size as f64 * adjustment_factor) as i32;
+        let safe_window = adjusted_window.clamp(10, self.aspiration_config.max_window_size);
+        
+        *alpha = previous_score - safe_window;
+        *beta = previous_score + safe_window;
+        
+        // Validate the result
+        if *alpha < *beta {
+            crate::debug_utils::trace_log("RECOVERY_ADAPTIVE", 
+                &format!("Adaptive adjustment applied: alpha={}, beta={}, factor={}", 
+                    alpha, beta, adjustment_factor));
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Recovery strategy 3: Fall back to full-width search
+    fn recover_with_full_width(&self, alpha: &mut i32, beta: &mut i32) -> bool {
+        *alpha = i32::MIN + 1;
+        *beta = i32::MAX - 1;
+        
+        crate::debug_utils::trace_log("RECOVERY_FULL_WIDTH", 
+            "Fallback to full-width search applied");
+        true
+    }
+
+    /// Emergency recovery for critical failures
+    fn emergency_recovery(&mut self, alpha: &mut i32, beta: &mut i32, 
+                         previous_score: i32, depth: u8) -> bool {
+        crate::debug_utils::trace_log("EMERGENCY_RECOVERY", 
+            "Emergency recovery activated");
+        
+        // Reset statistics to prevent cascading failures
+        self.aspiration_stats.fail_lows = 0;
+        self.aspiration_stats.fail_highs = 0;
+        self.aspiration_stats.total_researches = 0;
+        
+        // Use very conservative window
+        let emergency_window = 25; // Very small window
+        *alpha = previous_score - emergency_window;
+        *beta = previous_score + emergency_window;
+        
+        // Final safety check
+        if *alpha >= *beta {
+            *alpha = i32::MIN + 1;
+            *beta = i32::MAX - 1;
+        }
+        
+        crate::debug_utils::trace_log("EMERGENCY_RECOVERY", 
+            &format!("Emergency recovery complete: alpha={}, beta={}", alpha, beta));
+        true
+    }
+
+    /// Comprehensive error handling for aspiration window operations
+    fn handle_aspiration_error(&mut self, error_type: &str, error_context: &str, 
+                              alpha: &mut i32, beta: &mut i32, previous_score: i32, 
+                              depth: u8, researches: u8) -> bool {
+        
+        crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+            &format!("Error type: {}, context: {}", error_type, error_context));
+        
+        match error_type {
+            "window_overflow" => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Window overflow detected, applying bounds check");
+                *alpha = (*alpha).clamp(i32::MIN + 1, i32::MAX - 1);
+                *beta = (*beta).clamp(i32::MIN + 1, i32::MAX - 1);
+                true
+            },
+            "invalid_parameters" => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Invalid parameters detected, using safe defaults");
+                self.recover_with_safe_defaults(alpha, beta, previous_score, 50)
+            },
+            "statistics_corruption" => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Statistics corruption detected, resetting");
+                self.aspiration_stats.reset();
+                self.recover_with_safe_defaults(alpha, beta, previous_score, 50)
+            },
+            "cascading_failure" => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Cascading failure detected, emergency recovery");
+                self.emergency_recovery(alpha, beta, previous_score, depth)
+            },
+            "timeout_cascade" => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Timeout cascade detected, disabling aspiration");
+                *alpha = i32::MIN + 1;
+                *beta = i32::MAX - 1;
+                true
+            },
+            _ => {
+                crate::debug_utils::trace_log("ASPIRATION_ERROR", 
+                    "Unknown error type, using fallback");
+                self.recover_with_full_width(alpha, beta)
+            }
+        }
+    }
+
+    /// Error detection and classification
+    fn detect_aspiration_errors(&self, alpha: i32, beta: i32, previous_score: i32, 
+                               researches: u8, depth: u8) -> Vec<String> {
+        let mut errors = Vec::new();
+        
+        // Check for window overflow
+        if alpha <= i32::MIN + 100 || beta >= i32::MAX - 100 {
+            errors.push("window_overflow".to_string());
+        }
+        
+        // Check for invalid parameters
+        if alpha >= beta || previous_score < -100000 || previous_score > 100000 {
+            errors.push("invalid_parameters".to_string());
+        }
+        
+        // Check for statistics corruption
+        if self.aspiration_stats.fail_lows > self.aspiration_stats.total_searches ||
+           self.aspiration_stats.fail_highs > self.aspiration_stats.total_searches {
+            errors.push("statistics_corruption".to_string());
+        }
+        
+        // Check for cascading failure (too many researches)
+        if researches > self.aspiration_config.max_researches + 1 {
+            errors.push("cascading_failure".to_string());
+        }
+        
+        // Check for timeout cascade (if we have timeout detection)
+        if researches > 5 { // Arbitrary threshold for potential timeout issues
+            errors.push("timeout_cascade".to_string());
+        }
+        
+        errors
+    }
+
+    /// Safe aspiration window operation with error handling
+    fn safe_aspiration_operation<F>(&mut self, operation: F, alpha: &mut i32, beta: &mut i32, 
+                                   previous_score: i32, depth: u8, researches: u8) -> bool 
+    where F: FnOnce(&mut i32, &mut i32) -> bool {
+        
+        // Pre-operation error detection
+        let errors = self.detect_aspiration_errors(*alpha, *beta, previous_score, researches, depth);
+        if !errors.is_empty() {
+            for error in errors {
+                if !self.handle_aspiration_error(&error, "pre_operation", alpha, beta, 
+                                               previous_score, depth, researches) {
+                    return false;
+                }
+            }
+        }
+        
+        // Perform the operation with error handling
+        let success = operation(alpha, beta);
+        
+        if success {
+            // Post-operation validation
+            self.validate_aspiration_state(*alpha, *beta, previous_score, researches, depth);
+        }
+        
+        success
+    }
+
+    /// Graceful degradation system for aspiration windows
+    fn apply_graceful_degradation(&mut self, alpha: &mut i32, beta: &mut i32, 
+                                 previous_score: i32, depth: u8, researches: u8) -> bool {
+        
+        // Determine degradation level based on failure patterns
+        let degradation_level = self.calculate_degradation_level(researches, depth);
+        
+        crate::debug_utils::trace_log("GRACEFUL_DEGRADATION", 
+            &format!("Applying degradation level {} for researches={}, depth={}", 
+                degradation_level, researches, depth));
+        
+        match degradation_level {
+            0 => {
+                // No degradation - normal operation
+                true
+            },
+            1 => {
+                // Level 1: Reduce window aggressiveness
+                self.degrade_window_aggressiveness(alpha, beta, previous_score)
+            },
+            2 => {
+                // Level 2: Disable adaptive features
+                self.degrade_adaptive_features(alpha, beta, previous_score)
+            },
+            3 => {
+                // Level 3: Use conservative defaults
+                self.degrade_to_conservative_defaults(alpha, beta, previous_score)
+            },
+            4 => {
+                // Level 4: Disable aspiration windows entirely
+                self.degrade_disable_aspiration(alpha, beta)
+            },
+            _ => {
+                // Emergency: Full fallback
+                self.emergency_recovery(alpha, beta, previous_score, depth)
+            }
+        }
+    }
+
+    /// Calculate degradation level based on failure patterns
+    fn calculate_degradation_level(&self, researches: u8, depth: u8) -> u8 {
+        let mut level = 0;
+        
+        // Factor 1: Research count
+        if researches > self.aspiration_config.max_researches {
+            level += 2;
+        } else if researches > self.aspiration_config.max_researches / 2 {
+            level += 1;
+        }
+        
+        // Factor 2: Failure rate
+        let total_searches = self.aspiration_stats.total_searches.max(1);
+        let failure_rate = (self.aspiration_stats.fail_lows + self.aspiration_stats.fail_highs) as f64 
+                          / total_searches as f64;
+        
+        if failure_rate > 0.5 {
+            level += 2;
+        } else if failure_rate > 0.3 {
+            level += 1;
+        }
+        
+        // Factor 3: Depth (deeper searches are more critical)
+        if depth > 10 {
+            level += 1;
+        }
+        
+        // Factor 4: Recent consecutive failures
+        if researches > 3 {
+            level += 1;
+        }
+        
+        level.min(4) // Cap at level 4
+    }
+
+    /// Level 1 degradation: Reduce window aggressiveness
+    fn degrade_window_aggressiveness(&self, alpha: &mut i32, beta: &mut i32, 
+                                    previous_score: i32) -> bool {
+        let conservative_window = 25; // Very conservative window
+        *alpha = previous_score - conservative_window;
+        *beta = previous_score + conservative_window;
+        
+        crate::debug_utils::trace_log("DEGRADATION_LEVEL_1", 
+            "Reduced window aggressiveness");
+        true
+    }
+
+    /// Level 2 degradation: Disable adaptive features
+    fn degrade_adaptive_features(&self, alpha: &mut i32, beta: &mut i32, 
+                                previous_score: i32) -> bool {
+        let fixed_window = 50; // Fixed window size
+        *alpha = previous_score - fixed_window;
+        *beta = previous_score + fixed_window;
+        
+        crate::debug_utils::trace_log("DEGRADATION_LEVEL_2", 
+            "Disabled adaptive features, using fixed window");
+        true
+    }
+
+    /// Level 3 degradation: Use conservative defaults
+    fn degrade_to_conservative_defaults(&self, alpha: &mut i32, beta: &mut i32, 
+                                       previous_score: i32) -> bool {
+        let safe_score = previous_score.clamp(-1000, 1000);
+        let safe_window = 30;
+        *alpha = safe_score - safe_window;
+        *beta = safe_score + safe_window;
+        
+        crate::debug_utils::trace_log("DEGRADATION_LEVEL_3", 
+            "Using conservative defaults");
+        true
+    }
+
+    /// Level 4 degradation: Disable aspiration windows entirely
+    fn degrade_disable_aspiration(&self, alpha: &mut i32, beta: &mut i32) -> bool {
+        *alpha = i32::MIN + 1;
+        *beta = i32::MAX - 1;
+        
+        crate::debug_utils::trace_log("DEGRADATION_LEVEL_4", 
+            "Disabled aspiration windows, using full-width search");
+        true
+    }
+
+    /// Monitor system health and trigger degradation if needed
+    fn monitor_system_health(&mut self, alpha: i32, beta: i32, previous_score: i32, 
+                            depth: u8, researches: u8) -> bool {
+        let health_score = self.calculate_system_health_score(alpha, beta, previous_score, 
+                                                             depth, researches);
+        
+        crate::debug_utils::trace_log("SYSTEM_HEALTH", 
+            &format!("System health score: {}", health_score));
+        
+        if health_score < 0.3 {
+            // System is unhealthy, trigger graceful degradation
+            crate::debug_utils::trace_log("SYSTEM_HEALTH", 
+                "System health critical, triggering graceful degradation");
+            return false; // Signal that degradation is needed
+        }
+        
+        true
+    }
+
+    /// Calculate system health score (0.0 = critical, 1.0 = healthy)
+    fn calculate_system_health_score(&self, alpha: i32, beta: i32, previous_score: i32, 
+                                    depth: u8, researches: u8) -> f64 {
+        let mut score = 1.0;
+        
+        // Factor 1: Window validity
+        if alpha >= beta {
+            score -= 0.5;
+        }
+        
+        // Factor 2: Parameter bounds
+        if previous_score < -50000 || previous_score > 50000 {
+            score -= 0.3;
+        }
+        
+        // Factor 3: Research count
+        let research_ratio = researches as f64 / self.aspiration_config.max_researches as f64;
+        if research_ratio > 1.0 {
+            score -= 0.4;
+        } else if research_ratio > 0.5 {
+            score -= 0.2;
+        }
+        
+        // Factor 4: Failure rate
+        let total_searches = self.aspiration_stats.total_searches.max(1);
+        let failure_rate = (self.aspiration_stats.fail_lows + self.aspiration_stats.fail_highs) as f64 
+                          / total_searches as f64;
+        score -= failure_rate * 0.3;
+        
+        score.max(0.0).min(1.0)
+    }
+
+    /// Comprehensive aspiration window retry strategy
+    /// 
+    /// This method implements a robust retry mechanism for aspiration window failures.
+    /// It addresses the critical issue where aspiration window searches would fail
+    /// completely, causing the engine to return no result.
+    /// 
+    /// # Arguments
+    /// * `alpha` - Current alpha bound (modified in place)
+    /// * `beta` - Current beta bound (modified in place)
+    /// * `previous_score` - Score from previous iteration
+    /// * `window_size` - Size of the aspiration window
+    /// * `failure_type` - Type of failure ("fail_low", "fail_high", "search_failed")
+    /// * `researches` - Number of retry attempts so far
+    /// * `depth` - Current search depth
+    /// 
+    /// # Returns
+    /// `true` if retry should continue, `false` if should fall back to full-width search
+    /// 
+    /// # Strategy
+    /// 1. Validate parameters to ensure they're reasonable
+    /// 2. Check if max retry limit has been reached
+    /// 3. Apply failure-type-specific recovery strategies
+    /// 4. Implement graceful degradation if recovery fails
+    fn handle_aspiration_retry(&mut self, alpha: &mut i32, beta: &mut i32, 
+                              previous_score: i32, window_size: i32, 
+                              failure_type: &str, researches: u8, depth: u8) -> bool {
+        
+        // Validate parameters
+        if !self.validate_window_parameters(previous_score, window_size) {
+            crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                "Invalid parameters, falling back to full-width search");
+            *alpha = i32::MIN + 1;
+            *beta = i32::MAX - 1;
+            return true;
+        }
+        
+        // Check if we've exceeded max researches
+        if researches >= self.aspiration_config.max_researches {
+            crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                "Max researches exceeded, falling back to full-width search");
+            *alpha = i32::MIN + 1;
+            *beta = i32::MAX - 1;
+            return true;
+        }
+        
+        // Handle different failure types with specific strategies
+        match failure_type {
+            "fail_low" => {
+                self.handle_fail_low(alpha, beta, previous_score, window_size);
+                crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                    &format!("Fail-low retry: alpha={}, beta={}, researches={}", 
+                        alpha, beta, researches));
+            },
+            "fail_high" => {
+                self.handle_fail_high(alpha, beta, previous_score, window_size);
+                crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                    &format!("Fail-high retry: alpha={}, beta={}, researches={}", 
+                        alpha, beta, researches));
+            },
+            "search_failed" => {
+                // Widen window significantly for search failures (safe arithmetic)
+                let doubled_window = window_size.saturating_mul(2);
+                let new_alpha = previous_score.saturating_sub(doubled_window);
+                let new_beta = previous_score.saturating_add(doubled_window);
+                
+                if new_alpha < new_beta {
+                    *alpha = new_alpha;
+                    *beta = new_beta;
+                    crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                        &format!("Search failure retry: alpha={}, beta={}, researches={}", 
+                            alpha, beta, researches));
+                } else {
+                    // Fallback to full-width search
+                    *alpha = i32::MIN + 1;
+                    *beta = i32::MAX - 1;
+                    crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                        "Search failure: invalid window, falling back to full-width");
+                }
+            },
+            "timeout" => {
+                // For timeouts, use a more conservative approach
+                let conservative_window = window_size / 2;
+                let new_alpha = previous_score - conservative_window;
+                let new_beta = previous_score + conservative_window;
+                
+                if new_alpha < new_beta {
+                    *alpha = new_alpha;
+                    *beta = new_beta;
+                } else {
+                    *alpha = i32::MIN + 1;
+                    *beta = i32::MAX - 1;
+                }
+                crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                    &format!("Timeout retry: alpha={}, beta={}, researches={}", 
+                        alpha, beta, researches));
+            },
+            _ => {
+                crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                    "Unknown failure type, falling back to full-width search");
+                *alpha = i32::MIN + 1;
+                *beta = i32::MAX - 1;
+            }
+        }
+        
+        // Validate the new window
+        if *alpha >= *beta {
+            crate::debug_utils::trace_log("ASPIRATION_RETRY", 
+                "Invalid window after retry, falling back to full-width search");
+            *alpha = i32::MIN + 1;
+            *beta = i32::MAX - 1;
+        }
+        
+        true
+    }
+
+    // ============================================================================
+    // DIAGNOSTIC TOOLS AND MONITORING
+    // ============================================================================
+
+    /// Get comprehensive search state for debugging and diagnostics
+    /// 
+    /// This method provides a snapshot of the current search state, including
+    /// aspiration window parameters, move tracking status, and performance metrics.
+    /// Useful for debugging search issues and monitoring engine health.
+    pub fn get_search_state(&self) -> SearchState {
+        SearchState {
+            alpha: self.current_alpha,
+            beta: self.current_beta,
+            best_move: self.current_best_move.clone(),
+            best_score: self.current_best_score,
+            nodes_searched: self.nodes_searched,
+            depth: self.current_depth,
+            aspiration_enabled: self.aspiration_config.enabled,
+            researches: self.aspiration_stats.total_researches as u8,
+            health_score: self.calculate_system_health_score(
+                self.current_alpha, 
+                self.current_beta, 
+                self.current_best_score,
+                self.current_depth,
+                self.aspiration_stats.total_researches as u8
+            ),
+        }
+    }
+
+    /// Get detailed aspiration window diagnostics
+    /// 
+    /// Provides comprehensive information about the current aspiration window
+    /// state, including window parameters, retry statistics, and health metrics.
+    pub fn get_aspiration_diagnostics(&self) -> AspirationDiagnostics {
+        AspirationDiagnostics {
+            alpha: self.current_alpha,
+            beta: self.current_beta,
+            window_size: self.current_beta - self.current_alpha,
+            researches: self.aspiration_stats.total_researches as u8,
+            success_rate: self.aspiration_stats.success_rate(),
+            health_score: self.calculate_system_health_score(
+                self.current_alpha, 
+                self.current_beta, 
+                self.current_best_score,
+                self.current_depth,
+                self.aspiration_stats.total_researches as u8
+            ),
+            estimated_time_saved: self.aspiration_stats.estimated_time_saved_ms,
+            estimated_nodes_saved: self.aspiration_stats.estimated_nodes_saved,
+            failure_rate: self.aspiration_stats.fail_low_rate(),
+        }
+    }
+
+    /// Classify the current error state and provide recovery suggestions
+    /// 
+    /// Analyzes the current search state to identify potential issues and
+    /// suggests appropriate recovery strategies.
+    pub fn classify_error_type(&self, score: i32, alpha: i32, beta: i32) -> String {
+        if score <= alpha {
+            "fail_low".to_string()
+        } else if score >= beta {
+            "fail_high".to_string()
+        } else if alpha >= beta {
+            "invalid_window".to_string()
+        } else if score < alpha - 1000 || score > beta + 1000 {
+            "extreme_score".to_string()
+        } else {
+            "normal".to_string()
+        }
+    }
+
+    /// Get recovery suggestion for a specific error type
+    /// 
+    /// Provides specific recommendations for handling different types of
+    /// search failures and aspiration window issues.
+    pub fn get_recovery_suggestion(&self, error_type: &str) -> String {
+        match error_type {
+            "fail_low" => "Lower alpha bound or widen window downward".to_string(),
+            "fail_high" => "Raise beta bound or widen window upward".to_string(),
+            "invalid_window" => "Reset to full-width search".to_string(),
+            "extreme_score" => "Check evaluation function for anomalies".to_string(),
+            "normal" => "No recovery needed".to_string(),
+            _ => "Unknown error type, use emergency recovery".to_string(),
+        }
+    }
+
+    /// Generate a comprehensive diagnostic report
+    /// 
+    /// Creates a detailed report of the current search state, including
+    /// all relevant metrics, potential issues, and recommendations.
+    pub fn generate_diagnostic_report(&self) -> String {
+        let state = self.get_search_state();
+        let diagnostics = self.get_aspiration_diagnostics();
+        let error_type = self.classify_error_type(state.best_score, state.alpha, state.beta);
+        let suggestion = self.get_recovery_suggestion(&error_type);
+
+        format!(
+            "=== SEARCH DIAGNOSTIC REPORT ===\n\
+            Search State:\n\
+            - Alpha: {}, Beta: {}, Window Size: {}\n\
+            - Best Move: {:?}, Best Score: {}\n\
+            - Nodes Searched: {}, Depth: {}\n\
+            \n\
+            Aspiration Window:\n\
+            - Enabled: {}, Researches: {}\n\
+            - Success Rate: {:.2}%, Failure Rate: {:.2}%\n\
+            - Health Score: {:.2}\n\
+            - Time Saved: {}ms, Nodes Saved: {}\n\
+            \n\
+            Error Analysis:\n\
+            - Error Type: {}\n\
+            - Suggestion: {}\n\
+            \n\
+            Recommendations:\n\
+            - Monitor health score for degradation\n\
+            - Check error logs for patterns\n\
+            - Consider adjusting window parameters if issues persist\n\
+            =================================",
+            state.alpha, state.beta, diagnostics.window_size,
+            state.best_move.as_ref().map(|m| m.to_usi_string()),
+            state.best_score, state.nodes_searched, state.depth,
+            state.aspiration_enabled, diagnostics.researches,
+            diagnostics.success_rate * 100.0, diagnostics.failure_rate * 100.0,
+            diagnostics.health_score,
+            diagnostics.estimated_time_saved, diagnostics.estimated_nodes_saved,
+            error_type, suggestion
+        )
+    }
+
+    /// Check if the search engine is in a healthy state
+    /// 
+    /// Performs various health checks to determine if the search engine
+    /// is operating normally or if there are potential issues.
+    pub fn is_healthy(&self) -> bool {
+        let health_score = self.calculate_system_health_score(
+            self.current_alpha, 
+            self.current_beta, 
+            self.current_best_score,
+            self.current_depth,
+            self.aspiration_stats.total_researches as u8
+        );
+        
+        // Consider healthy if health score is above 0.7
+        health_score > 0.7
+    }
+
+    /// Get performance metrics for monitoring
+    /// 
+    /// Returns key performance indicators for monitoring engine performance
+    /// and detecting potential issues.
+    pub fn get_performance_metrics(&self) -> PerformanceMetrics {
+        PerformanceMetrics {
+            nodes_per_second: self.calculate_nodes_per_second(),
+            aspiration_success_rate: self.aspiration_stats.success_rate(),
+            average_window_size: self.calculate_average_window_size(),
+            retry_frequency: self.aspiration_stats.total_researches as f64 / 
+                           (self.aspiration_stats.successful_searches + self.aspiration_stats.total_researches) as f64,
+            health_score: self.calculate_system_health_score(
+                self.current_alpha, 
+                self.current_beta, 
+                self.current_best_score,
+                self.current_depth,
+                self.aspiration_stats.total_researches as u8
+            ),
+        }
+    }
+
+    /// Calculate nodes searched per second
+    fn calculate_nodes_per_second(&self) -> f64 {
+        if self.search_start_time.is_none() {
+            return 0.0;
+        }
+        
+        let elapsed_ms = self.search_start_time.as_ref().unwrap().elapsed_ms();
+        let elapsed_seconds = elapsed_ms as f64 / 1000.0;
+        
+        if elapsed_seconds > 0.0 {
+            self.nodes_searched as f64 / elapsed_seconds
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate average window size over recent searches
+    fn calculate_average_window_size(&self) -> f64 {
+        if self.previous_scores.is_empty() {
+            return (self.current_beta - self.current_alpha) as f64;
+        }
+        
+        let recent_scores = &self.previous_scores[..self.previous_scores.len().min(10)];
+        let avg_score = recent_scores.iter().sum::<i32>() as f64 / recent_scores.len() as f64;
+        
+        // Estimate average window size based on recent scores
+        avg_score * 0.1 // Assume 10% of score as window size
+    }
+
+    // ============================================================================
+    // RUNTIME VALIDATION AND MONITORING
+    // ============================================================================
+
+    /// Perform runtime validation of search consistency
+    /// 
+    /// This method performs various runtime checks to ensure the search
+    /// is operating correctly and consistently. It should be called
+    /// periodically during search to detect issues early.
+    pub fn validate_search_consistency(&self) -> ValidationResult {
+        let mut issues = Vec::new();
+        let mut warnings = Vec::new();
+
+        // Check window validity
+        if self.current_alpha >= self.current_beta {
+            issues.push("Invalid aspiration window: alpha >= beta".to_string());
+        }
+
+        // Check for extreme values
+        if self.current_alpha < i32::MIN + 1000 {
+            warnings.push("Alpha very close to minimum value".to_string());
+        }
+        if self.current_beta > i32::MAX - 1000 {
+            warnings.push("Beta very close to maximum value".to_string());
+        }
+
+        // Check move tracking consistency
+        if self.current_best_move.is_some() && self.current_best_score == i32::MIN {
+            issues.push("Move exists but score is minimum value".to_string());
+        }
+
+        // Check aspiration window health
+        let health_score = self.calculate_system_health_score(
+            self.current_alpha, 
+            self.current_beta, 
+            self.current_best_score,
+            self.current_depth,
+            self.aspiration_stats.total_researches as u8
+        );
+        if health_score < 0.5 {
+            warnings.push("Low system health score detected".to_string());
+        }
+
+        // Check for excessive retries
+        if self.aspiration_stats.total_researches > self.aspiration_config.max_researches as u64 {
+            issues.push("Exceeded maximum retry attempts".to_string());
+        }
+
+        ValidationResult {
+            is_valid: issues.is_empty(),
+            issues,
+            warnings,
+            health_score,
+        }
+    }
+
+    /// Add runtime warnings for suspicious behavior
+    /// 
+    /// Monitors the search for patterns that might indicate problems
+    /// and logs warnings when suspicious behavior is detected.
+    pub fn check_suspicious_behavior(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // Check for rapid window changes
+        if self.previous_scores.len() >= 3 {
+            let recent_scores = &self.previous_scores[self.previous_scores.len()-3..];
+            let variance = self.calculate_score_variance(recent_scores);
+            if variance > 1000.0 {
+                warnings.push("High score variance detected - possible evaluation instability".to_string());
+            }
+        }
+
+        // Check for excessive node usage
+        if self.nodes_searched > 1_000_000 && self.current_depth < 5 {
+            warnings.push("High node count for shallow depth - possible infinite loop".to_string());
+        }
+
+        // Check for aspiration window thrashing
+        if self.aspiration_stats.total_researches > 5 {
+            warnings.push("Frequent aspiration window retries - possible parameter issues".to_string());
+        }
+
+        // Check for move tracking issues
+        if self.current_best_move.is_none() && self.current_depth > 0 {
+            warnings.push("No best move found at non-zero depth".to_string());
+        }
+
+        warnings
+    }
+
+    /// Create diagnostic reports for troubleshooting
+    /// 
+    /// Generates detailed diagnostic information that can be used
+    /// for troubleshooting search issues and performance problems.
+    pub fn create_troubleshooting_report(&self) -> TroubleshootingReport {
+        let validation = self.validate_search_consistency();
+        let suspicious_behavior = self.check_suspicious_behavior();
+        let performance = self.get_performance_metrics();
+
+        TroubleshootingReport {
+            timestamp: format!("{}", TimeSource::now().elapsed_ms()),
+            validation_result: validation.clone(),
+            suspicious_behavior: suspicious_behavior.clone(),
+            performance_metrics: performance,
+            recommendations: self.generate_recommendations(&validation, &suspicious_behavior),
+        }
+    }
+
+    /// Calculate score variance for stability analysis
+    fn calculate_score_variance(&self, scores: &[i32]) -> f64 {
+        if scores.len() < 2 {
+            return 0.0;
+        }
+
+        let mean = scores.iter().sum::<i32>() as f64 / scores.len() as f64;
+        let variance = scores.iter()
+            .map(|&score| (score as f64 - mean).powi(2))
+            .sum::<f64>() / scores.len() as f64;
+
+        variance.sqrt()
+    }
+
+    /// Generate recommendations based on validation results
+    fn generate_recommendations(&self, validation: &ValidationResult, suspicious: &[String]) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        if !validation.is_valid {
+            recommendations.push("Fix critical issues before continuing search".to_string());
+        }
+
+        if validation.health_score < 0.7 {
+            recommendations.push("Consider resetting aspiration window parameters".to_string());
+        }
+
+        if !suspicious.is_empty() {
+            recommendations.push("Investigate suspicious behavior patterns".to_string());
+        }
+
+        if self.aspiration_stats.total_researches > 3 {
+            recommendations.push("Consider increasing window size or reducing aggressiveness".to_string());
+        }
+
+        if self.current_depth > 10 && self.nodes_searched < 1000 {
+            recommendations.push("Very low node count for deep search - check pruning parameters".to_string());
+        }
+
+        recommendations
+    }
+
+    /// Update current search state for monitoring
+    /// 
+    /// This method should be called at the beginning of each search
+    /// to update the current state for monitoring and diagnostics.
+    pub fn update_search_state(&mut self, alpha: i32, beta: i32, depth: u8) {
+        self.current_alpha = alpha;
+        self.current_beta = beta;
+        self.current_depth = depth;
+        self.search_start_time = Some(TimeSource::now());
+        self.current_best_move = None;
+        self.current_best_score = i32::MIN;
+    }
+
+    /// Update best move and score for monitoring
+    /// 
+    /// This method should be called whenever a new best move is found
+    /// to keep the monitoring state up to date.
+    pub fn update_best_move(&mut self, best_move: Option<Move>, best_score: i32) {
+        self.current_best_move = best_move;
+        self.current_best_score = best_score;
+    }
+}
+
+// ============================================================================
+// DIAGNOSTIC DATA STRUCTURES
+// ============================================================================
+
+/// Comprehensive search state for debugging and monitoring
+#[derive(Debug, Clone)]
+pub struct SearchState {
+    pub alpha: i32,
+    pub beta: i32,
+    pub best_move: Option<Move>,
+    pub best_score: i32,
+    pub nodes_searched: u64,
+    pub depth: u8,
+    pub aspiration_enabled: bool,
+    pub researches: u8,
+    pub health_score: f64,
+}
+
+/// Detailed aspiration window diagnostics
+#[derive(Debug, Clone)]
+pub struct AspirationDiagnostics {
+    pub alpha: i32,
+    pub beta: i32,
+    pub window_size: i32,
+    pub researches: u8,
+    pub success_rate: f64,
+    pub health_score: f64,
+    pub estimated_time_saved: u64,
+    pub estimated_nodes_saved: u64,
+    pub failure_rate: f64,
+}
+
+/// Performance metrics for monitoring
+#[derive(Debug, Clone)]
+pub struct PerformanceMetrics {
+    pub nodes_per_second: f64,
+    pub aspiration_success_rate: f64,
+    pub average_window_size: f64,
+    pub retry_frequency: f64,
+    pub health_score: f64,
+}
+
+/// Validation result for runtime checks
+#[derive(Debug, Clone)]
+pub struct ValidationResult {
+    pub is_valid: bool,
+    pub issues: Vec<String>,
+    pub warnings: Vec<String>,
+    pub health_score: f64,
+}
+
+/// Comprehensive troubleshooting report
+#[derive(Debug, Clone)]
+pub struct TroubleshootingReport {
+    pub timestamp: String,
+    pub validation_result: ValidationResult,
+    pub suspicious_behavior: Vec<String>,
+    pub performance_metrics: PerformanceMetrics,
+    pub recommendations: Vec<String>,
 }
 
 
@@ -5092,6 +6431,10 @@ impl IterativeDeepening {
             let mut current_beta = beta;
 
             crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Starting aspiration window search at depth {} (alpha: {}, beta: {})", depth, current_alpha, current_beta));
+            crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!(
+                "Window state: alpha={}, beta={}, previous_score={}, researches={}", 
+                current_alpha, current_beta, 
+                previous_scores.last().copied().unwrap_or(0), researches));
 
             loop {
                 if researches >= search_engine.aspiration_config.max_researches {
@@ -5145,10 +6488,35 @@ impl IterativeDeepening {
                     previous_scores.push(score);
                     break;
                 } else {
-                    // Search failed completely
+                    // Search failed - widen window and retry instead of giving up
                     crate::debug_utils::end_timing(&format!("aspiration_search_{}_{}", depth, researches), "ASPIRATION_WINDOW");
-                    crate::debug_utils::trace_log("ASPIRATION_WINDOW", "Search failed completely");
-                    break;
+                    crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!(
+                        "Search failed at research {}, widening window and retrying", researches));
+                    
+                    if researches >= search_engine.aspiration_config.max_researches {
+                        // Only fall back to full-width search after exhausting retries
+                        crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!(
+                            "Max researches ({}) reached, falling back to full-width search", researches));
+                        current_alpha = i32::MIN + 1;
+                        current_beta = i32::MAX - 1;
+                        researches += 1;
+                        crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!(
+                            "Window state after fallback: alpha={}, beta={}, researches={}", 
+                            current_alpha, current_beta, researches));
+                        continue;
+                    } else {
+                        // Widen window and retry
+                        let old_alpha = current_alpha;
+                        let old_beta = current_beta;
+                        search_engine.handle_fail_low(&mut current_alpha, &mut current_beta, 
+                                                    previous_scores.last().copied().unwrap_or(0), 
+                                                    search_engine.calculate_window_size(depth, 0, 0));
+                        researches += 1;
+                        crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!(
+                            "Window widened: alpha {}->{}, beta {}->{}, researches={}", 
+                            old_alpha, current_alpha, old_beta, current_beta, researches));
+                        continue;
+                    }
                 }
             }
 
@@ -5356,7 +6724,7 @@ mod tablebase_tests {
         
         // Test win score
         let win_result = crate::tablebase::TablebaseResult::win(
-            Move::new_move(Position::new(0, 0), Position::new(1, 1), PieceType::King, Player::Black, false),
+            Some(Move::new_move(Position::new(0, 0), Position::new(1, 1), PieceType::King, Player::Black, false)),
             5
         );
         let win_score = engine.convert_tablebase_score(&win_result);

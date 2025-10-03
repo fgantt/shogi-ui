@@ -473,7 +473,7 @@ mod tests {
             false,
         );
 
-        let result = TablebaseResult::win(move_, 5);
+        let result = TablebaseResult::win(Some(move_), 5);
 
         // Initially, cache should be empty
         assert!(cache.get(&board, player, &captured_pieces).is_none());
@@ -582,13 +582,13 @@ mod benchmarks {
 
         // Create a test result
         let test_result = TablebaseResult::win(
-            crate::types::Move::new_move(
+            Some(crate::types::Move::new_move(
                 Position::new(0, 0),
                 Position::new(1, 1),
                 PieceType::King,
                 Player::Black,
                 false,
-            ),
+            )),
             5,
         );
 
@@ -633,13 +633,13 @@ mod benchmarks {
         let player = Player::Black;
 
         let test_result = TablebaseResult::win(
-            crate::types::Move::new_move(
+            Some(crate::types::Move::new_move(
                 Position::new(0, 0),
                 Position::new(1, 1),
                 PieceType::King,
                 Player::Black,
                 false,
-            ),
+            )),
             5,
         );
 

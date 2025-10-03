@@ -330,7 +330,7 @@ mod tests {
             false,
         );
 
-        let result = TablebaseResult::win(move_, 5);
+        let result = TablebaseResult::win(Some(move_), 5);
         let solver = MockSolver::new("TestSolver", 100)
             .with_solve_result(Some(result));
 
