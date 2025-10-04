@@ -4327,10 +4327,10 @@ impl SearchEngine {
         }
         
         // Validate window size is reasonable for depth
-        let current_window_size = *beta - *alpha;
+        let current_window_size = (*beta as i64).saturating_sub(*alpha as i64);
         let expected_max_size = self.aspiration_config.max_window_size;
         
-        if current_window_size > expected_max_size {
+        if current_window_size > expected_max_size as i64 {
             crate::debug_utils::trace_log("WINDOW_VALIDATION", 
                 &format!("Window too large: {} > {}, adjusting", current_window_size, expected_max_size));
             
@@ -4348,7 +4348,7 @@ impl SearchEngine {
 
     /// Check if window is in a stable state
     fn is_window_stable(&self, alpha: i32, beta: i32, previous_score: i32) -> bool {
-        let window_size = beta - alpha;
+        let window_size = (beta as i64).saturating_sub(alpha as i64);
         let center = (alpha + beta) / 2;
         let score_deviation = (center - previous_score).abs();
         
@@ -4357,8 +4357,8 @@ impl SearchEngine {
         // 2. Center is close to previous score
         // 3. Bounds are valid
         window_size > 0 && 
-        window_size <= self.aspiration_config.max_window_size &&
-        score_deviation <= window_size / 4 &&
+        window_size <= self.aspiration_config.max_window_size as i64 &&
+        score_deviation as i64 <= window_size / 4 &&
         alpha < beta
     }
 
@@ -5560,8 +5560,8 @@ impl SearchEngine {
         }
         
         // Check window size consistency
-        let actual_window_size = beta - alpha;
-        if actual_window_size != window_size && window_size != i32::MAX {
+        let actual_window_size = (beta as i64).saturating_sub(alpha as i64);
+        if actual_window_size != window_size as i64 && window_size != i32::MAX {
             issues.push(format!("Window size mismatch: actual={}, expected={}", 
                 actual_window_size, window_size));
         }
@@ -5604,7 +5604,7 @@ impl SearchEngine {
     fn validate_aspiration_state(&self, alpha: i32, beta: i32, previous_score: i32, 
                                 researches: u8, depth: u8) -> bool {
         let issues = self.perform_consistency_checks(alpha, beta, previous_score, 
-                                                   beta - alpha, depth, researches);
+                                                   (beta as i64).saturating_sub(alpha as i64) as i32, depth, researches);
         
         if !issues.is_empty() {
             crate::debug_utils::trace_log("CONSISTENCY_CHECK", 
@@ -6174,7 +6174,7 @@ impl SearchEngine {
         AspirationDiagnostics {
             alpha: self.current_alpha,
             beta: self.current_beta,
-            window_size: self.current_beta - self.current_alpha,
+            window_size: (self.current_beta as i64).saturating_sub(self.current_alpha as i64) as i32,
             researches: self.aspiration_stats.total_researches as u8,
             success_rate: self.aspiration_stats.success_rate(),
             health_score: self.calculate_system_health_score(
@@ -6323,7 +6323,7 @@ impl SearchEngine {
     /// Calculate average window size over recent searches
     fn calculate_average_window_size(&self) -> f64 {
         if self.previous_scores.is_empty() {
-            return (self.current_beta - self.current_alpha) as f64;
+            return (self.current_beta as i64).saturating_sub(self.current_alpha as i64) as f64;
         }
         
         let recent_scores = &self.previous_scores[..self.previous_scores.len().min(10)];
