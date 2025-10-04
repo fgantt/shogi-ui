@@ -2330,11 +2330,11 @@ impl SearchEngine {
         // === END NULL MOVE PRUNING ===
         
         if depth == 0 {
-            crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search (alpha: {}, beta: {})", alpha, beta));
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search (alpha: {}, beta: {})", alpha, beta));
             crate::debug_utils::start_timing("quiescence_search");
             let result = self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
             crate::debug_utils::end_timing("quiescence_search", "QUIESCENCE");
-            crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: score={}", result));
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: score={}", result));
             return result;
         }
         
@@ -2521,20 +2521,20 @@ impl SearchEngine {
 
     fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { 
-            crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, returning 0");
+            // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, returning 0");
             return 0; 
         }
         
-        crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search: depth={}, alpha={}, beta={}", depth, alpha, beta));
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search: depth={}, alpha={}, beta={}", depth, alpha, beta));
 
         // Update statistics
         self.quiescence_stats.nodes_searched += 1;
 
         // Check depth limit
         if depth == 0 || depth > self.quiescence_config.max_depth {
-            crate::debug_utils::trace_log("QUIESCENCE", &format!("Depth limit reached (depth={}), evaluating position", depth));
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Depth limit reached (depth={}), evaluating position", depth));
             let score = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
-            crate::debug_utils::trace_log("QUIESCENCE", &format!("Position evaluation: {}", score));
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Position evaluation: {}", score));
             return score;
         }
 
@@ -2542,7 +2542,7 @@ impl SearchEngine {
         if self.quiescence_config.enable_tt {
             // Clean up TT if it's getting too large
             if self.quiescence_tt.len() > self.quiescence_config.tt_cleanup_threshold {
-                crate::debug_utils::trace_log("QUIESCENCE", "Cleaning up quiescence TT");
+                // crate::debug_utils::trace_log("QUIESCENCE", "Cleaning up quiescence TT");
                 self.cleanup_quiescence_tt(self.quiescence_config.tt_cleanup_threshold / 2);
             }
             
@@ -2550,29 +2550,29 @@ impl SearchEngine {
             if let Some(entry) = self.quiescence_tt.get(&fen_key) {
                 if entry.depth >= depth {
                     self.quiescence_stats.tt_hits += 1;
-                    crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence TT hit: depth={}, score={}, flag={:?}", 
-                        entry.depth, entry.score, entry.flag));
+                    // crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence TT hit: depth={}, score={}, flag={:?}", 
+                    //     entry.depth, entry.score, entry.flag));
                     match entry.flag {
                         TranspositionFlag::Exact => return entry.score,
                         TranspositionFlag::LowerBound => if entry.score >= beta { 
-                            crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT lower bound cutoff");
+                            // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT lower bound cutoff");
                             return entry.score; 
                         },
                         TranspositionFlag::UpperBound => if entry.score <= alpha { 
-                            crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT upper bound cutoff");
+                            // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT upper bound cutoff");
                             return entry.score; 
                         },
                     }
                 }
             } else {
                 self.quiescence_stats.tt_misses += 1;
-                crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT miss");
+                // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT miss");
             }
         }
         
-        crate::debug_utils::trace_log("QUIESCENCE", "Evaluating stand-pat position");
+        // crate::debug_utils::trace_log("QUIESCENCE", "Evaluating stand-pat position");
         let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
-        crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {}", stand_pat));
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {}", stand_pat));
         
         if stand_pat >= beta { 
             crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat beta cutoff", 
@@ -2587,9 +2587,9 @@ impl SearchEngine {
             alpha = stand_pat; 
         }
         
-        crate::debug_utils::trace_log("QUIESCENCE", "Generating noisy moves");
+        // crate::debug_utils::trace_log("QUIESCENCE", "Generating noisy moves");
         let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
-        crate::debug_utils::trace_log("QUIESCENCE", &format!("Found {} noisy moves", noisy_moves.len()));
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Found {} noisy moves", noisy_moves.len()));
         
         // Track move type statistics
         for move_ in &noisy_moves {
@@ -2604,30 +2604,30 @@ impl SearchEngine {
             }
         }
         
-        crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
+        // crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
         let sorted_noisy_moves = self.sort_quiescence_moves(&noisy_moves);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
 
-        crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
 
         for (move_index, move_) in sorted_noisy_moves.iter().enumerate() {
             if self.should_stop(&start_time, time_limit_ms) { 
-                crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, stopping move evaluation");
+                // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, stopping move evaluation");
                 break; 
             }
             
-            crate::debug_utils::trace_log("QUIESCENCE", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
-                move_index + 1, move_.to_usi_string(), alpha, beta));
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
+            //     move_index + 1, move_.to_usi_string(), alpha, beta));
             
             // Apply pruning checks
             if self.should_prune_delta(&move_, stand_pat, alpha) {
-                crate::debug_utils::trace_log("QUIESCENCE", &format!("Delta pruning move {}", move_.to_usi_string()));
+                // crate::debug_utils::trace_log("QUIESCENCE", &format!("Delta pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.delta_prunes += 1;
                 continue;
             }
             
             if self.should_prune_futility(&move_, stand_pat, alpha, depth) {
-                crate::debug_utils::trace_log("QUIESCENCE", &format!("Futility pruning move {}", move_.to_usi_string()));
+                // crate::debug_utils::trace_log("QUIESCENCE", &format!("Futility pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.futility_prunes += 1;
                 continue;
             }
@@ -2640,7 +2640,7 @@ impl SearchEngine {
             
             // Check for selective extension
             let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
-                crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
+                // crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
                 self.quiescence_stats.extensions += 1;
                 depth - 1 // Still reduce depth but less aggressively
             } else {
@@ -2651,8 +2651,8 @@ impl SearchEngine {
             let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, search_depth);
             crate::debug_utils::end_timing(&format!("quiescence_move_{}", move_index), "QUIESCENCE");
             
-            crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
-                &format!("move {} of {}", move_index + 1, sorted_noisy_moves.len()));
+            // crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
+            //     &format!("move {} of {}", move_index + 1, sorted_noisy_moves.len()));
             
             if score >= beta { 
                 crate::debug_utils::log_decision("QUIESCENCE", "Beta cutoff", 
@@ -2679,7 +2679,7 @@ impl SearchEngine {
             }
         }
         
-        crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: depth={}, score={}", depth, alpha));
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: depth={}, score={}", depth, alpha));
         
         // Store result in transposition table
         if self.quiescence_config.enable_tt {
