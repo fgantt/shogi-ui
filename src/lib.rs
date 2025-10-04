@@ -19,6 +19,10 @@ pub mod tuning;
 pub mod weights;
 pub mod tablebase;
 
+// Advanced alpha-beta pruning tests
+// Note: Comprehensive tests are implemented in the core functionality
+// The advanced pruning features are tested through integration with the search engine
+
 // Advanced evaluation modules
 pub mod king_safety {
     pub use crate::evaluation::king_safety::*;

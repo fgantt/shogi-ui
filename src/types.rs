@@ -4056,6 +4056,7 @@ pub struct AttackConfig {
 
 /// Performance metrics for magic bitboard operations
 #[derive(Debug, Default, Clone)]
+#[derive(PartialEq)]
 pub struct PerformanceMetrics {
     pub lookup_count: u64,
     pub total_lookup_time: std::time::Duration,
@@ -4063,4 +4064,2174 @@ pub struct PerformanceMetrics {
     pub cache_misses: u64,
     pub memory_usage: usize,
     pub fallback_lookups: u64,
+}
+
+// ============================================================================
+// Advanced Alpha-Beta Pruning Structures
+// ============================================================================
+
+// Import BitboardBoard for adaptive parameter methods
+use crate::bitboards::BitboardBoard;
+
+/// Game phase for position-dependent pruning decisions
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GamePhase {
+    Opening,
+    Middlegame,
+    Endgame,
+}
+
+impl GamePhase {
+    /// Determine game phase based on material count
+    pub fn from_material_count(material: u32) -> Self {
+        match material {
+            0..=20 => GamePhase::Endgame,
+            21..=35 => GamePhase::Middlegame,
+            _ => GamePhase::Opening,
+        }
+    }
+}
+
+/// Search state for advanced alpha-beta pruning
+#[derive(Debug, Clone)]
+pub struct SearchState {
+    pub depth: u8,
+    pub move_number: u8,
+    pub alpha: i32,
+    pub beta: i32,
+    pub is_in_check: bool,
+    pub static_eval: i32,
+    pub best_move: Option<Move>,
+    pub position_hash: u64,
+    pub game_phase: GamePhase,
+}
+
+impl SearchState {
+    pub fn new(depth: u8, alpha: i32, beta: i32) -> Self {
+        Self {
+            depth,
+            move_number: 0,
+            alpha,
+            beta,
+            is_in_check: false,
+            static_eval: 0,
+            best_move: None,
+            position_hash: 0,
+            game_phase: GamePhase::Middlegame,
+        }
+    }
+    
+    /// Update search state with current position information
+    /// Note: This method should be called from SearchEngine with the appropriate values
+    pub fn update_fields(&mut self, is_in_check: bool, static_eval: i32, position_hash: u64, game_phase: GamePhase) {
+        self.is_in_check = is_in_check;
+        self.static_eval = static_eval;
+        self.position_hash = position_hash;
+        self.game_phase = game_phase;
+    }
+}
+
+/// Pruning decision result
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PruningDecision {
+    Search,           // Search normally
+    ReducedSearch,    // Search with reduced depth
+    Skip,             // Skip this move
+    Razor,            // Use razoring
+}
+
+impl PruningDecision {
+    pub fn is_pruned(&self) -> bool {
+        matches!(self, PruningDecision::Skip)
+    }
+    
+    pub fn needs_reduction(&self) -> bool {
+        matches!(self, PruningDecision::ReducedSearch)
+    }
+}
+
+/// Parameters for advanced alpha-beta pruning techniques
+#[derive(Debug, Clone)]
+#[derive(PartialEq)]
+pub struct PruningParameters {
+    // Futility pruning parameters
+    pub futility_margin: [i32; 8],
+    pub futility_depth_limit: u8,
+    pub extended_futility_depth: u8,
+    
+    // Late move reduction parameters
+    pub lmr_base_reduction: u8,
+    pub lmr_move_threshold: u8,
+    pub lmr_depth_threshold: u8,
+    pub lmr_max_reduction: u8,
+    
+    // Delta pruning parameters
+    pub delta_margin: i32,
+    pub delta_depth_limit: u8,
+    
+    // Razoring parameters
+    pub razoring_depth_limit: u8,
+    pub razoring_margin: i32,
+    pub razoring_margin_endgame: i32,
+    
+    // Multi-cut pruning parameters
+    pub multi_cut_threshold: u8,
+    pub multi_cut_depth_limit: u8,
+    
+    // Adaptive parameters
+    pub adaptive_enabled: bool,
+    pub position_dependent_margins: bool,
+}
+
+impl Default for PruningParameters {
+    fn default() -> Self {
+        Self {
+            futility_margin: [0, 100, 200, 300, 400, 500, 600, 700],
+            futility_depth_limit: 3,
+            extended_futility_depth: 5,
+            lmr_base_reduction: 1,
+            lmr_move_threshold: 3,
+            lmr_depth_threshold: 2,
+            lmr_max_reduction: 3,
+            delta_margin: 200,
+            delta_depth_limit: 4,
+            razoring_depth_limit: 3,
+            razoring_margin: 300,
+            razoring_margin_endgame: 200,
+            multi_cut_threshold: 3,
+            multi_cut_depth_limit: 4,
+            adaptive_enabled: false,
+            position_dependent_margins: false,
+        }
+    }
+}
+
+/// Statistics for pruning effectiveness monitoring
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PruningStatistics {
+    pub total_moves: u64,
+    pub pruned_moves: u64,
+    pub futility_pruned: u64,
+    pub delta_pruned: u64,
+    pub razored: u64,
+    pub lmr_applied: u64,
+    pub re_searches: u64,
+    pub multi_cuts: u64,
+}
+
+impl PruningStatistics {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    pub fn record_decision(&mut self, decision: PruningDecision) {
+        self.total_moves += 1;
+        
+        match decision {
+            PruningDecision::Skip => self.pruned_moves += 1,
+            PruningDecision::Razor => self.razored += 1,
+            _ => {}
+        }
+    }
+    
+    pub fn get_pruning_rate(&self) -> f64 {
+        if self.total_moves == 0 {
+            0.0
+        } else {
+            self.pruned_moves as f64 / self.total_moves as f64
+        }
+    }
+    
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+}
+
+/// Pruning effectiveness metrics for analysis
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PruningEffectiveness {
+    pub futility_rate: f64,
+    pub delta_rate: f64,
+    pub razoring_rate: f64,
+    pub multi_cut_rate: f64,
+    pub lmr_rate: f64,
+    pub overall_effectiveness: f64,
+}
+
+/// Pruning frequency statistics for detailed analysis
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PruningFrequencyStats {
+    pub total_moves: u64,
+    pub pruned_moves: u64,
+    pub futility_pruned: u64,
+    pub delta_pruned: u64,
+    pub razored: u64,
+    pub lmr_applied: u64,
+    pub multi_cuts: u64,
+    pub re_searches: u64,
+    pub pruning_rate: f64,
+    pub cache_hit_rate: f64,
+}
+
+/// Search performance metrics for monitoring
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SearchPerformanceMetrics {
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub cache_size: usize,
+    pub position_cache_size: usize,
+    pub check_cache_size: usize,
+    pub total_cache_operations: u64,
+    pub cache_hit_rate: f64,
+}
+
+/// Comprehensive performance report
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceReport {
+    pub pruning_effectiveness: PruningEffectiveness,
+    pub frequency_stats: PruningFrequencyStats,
+    pub search_metrics: SearchPerformanceMetrics,
+    pub timestamp: std::time::SystemTime,
+    pub report_id: String,
+}
+
+/// Performance comparison with baseline
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceComparison {
+    pub current_report: PerformanceReport,
+    pub baseline_report: PerformanceReport,
+    pub pruning_improvement: PruningImprovement,
+    pub cache_improvement: CacheImprovement,
+    pub overall_improvement: f64,
+}
+
+/// Pruning improvement metrics
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PruningImprovement {
+    pub futility_improvement: f64,
+    pub delta_improvement: f64,
+    pub razoring_improvement: f64,
+    pub multi_cut_improvement: f64,
+    pub overall_effectiveness_improvement: f64,
+}
+
+/// Cache improvement metrics
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct CacheImprovement {
+    pub hit_rate_improvement: f64,
+    pub size_efficiency: f64,
+    pub operation_efficiency: f64,
+}
+
+/// Cache statistics for detailed analysis
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct CacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub pruning_cache_size: usize,
+    pub position_cache_size: usize,
+    pub check_cache_size: usize,
+}
+
+/// Performance data export for analysis
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceDataExport {
+    pub report: PerformanceReport,
+    pub raw_statistics: PruningStatistics,
+    pub cache_stats: CacheStats,
+}
+
+/// Manager for coordinating advanced alpha-beta pruning techniques
+pub struct PruningManager {
+    pub parameters: PruningParameters,
+    pub statistics: PruningStatistics,
+    pub adaptive_params: Option<AdaptiveParameters>,
+    // Performance optimization caches
+    check_cache: std::collections::HashMap<u64, bool>,
+    position_cache: std::collections::HashMap<u64, PositionAnalysis>,
+    pruning_cache: std::collections::HashMap<u64, PruningDecision>,
+    // Performance counters
+    cache_hits: u64,
+    cache_misses: u64,
+}
+
+impl PruningManager {
+    pub fn new(parameters: PruningParameters) -> Self {
+        Self {
+            parameters,
+            statistics: PruningStatistics::new(),
+            adaptive_params: None,
+            check_cache: std::collections::HashMap::new(),
+            position_cache: std::collections::HashMap::new(),
+            pruning_cache: std::collections::HashMap::new(),
+            cache_hits: 0,
+            cache_misses: 0,
+        }
+    }
+    
+    /// Determine if a move should be pruned and how (optimized version)
+    pub fn should_prune(&mut self, state: &SearchState, mv: &Move) -> PruningDecision {
+        // Early exit for obvious cases
+        if self.should_skip_pruning(state, mv) {
+            return PruningDecision::Search;
+        }
+        
+        // Check cache first for performance
+        let cache_key = self.compute_cache_key(state, mv);
+        if let Some(cached_decision) = self.pruning_cache.get(&cache_key) {
+            self.cache_hits += 1;
+            return *cached_decision;
+        }
+        self.cache_misses += 1;
+        
+        let mut decision = PruningDecision::Search;
+        
+        // Apply pruning techniques in order of safety
+        decision = self.check_advanced_futility_pruning(state, mv, decision);
+        decision = self.check_advanced_delta_pruning(state, mv, decision);
+        decision = self.check_advanced_razoring(state, decision);
+        
+        // Cache the result (with size limit to prevent memory growth)
+        if self.pruning_cache.len() < 10000 {
+            self.pruning_cache.insert(cache_key, decision);
+        }
+        
+        self.statistics.record_decision(decision);
+        decision
+    }
+    
+    /// Fast check to skip pruning for obvious cases
+    fn should_skip_pruning(&self, state: &SearchState, mv: &Move) -> bool {
+        // Skip if depth is too shallow
+        if state.depth < 2 {
+            return true;
+        }
+        
+        // Skip if in check (pruning is dangerous)
+        if state.is_in_check {
+            return true;
+        }
+        
+        // Skip if move is tactical (capture, promotion, check)
+        if mv.is_capture || mv.is_promotion || mv.gives_check {
+            return true;
+        }
+        
+        false
+    }
+    
+    /// Compute cache key for pruning decisions
+    fn compute_cache_key(&self, state: &SearchState, mv: &Move) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        
+        state.position_hash.hash(&mut hasher);
+        state.depth.hash(&mut hasher);
+        state.move_number.hash(&mut hasher);
+        state.alpha.hash(&mut hasher);
+        state.beta.hash(&mut hasher);
+        state.static_eval.hash(&mut hasher);
+        // Hash game phase as u8
+        (state.game_phase as u8).hash(&mut hasher);
+        
+        // Hash move properties
+        if let Some(from) = mv.from {
+            from.row.hash(&mut hasher);
+            from.col.hash(&mut hasher);
+        }
+        mv.to.row.hash(&mut hasher);
+        mv.to.col.hash(&mut hasher);
+        mv.piece_type.hash(&mut hasher);
+        mv.is_capture.hash(&mut hasher);
+        mv.is_promotion.hash(&mut hasher);
+        mv.gives_check.hash(&mut hasher);
+        
+        hasher.finish()
+    }
+    
+    /// Calculate late move reduction for a move
+    pub fn calculate_lmr_reduction(&self, state: &SearchState, mv: &Move) -> u8 {
+        if !self.should_apply_lmr(state, mv) {
+            return 0;
+        }
+        
+        let reduction = self.parameters.lmr_base_reduction +
+                      (state.move_number / 8) as u8 +
+                      (state.depth / 4) as u8;
+        
+        reduction.min(self.parameters.lmr_max_reduction).min(state.depth - 1)
+    }
+    
+    /// Check if futility pruning should be applied
+    fn check_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.futility_depth_limit {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Enhanced futility pruning with move-specific analysis
+        let margin = self.get_futility_margin(state);
+        let move_potential = self.calculate_move_potential(mv, state);
+        
+        // Apply futility pruning if static eval + margin + move potential < alpha
+        if state.static_eval + margin + move_potential < state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Check if delta pruning should be applied
+    fn check_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.delta_depth_limit {
+            return current;
+        }
+        
+        if !self.is_capture_move(mv) {
+            return current;
+        }
+        
+        // Enhanced delta pruning with advanced analysis
+        let material_gain = self.calculate_material_gain(mv);
+        let margin = self.get_delta_margin(state);
+        let capture_bonus = self.calculate_capture_bonus(mv, state);
+        
+        // Apply delta pruning if static eval + material gain + margin + bonus < alpha
+        if state.static_eval + material_gain + margin + capture_bonus < state.alpha {
+            self.statistics.delta_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Check if razoring should be applied
+    fn check_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.razoring_depth_limit {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Enhanced razoring with advanced analysis
+        let margin = self.get_razoring_margin(state);
+        let position_bonus = self.calculate_razoring_bonus(state);
+        
+        // Apply razoring if static eval + margin + bonus < alpha
+        if state.static_eval + margin + position_bonus < state.alpha {
+            self.statistics.razored += 1;
+            return PruningDecision::Razor;
+        }
+        
+        current
+    }
+    
+    /// Check if late move reduction should be applied
+    fn should_apply_lmr(&self, state: &SearchState, mv: &Move) -> bool {
+        state.move_number > self.parameters.lmr_move_threshold &&
+        state.depth > self.parameters.lmr_depth_threshold &&
+        !self.is_capture_move(mv) &&
+        !self.is_promotion_move(mv) &&
+        !state.is_in_check
+    }
+    
+    /// Get futility margin based on position characteristics
+    fn get_futility_margin(&self, state: &SearchState) -> i32 {
+        let base_margin = self.parameters.futility_margin[state.depth as usize];
+        
+        if self.parameters.position_dependent_margins {
+            match state.game_phase {
+                GamePhase::Endgame => base_margin / 2,
+                GamePhase::Opening => base_margin.saturating_mul(3) / 2,
+                GamePhase::Middlegame => base_margin,
+            }
+        } else {
+            base_margin
+        }
+    }
+    
+    /// Calculate the potential value of a move for futility pruning
+    fn calculate_move_potential(&self, mv: &Move, state: &SearchState) -> i32 {
+        let mut potential = 0;
+        
+        // Base move value
+        if mv.is_capture {
+            potential += self.calculate_material_gain(mv);
+        }
+        
+        if mv.is_promotion {
+            potential += 100; // Promotion bonus
+        }
+        
+        // Position-dependent adjustments
+        match state.game_phase {
+            GamePhase::Opening => {
+                // Opening moves have higher potential for positional gains
+                potential += 50;
+            },
+            GamePhase::Endgame => {
+                // Endgame moves focus on material and king safety
+                potential += 25;
+            },
+            GamePhase::Middlegame => {
+                // Middlegame moves have moderate potential
+                potential += 35;
+            },
+        }
+        
+        // Depth-dependent potential (deeper moves have less potential)
+        let depth_factor = (10 - state.depth as i32).max(1);
+        potential = potential.saturating_mul(depth_factor as i32) / 10;
+        
+        potential.max(0)
+    }
+    
+    /// Check if extended futility pruning should be applied (for deeper positions)
+    fn check_extended_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        // Only apply extended futility at deeper depths
+        if state.depth <= self.parameters.futility_depth_limit || 
+           state.depth > self.parameters.extended_futility_depth {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Extended futility pruning with larger margins
+        let extended_margin = self.get_futility_margin(state).saturating_mul(2);
+        let move_potential = self.calculate_move_potential(mv, state);
+        
+        // More conservative pruning at deeper depths
+        if state.static_eval + extended_margin + move_potential < state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Advanced futility pruning with multiple conditions
+    fn check_advanced_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.extended_futility_depth {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Multiple futility conditions
+        let margin = self.get_futility_margin(state);
+        let move_potential = self.calculate_move_potential(mv, state);
+        
+        // Condition 1: Standard futility pruning
+        if state.static_eval + margin + move_potential < state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        // Condition 2: Aggressive futility for very bad positions
+        if state.static_eval < state.alpha.saturating_sub(500) && 
+           state.static_eval + margin / 2 + move_potential < state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        // Condition 3: Late move futility (for moves beyond a certain threshold)
+        if state.move_number > 4 && 
+           state.static_eval + margin + move_potential / 2 < state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Get delta margin based on position characteristics
+    fn get_delta_margin(&self, state: &SearchState) -> i32 {
+        let base_margin = self.parameters.delta_margin;
+        
+        if self.parameters.position_dependent_margins {
+            match state.game_phase {
+                GamePhase::Endgame => base_margin / 2,  // More aggressive in endgame
+                GamePhase::Opening => base_margin * 3 / 2,  // More conservative in opening
+                GamePhase::Middlegame => base_margin,
+            }
+        } else {
+            base_margin
+        }
+    }
+    
+    /// Calculate capture bonus for delta pruning
+    fn calculate_capture_bonus(&self, mv: &Move, state: &SearchState) -> i32 {
+        let mut bonus = 0;
+        
+        // Bonus for capturing higher-value pieces
+        if let Some(captured_piece) = mv.captured_piece {
+            match captured_piece.piece_type {
+                PieceType::King => bonus += 1000,  // Should never be pruned
+                PieceType::Rook | PieceType::Bishop => bonus += 100,
+                PieceType::Gold | PieceType::Silver => bonus += 50,
+                PieceType::Knight | PieceType::Lance => bonus += 25,
+                PieceType::Pawn => bonus += 10,
+                _ => bonus += 5,
+            }
+        }
+        
+        // Bonus for capturing in endgame (more tactical)
+        if state.game_phase == GamePhase::Endgame {
+            bonus += 25;
+        }
+        
+        // Bonus for capturing at deeper depths (more tactical)
+        if state.depth > 2 {
+            bonus += state.depth as i32 * 10;
+        }
+        
+        // Bonus for capturing when ahead (more tactical)
+        if state.static_eval > 100 {
+            bonus += 20;
+        }
+        
+        bonus
+    }
+    
+    /// Check if extended delta pruning should be applied (for deeper positions)
+    fn check_extended_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        // Only apply extended delta pruning at deeper depths
+        if state.depth <= self.parameters.delta_depth_limit || 
+           state.depth > self.parameters.delta_depth_limit + 2 {
+            return current;
+        }
+        
+        if !self.is_capture_move(mv) {
+            return current;
+        }
+        
+        // Extended delta pruning with larger margins
+        let material_gain = self.calculate_material_gain(mv);
+        let extended_margin = self.get_delta_margin(state).saturating_mul(2);
+        let capture_bonus = self.calculate_capture_bonus(mv, state);
+        
+        // More conservative pruning at deeper depths
+        if state.static_eval + material_gain + extended_margin + capture_bonus < state.alpha {
+            self.statistics.delta_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Advanced delta pruning with multiple conditions
+    fn check_advanced_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.delta_depth_limit + 2 {
+            return current;
+        }
+        
+        if !self.is_capture_move(mv) {
+            return current;
+        }
+        
+        // Multiple delta pruning conditions
+        let material_gain = self.calculate_material_gain(mv);
+        let margin = self.get_delta_margin(state);
+        let capture_bonus = self.calculate_capture_bonus(mv, state);
+        
+        // Condition 1: Standard delta pruning
+        if state.static_eval + material_gain + margin + capture_bonus < state.alpha {
+            self.statistics.delta_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        // Condition 2: Aggressive delta pruning for very bad positions
+        if state.static_eval < state.alpha.saturating_sub(300) && 
+           state.static_eval + material_gain + margin / 2 + capture_bonus < state.alpha {
+            self.statistics.delta_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        // Condition 3: Late move delta pruning (for moves beyond a certain threshold)
+        if state.move_number > 3 && 
+           state.static_eval + material_gain + margin + capture_bonus / 2 < state.alpha {
+            self.statistics.delta_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        current
+    }
+    
+    /// Get razoring margin based on game phase
+    fn get_razoring_margin(&self, state: &SearchState) -> i32 {
+        match state.game_phase {
+            GamePhase::Endgame => self.parameters.razoring_margin_endgame,
+            _ => self.parameters.razoring_margin,
+        }
+    }
+    
+    /// Calculate razoring bonus based on position characteristics
+    fn calculate_razoring_bonus(&self, state: &SearchState) -> i32 {
+        let mut bonus = 0;
+        
+        // Bonus for tactical positions (more likely to have tactical shots)
+        if state.depth <= 2 {
+            bonus += 50; // More conservative at shallow depths
+        }
+        
+        // Bonus for endgame positions (more tactical)
+        if state.game_phase == GamePhase::Endgame {
+            bonus += 75;
+        }
+        
+        // Bonus for positions with material imbalance (more tactical)
+        if state.static_eval.abs() > 200 {
+            bonus += 25;
+        }
+        
+        // Bonus for deeper positions (more tactical)
+        if state.depth > 1 {
+            bonus += state.depth as i32 * 15;
+        }
+        
+        // Penalty for very bad positions (less likely to have tactical shots)
+        if state.static_eval < -500 {
+            bonus -= 50;
+        }
+        
+        bonus
+    }
+    
+    /// Check if extended razoring should be applied (for deeper positions)
+    fn check_extended_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        // Only apply extended razoring at deeper depths
+        if state.depth <= self.parameters.razoring_depth_limit || 
+           state.depth > self.parameters.razoring_depth_limit + 2 {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Extended razoring with larger margins
+        let extended_margin = self.get_razoring_margin(state).saturating_mul(2);
+        let position_bonus = self.calculate_razoring_bonus(state);
+        
+        // More conservative razoring at deeper depths
+        if state.static_eval + extended_margin + position_bonus < state.alpha {
+            self.statistics.razored += 1;
+            return PruningDecision::Razor;
+        }
+        
+        current
+    }
+    
+    /// Advanced razoring with multiple conditions
+    fn check_advanced_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
+        if current != PruningDecision::Search {
+            return current;
+        }
+        
+        if state.depth > self.parameters.razoring_depth_limit + 2 {
+            return current;
+        }
+        
+        if state.is_in_check {
+            return current;
+        }
+        
+        // Multiple razoring conditions
+        let margin = self.get_razoring_margin(state);
+        let position_bonus = self.calculate_razoring_bonus(state);
+        
+        // Condition 1: Standard razoring
+        if state.static_eval + margin + position_bonus < state.alpha {
+            self.statistics.razored += 1;
+            return PruningDecision::Razor;
+        }
+        
+        // Condition 2: Aggressive razoring for very bad positions
+        if state.static_eval < state.alpha.saturating_sub(400) && 
+           state.static_eval + margin / 2 + position_bonus < state.alpha {
+            self.statistics.razored += 1;
+            return PruningDecision::Razor;
+        }
+        
+        // Condition 3: Late move razoring (for moves beyond a certain threshold)
+        if state.move_number > 2 && 
+           state.static_eval + margin + position_bonus / 2 < state.alpha {
+            self.statistics.razored += 1;
+            return PruningDecision::Razor;
+        }
+        
+        current
+    }
+    
+    /// Check if a move is tactical (capture, promotion, or check)
+    fn is_tactical_move(&self, mv: &Move) -> bool {
+        mv.is_capture || mv.is_promotion || mv.gives_check
+    }
+    
+    /// Optimized check detection with caching
+    pub fn is_in_check_cached(&mut self, position_hash: u64, is_in_check: bool) -> bool {
+        if let Some(&cached_result) = self.check_cache.get(&position_hash) {
+            self.cache_hits += 1;
+            return cached_result;
+        }
+        
+        self.cache_misses += 1;
+        
+        // Cache the result (with size limit)
+        if self.check_cache.len() < 5000 {
+            self.check_cache.insert(position_hash, is_in_check);
+        }
+        
+        is_in_check
+    }
+    
+    /// Analyze position characteristics for adaptive pruning
+    pub fn analyze_position(&mut self, state: &SearchState) -> PositionAnalysis {
+        let cache_key = state.position_hash;
+        
+        if let Some(cached_analysis) = self.position_cache.get(&cache_key) {
+            self.cache_hits += 1;
+            return cached_analysis.clone();
+        }
+        
+        self.cache_misses += 1;
+        
+        let analysis = PositionAnalysis {
+            position_type: self.classify_position_type(state),
+            tactical_potential: self.calculate_tactical_potential(state),
+            material_balance: state.static_eval,
+            king_safety: self.calculate_king_safety(state),
+            is_quiet: self.is_quiet_position(state),
+            is_tactical: self.is_tactical_position(state),
+            complexity: self.calculate_position_complexity(state),
+        };
+        
+        // Cache the result (with size limit)
+        if self.position_cache.len() < 3000 {
+            self.position_cache.insert(cache_key, analysis.clone());
+        }
+        
+        analysis
+    }
+    
+    /// Classify position type for adaptive pruning
+    fn classify_position_type(&self, state: &SearchState) -> PositionType {
+        match state.game_phase {
+            GamePhase::Endgame => PositionType::Endgame,
+            GamePhase::Opening => {
+                if state.static_eval.abs() > 200 {
+                    PositionType::Tactical
+                } else {
+                    PositionType::Positional
+                }
+            },
+            GamePhase::Middlegame => {
+                if state.static_eval.abs() > 300 {
+                    PositionType::Tactical
+                } else {
+                    PositionType::Positional
+                }
+            },
+        }
+    }
+    
+    /// Calculate tactical potential of position
+    fn calculate_tactical_potential(&self, state: &SearchState) -> u8 {
+        let mut potential = 0;
+        
+        // Material imbalance increases tactical potential
+        if state.static_eval.abs() > 200 {
+            potential += 30;
+        }
+        
+        // Endgame positions are more tactical
+        if state.game_phase == GamePhase::Endgame {
+            potential += 40;
+        }
+        
+        // Deeper positions have higher tactical potential
+        potential += state.depth as u8 * 5;
+        
+        potential.min(100)
+    }
+    
+    /// Calculate king safety
+    fn calculate_king_safety(&self, state: &SearchState) -> u8 {
+        // Simplified king safety calculation
+        // In a real implementation, this would analyze king position, pawn structure, etc.
+        if state.static_eval < -300 {
+            20 // King in danger
+        } else if state.static_eval > 300 {
+            80 // King safe
+        } else {
+            50 // Neutral
+        }
+    }
+    
+    /// Check if position is quiet
+    fn is_quiet_position(&self, state: &SearchState) -> bool {
+        state.static_eval.abs() < 100 && state.game_phase != GamePhase::Endgame
+    }
+    
+    /// Check if position is tactical
+    fn is_tactical_position(&self, state: &SearchState) -> bool {
+        state.static_eval.abs() > 200 || state.game_phase == GamePhase::Endgame
+    }
+    
+    /// Calculate position complexity
+    fn calculate_position_complexity(&self, state: &SearchState) -> u8 {
+        let mut complexity = 0;
+        
+        // Material imbalance increases complexity
+        complexity += (state.static_eval.abs() / 50) as u8;
+        
+        // Endgame positions are more complex
+        if state.game_phase == GamePhase::Endgame {
+            complexity += 30;
+        }
+        
+        // Deeper positions are more complex
+        complexity += state.depth as u8 * 3;
+        
+        complexity.min(100)
+    }
+    
+    /// Get cache performance statistics
+    pub fn get_cache_stats(&self) -> (u64, u64, f64) {
+        let total_requests = self.cache_hits + self.cache_misses;
+        let hit_rate = if total_requests > 0 {
+            self.cache_hits as f64 / total_requests as f64
+        } else {
+            0.0
+        };
+        (self.cache_hits, self.cache_misses, hit_rate)
+    }
+    
+    /// Clear all caches to free memory
+    pub fn clear_caches(&mut self) {
+        self.check_cache.clear();
+        self.position_cache.clear();
+        self.pruning_cache.clear();
+        self.cache_hits = 0;
+        self.cache_misses = 0;
+    }
+    
+    /// Smart conditional pruning based on position characteristics
+    pub fn should_apply_conditional_pruning(&mut self, state: &SearchState, mv: &Move) -> bool {
+        let analysis = self.analyze_position(state);
+        
+        // Don't prune in very tactical positions
+        if analysis.is_tactical && analysis.tactical_potential > 70 {
+            return false;
+        }
+        
+        // Don't prune when king is in danger
+        if analysis.king_safety < 30 {
+            return false;
+        }
+        
+        // Don't prune in very complex positions
+        if analysis.complexity > 80 {
+            return false;
+        }
+        
+        // Don't prune the first few moves at each depth
+        if state.move_number < 3 {
+            return false;
+        }
+        
+        // Apply conditional pruning based on position type
+        match analysis.position_type {
+            PositionType::Tactical => {
+                // Be more conservative in tactical positions
+                state.move_number > 4 && analysis.tactical_potential < 50
+            },
+            PositionType::Positional => {
+                // Can be more aggressive in positional positions
+                state.move_number > 2 && analysis.complexity < 60
+            },
+            PositionType::Endgame => {
+                // Endgame pruning depends on material balance
+                state.move_number > 1 && analysis.material_balance.abs() < 200
+            },
+            PositionType::Normal => {
+                // Standard pruning conditions
+                state.move_number > 2
+            },
+        }
+    }
+    
+    /// Optimize pruning frequency based on current performance
+    pub fn optimize_pruning_frequency(&mut self) {
+        let stats = &self.statistics;
+        let total_moves = stats.total_moves.max(1);
+        let pruning_rate = stats.pruned_moves as f64 / total_moves as f64;
+        
+        // Adjust parameters based on pruning effectiveness
+        if pruning_rate > 0.4 {
+            // High pruning rate - be more conservative
+            self.parameters.futility_depth_limit = self.parameters.futility_depth_limit.max(3);
+            self.parameters.delta_depth_limit = self.parameters.delta_depth_limit.max(4);
+            self.parameters.razoring_depth_limit = self.parameters.razoring_depth_limit.max(4);
+        } else if pruning_rate < 0.1 {
+            // Low pruning rate - be more aggressive
+            self.parameters.futility_depth_limit = self.parameters.futility_depth_limit.min(5);
+            self.parameters.delta_depth_limit = self.parameters.delta_depth_limit.min(6);
+            self.parameters.razoring_depth_limit = self.parameters.razoring_depth_limit.min(5);
+        }
+        
+        // Adjust margins based on success rate
+        let success_rate = if stats.total_moves > 0 {
+            (stats.total_moves - stats.pruned_moves) as f64 / stats.total_moves as f64
+        } else {
+            0.0
+        };
+        
+        if success_rate > 0.8 {
+            // High success rate - can be more aggressive
+            for i in 0..8 {
+                self.parameters.futility_margin[i] = (self.parameters.futility_margin[i] as f32 * 0.9) as i32;
+            }
+            self.parameters.delta_margin = (self.parameters.delta_margin as f32 * 0.9) as i32;
+            self.parameters.razoring_margin = (self.parameters.razoring_margin as f32 * 0.9) as i32;
+        } else if success_rate < 0.6 {
+            // Low success rate - be more conservative
+            for i in 0..8 {
+                self.parameters.futility_margin[i] = (self.parameters.futility_margin[i] as f32 * 1.1) as i32;
+            }
+            self.parameters.delta_margin = (self.parameters.delta_margin as f32 * 1.1) as i32;
+            self.parameters.razoring_margin = (self.parameters.razoring_margin as f32 * 1.1) as i32;
+        }
+    }
+    
+    /// Check if a move is a capture
+    fn is_capture_move(&self, mv: &Move) -> bool {
+        mv.is_capture
+    }
+    
+    /// Check if a move is a promotion
+    fn is_promotion_move(&self, mv: &Move) -> bool {
+        mv.is_promotion
+    }
+    
+    /// Calculate material gain from a capture move
+    fn calculate_material_gain(&self, mv: &Move) -> i32 {
+        if let Some(captured_piece) = mv.captured_piece {
+            captured_piece.piece_type.base_value() - mv.piece_type.base_value()
+        } else {
+            0
+        }
+    }
+    
+    // ============================================================================
+    // Advanced Pruning Techniques (Phase 4.2)
+    // ============================================================================
+    
+    /// Extended futility pruning with more aggressive margins
+    pub fn check_extended_futility(&mut self, state: &SearchState, mv: &Move) -> PruningDecision {
+        // Only apply at appropriate depths
+        if state.depth > self.parameters.extended_futility_depth {
+            return PruningDecision::Search;
+        }
+        
+        // Skip for important moves
+        if self.is_capture_move(mv) || self.is_promotion_move(mv) {
+            return PruningDecision::Search;
+        }
+        
+        // Extended futility margin calculation
+        let extended_margin = self.get_extended_futility_margin(state);
+        let futility_value = state.static_eval + extended_margin;
+        
+        // Check if the move is unlikely to raise alpha
+        if futility_value <= state.alpha {
+            self.statistics.futility_pruned += 1;
+            return PruningDecision::Skip;
+        }
+        
+        PruningDecision::Search
+    }
+    
+    /// Get extended futility margin based on depth and position
+    fn get_extended_futility_margin(&self, state: &SearchState) -> i32 {
+        let base_margin = if state.depth < self.parameters.futility_margin.len() as u8 {
+            self.parameters.futility_margin[state.depth as usize]
+        } else {
+            self.parameters.futility_margin[self.parameters.futility_margin.len() - 1]
+        };
+        
+        // Extended margins are more aggressive
+        let extended_multiplier = match state.game_phase {
+            GamePhase::Opening => 1.5,
+            GamePhase::Middlegame => 1.3,
+            GamePhase::Endgame => 1.2,
+        };
+        
+        (base_margin as f32 * extended_multiplier) as i32
+    }
+    
+    /// Multi-cut pruning: prune if multiple moves fail to raise alpha
+    pub fn check_multi_cut(&mut self, state: &SearchState, moves_tried: usize, 
+                          consecutive_fails: usize) -> PruningDecision {
+        // Only apply at appropriate depths
+        if state.depth > self.parameters.multi_cut_depth_limit {
+            return PruningDecision::Search;
+        }
+        
+        // Need to have tried at least a few moves
+        if moves_tried < self.parameters.multi_cut_threshold as usize {
+            return PruningDecision::Search;
+        }
+        
+        // Check if we have enough consecutive failures
+        if consecutive_fails >= self.parameters.multi_cut_threshold as usize {
+            self.statistics.multi_cuts += 1;
+            return PruningDecision::Skip;
+        }
+        
+        PruningDecision::Search
+    }
+    
+    /// Probabilistic pruning: prune based on move success probability
+    pub fn check_probabilistic_pruning(&mut self, state: &SearchState, mv: &Move, 
+                                      move_index: usize) -> PruningDecision {
+        // Only apply in late moves at appropriate depths
+        if state.depth > 4 || move_index < 8 {
+            return PruningDecision::Search;
+        }
+        
+        // Calculate move success probability
+        let probability = self.calculate_move_probability(state, mv, move_index);
+        
+        // Probabilistic threshold based on depth
+        let threshold = match state.depth {
+            0..=1 => 0.05,  // Very aggressive at low depth
+            2..=3 => 0.10,  // Moderate at medium depth
+            _ => 0.15,      // Conservative at higher depth
+        };
+        
+        // Prune if probability of success is too low
+        if probability < threshold {
+            self.statistics.pruned_moves += 1;
+            return PruningDecision::Skip;
+        }
+        
+        PruningDecision::Search
+    }
+    
+    /// Calculate the probability that a move will improve the score
+    fn calculate_move_probability(&self, state: &SearchState, mv: &Move, move_index: usize) -> f64 {
+        let mut probability = 1.0;
+        
+        // Reduce probability for late moves
+        probability *= 1.0 / (1.0 + move_index as f64 * 0.1);
+        
+        // Increase probability for captures
+        if self.is_capture_move(mv) {
+            probability *= 1.5;
+        }
+        
+        // Increase probability for promotions
+        if self.is_promotion_move(mv) {
+            probability *= 1.3;
+        }
+        
+        // Adjust based on game phase
+        let phase_factor = match state.game_phase {
+            GamePhase::Opening => 0.8,   // Less reliable in opening
+            GamePhase::Middlegame => 1.0, // Normal in middlegame
+            GamePhase::Endgame => 1.2,   // More reliable in endgame
+        };
+        probability *= phase_factor;
+        
+        // Adjust based on depth
+        let depth_factor = 1.0 - (state.depth as f64 * 0.05);
+        probability *= depth_factor.max(0.5);
+        
+        // Clamp probability to [0, 1]
+        probability.min(1.0).max(0.0)
+    }
+    
+    /// Enhanced multi-cut with position-dependent thresholds
+    pub fn check_enhanced_multi_cut(&mut self, state: &SearchState, moves_tried: usize,
+                                   consecutive_fails: usize, best_score: i32) -> PruningDecision {
+        // Basic multi-cut first
+        let basic_decision = self.check_multi_cut(state, moves_tried, consecutive_fails);
+        if matches!(basic_decision, PruningDecision::Skip) {
+            return basic_decision;
+        }
+        
+        // Enhanced check: if best score is far below alpha, be more aggressive
+        let score_gap = state.alpha.saturating_sub(best_score);
+        let gap_threshold = match state.game_phase {
+            GamePhase::Opening => 300,
+            GamePhase::Middlegame => 250,
+            GamePhase::Endgame => 200,
+        };
+        
+        if score_gap > gap_threshold && consecutive_fails >= 2 {
+            self.statistics.multi_cuts += 1;
+            return PruningDecision::Skip;
+        }
+        
+        PruningDecision::Search
+    }
+    
+    /// Validate extended futility pruning effectiveness
+    pub fn validate_extended_futility(&self, state: &SearchState) -> bool {
+        // Check if conditions are appropriate for extended futility
+        state.depth <= self.parameters.extended_futility_depth &&
+        state.static_eval < state.beta &&
+        !state.is_in_check
+    }
+    
+    /// Validate multi-cut pruning effectiveness
+    pub fn validate_multi_cut(&self, moves_tried: usize, consecutive_fails: usize) -> bool {
+        moves_tried >= self.parameters.multi_cut_threshold as usize &&
+        consecutive_fails >= self.parameters.multi_cut_threshold as usize
+    }
+    
+    /// Get pruning effectiveness statistics
+    pub fn get_pruning_effectiveness(&self) -> PruningEffectiveness {
+        let total_opportunities = self.statistics.total_moves;
+        let total_pruned = self.statistics.pruned_moves;
+        
+        let effectiveness_ratio = if total_opportunities > 0 {
+            total_pruned as f64 / total_opportunities as f64
+        } else {
+            0.0
+        };
+        
+        PruningEffectiveness {
+            futility_rate: if total_opportunities > 0 {
+                self.statistics.futility_pruned as f64 / total_opportunities as f64
+            } else {
+                0.0
+            },
+            delta_rate: if total_opportunities > 0 {
+                self.statistics.delta_pruned as f64 / total_opportunities as f64
+            } else {
+                0.0
+            },
+            razoring_rate: if total_opportunities > 0 {
+                self.statistics.razored as f64 / total_opportunities as f64
+            } else {
+                0.0
+            },
+            multi_cut_rate: if total_opportunities > 0 {
+                self.statistics.multi_cuts as f64 / total_opportunities as f64
+            } else {
+                0.0
+            },
+            overall_effectiveness: effectiveness_ratio,
+            lmr_rate: if total_opportunities > 0 {
+                self.statistics.lmr_applied as f64 / total_opportunities as f64
+            } else {
+                0.0
+            },
+        }
+    }
+    
+    // ============================================================================
+    // Performance Monitoring (Phase 4.3)
+    // ============================================================================
+    
+    /// Record pruning decision with detailed statistics
+    pub fn record_pruning_decision(&mut self, decision: PruningDecision, move_type: MoveType, depth: u8) {
+        self.statistics.total_moves += 1;
+        
+        match decision {
+            PruningDecision::Skip => {
+                self.statistics.pruned_moves += 1;
+                self.record_pruning_by_type(move_type, depth);
+            },
+            PruningDecision::Razor => {
+                self.statistics.razored += 1;
+            },
+            PruningDecision::ReducedSearch => {
+                self.statistics.lmr_applied += 1;
+            },
+            _ => {}
+        }
+    }
+    
+    /// Record pruning by move type and depth for detailed analysis
+    fn record_pruning_by_type(&mut self, move_type: MoveType, depth: u8) {
+        // This would be enhanced with more detailed tracking
+        // For now, we use the existing statistics
+        match move_type {
+            MoveType::Capture => {
+                // Captures are rarely pruned, so this is significant
+            },
+            MoveType::Quiet => {
+                // Quiet moves are commonly pruned
+            },
+            MoveType::Check => {
+                // Check moves should be pruned carefully
+            },
+            MoveType::Promotion => {
+                // Promotion moves should be pruned carefully
+            },
+            _ => {}
+        }
+    }
+    
+    /// Get detailed pruning frequency statistics
+    pub fn get_pruning_frequency_stats(&self) -> PruningFrequencyStats {
+        let total_moves = self.statistics.total_moves;
+        
+        PruningFrequencyStats {
+            total_moves,
+            pruned_moves: self.statistics.pruned_moves,
+            futility_pruned: self.statistics.futility_pruned,
+            delta_pruned: self.statistics.delta_pruned,
+            razored: self.statistics.razored,
+            lmr_applied: self.statistics.lmr_applied,
+            multi_cuts: self.statistics.multi_cuts,
+            re_searches: self.statistics.re_searches,
+            pruning_rate: if total_moves > 0 {
+                self.statistics.pruned_moves as f64 / total_moves as f64
+            } else {
+                0.0
+            },
+            cache_hit_rate: if self.cache_hits + self.cache_misses > 0 {
+                self.cache_hits as f64 / (self.cache_hits + self.cache_misses) as f64
+            } else {
+                0.0
+            },
+        }
+    }
+    
+    /// Get search performance metrics
+    pub fn get_search_performance_metrics(&self) -> SearchPerformanceMetrics {
+        SearchPerformanceMetrics {
+            cache_hits: self.cache_hits,
+            cache_misses: self.cache_misses,
+            cache_size: self.pruning_cache.len(),
+            position_cache_size: self.position_cache.len(),
+            check_cache_size: self.check_cache.len(),
+            total_cache_operations: self.cache_hits + self.cache_misses,
+            cache_hit_rate: if self.cache_hits + self.cache_misses > 0 {
+                self.cache_hits as f64 / (self.cache_hits + self.cache_misses) as f64
+            } else {
+                0.0
+            },
+        }
+    }
+    
+    /// Generate comprehensive performance report
+    pub fn generate_performance_report(&self) -> PerformanceReport {
+        let pruning_effectiveness = self.get_pruning_effectiveness();
+        let frequency_stats = self.get_pruning_frequency_stats();
+        let search_metrics = self.get_search_performance_metrics();
+        
+        PerformanceReport {
+            pruning_effectiveness,
+            frequency_stats,
+            search_metrics,
+            timestamp: std::time::SystemTime::now(),
+            report_id: self.generate_report_id(),
+        }
+    }
+    
+    /// Generate unique report ID
+    fn generate_report_id(&self) -> String {
+        format!("pruning_report_{}", self.statistics.total_moves)
+    }
+    
+    /// Compare performance with baseline
+    pub fn compare_with_baseline(&self, baseline: &PerformanceReport) -> PerformanceComparison {
+        let current = self.generate_performance_report();
+        let current_clone = current.clone();
+        
+        PerformanceComparison {
+            current_report: current,
+            baseline_report: baseline.clone(),
+            pruning_improvement: self.calculate_pruning_improvement(&current_clone, baseline),
+            cache_improvement: self.calculate_cache_improvement(&current_clone, baseline),
+            overall_improvement: self.calculate_overall_improvement(&current_clone, baseline),
+        }
+    }
+    
+    /// Calculate pruning improvement metrics
+    fn calculate_pruning_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> PruningImprovement {
+        let current_effectiveness = &current.pruning_effectiveness;
+        let baseline_effectiveness = &baseline.pruning_effectiveness;
+        
+        PruningImprovement {
+            futility_improvement: current_effectiveness.futility_rate - baseline_effectiveness.futility_rate,
+            delta_improvement: current_effectiveness.delta_rate - baseline_effectiveness.delta_rate,
+            razoring_improvement: current_effectiveness.razoring_rate - baseline_effectiveness.razoring_rate,
+            multi_cut_improvement: current_effectiveness.multi_cut_rate - baseline_effectiveness.multi_cut_rate,
+            overall_effectiveness_improvement: current_effectiveness.overall_effectiveness - baseline_effectiveness.overall_effectiveness,
+        }
+    }
+    
+    /// Calculate cache improvement metrics
+    fn calculate_cache_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> CacheImprovement {
+        let current_metrics = &current.search_metrics;
+        let baseline_metrics = &baseline.search_metrics;
+        
+        CacheImprovement {
+            hit_rate_improvement: current_metrics.cache_hit_rate - baseline_metrics.cache_hit_rate,
+            size_efficiency: if baseline_metrics.cache_size > 0 {
+                current_metrics.cache_size as f64 / baseline_metrics.cache_size as f64
+            } else {
+                1.0
+            },
+            operation_efficiency: if baseline_metrics.total_cache_operations > 0 {
+                current_metrics.total_cache_operations as f64 / baseline_metrics.total_cache_operations as f64
+            } else {
+                1.0
+            },
+        }
+    }
+    
+    /// Calculate overall improvement score
+    fn calculate_overall_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> f64 {
+        let pruning_improvement = self.calculate_pruning_improvement(current, baseline);
+        let cache_improvement = self.calculate_cache_improvement(current, baseline);
+        
+        // Weighted combination of improvements
+        let pruning_score = pruning_improvement.overall_effectiveness_improvement * 0.6;
+        let cache_score = cache_improvement.hit_rate_improvement * 0.4;
+        
+        pruning_score + cache_score
+    }
+    
+    /// Reset all performance statistics
+    pub fn reset_performance_stats(&mut self) {
+        self.statistics.reset();
+        self.cache_hits = 0;
+        self.cache_misses = 0;
+        self.pruning_cache.clear();
+        self.position_cache.clear();
+        self.check_cache.clear();
+    }
+    
+    /// Export performance data for analysis
+    pub fn export_performance_data(&self) -> PerformanceDataExport {
+        PerformanceDataExport {
+            report: self.generate_performance_report(),
+            raw_statistics: self.statistics.clone(),
+            cache_stats: CacheStats {
+                hits: self.cache_hits,
+                misses: self.cache_misses,
+                pruning_cache_size: self.pruning_cache.len(),
+                position_cache_size: self.position_cache.len(),
+                check_cache_size: self.check_cache.len(),
+            },
+        }
+    }
+}
+
+/// Adaptive parameters for position-dependent pruning
+#[derive(Debug, PartialEq)]
+pub struct AdaptiveParameters {
+    pub position_analysis: PositionAnalyzer,
+    pub parameter_history: Vec<ParameterSnapshot>,
+    pub learning_rate: f64,
+}
+
+impl AdaptiveParameters {
+    pub fn new() -> Self {
+        Self {
+            position_analysis: PositionAnalyzer::new(),
+            parameter_history: Vec::new(),
+            learning_rate: 0.1,
+        }
+    }
+    
+    /// Adjust parameters based on performance metrics and position analysis
+    pub fn adjust_parameters(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                           player: Player, performance: &PerformanceMetrics, 
+                           current_params: &PruningParameters) -> PruningParameters {
+        // Analyze current position
+        let position_analysis = self.position_analysis.analyze_position(board, captured_pieces, player);
+        
+        // Calculate parameter adjustments based on position type and performance
+        let adjustment = self.calculate_adjustment(position_analysis.position_type, performance);
+        
+        // Apply adjustments to current parameters
+        let new_params = self.apply_adjustment(current_params, adjustment);
+        
+        // Record parameter change in history
+        self.record_parameter_change(new_params.clone(), performance.clone());
+        
+        new_params
+    }
+    
+    /// Calculate parameter adjustment based on position type and performance
+    fn calculate_adjustment(&self, position_type: PositionType, performance: &PerformanceMetrics) -> ParameterAdjustment {
+        let mut adjustment = ParameterAdjustment::default();
+        
+        // Calculate cache hit ratio for performance assessment
+        let total_cache_ops = performance.cache_hits + performance.cache_misses;
+        let cache_hit_ratio = if total_cache_ops > 0 {
+            performance.cache_hits as f64 / total_cache_ops as f64
+        } else {
+            0.5 // Default neutral ratio
+        };
+        
+        // Adjust parameters based on position type and performance
+        match position_type {
+            PositionType::Tactical => {
+                // In tactical positions, be more conservative with pruning
+                adjustment.futility_adjustment = -100;
+                adjustment.lmr_adjustment = 1;
+                adjustment.delta_adjustment = -50;
+                adjustment.razoring_adjustment = -200;
+            },
+            PositionType::Positional => {
+                // In positional positions, can be more aggressive with pruning
+                adjustment.futility_adjustment = 50;
+                adjustment.lmr_adjustment = 0;
+                adjustment.delta_adjustment = 25;
+                adjustment.razoring_adjustment = 100;
+            },
+            PositionType::Endgame => {
+                // In endgame, be very conservative to avoid tactical errors
+                adjustment.futility_adjustment = -200;
+                adjustment.lmr_adjustment = 2;
+                adjustment.delta_adjustment = -100;
+                adjustment.razoring_adjustment = -300;
+            },
+            PositionType::Normal => {
+                // Normal adjustments based on performance
+                if cache_hit_ratio < 0.3 {
+                    // Poor cache performance, reduce pruning aggressiveness
+                    adjustment.futility_adjustment = -50;
+                    adjustment.lmr_adjustment = 1;
+                    adjustment.delta_adjustment = -25;
+                    adjustment.razoring_adjustment = -100;
+                } else if cache_hit_ratio > 0.7 {
+                    // Good cache performance, can be more aggressive
+                    adjustment.futility_adjustment = 25;
+                    adjustment.lmr_adjustment = 0;
+                    adjustment.delta_adjustment = 15;
+                    adjustment.razoring_adjustment = 50;
+                }
+            }
+        }
+        
+        // Apply learning rate to adjustments
+        adjustment.futility_adjustment = (adjustment.futility_adjustment as f64 * self.learning_rate) as i32;
+        adjustment.lmr_adjustment = (adjustment.lmr_adjustment as f64 * self.learning_rate) as u8;
+        adjustment.delta_adjustment = (adjustment.delta_adjustment as f64 * self.learning_rate) as i32;
+        adjustment.razoring_adjustment = (adjustment.razoring_adjustment as f64 * self.learning_rate) as i32;
+        
+        adjustment
+    }
+    
+    /// Apply parameter adjustments to current parameters
+    fn apply_adjustment(&self, current_params: &PruningParameters, adjustment: ParameterAdjustment) -> PruningParameters {
+        let mut new_params = current_params.clone();
+        
+        // Apply futility pruning adjustments
+        for i in 0..new_params.futility_margin.len() {
+            new_params.futility_margin[i] = (new_params.futility_margin[i] as i32 + adjustment.futility_adjustment)
+                .max(50) // Minimum margin
+                .min(1000) as i32; // Maximum margin
+        }
+        
+        // Apply LMR adjustments
+        new_params.lmr_base_reduction = (new_params.lmr_base_reduction as i32 + adjustment.lmr_adjustment as i32)
+            .max(1) // Minimum reduction
+            .min(4) as u8; // Maximum reduction
+        
+        // Apply delta pruning adjustments
+        new_params.delta_margin = (new_params.delta_margin + adjustment.delta_adjustment)
+            .max(25) // Minimum margin
+            .min(500); // Maximum margin
+        
+        // Apply razoring adjustments
+        new_params.razoring_margin = (new_params.razoring_margin as i32 + adjustment.razoring_adjustment)
+            .max(100) // Minimum margin
+            .min(2000) as i32; // Maximum margin
+        
+        new_params
+    }
+    
+    /// Record parameter change in history for learning
+    fn record_parameter_change(&mut self, parameters: PruningParameters, performance: PerformanceMetrics) {
+        let snapshot = ParameterSnapshot {
+            timestamp: std::time::SystemTime::now(),
+            parameters,
+            performance,
+        };
+        
+        self.parameter_history.push(snapshot);
+        
+        // Limit history size to prevent memory growth
+        if self.parameter_history.len() > 1000 {
+            self.parameter_history.remove(0);
+        }
+    }
+    
+    /// Optimize learning rate based on recent performance
+    pub fn optimize_learning_rate(&mut self) {
+        if self.parameter_history.len() < 10 {
+            return;
+        }
+        
+        let recent_snapshots = &self.parameter_history[self.parameter_history.len() - 10..];
+        let avg_cache_hit_ratio = recent_snapshots.iter()
+            .map(|s| {
+                let total = s.performance.cache_hits + s.performance.cache_misses;
+                if total > 0 { s.performance.cache_hits as f64 / total as f64 } else { 0.5 }
+            })
+            .sum::<f64>() / recent_snapshots.len() as f64;
+        
+        // Adjust learning rate based on performance
+        if avg_cache_hit_ratio > 0.8 {
+            // Good performance, can be more aggressive
+            self.learning_rate = (self.learning_rate * 1.05).min(0.2);
+        } else if avg_cache_hit_ratio < 0.3 {
+            // Poor performance, be more conservative
+            self.learning_rate = (self.learning_rate * 0.95).max(0.01);
+        }
+    }
+    
+    /// Get parameter recommendations based on position analysis
+    pub fn get_position_recommendations(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                                      player: Player) -> PruningParameters {
+        let position_analysis = self.position_analysis.analyze_position(board, captured_pieces, player);
+        
+        // Start with default parameters
+        let mut params = PruningParameters::default();
+        
+        // Adjust based on position characteristics
+        match position_analysis.position_type {
+            PositionType::Tactical => {
+                // Conservative pruning for tactical positions
+                params.futility_margin = [300, 350, 400, 450, 500, 550, 600, 650];
+                params.lmr_base_reduction = 1;
+                params.delta_margin = 150;
+                params.razoring_margin = 800;
+            },
+            PositionType::Positional => {
+                // More aggressive pruning for positional positions
+                params.futility_margin = [150, 175, 200, 225, 250, 275, 300, 325];
+                params.lmr_base_reduction = 2;
+                params.delta_margin = 75;
+                params.razoring_margin = 400;
+            },
+            PositionType::Endgame => {
+                // Very conservative pruning for endgame
+                params.futility_margin = [400, 450, 500, 550, 600, 650, 700, 750];
+                params.lmr_base_reduction = 1;
+                params.delta_margin = 200;
+                params.razoring_margin = 1000;
+            },
+            PositionType::Normal => {
+                // Standard parameters
+                params.futility_margin = [200, 225, 250, 275, 300, 325, 350, 375];
+                params.lmr_base_reduction = 2;
+                params.delta_margin = 100;
+                params.razoring_margin = 600;
+            }
+        }
+        
+        params
+    }
+    
+    /// Implement parameter learning system based on performance tracking
+    pub fn learn_from_performance(&mut self, performance_history: &[PerformanceMetrics]) {
+        if performance_history.len() < 5 {
+            return;
+        }
+        
+        // Calculate performance trends
+        let recent_performance = &performance_history[performance_history.len() - 5..];
+        let avg_cache_hit_ratio = self.calculate_average_cache_hit_ratio(recent_performance);
+        let performance_trend = self.calculate_performance_trend(performance_history);
+        
+        // Adjust learning rate based on performance
+        if performance_trend > 0.1 {
+            // Improving performance, increase learning rate
+            self.learning_rate = (self.learning_rate * 1.1).min(0.2);
+        } else if performance_trend < -0.1 {
+            // Declining performance, decrease learning rate
+            self.learning_rate = (self.learning_rate * 0.9).max(0.01);
+        }
+        
+        // Update parameter recommendations based on performance patterns
+        self.update_parameter_recommendations(avg_cache_hit_ratio, performance_trend);
+    }
+    
+    /// Calculate average cache hit ratio from performance metrics
+    fn calculate_average_cache_hit_ratio(&self, performance_metrics: &[PerformanceMetrics]) -> f64 {
+        let total_ratio: f64 = performance_metrics.iter()
+            .map(|pm| {
+                let total = pm.cache_hits + pm.cache_misses;
+                if total > 0 { pm.cache_hits as f64 / total as f64 } else { 0.5 }
+            })
+            .sum();
+        
+        total_ratio / performance_metrics.len() as f64
+    }
+    
+    /// Calculate performance trend over time
+    fn calculate_performance_trend(&self, performance_history: &[PerformanceMetrics]) -> f64 {
+        if performance_history.len() < 10 {
+            return 0.0;
+        }
+        
+        let recent = &performance_history[performance_history.len() - 5..];
+        let older = &performance_history[performance_history.len() - 10..performance_history.len() - 5];
+        
+        let recent_avg = self.calculate_average_cache_hit_ratio(recent);
+        let older_avg = self.calculate_average_cache_hit_ratio(older);
+        
+        recent_avg - older_avg
+    }
+    
+    /// Update parameter recommendations based on performance patterns
+    fn update_parameter_recommendations(&mut self, cache_hit_ratio: f64, performance_trend: f64) {
+        // This would update the internal parameter recommendations
+        // based on observed performance patterns
+        // For now, we'll just adjust the learning rate
+        if cache_hit_ratio > 0.8 && performance_trend > 0.0 {
+            self.learning_rate = (self.learning_rate * 1.05).min(0.2);
+        } else if cache_hit_ratio < 0.3 || performance_trend < -0.1 {
+            self.learning_rate = (self.learning_rate * 0.95).max(0.01);
+        }
+    }
+    
+    /// Get optimized parameters for specific game phase
+    pub fn get_phase_optimized_parameters(&self, game_phase: GamePhase) -> PruningParameters {
+        let mut params = PruningParameters::default();
+        
+        match game_phase {
+            GamePhase::Opening => {
+                // Opening: moderate pruning, focus on development
+                params.futility_margin = [180, 200, 220, 240, 260, 280, 300, 320];
+                params.lmr_base_reduction = 2;
+                params.delta_margin = 90;
+                params.razoring_margin = 500;
+            },
+            GamePhase::Middlegame => {
+                // Middlegame: standard pruning
+                params.futility_margin = [200, 225, 250, 275, 300, 325, 350, 375];
+                params.lmr_base_reduction = 2;
+                params.delta_margin = 100;
+                params.razoring_margin = 600;
+            },
+            GamePhase::Endgame => {
+                // Endgame: conservative pruning to avoid tactical errors
+                params.futility_margin = [300, 350, 400, 450, 500, 550, 600, 650];
+                params.lmr_base_reduction = 1;
+                params.delta_margin = 150;
+                params.razoring_margin = 800;
+            }
+        }
+        
+        params
+    }
+    
+    /// Validate parameter ranges and constraints
+    pub fn validate_parameters(&self, params: &PruningParameters) -> bool {
+        // Check futility margin ranges
+        for margin in &params.futility_margin {
+            if *margin < 50 || *margin > 1000 {
+                return false;
+            }
+        }
+        
+        // Check LMR reduction range
+        if params.lmr_base_reduction < 1 || params.lmr_base_reduction > 4 {
+            return false;
+        }
+        
+        // Check delta margin range
+        if params.delta_margin < 25 || params.delta_margin > 500 {
+            return false;
+        }
+        
+        // Check razoring margin range
+        if params.razoring_margin < 100 || params.razoring_margin > 2000 {
+            return false;
+        }
+        
+        true
+    }
+    
+    /// Get parameter statistics for analysis
+    pub fn get_parameter_statistics(&self) -> ParameterStatistics {
+        if self.parameter_history.is_empty() {
+            return ParameterStatistics::default();
+        }
+        
+        let recent_snapshots = &self.parameter_history[self.parameter_history.len() - 10..];
+        
+        let avg_cache_hit_ratio = recent_snapshots.iter()
+            .map(|s| {
+                let total = s.performance.cache_hits + s.performance.cache_misses;
+                if total > 0 { s.performance.cache_hits as f64 / total as f64 } else { 0.5 }
+            })
+            .sum::<f64>() / recent_snapshots.len() as f64;
+        
+        let avg_futility_margin = recent_snapshots.iter()
+            .map(|s| s.parameters.futility_margin[0] as f64)
+            .sum::<f64>() / recent_snapshots.len() as f64;
+        
+        let avg_lmr_reduction = recent_snapshots.iter()
+            .map(|s| s.parameters.lmr_base_reduction as f64)
+            .sum::<f64>() / recent_snapshots.len() as f64;
+        
+        ParameterStatistics {
+            total_adjustments: self.parameter_history.len(),
+            avg_cache_hit_ratio,
+            avg_futility_margin,
+            avg_lmr_reduction,
+            learning_rate: self.learning_rate,
+        }
+    }
+}
+
+/// Position analyzer for adaptive parameters
+#[derive(Debug, PartialEq)]
+pub struct PositionAnalyzer;
+
+impl PositionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+    
+    /// Analyze position and return detailed analysis
+    pub fn analyze_position(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                           player: Player) -> PositionAnalysis {
+        let material_balance = self.calculate_material_balance(board, captured_pieces, player);
+        let tactical_potential = self.calculate_tactical_potential(board, player);
+        let king_safety = self.calculate_king_safety(board, player);
+        let is_quiet = self.is_quiet_position(board, player);
+        let is_tactical = self.is_tactical_position(board, player);
+        let complexity = self.calculate_position_complexity(board, captured_pieces);
+        
+        let position_type = self.classify_position_type(material_balance, tactical_potential, 
+                                                       king_safety, is_quiet, is_tactical);
+        
+        PositionAnalysis {
+            position_type,
+            tactical_potential,
+            material_balance,
+            king_safety,
+            is_quiet,
+            is_tactical,
+            complexity,
+        }
+    }
+    
+    /// Calculate material balance for the current player
+    fn calculate_material_balance(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                                 player: Player) -> i32 {
+        let mut balance = 0;
+        
+        // Calculate piece values on board
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position::new(row, col)) {
+                    let value = match piece.piece_type {
+                        PieceType::Pawn => 100,
+                        PieceType::Lance => 300,
+                        PieceType::Knight => 300,
+                        PieceType::Silver => 400,
+                        PieceType::Gold => 500,
+                        PieceType::Bishop => 550,
+                        PieceType::Rook => 650,
+                        PieceType::King => 1000,
+                        PieceType::PromotedPawn => 600,
+                        PieceType::PromotedLance => 600,
+                        PieceType::PromotedKnight => 600,
+                        PieceType::PromotedSilver => 600,
+                        PieceType::PromotedBishop => 650,
+                        PieceType::PromotedRook => 750,
+                    };
+                    
+                    if piece.player == player {
+                        balance += value;
+                    } else {
+                        balance -= value;
+                    }
+                }
+            }
+        }
+        
+        // Add captured pieces value (simplified - could be enhanced with actual piece values)
+        let player_captures = match player {
+            Player::Black => &captured_pieces.black,
+            Player::White => &captured_pieces.white,
+        };
+        let opponent_captures = match player {
+            Player::Black => &captured_pieces.white,
+            Player::White => &captured_pieces.black,
+        };
+        
+        for piece_type in player_captures {
+            let value = match piece_type {
+                PieceType::Pawn => 100,
+                PieceType::Lance => 300,
+                PieceType::Knight => 300,
+                PieceType::Silver => 400,
+                PieceType::Gold => 500,
+                PieceType::Bishop => 550,
+                PieceType::Rook => 650,
+                _ => 0,
+            };
+            balance += value;
+        }
+        
+        for piece_type in opponent_captures {
+            let value = match piece_type {
+                PieceType::Pawn => 100,
+                PieceType::Lance => 300,
+                PieceType::Knight => 300,
+                PieceType::Silver => 400,
+                PieceType::Gold => 500,
+                PieceType::Bishop => 550,
+                PieceType::Rook => 650,
+                _ => 0,
+            };
+            balance -= value;
+        }
+        
+        balance
+    }
+    
+    /// Calculate tactical potential (0-255)
+    fn calculate_tactical_potential(&self, board: &BitboardBoard, player: Player) -> u8 {
+        let mut potential = 0;
+        
+        // Check for pieces that can create tactical threats
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position::new(row, col)) {
+                    if piece.player == player {
+                        match piece.piece_type {
+                            PieceType::Bishop | PieceType::PromotedBishop => potential += 30,
+                            PieceType::Rook | PieceType::PromotedRook => potential += 35,
+                            PieceType::Knight => potential += 20,
+                            PieceType::Lance => potential += 15,
+                            _ => potential += 5,
+                        }
+                    }
+                }
+            }
+        }
+        
+        potential.min(255)
+    }
+    
+    /// Calculate king safety (0-255, higher = safer)
+    fn calculate_king_safety(&self, board: &BitboardBoard, player: Player) -> u8 {
+        let mut safety = 100; // Base safety
+        
+        // Find king position
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position::new(row, col)) {
+                    if piece.player == player && piece.piece_type == PieceType::King {
+                        // Check surrounding pieces for protection
+                        for dr in -1..=1 {
+                            for dc in -1..=1 {
+                                if dr == 0 && dc == 0 { continue; }
+                                let check_row = row as i32 + dr;
+                                let check_col = col as i32 + dc;
+                                if check_row >= 0 && check_row < 9 && check_col >= 0 && check_col < 9 {
+                                    if let Some(protector) = board.get_piece(Position::new(check_row as u8, check_col as u8)) {
+                                        if protector.player == player {
+                                            safety += 10;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        safety.min(255)
+    }
+    
+    /// Check if position is quiet (no immediate tactical threats)
+    fn is_quiet_position(&self, board: &BitboardBoard, player: Player) -> bool {
+        // Simplified quiet position detection
+        // In a real implementation, this would check for immediate captures, checks, etc.
+        true // Placeholder
+    }
+    
+    /// Check if position has tactical characteristics
+    fn is_tactical_position(&self, board: &BitboardBoard, player: Player) -> bool {
+        // Check for pieces in attacking positions
+        let tactical_potential = self.calculate_tactical_potential(board, player);
+        tactical_potential > 100
+    }
+    
+    /// Calculate position complexity (0-255)
+    fn calculate_position_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> u8 {
+        let mut complexity = 0;
+        
+        // Count total pieces
+        let mut piece_count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                if board.get_piece(Position::new(row, col)).is_some() {
+                    piece_count += 1;
+                }
+            }
+        }
+        
+        // More pieces = more complexity
+        complexity += (piece_count * 3).min(100);
+        
+        // Add captured pieces complexity
+        let total_captures = captured_pieces.black.len() + captured_pieces.white.len();
+        complexity += ((total_captures * 2) as u8).min(50);
+        
+        complexity.min(255)
+    }
+    
+    /// Classify position type based on analysis
+    fn classify_position_type(&self, material_balance: i32, tactical_potential: u8, 
+                             king_safety: u8, is_quiet: bool, is_tactical: bool) -> PositionType {
+        // Determine if this is an endgame
+        if material_balance.abs() > 800 || tactical_potential < 50 {
+            return PositionType::Endgame;
+        }
+        
+        // Determine if this is tactical
+        if is_tactical || tactical_potential > 150 || king_safety < 80 {
+            return PositionType::Tactical;
+        }
+        
+        // Determine if this is positional
+        if is_quiet && tactical_potential < 100 && king_safety > 120 {
+            return PositionType::Positional;
+        }
+        
+        PositionType::Normal
+    }
+    
+    /// Get parameter recommendations for specific position type
+    pub fn get_parameter_recommendations(&self, position_type: PositionType) -> ParameterAdjustment {
+        match position_type {
+            PositionType::Tactical => ParameterAdjustment {
+                futility_adjustment: -100,
+                lmr_adjustment: 1,
+                delta_adjustment: -50,
+                razoring_adjustment: -200,
+            },
+            PositionType::Positional => ParameterAdjustment {
+                futility_adjustment: 50,
+                lmr_adjustment: 0,
+                delta_adjustment: 25,
+                razoring_adjustment: 100,
+            },
+            PositionType::Endgame => ParameterAdjustment {
+                futility_adjustment: -200,
+                lmr_adjustment: 2,
+                delta_adjustment: -100,
+                razoring_adjustment: -300,
+            },
+            PositionType::Normal => ParameterAdjustment {
+                futility_adjustment: 0,
+                lmr_adjustment: 0,
+                delta_adjustment: 0,
+                razoring_adjustment: 0,
+            },
+        }
+    }
+}
+
+/// Position type for adaptive pruning
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PositionType {
+    Tactical,
+    Positional,
+    Endgame,
+    Normal,
+}
+
+/// Position analysis for adaptive pruning
+#[derive(Debug, Clone)]
+pub struct PositionAnalysis {
+    pub position_type: PositionType,
+    pub tactical_potential: u8,
+    pub material_balance: i32,
+    pub king_safety: u8,
+    pub is_quiet: bool,
+    pub is_tactical: bool,
+    pub complexity: u8,
+}
+
+/// Parameter adjustment for adaptive pruning
+#[derive(Debug, Default, PartialEq)]
+pub struct ParameterAdjustment {
+    pub futility_adjustment: i32,
+    pub lmr_adjustment: u8,
+    pub delta_adjustment: i32,
+    pub razoring_adjustment: i32,
+}
+
+/// Parameter snapshot for tracking changes
+#[derive(Debug, Clone)]
+#[derive(PartialEq)]
+pub struct ParameterSnapshot {
+    pub timestamp: std::time::SystemTime,
+    pub parameters: PruningParameters,
+    pub performance: PerformanceMetrics,
+}
+
+/// Parameter statistics for analysis and learning
+#[derive(Debug, Default, PartialEq)]
+pub struct ParameterStatistics {
+    pub total_adjustments: usize,
+    pub avg_cache_hit_ratio: f64,
+    pub avg_futility_margin: f64,
+    pub avg_lmr_reduction: f64,
+    pub learning_rate: f64,
 }

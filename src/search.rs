@@ -28,6 +28,8 @@ pub struct SearchEngine {
     iid_config: IIDConfig,
     iid_stats: IIDStats,
     previous_scores: Vec<i32>,
+    // Advanced Alpha-Beta Pruning
+    pruning_manager: PruningManager,
     // Current search state for diagnostics
     current_alpha: i32,
     current_beta: i32,
@@ -67,6 +69,8 @@ impl SearchEngine {
             iid_config: IIDConfig::default(),
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
+            // Advanced Alpha-Beta Pruning
+            pruning_manager: PruningManager::new(PruningParameters::default()),
             // Initialize diagnostic fields
             current_alpha: 0,
             current_beta: 0,
@@ -104,6 +108,8 @@ impl SearchEngine {
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
+            // Advanced Alpha-Beta Pruning
+            pruning_manager: PruningManager::new(PruningParameters::default()),
             // Initialize diagnostic fields
             current_alpha: 0,
             current_beta: 0,
@@ -2076,6 +2082,11 @@ impl SearchEngine {
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Starting search at depth {} (alpha: {}, beta: {})", depth, alpha, beta));
         crate::debug_utils::start_timing(&format!("search_at_depth_{}", depth));
         
+        // Optimize pruning performance periodically
+        if depth % 3 == 0 {
+            self.optimize_pruning_performance();
+        }
+        
         // Check tablebase first
         crate::debug_utils::start_timing("tablebase_probe");
         if let Some(tablebase_result) = self.tablebase.probe(board, player, captured_pieces) {
@@ -2132,7 +2143,7 @@ impl SearchEngine {
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Sorting moves");
         crate::debug_utils::start_timing("move_sorting");
-        let sorted_moves = self.sort_moves(&legal_moves, board, None);
+        let sorted_moves = self.sort_moves_with_pruning_awareness(&legal_moves, board, None, Some(depth), Some(alpha), Some(beta));
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
@@ -2383,7 +2394,7 @@ impl SearchEngine {
         // === END IID ===
         
         crate::debug_utils::trace_log("NEGAMAX", "Sorting moves for evaluation");
-        let sorted_moves = self.sort_moves(&legal_moves, board, iid_move.as_ref());
+        let sorted_moves = self.sort_moves_with_pruning_awareness(&legal_moves, board, iid_move.as_ref(), Some(depth), Some(alpha), Some(beta));
         let mut best_score = -200000;
         let mut best_move_for_tt = None;
         
@@ -2403,6 +2414,27 @@ impl SearchEngine {
             
             crate::debug_utils::trace_log("NEGAMAX", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
                 move_index, move_.to_usi_string(), alpha, beta));
+            
+            // Create search state for advanced pruning decisions
+            let mut search_state = crate::types::SearchState::new(depth, alpha, beta);
+            search_state.move_number = move_index as u8;
+            search_state.update_fields(
+                has_check,
+                self.evaluate_position(board, player, captured_pieces),
+                self.get_position_hash(board),
+                self.get_game_phase(board)
+            );
+            
+            // Check if move should be pruned using advanced pruning techniques with conditional logic
+            let should_consider_pruning = self.pruning_manager.should_apply_conditional_pruning(&search_state, move_);
+            if should_consider_pruning {
+                let pruning_decision = self.pruning_manager.should_prune(&search_state, move_);
+                
+                if pruning_decision.is_pruned() {
+                    crate::debug_utils::trace_log("NEGAMAX", &format!("Move {} pruned by advanced pruning", move_.to_usi_string()));
+                    continue; // Skip this move
+                }
+            }
             
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
@@ -2682,6 +2714,20 @@ impl SearchEngine {
     
 
     pub fn sort_moves(&mut self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>) -> Vec<Move> {
+        // Enhanced move ordering with pruning awareness
+        self.sort_moves_with_pruning_awareness(moves, board, iid_move, None, None, None)
+    }
+    
+    /// Enhanced move ordering that considers pruning effectiveness
+    pub fn sort_moves_with_pruning_awareness(
+        &mut self, 
+        moves: &[Move], 
+        board: &BitboardBoard, 
+        iid_move: Option<&Move>,
+        depth: Option<u8>,
+        alpha: Option<i32>,
+        beta: Option<i32>
+    ) -> Vec<Move> {
         // First, check if any move is a tablebase move
         let mut tablebase_moves = Vec::new();
         let mut regular_moves = Vec::new();
@@ -2706,9 +2752,13 @@ impl SearchEngine {
             ));
         }
         
-        // Score and sort regular moves
+        // Score and sort regular moves with pruning awareness
         let mut scored_regular: Vec<(Move, i32)> = regular_moves.iter()
-            .map(|m| (m.clone(), self.score_move(m, board, iid_move)))
+            .map(|m| {
+                let base_score = self.score_move(m, board, iid_move);
+                let pruning_score = self.score_move_for_pruning(m, board, depth, alpha, beta);
+                (m.clone(), base_score + pruning_score)
+            })
             .collect();
         scored_regular.sort_by(|a, b| b.1.cmp(&a.1));
         
@@ -2771,6 +2821,147 @@ impl SearchEngine {
             score += 20;
         }
         score
+    }
+    
+    /// Score a move based on pruning effectiveness
+    fn score_move_for_pruning(&self, move_: &Move, board: &BitboardBoard, depth: Option<u8>, alpha: Option<i32>, beta: Option<i32>) -> i32 {
+        let mut pruning_score = 0;
+        
+        // Bonus for moves that are less likely to be pruned
+        if let Some(d) = depth {
+            // Tactical moves (captures, promotions, checks) are less likely to be pruned
+            if move_.is_capture {
+                pruning_score += 200;
+                // Higher value captures are even less likely to be pruned
+                if let Some(captured_piece) = &move_.captured_piece {
+                    pruning_score += captured_piece.piece_type.base_value() / 10;
+                }
+            }
+            
+            if move_.is_promotion {
+                pruning_score += 150;
+            }
+            
+            if move_.gives_check {
+                pruning_score += 100;
+            }
+            
+            // Bonus for moves that are likely to cause cutoffs (good for pruning)
+            if let Some(from) = move_.from {
+                // History table indicates moves that have caused cutoffs before
+                pruning_score += self.history_table[from.row as usize][from.col as usize] / 10;
+            }
+            
+            // Killer moves are likely to cause cutoffs
+            if let Some(killer) = &self.killer_moves[0] {
+                if self.moves_equal(move_, killer) { 
+                    pruning_score += 50; 
+                }
+            }
+            if let Some(killer) = &self.killer_moves[1] {
+                if self.moves_equal(move_, killer) { 
+                    pruning_score += 40; 
+                }
+            }
+            
+            // Depth-dependent adjustments
+            if d <= 2 {
+                // At shallow depths, prioritize moves that are less likely to be pruned
+                pruning_score += 30;
+            } else if d >= 4 {
+                // At deeper depths, prioritize moves that are more likely to cause cutoffs
+                pruning_score += 20;
+            }
+        }
+        
+        // Alpha-beta window awareness
+        if let (Some(a), Some(b)) = (alpha, beta) {
+            let window_size = b.saturating_sub(a);
+            if window_size < 100 {
+                // Narrow window - prioritize moves likely to cause cutoffs
+                pruning_score += 25;
+            } else if window_size > 500 {
+                // Wide window - prioritize moves less likely to be pruned
+                pruning_score += 15;
+            }
+        }
+        
+        pruning_score
+    }
+    
+    /// Adaptive move ordering based on pruning statistics
+    fn get_adaptive_ordering_adjustment(&self, move_: &Move, depth: u8) -> i32 {
+        let mut adjustment = 0;
+        
+        // Get pruning statistics
+        let stats = &self.pruning_manager.statistics;
+        let total_moves = stats.total_moves.max(1);
+        let pruning_rate = stats.pruned_moves as f64 / total_moves as f64;
+        
+        // Adjust ordering based on pruning effectiveness
+        if pruning_rate > 0.3 {
+            // High pruning rate - prioritize moves less likely to be pruned
+            if move_.is_capture || move_.is_promotion || move_.gives_check {
+                adjustment += 50; // Tactical moves are less likely to be pruned
+            } else {
+                adjustment -= 25; // Quiet moves are more likely to be pruned
+            }
+        } else if pruning_rate < 0.1 {
+            // Low pruning rate - prioritize moves more likely to cause cutoffs
+            if let Some(from) = move_.from {
+                adjustment += self.history_table[from.row as usize][from.col as usize] / 5;
+            }
+            
+            // Killer moves are likely to cause cutoffs
+            if let Some(killer) = &self.killer_moves[0] {
+                if self.moves_equal(move_, killer) { 
+                    adjustment += 30; 
+                }
+            }
+        }
+        
+        // Depth-dependent adjustments
+        if depth <= 2 {
+            // At shallow depths, be more conservative with pruning
+            adjustment += 20;
+        } else if depth >= 5 {
+            // At deeper depths, be more aggressive with pruning
+            adjustment -= 15;
+        }
+        
+        adjustment
+    }
+    
+    /// Enhanced move ordering with adaptive pruning awareness
+    pub fn sort_moves_adaptive(&mut self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+        // First, check if any move is a tablebase move
+        let mut tablebase_moves = Vec::new();
+        let mut regular_moves = Vec::new();
+        
+        for move_ in moves {
+            if self.is_tablebase_move(move_, board) {
+                tablebase_moves.push(move_.clone());
+            } else {
+                regular_moves.push(move_.clone());
+            }
+        }
+        
+        // Score and sort regular moves with adaptive pruning awareness
+        let mut scored_regular: Vec<(Move, i32)> = regular_moves.iter()
+            .map(|m| {
+                let base_score = self.score_move(m, board, iid_move);
+                let pruning_score = self.score_move_for_pruning(m, board, Some(depth), Some(alpha), Some(beta));
+                let adaptive_score = self.get_adaptive_ordering_adjustment(m, depth);
+                (m.clone(), base_score + pruning_score + adaptive_score)
+            })
+            .collect();
+        scored_regular.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Combine: tablebase moves first, then regular moves
+        let mut result = tablebase_moves;
+        result.extend(scored_regular.into_iter().map(|(m, _)| m));
+        
+        result
     }
 
     pub fn moves_equal(&self, move1: &Move, move2: &Move) -> bool {
@@ -4516,12 +4707,22 @@ impl SearchEngine {
         
         self.lmr_stats.moves_considered += 1;
         
-        // Check if LMR should be applied
-        if self.should_apply_lmr(move_, depth, move_index) {
+        // Create search state for advanced pruning
+        let mut search_state = crate::types::SearchState::new(depth, alpha, beta);
+        search_state.move_number = move_index as u8;
+        search_state.update_fields(
+            has_check,
+            self.evaluate_position(board, player, captured_pieces),
+            self.get_position_hash(board),
+            self.get_game_phase(board)
+        );
+        
+        // Check if LMR should be applied using new PruningManager
+        let reduction = self.pruning_manager.calculate_lmr_reduction(&search_state, move_);
+        
+        if reduction > 0 {
             self.lmr_stats.reductions_applied += 1;
-            
-            // Calculate reduction amount (use optimized version)
-            let reduction = self.calculate_reduction_optimized(move_, depth, move_index);
+            self.pruning_manager.statistics.lmr_applied += 1;
             self.lmr_stats.total_depth_saved += reduction as u64;
             
             // Perform reduced-depth search with null window
@@ -4545,6 +4746,7 @@ impl SearchEngine {
             // Check if re-search is needed
             if score > alpha {
                 self.lmr_stats.researches_triggered += 1;
+                self.pruning_manager.statistics.re_searches += 1;
                 
                 // Re-search at full depth
                 let full_score = -self.negamax_with_context(
@@ -6300,6 +6502,103 @@ impl SearchEngine {
     pub fn update_best_move(&mut self, best_move: Option<Move>, best_score: i32) {
         self.current_best_move = best_move;
         self.current_best_score = best_score;
+    }
+
+    // ============================================================================
+    // Advanced Alpha-Beta Pruning Helper Methods
+    // ============================================================================
+
+    /// Check if the current player is in check
+    pub fn is_in_check(&self, board: &BitboardBoard) -> bool {
+        // This should use the existing check detection logic
+        // For now, return false as a placeholder
+        false
+    }
+
+    /// Evaluate the current position statically
+    pub fn evaluate_position(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        self.evaluator.evaluate(board, player, captured_pieces)
+    }
+
+    /// Get the position hash for the current board state
+    pub fn get_position_hash(&self, board: &BitboardBoard) -> u64 {
+        // This should use the existing position hashing logic
+        // For now, return 0 as a placeholder
+        0
+    }
+
+    /// Determine the current game phase based on material
+    pub fn get_game_phase(&self, board: &BitboardBoard) -> GamePhase {
+        let material_count = self.count_material_for_phase(board);
+        GamePhase::from_material_count(material_count)
+    }
+
+    /// Count the total material on the board for game phase calculation
+    fn count_material_for_phase(&self, board: &BitboardBoard) -> u32 {
+        let mut count = 0;
+        
+        // Count pieces for both players
+        for player in [Player::Black, Player::White] {
+            for piece_type in [
+                PieceType::Pawn, PieceType::Lance, PieceType::Knight,
+                PieceType::Silver, PieceType::Gold, PieceType::Bishop,
+                PieceType::Rook, PieceType::King,
+                PieceType::PromotedPawn, PieceType::PromotedLance,
+                PieceType::PromotedKnight, PieceType::PromotedSilver,
+                PieceType::PromotedBishop, PieceType::PromotedRook,
+            ] {
+                // Count pieces on the board (simplified approach)
+                for row in 0..9 {
+                    for col in 0..9 {
+                        let pos = Position::new(row, col);
+                        if let Some(piece) = board.get_piece(pos) {
+                            if piece.piece_type == piece_type && piece.player == player {
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+
+    /// Get pruning manager reference
+    pub fn get_pruning_manager(&self) -> &PruningManager {
+        &self.pruning_manager
+    }
+
+    /// Get mutable pruning manager reference
+    pub fn get_pruning_manager_mut(&mut self) -> &mut PruningManager {
+        &mut self.pruning_manager
+    }
+    
+    /// Optimize pruning performance periodically
+    pub fn optimize_pruning_performance(&mut self) {
+        // Optimize pruning frequency based on current performance
+        self.pruning_manager.optimize_pruning_frequency();
+        
+        // Clear caches if they get too large
+        let (hits, misses, hit_rate) = self.pruning_manager.get_cache_stats();
+        if hit_rate < 0.3 && (hits + misses) > 10000 {
+            self.pruning_manager.clear_caches();
+        }
+    }
+
+    /// Update pruning parameters
+    pub fn update_pruning_parameters(&mut self, params: PruningParameters) {
+        self.pruning_manager.parameters = params;
+    }
+
+    /// Get pruning statistics
+    pub fn get_pruning_statistics(&self) -> &PruningStatistics {
+        &self.pruning_manager.statistics
+    }
+
+    /// Reset pruning statistics
+    pub fn reset_pruning_statistics(&mut self) {
+        self.pruning_manager.statistics.reset();
     }
 }
 
