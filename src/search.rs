@@ -242,7 +242,7 @@ impl SearchEngine {
                          time_limit_ms: u32, 
                          history: &mut Vec<String>) -> Option<Move> {
         
-        let iid_start_time = std::time::Instant::now();
+        let iid_start_time = TimeSource::now();
         let initial_nodes = self.nodes_searched;
         
         // Perform shallow search with null window for efficiency
@@ -263,7 +263,7 @@ impl SearchEngine {
         );
         
         // Record IID statistics
-        let iid_time = iid_start_time.elapsed().as_millis() as u64;
+        let iid_time = iid_start_time.elapsed_ms() as u64;
         self.iid_stats.iid_time_ms += iid_time;
         self.iid_stats.total_iid_nodes += self.nodes_searched - initial_nodes;
         
@@ -770,8 +770,8 @@ impl SearchEngine {
                 captured_pieces,
                 player.opposite(),
                 iid_depth - 1,
-                -beta,
-                -best_score,
+                beta.saturating_neg(),
+                best_score.saturating_neg(),
                 start_time,
                 time_limit_ms,
                 history,
@@ -1394,8 +1394,8 @@ impl SearchEngine {
                 captured_pieces,
                 player.opposite(),
                 iid_depth - 1,
-                -beta,
-                -current_alpha,
+                beta.saturating_neg(),
+                current_alpha.saturating_neg(),
                 start_time,
                 time_limit_ms,
                 history,
@@ -1460,8 +1460,8 @@ impl SearchEngine {
                 captured_pieces,
                 player.opposite(),
                 probe_depth - 1,
-                -beta,
-                -alpha,
+                beta.saturating_neg(),
+                alpha.saturating_neg(),
                 start_time,
                 time_limit_ms,
                 history,
@@ -2160,7 +2160,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, -beta, -alpha, &start_time, time_limit_ms, &mut history, true);
+            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut history, true);
             crate::debug_utils::end_timing(&format!("move_eval_{}", move_index), "SEARCH_AT_DEPTH");
             
             // Enhanced move evaluation logging
@@ -2351,7 +2351,7 @@ impl SearchEngine {
             let iid_depth = self.calculate_iid_depth(depth);
             crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
-            let iid_start_time = std::time::Instant::now();
+            let iid_start_time = TimeSource::now();
             iid_move = self.perform_iid_search(
                 &mut board.clone(), 
                 captured_pieces, 
@@ -2364,7 +2364,7 @@ impl SearchEngine {
                 history
             );
             
-            let iid_time = iid_start_time.elapsed().as_millis();
+            let iid_time = iid_start_time.elapsed_ms();
             self.iid_stats.iid_searches_performed += 1;
             crate::debug_utils::end_timing("iid_search", "IID");
             
@@ -2616,7 +2616,7 @@ impl SearchEngine {
             };
             
             crate::debug_utils::start_timing(&format!("quiescence_move_{}", move_index));
-            let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), -beta, -alpha, &start_time, time_limit_ms, search_depth);
+            let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, search_depth);
             crate::debug_utils::end_timing(&format!("quiescence_move_{}", move_index), "QUIESCENCE");
             
             crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
@@ -3480,7 +3480,7 @@ impl SearchEngine {
         // Perform null move search with zero-width window
         let null_move_score = -self.negamax_with_context(
             board, captured_pieces, player.opposite(), 
-            search_depth, -beta, -beta + 1, 
+            search_depth, beta.saturating_neg(), beta.saturating_neg().saturating_add(1), 
             start_time, time_limit_ms, history, 
             false, false, false, false  // Prevent recursive null moves
         );
@@ -4531,8 +4531,8 @@ impl SearchEngine {
                 captured_pieces, 
                 player.opposite(), 
                 reduced_depth, 
-                -alpha - 1, 
-                -alpha, 
+                alpha.saturating_neg().saturating_sub(1), 
+                alpha.saturating_neg(), 
                 start_time, 
                 time_limit_ms, 
                 history, 
@@ -4552,8 +4552,8 @@ impl SearchEngine {
                     captured_pieces, 
                     player.opposite(), 
                     depth - 1, 
-                    -beta, 
-                    -alpha, 
+                    beta.saturating_neg(), 
+                    alpha.saturating_neg(), 
                     start_time, 
                     time_limit_ms, 
                     history, 
@@ -4581,8 +4581,8 @@ impl SearchEngine {
                 captured_pieces, 
                 player.opposite(), 
                 depth - 1, 
-                -beta, 
-                -alpha, 
+                beta.saturating_neg(), 
+                alpha.saturating_neg(), 
                 start_time, 
                 time_limit_ms, 
                 history, 

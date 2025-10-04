@@ -430,7 +430,7 @@ impl PositionEvaluator {
         // Use advanced king safety evaluation if enabled
         if self.config.king_safety.enabled {
             let start_time = if self.config.enable_performance_monitoring {
-                Some(std::time::Instant::now())
+                Some(crate::time_utils::TimeSource::now())
             } else {
                 None
             };
@@ -445,9 +445,9 @@ impl PositionEvaluator {
             
             // Log performance if monitoring is enabled
             if let Some(start) = start_time {
-                let duration = start.elapsed();
-                if duration.as_micros() > 1000 { // Log if takes more than 1ms
-                    println!("Advanced king safety evaluation took: {}μs", duration.as_micros());
+                let duration_ms = start.elapsed_ms();
+                if duration_ms > 1 { // Log if takes more than 1ms
+                    println!("Advanced king safety evaluation took: {}ms", duration_ms);
                 }
             }
             
