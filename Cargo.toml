@@ -35,12 +35,20 @@ lazy_static = "1.4"
 [dev-dependencies]
 tempfile = "3.0"
 criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.8"
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
+debug = true
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"
 debug = true
 
 [profile.dev]
@@ -50,3 +58,11 @@ debug = true
 [[bench]]
 name = "tablebase_performance_benchmarks"
 harness = false
+
+[[bench]]
+name = "attack_pattern_performance_benchmarks"
+harness = false
+
+[[example]]
+name = "attack_pattern_demo"
+path = "examples/attack_pattern_demo.rs"

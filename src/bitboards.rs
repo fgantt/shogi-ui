@@ -4,6 +4,7 @@ use std::collections::HashMap;
 // Include the magic bitboard module
 pub mod magic;
 pub mod sliding_moves;
+pub mod attack_patterns;
 
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {
@@ -13,6 +14,8 @@ pub struct BitboardBoard {
     white_occupied: Bitboard,
     piece_positions: HashMap<Position, Piece>,
     attack_patterns: AttackPatterns,
+    /// Precomputed attack tables for non-sliding pieces
+    attack_tables: attack_patterns::AttackTables,
     /// Magic bitboard table for sliding piece moves
     magic_table: Option<crate::types::MagicTable>,
     /// Sliding move generator for magic bitboard operations
@@ -34,6 +37,7 @@ impl BitboardBoard {
             white_occupied: EMPTY_BITBOARD,
             piece_positions: HashMap::new(),
             attack_patterns: AttackPatterns::new(),
+            attack_tables: attack_patterns::AttackTables::new(),
             magic_table: None,
             sliding_generator: None,
         }
@@ -402,9 +406,36 @@ impl BitboardBoard {
             white_occupied: EMPTY_BITBOARD,
             piece_positions: HashMap::new(),
             attack_patterns: AttackPatterns::new(),
+            attack_tables: attack_patterns::AttackTables::new(),
             magic_table: Some(magic_table),
             sliding_generator: None,
         })
+    }
+
+    /// Get attack pattern for a piece at a given square using precomputed tables
+    pub fn get_attack_pattern_precomputed(
+        &self,
+        square: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> Bitboard {
+        self.attack_tables.get_attack_pattern(square.to_u8(), piece_type, player)
+    }
+
+    /// Check if a square is attacked by a piece using precomputed tables
+    pub fn is_square_attacked_precomputed(
+        &self,
+        from_square: Position,
+        to_square: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> bool {
+        self.attack_tables.is_square_attacked(from_square.to_u8(), to_square.to_u8(), piece_type, player)
+    }
+
+    /// Get attack table statistics and metadata
+    pub fn get_attack_table_stats(&self) -> &attack_patterns::AttackTablesMetadata {
+        self.attack_tables.memory_stats()
     }
 
     /// Get attack pattern for a square using magic bitboards
@@ -508,6 +539,7 @@ impl Clone for BitboardBoard {
             white_occupied: self.white_occupied,
             piece_positions: self.piece_positions.clone(),
             attack_patterns: self.attack_patterns.clone(),
+            attack_tables: self.attack_tables.clone(),
             magic_table: self.magic_table.clone(),
             sliding_generator: self.sliding_generator.clone(),
         }

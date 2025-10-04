@@ -291,13 +291,14 @@ impl MoveGenerator {
                 }
             },
             PieceType::Knight => {
-                let dir: i8 = if player == Player::Black { -1 } else { 1 };
-                let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
-                for (dr, dc) in move_offsets.iter() {
-                    let new_row = pos.row as i8 + dr;
-                    let new_col = pos.col as i8 + dc;
-                    if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
-                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                // Use precomputed attack patterns for better performance
+                let attacks = board.get_attack_pattern_precomputed(pos, piece.piece_type, player);
+                
+                // Convert attack bitboard to individual moves
+                for target_square in 0..81 {
+                    if attacks & (1u128 << target_square) != 0 {
+                        let target_pos = Position::from_index(target_square as u8);
+                        handle_move(&mut moves, target_pos);
                     }
                 }
             },
@@ -324,13 +325,14 @@ impl MoveGenerator {
                 }
             },
             PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver | PieceType::PromotedBishop | PieceType::PromotedRook => {
-                let dir: i8 = if player == Player::Black { -1 } else { 1 };
-                let offsets = piece.piece_type.get_move_offsets(dir);
-                for (dr, dc) in offsets {
-                    let new_row = pos.row as i8 + dr;
-                    let new_col = pos.col as i8 + dc;
-                    if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
-                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                // Use precomputed attack patterns for better performance
+                let attacks = board.get_attack_pattern_precomputed(pos, piece.piece_type, player);
+                
+                // Convert attack bitboard to individual moves
+                for target_square in 0..81 {
+                    if attacks & (1u128 << target_square) != 0 {
+                        let target_pos = Position::from_index(target_square as u8);
+                        handle_move(&mut moves, target_pos);
                     }
                 }
             }
