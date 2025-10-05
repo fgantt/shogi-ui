@@ -12,6 +12,10 @@ pub mod debruijn;
 pub mod lookup_tables;
 pub mod masks;
 pub mod integration;
+pub mod bit_iterator;
+pub mod bit_utils;
+pub mod square_utils;
+pub mod api;
 
 // Re-export commonly used functions for convenience
 pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
@@ -33,6 +37,21 @@ pub use masks::{
 };
 pub use integration::{
     BitScanningOptimizer, GlobalOptimizer, GeometricAnalysis
+};
+pub use bit_iterator::{
+    BitIterator, ReverseBitIterator, BitIteratorExt, ReverseBitIteratorExt,
+    bits, bits_from
+};
+pub use bit_utils::{
+    bit_positions, extract_lsb, extract_msb, lsb_position, msb_position,
+    rotate_left, rotate_right, reverse_bits, overlaps, is_subset,
+    intersection, union, symmetric_difference, complement, difference
+};
+pub use square_utils::{
+    bit_to_square, square_to_bit, bit_to_coords, coords_to_bit,
+    bit_to_square_name, square_name_to_bit, is_valid_shogi_square,
+    is_promotion_zone, square_distance, promotion_zone_mask,
+    get_center_squares, is_center_square
 };
 
 /// Bitboard-based board representation for efficient Shogi operations
