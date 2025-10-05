@@ -16,6 +16,7 @@ pub mod bit_iterator;
 pub mod bit_utils;
 pub mod square_utils;
 pub mod api;
+pub mod cache_opt;
 
 // Re-export commonly used functions for convenience
 pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
@@ -52,6 +53,13 @@ pub use square_utils::{
     bit_to_square_name, square_name_to_bit, is_valid_shogi_square,
     is_promotion_zone, square_distance, promotion_zone_mask,
     get_center_squares, is_center_square
+};
+pub use cache_opt::{
+    CACHE_LINE_SIZE, CACHE_ALIGNED_SIZE,
+    CacheAlignedPopcountTable, CacheAlignedBitPositionTable,
+    CacheAlignedRankMasks, CacheAlignedFileMasks,
+    prefetch_bitboard, prefetch_bitboard_sequence, process_bitboard_sequence,
+    popcount_cache_optimized, get_bit_positions_cache_optimized
 };
 
 /// Bitboard-based board representation for efficient Shogi operations

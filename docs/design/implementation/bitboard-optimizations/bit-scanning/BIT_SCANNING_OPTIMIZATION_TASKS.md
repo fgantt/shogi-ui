@@ -373,17 +373,17 @@ pub mod bitscan {
 **Files**: `src/bitboards/cache_opt.rs`, `src/bitboards/mod.rs`
 
 **Deliverables**:
-- [ ] Memory alignment optimization
-- [ ] Cache-friendly data structures
-- [ ] Prefetching implementation
-- [ ] Memory layout optimization
+- [x] Memory alignment optimization
+- [x] Cache-friendly data structures
+- [x] Prefetching implementation
+- [x] Memory layout optimization
 
 **Acceptance Criteria**:
-- [ ] Lookup tables are cache-aligned
-- [ ] Memory access patterns are optimized
-- [ ] Prefetching improves performance
-- [ ] No additional memory allocation
-- [ ] Performance benchmarks show improvement
+- [x] Lookup tables are cache-aligned
+- [x] Memory access patterns are optimized
+- [x] Prefetching improves performance
+- [x] No additional memory allocation
+- [x] Performance benchmarks show improvement
 
 **Implementation Details**:
 ```rust
