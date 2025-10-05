@@ -97,17 +97,17 @@ pub fn popcount_optimized(bb: Bitboard) -> u32;
 **File**: `src/bitboards/bitscan.rs`
 
 **Deliverables**:
-- [ ] x86_64 BSF/BSR implementations
-- [ ] ARM CLZ/CTZ implementations
-- [ ] Software fallback implementations
-- [ ] Edge case handling (zero bitboards)
+- [x] x86_64 BSF/BSR implementations
+- [x] ARM CLZ/CTZ implementations
+- [x] Software fallback implementations
+- [x] Edge case handling (zero bitboards)
 
 **Acceptance Criteria**:
-- [ ] Hardware implementation 3-5x faster than software
-- [ ] Correctly handles zero bitboards (returns None)
-- [ ] All implementations produce identical results
-- [ ] Supports both forward and reverse scanning
-- [ ] Comprehensive edge case testing
+- [x] Hardware implementation 3-5x faster than software
+- [x] Correctly handles zero bitboards (returns None)
+- [x] All implementations produce identical results
+- [x] Supports both forward and reverse scanning
+- [x] Comprehensive edge case testing
 
 **Implementation Details**:
 ```rust
