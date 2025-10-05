@@ -6712,12 +6712,32 @@ impl IterativeDeepening {
         let mut best_score = 0;
         let mut previous_scores = Vec::new();
         
-        let search_time_limit = self.time_limit_ms.saturating_sub(100);
-        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Search time limit: {}ms, max depth: {}", search_time_limit, self.max_depth));
+        // Check if we're in check and have few legal moves - optimize search parameters
+        let is_in_check = board.is_king_in_check(player, captured_pieces);
+        let legal_moves = search_engine.move_generator.generate_legal_moves(board, player, captured_pieces);
+        let legal_move_count = legal_moves.len();
+        
+        // Adjust search parameters for check positions with few moves
+        let (effective_max_depth, effective_time_limit) = if is_in_check && legal_move_count <= 10 {
+            // For check positions with ≤10 moves, use much more aggressive limits
+            let max_depth = if legal_move_count <= 5 { 3 } else { 5 };
+            let time_limit = if legal_move_count <= 5 { 2000 } else { 5000 }; // 2-5 seconds max
+            crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!(
+                "Check position detected: {} legal moves, limiting to depth {} and {}ms", 
+                legal_move_count, max_depth, time_limit
+            ));
+            (max_depth, time_limit)
+        } else {
+            // Normal search parameters
+            (self.max_depth, self.time_limit_ms.saturating_sub(100))
+        };
+        
+        let search_time_limit = effective_time_limit;
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Search time limit: {}ms, max depth: {}", search_time_limit, effective_max_depth));
 
         crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Starting depth iteration loop");
 
-        for depth in 1..=self.max_depth {
+        for depth in 1..=effective_max_depth {
             if self.should_stop(&start_time, search_time_limit) { 
                 crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Time limit reached, stopping search");
                 break; 
@@ -6873,6 +6893,18 @@ impl IterativeDeepening {
         }
         
         crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+        
+        // Fallback: if we're in check and didn't find a move, just pick the first legal move
+        if is_in_check && best_move.is_none() && !legal_moves.is_empty() {
+            let fallback_move = legal_moves[0].clone();
+            crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!(
+                "Fallback: using first legal move {} ({} moves available)", 
+                fallback_move.to_usi_string(), legal_moves.len()
+            ));
+            crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+            return Some((fallback_move, 0)); // Neutral score for fallback move
+        }
+        
         crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Search completed: best_move={:?}, best_score={}", 
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
         
