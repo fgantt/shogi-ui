@@ -1,448 +1,599 @@
-# Bit-Scanning Optimization API Reference
+# Bit-Scanning API Reference
 
-This document provides comprehensive documentation for the bit-scanning optimization API, including usage examples, performance characteristics, and migration guidance.
+Complete API reference for the bit-scanning optimization system.
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [API Modules](#api-modules)
-3. [Core Functions](#core-functions)
-4. [Performance Characteristics](#performance-characteristics)
-5. [Platform Support](#platform-support)
-6. [Usage Examples](#usage-examples)
-7. [Migration Guide](#migration-guide)
-8. [Best Practices](#best-practices)
-
-## Overview
-
-The bit-scanning optimization API provides high-performance bit manipulation operations optimized for both native and WebAssembly environments. The API is organized into logical modules for easy discovery and use.
-
-### Key Features
-
-- **Hardware Acceleration**: Automatic detection and use of CPU features (POPCNT, BMI1, BMI2)
-- **WASM Compatibility**: Optimized implementations for WebAssembly environments
-- **Adaptive Selection**: Automatic algorithm selection based on platform capabilities
-- **Zero Allocation**: Efficient operations without heap allocations
-- **Comprehensive Testing**: Thoroughly tested across all supported platforms
-
-## API Modules
-
-### 1. Core Bit-Scanning (`bitscan`)
-
-The core module provides fundamental bit-scanning operations:
-
-```rust
-use shogi_engine::bitboards::api::bitscan;
-
-// Population count
-let count = bitscan::popcount(0b1010); // Returns 2
-
-// Find bit positions
-let lsb = bitscan::bit_scan_forward(0b1000); // Returns Some(3)
-let msb = bitscan::bit_scan_reverse(0b1010); // Returns Some(3)
-
-// Get all positions
-let positions = bitscan::get_all_bit_positions(0b1010); // Returns vec![1, 3]
-
-// Iterate over bits
-for pos in bitscan::bits(0b1010) {
-    println!("Bit at position: {}", pos);
-}
-```
-
-### 2. Bit Manipulation Utilities (`utils`)
-
-Utility functions for common bit manipulation operations:
-
-```rust
-use shogi_engine::bitboards::api::utils;
-
-// Extract bits
-let (lsb, cleared) = utils::extract_lsb(0b1010); // (0b0010, 0b1000)
-let (msb, cleared) = utils::extract_msb(0b1010); // (0b1000, 0b0010)
-
-// Set operations
-let intersection = utils::intersection(0b1010, 0b0110); // Returns 0b0010
-let union = utils::union(0b1010, 0b0110); // Returns 0b1110
-
-// Check overlaps
-let has_overlap = utils::overlaps(0b1010, 0b0101); // Returns true
-```
-
-### 3. Square Coordinate Conversion (`squares`)
-
-Convert between bit positions, coordinates, and algebraic notation:
-
-```rust
-use shogi_engine::bitboards::api::squares;
-use shogi_engine::types::{Position, Player};
-
-// Convert between bit positions and coordinates
-let pos = squares::bit_to_square(40); // Position { row: 4, col: 4 }
-let bit = squares::square_to_bit(pos); // Returns 40
-
-// Algebraic notation
-let name = squares::bit_to_square_name(40); // Returns "5e"
-let bit = squares::square_name_to_bit("5e"); // Returns 40
-
-// Shogi-specific utilities
-let is_promo = squares::is_promotion_zone(63, Player::Black); // Returns true
-let center_squares = squares::get_center_squares(); // Returns vec![40, 39, 41, 31, 49]
-```
-
-### 4. Platform Detection (`platform`)
-
-Access platform capabilities and create optimized instances:
-
-```rust
-use shogi_engine::bitboards::api::platform;
-
-// Check platform capabilities
-let caps = platform::get_platform_capabilities();
-println!("Has POPCNT: {}", caps.has_popcnt);
-println!("Is WASM: {}", caps.is_wasm);
-
-// Create optimized optimizer
-let optimizer = platform::create_optimizer();
-let count = optimizer.popcount(0b1010);
-```
-
-### 5. Performance Analysis (`analysis`)
-
-Analyze bitboard patterns and geometric structures:
-
-```rust
-use shogi_engine::bitboards::api::analysis;
-
-// Analyze bitboard patterns
-let analysis = analysis::analyze_bitboard(0b1010);
-println!("Population count: {}", analysis.popcount);
-println!("First bit: {:?}", analysis.first_bit);
-println!("Last bit: {:?}", analysis.last_bit);
-
-// Analyze geometric patterns
-let geo_analysis = analysis::analyze_geometry(0b1010);
-println!("Rank distribution: {:?}", geo_analysis.rank_counts);
-println!("File distribution: {:?}", geo_analysis.file_counts);
-```
-
-### 6. Lookup Tables (`lookup`)
-
-Access precomputed masks and lookup tables:
-
-```rust
-use shogi_engine::bitboards::api::lookup;
-
-// Precomputed masks
-let rank_mask = lookup::get_rank_mask(0); // Top rank mask
-let file_mask = lookup::get_file_mask(4); // Center file mask
-
-// Validate tables
-assert!(lookup::validate_all_tables());
-```
-
-### 7. Backward Compatibility (`compat`)
-
-Legacy API for existing code:
-
-```rust
-use shogi_engine::bitboards::api::compat;
-
-// Legacy function names (deprecated but functional)
-let count = compat::count_bits(0b1010); // Use bitscan::popcount instead
-let first = compat::find_first_bit(0b1000); // Use bitscan::bit_scan_forward instead
-let last = compat::find_last_bit(0b1000); // Use bitscan::bit_scan_reverse instead
-```
+1. [Core Functions](#core-functions)
+2. [Performance-Optimized Functions](#performance-optimized-functions)
+3. [Common Case Optimization](#common-case-optimization)
+4. [Cache Optimization](#cache-optimization)
+5. [Branch Prediction Optimization](#branch-prediction-optimization)
+6. [Bit Manipulation Utilities](#bit-manipulation-utilities)
+7. [Bit Iterator](#bit-iterator)
+8. [Square Coordinate Conversion](#square-coordinate-conversion)
+9. [Platform Detection](#platform-detection)
+10. [API Modules](#api-modules)
+11. [Backward Compatibility](#backward-compatibility)
 
 ## Core Functions
 
 ### Population Count
 
+#### `popcount(bb: Bitboard) -> u32`
+Counts the number of set bits in a bitboard.
+
+**Parameters**:
+- `bb`: The bitboard to count bits in
+
+**Returns**: Number of set bits (0-128)
+
+**Example**:
 ```rust
-// Count set bits in a bitboard
-let count = bitscan::popcount(bitboard);
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1010_1010;
+let count = popcount(bb);  // Returns 4
 ```
 
-**Performance**: O(1) with hardware acceleration, O(log n) with software fallback
+**Performance**: Automatically selects the best available implementation based on platform capabilities.
 
-### Bit Position Finding
+#### `popcount_optimized(bb: Bitboard) -> u32`
+Alias for `popcount()` with explicit optimization selection.
 
+### Bit Scanning
+
+#### `bit_scan_forward(bb: Bitboard) -> Option<u8>`
+Finds the position of the least significant set bit.
+
+**Parameters**:
+- `bb`: The bitboard to scan
+
+**Returns**: `Some(position)` if bits are set, `None` if bitboard is empty
+
+**Example**:
 ```rust
-// Find least significant bit
-let lsb = bitscan::bit_scan_forward(bitboard);
+use shogi_engine::bitboards::*;
 
-// Find most significant bit  
-let msb = bitscan::bit_scan_reverse(bitboard);
+let bb: Bitboard = 0b1000_1000;
+let pos = bit_scan_forward(bb);  // Returns Some(3)
 ```
 
-**Performance**: O(1) with hardware acceleration, O(log n) with software fallback
+#### `bit_scan_reverse(bb: Bitboard) -> Option<u8>`
+Finds the position of the most significant set bit.
 
-### Bit Iteration
+**Parameters**:
+- `bb`: The bitboard to scan
 
+**Returns**: `Some(position)` if bits are set, `None` if bitboard is empty
+
+**Example**:
 ```rust
-// Iterate over all set bits
-for pos in bitscan::bits(bitboard) {
-    // Process each bit position
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1000_1000;
+let pos = bit_scan_reverse(bb);  // Returns Some(7)
+```
+
+#### `get_all_bit_positions(bb: Bitboard) -> Vec<u8>`
+Gets all positions of set bits in a bitboard.
+
+**Parameters**:
+- `bb`: The bitboard to analyze
+
+**Returns**: Vector of bit positions, ordered from LSB to MSB
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1010_1010;
+let positions = get_all_bit_positions(bb);  // Returns vec![1, 3, 5, 7]
+```
+
+## Performance-Optimized Functions
+
+### Critical Path Functions
+
+#### `popcount_critical(bb: Bitboard) -> u32`
+Maximum performance population count for tight loops.
+
+**Use Case**: Performance-critical code where every cycle matters.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::critical_paths::*;
+
+// In a tight loop
+for bb in bitboards {
+    let count = popcount_critical(bb);  // Maximum performance
 }
+```
 
-// Reverse iteration
-for pos in bitboard.bits_rev() {
-    // Process from MSB to LSB
+#### `bit_scan_forward_critical(bb: Bitboard) -> Option<u8>`
+Maximum performance bit scan forward for tight loops.
+
+**Use Case**: Performance-critical code requiring LSB position.
+
+### Branch-Optimized Functions
+
+#### `popcount_branch_optimized(bb: Bitboard) -> u32`
+Population count with branch prediction optimization.
+
+**Use Case**: Code with predictable bitboard patterns.
+
+#### `bit_scan_forward_optimized(bb: Bitboard) -> Option<u8>`
+Bit scan forward with branch prediction optimization.
+
+**Use Case**: Code with predictable bitboard patterns.
+
+#### `bit_scan_reverse_optimized(bb: Bitboard) -> Option<u8>`
+Bit scan reverse with branch prediction optimization.
+
+**Use Case**: Code with predictable bitboard patterns.
+
+## Common Case Optimization
+
+### Empty Board Detection
+
+#### `is_empty_optimized(bb: Bitboard) -> bool`
+Optimized check for empty bitboards.
+
+**Use Case**: Most common case in Shogi engines.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::common_cases::*;
+
+if is_empty_optimized(bb) {
+    return;  // Early return for most common case
 }
 ```
 
-**Performance**: O(k) where k is the number of set bits
+#### `is_not_empty_optimized(bb: Bitboard) -> bool`
+Optimized check for non-empty bitboards.
 
-### Bit Manipulation
+### Single Piece Detection
 
+#### `is_single_piece_optimized(bb: Bitboard) -> bool`
+Optimized check for single piece on board.
+
+**Use Case**: Common case in Shogi engines.
+
+**Example**:
 ```rust
-// Extract and clear bits
-let (lsb, remaining) = utils::extract_lsb(bitboard);
-let (msb, remaining) = utils::extract_msb(bitboard);
+use shogi_engine::bitboards::common_cases::*;
 
-// Set operations
-let intersection = utils::intersection(bb1, bb2);
-let union = utils::union(bb1, bb2);
-let difference = utils::difference(bb1, bb2);
+if is_single_piece_optimized(bb) {
+    let pos = single_piece_position_optimized(bb);
+    // Handle single piece efficiently
+}
 ```
 
-**Performance**: O(1) for all operations
+#### `single_piece_position_optimized(bb: Bitboard) -> u8`
+Gets position of single piece (assumes only one piece is set).
+
+**Use Case**: When you know there's only one piece.
+
+### Multiple Pieces Detection
+
+#### `is_multiple_pieces_optimized(bb: Bitboard) -> bool`
+Optimized check for multiple pieces on board.
+
+**Use Case**: When handling multiple pieces.
+
+## Cache Optimization
+
+### Cache-Aligned Data Structures
+
+#### `CacheAlignedPopcountTable`
+Cache-aligned lookup table for population count.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::cache_opt::*;
+
+let table = CacheAlignedPopcountTable::new();
+let count = table.get_popcount(0b1010);  // Returns 2
+```
+
+#### `CacheAlignedBitPositionTable`
+Cache-aligned lookup table for bit positions.
+
+#### `CacheAlignedRankMasks`
+Cache-aligned rank masks for 9x9 board.
+
+#### `CacheAlignedFileMasks`
+Cache-aligned file masks for 9x9 board.
+
+### Cache-Optimized Functions
+
+#### `popcount_cache_optimized(bb: Bitboard) -> u32`
+Population count using cache-optimized lookup tables.
+
+**Use Case**: Memory-intensive operations with large datasets.
+
+#### `get_bit_positions_cache_optimized(bb: Bitboard) -> Vec<u8>`
+Bit position enumeration using cache-optimized lookup tables.
+
+### Prefetching
+
+#### `prefetch_bitboard(bb: Bitboard)`
+Prefetches a bitboard into cache.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::cache_opt::*;
+
+unsafe {
+    prefetch_bitboard(bb);
+    let count = popcount_cache_optimized(bb);
+}
+```
+
+#### `prefetch_bitboard_sequence(bitboards: &[Bitboard])`
+Prefetches a sequence of bitboards.
+
+#### `process_bitboard_sequence(bitboards: &[Bitboard]) -> Vec<u32>`
+Processes a sequence of bitboards with prefetching.
+
+## Bit Manipulation Utilities
+
+### Bit Isolation
+
+#### `isolate_lsb(bb: Bitboard) -> Bitboard`
+Isolates the least significant bit.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1010;
+let lsb = isolate_lsb(bb);  // Returns 0b0010
+```
+
+#### `isolate_msb(bb: Bitboard) -> Bitboard`
+Isolates the most significant bit.
+
+#### `extract_lsb(bb: Bitboard) -> (Bitboard, Bitboard)`
+Extracts LSB and returns (isolated_bit, remaining_bitboard).
+
+#### `extract_msb(bb: Bitboard) -> (Bitboard, Bitboard)`
+Extracts MSB and returns (isolated_bit, remaining_bitboard).
+
+### Bit Clearing
+
+#### `clear_lsb(bb: Bitboard) -> Bitboard`
+Clears the least significant bit.
+
+#### `clear_msb(bb: Bitboard) -> Bitboard`
+Clears the most significant bit.
+
+### Bit Rotation and Reversal
+
+#### `rotate_left(bb: Bitboard, amount: u32) -> Bitboard`
+Rotates bitboard left by specified amount.
+
+#### `rotate_right(bb: Bitboard, amount: u32) -> Bitboard`
+Rotates bitboard right by specified amount.
+
+#### `reverse_bits(bb: Bitboard) -> Bitboard`
+Reverses the order of bits in the bitboard.
+
+### Set Operations
+
+#### `intersection(a: Bitboard, b: Bitboard) -> Bitboard`
+Returns intersection of two bitboards.
+
+#### `union(a: Bitboard, b: Bitboard) -> Bitboard`
+Returns union of two bitboards.
+
+#### `symmetric_difference(a: Bitboard, b: Bitboard) -> Bitboard`
+Returns symmetric difference of two bitboards.
+
+#### `difference(a: Bitboard, b: Bitboard) -> Bitboard`
+Returns difference of two bitboards.
+
+#### `complement(bb: Bitboard) -> Bitboard`
+Returns complement of bitboard.
+
+### Boolean Operations
+
+#### `overlaps(a: Bitboard, b: Bitboard) -> bool`
+Checks if two bitboards overlap.
+
+#### `is_subset(a: Bitboard, b: Bitboard) -> bool`
+Checks if first bitboard is subset of second.
+
+## Bit Iterator
+
+### Basic Iterator
+
+#### `bits(bb: Bitboard) -> BitIterator`
+Creates iterator over set bits.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1010;
+for pos in bits(bb) {
+    println!("Bit at position: {}", pos);
+}
+```
+
+#### `BitIterator`
+Iterator that yields bit positions from LSB to MSB.
+
+**Methods**:
+- `new(bb: Bitboard) -> BitIterator`
+- `from_position(bb: Bitboard, start_pos: u8) -> BitIterator`
+- `peek() -> Option<u8>`
+- `skip(n: usize) -> BitIterator`
+- `count() -> usize`
+- `last() -> Option<u8>`
+- `nth(n: usize) -> Option<u8>`
+
+### Reverse Iterator
+
+#### `bits_rev(bb: Bitboard) -> ReverseBitIterator`
+Creates reverse iterator over set bits.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let bb: Bitboard = 0b1010;
+for pos in bb.bits_rev() {
+    println!("Bit at position: {}", pos);
+}
+```
+
+## Square Coordinate Conversion
+
+### Basic Conversion
+
+#### `bit_to_square(bit_pos: u8) -> Position`
+Converts bit position to Position struct.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let pos = bit_to_square(40);  // Returns Position { row: 4, col: 4 }
+```
+
+#### `square_to_bit(square: Position) -> u8`
+Converts Position struct to bit position.
+
+#### `bit_to_coords(bit_pos: u8) -> (u8, u8)`
+Converts bit position to (file, rank) coordinates.
+
+#### `coords_to_bit(file: u8, rank: u8) -> u8`
+Converts (file, rank) coordinates to bit position.
+
+### Algebraic Notation
+
+#### `bit_to_square_name(bit_pos: u8) -> String`
+Converts bit position to algebraic notation.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let name = bit_to_square_name(40);  // Returns "5e"
+```
+
+#### `square_name_to_bit(name: &str) -> u8`
+Converts algebraic notation to bit position.
+
+### Shogi-Specific Utilities
+
+#### `is_valid_shogi_square(bit_pos: u8) -> bool`
+Checks if bit position is valid for 9x9 Shogi board.
+
+#### `is_promotion_zone(bit_pos: u8, player: Player) -> bool`
+Checks if square is in promotion zone for given player.
+
+#### `square_distance(square1: u8, square2: u8) -> u8`
+Calculates distance between two squares.
+
+#### `promotion_zone_mask(player: Player) -> Bitboard`
+Returns bitboard mask for player's promotion zone.
+
+#### `get_center_squares() -> Vec<u8>`
+Returns vector of center square positions.
+
+#### `is_center_square(bit_pos: u8) -> bool`
+Checks if square is in center of board.
+
+## Platform Detection
+
+### Platform Capabilities
+
+#### `get_platform_capabilities() -> &PlatformCapabilities`
+Gets platform capabilities for optimization selection.
+
+**Example**:
+```rust
+use shogi_engine::bitboards::*;
+
+let caps = get_platform_capabilities();
+if caps.has_popcnt {
+    println!("POPCNT instruction available");
+}
+```
+
+#### `PlatformCapabilities`
+Structure containing platform capabilities:
+- `has_popcnt: bool` - POPCNT instruction available
+- `has_bmi1: bool` - BMI1 instructions available
+- `has_bmi2: bool` - BMI2 instructions available
+- `is_wasm: bool` - Running in WASM environment
+- `architecture: Architecture` - CPU architecture
+
+### Best Implementation Selection
+
+#### `get_best_popcount_impl() -> PopcountImpl`
+Gets best population count implementation for current platform.
+
+#### `get_best_bitscan_impl() -> BitscanImpl`
+Gets best bit scanning implementation for current platform.
+
+## API Modules
+
+### Core API
+
+#### `api::bitscan`
+Core bit-scanning functions with automatic optimization selection.
+
+**Functions**:
+- `popcount(bb: Bitboard) -> u32`
+- `bit_scan_forward(bb: Bitboard) -> Option<u8>`
+- `bit_scan_reverse(bb: Bitboard) -> Option<u8>`
+- `get_all_bit_positions(bb: Bitboard) -> Vec<u8>`
+
+#### `api::utils`
+Bit manipulation utility functions.
+
+**Functions**:
+- `extract_lsb(bb: Bitboard) -> (Bitboard, Bitboard)`
+- `extract_msb(bb: Bitboard) -> (Bitboard, Bitboard)`
+- `overlaps(a: Bitboard, b: Bitboard) -> bool`
+- `is_subset(a: Bitboard, b: Bitboard) -> bool`
+
+#### `api::squares`
+Square coordinate conversion functions.
+
+**Functions**:
+- `bit_to_square(bit_pos: u8) -> Position`
+- `square_to_bit(square: Position) -> u8`
+- `bit_to_square_name(bit_pos: u8) -> String`
+- `square_name_to_bit(name: &str) -> u8`
+
+#### `api::platform`
+Platform detection and optimization functions.
+
+**Functions**:
+- `create_optimizer() -> BitScanningOptimizer`
+- `get_platform_capabilities() -> &PlatformCapabilities`
+
+#### `api::analysis`
+Geometric analysis functions.
+
+**Functions**:
+- `analyze_geometry(bb: Bitboard) -> GeometricAnalysis`
+
+### Specialized Modules
+
+#### `api::lookup`
+Lookup table functions.
+
+#### `api::masks`
+Precomputed mask functions.
+
+#### `api::debruijn`
+De Bruijn sequence functions.
+
+## Backward Compatibility
+
+### Compatibility Functions
+
+#### `api::compat::count_bits(bb: Bitboard) -> u32`
+Legacy function for population count.
+
+**Deprecated**: Use `popcount()` instead.
+
+#### `api::compat::find_first_bit(bb: Bitboard) -> Option<u8>`
+Legacy function for bit scan forward.
+
+**Deprecated**: Use `bit_scan_forward()` instead.
+
+#### `api::compat::find_last_bit(bb: Bitboard) -> Option<u8>`
+Legacy function for bit scan reverse.
+
+**Deprecated**: Use `bit_scan_reverse()` instead.
+
+### Migration
+
+To migrate from legacy functions:
+
+```rust
+// Old code
+let count = count_bits(bb);
+let first = find_first_bit(bb);
+let last = find_last_bit(bb);
+
+// New code
+let count = popcount(bb);
+let first = bit_scan_forward(bb);
+let last = bit_scan_reverse(bb);
+```
 
 ## Performance Characteristics
 
-### Hardware Acceleration
+### Platform-Specific Performance
 
-The API automatically detects and uses available CPU features:
+| Function | x86_64 (POPCNT) | ARM64 | WASM |
+|----------|-----------------|-------|------|
+| `popcount` | ~1 cycle | ~3-5 cycles | ~3-8 cycles |
+| `bit_scan_forward` | ~1 cycle | ~2-4 cycles | ~3-6 cycles |
+| `bit_scan_reverse` | ~1 cycle | ~2-4 cycles | ~3-6 cycles |
 
-- **POPCNT**: x86_64 population count instruction
-- **BMI1**: Bit manipulation instruction set 1
-- **BMI2**: Bit manipulation instruction set 2
-- **ARM CLZ/CTZ**: Count leading/trailing zeros instructions
+### Optimization Levels
 
-### WASM Optimization
+1. **Hardware-Accelerated**: Uses CPU features for maximum performance
+2. **Cache-Optimized**: Uses cache-aligned lookup tables
+3. **Branch-Optimized**: Uses branch prediction hints
+4. **Critical Path**: Optimized for tight loops
+5. **Adaptive**: Automatically selects best implementation
 
-For WebAssembly environments:
+## Error Handling
 
-- **SWAR Algorithms**: SIMD Within A Register for parallel operations
-- **4-bit Lookup Tables**: Optimized for small bitboards
-- **De Bruijn Sequences**: Fast bit position finding
-- **No SIMD Dependencies**: Universal compatibility
+### Common Errors
 
-### Algorithm Selection
-
-The system automatically selects the best algorithm based on:
-
-1. **Platform Capabilities**: Hardware features available
-2. **Bitboard Characteristics**: Size, density, patterns
-3. **Environment**: Native vs WASM
-4. **Performance Requirements**: Speed vs memory trade-offs
-
-## Platform Support
-
-### Native Platforms
-
-- **x86_64**: Full hardware acceleration support
-- **ARM64**: Software optimizations with hardware fallbacks
-- **Other Architectures**: Generic software implementations
-
-### WebAssembly
-
-- **All WASM Targets**: Universal compatibility
-- **No SIMD Dependencies**: Works on all browsers
-- **Optimized Algorithms**: SWAR and lookup table optimizations
-
-## Usage Examples
-
-### Basic Bit Manipulation
-
+#### Empty Bitboard
 ```rust
-use shogi_engine::bitboards::api::{bitscan, utils};
-
-fn analyze_bitboard(bb: u128) {
-    // Count bits
-    let count = bitscan::popcount(bb);
-    println!("Bit count: {}", count);
-    
-    // Find positions
-    if let Some(lsb) = bitscan::bit_scan_forward(bb) {
-        println!("First bit at: {}", lsb);
-    }
-    
-    // Extract bits
-    let (lsb, remaining) = utils::extract_lsb(bb);
-    println!("LSB: 0x{:X}, Remaining: 0x{:X}", lsb, remaining);
-}
+let bb: Bitboard = 0;
+let pos = bit_scan_forward(bb);  // Returns None
 ```
 
-### Shogi Board Analysis
-
+#### Invalid Square Position
 ```rust
-use shogi_engine::bitboards::api::{squares, analysis};
-use shogi_engine::types::Player;
-
-fn analyze_shogi_position(bitboard: u128) {
-    // Analyze patterns
-    let analysis = analysis::analyze_bitboard(bitboard);
-    println!("Pattern analysis: {:?}", analysis);
-    
-    // Check promotion zones
-    for bit in bitscan::bits(bitboard) {
-        if squares::is_promotion_zone(bit, Player::Black) {
-            println!("Black promotion square: {}", squares::bit_to_square_name(bit));
-        }
-    }
-    
-    // Geometric analysis
-    let geo = analysis::analyze_geometry(bitboard);
-    println!("Rank distribution: {:?}", geo.rank_counts);
-}
+let pos = bit_to_square(200);  // Panics for invalid position
 ```
 
-### Performance Optimization
-
+#### Invalid Algebraic Notation
 ```rust
-use shogi_engine::bitboards::api::platform;
-
-fn optimized_operations() {
-    // Create platform-optimized instance
-    let optimizer = platform::create_optimizer();
-    
-    // Use for multiple operations
-    let results: Vec<u32> = bitboards.iter()
-        .map(|&bb| optimizer.popcount(bb))
-        .collect();
-    
-    // Platform information
-    let caps = platform::get_platform_capabilities();
-    if caps.has_popcnt {
-        println!("Using hardware-accelerated population count");
-    }
-}
+let pos = square_name_to_bit("z99");  // Panics for invalid notation
 ```
 
-## Migration Guide
+### Best Practices
 
-### From Legacy API
+1. **Always check for empty bitboards**:
+   ```rust
+   if let Some(pos) = bit_scan_forward(bb) {
+       // Process bit position
+   }
+   ```
 
-If you're using the old bit-scanning functions:
+2. **Validate square positions**:
+   ```rust
+   if is_valid_shogi_square(bit_pos) {
+       let square = bit_to_square(bit_pos);
+   }
+   ```
 
-```rust
-// Old API (deprecated)
-use shogi_engine::bitboards::api::compat;
+3. **Use appropriate optimization level**:
+   ```rust
+   // For tight loops
+   let count = popcount_critical(bb);
+   
+   // For common cases
+   let count = popcount_branch_optimized(bb);
+   
+   // For general use
+   let count = popcount(bb);
+   ```
 
-let count = compat::count_bits(bitboard);        // Deprecated
-let first = compat::find_first_bit(bitboard);    // Deprecated
-let last = compat::find_last_bit(bitboard);      // Deprecated
-
-// New API (recommended)
-use shogi_engine::bitboards::api::bitscan;
-
-let count = bitscan::popcount(bitboard);         // Recommended
-let first = bitscan::bit_scan_forward(bitboard); // Recommended
-let last = bitscan::bit_scan_reverse(bitboard);  // Recommended
-```
-
-### Module Organization
-
-The new API is organized into logical modules:
-
-```rust
-// Import specific modules as needed
-use shogi_engine::bitboards::api::{
-    bitscan,    // Core bit-scanning operations
-    utils,      // Bit manipulation utilities
-    squares,    // Coordinate conversion
-    platform,   // Platform detection
-    analysis,   // Performance analysis
-    lookup,     // Precomputed tables
-    compat      // Backward compatibility
-};
-```
-
-### Performance Improvements
-
-The new API provides significant performance improvements:
-
-- **Hardware Acceleration**: Automatic CPU feature detection
-- **Adaptive Selection**: Best algorithm for each operation
-- **WASM Optimization**: Specialized implementations for web
-- **Memory Efficiency**: Zero-allocation operations
-
-## Best Practices
-
-### 1. Use Appropriate Modules
-
-```rust
-// For basic bit operations
-use shogi_engine::bitboards::api::bitscan;
-
-// For Shogi-specific operations
-use shogi_engine::bitboards::api::squares;
-
-// For performance-critical code
-use shogi_engine::bitboards::api::platform;
-let optimizer = platform::create_optimizer();
-```
-
-### 2. Leverage Platform Optimization
-
-```rust
-// Check capabilities
-let caps = platform::get_platform_capabilities();
-if caps.has_popcnt {
-    // Use hardware-accelerated operations
-}
-
-// Create optimized instances for repeated operations
-let optimizer = platform::create_optimizer();
-for bitboard in large_collection {
-    let count = optimizer.popcount(bitboard);
-    // Process...
-}
-```
-
-### 3. Use Iterators for Bit Traversal
-
-```rust
-// Efficient bit iteration
-for pos in bitscan::bits(bitboard) {
-    // Process each bit position
-    process_square(pos);
-}
-
-// Reverse iteration when needed
-for pos in bitboard.bits_rev() {
-    // Process from MSB to LSB
-    process_square(pos);
-}
-```
-
-### 4. Validate Inputs
-
-```rust
-// Check if square is valid
-if squares::is_valid_shogi_square(bit) {
-    let name = squares::bit_to_square_name(bit);
-    println!("Valid square: {}", name);
-}
-```
-
-### 5. Use Analysis for Debugging
-
-```rust
-// Analyze bitboard patterns
-let analysis = analysis::analyze_bitboard(bitboard);
-println!("Debug info: {:?}", analysis);
-
-// Geometric analysis for Shogi
-let geo = analysis::analyze_geometry(bitboard);
-if geo.has_complete_lines() {
-    println!("Complete lines detected");
-}
-```
-
-## Conclusion
-
-The bit-scanning optimization API provides a comprehensive, high-performance solution for bit manipulation operations in Shogi engines. With automatic platform optimization, WASM compatibility, and extensive functionality, it serves as a solid foundation for efficient bitboard-based game engines.
-
-For more information, see the individual module documentation and the migration guide for transitioning from legacy APIs.
+This API reference provides complete documentation for all bit-scanning optimization functions. For usage examples, see `examples/bit-scanning-examples.rs` and for performance guidance, see `docs/bit-scanning-performance-guide.md`.
