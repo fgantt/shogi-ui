@@ -454,9 +454,15 @@ WebAssembly has several important constraints that affect bit-scanning optimizat
 
 1. **No CPU Feature Detection**: WASM cannot detect CPU features at runtime
 2. **Limited Intrinsics**: Many hardware-specific intrinsics are not available
-3. **No SIMD Instructions**: Basic WASM doesn't support SIMD (though WASM SIMD exists)
+3. **SIMD Support**: Basic WASM doesn't support SIMD, WASM SIMD extension exists but limited browser support
 4. **No Multi-threading**: WASM doesn't support true parallelism (multiple threads)
 5. **Performance Characteristics**: Different performance profile than native code
+
+### WASM SIMD Status
+
+- **WASM SIMD Extension**: Available but not universally supported
+- **Browser Support**: Limited (Chrome 91+, Firefox 89+, Safari 15.4+)
+- **Our Strategy**: Use basic SWAR for universal compatibility across all WASM implementations
 
 ### WASM-Optimized Implementation Strategy
 
@@ -474,16 +480,26 @@ pub const WASM_DEBRUIJN_TABLE: &[u8; 64] = &[
     46, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6
 ];
 
-// WASM-optimized popcount using SWAR algorithm
+// WASM-optimized popcount using basic SWAR algorithm
 #[cfg(target_arch = "wasm32")]
 pub fn popcount_wasm_optimized(bb: Bitboard) -> u32 {
-    // SWAR (SIMD Within A Register) bit counting - optimal for WASM
-    // Processes all 64 bits simultaneously using bitwise operations only
+    // Basic SWAR (SIMD Within A Register) bit counting - universal WASM compatibility
+    // Uses only basic bitwise operations supported by ALL WASM implementations
+    // Processes all 64 bits simultaneously without requiring SIMD extensions
     let mut x = bb;
     x = x - ((x >> 1) & 0x5555555555555555);  // Count bits in pairs
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);  // Count in groups of 4
     x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;  // Count in groups of 8
     ((x * 0x0101010101010101) >> 56) as u32   // Sum all groups
+}
+
+// Alternative: WASM SIMD version (when SIMD extension is available)
+#[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+pub fn popcount_wasm_simd(bb: Bitboard) -> u32 {
+    // WASM SIMD implementation for browsers that support it
+    // This is optional and only used if SIMD feature is explicitly enabled
+    // Falls back to basic SWAR if SIMD is not available
+    popcount_wasm_optimized(bb)  // For now, use basic SWAR
 }
 
 // WASM-optimized bit scanning using De Bruijn
@@ -502,9 +518,10 @@ pub fn bit_scan_forward_wasm_optimized(bb: Bitboard) -> Option<u8> {
 
 1. **Memory Access Patterns**: WASM has different memory access costs
 2. **Function Call Overhead**: Minimize function call overhead
-3. **Bit-Parallel Operations**: SWAR algorithms are optimal for WASM (no threading needed)
-4. **Loop Unrolling**: Consider manual loop unrolling for critical paths
-5. **Constant Folding**: Use compile-time constants where possible
+3. **Basic SWAR Algorithms**: Use only basic bitwise operations for universal compatibility
+4. **No SIMD Dependencies**: Avoid WASM SIMD extensions for maximum browser support
+5. **Loop Unrolling**: Consider manual loop unrolling for critical paths
+6. **Constant Folding**: Use compile-time constants where possible
 
 ### WASM Testing Strategy
 
@@ -522,6 +539,16 @@ mod wasm_tests {
             let expected = bb.count_ones();
             assert_eq!(result, expected);
         }
+    }
+    
+    #[test]
+    fn test_wasm_basic_swar_compatibility() {
+        // Verify basic SWAR works on all WASM implementations
+        // Uses only basic bitwise operations: &, |, ^, >>, <<, +, *
+        let test_bitboard = 0x123456789ABCDEF0;
+        let result = popcount_wasm_optimized(test_bitboard);
+        let expected = test_bitboard.count_ones();
+        assert_eq!(result, expected);
     }
     
     #[test]

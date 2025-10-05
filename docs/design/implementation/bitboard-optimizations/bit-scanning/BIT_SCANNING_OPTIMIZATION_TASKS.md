@@ -20,6 +20,7 @@ This document provides detailed implementation tasks for the bit-scanning optimi
 - [ ] Detects x86_64 POPCNT, BMI1, BMI2 support (native only)
 - [ ] Detects ARM CLZ, CTZ support (native only)
 - [ ] WASM environment properly detected and configured
+- [ ] No WASM SIMD dependencies (use basic SWAR for universal compatibility)
 - [ ] Provides graceful fallbacks for unsupported platforms
 - [ ] All functions have comprehensive unit tests
 - [ ] Performance benchmarks show < 1% overhead
@@ -67,13 +68,14 @@ pub fn detect_native_capabilities() -> PlatformCapabilities {
 
 **Deliverables**:
 - [ ] x86_64 POPCNT implementation
-- [ ] SWAR (bit-parallel) counting algorithm
+- [ ] Basic SWAR counting algorithm (WASM-compatible)
 - [ ] Software fallback implementation
 - [ ] Performance benchmarking suite
 
 **Acceptance Criteria**:
 - [ ] Hardware implementation 5-10x faster than software
-- [ ] SWAR implementation 3-5x faster than software
+- [ ] Basic SWAR implementation 3-5x faster than software
+- [ ] SWAR uses only basic bitwise operations (no SIMD dependencies)
 - [ ] All implementations produce identical results
 - [ ] Handles edge cases (0, single bits, all bits set)
 - [ ] Benchmark suite validates performance targets
@@ -83,7 +85,7 @@ pub fn detect_native_capabilities() -> PlatformCapabilities {
 #[cfg(target_arch = "x86_64")]
 pub fn popcount_hardware(bb: Bitboard) -> u32;
 
-pub fn popcount_bit_parallel(bb: Bitboard) -> u32;  // SWAR algorithm
+pub fn popcount_bit_parallel(bb: Bitboard) -> u32;  // Basic SWAR (WASM-compatible)
 pub fn popcount_software(bb: Bitboard) -> u32;
 pub fn popcount_optimized(bb: Bitboard) -> u32;
 ```
@@ -544,7 +546,8 @@ mod performance_tests {
 **Acceptance Criteria**:
 - [ ] Code compiles to WASM without errors
 - [ ] Functions work correctly in browser environment
-- [ ] WASM performance meets targets (SWAR algorithms)
+- [ ] WASM performance meets targets (basic SWAR algorithms)
+- [ ] No WASM SIMD dependencies (universal compatibility)
 - [ ] No WASM-specific regressions
 - [ ] Cross-browser compatibility verified
 
@@ -577,7 +580,7 @@ mod wasm_tests {
 - [ ] 10-20% improvement in bitboard operations
 - [ ] < 5 CPU cycles for popcount operations (native)
 - [ ] < 10 CPU cycles for bit-scan operations (native)
-- [ ] WASM performance competitive with SWAR (bit-parallel) algorithms
+- [ ] WASM performance competitive with basic SWAR algorithms (universal compatibility)
 - [ ] No additional memory allocation
 
 ### Quality Requirements
