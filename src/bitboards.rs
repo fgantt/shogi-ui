@@ -9,6 +9,15 @@ pub mod platform_detection;
 pub mod popcount;
 pub mod bitscan;
 
+// Re-export commonly used functions for convenience
+pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
+pub use popcount::{popcount, popcount_optimized, is_single_bit, is_multiple_bits, is_empty};
+pub use bitscan::{
+    bit_scan_forward, bit_scan_reverse, 
+    clear_lsb, clear_msb, isolate_lsb, isolate_msb,
+    get_all_bit_positions, bit_scan_optimized
+};
+
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {
     pieces: [[Bitboard; 14]; 2],

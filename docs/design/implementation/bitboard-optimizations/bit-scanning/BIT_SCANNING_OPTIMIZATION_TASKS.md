@@ -124,17 +124,17 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8>;
 **Files**: `src/bitboards/mod.rs`, `tests/`
 
 **Deliverables**:
-- [ ] Module integration
-- [ ] Cross-platform compatibility tests
-- [ ] Performance regression tests
-- [ ] Documentation updates
+- [x] Module integration
+- [x] Cross-platform compatibility tests
+- [x] Performance regression tests
+- [x] Documentation updates
 
 **Acceptance Criteria**:
-- [ ] All functions accessible through public API
-- [ ] Cross-platform tests pass on x86_64 and ARM
-- [ ] Performance tests validate speed improvements
-- [ ] No regressions in existing functionality
-- [ ] API documentation is complete
+- [x] All functions accessible through public API
+- [x] Cross-platform tests pass on x86_64 and ARM
+- [x] Performance tests validate speed improvements
+- [x] No regressions in existing functionality
+- [x] API documentation is complete
 
 **Dependencies**: Tasks 1.1, 1.2, 1.3
 **Estimated Time**: 1 day
