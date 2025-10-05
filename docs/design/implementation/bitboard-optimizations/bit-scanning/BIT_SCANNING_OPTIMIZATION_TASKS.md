@@ -313,17 +313,17 @@ pub fn bit_positions(bb: Bitboard) -> Vec<u8>;
 **File**: `src/bitboards/square_utils.rs`
 
 **Deliverables**:
-- [ ] Bit position to square conversion
-- [ ] Square to bit position conversion
-- [ ] Coordinate system conversion
-- [ ] Shogi-specific utilities
+- [x] Bit position to square conversion
+- [x] Square to bit position conversion
+- [x] Coordinate system conversion
+- [x] Shogi-specific utilities
 
 **Acceptance Criteria**:
-- [ ] All conversions are correct for 9x9 board
-- [ ] Performance is optimal (no unnecessary computation)
-- [ ] Integration with existing Square type
-- [ ] Error handling for invalid inputs
-- [ ] Comprehensive validation tests
+- [x] All conversions are correct for 9x9 board
+- [x] Performance is optimal (no unnecessary computation)
+- [x] Integration with existing Square type
+- [x] Error handling for invalid inputs
+- [x] Comprehensive validation tests
 
 **Implementation Details**:
 ```rust
