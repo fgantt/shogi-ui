@@ -379,6 +379,8 @@ pub fn compare_4bit_lookup_performance(iterations: u32) -> (f64, f64) {
             count += 1;
             bits &= bits - 1;
         }
+        // Use count to prevent compiler warning (benchmark only)
+        std::hint::black_box(count);
     }
     let software_duration = start.elapsed().as_nanos() as u64;
     
