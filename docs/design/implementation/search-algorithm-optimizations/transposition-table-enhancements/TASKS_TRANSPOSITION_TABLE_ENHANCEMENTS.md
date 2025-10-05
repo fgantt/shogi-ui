@@ -19,16 +19,18 @@ This document provides a comprehensive task list for implementing transposition 
 - [ ] **1.1.2**: Implement `ZobristTable` struct with random key generation
 - [ ] **1.1.3**: Add piece position hash keys (14 piece types × 81 positions)
 - [ ] **1.1.4**: Add side-to-move hash key
-- [ ] **1.1.5**: Add castling rights hash keys (4 possibilities)
-- [ ] **1.1.6**: Add en passant hash keys (81 squares)
+- [ ] **1.1.5**: Add hand pieces hash keys (14 piece types × 8 counts)
+- [ ] **1.1.6**: Add repetition tracking hash keys (4 states)
 - [ ] **1.1.7**: Implement `hash_position()` method
 - [ ] **1.1.8**: Implement `update_hash_for_move()` method
 - [ ] **1.1.9**: Create global `ZOBRIST_TABLE` instance
 - [ ] **1.1.10**: Add unit tests for hash key generation
 
 **Acceptance Criteria**:
-- Hash keys are unique for different positions
-- Hash updates are consistent with position changes
+- Hash keys are unique for different Shogi positions
+- Hash updates are consistent with position changes (including drops and captures)
+- Hand piece tracking works correctly for drop moves
+- Repetition detection is properly integrated
 - All tests pass with 100% coverage
 
 #### Task 1.2: Transposition Entry Structure
@@ -69,25 +71,45 @@ This document provides a comprehensive task list for implementing transposition 
 - [ ] **1.4.1**: Create `BoardTrait` for Zobrist hashing
 - [ ] **1.4.2**: Implement trait methods in `BitboardBoard`
 - [ ] **1.4.3**: Add piece position checking methods
-- [ ] **1.4.4**: Add castling rights checking methods
-- [ ] **1.4.5**: Add en passant square checking methods
+- [ ] **1.4.4**: Add pieces in hand checking methods
+- [ ] **1.4.5**: Add repetition state checking methods
 - [ ] **1.4.6**: Update existing board implementation
 - [ ] **1.4.7**: Add integration tests
 
 **Acceptance Criteria**:
-- Board trait provides all needed methods
+- Board trait provides all Shogi-specific methods
+- Hand piece management is properly integrated
+- Repetition tracking works correctly
+- Drop move handling is implemented
 - Integration with existing board works seamlessly
 - No performance regression in board operations
 
+#### Task 1.5: Shogi-Specific Features
+- [ ] **1.5.1**: Implement drop move hash handling
+- [ ] **1.5.2**: Implement capture-to-hand hash updates
+- [ ] **1.5.3**: Implement promotion hash handling
+- [ ] **1.5.4**: Add repetition position tracking
+- [ ] **1.5.5**: Implement hand piece counting in hash
+- [ ] **1.5.6**: Add Shogi-specific move validation
+- [ ] **1.5.7**: Test with known Shogi positions
+- [ ] **1.5.8**: Validate hash uniqueness for Shogi scenarios
+
+**Acceptance Criteria**:
+- All Shogi move types are properly handled in hash generation
+- Drop moves and captures work correctly
+- Repetition detection is accurate
+- Hand piece tracking is consistent
+- Hash keys are unique for all Shogi positions
+
 ### Low Priority Tasks
 
-#### Task 1.5: Configuration System
-- [ ] **1.5.1**: Create `TranspositionConfig` struct
-- [ ] **1.5.2**: Add configuration options for table size
-- [ ] **1.5.3**: Add configuration options for replacement policy
-- [ ] **1.5.4**: Implement configuration loading from file
-- [ ] **1.5.5**: Add configuration validation
-- [ ] **1.5.6**: Add unit tests for configuration
+#### Task 1.6: Configuration System
+- [ ] **1.6.1**: Create `TranspositionConfig` struct
+- [ ] **1.6.2**: Add configuration options for table size
+- [ ] **1.6.3**: Add configuration options for replacement policy
+- [ ] **1.6.4**: Implement configuration loading from file
+- [ ] **1.6.5**: Add configuration validation
+- [ ] **1.6.6**: Add unit tests for configuration
 
 **Acceptance Criteria**:
 - Configuration system is flexible and extensible
@@ -291,32 +313,40 @@ This document provides a comprehensive task list for implementing transposition 
 ## Testing Strategy
 
 ### Unit Tests
-- [ ] **Test 1**: Zobrist hash key generation
-- [ ] **Test 2**: Hash key uniqueness
-- [ ] **Test 3**: Hash key updates
-- [ ] **Test 4**: Transposition entry operations
-- [ ] **Test 5**: Table storage and retrieval
-- [ ] **Test 6**: Replacement policies
-- [ ] **Test 7**: Thread safety
-- [ ] **Test 8**: Error handling
+- [ ] **Test 1**: Zobrist hash key generation for Shogi positions
+- [ ] **Test 2**: Hash key uniqueness across different Shogi positions
+- [ ] **Test 3**: Hash key updates for drop moves
+- [ ] **Test 4**: Hash key updates for captures (pieces to hand)
+- [ ] **Test 5**: Hash key updates for promotions
+- [ ] **Test 6**: Hand piece tracking in hash keys
+- [ ] **Test 7**: Repetition state tracking
+- [ ] **Test 8**: Transposition entry operations
+- [ ] **Test 9**: Table storage and retrieval
+- [ ] **Test 10**: Replacement policies
+- [ ] **Test 11**: Thread safety
+- [ ] **Test 12**: Error handling
 
 ### Integration Tests
-- [ ] **Test 9**: Search algorithm integration
-- [ ] **Test 10**: Move ordering integration
-- [ ] **Test 11**: Board trait integration
-- [ ] **Test 12**: Configuration system
-- [ ] **Test 13**: Performance benchmarks
-- [ ] **Test 14**: Memory usage validation
-- [ ] **Test 15**: WASM compatibility validation
-- [ ] **Test 16**: Cross-platform performance testing
+- [ ] **Test 13**: Search algorithm integration with Shogi positions
+- [ ] **Test 14**: Move ordering integration with drop moves
+- [ ] **Test 15**: Board trait integration with hand pieces
+- [ ] **Test 16**: Configuration system
+- [ ] **Test 17**: Performance benchmarks with Shogi-specific positions
+- [ ] **Test 18**: Memory usage validation
+- [ ] **Test 19**: WASM compatibility validation
+- [ ] **Test 20**: Cross-platform performance testing
+- [ ] **Test 21**: Drop move performance testing
+- [ ] **Test 22**: Repetition detection integration
 
 ### Performance Tests
-- [ ] **Test 15**: Hash generation performance
-- [ ] **Test 16**: Table operations performance
-- [ ] **Test 17**: Search performance improvement
-- [ ] **Test 18**: Memory usage efficiency
-- [ ] **Test 19**: Thread safety overhead
-- [ ] **Test 20**: Cache hit rate optimization
+- [ ] **Test 23**: Hash generation performance for Shogi positions
+- [ ] **Test 24**: Table operations performance with hand piece tracking
+- [ ] **Test 25**: Search performance improvement with drop moves
+- [ ] **Test 26**: Memory usage efficiency
+- [ ] **Test 27**: Thread safety overhead
+- [ ] **Test 28**: Cache hit rate optimization
+- [ ] **Test 29**: Drop move hash performance
+- [ ] **Test 30**: Repetition tracking performance
 
 ## Quality Assurance
 
@@ -367,9 +397,9 @@ This document provides a comprehensive task list for implementing transposition 
 ## Timeline
 
 ### Week 1: Core Infrastructure
-- **Days 1-2**: Zobrist hashing system
-- **Days 3-4**: Transposition entry structure
-- **Days 5-7**: Basic transposition table
+- **Days 1-2**: Zobrist hashing system with Shogi-specific features
+- **Days 3-4**: Transposition entry structure and Shogi move handling
+- **Days 5-7**: Basic transposition table and Shogi-specific testing
 
 ### Week 2: Advanced Features
 - **Days 1-3**: Replacement policies and cache management
