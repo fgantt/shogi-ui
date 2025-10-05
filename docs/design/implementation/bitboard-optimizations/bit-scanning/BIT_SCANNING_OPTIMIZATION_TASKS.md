@@ -426,18 +426,18 @@ pub fn popcount_optimized(bb: Bitboard) -> u32;
 **Files**: `tests/bitscan_tests.rs`, `benches/bitscan_benchmarks.rs`
 
 **Deliverables**:
-- [ ] Unit tests for all functions
-- [ ] Integration tests
-- [ ] Performance benchmarks
-- [ ] Cross-platform testing
-- [ ] Regression testing
+- [x] Unit tests for all functions
+- [x] Integration tests
+- [x] Performance benchmarks
+- [x] Cross-platform testing
+- [x] Regression testing
 
 **Acceptance Criteria**:
-- [ ] 100% test coverage for bit-scanning code
-- [ ] All tests pass on target platforms
-- [ ] Performance benchmarks validate targets
-- [ ] No performance regressions
-- [ ] Edge cases are thoroughly tested
+- [x] 100% test coverage for bit-scanning code
+- [x] All tests pass on target platforms
+- [x] Performance benchmarks validate targets
+- [x] No performance regressions
+- [x] Edge cases are thoroughly tested
 
 **Implementation Details**:
 ```rust
