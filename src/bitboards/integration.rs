@@ -97,9 +97,12 @@ impl BitScanningOptimizer {
         if self.platform_caps.has_bmi1 && !self.platform_caps.is_wasm {
             // Hardware acceleration available
             self.bit_scan_forward_hardware(bb)
-        } else {
-            // De Bruijn sequences - best software fallback
+        } else if !self.platform_caps.is_wasm {
+            // De Bruijn sequences - best software fallback for native
             bit_scan_forward_debruijn(bb)
+        } else {
+            // WASM environment - use basic software implementation for simplicity
+            self.bit_scan_forward_software(bb)
         }
     }
     
@@ -119,9 +122,12 @@ impl BitScanningOptimizer {
         if self.platform_caps.has_bmi1 && !self.platform_caps.is_wasm {
             // Hardware acceleration available
             self.bit_scan_reverse_hardware(bb)
-        } else {
-            // De Bruijn sequences - best software fallback
+        } else if !self.platform_caps.is_wasm {
+            // De Bruijn sequences - best software fallback for native
             bit_scan_reverse_debruijn(bb)
+        } else {
+            // WASM environment - use basic software implementation for simplicity
+            self.bit_scan_reverse_software(bb)
         }
     }
     
