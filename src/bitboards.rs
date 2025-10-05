@@ -17,6 +17,7 @@ pub mod bit_utils;
 pub mod square_utils;
 pub mod api;
 pub mod cache_opt;
+pub mod branch_opt;
 
 // Re-export commonly used functions for convenience
 pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
@@ -60,6 +61,19 @@ pub use cache_opt::{
     CacheAlignedRankMasks, CacheAlignedFileMasks,
     prefetch_bitboard, prefetch_bitboard_sequence, process_bitboard_sequence,
     popcount_cache_optimized, get_bit_positions_cache_optimized
+};
+pub use branch_opt::{
+    optimized::{
+        bit_scan_forward_optimized, bit_scan_reverse_optimized, popcount_optimized as popcount_branch_optimized,
+        overlaps_optimized, is_subset_optimized
+    },
+    common_cases::{
+        is_single_piece_optimized, is_multiple_pieces_optimized, is_empty_optimized,
+        is_not_empty_optimized, single_piece_position_optimized
+    },
+    critical_paths::{
+        popcount_critical, bit_scan_forward_critical
+    }
 };
 
 /// Bitboard-based board representation for efficient Shogi operations

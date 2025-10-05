@@ -401,17 +401,17 @@ pub fn process_bitboard_sequence(bitboards: &[Bitboard]) -> Vec<u32>;
 **Files**: `src/bitboards/branch_opt.rs`, `src/bitboards/mod.rs`
 
 **Deliverables**:
-- [ ] Branch prediction hints
-- [ ] Common case optimization
-- [ ] Performance-critical path optimization
-- [ ] Benchmarking improvements
+- [x] Branch prediction hints
+- [x] Common case optimization
+- [x] Performance-critical path optimization
+- [x] Benchmarking improvements
 
 **Acceptance Criteria**:
-- [ ] Branch prediction hints improve performance
-- [ ] Common cases are optimized
-- [ ] Performance benchmarks show improvement
-- [ ] No correctness regressions
-- [ ] Cross-platform compatibility maintained
+- [x] Branch prediction hints improve performance
+- [x] Common cases are optimized
+- [x] Performance benchmarks show improvement
+- [x] No correctness regressions
+- [x] Cross-platform compatibility maintained
 
 **Implementation Details**:
 ```rust
