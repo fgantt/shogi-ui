@@ -8,6 +8,7 @@ pub mod attack_patterns;
 pub mod platform_detection;
 pub mod popcount;
 pub mod bitscan;
+pub mod debruijn;
 
 // Re-export commonly used functions for convenience
 pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};

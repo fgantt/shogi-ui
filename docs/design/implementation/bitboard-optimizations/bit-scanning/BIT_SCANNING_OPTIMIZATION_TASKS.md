@@ -145,17 +145,17 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8>;
 **File**: `src/bitboards/debruijn.rs`
 
 **Deliverables**:
-- [ ] De Bruijn sequence lookup table
-- [ ] Bit scanning using De Bruijn method
-- [ ] Performance optimization
-- [ ] Comprehensive testing
+- [x] De Bruijn sequence lookup table
+- [x] Bit scanning using De Bruijn method
+- [x] Performance optimization
+- [x] Comprehensive testing
 
 **Acceptance Criteria**:
-- [ ] De Bruijn implementation faster than software fallback
-- [ ] Lookup table correctly indexed
-- [ ] All bit positions correctly mapped
-- [ ] Memory usage < 64 bytes for lookup table
-- [ ] Performance benchmarks show improvement
+- [x] De Bruijn implementation faster than software fallback
+- [x] Lookup table correctly indexed
+- [x] All bit positions correctly mapped
+- [x] Memory usage < 64 bytes for lookup table
+- [x] Performance benchmarks show improvement
 
 **Implementation Details**:
 ```rust

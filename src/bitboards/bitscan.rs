@@ -209,18 +209,7 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_forward_debruijn(bb: Bitboard) -> Option<u8> {
-    if bb == 0 {
-        return None;
-    }
-    
-    // For u128, we need to check both halves
-    let low = bb as u64;
-    if low != 0 {
-        Some(bit_scan_forward_debruijn_64(low))
-    } else {
-        let high = (bb >> 64) as u64;
-        Some(bit_scan_forward_debruijn_64(high) + 64)
-    }
+    crate::bitboards::debruijn::bit_scan_forward_debruijn(bb)
 }
 
 /// De Bruijn sequence bit scan reverse implementation
@@ -234,44 +223,9 @@ pub fn bit_scan_forward_debruijn(bb: Bitboard) -> Option<u8> {
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_reverse_debruijn(bb: Bitboard) -> Option<u8> {
-    if bb == 0 {
-        return None;
-    }
-    
-    // For u128, we need to check both halves
-    let high = (bb >> 64) as u64;
-    if high != 0 {
-        Some(bit_scan_reverse_debruijn_64(high) + 64)
-    } else {
-        let low = bb as u64;
-        Some(bit_scan_reverse_debruijn_64(low))
-    }
+    crate::bitboards::debruijn::bit_scan_reverse_debruijn(bb)
 }
 
-/// 64-bit De Bruijn sequence for bit scan forward
-const DEBRUIJN64: u64 = 0x03f79d71b4cb0a89;
-
-/// Lookup table for bit positions using De Bruijn sequence
-const DEBRUIJN_TABLE: [u8; 64] = [
-    0, 1, 48, 2, 57, 49, 28, 3, 61, 58, 50, 42, 38, 29, 17, 4,
-    62, 55, 59, 36, 53, 51, 43, 22, 45, 39, 33, 30, 24, 18, 12, 5,
-    63, 47, 56, 27, 60, 41, 37, 16, 54, 35, 52, 21, 44, 32, 23, 11,
-    46, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6
-];
-
-/// 64-bit De Bruijn bit scan forward
-fn bit_scan_forward_debruijn_64(bb: u64) -> u8 {
-    let isolated = bb & (!bb + 1); // Isolate least significant bit
-    DEBRUIJN_TABLE[((isolated * DEBRUIJN64) >> 58) as usize]
-}
-
-/// 64-bit De Bruijn bit scan reverse
-fn bit_scan_reverse_debruijn_64(bb: u64) -> u8 {
-    // For reverse scan, we need to find the most significant bit
-    // We can use the same De Bruijn approach but need to isolate the MSB
-    let msb = if bb != 0 { 1 << (63 - bb.leading_zeros()) } else { 0 };
-    DEBRUIJN_TABLE[((msb * DEBRUIJN64) >> 58) as usize]
-}
 
 /// Software fallback bit scan forward implementation
 /// 
@@ -603,7 +557,7 @@ mod tests {
     #[test]
     fn test_get_all_bit_positions() {
         // Test empty bitboard
-        assert_eq!(get_all_bit_positions(0), vec![]);
+        assert_eq!(get_all_bit_positions(0), Vec::<u8>::new());
         
         // Test single bit
         assert_eq!(get_all_bit_positions(1), vec![0]);
