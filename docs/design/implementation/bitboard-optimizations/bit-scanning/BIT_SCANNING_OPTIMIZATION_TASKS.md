@@ -252,17 +252,17 @@ pub fn get_diagonal_mask(diagonal: u8) -> Bitboard;
 **File**: `src/bitboards/bit_iterator.rs`
 
 **Deliverables**:
-- [ ] Efficient bit iterator
-- [ ] Iterator trait implementation
-- [ ] Performance optimization
-- [ ] Memory-efficient design
+- [x] Efficient bit iterator
+- [x] Iterator trait implementation
+- [x] Performance optimization
+- [x] Memory-efficient design
 
 **Acceptance Criteria**:
-- [ ] Iterator produces correct bit positions
-- [ ] No heap allocation during iteration
-- [ ] Performance comparable to manual bit scanning
-- [ ] Supports size_hint for optimization
-- [ ] Comprehensive iterator testing
+- [x] Iterator produces correct bit positions
+- [x] No heap allocation during iteration
+- [x] Performance comparable to manual bit scanning
+- [x] Supports size_hint for optimization
+- [x] Comprehensive iterator testing
 
 **Implementation Details**:
 ```rust
@@ -285,17 +285,17 @@ impl Iterator for BitIterator {
 **File**: `src/bitboards/bit_utils.rs`
 
 **Deliverables**:
-- [ ] LSB/MSB isolation functions
-- [ ] LSB/MSB clearing functions
-- [ ] Bit position extraction
-- [ ] Utility function collection
+- [x] LSB/MSB isolation functions
+- [x] LSB/MSB clearing functions
+- [x] Bit position extraction
+- [x] Utility function collection
 
 **Acceptance Criteria**:
-- [ ] All utility functions are correct
-- [ ] Performance is optimal (single instruction where possible)
-- [ ] Edge cases are handled properly
-- [ ] Functions are well-documented
-- [ ] Comprehensive test coverage
+- [x] All utility functions are correct
+- [x] Performance is optimal (single instruction where possible)
+- [x] Edge cases are handled properly
+- [x] Functions are well-documented
+- [x] Comprehensive test coverage
 
 **Implementation Details**:
 ```rust
