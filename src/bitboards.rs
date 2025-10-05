@@ -6,6 +6,7 @@ pub mod magic;
 pub mod sliding_moves;
 pub mod attack_patterns;
 pub mod platform_detection;
+pub mod popcount;
 
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {

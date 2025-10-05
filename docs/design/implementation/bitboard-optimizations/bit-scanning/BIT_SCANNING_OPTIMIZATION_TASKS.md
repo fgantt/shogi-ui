@@ -67,18 +67,18 @@ pub fn detect_native_capabilities() -> PlatformCapabilities {
 **File**: `src/bitboards/popcount.rs`
 
 **Deliverables**:
-- [ ] x86_64 POPCNT implementation
-- [ ] Basic SWAR counting algorithm (WASM-compatible)
-- [ ] Software fallback implementation
-- [ ] Performance benchmarking suite
+- [x] x86_64 POPCNT implementation
+- [x] Basic SWAR counting algorithm (WASM-compatible)
+- [x] Software fallback implementation
+- [x] Performance benchmarking suite
 
 **Acceptance Criteria**:
-- [ ] Hardware implementation 5-10x faster than software
-- [ ] Basic SWAR implementation 3-5x faster than software
-- [ ] SWAR uses only basic bitwise operations (no SIMD dependencies)
-- [ ] All implementations produce identical results
-- [ ] Handles edge cases (0, single bits, all bits set)
-- [ ] Benchmark suite validates performance targets
+- [x] Hardware implementation 5-10x faster than software
+- [x] Basic SWAR implementation 3-5x faster than software
+- [x] SWAR uses only basic bitwise operations (no SIMD dependencies)
+- [x] All implementations produce identical results
+- [x] Handles edge cases (0, single bits, all bits set)
+- [x] Benchmark suite validates performance targets
 
 **Implementation Details**:
 ```rust
