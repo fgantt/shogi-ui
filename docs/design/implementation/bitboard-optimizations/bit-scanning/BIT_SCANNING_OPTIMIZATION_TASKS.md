@@ -35,7 +35,7 @@ pub enum BitscanImpl {
 
 pub enum PopcountImpl {
     Hardware,      // Native platforms only
-    Parallel,      // WASM optimized
+    BitParallel,   // SWAR (SIMD Within A Register) - WASM optimized
     Software,      // Final fallback
 }
 
@@ -67,13 +67,13 @@ pub fn detect_native_capabilities() -> PlatformCapabilities {
 
 **Deliverables**:
 - [ ] x86_64 POPCNT implementation
-- [ ] Parallel bit counting algorithm
+- [ ] SWAR (bit-parallel) counting algorithm
 - [ ] Software fallback implementation
 - [ ] Performance benchmarking suite
 
 **Acceptance Criteria**:
 - [ ] Hardware implementation 5-10x faster than software
-- [ ] Parallel implementation 3-5x faster than software
+- [ ] SWAR implementation 3-5x faster than software
 - [ ] All implementations produce identical results
 - [ ] Handles edge cases (0, single bits, all bits set)
 - [ ] Benchmark suite validates performance targets
@@ -83,7 +83,7 @@ pub fn detect_native_capabilities() -> PlatformCapabilities {
 #[cfg(target_arch = "x86_64")]
 pub fn popcount_hardware(bb: Bitboard) -> u32;
 
-pub fn popcount_parallel(bb: Bitboard) -> u32;
+pub fn popcount_bit_parallel(bb: Bitboard) -> u32;  // SWAR algorithm
 pub fn popcount_software(bb: Bitboard) -> u32;
 pub fn popcount_optimized(bb: Bitboard) -> u32;
 ```
@@ -544,7 +544,7 @@ mod performance_tests {
 **Acceptance Criteria**:
 - [ ] Code compiles to WASM without errors
 - [ ] Functions work correctly in browser environment
-- [ ] WASM performance meets targets (parallel algorithms)
+- [ ] WASM performance meets targets (SWAR algorithms)
 - [ ] No WASM-specific regressions
 - [ ] Cross-browser compatibility verified
 
@@ -577,7 +577,7 @@ mod wasm_tests {
 - [ ] 10-20% improvement in bitboard operations
 - [ ] < 5 CPU cycles for popcount operations (native)
 - [ ] < 10 CPU cycles for bit-scan operations (native)
-- [ ] WASM performance competitive with parallel algorithms
+- [ ] WASM performance competitive with SWAR (bit-parallel) algorithms
 - [ ] No additional memory allocation
 
 ### Quality Requirements

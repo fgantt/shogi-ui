@@ -41,7 +41,7 @@ pub enum BitscanImpl {
 
 pub enum PopcountImpl {
     Hardware,      // Native popcnt instruction (x86_64 only)
-    Parallel,      // Parallel bit counting
+    BitParallel,   // SWAR (SIMD Within A Register) bit counting
     Software,      // Generic software implementation (WASM fallback)
 }
 
@@ -92,14 +92,15 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
     unsafe { std::arch::x86_64::_popcnt64(bb as i64) as u32 }
 }
 
-// WASM-compatible parallel bit counting algorithm
-pub fn popcount_parallel(bb: Bitboard) -> u32 {
-    // Parallel bit counting algorithm - works on all platforms including WASM
+// WASM-compatible bit-parallel counting algorithm (SWAR)
+pub fn popcount_bit_parallel(bb: Bitboard) -> u32 {
+    // SWAR (SIMD Within A Register) algorithm - processes all 64 bits simultaneously
+    // Works on all platforms including WASM using only bitwise operations
     let mut x = bb;
-    x = x - ((x >> 1) & 0x5555555555555555);
-    x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
-    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-    ((x * 0x0101010101010101) >> 56) as u32
+    x = x - ((x >> 1) & 0x5555555555555555);  // Count bits in pairs
+    x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);  // Count in groups of 4
+    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;  // Count in groups of 8
+    ((x * 0x0101010101010101) >> 56) as u32   // Sum all groups
 }
 
 // WASM-compatible software implementation
@@ -120,18 +121,18 @@ pub fn popcount(bb: Bitboard) -> u32 {
         if has_popcnt_support() {
             popcount_hardware(bb)
         } else {
-            popcount_parallel(bb)
+            popcount_bit_parallel(bb)  // Use SWAR algorithm as fallback
         }
     }
     
     #[cfg(target_arch = "wasm32")]
     {
-        popcount_parallel(bb) // Use parallel algorithm for WASM
+        popcount_bit_parallel(bb) // Use SWAR algorithm for WASM (optimal for web)
     }
     
     #[cfg(not(any(target_arch = "x86_64", target_arch = "wasm32")))]
     {
-        popcount_parallel(bb) // Use parallel algorithm for other architectures
+        popcount_bit_parallel(bb) // Use SWAR algorithm for other architectures
     }
 }
 ```
@@ -443,6 +444,10 @@ pub fn popcount_optimized(bb: Bitboard) -> u32 {
 
 ## WebAssembly (WASM) Compatibility
 
+### Terminology Clarification
+
+**Important**: The term "parallel" in this context refers to **bit-parallel algorithms** (SWAR - SIMD Within A Register), not multi-threaded parallelism. These algorithms process multiple bits simultaneously using bitwise operations within a single instruction, making them perfect for WASM which doesn't support threading.
+
 ### WASM Constraints and Limitations
 
 WebAssembly has several important constraints that affect bit-scanning optimization:
@@ -450,7 +455,8 @@ WebAssembly has several important constraints that affect bit-scanning optimizat
 1. **No CPU Feature Detection**: WASM cannot detect CPU features at runtime
 2. **Limited Intrinsics**: Many hardware-specific intrinsics are not available
 3. **No SIMD Instructions**: Basic WASM doesn't support SIMD (though WASM SIMD exists)
-4. **Performance Characteristics**: Different performance profile than native code
+4. **No Multi-threading**: WASM doesn't support true parallelism (multiple threads)
+5. **Performance Characteristics**: Different performance profile than native code
 
 ### WASM-Optimized Implementation Strategy
 
@@ -468,15 +474,16 @@ pub const WASM_DEBRUIJN_TABLE: &[u8; 64] = &[
     46, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6
 ];
 
-// WASM-optimized popcount using parallel algorithm
+// WASM-optimized popcount using SWAR algorithm
 #[cfg(target_arch = "wasm32")]
 pub fn popcount_wasm_optimized(bb: Bitboard) -> u32 {
-    // Parallel bit counting - optimal for WASM
+    // SWAR (SIMD Within A Register) bit counting - optimal for WASM
+    // Processes all 64 bits simultaneously using bitwise operations only
     let mut x = bb;
-    x = x - ((x >> 1) & 0x5555555555555555);
-    x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
-    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-    ((x * 0x0101010101010101) >> 56) as u32
+    x = x - ((x >> 1) & 0x5555555555555555);  // Count bits in pairs
+    x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);  // Count in groups of 4
+    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;  // Count in groups of 8
+    ((x * 0x0101010101010101) >> 56) as u32   // Sum all groups
 }
 
 // WASM-optimized bit scanning using De Bruijn
@@ -495,8 +502,9 @@ pub fn bit_scan_forward_wasm_optimized(bb: Bitboard) -> Option<u8> {
 
 1. **Memory Access Patterns**: WASM has different memory access costs
 2. **Function Call Overhead**: Minimize function call overhead
-3. **Loop Unrolling**: Consider manual loop unrolling for critical paths
-4. **Constant Folding**: Use compile-time constants where possible
+3. **Bit-Parallel Operations**: SWAR algorithms are optimal for WASM (no threading needed)
+4. **Loop Unrolling**: Consider manual loop unrolling for critical paths
+5. **Constant Folding**: Use compile-time constants where possible
 
 ### WASM Testing Strategy
 
