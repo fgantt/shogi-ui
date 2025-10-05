@@ -4329,10 +4329,11 @@ impl SearchEngine {
             
             // Recovery: Ensure alpha < beta
             if *alpha >= *beta {
-                let center = (*alpha + *beta) / 2;
+                // Use safe arithmetic to prevent overflow when alpha and beta are very large
+                let center = (*alpha as i64 + *beta as i64) / 2;
                 let half_window = window_size / 2;
-                *alpha = center.saturating_sub(half_window);
-                *beta = center.saturating_add(half_window);
+                *alpha = center.saturating_sub(half_window as i64) as i32;
+                *beta = center.saturating_add(half_window as i64) as i32;
                 
                 // Final safety check
                 if *alpha >= *beta {
@@ -4353,10 +4354,11 @@ impl SearchEngine {
             crate::debug_utils::trace_log("WINDOW_VALIDATION", 
                 &format!("Window too large: {} > {}, adjusting", current_window_size, expected_max_size));
             
-            let center = (*alpha + *beta) / 2;
+            // Use safe arithmetic to prevent overflow when alpha and beta are very large
+            let center = (*alpha as i64 + *beta as i64) / 2;
             let half_max_size = expected_max_size / 2;
-            *alpha = center.saturating_sub(half_max_size);
-            *beta = center.saturating_add(half_max_size);
+            *alpha = center.saturating_sub(half_max_size as i64) as i32;
+            *beta = center.saturating_add(half_max_size as i64) as i32;
             
             crate::debug_utils::trace_log("WINDOW_VALIDATION", 
                 &format!("Window size adjusted: alpha={}, beta={}", alpha, beta));
@@ -4368,8 +4370,9 @@ impl SearchEngine {
     /// Check if window is in a stable state
     fn is_window_stable(&self, alpha: i32, beta: i32, previous_score: i32) -> bool {
         let window_size = (beta as i64).saturating_sub(alpha as i64);
-        let center = (alpha + beta) / 2;
-        let score_deviation = (center - previous_score).abs();
+        // Use safe arithmetic to prevent overflow when alpha and beta are very large
+        let center = (alpha as i64 + beta as i64) / 2;
+        let score_deviation = (center - previous_score as i64).abs();
         
         // Window is stable if:
         // 1. Size is reasonable
@@ -4377,7 +4380,7 @@ impl SearchEngine {
         // 3. Bounds are valid
         window_size > 0 && 
         window_size <= self.aspiration_config.max_window_size as i64 &&
-        score_deviation as i64 <= window_size / 4 &&
+        score_deviation <= window_size / 4 &&
         alpha < beta
     }
 
