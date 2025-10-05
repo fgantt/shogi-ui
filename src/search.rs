@@ -764,16 +764,23 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move efficiently
-            let move_result = board.make_move(&move_);
+            // Make move on a copy of the board to avoid corruption
+            let mut new_board = board.clone();
+            let mut new_captured = captured_pieces.clone();
+            
+            let move_result = new_board.make_move(&move_);
             if move_result.is_none() {
                 continue;
+            }
+            
+            if let Some(captured) = move_result {
+                new_captured.add_piece(captured.piece_type, player);
             }
 
             // Recursive search with reduced depth
             let score = -self.negamax_with_context(
-                board,
-                captured_pieces,
+                &mut new_board,
+                &new_captured,
                 player.opposite(),
                 iid_depth - 1,
                 beta.saturating_neg(),
@@ -786,9 +793,6 @@ impl SearchEngine {
                 false,
                 false
             );
-
-            // Note: In a real implementation, we would undo the move here
-            // For now, we'll work with a simplified version that doesn't require undo
 
             if score > best_score {
                 best_score = score;
@@ -1039,10 +1043,17 @@ impl SearchEngine {
                     break;
                 }
 
-                // Make move
-                let move_result = board.make_move(move_);
+                // Make move on a copy of the board to avoid corruption
+                let mut new_board = board.clone();
+                let mut new_captured = captured_pieces.clone();
+                
+                let move_result = new_board.make_move(move_);
                 if move_result.is_none() {
                     continue;
+                }
+                
+                if let Some(captured) = move_result {
+                    new_captured.add_piece(captured.piece_type, player);
                 }
 
                 // Use aspiration window for this PV
@@ -1052,8 +1063,8 @@ impl SearchEngine {
 
                 // Recursive search
                 let score = -self.negamax_with_context(
-                    board,
-                    captured_pieces,
+                    &mut new_board,
+                    &new_captured,
                     player.opposite(),
                     iid_depth - 1,
                     -aspiration_beta,
@@ -1066,9 +1077,6 @@ impl SearchEngine {
                     false,
                     false
                 );
-
-                // Undo move (simplified - in real implementation would need proper undo)
-                // Note: This is a placeholder for the undo functionality
 
                 if score > best_score {
                     best_score = score;
@@ -1388,16 +1396,23 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move
-            let move_result = board.make_move(move_);
+            // Make move on a copy of the board to avoid corruption
+            let mut new_board = board.clone();
+            let mut new_captured = captured_pieces.clone();
+            
+            let move_result = new_board.make_move(move_);
             if move_result.is_none() {
                 continue;
+            }
+            
+            if let Some(captured) = move_result {
+                new_captured.add_piece(captured.piece_type, player);
             }
 
             // Shallow search to evaluate move potential
             let score = -self.negamax_with_context(
-                board,
-                captured_pieces,
+                &mut new_board,
+                &new_captured,
                 player.opposite(),
                 iid_depth - 1,
                 beta.saturating_neg(),
@@ -1410,8 +1425,6 @@ impl SearchEngine {
                 false,
                 false
             );
-
-            // Undo move (placeholder - would need proper undo implementation)
 
             // Check if move is promising enough for deeper probing
             if score > current_alpha + promising_threshold {
@@ -1454,16 +1467,23 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move
-            let move_result = board.make_move(&promising_move.move_);
+            // Make move on a copy of the board to avoid corruption
+            let mut new_board = board.clone();
+            let mut new_captured = captured_pieces.clone();
+            
+            let move_result = new_board.make_move(&promising_move.move_);
             if move_result.is_none() {
                 continue;
+            }
+            
+            if let Some(captured) = move_result {
+                new_captured.add_piece(captured.piece_type, player);
             }
 
             // Deeper search for verification
             let deep_score = -self.negamax_with_context(
-                board,
-                captured_pieces,
+                &mut new_board,
+                &new_captured,
                 player.opposite(),
                 probe_depth - 1,
                 beta.saturating_neg(),
@@ -1476,8 +1496,6 @@ impl SearchEngine {
                 false,
                 false
             );
-
-            // Undo move (placeholder - would need proper undo implementation)
 
             // Calculate verification metrics
             let score_difference = (deep_score - promising_move.shallow_score).abs();

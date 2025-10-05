@@ -95,7 +95,13 @@ pub struct MicroTablebase {
 impl MicroTablebase {
     /// Create a new tablebase with default configuration
     pub fn new() -> Self {
-        Self::with_config(TablebaseConfig::default())
+        // Automatically use WASM-optimized configuration when running in WASM
+        let config = if cfg!(target_arch = "wasm32") {
+            TablebaseConfig::wasm_optimized()
+        } else {
+            TablebaseConfig::default()
+        };
+        Self::with_config(config)
     }
 
     /// Create a new tablebase with specified configuration

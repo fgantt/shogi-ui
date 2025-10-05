@@ -708,9 +708,8 @@ impl WasmUsiHandler {
         let time_to_use = {
             let time_for_player = if self.engine.current_player == Player::Black { btime } else { wtime };
             if time_for_player > 0 {
-                // During regular game time, don't restrict by time - let it search to full depth
-                // Use a very large time limit to allow full depth search
-                300000 // 5 minutes should be enough for any reasonable depth
+                // Use the same time allocation logic as the standalone version
+                time_for_player / 40 // Use a fraction of the remaining time
             } else if byoyomi > 0 {
                 // Only use byoyomi when main time is exhausted
                 byoyomi as u32
