@@ -20,6 +20,7 @@ import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceT
 import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
+import { playPieceMoveSound, setSoundsEnabled } from '../utils/audio';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -212,12 +213,37 @@ const GamePage: React.FC<GamePageProps> = ({
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'kifu');
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
+  const [soundsEnabled, setSoundsEnabledState] = useState(localStorage.getItem('shogi-sounds-enabled') !== 'false'); // Default to true
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '');
   const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
   const [gameLayout, setGameLayout] = useState<'classic' | 'compact'>((localStorage.getItem('shogi-game-layout') as 'classic' | 'compact') || 'compact');
   const [pieceThemeList, setPieceThemeList] = useState<string[]>(['kanji', 'english', ...AVAILABLE_PIECE_THEMES]);
+
+  // Sync sound settings with audio manager
+  useEffect(() => {
+    setSoundsEnabled(soundsEnabled);
+  }, [soundsEnabled]);
+
+  // Listen for AI moves to play sound
+  useEffect(() => {
+    const handleAiMove = () => {
+      playPieceMoveSound();
+    };
+
+    controller.on('aiMoveMade', handleAiMove);
+
+    return () => {
+      controller.off('aiMoveMade', handleAiMove);
+    };
+  }, [controller]);
+
+  // Wrapper function for setting sounds enabled
+  const handleSoundsEnabledChange = (enabled: boolean) => {
+    setSoundsEnabledState(enabled);
+    setSoundsEnabled(enabled);
+  };
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -525,6 +551,7 @@ const GamePage: React.FC<GamePageProps> = ({
           controller.clearRecommendation();
           setCurrentRecommendation(null);
           controller.handleUserMove(dropMove);
+          playPieceMoveSound();
         }
       }
       
@@ -580,6 +607,7 @@ const GamePage: React.FC<GamePageProps> = ({
         controller.clearRecommendation();
         setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
+        playPieceMoveSound();
         setSelectedSquare(null);
         setLegalMoves([]);
       }
@@ -655,6 +683,7 @@ const GamePage: React.FC<GamePageProps> = ({
         controller.clearRecommendation();
         setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
+        playPieceMoveSound();
         setSelectedSquare(null);
         setLegalMoves([]);
       }
@@ -679,6 +708,7 @@ const GamePage: React.FC<GamePageProps> = ({
     controller.clearRecommendation();
     setCurrentRecommendation(null);
     controller.handleUserMove(move);
+    playPieceMoveSound();
     setPromotionMove(null);
   };
 
@@ -1081,6 +1111,8 @@ const GamePage: React.FC<GamePageProps> = ({
           onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
           gameLayout={gameLayout}
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
+          soundsEnabled={soundsEnabled}
+          onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
         />}
         <SaveGameModal 
           isOpen={isSaveModalOpen} 
@@ -1310,6 +1342,8 @@ const GamePage: React.FC<GamePageProps> = ({
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
         gameLayout={gameLayout}
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
+        soundsEnabled={soundsEnabled}
+        onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
       />}
       <SaveGameModal 
         isOpen={isSaveModalOpen} 

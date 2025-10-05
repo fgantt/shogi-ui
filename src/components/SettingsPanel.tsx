@@ -24,6 +24,8 @@ interface SettingsPanelProps {
   onShowPieceTooltipsChange: (show: boolean) => void;
   gameLayout: 'classic' | 'compact';
   onGameLayoutChange: (layout: 'classic' | 'compact') => void;
+  soundsEnabled: boolean;
+  onSoundsEnabledChange: (enabled: boolean) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -44,6 +46,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onShowPieceTooltipsChange,
   gameLayout,
   onGameLayoutChange,
+  soundsEnabled,
+  onSoundsEnabledChange,
 }) => {
   const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(true);
   const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(true);
@@ -199,6 +203,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               />
               <span className="slider round"></span>
             </label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Piece Movement Sounds</h3>
+          <div className="setting-group">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={soundsEnabled}
+                onChange={(e) => onSoundsEnabledChange(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+            <span style={{ marginLeft: '10px', fontSize: '14px', color: '#666' }}>
+              Play clacking sound when pieces are moved
+            </span>
           </div>
         </section>
 

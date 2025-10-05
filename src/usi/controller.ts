@@ -45,6 +45,7 @@ export class ShogiController extends EventEmitter {
               this.parseRecommendation(usiMove);
             } else {
               this.applyMove(usiMove);
+              this.emit('aiMoveMade', { move: usiMove });
               this.emitStateChanged();
               if (this.isCurrentPlayerAI()) {
                 this.requestEngineMove();

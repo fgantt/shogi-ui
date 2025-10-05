@@ -1,0 +1,139 @@
+/**
+ * Audio utility for playing sound effects in the shogi game
+ */
+
+class AudioManager {
+  private static instance: AudioManager;
+  private audioContext: AudioContext | null = null;
+  private pieceMoveSound: HTMLAudioElement | null = null;
+  private soundsEnabled: boolean = true;
+
+  private constructor() {
+    this.initializeAudio();
+  }
+
+  public static getInstance(): AudioManager {
+    if (!AudioManager.instance) {
+      AudioManager.instance = new AudioManager();
+    }
+    return AudioManager.instance;
+  }
+
+  private async initializeAudio(): Promise<void> {
+    try {
+      // Create audio context
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Try to load piece move sound, fallback to synthetic sound if not available
+      try {
+        this.pieceMoveSound = new Audio('/sounds/piece-move.mp3');
+        this.pieceMoveSound.preload = 'auto';
+        this.pieceMoveSound.volume = 0.7;
+        
+        // Test if the file exists
+        this.pieceMoveSound.addEventListener('error', () => {
+          console.log('Piece move sound file not found, will use synthetic sound');
+          this.pieceMoveSound = null;
+        });
+      } catch (error) {
+        console.log('Using synthetic piece move sound');
+        this.pieceMoveSound = null;
+      }
+      
+      // Handle audio context suspension (required for user interaction)
+      if (this.audioContext.state === 'suspended') {
+        // We'll resume it when the first sound is played
+      }
+    } catch (error) {
+      console.warn('Failed to initialize audio:', error);
+    }
+  }
+
+  public setSoundsEnabled(enabled: boolean): void {
+    this.soundsEnabled = enabled;
+  }
+
+  public isSoundsEnabled(): boolean {
+    return this.soundsEnabled;
+  }
+
+  public async playPieceMoveSound(): Promise<void> {
+    if (!this.soundsEnabled) {
+      return;
+    }
+
+    try {
+      // Resume audio context if suspended (required for user interaction)
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
+      // Use audio file if available, otherwise generate synthetic sound
+      if (this.pieceMoveSound) {
+        this.pieceMoveSound.currentTime = 0;
+        await this.pieceMoveSound.play();
+      } else if (this.audioContext) {
+        await this.playSyntheticClackSound();
+      }
+    } catch (error) {
+      console.warn('Failed to play piece move sound:', error);
+    }
+  }
+
+  private async playSyntheticClackSound(): Promise<void> {
+    if (!this.audioContext) return;
+
+    const sampleRate = this.audioContext.sampleRate;
+    const duration = 0.15; // 150ms
+    const bufferSize = Math.floor(sampleRate * duration);
+    const buffer = this.audioContext.createBuffer(1, bufferSize, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    // Generate a sharp clack sound using noise and envelope
+    for (let i = 0; i < bufferSize; i++) {
+      const t = i / sampleRate;
+      // Sharp attack with quick decay
+      const envelope = Math.exp(-t * 25) * (1 - t / duration);
+      // White noise with some filtering
+      const noise = (Math.random() * 2 - 1) * 0.3;
+      // Add a slight click at the beginning
+      const click = t < 0.01 ? Math.sin(t * 2000 * Math.PI) * 0.5 : 0;
+      
+      data[i] = (noise + click) * envelope;
+    }
+
+    const source = this.audioContext.createBufferSource();
+    const gainNode = this.audioContext.createGain();
+    
+    source.buffer = buffer;
+    gainNode.gain.value = 0.4; // Volume control
+    
+    source.connect(gainNode);
+    gainNode.connect(this.audioContext.destination);
+    
+    source.start();
+  }
+
+  public async playCustomSound(soundPath: string, volume: number = 0.7): Promise<void> {
+    if (!this.soundsEnabled) {
+      return;
+    }
+
+    try {
+      const audio = new Audio(soundPath);
+      audio.volume = volume;
+      audio.currentTime = 0;
+      await audio.play();
+    } catch (error) {
+      console.warn('Failed to play custom sound:', error);
+    }
+  }
+}
+
+// Export singleton instance
+export const audioManager = AudioManager.getInstance();
+
+// Convenience functions
+export const playPieceMoveSound = () => audioManager.playPieceMoveSound();
+export const setSoundsEnabled = (enabled: boolean) => audioManager.setSoundsEnabled(enabled);
+export const isSoundsEnabled = () => audioManager.isSoundsEnabled();
