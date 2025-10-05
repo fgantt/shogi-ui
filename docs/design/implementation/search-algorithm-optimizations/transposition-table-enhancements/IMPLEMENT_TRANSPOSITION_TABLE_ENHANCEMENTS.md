@@ -36,8 +36,8 @@ use crate::types::{Player, PieceType, Move};
 pub struct ZobristTable {
     pub piece_keys: [[u64; 81]; 14], // [piece_type][position]
     pub side_key: u64,
-    pub castling_keys: [u64; 4],
-    pub en_passant_keys: [u64; 81],
+    pub hand_keys: [[u64; 8]; 14], // [piece_type][count] - pieces in hand
+    pub repetition_keys: [u64; 4], // For repetition tracking
 }
 
 impl ZobristTable {
@@ -46,8 +46,8 @@ impl ZobristTable {
         let mut table = Self {
             piece_keys: [[0; 81]; 14],
             side_key: 0,
-            castling_keys: [0; 4],
-            en_passant_keys: [0; 81],
+            hand_keys: [[0; 8]; 14],
+            repetition_keys: [0; 4],
         };
         table.initialize_keys();
         table
@@ -67,14 +67,16 @@ impl ZobristTable {
         // Initialize side to move key
         self.side_key = rng.gen();
         
-        // Initialize castling rights keys
-        for i in 0..4 {
-            self.castling_keys[i] = rng.gen();
+        // Initialize hand piece keys
+        for piece_type in 0..14 {
+            for count in 0..8 {
+                self.hand_keys[piece_type][count] = rng.gen();
+            }
         }
         
-        // Initialize en passant keys
-        for i in 0..81 {
-            self.en_passant_keys[i] = rng.gen();
+        // Initialize repetition keys
+        for i in 0..4 {
+            self.repetition_keys[i] = rng.gen();
         }
     }
     
@@ -96,17 +98,17 @@ impl ZobristTable {
             hash ^= self.side_key;
         }
         
-        // XOR castling rights
-        for i in 0..4 {
-            if board.has_castling_right(i) {
-                hash ^= self.castling_keys[i];
+        // XOR hand pieces (pieces in hand for drops)
+        for piece_type in 0..14 {
+            let count = board.pieces_in_hand(piece_type);
+            if count > 0 {
+                hash ^= self.hand_keys[piece_type][count.min(7) as usize];
             }
         }
         
-        // XOR en passant square
-        if let Some(ep_square) = board.en_passant_square() {
-            hash ^= self.en_passant_keys[ep_square as usize];
-        }
+        // XOR repetition state
+        let repetition_state = board.get_repetition_state();
+        hash ^= self.repetition_keys[repetition_state as usize];
         
         hash
     }
@@ -114,56 +116,49 @@ impl ZobristTable {
     /// Update hash key incrementally for a move
     pub fn update_hash_for_move(&self, mut hash: u64, mv: &Move, 
                                board: &dyn BoardTrait) -> u64 {
-        // Remove piece from source square
-        hash ^= self.piece_keys[mv.piece_type as usize][mv.from as usize];
-        
-        // Add piece to destination square
-        hash ^= self.piece_keys[mv.piece_type as usize][mv.to as usize];
-        
-        // Handle captures
-        if let Some(captured_piece) = board.piece_at(mv.to) {
-            hash ^= self.piece_keys[captured_piece as usize][mv.to as usize];
-        }
-        
-        // Handle promotions
-        if let Some(promoted_piece) = mv.promotion {
-            // Remove original piece
+        if mv.is_drop_move() {
+            // Handle drop moves (pieces from hand)
+            let piece_type = mv.piece_type as usize;
+            let current_count = board.pieces_in_hand(piece_type);
+            
+            // Remove piece from hand
+            hash ^= self.hand_keys[piece_type][current_count as usize];
+            
+            // Add piece to board
+            hash ^= self.piece_keys[piece_type][mv.to as usize];
+        } else {
+            // Handle regular moves
+            // Remove piece from source square
+            hash ^= self.piece_keys[mv.piece_type as usize][mv.from as usize];
+            
+            // Add piece to destination square
             hash ^= self.piece_keys[mv.piece_type as usize][mv.to as usize];
-            // Add promoted piece
-            hash ^= self.piece_keys[promoted_piece as usize][mv.to as usize];
+            
+            // Handle captures
+            if let Some(captured_piece) = board.piece_at(mv.to as usize) {
+                hash ^= self.piece_keys[captured_piece as usize][mv.to as usize];
+                
+                // Add captured piece to hand
+                let new_hand_count = board.pieces_in_hand(captured_piece as usize);
+                hash ^= self.hand_keys[captured_piece as usize][new_hand_count as usize];
+            }
+            
+            // Handle promotions
+            if mv.is_promotion() {
+                // Remove original piece from destination
+                hash ^= self.piece_keys[mv.piece_type as usize][mv.to as usize];
+                
+                // Add promoted piece to destination
+                if let Some(promoted_piece) = mv.promotion {
+                    hash ^= self.piece_keys[promoted_piece as usize][mv.to as usize];
+                }
+            }
         }
         
         // Toggle side to move
         hash ^= self.side_key;
         
-        // Update castling rights if needed
-        if mv.piece_type == PieceType::King || mv.piece_type == PieceType::Rook {
-            self.update_castling_hash(&mut hash, mv);
-        }
-        
-        // Update en passant if needed
-        if mv.piece_type == PieceType::Pawn && 
-           (mv.from as i8 - mv.to as i8).abs() == 18 {
-            hash ^= self.en_passant_keys[mv.to as usize];
-        }
-        
         hash
-    }
-    
-    /// Update castling rights in hash
-    fn update_castling_hash(&self, hash: &mut u64, mv: &Move) {
-        // Implementation depends on castling rights tracking
-        // This is a simplified version
-        if mv.piece_type == PieceType::King {
-            *hash ^= self.castling_keys[0] ^ self.castling_keys[1];
-        } else if mv.piece_type == PieceType::Rook {
-            // Update specific rook castling rights
-            match mv.from {
-                0 => *hash ^= self.castling_keys[0],
-                8 => *hash ^= self.castling_keys[1],
-                _ => {}
-            }
-        }
     }
 }
 
@@ -171,9 +166,10 @@ impl ZobristTable {
 pub trait BoardTrait {
     fn has_piece(&self, piece_type: usize, position: usize) -> bool;
     fn side_to_move(&self) -> Player;
-    fn has_castling_right(&self, index: usize) -> bool;
-    fn en_passant_square(&self) -> Option<u8>;
+    fn pieces_in_hand(&self, piece_type: usize) -> u8;
+    fn get_repetition_state(&self) -> u8;
     fn piece_at(&self, position: usize) -> Option<PieceType>;
+    fn piece_owner(&self, piece_type: usize, position: usize) -> Player;
 }
 
 // Global Zobrist table instance

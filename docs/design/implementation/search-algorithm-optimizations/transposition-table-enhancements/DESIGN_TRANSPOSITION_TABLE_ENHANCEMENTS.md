@@ -25,16 +25,16 @@ The engine currently uses a basic hash table with string keys for position cachi
 **Components**:
 - Piece position keys: `[piece_type][position]` lookup table
 - Side to move key: Single key for player turn
-- Castling rights keys: Keys for each castling possibility
-- En passant keys: Keys for en passant squares
+- Hand pieces keys: Keys for pieces in hand (dropped pieces)
+- Repetition keys: Keys for position repetition tracking
 
 **Implementation**:
 ```rust
 struct ZobristTable {
     piece_keys: [[u64; 81]; 14], // [piece_type][position]
     side_key: u64,
-    castling_keys: [u64; 4],
-    en_passant_keys: [u64; 81],
+    hand_keys: [[u64; 8]; 14], // [piece_type][count] - pieces in hand
+    repetition_keys: [u64; 4], // For repetition tracking
 }
 
 impl ZobristTable {
@@ -42,8 +42,8 @@ impl ZobristTable {
         let mut table = Self {
             piece_keys: [[0; 81]; 14],
             side_key: 0,
-            castling_keys: [0; 4],
-            en_passant_keys: [0; 81],
+            hand_keys: [[0; 8]; 14],
+            repetition_keys: [0; 4],
         };
         table.initialize_keys();
         table
@@ -61,11 +61,17 @@ impl ZobristTable {
         
         // Initialize other keys
         self.side_key = rng.gen();
-        for i in 0..4 {
-            self.castling_keys[i] = rng.gen();
+        
+        // Initialize hand piece keys
+        for piece_type in 0..14 {
+            for count in 0..8 {
+                self.hand_keys[piece_type][count] = rng.gen();
+            }
         }
-        for i in 0..81 {
-            self.en_passant_keys[i] = rng.gen();
+        
+        // Initialize repetition keys
+        for i in 0..4 {
+            self.repetition_keys[i] = rng.gen();
         }
     }
 }
@@ -147,17 +153,17 @@ impl TranspositionTable {
             hash ^= self.zobrist_table.side_key;
         }
         
-        // XOR castling rights
-        for i in 0..4 {
-            if board.has_castling_right(i) {
-                hash ^= self.zobrist_table.castling_keys[i];
+        // XOR hand pieces (pieces in hand for drops)
+        for piece_type in 0..14 {
+            let count = board.pieces_in_hand(piece_type);
+            if count > 0 {
+                hash ^= self.zobrist_table.hand_keys[piece_type][count.min(7) as usize];
             }
         }
         
-        // XOR en passant
-        if let Some(ep_square) = board.en_passant_square() {
-            hash ^= self.zobrist_table.en_passant_keys[ep_square as usize];
-        }
+        // XOR repetition state
+        let repetition_state = board.get_repetition_state();
+        hash ^= self.zobrist_table.repetition_keys[repetition_state as usize];
         
         hash
     }
@@ -165,15 +171,43 @@ impl TranspositionTable {
     fn update_hash_for_move(&self, hash: u64, mv: &Move, board: &BitboardBoard) -> u64 {
         let mut new_hash = hash;
         
-        // Remove piece from source square
-        new_hash ^= self.zobrist_table.piece_keys[mv.piece_type as usize][mv.from as usize];
-        
-        // Add piece to destination square
-        new_hash ^= self.zobrist_table.piece_keys[mv.piece_type as usize][mv.to as usize];
-        
-        // Handle captures
-        if let Some(captured_piece) = board.piece_at(mv.to) {
-            new_hash ^= self.zobrist_table.piece_keys[captured_piece as usize][mv.to as usize];
+        if mv.is_drop_move() {
+            // Handle drop moves (pieces from hand)
+            let piece_type = mv.piece_type;
+            let current_count = board.pieces_in_hand(piece_type);
+            
+            // Remove piece from hand
+            new_hash ^= self.zobrist_table.hand_keys[piece_type as usize][current_count as usize];
+            
+            // Add piece to board
+            new_hash ^= self.zobrist_table.piece_keys[piece_type as usize][mv.to as usize];
+        } else {
+            // Handle regular moves
+            // Remove piece from source square
+            new_hash ^= self.zobrist_table.piece_keys[mv.piece_type as usize][mv.from as usize];
+            
+            // Add piece to destination square
+            new_hash ^= self.zobrist_table.piece_keys[mv.piece_type as usize][mv.to as usize];
+            
+            // Handle captures
+            if let Some(captured_piece) = board.piece_at(mv.to) {
+                new_hash ^= self.zobrist_table.piece_keys[captured_piece as usize][mv.to as usize];
+                
+                // Add captured piece to hand
+                let new_hand_count = board.pieces_in_hand(captured_piece);
+                new_hash ^= self.zobrist_table.hand_keys[captured_piece as usize][new_hand_count as usize];
+            }
+            
+            // Handle promotions
+            if mv.is_promotion() {
+                // Remove original piece from destination
+                new_hash ^= self.zobrist_table.piece_keys[mv.piece_type as usize][mv.to as usize];
+                
+                // Add promoted piece to destination
+                if let Some(promoted_piece) = mv.promotion {
+                    new_hash ^= self.zobrist_table.piece_keys[promoted_piece as usize][mv.to as usize];
+                }
+            }
         }
         
         // Toggle side to move
