@@ -201,17 +201,17 @@ pub fn bit_positions_4bit_lookup(bb: Bitboard) -> Vec<u8>;
 **File**: `src/bitboards/masks.rs`
 
 **Deliverables**:
-- [ ] Rank masks for 9x9 Shogi board
-- [ ] File masks for 9x9 Shogi board
-- [ ] Diagonal masks for 9x9 Shogi board
-- [ ] Mask utility functions
+- [x] Rank masks for 9x9 Shogi board
+- [x] File masks for 9x9 Shogi board
+- [x] Diagonal masks for 9x9 Shogi board
+- [x] Mask utility functions
 
 **Acceptance Criteria**:
-- [ ] All masks correctly represent Shogi board geometry
-- [ ] Mask operations are fast (single array lookup)
-- [ ] Memory usage is reasonable (< 1KB for all masks)
-- [ ] Integration with existing bitboard operations
-- [ ] Comprehensive validation tests
+- [x] All masks correctly represent Shogi board geometry
+- [x] Mask operations are fast (single array lookup)
+- [x] Memory usage is reasonable (< 1KB for all masks)
+- [x] Integration with existing bitboard operations
+- [x] Comprehensive validation tests
 
 **Implementation Details**:
 ```rust

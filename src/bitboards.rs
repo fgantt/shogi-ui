@@ -10,6 +10,7 @@ pub mod popcount;
 pub mod bitscan;
 pub mod debruijn;
 pub mod lookup_tables;
+pub mod masks;
 
 // Re-export commonly used functions for convenience
 pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
@@ -22,6 +23,12 @@ pub use bitscan::{
 pub use lookup_tables::{
     popcount_4bit_lookup, bit_positions_4bit_lookup, popcount_4bit_optimized,
     popcount_4bit_small, bit_positions_4bit_small, validate_4bit_lookup_tables
+};
+pub use masks::{
+    get_rank_mask, get_file_mask, get_diagonal_mask,
+    get_rank_from_square, get_file_from_square, get_square_from_rank_file,
+    get_rank_squares, get_file_squares, get_diagonal_squares,
+    same_rank, same_file, same_diagonal, validate_masks
 };
 
 /// Bitboard-based board representation for efficient Shogi operations
