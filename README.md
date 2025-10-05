@@ -113,6 +113,7 @@ When a piece moves onto a square occupied by an opponent's piece, the opponent's
 *   Visual indicator for the opponent's last move.
 *   Move history log.
 *   New Game and Undo Move buttons.
+*   **Sound effects:** Realistic piece movement sounds with configurable audio settings.
 
 ## Getting Started
 
@@ -156,6 +157,49 @@ wasm-pack build --target web
 ```
 
 This command will compile the Rust code, generate the necessary JavaScript bindings, and place the output in the `pkg/` directory.
+
+## Sound Effects System
+
+The game includes an immersive audio system that provides realistic sound effects for piece movements, enhancing the traditional shogi playing experience.
+
+### Features
+
+*   **Realistic Clacking Sounds:** Authentic wooden piece placement sounds that mimic traditional shogi gameplay
+*   **Configurable Audio Settings:** Toggle sound effects on/off in the settings panel (enabled by default)
+*   **Comprehensive Coverage:** Sound effects for all move types including:
+    - Regular piece movements (clicks and drags)
+    - Captured piece drops
+    - Promotion moves
+    - AI opponent moves
+*   **Cross-Browser Compatibility:** Works across modern browsers with graceful fallbacks
+*   **Synthetic Sound Generation:** Built-in Web Audio API sound generation when audio files are unavailable
+
+### Audio Technology
+
+The sound system uses modern web audio technologies:
+
+*   **Web Audio API:** For high-quality sound generation and playback
+*   **AudioContext Management:** Handles browser audio context suspension and user interaction requirements
+*   **Fallback System:** Generates synthetic clacking sounds using noise and envelope shaping
+*   **Memory Efficient:** Minimal memory footprint with on-demand audio generation
+
+### Settings
+
+Sound effects can be controlled through the game's settings panel:
+
+1. Open the settings panel (gear icon)
+2. Find the "Piece Movement Sounds" section
+3. Toggle the switch to enable/disable sounds
+4. Settings are automatically saved and persist between sessions
+
+### Custom Audio Files
+
+To use custom sound files:
+
+1. Place your audio file as `public/sounds/piece-move.mp3`
+2. Recommended format: MP3, 0.1-0.3 seconds duration
+3. The system will automatically load the custom file
+4. If no file is found, the system falls back to synthetic sound generation
 
 ## Opening Book System
 
