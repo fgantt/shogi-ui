@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
-use crate::{BitboardBoard, Player, CapturedPieces};
 use crate::time_utils::TimeSource;
 
 /// Performance metrics for a specific operation
@@ -324,6 +323,7 @@ impl Default for TablebaseProfiler {
 /// Performance profiler for specific tablebase operations
 pub struct OperationProfiler<'a> {
     profiler: &'a mut TablebaseProfiler,
+    #[allow(dead_code)]
     operation_name: String,
 }
 

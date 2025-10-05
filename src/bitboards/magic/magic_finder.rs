@@ -193,7 +193,7 @@ impl MagicFinder {
     /// Generate heuristic magic number candidates
     fn generate_heuristic_candidates(&self, mask: Bitboard) -> Vec<u64> {
         let mut candidates = Vec::new();
-        let bit_count = mask.count_ones() as u8;
+        let _bit_count = mask.count_ones() as u8;
         
         // Try powers of 2
         for i in 0..64 {
@@ -286,8 +286,8 @@ impl MagicFinder {
     fn validate_magic_fast(
         &self,
         magic: u64,
-        square: u8,
-        piece_type: PieceType,
+        _square: u8,
+        _piece_type: PieceType,
         mask: &Bitboard,
         shift: u8
     ) -> bool {

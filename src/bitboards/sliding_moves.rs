@@ -9,7 +9,7 @@ use crate::bitboards::BitboardBoard;
 
 // Simple immutable lookup engine
 #[derive(Clone)]
-struct SimpleLookupEngine {
+pub struct SimpleLookupEngine {
     magic_table: MagicTable,
 }
 

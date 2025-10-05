@@ -4,7 +4,7 @@
 //! which can find optimal moves in positions with only a king and rook
 //! on one side versus a lone king on the other side.
 
-use crate::tablebase::{TablebaseResult, TablebaseOutcome};
+use crate::tablebase::TablebaseResult;
 use crate::tablebase::solver_traits::EndgameSolver;
 use crate::tablebase::tablebase_config::KingRookConfig;
 use crate::bitboards::BitboardBoard;
@@ -137,7 +137,7 @@ impl KingRookVsKingSolver {
     }
 
     /// Generate moves for a specific piece
-    fn generate_piece_moves(&self, board: &BitboardBoard, piece: Piece, from: Position, captured_pieces: &CapturedPieces) -> Vec<Move> {
+    fn generate_piece_moves(&self, board: &BitboardBoard, piece: Piece, from: Position, _captured_pieces: &CapturedPieces) -> Vec<Move> {
         let mut moves = Vec::new();
         
         match piece.piece_type {
@@ -194,7 +194,7 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move is legal
-    fn is_legal_move(&self, board: &BitboardBoard, from: Position, to: Position, piece: Piece) -> bool {
+    fn is_legal_move(&self, board: &BitboardBoard, _from: Position, to: Position, piece: Piece) -> bool {
         // Check if destination is within bounds
         if to.row >= 9 || to.col >= 9 {
             return false;
@@ -212,13 +212,13 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if the position is a checkmate
-    fn is_checkmate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> bool {
+    fn is_checkmate(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
         // TODO: Implement checkmate detection
         false
     }
 
     /// Check if the position is a stalemate
-    fn is_stalemate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> bool {
+    fn is_stalemate(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
         // TODO: Implement stalemate detection
         false
     }
@@ -255,7 +255,7 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move results in checkmate
-    fn is_mating_move(&self, board: &BitboardBoard, player: Player, move_: &Move, defending_king: Position) -> bool {
+    fn is_mating_move(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
         // TODO: Implement proper checkmate detection
         // For now, return false
         false
@@ -299,7 +299,7 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move coordinates the king and rook effectively
-    fn coordinates_king_rook(&self, board: &BitboardBoard, player: Player, move_: &Move, king: Position, rook: Position) -> bool {
+    fn coordinates_king_rook(&self, _board: &BitboardBoard, _player: Player, move_: &Move, _king: Position, rook: Position) -> bool {
         // TODO: Implement proper coordination logic
         // For now, return true if the move is by the rook piece
         if let Some(from) = move_.from {
@@ -310,14 +310,14 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move restricts the defending king's mobility
-    fn restricts_king_mobility(&self, board: &BitboardBoard, player: Player, move_: &Move, defending_king: Position) -> bool {
+    fn restricts_king_mobility(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
         // TODO: Implement mobility restriction logic
         // For now, return false
         false
     }
 
     /// Check if a move controls key squares for rook mating patterns
-    fn controls_key_squares(&self, board: &BitboardBoard, player: Player, move_: &Move, defending_king: Position) -> bool {
+    fn controls_key_squares(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
         // TODO: Implement key square control logic
         // For now, return false
         false
@@ -325,7 +325,7 @@ impl KingRookVsKingSolver {
 }
 
 impl EndgameSolver for KingRookVsKingSolver {
-    fn can_solve(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> bool {
+    fn can_solve(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> bool {
         if !self.config.enabled {
             return false;
         }

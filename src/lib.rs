@@ -40,7 +40,6 @@ pub mod patterns {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod usi;
 
-use bitboards::*;
 use moves::*;
 use search::SearchEngine;
 use types::*;

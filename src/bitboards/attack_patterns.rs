@@ -90,9 +90,11 @@ impl Direction {
 /// Attack pattern generator for creating precomputed tables
 pub struct AttackPatternGenerator {
     /// Cache for generated patterns during initialization
+    #[allow(dead_code)]
     pattern_cache: std::collections::HashMap<(u8, PieceType, Player), Bitboard>,
     
     /// Direction vectors for each piece type
+    #[allow(dead_code)]
     direction_cache: std::collections::HashMap<PieceType, Vec<Direction>>,
     
     /// Validation statistics

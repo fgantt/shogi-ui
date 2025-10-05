@@ -9,7 +9,7 @@ use rand::thread_rng;
 use rand::Rng;
 use super::types::{ValidationConfig, ValidationResults, TrainingPosition, FoldResult, MatchResult, OptimizationMethod};
 use super::optimizer::Optimizer;
-use crate::types::{NUM_EVAL_FEATURES, Player};
+use crate::types::Player;
 
 /// Validation engine for tuning results
 pub struct Validator {
@@ -261,7 +261,7 @@ impl StrengthTester {
         }
         
         let win_rate = wins as f64 / total_games as f64;
-        let draw_rate = draws as f64 / total_games as f64;
+        let _draw_rate = draws as f64 / total_games as f64;
         
         // Simple ELO calculation: win rate of 0.5 = 0 ELO difference
         // This is a simplified version - real implementation would be more sophisticated
@@ -292,6 +292,7 @@ pub struct SyntheticDataGenerator {
     /// Number of features to generate
     feature_count: usize,
     /// Random seed for reproducibility
+    #[allow(dead_code)]
     seed: u64,
 }
 

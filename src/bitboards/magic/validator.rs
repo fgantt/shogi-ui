@@ -84,7 +84,7 @@ impl MagicValidator {
     }
 
     /// Generate test blocker combinations for validation
-    fn generate_test_combinations(&self, square: u8, piece_type: PieceType) -> Vec<Bitboard> {
+    fn generate_test_combinations(&self, _square: u8, _piece_type: PieceType) -> Vec<Bitboard> {
         // Generate a representative set of blocker combinations
         // This is a simplified version - in practice, you'd want more comprehensive testing
         vec![

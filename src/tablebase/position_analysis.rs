@@ -3,8 +3,7 @@
 //! This module provides tools for analyzing the complexity of chess positions
 //! to help select the most appropriate endgame solver.
 
-use crate::{BitboardBoard, Player, Position, PieceType, Piece};
-use crate::types::{CapturedPieces, Move};
+use crate::{BitboardBoard, Player, Position, PieceType, CapturedPieces};
 
 /// Position complexity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

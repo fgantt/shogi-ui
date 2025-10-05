@@ -76,20 +76,20 @@ impl ThreatEvaluator {
     }
     
     /// Detect if king is pinned by opponent's rook
-    fn detect_rook_pin(&self, board: &BitboardBoard, player: Player, king_pos: Position) -> bool {
+    fn detect_rook_pin(&self, _board: &BitboardBoard, _player: Player, _king_pos: Position) -> bool {
         // TODO: Implement rook pin detection
         // Check for rook on same rank or file with no blocking pieces
         false
     }
     
     /// Detect if king is skewered by opponent's bishop
-    fn detect_bishop_skewer(&self, board: &BitboardBoard, player: Player, king_pos: Position) -> bool {
+    fn detect_bishop_skewer(&self, _board: &BitboardBoard, _player: Player, _king_pos: Position) -> bool {
         // TODO: Implement bishop skewer detection
         false
     }
     
     /// Detect if opponent's knight can fork king and another piece
-    fn detect_knight_fork(&self, board: &BitboardBoard, player: Player, king_pos: Position) -> bool {
+    fn detect_knight_fork(&self, _board: &BitboardBoard, _player: Player, _king_pos: Position) -> bool {
         // TODO: Implement knight fork detection
         false
     }

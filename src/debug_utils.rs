@@ -3,7 +3,6 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use std::time::Duration;
 use std::sync::Mutex;
 use std::collections::HashMap;
 
@@ -20,7 +19,6 @@ lazy_static::lazy_static! {
 fn get_current_time_ms() -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::prelude::*;
         use web_sys::js_sys::Date;
         Date::new_0().get_time()
     }

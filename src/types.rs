@@ -4355,6 +4355,7 @@ pub struct PruningManager {
     cache_misses: u64,
 }
 
+#[allow(dead_code)]
 impl PruningManager {
     pub fn new(parameters: PruningParameters) -> Self {
         Self {
@@ -5059,7 +5060,7 @@ impl PruningManager {
     }
     
     /// Smart conditional pruning based on position characteristics
-    pub fn should_apply_conditional_pruning(&mut self, state: &SearchState, mv: &Move) -> bool {
+    pub fn should_apply_conditional_pruning(&mut self, state: &SearchState, _mv: &Move) -> bool {
         let analysis = self.analyze_position(state);
         
         // Don't prune in very tactical positions
@@ -5398,7 +5399,7 @@ impl PruningManager {
     }
     
     /// Record pruning by move type and depth for detailed analysis
-    fn record_pruning_by_type(&mut self, move_type: MoveType, depth: u8) {
+    fn record_pruning_by_type(&mut self, move_type: MoveType, _depth: u8) {
         // This would be enhanced with more detailed tracking
         // For now, we use the existing statistics
         match move_type {
@@ -6098,7 +6099,7 @@ impl PositionAnalyzer {
     }
     
     /// Check if position is quiet (no immediate tactical threats)
-    fn is_quiet_position(&self, board: &BitboardBoard, player: Player) -> bool {
+    fn is_quiet_position(&self, _board: &BitboardBoard, _player: Player) -> bool {
         // Simplified quiet position detection
         // In a real implementation, this would check for immediate captures, checks, etc.
         true // Placeholder

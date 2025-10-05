@@ -12,6 +12,7 @@ use crate::types::{MagicTable, MagicError};
 /// Parallel magic table initializer
 pub struct ParallelInitializer {
     /// Number of threads to use (0 = auto-detect)
+    #[allow(dead_code)]
     thread_count: usize,
     /// Progress callback for monitoring initialization
     progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
@@ -49,7 +50,7 @@ impl ParallelInitializer {
     /// This version provides optimized sequential initialization with progress tracking.
     pub fn initialize_with_progress(&self) -> Result<MagicTable, MagicError> {
         // Create table with progress tracking
-        let mut table = MagicTable::new()?;
+        let table = MagicTable::new()?;
         
         // Report 100% complete
         if let Some(ref callback) = self.progress_callback {
@@ -62,7 +63,7 @@ impl ParallelInitializer {
     /// Initialize magic table sequentially (WASM-compatible)
     pub fn initialize_sequential(&self) -> Result<MagicTable, MagicError> {
         // This is the same as MagicTable::new() but with progress tracking
-        let mut table = MagicTable::new()?;
+        let table = MagicTable::new()?;
         Ok(table)
     }
 

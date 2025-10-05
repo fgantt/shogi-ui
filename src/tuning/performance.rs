@@ -113,6 +113,7 @@ pub struct TuningProfiler {
     memory_snapshots: Arc<Mutex<Vec<(Instant, usize)>>>,
     checkpoint_frequency: usize,
     last_checkpoint: Option<Instant>,
+    #[allow(dead_code)]
     log_level: LogLevel,
 }
 

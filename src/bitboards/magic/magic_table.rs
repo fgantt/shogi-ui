@@ -4,7 +4,7 @@
 //! for efficient sliding piece move generation.
 
 use crate::types::{
-    MagicTable, MagicBitboard, MagicError, MagicGenerationResult, 
+    MagicTable, MagicBitboard, MagicError, 
     Bitboard, PieceType, EMPTY_BITBOARD, MemoryPool
 };
 use super::magic_finder::MagicFinder;

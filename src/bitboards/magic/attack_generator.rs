@@ -4,7 +4,7 @@
 //! pieces using ray-casting algorithms. These patterns are used to build the magic
 //! bitboard lookup tables.
 
-use crate::types::{PieceType, Bitboard, AttackConfig, EMPTY_BITBOARD};
+use crate::types::{PieceType, Bitboard, EMPTY_BITBOARD};
 use std::collections::HashMap;
 
 /// Attack pattern generator with optimization

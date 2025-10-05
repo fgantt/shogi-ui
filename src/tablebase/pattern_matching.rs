@@ -89,7 +89,7 @@ impl PatternMatcher {
 
     /// Fast endgame pattern detection
     pub fn detect_endgame_pattern(&mut self, board: &BitboardBoard, player: Player) -> EndgamePattern {
-        let (black_king, white_king) = self.find_kings_fast(board);
+        let (_black_king, _white_king) = self.find_kings_fast(board);
         
         // Count pieces efficiently
         let black_pieces = self.count_all_pieces(board, Player::Black);
@@ -201,7 +201,7 @@ impl PatternMatcher {
     }
 
     /// Check if a position has no escape squares
-    fn has_no_escape_squares(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> bool {
+    fn has_no_escape_squares(&self, board: &BitboardBoard, king_pos: Position, _player: Player) -> bool {
         // Check all 8 directions around the king
         for dr in -1..=1 {
             for dc in -1..=1 {

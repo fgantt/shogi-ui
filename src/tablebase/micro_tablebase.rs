@@ -4,17 +4,14 @@
 //! all endgame solvers and provides the primary interface for tablebase
 //! functionality.
 
-use std::collections::HashMap;
 use crate::types::{Player};
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 use crate::time_utils::TimeSource;
 use super::{
     TablebaseResult, TablebaseStats, TablebaseConfig,
-    EndgameSolver, PositionCache, PositionAnalyzer, PositionAnalysis, PositionComplexity,
-    TablebaseProfiler, PerformanceMetrics, OperationProfiler,
+    EndgameSolver, PositionCache, PositionAnalyzer, TablebaseProfiler,
 };
-use super::tablebase_config::WasmConfig;
 use super::endgame_solvers::{KingGoldVsKingSolver, KingSilverVsKingSolver, KingRookVsKingSolver};
 
 /// Main tablebase implementation
@@ -89,6 +86,7 @@ pub struct MicroTablebase {
     /// Position analyzer for adaptive solver selection
     position_analyzer: PositionAnalyzer,
     /// Performance profiler for detailed timing analysis
+    #[allow(dead_code)]
     profiler: TablebaseProfiler,
 }
 

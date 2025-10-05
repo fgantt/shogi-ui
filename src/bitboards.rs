@@ -453,7 +453,7 @@ impl BitboardBoard {
     }
 
     /// Generate attack pattern using ray-casting (fallback method)
-    fn generate_attack_pattern_raycast(&self, square: Position, piece_type: PieceType) -> Bitboard {
+    fn generate_attack_pattern_raycast(&self, _square: Position, _piece_type: PieceType) -> Bitboard {
         // Placeholder implementation - would use the existing ray-casting logic
         EMPTY_BITBOARD
     }

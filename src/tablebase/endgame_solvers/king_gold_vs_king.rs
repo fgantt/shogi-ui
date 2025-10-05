@@ -38,7 +38,7 @@ impl KingGoldVsKingSolver {
     /// - One side has exactly a King and Gold
     /// - The other side has exactly a King
     /// - No captured pieces are present
-    fn is_king_gold_vs_king(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> bool {
+    fn is_king_gold_vs_king(&self, board: &BitboardBoard, _player: Player, captured_pieces: &CapturedPieces) -> bool {
         // Must have no captured pieces
         if !captured_pieces.black.is_empty() || !captured_pieces.white.is_empty() {
             return false;
@@ -256,7 +256,7 @@ impl KingGoldVsKingSolver {
     }
 
     /// Find the best defensive move when no progress can be made
-    fn find_best_defensive_move(&self, board: &BitboardBoard, player: Player, king: Position, gold: Position, defending_king: Position) -> Option<TablebaseResult> {
+    fn find_best_defensive_move(&self, board: &BitboardBoard, player: Player, king: Position, _gold: Position, _defending_king: Position) -> Option<TablebaseResult> {
         // In King + Gold vs King, the side with King + Gold should always be winning
         // If we can't make progress, it might be a draw or we need to find a different approach
         let king_moves = self.generate_king_moves(board, player, king);
@@ -340,7 +340,7 @@ impl KingGoldVsKingSolver {
     }
 
     /// Check if a move delivers mate
-    fn is_mating_move(&self, board: &BitboardBoard, player: Player, move_: &Move, defending_king: Position) -> bool {
+    fn is_mating_move(&self, _board: &BitboardBoard, _player: Player, move_: &Move, defending_king: Position) -> bool {
         // This is a simplified check - in a real implementation, we would need to
         // verify that the move actually puts the king in checkmate
         // For now, we'll check if the move attacks the king's square
@@ -348,7 +348,7 @@ impl KingGoldVsKingSolver {
     }
 
     /// Check if a move improves the mating position
-    fn improves_mating_position(&self, board: &BitboardBoard, player: Player, move_: &Move, king: Position, defending_king: Position) -> bool {
+    fn improves_mating_position(&self, _board: &BitboardBoard, _player: Player, move_: &Move, _king: Position, defending_king: Position) -> bool {
         // Check if the move gets the Gold closer to the defending King
         let current_distance = self.manhattan_distance(move_.from.unwrap(), defending_king);
         let new_distance = self.manhattan_distance(move_.to, defending_king);
@@ -357,7 +357,7 @@ impl KingGoldVsKingSolver {
     }
 
     /// Check if King move supports Gold mate
-    fn king_supports_gold_mate(&self, board: &BitboardBoard, player: Player, move_: &Move, gold: Position, defending_king: Position) -> bool {
+    fn king_supports_gold_mate(&self, _board: &BitboardBoard, _player: Player, move_: &Move, gold: Position, defending_king: Position) -> bool {
         // Check if the King move helps coordinate with the Gold for mate
         let king_distance_to_gold = self.manhattan_distance(move_.to, gold);
         let king_distance_to_defending_king = self.manhattan_distance(move_.to, defending_king);

@@ -640,6 +640,7 @@ impl MoveGenerator {
     }
 
     /// Compare two moves for quiescence search ordering
+    #[allow(dead_code)]
     fn compare_quiescence_moves(&self, a: &Move, b: &Move) -> std::cmp::Ordering {
         // 1. Checks first
         match (a.gives_check, b.gives_check) {

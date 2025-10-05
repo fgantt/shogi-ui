@@ -7,7 +7,7 @@
 use crate::types::{Player};
 use crate::BitboardBoard;
 use crate::CapturedPieces;
-use super::{TablebaseResult, TablebaseOutcome};
+use super::TablebaseResult;
 
 /// Trait that all endgame solvers must implement
 /// 
@@ -192,7 +192,7 @@ pub trait AdvancedEndgameSolver: EndgameSolver {
     /// 
     /// # Returns
     /// Vector of alternative moves with their scores
-    fn get_alternative_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<(crate::types::Move, i32)> {
+    fn get_alternative_moves(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> Vec<(crate::types::Move, i32)> {
         // Default implementation returns empty vector
         Vec::new()
     }
@@ -209,7 +209,7 @@ pub trait AdvancedEndgameSolver: EndgameSolver {
     /// 
     /// # Returns
     /// String containing detailed analysis
-    fn analyze_position(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> String {
+    fn analyze_position(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> String {
         format!("Position analysis by {}: Basic analysis available", self.name())
     }
 }

@@ -67,12 +67,19 @@ pub enum OpeningBookError {
 
 /// Static error messages to reduce allocations
 mod error_messages {
+    #[allow(dead_code)]
     pub const OPENING_BOOK_NOT_LOADED: &str = "Opening book not loaded";
+    #[allow(dead_code)]
     pub const EMPTY_FEN_STRING: &str = "Empty FEN string";
+    #[allow(dead_code)]
     pub const INSUFFICIENT_HEADER_DATA: &str = "Insufficient data for header";
+    #[allow(dead_code)]
     pub const INVALID_MAGIC_NUMBER: &str = "Invalid magic number";
+    #[allow(dead_code)]
     pub const UNEXPECTED_END_OF_DATA: &str = "Unexpected end of data";
+    #[allow(dead_code)]
     pub const MISSING_DESTINATION_POSITION: &str = "Missing destination position";
+    #[allow(dead_code)]
     pub const MISSING_PIECE_TYPE: &str = "Missing piece type";
 }
 
@@ -632,7 +639,7 @@ impl OpeningBook {
     }
 
     /// Load a chunk of positions from binary data (for streaming)
-    pub fn load_chunk(&mut self, chunk_data: &[u8], chunk_offset: u64) -> Result<usize, OpeningBookError> {
+    pub fn load_chunk(&mut self, chunk_data: &[u8], _chunk_offset: u64) -> Result<usize, OpeningBookError> {
         let mut reader = binary_format::BinaryReader::new(chunk_data.to_vec());
         let mut loaded_count = 0;
         

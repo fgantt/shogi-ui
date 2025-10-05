@@ -3,7 +3,7 @@
 //! This module provides runtime performance monitoring and adaptive optimization
 //! for magic bitboard operations.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::sync::Arc;
 

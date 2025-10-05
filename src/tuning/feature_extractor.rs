@@ -16,7 +16,7 @@
 
 use crate::evaluation::PositionEvaluator;
 use crate::evaluation::king_safety::KingSafetyEvaluator;
-use crate::{BitboardBoard, types::{Player, CapturedPieces, NUM_EVAL_FEATURES, PieceType, Position, KingSafetyConfig}};
+use crate::{BitboardBoard, types::{Player, CapturedPieces, PieceType, Position, KingSafetyConfig}};
 use super::types::TrainingPosition;
 
 /// Feature extractor for automated tuning

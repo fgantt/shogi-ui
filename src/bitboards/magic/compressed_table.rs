@@ -3,7 +3,7 @@
 //! This module provides a compressed representation of magic tables
 //! that trades some lookup speed for significant memory savings.
 
-use crate::types::{Bitboard, PieceType, MagicTable, MagicError, EMPTY_BITBOARD};
+use crate::types::{Bitboard, PieceType, MagicTable, MagicError};
 
 /// Compressed magic table with reduced memory footprint
 #[derive(Clone)]

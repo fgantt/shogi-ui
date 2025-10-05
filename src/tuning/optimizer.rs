@@ -86,6 +86,7 @@ struct GeneticAlgorithmState {
 /// Optimization engine for tuning evaluation parameters
 pub struct Optimizer {
     method: OptimizationMethod,
+    #[allow(dead_code)]
     config: TuningConfig,
 }
 

@@ -284,6 +284,7 @@ impl PositionEvaluator {
     }
     
     /// Get piece value for simple evaluation
+    #[allow(dead_code)]
     fn get_piece_value(&self, piece_type: PieceType) -> i32 {
         match piece_type {
             PieceType::Pawn => 100,

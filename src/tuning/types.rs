@@ -458,7 +458,7 @@ impl MatchResult {
     }
 
     /// Calculate ELO difference using the standard formula
-    fn calculate_elo_difference(wins: u32, losses: u32, draws: u32) -> f64 {
+    fn calculate_elo_difference(wins: u32, losses: u32, _draws: u32) -> f64 {
         if wins + losses == 0 {
             return 0.0;
         }

@@ -74,10 +74,7 @@
 //! - `tablebase_config.rs`: Configuration management
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use crate::types::{Move, Player};
-use crate::BitboardBoard;
-use crate::CapturedPieces;
+use crate::types::Move;
 
 pub mod micro_tablebase;
 pub mod endgame_solvers;

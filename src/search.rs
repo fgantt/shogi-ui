@@ -39,6 +39,7 @@ pub struct SearchEngine {
     search_start_time: Option<TimeSource>,
 }
 
+#[allow(dead_code)]
 impl SearchEngine {
     pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
         Self::new_with_config(stop_flag, hash_size_mb, QuiescenceConfig::default())
@@ -243,7 +244,7 @@ impl SearchEngine {
                          player: Player, 
                          iid_depth: u8, 
                          alpha: i32, 
-                         beta: i32, 
+                         _beta: i32, 
                          start_time: &TimeSource, 
                          time_limit_ms: u32, 
                          history: &mut Vec<String>) -> Option<Move> {
@@ -479,7 +480,7 @@ impl SearchEngine {
     }
 
     /// Count material value for a player
-    fn count_material(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+    fn count_material(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> i32 {
         let mut material = 0;
         
         // Count pieces on board
@@ -538,7 +539,7 @@ impl SearchEngine {
 
     /// Count mobility (legal moves available)
     fn count_mobility(&self, board: &BitboardBoard) -> usize {
-        let mut generator = MoveGenerator::new();
+        let generator = MoveGenerator::new();
         let captured_pieces = CapturedPieces::new();
         
         let black_moves = generator.generate_legal_moves(board, Player::Black, &captured_pieces);
@@ -572,7 +573,7 @@ impl SearchEngine {
 
     /// Count tactical threats (checks, captures, promotions)
     fn count_tactical_threats(&self, board: &BitboardBoard) -> usize {
-        let mut generator = MoveGenerator::new();
+        let generator = MoveGenerator::new();
         let captured_pieces = CapturedPieces::new();
         let mut threats = 0;
         
@@ -732,12 +733,12 @@ impl SearchEngine {
         }
 
         // Create efficient board state instead of full clone
-        let board_state = self.create_iid_board_state(board, captured_pieces);
+        let _board_state = self.create_iid_board_state(board, captured_pieces);
         
         // Use memory pool for move generation
-        let mut _move_pool: Vec<Move> = Vec::with_capacity(50); // Pre-allocate reasonable capacity
+        let _move_pool: Vec<Move> = Vec::with_capacity(50); // Pre-allocate reasonable capacity
         
-        let mut generator = MoveGenerator::new();
+        let generator = MoveGenerator::new();
         let moves = generator.generate_legal_moves(board, player, captured_pieces);
         
         // Limit moves for IID efficiency
@@ -1001,7 +1002,7 @@ impl SearchEngine {
                                       iid_depth: u8,
                                       pv_count: usize,
                                       alpha: i32,
-                                      beta: i32,
+                                      _beta: i32,
                                       start_time: &TimeSource,
                                       time_limit_ms: u32,
                                       history: &mut Vec<String>) -> Vec<IIDPVResult> {
@@ -1009,7 +1010,7 @@ impl SearchEngine {
             return Vec::new();
         }
 
-        let mut generator = MoveGenerator::new();
+        let generator = MoveGenerator::new();
         let moves = generator.generate_legal_moves(board, player, captured_pieces);
         
         // Limit moves for IID efficiency
@@ -1038,7 +1039,7 @@ impl SearchEngine {
             let mut best_pv = Vec::new();
 
             // Search remaining moves for this PV
-            for (move_index, move_) in remaining_moves.iter().enumerate() {
+            for (_move_index, move_) in remaining_moves.iter().enumerate() {
                 if start_time.elapsed_ms() >= time_limit_ms {
                     break;
                 }
@@ -1334,7 +1335,7 @@ impl SearchEngine {
             return None;
         }
 
-        let mut generator = MoveGenerator::new();
+        let generator = MoveGenerator::new();
         let moves = generator.generate_legal_moves(board, player, captured_pieces);
         
         // Limit moves for IID efficiency
@@ -1551,7 +1552,7 @@ impl SearchEngine {
     }
 
     /// Calculate verification confidence based on score consistency
-    pub fn calculate_verification_confidence(&self, shallow_score: i32, deep_score: i32, score_difference: i32) -> f64 {
+    pub fn calculate_verification_confidence(&self, _shallow_score: i32, _deep_score: i32, score_difference: i32) -> f64 {
         if score_difference == 0 {
             return 1.0; // Perfect confidence
         }
@@ -1634,7 +1635,7 @@ impl SearchEngine {
         };
 
         for iteration in 0..iterations {
-            let start_time = TimeSource::now();
+            let _start_time = TimeSource::now();
             let mut history = Vec::new();
 
             // Benchmark with IID enabled
@@ -1809,7 +1810,7 @@ impl SearchEngine {
             };
 
             // Test with IID enabled
-            let mut iid_config = self.iid_config.clone();
+            let iid_config = self.iid_config.clone();
             self.iid_config.enabled = true;
             
             let iid_wins = self.play_strength_games(
@@ -1885,7 +1886,7 @@ impl SearchEngine {
         let max_moves = 200; // Prevent infinite games
         
         while move_count < max_moves {
-            let start_time = TimeSource::now();
+            let _start_time = TimeSource::now();
             let mut history = Vec::new();
             
             // Find best move
@@ -1925,13 +1926,13 @@ impl SearchEngine {
     }
 
     /// Parse FEN position for strength testing
-    fn parse_fen_position(&self, fen: &str) -> Result<BitboardBoard, String> {
+    fn parse_fen_position(&self, _fen: &str) -> Result<BitboardBoard, String> {
         // Simplified FEN parsing - would need full implementation
         Ok(BitboardBoard::new())
     }
 
     /// Check if game is over
-    fn is_game_over(&self, board: &BitboardBoard) -> bool {
+    fn is_game_over(&self, _board: &BitboardBoard) -> bool {
         // Simplified game over detection - would need full implementation
         false
     }
@@ -1947,7 +1948,7 @@ impl SearchEngine {
         let start_time = TimeSource::now();
         
         // Use the main search function
-        let score = self.negamax_with_context(
+        let _score = self.negamax_with_context(
             board,
             captured_pieces,
             player,
@@ -2290,11 +2291,11 @@ impl SearchEngine {
         self.search_at_depth(board, captured_pieces, player, depth, time_limit_ms, i32::MIN + 1, i32::MAX - 1)
     }
 
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool) -> i32 {
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool) -> i32 {
         self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, history, can_null_move, false, false, false)
     }
     
-    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, has_capture: bool, has_check: bool) -> i32 {
+    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { 
             crate::debug_utils::trace_log("NEGAMAX", "Time limit reached, returning 0");
             return 0; 
@@ -2806,7 +2807,7 @@ impl SearchEngine {
         }
     }
 
-    pub fn score_move(&self, move_: &Move, board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
+    pub fn score_move(&self, move_: &Move, _board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
         // Priority 1: IID move gets maximum score
         if let Some(iid_mv) = iid_move {
             if self.moves_equal(move_, iid_mv) {
@@ -2842,7 +2843,7 @@ impl SearchEngine {
     }
     
     /// Score a move based on pruning effectiveness
-    fn score_move_for_pruning(&self, move_: &Move, board: &BitboardBoard, depth: Option<u8>, alpha: Option<i32>, beta: Option<i32>) -> i32 {
+    fn score_move_for_pruning(&self, move_: &Move, _board: &BitboardBoard, depth: Option<u8>, alpha: Option<i32>, beta: Option<i32>) -> i32 {
         let mut pruning_score = 0;
         
         // Bonus for moves that are less likely to be pruned
@@ -4294,7 +4295,7 @@ impl SearchEngine {
     /// Enhanced window validation with recovery mechanisms
     fn validate_and_recover_window(&mut self, alpha: &mut i32, beta: &mut i32, 
                                   previous_score: i32, window_size: i32, 
-                                  depth: u8) -> bool {
+                                  _depth: u8) -> bool {
         
         // Initial validation
         if !self.validate_window_parameters(previous_score, window_size) {
@@ -4719,7 +4720,7 @@ impl SearchEngine {
                            history: &mut Vec<String>, 
                            move_: &Move, 
                            move_index: usize,
-                           is_root: bool,
+                           _is_root: bool,
                            has_capture: bool,
                            has_check: bool) -> i32 {
         
@@ -5641,7 +5642,7 @@ impl SearchEngine {
     /// Comprehensive recovery mechanisms for aspiration window failures
     fn attempt_aspiration_recovery(&mut self, alpha: &mut i32, beta: &mut i32, 
                                   previous_score: i32, window_size: i32, 
-                                  failure_type: &str, researches: u8, depth: u8) -> bool {
+                                  failure_type: &str, researches: u8, _depth: u8) -> bool {
         
         crate::debug_utils::trace_log("ASPIRATION_RECOVERY", 
             &format!("Attempting recovery for failure type: {}, researches: {}", 
@@ -5735,7 +5736,7 @@ impl SearchEngine {
 
     /// Emergency recovery for critical failures
     fn emergency_recovery(&mut self, alpha: &mut i32, beta: &mut i32, 
-                         previous_score: i32, depth: u8) -> bool {
+                         previous_score: i32, _depth: u8) -> bool {
         crate::debug_utils::trace_log("EMERGENCY_RECOVERY", 
             "Emergency recovery activated");
         
@@ -5763,7 +5764,7 @@ impl SearchEngine {
     /// Comprehensive error handling for aspiration window operations
     fn handle_aspiration_error(&mut self, error_type: &str, error_context: &str, 
                               alpha: &mut i32, beta: &mut i32, previous_score: i32, 
-                              depth: u8, researches: u8) -> bool {
+                              depth: u8, _researches: u8) -> bool {
         
         crate::debug_utils::trace_log("ASPIRATION_ERROR", 
             &format!("Error type: {}, context: {}", error_type, error_context));
@@ -5809,7 +5810,7 @@ impl SearchEngine {
 
     /// Error detection and classification
     fn detect_aspiration_errors(&self, alpha: i32, beta: i32, previous_score: i32, 
-                               researches: u8, depth: u8) -> Vec<String> {
+                               researches: u8, _depth: u8) -> Vec<String> {
         let mut errors = Vec::new();
         
         // Check for window overflow
@@ -6010,7 +6011,7 @@ impl SearchEngine {
 
     /// Calculate system health score (0.0 = critical, 1.0 = healthy)
     fn calculate_system_health_score(&self, alpha: i32, beta: i32, previous_score: i32, 
-                                    depth: u8, researches: u8) -> f64 {
+                                    _depth: u8, researches: u8) -> f64 {
         let mut score = 1.0;
         
         // Factor 1: Window validity
@@ -6065,7 +6066,7 @@ impl SearchEngine {
     /// 4. Implement graceful degradation if recovery fails
     fn handle_aspiration_retry(&mut self, alpha: &mut i32, beta: &mut i32, 
                               previous_score: i32, window_size: i32, 
-                              failure_type: &str, researches: u8, depth: u8) -> bool {
+                              failure_type: &str, researches: u8, _depth: u8) -> bool {
         
         // Validate parameters
         if !self.validate_window_parameters(previous_score, window_size) {
@@ -6527,7 +6528,7 @@ impl SearchEngine {
     // ============================================================================
 
     /// Check if the current player is in check
-    pub fn is_in_check(&self, board: &BitboardBoard) -> bool {
+    pub fn is_in_check(&self, _board: &BitboardBoard) -> bool {
         // This should use the existing check detection logic
         // For now, return false as a placeholder
         false
@@ -6539,7 +6540,7 @@ impl SearchEngine {
     }
 
     /// Get the position hash for the current board state
-    pub fn get_position_hash(&self, board: &BitboardBoard) -> u64 {
+    pub fn get_position_hash(&self, _board: &BitboardBoard) -> u64 {
         // This should use the existing position hashing logic
         // For now, return 0 as a placeholder
         0
@@ -6742,7 +6743,8 @@ impl IterativeDeepening {
             };
 
             // Perform search with aspiration window
-            let mut search_result = None;
+            let mut search_result: Option<(Move, i32)> = None;
+            let _ = search_result; // Suppress unused assignment warning
             let mut researches = 0;
             let mut current_alpha = alpha;
             let mut current_beta = beta;

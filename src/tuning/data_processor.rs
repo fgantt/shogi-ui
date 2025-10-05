@@ -24,12 +24,14 @@ use serde_json;
 pub struct DataProcessor {
     feature_extractor: FeatureExtractor,
     filter: PositionFilter,
+    #[allow(dead_code)]
     progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
 }
 
 /// Game database for managing large collections of games
 pub struct GameDatabase {
     games: Vec<GameRecord>,
+    #[allow(dead_code)]
     metadata: HashMap<String, String>,
     total_positions: usize,
 }
@@ -37,6 +39,7 @@ pub struct GameDatabase {
 /// Position selector for filtering training positions
 pub struct PositionSelector {
     filter: PositionFilter,
+    #[allow(dead_code)]
     seen_positions: HashSet<String>, // For deduplication
 }
 
@@ -531,7 +534,7 @@ impl PositionSelector {
 
     /// Select positions from a game record
     pub fn select_positions(&mut self, game_record: &GameRecord) -> Vec<TrainingPosition> {
-        let mut positions = Vec::new();
+        let positions = Vec::new();
         
         // Apply filters
         if !self.passes_rating_filter(game_record) {
@@ -580,6 +583,7 @@ impl PositionSelector {
     }
 
     /// Check for position deduplication
+    #[allow(dead_code)]
     fn is_duplicate_position(&mut self, position_hash: &str) -> bool {
         if self.seen_positions.contains(position_hash) {
             true
