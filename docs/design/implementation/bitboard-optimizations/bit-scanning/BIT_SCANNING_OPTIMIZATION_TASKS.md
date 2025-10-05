@@ -10,21 +10,21 @@ This document provides detailed implementation tasks for the bit-scanning optimi
 **File**: `src/bitboards/platform_detection.rs`
 
 **Deliverables**:
-- [ ] CPU feature detection functions (native platforms only)
-- [ ] Architecture-specific capability detection
-- [ ] WASM environment detection and configuration
-- [ ] Fallback mechanism implementation
-- [ ] Runtime capability querying
+- [x] CPU feature detection functions (native platforms only)
+- [x] Architecture-specific capability detection
+- [x] WASM environment detection and configuration
+- [x] Fallback mechanism implementation
+- [x] Runtime capability querying
 
 **Acceptance Criteria**:
-- [ ] Detects x86_64 POPCNT, BMI1, BMI2 support (native only)
-- [ ] Detects ARM CLZ, CTZ support (native only)
-- [ ] WASM environment properly detected and configured
-- [ ] No WASM SIMD dependencies (use basic SWAR for universal compatibility)
-- [ ] Provides graceful fallbacks for unsupported platforms
-- [ ] All functions have comprehensive unit tests
-- [ ] Performance benchmarks show < 1% overhead
-- [ ] WASM compatibility verified in browser environment
+- [x] Detects x86_64 POPCNT, BMI1, BMI2 support (native only)
+- [x] Detects ARM CLZ, CTZ support (native only)
+- [x] WASM environment properly detected and configured
+- [x] No WASM SIMD dependencies (use basic SWAR for universal compatibility)
+- [x] Provides graceful fallbacks for unsupported platforms
+- [x] All functions have comprehensive unit tests
+- [x] Performance benchmarks show < 1% overhead
+- [x] WASM compatibility verified in browser environment
 
 **Implementation Details**:
 ```rust
