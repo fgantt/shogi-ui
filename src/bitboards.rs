@@ -227,10 +227,24 @@ impl BitboardBoard {
 
     // Helper to generate pseudo-legal moves for a single piece
     fn generate_pseudo_moves_for_piece(&self, piece: &Piece, pos: Position) -> Vec<Move> {
-        let mut moves = Vec::new();
+        // Limit move generation to prevent memory issues in WASM
+        const MAX_MOVES_PER_PIECE: usize = 50;
+        let mut moves = Vec::with_capacity(MAX_MOVES_PER_PIECE);
         let player = piece.player;
+        
+        // Early return for invalid positions to prevent memory issues
+        if pos.row >= 9 || pos.col >= 9 {
+            return moves;
+        }
 
         let handle_move = |moves: &mut Vec<Move>, to_pos: Position| {
+            if moves.len() >= MAX_MOVES_PER_PIECE {
+                return; // Prevent excessive memory allocation
+            }
+            // Bounds check for target position
+            if to_pos.row >= 9 || to_pos.col >= 9 {
+                return;
+            }
             if !self.is_square_occupied_by(to_pos, player) {
                 moves.push(Move::new_move(pos, to_pos, piece.piece_type, player, false));
             }
@@ -267,7 +281,13 @@ impl BitboardBoard {
 
                 for (dr, dc) in directions {
                     let mut current_pos = pos;
+                    let mut steps = 0;
+                    const MAX_SLIDING_STEPS: i32 = 8; // Prevent infinite loops
+                    
                     loop {
+                        if steps >= MAX_SLIDING_STEPS { break; } // Safety limit
+                        steps += 1;
+                        
                         let new_row = current_pos.row as i8 + dr;
                         let new_col = current_pos.col as i8 + dc;
                         if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 { break; } // Out of bounds
@@ -597,6 +617,215 @@ impl BitboardBoard {
         } else {
             false
         }
+    }
+}
+
+// Import the BoardTrait for implementation
+use crate::search::board_trait::{BoardTrait, BoardTraitExt};
+use crate::search::RepetitionState;
+
+impl BoardTrait for BitboardBoard {
+    fn get_piece_at(&self, position: Position) -> Option<Piece> {
+        self.get_piece(position).cloned()
+    }
+    
+    fn get_all_pieces(&self) -> Vec<(Position, Piece)> {
+        let mut pieces = Vec::new();
+        for (pos, piece) in &self.piece_positions {
+            pieces.push((*pos, piece.clone()));
+        }
+        pieces
+    }
+    
+    fn count_pieces(&self, piece_type: PieceType, player: Player) -> usize {
+        let player_idx = if player == Player::Black { 0 } else { 1 };
+        let piece_idx = piece_type.to_u8() as usize;
+        popcount(self.pieces[player_idx][piece_idx]) as usize
+    }
+    
+    fn is_square_occupied(&self, position: Position) -> bool {
+        self.is_square_occupied(position)
+    }
+    
+    fn is_square_occupied_by_player(&self, position: Position, player: Player) -> bool {
+        self.is_square_occupied_by(position, player)
+    }
+    
+    fn get_occupied_bitboard_for_player(&self, player: Player) -> Bitboard {
+        match player {
+            Player::Black => self.black_occupied,
+            Player::White => self.white_occupied,
+        }
+    }
+    
+    fn get_occupied_bitboard(&self) -> Bitboard {
+        self.occupied
+    }
+    
+    fn is_valid_position(&self) -> bool {
+        // Check for exactly one king per player
+        let black_kings = self.count_pieces(PieceType::King, Player::Black);
+        let white_kings = self.count_pieces(PieceType::King, Player::White);
+        black_kings == 1 && white_kings == 1
+    }
+    
+    fn get_side_to_move(&self) -> Player {
+        // Default to Black - this should be managed by the game state
+        Player::Black
+    }
+    
+    fn get_repetition_state(&self) -> RepetitionState {
+        // Default to no repetition - this should be managed by the game state
+        RepetitionState::None
+    }
+    
+    fn get_captured_pieces(&self, _player: Player) -> Vec<PieceType> {
+        // This method requires access to CapturedPieces, which is not stored in BitboardBoard
+        // We'll return an empty vector for now - this should be managed by the game state
+        Vec::new()
+    }
+    
+    fn get_captured_pieces_count(&self, _player: Player) -> usize {
+        // This method requires access to CapturedPieces, which is not stored in BitboardBoard
+        // We'll return 0 for now - this should be managed by the game state
+        0
+    }
+    
+    fn get_captured_piece_count(&self, _piece_type: PieceType, _player: Player) -> usize {
+        // This method requires access to CapturedPieces, which is not stored in BitboardBoard
+        // We'll return 0 for now - this should be managed by the game state
+        0
+    }
+    
+    fn has_captured_piece(&self, _piece_type: PieceType, _player: Player) -> bool {
+        // This method requires access to CapturedPieces, which is not stored in BitboardBoard
+        // We'll return false for now - this should be managed by the game state
+        false
+    }
+    
+    fn get_position_id(&self) -> u64 {
+        // Use a simple hash based on piece positions
+        let mut hash = 0u64;
+        for (pos, piece) in &self.piece_positions {
+            hash ^= (pos.row as u64) << 32 | (pos.col as u64);
+            hash ^= (piece.piece_type.to_u8() as u64) << 16 | (match piece.player { Player::Black => 0, Player::White => 1 } as u64);
+        }
+        hash
+    }
+    
+    fn clone_board(&self) -> Self {
+        self.clone()
+    }
+    
+    fn is_terminal_position(&self, captured_pieces: &CapturedPieces) -> bool {
+        // Check for checkmate or stalemate
+        self.is_checkmate(Player::Black, captured_pieces) ||
+        self.is_checkmate(Player::White, captured_pieces) ||
+        self.is_stalemate(Player::Black, captured_pieces) ||
+        self.is_stalemate(Player::White, captured_pieces)
+    }
+    
+    fn get_game_phase(&self) -> GamePhase {
+        let _total_pieces = BoardTraitExt::get_total_piece_count(self);
+        let material_count = self.get_total_material_count();
+        GamePhase::from_material_count(material_count)
+    }
+    
+    fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
+        self.is_legal_move(move_, captured_pieces)
+    }
+    
+    fn get_king_position(&self, player: Player) -> Option<Position> {
+        self.find_king_position(player)
+    }
+    
+    fn is_king_in_check(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
+        self.is_king_in_check(player, captured_pieces)
+    }
+    
+    fn get_material_balance(&self, player: Player) -> i32 {
+        let mut balance = 0;
+        
+        // Calculate material balance for the current player
+        for (_, piece) in &self.piece_positions {
+            let value = piece.piece_type.base_value();
+            if piece.player == player {
+                balance += value;
+            } else {
+                balance -= value;
+            }
+        }
+        
+        balance
+    }
+    
+    fn get_total_material_count(&self) -> u32 {
+        self.piece_positions.len() as u32
+    }
+    
+    fn is_in_promotion_zone(&self, position: Position, player: Player) -> bool {
+        match player {
+            Player::Black => position.row >= 6, // Black promotes in ranks 6-8
+            Player::White => position.row <= 2, // White promotes in ranks 0-2
+        }
+    }
+    
+    fn get_drop_moves(&self, _piece_type: PieceType, _player: Player) -> Vec<Move> {
+        // This method requires access to CapturedPieces, which is not stored in BitboardBoard
+        // We'll return an empty vector for now - this should be managed by the game state
+        Vec::new()
+    }
+    
+    fn is_legal_drop(&self, piece_type: PieceType, position: Position, player: Player, captured_pieces: &CapturedPieces) -> bool {
+        // Check if the square is empty
+        if self.is_square_occupied(position) {
+            return false;
+        }
+        
+        // Check if the player has the piece in hand
+        if captured_pieces.count(piece_type, player) == 0 {
+            return false;
+        }
+        
+        // Check piece-specific drop rules
+        match piece_type {
+            PieceType::Pawn => {
+                // Pawn cannot be dropped in the last rank
+                match player {
+                    Player::Black => position.row < 8,
+                    Player::White => position.row > 0,
+                }
+            },
+            PieceType::Lance => {
+                // Lance cannot be dropped in the last rank
+                match player {
+                    Player::Black => position.row < 8,
+                    Player::White => position.row > 0,
+                }
+            },
+            PieceType::Knight => {
+                // Knight cannot be dropped in the last two ranks
+                match player {
+                    Player::Black => position.row < 7,
+                    Player::White => position.row > 1,
+                }
+            },
+            _ => true, // Other pieces can be dropped anywhere
+        }
+    }
+    
+    fn get_position_hash(&self, captured_pieces: &CapturedPieces) -> u64 {
+        // Use the Zobrist hasher to compute the hash
+        use crate::search::zobrist::ZobristHasher;
+        let hasher = ZobristHasher::new();
+        hasher.hash_position(self, self.get_side_to_move(), captured_pieces, self.get_repetition_state())
+    }
+    
+    fn update_hash_for_move(&self, current_hash: u64, move_: &Move, captured_pieces_before: &CapturedPieces, captured_pieces_after: &CapturedPieces) -> u64 {
+        // Use the Zobrist hasher to update the hash
+        use crate::search::zobrist::ZobristHasher;
+        let hasher = ZobristHasher::new();
+        hasher.update_hash_for_move(current_hash, move_, self, self, captured_pieces_before, captured_pieces_after)
     }
 }
 

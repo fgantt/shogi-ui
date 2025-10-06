@@ -41,7 +41,7 @@ pub mod patterns {
 pub mod usi;
 
 use moves::*;
-use search::SearchEngine;
+use search::search_engine::SearchEngine;
 use types::*;
 use opening_book::OpeningBook;
 use tablebase::MicroTablebase;
@@ -385,7 +385,7 @@ impl ShogiEngine {
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
         println!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
-        let mut searcher = search::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
+        let mut searcher = search::search_engine::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         

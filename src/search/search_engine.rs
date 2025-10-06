@@ -11,7 +11,9 @@ pub struct SearchEngine {
     evaluator: PositionEvaluator,
     move_generator: MoveGenerator,
     tablebase: MicroTablebase,
-    transposition_table: HashMap<String, TranspositionEntry>,
+    transposition_table: crate::search::ThreadSafeTranspositionTable,
+    hash_calculator: crate::search::ShogiHashHandler,
+    move_orderer: crate::search::TranspositionMoveOrderer,
     quiescence_tt: HashMap<String, QuiescenceEntry>,
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
@@ -46,14 +48,20 @@ impl SearchEngine {
     }
 
     pub fn new_with_config(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize, quiescence_config: QuiescenceConfig) -> Self {
+        let config = crate::search::TranspositionConfig::performance_optimized();
+        let config = crate::search::TranspositionConfig {
+            table_size: hash_size_mb * 1024 * 1024 / 100, // Approximate entries
+            ..config
+        };
         const BYTES_PER_ENTRY: usize = 100; // Approximate size of a TT entry
-        let capacity = hash_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
         let quiescence_capacity = quiescence_config.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
-            transposition_table: HashMap::with_capacity(capacity),
+            transposition_table: crate::search::ThreadSafeTranspositionTable::new(config),
+            hash_calculator: crate::search::ShogiHashHandler::new(1000),
+            move_orderer: crate::search::TranspositionMoveOrderer::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
@@ -82,17 +90,38 @@ impl SearchEngine {
         }
     }
 
+    /// Initialize the move orderer with the transposition table
+    fn initialize_move_orderer(&mut self) {
+        self.move_orderer.set_transposition_table(&self.transposition_table);
+    }
+
+    /// Update move orderer with killer move
+    fn update_move_orderer_killer(&mut self, killer_move: Move) {
+        self.move_orderer.update_killer_moves(killer_move);
+    }
+
+    /// Update move orderer with history
+    fn update_move_orderer_history(&mut self, mv: &Move, depth: u8) {
+        self.move_orderer.update_history(mv, depth);
+    }
+
     /// Create a new SearchEngine with full EngineConfig
     pub fn new_with_engine_config(stop_flag: Option<Arc<AtomicBool>>, config: EngineConfig) -> Self {
         const BYTES_PER_ENTRY: usize = 100; // Approximate size of a TT entry
-        let capacity = config.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
+        let tt_config = crate::search::TranspositionConfig::performance_optimized();
+        let tt_config = crate::search::TranspositionConfig {
+            table_size: config.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY,
+            ..tt_config
+        };
         let quiescence_capacity = config.quiescence.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
         
         Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
-            transposition_table: HashMap::with_capacity(capacity),
+            transposition_table: crate::search::ThreadSafeTranspositionTable::new(tt_config),
+            hash_calculator: crate::search::ShogiHashHandler::new(1000),
+            move_orderer: crate::search::TranspositionMoveOrderer::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
@@ -160,7 +189,7 @@ impl SearchEngine {
             lmr: self.lmr_config.clone(),
             aspiration_windows: self.aspiration_config.clone(),
             iid: self.iid_config.clone(),
-            tt_size_mb: self.transposition_table.capacity() * 100 / (1024 * 1024), // Approximate
+            tt_size_mb: self.transposition_table.size() * 100 / (1024 * 1024), // Approximate
             debug_logging: false, // This would need to be tracked separately
             max_depth: 20, // This would need to be tracked separately
             time_management: TimeManagementConfig::default(),
@@ -277,8 +306,8 @@ impl SearchEngine {
         // Only return move if IID found something promising
         if iid_score > alpha {
             // Extract the best move from transposition table
-            let fen_key = board.to_fen(player, captured_pieces);
-            if let Some(entry) = self.transposition_table.get(&fen_key) {
+            let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
                 if let Some(best_move) = &entry.best_move {
                     return Some(best_move.clone());
                 }
@@ -291,8 +320,8 @@ impl SearchEngine {
 
     /// Extract the best move from transposition table for a given position
     fn extract_best_move_from_tt(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<Move> {
-        let fen_key = board.to_fen(player, captured_pieces);
-        if let Some(entry) = self.transposition_table.get(&fen_key) {
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
             entry.best_move.clone()
         } else {
             None
@@ -2162,7 +2191,9 @@ impl SearchEngine {
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Sorting moves");
         crate::debug_utils::start_timing("move_sorting");
-        let sorted_moves = self.sort_moves_with_pruning_awareness(&legal_moves, board, None, Some(depth), Some(alpha), Some(beta));
+        // Initialize move orderer if not already done
+        self.initialize_move_orderer();
+        let sorted_moves = self.move_orderer.order_moves(&legal_moves, board, captured_pieces, player, depth, alpha, beta, None);
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
@@ -2308,21 +2339,21 @@ impl SearchEngine {
         }
 
         // Check transposition table
-        if let Some(entry) = self.transposition_table.get(&fen_key) {
-            if entry.depth >= depth {
-                crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit: depth={}, score={}, flag={:?}", 
-                    entry.depth, entry.score, entry.flag));
-                match entry.flag {
-                    TranspositionFlag::Exact => return entry.score,
-                    TranspositionFlag::LowerBound => if entry.score >= beta { 
-                        crate::debug_utils::trace_log("NEGAMAX", "TT lower bound cutoff");
-                        return entry.score; 
-                    },
-                    TranspositionFlag::UpperBound => if entry.score <= alpha { 
-                        crate::debug_utils::trace_log("NEGAMAX", "TT upper bound cutoff");
-                        return entry.score; 
-                    },
-                }
+        // Calculate position hash for the new TT system
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        if let Some(entry) = self.transposition_table.probe(position_hash, depth) {
+            crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit: depth={}, score={}, flag={:?}", 
+                entry.depth, entry.score, entry.flag));
+            match entry.flag {
+                TranspositionFlag::Exact => return entry.score,
+                TranspositionFlag::LowerBound => if entry.score >= beta { 
+                    crate::debug_utils::trace_log("NEGAMAX", "TT lower bound cutoff");
+                    return entry.score; 
+                },
+                TranspositionFlag::UpperBound => if entry.score <= alpha { 
+                    crate::debug_utils::trace_log("NEGAMAX", "TT upper bound cutoff");
+                    return entry.score; 
+                },
             }
         }
         
@@ -2372,7 +2403,7 @@ impl SearchEngine {
         
         // === INTERNAL ITERATIVE DEEPENING (IID) ===
         let mut iid_move = None;
-        let tt_move = self.transposition_table.get(&fen_key).and_then(|entry| entry.best_move.clone());
+        let tt_move = self.transposition_table.probe(position_hash, 255).and_then(|entry| entry.best_move.clone());
         let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms);
         
         if should_apply_iid {
@@ -2413,7 +2444,9 @@ impl SearchEngine {
         // === END IID ===
         
         crate::debug_utils::trace_log("NEGAMAX", "Sorting moves for evaluation");
-        let sorted_moves = self.sort_moves_with_pruning_awareness(&legal_moves, board, iid_move.as_ref(), Some(depth), Some(alpha), Some(beta));
+        // Initialize move orderer if not already done
+        self.initialize_move_orderer();
+        let sorted_moves = self.move_orderer.order_moves(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref());
         let mut best_score = -200000;
         let mut best_move_for_tt = None;
         
@@ -2531,7 +2564,9 @@ impl SearchEngine {
         history.pop();
 
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
-        self.transposition_table.insert(fen_key, TranspositionEntry { score: best_score, depth, flag, best_move: best_move_for_tt });
+        // Use the position hash we calculated earlier for proper TT storage
+        let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt, position_hash);
+        self.transposition_table.store(entry);
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
         
@@ -2733,8 +2768,11 @@ impl SearchEngine {
     
 
     pub fn sort_moves(&mut self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>) -> Vec<Move> {
-        // Enhanced move ordering with pruning awareness
-        self.sort_moves_with_pruning_awareness(moves, board, iid_move, None, None, None)
+        // Enhanced move ordering with transposition table integration
+        self.initialize_move_orderer();
+        let captured_pieces = CapturedPieces::new(); // Default empty captured pieces
+        let player = Player::Black; // Default player (will be overridden by caller if needed)
+        self.move_orderer.order_moves(moves, board, &captured_pieces, player, 1, 0, 0, iid_move)
     }
     
     /// Enhanced move ordering that considers pruning effectiveness
@@ -3007,12 +3045,12 @@ impl SearchEngine {
 
     #[cfg(test)]
     pub fn transposition_table_len(&self) -> usize {
-        self.transposition_table.len()
+        self.transposition_table.size()
     }
 
     #[cfg(test)]
     pub fn transposition_table_capacity(&self) -> usize {
-        self.transposition_table.capacity()
+        self.transposition_table.size() // ThreadSafeTranspositionTable doesn't expose capacity
     }
 
     fn get_pv(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
@@ -3022,8 +3060,8 @@ impl SearchEngine {
         let mut current_player = player;
     
         for _ in 0..depth {
-            let fen_key = current_board.to_fen(current_player, &current_captured);
-            if let Some(entry) = self.transposition_table.get(&fen_key) {
+            let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
+            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
                 if let Some(move_) = &entry.best_move {
                     pv.push(move_.clone());
                     if let Some(captured) = current_board.make_move(move_) {
@@ -3859,7 +3897,7 @@ impl SearchEngine {
         }
         
         // Clear transposition table if it gets too large
-        if self.transposition_table.len() > 100_000 {
+        if self.transposition_table.size() > 100_000 {
             self.transposition_table.clear();
         }
     }
@@ -5284,7 +5322,7 @@ impl SearchEngine {
         }
         
         // Clear transposition table if it gets too large
-        if self.transposition_table.len() > 100_000 {
+        if self.transposition_table.size() > 100_000 {
             self.transposition_table.clear();
         }
     }

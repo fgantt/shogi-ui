@@ -480,13 +480,120 @@ pub struct TranspositionEntry {
     pub depth: u8,
     pub flag: TranspositionFlag,
     pub best_move: Option<Move>,
+    /// Hash key for this entry (used for collision detection)
+    pub hash_key: u64,
+    /// Age counter for replacement policies
+    pub age: u32,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+impl TranspositionEntry {
+    /// Create a new transposition table entry
+    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64, age: u32) -> Self {
+        Self {
+            score,
+            depth,
+            flag,
+            best_move,
+            hash_key,
+            age,
+        }
+    }
+    
+    /// Create a new entry with default age (0)
+    pub fn new_with_age(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64) -> Self {
+        Self::new(score, depth, flag, best_move, hash_key, 0)
+    }
+    
+    /// Check if this entry is valid for the given search depth
+    pub fn is_valid_for_depth(&self, required_depth: u8) -> bool {
+        self.depth >= required_depth
+    }
+    
+    /// Check if this entry matches the given hash key
+    pub fn matches_hash(&self, hash_key: u64) -> bool {
+        self.hash_key == hash_key
+    }
+    
+    /// Check if this entry is exact (not a bound)
+    pub fn is_exact(&self) -> bool {
+        matches!(self.flag, TranspositionFlag::Exact)
+    }
+    
+    /// Check if this entry is a lower bound
+    pub fn is_lower_bound(&self) -> bool {
+        matches!(self.flag, TranspositionFlag::LowerBound)
+    }
+    
+    /// Check if this entry is an upper bound
+    pub fn is_upper_bound(&self) -> bool {
+        matches!(self.flag, TranspositionFlag::UpperBound)
+    }
+    
+    /// Update the age of this entry
+    pub fn update_age(&mut self, new_age: u32) {
+        self.age = new_age;
+    }
+    
+    /// Get the memory size of this entry in bytes
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+    
+    /// Create a debug string representation
+    pub fn debug_string(&self) -> String {
+        let move_str = match &self.best_move {
+            Some(m) => format!("{}", m.to_usi_string()),
+            None => "None".to_string(),
+        };
+        
+        format!(
+            "TranspositionEntry {{ score: {}, depth: {}, flag: {:?}, best_move: {}, hash_key: 0x{:016x}, age: {} }}",
+            self.score, self.depth, self.flag, move_str, self.hash_key, self.age
+        )
+    }
+    
+    /// Check if this entry should be replaced by another entry
+    pub fn should_replace_with(&self, other: &TranspositionEntry) -> bool {
+        // Replace if hash keys don't match (collision)
+        if !self.matches_hash(other.hash_key) {
+            return true;
+        }
+        
+        // Replace if the new entry has greater depth
+        if other.depth > self.depth {
+            return true;
+        }
+        
+        // Replace if depths are equal but new entry is exact and current is not
+        if other.depth == self.depth && other.is_exact() && !self.is_exact() {
+            return true;
+        }
+        
+        // Replace if the new entry is newer (higher age)
+        if other.age > self.age {
+            return true;
+        }
+        
+        false
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum TranspositionFlag {
     Exact,
     LowerBound,
     UpperBound,
+}
+
+impl TranspositionFlag {
+    /// Get a string representation of the flag
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            TranspositionFlag::Exact => "Exact",
+            TranspositionFlag::LowerBound => "LowerBound",
+            TranspositionFlag::UpperBound => "UpperBound",
+        }
+    }
 }
 
 /// Transposition table entry specifically for quiescence search
@@ -6235,4 +6342,331 @@ pub struct ParameterStatistics {
     pub avg_futility_margin: f64,
     pub avg_lmr_reduction: f64,
     pub learning_rate: f64,
+}
+
+#[cfg(test)]
+mod transposition_entry_tests {
+    use super::*;
+    
+    #[test]
+    fn test_transposition_entry_creation() {
+        let entry = TranspositionEntry::new(
+            100, 
+            5, 
+            TranspositionFlag::Exact, 
+            None, 
+            0x1234567890ABCDEF, 
+            42
+        );
+        
+        assert_eq!(entry.score, 100);
+        assert_eq!(entry.depth, 5);
+        assert_eq!(entry.flag, TranspositionFlag::Exact);
+        assert!(entry.best_move.is_none());
+        assert_eq!(entry.hash_key, 0x1234567890ABCDEF);
+        assert_eq!(entry.age, 42);
+    }
+    
+    #[test]
+    fn test_transposition_entry_with_age() {
+        let entry = TranspositionEntry::new_with_age(
+            -50, 
+            3, 
+            TranspositionFlag::LowerBound, 
+            None, 
+            0xFEDCBA0987654321
+        );
+        
+        assert_eq!(entry.score, -50);
+        assert_eq!(entry.depth, 3);
+        assert_eq!(entry.flag, TranspositionFlag::LowerBound);
+        assert_eq!(entry.hash_key, 0xFEDCBA0987654321);
+        assert_eq!(entry.age, 0); // Default age
+    }
+    
+    #[test]
+    fn test_is_valid_for_depth() {
+        let entry = TranspositionEntry::new_with_age(
+            0, 
+            5, 
+            TranspositionFlag::Exact, 
+            None, 
+            0x1234
+        );
+        
+        // Entry depth 5 should be valid for required depth 5
+        assert!(entry.is_valid_for_depth(5));
+        // Entry depth 5 should be valid for required depth 4
+        assert!(entry.is_valid_for_depth(4));
+        // Entry depth 5 should NOT be valid for required depth 6
+        assert!(!entry.is_valid_for_depth(6));
+    }
+    
+    #[test]
+    fn test_matches_hash() {
+        let hash_key = 0x1234567890ABCDEF;
+        let entry = TranspositionEntry::new_with_age(
+            0, 
+            0, 
+            TranspositionFlag::Exact, 
+            None, 
+            hash_key
+        );
+        
+        assert!(entry.matches_hash(hash_key));
+        assert!(!entry.matches_hash(0xFEDCBA0987654321));
+        assert!(!entry.matches_hash(0));
+    }
+    
+    #[test]
+    fn test_flag_checks() {
+        let exact_entry = TranspositionEntry::new_with_age(
+            0, 0, TranspositionFlag::Exact, None, 0x1234
+        );
+        let lower_entry = TranspositionEntry::new_with_age(
+            0, 0, TranspositionFlag::LowerBound, None, 0x1234
+        );
+        let upper_entry = TranspositionEntry::new_with_age(
+            0, 0, TranspositionFlag::UpperBound, None, 0x1234
+        );
+        
+        assert!(exact_entry.is_exact());
+        assert!(!exact_entry.is_lower_bound());
+        assert!(!exact_entry.is_upper_bound());
+        
+        assert!(!lower_entry.is_exact());
+        assert!(lower_entry.is_lower_bound());
+        assert!(!lower_entry.is_upper_bound());
+        
+        assert!(!upper_entry.is_exact());
+        assert!(!upper_entry.is_lower_bound());
+        assert!(upper_entry.is_upper_bound());
+    }
+    
+    #[test]
+    fn test_age_management() {
+        let mut entry = TranspositionEntry::new_with_age(
+            0, 0, TranspositionFlag::Exact, None, 0x1234
+        );
+        
+        assert_eq!(entry.age, 0);
+        entry.update_age(100);
+        assert_eq!(entry.age, 100);
+        entry.update_age(0);
+        assert_eq!(entry.age, 0);
+    }
+    
+    #[test]
+    fn test_memory_size() {
+        let entry = TranspositionEntry::new_with_age(
+            0, 0, TranspositionFlag::Exact, None, 0x1234
+        );
+        
+        let size = entry.memory_size();
+        assert!(size > 0);
+        // Should be reasonable size (not too large)
+        assert!(size < 1000);
+    }
+    
+    #[test]
+    fn test_debug_string() {
+        let entry = TranspositionEntry::new(
+            42, 
+            3, 
+            TranspositionFlag::Exact, 
+            None, 
+            0x1234567890ABCDEF, 
+            10
+        );
+        
+        let debug_str = entry.debug_string();
+        assert!(debug_str.contains("score: 42"));
+        assert!(debug_str.contains("depth: 3"));
+        assert!(debug_str.contains("Exact"));
+        assert!(debug_str.contains("best_move: None"));
+        assert!(debug_str.contains("0x1234567890abcdef"));
+        assert!(debug_str.contains("age: 10"));
+    }
+    
+    #[test]
+    fn test_debug_string_with_move() {
+        let move_ = Move::new_move(
+            Position::new(1, 1), 
+            Position::new(2, 1), 
+            PieceType::Pawn, 
+            Player::Black, 
+            false
+        );
+        
+        let entry = TranspositionEntry::new(
+            100, 
+            5, 
+            TranspositionFlag::LowerBound, 
+            Some(move_), 
+            0xFEDCBA0987654321, 
+            20
+        );
+        
+        let debug_str = entry.debug_string();
+        assert!(debug_str.contains("score: 100"));
+        assert!(debug_str.contains("depth: 5"));
+        assert!(debug_str.contains("LowerBound"));
+        assert!(debug_str.contains("best_move:"));
+        assert!(debug_str.contains("0xfedcba0987654321"));
+        assert!(debug_str.contains("age: 20"));
+    }
+    
+    #[test]
+    fn test_should_replace_with_hash_mismatch() {
+        let entry1 = TranspositionEntry::new_with_age(
+            0, 5, TranspositionFlag::Exact, None, 0x1111
+        );
+        let entry2 = TranspositionEntry::new_with_age(
+            0, 3, TranspositionFlag::LowerBound, None, 0x2222
+        );
+        
+        // Should replace due to hash mismatch (collision)
+        assert!(entry1.should_replace_with(&entry2));
+    }
+    
+    #[test]
+    fn test_should_replace_with_depth() {
+        let entry1 = TranspositionEntry::new_with_age(
+            0, 3, TranspositionFlag::Exact, None, 0x1111
+        );
+        let entry2 = TranspositionEntry::new_with_age(
+            0, 5, TranspositionFlag::LowerBound, None, 0x1111
+        );
+        
+        // Should replace due to greater depth
+        assert!(entry1.should_replace_with(&entry2));
+    }
+    
+    #[test]
+    fn test_should_replace_with_exact_flag() {
+        let entry1 = TranspositionEntry::new_with_age(
+            0, 5, TranspositionFlag::LowerBound, None, 0x1111
+        );
+        let entry2 = TranspositionEntry::new_with_age(
+            0, 5, TranspositionFlag::Exact, None, 0x1111
+        );
+        
+        // Should replace due to exact flag when depths are equal
+        assert!(entry1.should_replace_with(&entry2));
+    }
+    
+    #[test]
+    fn test_should_replace_with_age() {
+        let entry1 = TranspositionEntry::new(
+            0, 5, TranspositionFlag::Exact, None, 0x1111, 10
+        );
+        let entry2 = TranspositionEntry::new(
+            0, 5, TranspositionFlag::Exact, None, 0x1111, 20
+        );
+        
+        // Should replace due to newer age when everything else is equal
+        assert!(entry1.should_replace_with(&entry2));
+    }
+    
+    #[test]
+    fn test_should_not_replace() {
+        let entry1 = TranspositionEntry::new(
+            0, 5, TranspositionFlag::Exact, None, 0x1111, 20
+        );
+        let entry2 = TranspositionEntry::new(
+            0, 3, TranspositionFlag::LowerBound, None, 0x1111, 10
+        );
+        
+        // Should NOT replace - current entry is better in all aspects
+        assert!(!entry1.should_replace_with(&entry2));
+    }
+    
+    #[test]
+    fn test_transposition_flag_to_string() {
+        assert_eq!(TranspositionFlag::Exact.to_string(), "Exact");
+        assert_eq!(TranspositionFlag::LowerBound.to_string(), "LowerBound");
+        assert_eq!(TranspositionFlag::UpperBound.to_string(), "UpperBound");
+    }
+    
+    #[test]
+    fn test_transposition_entry_clone() {
+        let original = TranspositionEntry::new(
+            100, 
+            5, 
+            TranspositionFlag::Exact, 
+            None, 
+            0x1234567890ABCDEF, 
+            42
+        );
+        
+        let cloned = original.clone();
+        
+        assert_eq!(original.score, cloned.score);
+        assert_eq!(original.depth, cloned.depth);
+        assert_eq!(original.flag, cloned.flag);
+        assert_eq!(original.best_move, cloned.best_move);
+        assert_eq!(original.hash_key, cloned.hash_key);
+        assert_eq!(original.age, cloned.age);
+    }
+    
+    #[test]
+    fn test_transposition_entry_with_best_move() {
+        let move_ = Move::new_move(
+            Position::new(0, 0), 
+            Position::new(1, 1), 
+            PieceType::King, 
+            Player::White, 
+            false
+        );
+        
+        let entry = TranspositionEntry::new_with_age(
+            150, 
+            7, 
+            TranspositionFlag::Exact, 
+            Some(move_), 
+            0xABCDEF1234567890
+        );
+        
+        assert_eq!(entry.score, 150);
+        assert_eq!(entry.depth, 7);
+        assert!(entry.best_move.is_some());
+        
+        let best_move = entry.best_move.unwrap();
+        assert_eq!(best_move.piece_type, PieceType::King);
+        assert_eq!(best_move.player, Player::White);
+        assert!(!best_move.is_promotion);
+    }
+    
+    #[test]
+    fn test_edge_cases() {
+        // Test with maximum values
+        let max_entry = TranspositionEntry::new(
+            i32::MAX, 
+            u8::MAX, 
+            TranspositionFlag::Exact, 
+            None, 
+            u64::MAX, 
+            u32::MAX
+        );
+        
+        assert_eq!(max_entry.score, i32::MAX);
+        assert_eq!(max_entry.depth, u8::MAX);
+        assert_eq!(max_entry.hash_key, u64::MAX);
+        assert_eq!(max_entry.age, u32::MAX);
+        
+        // Test with minimum values
+        let min_entry = TranspositionEntry::new(
+            i32::MIN, 
+            0, 
+            TranspositionFlag::UpperBound, 
+            None, 
+            0, 
+            0
+        );
+        
+        assert_eq!(min_entry.score, i32::MIN);
+        assert_eq!(min_entry.depth, 0);
+        assert_eq!(min_entry.hash_key, 0);
+        assert_eq!(min_entry.age, 0);
+    }
 }
