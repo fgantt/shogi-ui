@@ -6681,8 +6681,53 @@ impl SearchEngine {
     }
 
     /// Evaluate the current position statically
+    /// Automatically uses cache if enabled in evaluator (Task 3.2.2)
     pub fn evaluate_position(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         self.evaluator.evaluate(board, player, captured_pieces)
+    }
+
+    // ============================================================================
+    // EVALUATION CACHE INTEGRATION FOR SEARCH (Phase 3, Task 3.2)
+    // ============================================================================
+
+    /// Enable evaluation cache in the search engine's evaluator
+    pub fn enable_eval_cache(&mut self) {
+        self.evaluator.enable_eval_cache();
+    }
+
+    /// Enable multi-level cache in the search engine's evaluator
+    pub fn enable_multi_level_cache(&mut self) {
+        self.evaluator.enable_multi_level_cache();
+    }
+
+    /// Disable evaluation cache
+    pub fn disable_eval_cache(&mut self) {
+        self.evaluator.disable_eval_cache();
+    }
+
+    /// Check if cache is enabled
+    pub fn is_eval_cache_enabled(&self) -> bool {
+        self.evaluator.is_cache_enabled()
+    }
+
+    /// Get cache statistics from evaluator
+    pub fn get_eval_cache_statistics(&self) -> Option<String> {
+        self.evaluator.get_cache_statistics()
+    }
+
+    /// Clear evaluation cache
+    pub fn clear_eval_cache(&mut self) {
+        self.evaluator.clear_eval_cache();
+    }
+
+    /// Get mutable reference to evaluator for cache configuration
+    pub fn get_evaluator_mut(&mut self) -> &mut PositionEvaluator {
+        &mut self.evaluator
+    }
+
+    /// Get reference to evaluator for cache access
+    pub fn get_evaluator(&self) -> &PositionEvaluator {
+        &self.evaluator
     }
 
     /// Get the position hash for the current board state

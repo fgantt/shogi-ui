@@ -28,6 +28,7 @@ pub mod eval_cache;
 use king_safety::KingSafetyEvaluator;
 use integration::IntegratedEvaluator;
 use advanced_integration::AdvancedIntegration;
+use eval_cache::{EvaluationCache, MultiLevelCache};
 
 /// Position evaluator for the Shogi engine
 pub struct PositionEvaluator {
@@ -47,6 +48,12 @@ pub struct PositionEvaluator {
     use_integrated_eval: bool,
     // Advanced integration features (opening book, tablebase, analysis mode)
     advanced_integration: Option<AdvancedIntegration>,
+    // Evaluation cache (optional)
+    eval_cache: Option<EvaluationCache>,
+    // Multi-level cache (optional, mutually exclusive with eval_cache)
+    multi_level_cache: Option<MultiLevelCache>,
+    // Whether to use cache
+    use_cache: bool,
 }
 
 impl PositionEvaluator {
@@ -60,6 +67,9 @@ impl PositionEvaluator {
             integrated_evaluator: Some(IntegratedEvaluator::new()),
             use_integrated_eval: true,
             advanced_integration: Some(AdvancedIntegration::new()),
+            eval_cache: None,
+            multi_level_cache: None,
+            use_cache: false,
         }
     }
     
@@ -74,6 +84,9 @@ impl PositionEvaluator {
             integrated_evaluator: Some(IntegratedEvaluator::new()),
             use_integrated_eval: true,
             advanced_integration: Some(AdvancedIntegration::new()),
+            eval_cache: None,
+            multi_level_cache: None,
+            use_cache: false,
         }
     }
     
@@ -213,6 +226,84 @@ impl PositionEvaluator {
         }
     }
 
+    // ============================================================================
+    // EVALUATION CACHE INTEGRATION (Phase 3, Task 3.1)
+    // ============================================================================
+
+    /// Enable evaluation cache with default configuration
+    pub fn enable_eval_cache(&mut self) {
+        self.eval_cache = Some(EvaluationCache::new());
+        self.use_cache = true;
+    }
+
+    /// Enable evaluation cache with custom configuration
+    pub fn enable_eval_cache_with_config(&mut self, config: eval_cache::EvaluationCacheConfig) {
+        self.eval_cache = Some(EvaluationCache::with_config(config));
+        self.use_cache = true;
+    }
+
+    /// Enable multi-level cache with default configuration
+    pub fn enable_multi_level_cache(&mut self) {
+        self.multi_level_cache = Some(MultiLevelCache::new());
+        self.eval_cache = None; // Mutually exclusive
+        self.use_cache = true;
+    }
+
+    /// Enable multi-level cache with custom configuration
+    pub fn enable_multi_level_cache_with_config(&mut self, config: eval_cache::MultiLevelCacheConfig) {
+        self.multi_level_cache = Some(MultiLevelCache::with_config(config));
+        self.eval_cache = None; // Mutually exclusive
+        self.use_cache = true;
+    }
+
+    /// Disable evaluation cache
+    pub fn disable_eval_cache(&mut self) {
+        self.use_cache = false;
+    }
+
+    /// Check if cache is enabled
+    pub fn is_cache_enabled(&self) -> bool {
+        self.use_cache && (self.eval_cache.is_some() || self.multi_level_cache.is_some())
+    }
+
+    /// Get reference to evaluation cache
+    pub fn get_eval_cache(&self) -> Option<&EvaluationCache> {
+        self.eval_cache.as_ref()
+    }
+
+    /// Get mutable reference to evaluation cache
+    pub fn get_eval_cache_mut(&mut self) -> Option<&mut EvaluationCache> {
+        self.eval_cache.as_mut()
+    }
+
+    /// Get reference to multi-level cache
+    pub fn get_multi_level_cache(&self) -> Option<&MultiLevelCache> {
+        self.multi_level_cache.as_ref()
+    }
+
+    /// Get cache statistics (works for both cache types)
+    pub fn get_cache_statistics(&self) -> Option<String> {
+        if let Some(ref cache) = self.eval_cache {
+            let stats = cache.get_statistics();
+            Some(stats.summary())
+        } else if let Some(ref ml_cache) = self.multi_level_cache {
+            let stats = ml_cache.get_statistics();
+            Some(stats.summary())
+        } else {
+            None
+        }
+    }
+
+    /// Clear evaluation cache
+    pub fn clear_eval_cache(&mut self) {
+        if let Some(ref cache) = self.eval_cache {
+            cache.clear();
+        }
+        if let Some(ref ml_cache) = self.multi_level_cache {
+            ml_cache.clear();
+        }
+    }
+
     /// Extract raw feature values for tuning
     /// Returns a vector of unweighted feature values that can be used for automated tuning
     pub fn get_evaluation_features(
@@ -288,15 +379,40 @@ impl PositionEvaluator {
 
     /// Evaluate the current position from the perspective of the given player
     pub fn evaluate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
-        // Use integrated evaluator if enabled
-        if self.use_integrated_eval {
-            if let Some(ref integrated) = self.integrated_evaluator {
-                return integrated.evaluate(board, player, captured_pieces);
+        // Try cache first (Task 3.1.2: Cache probe before evaluation)
+        if self.use_cache {
+            if let Some(ref cache) = self.eval_cache {
+                if let Some(score) = cache.probe(board, player, captured_pieces) {
+                    return score;
+                }
+            } else if let Some(ref ml_cache) = self.multi_level_cache {
+                if let Some(score) = ml_cache.probe(board, player, captured_pieces) {
+                    return score;
+                }
             }
         }
-        
-        // Fallback to legacy evaluation
-        self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
+
+        // Cache miss or cache disabled - evaluate normally
+        let score = if self.use_integrated_eval {
+            if let Some(ref integrated) = self.integrated_evaluator {
+                integrated.evaluate(board, player, captured_pieces)
+            } else {
+                self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
+            }
+        } else {
+            self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
+        };
+
+        // Store in cache (Task 3.1.3: Cache store after evaluation)
+        if self.use_cache {
+            if let Some(ref cache) = self.eval_cache {
+                cache.store(board, player, captured_pieces, score, 0);
+            } else if let Some(ref ml_cache) = self.multi_level_cache {
+                ml_cache.store(board, player, captured_pieces, score, 0);
+            }
+        }
+
+        score
     }
 
     /// Evaluate using tuned weights if available, otherwise use traditional evaluation
@@ -325,7 +441,38 @@ impl PositionEvaluator {
     }
     
     /// Evaluate with search context for performance optimization
+    /// Includes cache integration with depth tracking (Task 3.1.2, 3.1.3)
     pub fn evaluate_with_context(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces, depth: u8, is_root: bool, has_capture: bool, has_check: bool, is_quiescence: bool) -> i32 {
+        // Try cache first (with depth information)
+        if self.use_cache && depth > 0 {
+            if let Some(ref cache) = self.eval_cache {
+                if let Some(score) = cache.probe(board, player, captured_pieces) {
+                    return score;
+                }
+            } else if let Some(ref ml_cache) = self.multi_level_cache {
+                if let Some(score) = ml_cache.probe(board, player, captured_pieces) {
+                    return score;
+                }
+            }
+        }
+
+        // Cache miss - evaluate normally
+        let score = self.evaluate_with_context_internal(board, player, captured_pieces, depth, is_root, has_capture, has_check, is_quiescence);
+
+        // Store in cache with depth information
+        if self.use_cache && depth > 0 {
+            if let Some(ref cache) = self.eval_cache {
+                cache.store(board, player, captured_pieces, score, depth);
+            } else if let Some(ref ml_cache) = self.multi_level_cache {
+                ml_cache.store(board, player, captured_pieces, score, depth);
+            }
+        }
+
+        score
+    }
+
+    /// Internal evaluation with context (extracted for cache integration)
+    fn evaluate_with_context_internal(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces, depth: u8, is_root: bool, has_capture: bool, has_check: bool, is_quiescence: bool) -> i32 {
         // Check if tapered evaluation is enabled
         if !self.config.enabled {
             // Fall back to simple evaluation (just material and basic positional)
@@ -2109,6 +2256,151 @@ mod tests {
         assert!(opening_score != i32::MIN && opening_score != i32::MAX || opening_score == 0);
         assert!(endgame_score != i32::MIN && endgame_score != i32::MAX || endgame_score == 0);
         assert!(middlegame_score != i32::MIN && middlegame_score != i32::MAX || middlegame_score == 0);
+    }
+
+    // ============================================================================
+    // PHASE 3 TASK 3.1: EVALUATION ENGINE CACHE INTEGRATION TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_eval_cache_integration_enable() {
+        let mut evaluator = PositionEvaluator::new();
+        
+        assert!(!evaluator.is_cache_enabled());
+        
+        evaluator.enable_eval_cache();
+        assert!(evaluator.is_cache_enabled());
+        assert!(evaluator.get_eval_cache().is_some());
+    }
+
+    #[test]
+    fn test_eval_cache_integration_probe_store() {
+        let mut evaluator = PositionEvaluator::new();
+        evaluator.enable_eval_cache();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // First evaluation should miss cache and store
+        let score1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Second evaluation should hit cache
+        let score2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Scores should be identical (cache correctness)
+        assert_eq!(score1, score2);
+        
+        // Check cache statistics
+        if let Some(stats) = evaluator.get_cache_statistics() {
+            assert!(stats.contains("Hit Rate"));
+        }
+    }
+
+    #[test]
+    fn test_eval_cache_integration_correctness() {
+        let mut evaluator_with_cache = PositionEvaluator::new();
+        evaluator_with_cache.enable_eval_cache();
+        
+        let evaluator_without_cache = PositionEvaluator::new();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let score_cached = evaluator_with_cache.evaluate(&board, Player::Black, &captured_pieces);
+        let score_uncached = evaluator_without_cache.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Should produce same result
+        assert_eq!(score_cached, score_uncached);
+    }
+
+    #[test]
+    fn test_multi_level_cache_integration() {
+        let mut evaluator = PositionEvaluator::new();
+        evaluator.enable_multi_level_cache();
+        
+        assert!(evaluator.is_cache_enabled());
+        assert!(evaluator.get_multi_level_cache().is_some());
+        assert!(evaluator.get_eval_cache().is_none());
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        assert!(score != 0); // Should have valid evaluation
+    }
+
+    #[test]
+    fn test_cache_clear_integration() {
+        let mut evaluator = PositionEvaluator::new();
+        evaluator.enable_eval_cache();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Evaluate to populate cache
+        evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        
+        // Clear cache
+        evaluator.clear_eval_cache();
+        
+        // Should still work (just miss cache now)
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        assert!(score != 0);
+    }
+
+    #[test]
+    fn test_eval_cache_with_context_depth() {
+        let mut evaluator = PositionEvaluator::new();
+        evaluator.enable_eval_cache();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Evaluate with different depths
+        let score_d5 = evaluator.evaluate_with_context(&board, Player::Black, &captured_pieces, 5, false, false, false, false);
+        let score_d3 = evaluator.evaluate_with_context(&board, Player::Black, &captured_pieces, 3, false, false, false, false);
+        
+        // Should have consistent scores regardless of depth
+        assert_eq!(score_d5, score_d3);
+    }
+
+    #[test]
+    fn test_cache_disable_enable() {
+        let mut evaluator = PositionEvaluator::new();
+        
+        evaluator.enable_eval_cache();
+        assert!(evaluator.is_cache_enabled());
+        
+        evaluator.disable_eval_cache();
+        assert!(!evaluator.is_cache_enabled());
+        
+        // Should still evaluate correctly
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        assert!(score != 0);
+    }
+
+    #[test]
+    fn test_cache_integration_performance() {
+        let mut evaluator = PositionEvaluator::new();
+        evaluator.enable_eval_cache();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // First call (cache miss)
+        let start = std::time::Instant::now();
+        let _ = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let first_time = start.elapsed();
+        
+        // Second call (cache hit)
+        let start = std::time::Instant::now();
+        let _ = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let second_time = start.elapsed();
+        
+        // Cache hit should be faster
+        assert!(second_time < first_time || second_time.as_nanos() < 1000);
     }
 
     #[test]
