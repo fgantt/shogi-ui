@@ -831,7 +831,7 @@ impl Default for KingSafetyConfig {
 }
 
 /// Configuration options for tapered evaluation
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TaperedEvaluationConfig {
     /// Enable or disable tapered evaluation
     pub enabled: bool,

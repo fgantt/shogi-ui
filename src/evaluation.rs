@@ -8,8 +8,25 @@ pub mod king_safety;
 pub mod castles;
 pub mod attacks;
 pub mod patterns;
+pub mod tapered_eval;
+pub mod material;
+pub mod piece_square_tables;
+pub mod phase_transition;
+pub mod position_features;
+pub mod config;
+pub mod endgame_patterns;
+pub mod opening_principles;
+pub mod performance;
+pub mod tuning;
+pub mod statistics;
+pub mod advanced_interpolation;
+pub mod integration;
+pub mod wasm_compatibility;
+pub mod advanced_integration;
 
 use king_safety::KingSafetyEvaluator;
+use integration::IntegratedEvaluator;
+use advanced_integration::AdvancedIntegration;
 
 /// Position evaluator for the Shogi engine
 pub struct PositionEvaluator {
@@ -23,6 +40,12 @@ pub struct PositionEvaluator {
     weight_manager: WeightManager,
     // Whether to use tuned weights for evaluation
     use_tuned_weights: bool,
+    // Integrated tapered evaluator
+    integrated_evaluator: Option<IntegratedEvaluator>,
+    // Use integrated evaluator (vs legacy evaluation)
+    use_integrated_eval: bool,
+    // Advanced integration features (opening book, tablebase, analysis mode)
+    advanced_integration: Option<AdvancedIntegration>,
 }
 
 impl PositionEvaluator {
@@ -33,6 +56,9 @@ impl PositionEvaluator {
             king_safety_evaluator: KingSafetyEvaluator::new(),
             weight_manager: WeightManager::new(),
             use_tuned_weights: false,
+            integrated_evaluator: Some(IntegratedEvaluator::new()),
+            use_integrated_eval: true,
+            advanced_integration: Some(AdvancedIntegration::new()),
         }
     }
     
@@ -44,6 +70,9 @@ impl PositionEvaluator {
             king_safety_evaluator: KingSafetyEvaluator::with_config(config.king_safety),
             weight_manager: WeightManager::new(),
             use_tuned_weights: false,
+            integrated_evaluator: Some(IntegratedEvaluator::new()),
+            use_integrated_eval: true,
+            advanced_integration: Some(AdvancedIntegration::new()),
         }
     }
     
@@ -117,6 +146,70 @@ impl PositionEvaluator {
         training_positions: usize,
     ) -> Result<(), WeightError> {
         self.weight_manager.save_weights(path, tuning_method, validation_error, training_positions)
+    }
+
+    /// Enable integrated tapered evaluator
+    pub fn enable_integrated_evaluator(&mut self) {
+        if self.integrated_evaluator.is_none() {
+            self.integrated_evaluator = Some(IntegratedEvaluator::new());
+        }
+        self.use_integrated_eval = true;
+    }
+
+    /// Disable integrated evaluator (use legacy evaluation)
+    pub fn disable_integrated_evaluator(&mut self) {
+        self.use_integrated_eval = false;
+    }
+
+    /// Check if integrated evaluator is enabled
+    pub fn is_using_integrated_evaluator(&self) -> bool {
+        self.use_integrated_eval && self.integrated_evaluator.is_some()
+    }
+
+    /// Get reference to integrated evaluator
+    pub fn get_integrated_evaluator(&self) -> Option<&IntegratedEvaluator> {
+        self.integrated_evaluator.as_ref()
+    }
+
+    /// Get mutable reference to integrated evaluator
+    pub fn get_integrated_evaluator_mut(&mut self) -> Option<&mut IntegratedEvaluator> {
+        self.integrated_evaluator.as_mut()
+    }
+
+    /// Enable statistics tracking in integrated evaluator
+    pub fn enable_integrated_statistics(&self) {
+        if let Some(ref integrated) = self.integrated_evaluator {
+            integrated.enable_statistics();
+        }
+    }
+
+    /// Get statistics from integrated evaluator (returns a clone)
+    pub fn get_integrated_statistics(&self) -> Option<crate::evaluation::statistics::EvaluationStatistics> {
+        self.integrated_evaluator.as_ref().map(|e| e.get_statistics())
+    }
+
+    /// Get reference to advanced integration
+    pub fn get_advanced_integration(&self) -> Option<&AdvancedIntegration> {
+        self.advanced_integration.as_ref()
+    }
+
+    /// Get mutable reference to advanced integration
+    pub fn get_advanced_integration_mut(&mut self) -> Option<&mut AdvancedIntegration> {
+        self.advanced_integration.as_mut()
+    }
+
+    /// Enable opening book integration
+    pub fn enable_opening_book(&mut self) {
+        if let Some(ref mut advanced) = self.advanced_integration {
+            advanced.enable_opening_book();
+        }
+    }
+
+    /// Enable tablebase integration
+    pub fn enable_tablebase(&mut self) {
+        if let Some(ref mut advanced) = self.advanced_integration {
+            advanced.enable_tablebase();
+        }
     }
 
     /// Extract raw feature values for tuning
@@ -194,6 +287,14 @@ impl PositionEvaluator {
 
     /// Evaluate the current position from the perspective of the given player
     pub fn evaluate(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        // Use integrated evaluator if enabled
+        if self.use_integrated_eval {
+            if let Some(ref integrated) = self.integrated_evaluator {
+                return integrated.evaluate(board, player, captured_pieces);
+            }
+        }
+        
+        // Fallback to legacy evaluation
         self.evaluate_with_context(board, player, captured_pieces, 0, false, false, false, false)
     }
 

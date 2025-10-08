@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use crate::time_utils::TimeSource;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use crate::search::move_ordering::MoveOrdering;
+use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -34,6 +35,8 @@ pub struct SearchEngine {
     previous_scores: Vec<i32>,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
+    // Tapered evaluation search integration
+    tapered_search_enhancer: TaperedSearchEnhancer,
     // Current search state for diagnostics
     current_alpha: i32,
     current_beta: i32,
@@ -83,6 +86,8 @@ impl SearchEngine {
             previous_scores: Vec::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: PruningManager::new(PruningParameters::default()),
+            // Tapered evaluation search integration
+            tapered_search_enhancer: TaperedSearchEnhancer::new(),
             // Initialize diagnostic fields
             current_alpha: 0,
             current_beta: 0,
@@ -218,6 +223,8 @@ impl SearchEngine {
             previous_scores: Vec::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: PruningManager::new(PruningParameters::default()),
+            // Tapered evaluation search integration
+            tapered_search_enhancer: TaperedSearchEnhancer::new(),
             // Initialize diagnostic fields
             current_alpha: 0,
             current_beta: 0,
@@ -6730,6 +6737,16 @@ impl SearchEngine {
     /// Get mutable pruning manager reference
     pub fn get_pruning_manager_mut(&mut self) -> &mut PruningManager {
         &mut self.pruning_manager
+    }
+
+    /// Get reference to tapered search enhancer
+    pub fn get_tapered_search_enhancer(&self) -> &TaperedSearchEnhancer {
+        &self.tapered_search_enhancer
+    }
+
+    /// Get mutable reference to tapered search enhancer
+    pub fn get_tapered_search_enhancer_mut(&mut self) -> &mut TaperedSearchEnhancer {
+        &mut self.tapered_search_enhancer
     }
     
     /// Optimize pruning performance periodically
