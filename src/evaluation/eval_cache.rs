@@ -8,8 +8,7 @@ use std::collections::VecDeque;
 use std::io::{Read, Write};
 
 // WASM compatibility (Task 3.5)
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+// Note: wasm_bindgen import not needed yet - cache uses standard Rust structures
 
 /// Configuration for the evaluation cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
