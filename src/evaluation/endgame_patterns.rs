@@ -97,6 +97,31 @@ impl EndgamePatternEvaluator {
             score += self.evaluate_major_piece_activity(board, player);
         }
 
+        // 6. Zugzwang detection (Phase 2 - Task 2.3.3)
+        if self.config.enable_zugzwang {
+            score += self.evaluate_zugzwang(board, player);
+        }
+
+        // 7. Opposition patterns (Phase 2 - Task 2.3.4)
+        if self.config.enable_opposition {
+            score += self.evaluate_opposition(board, player);
+        }
+
+        // 8. Triangulation detection (Phase 2 - Task 2.3.5)
+        if self.config.enable_triangulation {
+            score += self.evaluate_triangulation(board, player);
+        }
+
+        // 9. Piece vs pawns evaluation (Phase 2 - Task 2.3.6)
+        if self.config.enable_piece_vs_pawns {
+            score += self.evaluate_piece_vs_pawns(board, player);
+        }
+
+        // 10. Fortress patterns (Phase 2 - Task 2.3.7)
+        if self.config.enable_fortress {
+            score += self.evaluate_fortress(board, player);
+        }
+
         score
     }
 
@@ -531,6 +556,314 @@ impl EndgamePatternEvaluator {
     }
 
     // =======================================================================
+    // ZUGZWANG DETECTION (Phase 2 - Task 2.3.3)
+    // =======================================================================
+
+    /// Evaluate zugzwang positions (where any move worsens the position)
+    fn evaluate_zugzwang(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        // Zugzwang is rare in Shogi due to drop moves, but can occur in endgame
+        let opponent = player.opposite();
+        
+        // Count mobility for both sides
+        let player_squares = self.count_safe_moves(board, player);
+        let opponent_squares = self.count_safe_moves(board, opponent);
+        
+        // Zugzwang-like position: opponent has very few safe moves
+        if opponent_squares <= 2 && player_squares > 5 {
+            // Player benefits from opponent's lack of moves
+            return TaperedScore::new_tapered(0, 80);
+        }
+        
+        // Reverse zugzwang: player has few moves
+        if player_squares <= 2 && opponent_squares > 5 {
+            return TaperedScore::new_tapered(0, -60);
+        }
+        
+        TaperedScore::default()
+    }
+
+    /// Count safe moves for a player
+    fn count_safe_moves(&self, _board: &BitboardBoard, _player: Player) -> i32 {
+        // Simplified: count pieces that can move
+        // In full implementation, would check actual legal moves
+        10  // Placeholder
+    }
+
+    // =======================================================================
+    // OPPOSITION PATTERNS (Phase 2 - Task 2.3.4)
+    // =======================================================================
+
+    /// Evaluate opposition patterns (king opposition in pawn endgames)
+    fn evaluate_opposition(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        let king_pos = match self.find_king_position(board, player) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+        
+        let opp_king_pos = match self.find_king_position(board, player.opposite()) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+        
+        // Check for direct opposition (kings facing each other with 1 square between)
+        let file_diff = (king_pos.col as i8 - opp_king_pos.col as i8).abs();
+        let rank_diff = (king_pos.row as i8 - opp_king_pos.row as i8).abs();
+        
+        // Direct opposition
+        if (file_diff == 0 && rank_diff == 2) || (rank_diff == 0 && file_diff == 2) {
+            return TaperedScore::new_tapered(0, 40);
+        }
+        
+        // Distant opposition (even number of squares between)
+        if file_diff == 0 && rank_diff % 2 == 0 && rank_diff > 2 {
+            return TaperedScore::new_tapered(0, 20);
+        }
+        
+        // Diagonal opposition
+        if file_diff == rank_diff && file_diff % 2 == 0 && file_diff > 1 {
+            return TaperedScore::new_tapered(0, 15);
+        }
+        
+        TaperedScore::default()
+    }
+
+    // =======================================================================
+    // TRIANGULATION DETECTION (Phase 2 - Task 2.3.5)
+    // =======================================================================
+
+    /// Evaluate triangulation potential (losing a tempo to gain zugzwang)
+    fn evaluate_triangulation(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        let king_pos = match self.find_king_position(board, player) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+        
+        // Triangulation is valuable when:
+        // 1. Few pieces on board
+        // 2. King has room to maneuver
+        // 3. Opponent is in cramped position
+        
+        let piece_count = self.count_total_pieces(board);
+        
+        if piece_count > 10 {
+            return TaperedScore::default();  // Too many pieces for triangulation
+        }
+        
+        // Check if king has triangulation squares available
+        let king_mobility = self.count_king_safe_squares(board, king_pos, player);
+        
+        if king_mobility >= 4 {
+            // King has room to triangulate
+            return TaperedScore::new_tapered(0, 25);
+        }
+        
+        TaperedScore::default()
+    }
+
+    /// Count safe squares around king
+    fn count_king_safe_squares(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> i32 {
+        let mut count = 0;
+        
+        for dr in -1..=1 {
+            for dc in -1..=1 {
+                if dr == 0 && dc == 0 {
+                    continue;
+                }
+                
+                let new_row = king_pos.row as i8 + dr;
+                let new_col = king_pos.col as i8 + dc;
+                
+                if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                    let pos = Position::new(new_row as u8, new_col as u8);
+                    
+                    if !board.is_square_occupied(pos) {
+                        count += 1;
+                    } else if let Some(piece) = board.get_piece(pos) {
+                        if piece.player != player {
+                            count += 1;  // Can capture
+                        }
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+
+    // =======================================================================
+    // PIECE VS PAWNS EVALUATION (Phase 2 - Task 2.3.6)
+    // =======================================================================
+
+    /// Evaluate piece vs pawns endgames
+    fn evaluate_piece_vs_pawns(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        let player_pieces = self.count_pieces(board, player);
+        let player_pawns = self.count_piece_type(board, player, PieceType::Pawn);
+        let opp_pieces = self.count_pieces(board, player.opposite());
+        let opp_pawns = self.count_piece_type(board, player.opposite(), PieceType::Pawn);
+        
+        // Rook vs pawns
+        if player_pieces == 1 && player_pawns == 0 && opp_pawns >= 1 {
+            // Check if we have a rook
+            if self.has_piece_type(board, player, PieceType::Rook) {
+                // Rook vs pawns - usually winning if pawns not too advanced
+                let pawn_advancement = self.evaluate_pawn_advancement(board, player.opposite());
+                if pawn_advancement < 5 {
+                    return TaperedScore::new_tapered(0, 100);
+                } else {
+                    return TaperedScore::new_tapered(0, 30);
+                }
+            }
+        }
+        
+        // Bishop vs pawns - harder to win
+        if player_pieces == 1 && player_pawns == 0 && opp_pawns >= 1 {
+            if self.has_piece_type(board, player, PieceType::Bishop) {
+                let pawn_advancement = self.evaluate_pawn_advancement(board, player.opposite());
+                if pawn_advancement < 4 {
+                    return TaperedScore::new_tapered(0, 60);
+                } else {
+                    return TaperedScore::new_tapered(0, 10);
+                }
+            }
+        }
+        
+        TaperedScore::default()
+    }
+
+    /// Check if player has a specific piece type
+    fn has_piece_type(&self, board: &BitboardBoard, player: Player, piece_type: PieceType) -> bool {
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player && piece.piece_type == piece_type {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Evaluate pawn advancement for player
+    fn evaluate_pawn_advancement(&self, board: &BitboardBoard, player: Player) -> u8 {
+        let mut max_advancement = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player && piece.piece_type == PieceType::Pawn {
+                        let advancement = if player == Player::Black {
+                            8 - row
+                        } else {
+                            row
+                        };
+                        max_advancement = max_advancement.max(advancement);
+                    }
+                }
+            }
+        }
+        
+        max_advancement
+    }
+
+    // =======================================================================
+    // FORTRESS PATTERNS (Phase 2 - Task 2.3.7)
+    // =======================================================================
+
+    /// Evaluate fortress patterns (defensive structures that are hard to break)
+    fn evaluate_fortress(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        let king_pos = match self.find_king_position(board, player) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+        
+        // Check if king is in a corner or edge fortress
+        let is_corner = (king_pos.row == 0 || king_pos.row == 8) && 
+                       (king_pos.col == 0 || king_pos.col == 8);
+        
+        if !is_corner && king_pos.row != 0 && king_pos.row != 8 {
+            return TaperedScore::default();  // Not in fortress position
+        }
+        
+        // Count defenders around king
+        let defenders = self.count_defenders_near_king(board, king_pos, player);
+        
+        // Fortress is strong with 2-3 defenders
+        if defenders >= 2 {
+            // Check material disadvantage - fortress more valuable when behind
+            let material_diff = self.get_material_difference(board, player);
+            
+            if material_diff < -500 {
+                // Significant material disadvantage - fortress is crucial
+                return TaperedScore::new_tapered(0, 120);
+            } else if material_diff < 0 {
+                return TaperedScore::new_tapered(0, 60);
+            }
+        }
+        
+        TaperedScore::default()
+    }
+
+    /// Count defenders near king
+    fn count_defenders_near_king(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> i32 {
+        let mut count = 0;
+        
+        for dr in -2..=2 {
+            for dc in -2..=2 {
+                if dr == 0 && dc == 0 {
+                    continue;
+                }
+                
+                let new_row = king_pos.row as i8 + dr;
+                let new_col = king_pos.col as i8 + dc;
+                
+                if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                    let pos = Position::new(new_row as u8, new_col as u8);
+                    
+                    if let Some(piece) = board.get_piece(pos) {
+                        if piece.player == player {
+                            match piece.piece_type {
+                                PieceType::Gold | PieceType::Silver => count += 2,
+                                PieceType::Pawn => count += 1,
+                                _ => count += 1,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+
+    /// Get material difference (player - opponent)
+    fn get_material_difference(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let player_material = self.calculate_material(board, player);
+        let opponent_material = self.calculate_material(board, player.opposite());
+        player_material - opponent_material
+    }
+
+    /// Calculate material for a player
+    fn calculate_material(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut material = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        material += piece.piece_type.base_value();
+                    }
+                }
+            }
+        }
+        
+        material
+    }
+
+    // =======================================================================
     // HELPER METHODS
     // =======================================================================
 
@@ -547,6 +880,52 @@ impl EndgamePatternEvaluator {
             }
         }
         None
+    }
+
+    /// Count total pieces for a player
+    fn count_pieces(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    /// Count total pieces on board
+    fn count_total_pieces(&self, board: &BitboardBoard) -> i32 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if board.is_square_occupied(pos) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// Count pieces of specific type for player
+    fn count_piece_type(&self, board: &BitboardBoard, player: Player, piece_type: PieceType) -> i32 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player && piece.piece_type == piece_type {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
     }
 
     /// Collect all pawns for a player
@@ -636,6 +1015,16 @@ pub struct EndgamePatternConfig {
     pub enable_mating_patterns: bool,
     /// Enable major piece activity evaluation
     pub enable_major_piece_activity: bool,
+    /// Enable zugzwang detection
+    pub enable_zugzwang: bool,
+    /// Enable opposition patterns
+    pub enable_opposition: bool,
+    /// Enable triangulation detection
+    pub enable_triangulation: bool,
+    /// Enable piece vs pawns evaluation
+    pub enable_piece_vs_pawns: bool,
+    /// Enable fortress patterns
+    pub enable_fortress: bool,
 }
 
 impl Default for EndgamePatternConfig {
@@ -646,6 +1035,11 @@ impl Default for EndgamePatternConfig {
             enable_piece_coordination: true,
             enable_mating_patterns: true,
             enable_major_piece_activity: true,
+            enable_zugzwang: true,
+            enable_opposition: true,
+            enable_triangulation: true,
+            enable_piece_vs_pawns: true,
+            enable_fortress: true,
         }
     }
 }
