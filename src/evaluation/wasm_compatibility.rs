@@ -212,6 +212,8 @@ pub mod wasm_utils {
                 position_features: true,
                 opening_principles: false, // Disable in WASM for size
                 endgame_patterns: false,   // Disable in WASM for size
+                tactical_patterns: false,  // Disable in WASM for size
+                positional_patterns: false, // Disable in WASM for size
             }
         }
     }

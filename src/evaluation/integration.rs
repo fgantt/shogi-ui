@@ -37,6 +37,9 @@ use crate::evaluation::{
     opening_principles::OpeningPrincipleEvaluator,
     statistics::EvaluationStatistics,
     performance::OptimizedEvaluator,
+    tactical_patterns::TacticalPatternRecognizer,
+    positional_patterns::PositionalPatternAnalyzer,
+    pattern_cache::PatternCache,
 };
 use std::collections::HashMap;
 use std::time::Instant;
@@ -60,6 +63,12 @@ pub struct IntegratedEvaluator {
     endgame_patterns: RefCell<EndgamePatternEvaluator>,
     /// Opening principles (uses interior mutability)
     opening_principles: RefCell<OpeningPrincipleEvaluator>,
+    /// Tactical pattern recognizer (Phase 2 - Task 2.1)
+    tactical_patterns: RefCell<TacticalPatternRecognizer>,
+    /// Positional pattern analyzer (Phase 2 - Task 2.2)
+    positional_patterns: RefCell<PositionalPatternAnalyzer>,
+    /// Pattern result cache (Phase 2 - Task 2.4)
+    pattern_cache: RefCell<PatternCache>,
     /// Optimized evaluator (for performance mode)
     optimized_eval: Option<OptimizedEvaluator>,
     /// Statistics tracker (uses interior mutability)
@@ -85,7 +94,7 @@ impl IntegratedEvaluator {
         };
 
         Self {
-            config,
+            config: config.clone(),
             tapered_eval: RefCell::new(TaperedEvaluation::new()),
             material_eval: RefCell::new(MaterialEvaluator::new()),
             pst: PieceSquareTables::new(),
@@ -93,6 +102,9 @@ impl IntegratedEvaluator {
             position_features: RefCell::new(PositionFeatureEvaluator::new()),
             endgame_patterns: RefCell::new(EndgamePatternEvaluator::new()),
             opening_principles: RefCell::new(OpeningPrincipleEvaluator::new()),
+            tactical_patterns: RefCell::new(TacticalPatternRecognizer::new()),
+            positional_patterns: RefCell::new(PositionalPatternAnalyzer::new()),
+            pattern_cache: RefCell::new(PatternCache::new(config.pattern_cache_size)),
             optimized_eval,
             statistics: RefCell::new(EvaluationStatistics::new()),
             phase_cache: RefCell::new(HashMap::new()),
@@ -181,6 +193,16 @@ impl IntegratedEvaluator {
         // Endgame patterns (if in endgame)
         if self.config.components.endgame_patterns && phase < 64 {
             total += self.endgame_patterns.borrow_mut().evaluate_endgame(board, player, captured_pieces);
+        }
+
+        // Tactical patterns (Phase 3 - Task 3.1 Integration)
+        if self.config.components.tactical_patterns {
+            total += self.tactical_patterns.borrow_mut().evaluate_tactics(board, player);
+        }
+
+        // Positional patterns (Phase 3 - Task 3.1 Integration)
+        if self.config.components.positional_patterns {
+            total += self.positional_patterns.borrow_mut().evaluate_position(board, player);
         }
 
         // Interpolate to final score
@@ -349,6 +371,8 @@ pub struct IntegratedEvaluationConfig {
     pub use_optimized_path: bool,
     /// Maximum cache size
     pub max_cache_size: usize,
+    /// Pattern cache size (Phase 3 - Task 3.1)
+    pub pattern_cache_size: usize,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -359,6 +383,7 @@ impl Default for IntegratedEvaluationConfig {
             enable_eval_cache: true,
             use_optimized_path: true,
             max_cache_size: 10000,
+            pattern_cache_size: 100_000,
         }
     }
 }
@@ -371,6 +396,8 @@ pub struct ComponentFlags {
     pub position_features: bool,
     pub opening_principles: bool,
     pub endgame_patterns: bool,
+    pub tactical_patterns: bool,
+    pub positional_patterns: bool,
 }
 
 impl ComponentFlags {
@@ -381,6 +408,8 @@ impl ComponentFlags {
             position_features: true,
             opening_principles: true,
             endgame_patterns: true,
+            tactical_patterns: true,
+            positional_patterns: true,
         }
     }
 
@@ -391,6 +420,8 @@ impl ComponentFlags {
             position_features: false,
             opening_principles: false,
             endgame_patterns: false,
+            tactical_patterns: false,
+            positional_patterns: false,
         }
     }
 
@@ -401,6 +432,8 @@ impl ComponentFlags {
             position_features: false,
             opening_principles: false,
             endgame_patterns: false,
+            tactical_patterns: false,
+            positional_patterns: false,
         }
     }
 }

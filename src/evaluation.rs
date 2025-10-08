@@ -30,6 +30,8 @@ pub mod positional_patterns;
 pub mod pattern_cache;
 pub mod pattern_optimization;
 pub mod pattern_advanced;
+pub mod pattern_search_integration;
+pub mod pattern_comprehensive_tests;
 
 use king_safety::KingSafetyEvaluator;
 use integration::IntegratedEvaluator;
