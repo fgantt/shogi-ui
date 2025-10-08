@@ -1558,6 +1558,8 @@ pub struct MoveOrdering {
     simple_history_table: [[i32; 9]; 9],
     /// History update counter for aging
     history_update_counter: u64,
+    /// Pattern-based search integrator (Phase 3 - Task 3.2)
+    pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator,
     /// SEE cache for performance optimization
     /// Maps (from_square, to_square) -> SEE value
     see_cache: HashMap<(Position, Position), i32>,
@@ -2615,6 +2617,7 @@ impl MoveOrdering {
             current_depth: 0,
             history_table: HashMap::new(),
             history_update_counter: 0,
+            pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator::new(),
             see_cache: HashMap::new(),
             max_see_cache_size: config.cache_config.max_see_cache_size,
             move_score_pool: Vec::with_capacity(256), // Pre-allocate for common move lists
