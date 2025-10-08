@@ -14,112 +14,112 @@ This document provides a comprehensive task list for implementing evaluation cac
 
 ### High Priority Tasks
 
-#### Task 1.1: Basic Cache Structure
-- [ ] **1.1.1**: Create `src/evaluation/eval_cache.rs` file
-- [ ] **1.1.2**: Implement `EvaluationCache` struct with hash table
-- [ ] **1.1.3**: Add `EvaluationEntry` struct for cache entries
-- [ ] **1.1.4**: Implement cache size configuration
-- [ ] **1.1.5**: Add cache initialization
-- [ ] **1.1.6**: Implement basic `probe()` method
-- [ ] **1.1.7**: Implement basic `store()` method
-- [ ] **1.1.8**: Add cache statistics tracking
-- [ ] **1.1.9**: Add unit tests for basic structure
-- [ ] **1.1.10**: Add performance benchmarks
+#### Task 1.1: Basic Cache Structure ✅ COMPLETED
+- [x] **1.1.1**: Create `src/evaluation/eval_cache.rs` file
+- [x] **1.1.2**: Implement `EvaluationCache` struct with hash table
+- [x] **1.1.3**: Add `EvaluationEntry` struct for cache entries
+- [x] **1.1.4**: Implement cache size configuration
+- [x] **1.1.5**: Add cache initialization
+- [x] **1.1.6**: Implement basic `probe()` method
+- [x] **1.1.7**: Implement basic `store()` method
+- [x] **1.1.8**: Add cache statistics tracking
+- [x] **1.1.9**: Add unit tests for basic structure
+- [x] **1.1.10**: Add performance benchmarks
 
-**Acceptance Criteria**:
-- Basic cache structure is functional
-- Store and probe operations work correctly
-- Statistics tracking is accurate
-- All basic tests pass
+**Acceptance Criteria**: ✅
+- Basic cache structure is functional ✅
+- Store and probe operations work correctly ✅
+- Statistics tracking is accurate ✅
+- All basic tests pass ✅
 
-#### Task 1.2: Position Hashing Integration
-- [ ] **1.2.1**: Integrate with Zobrist hashing system
-- [ ] **1.2.2**: Implement position hash calculation
-- [ ] **1.2.3**: Add hash collision detection
-- [ ] **1.2.4**: Implement verification bits for correctness
-- [ ] **1.2.5**: Add hash key storage in entries
-- [ ] **1.2.6**: Implement incremental hash updates
-- [ ] **1.2.7**: Add hash collision handling
-- [ ] **1.2.8**: Add unit tests for hashing
-- [ ] **1.2.9**: Add integration tests with board
-- [ ] **1.2.10**: Add performance tests for hashing
+#### Task 1.2: Position Hashing Integration ✅ COMPLETED
+- [x] **1.2.1**: Integrate with Zobrist hashing system
+- [x] **1.2.2**: Implement position hash calculation
+- [x] **1.2.3**: Add hash collision detection
+- [x] **1.2.4**: Implement verification bits for correctness
+- [x] **1.2.5**: Add hash key storage in entries
+- [x] **1.2.6**: Implement incremental hash updates (using existing ZobristHasher)
+- [x] **1.2.7**: Add hash collision handling
+- [x] **1.2.8**: Add unit tests for hashing
+- [x] **1.2.9**: Add integration tests with board
+- [x] **1.2.10**: Add performance tests for hashing
 
-**Acceptance Criteria**:
-- Position hashing works correctly
-- Hash collisions are detected and handled
-- Incremental updates are accurate
-- All hashing tests pass
+**Acceptance Criteria**: ✅
+- Position hashing works correctly ✅
+- Hash collisions are detected and handled ✅
+- Incremental updates are accurate ✅ (via ZobristHasher)
+- All hashing tests pass ✅
 
-#### Task 1.3: Cache Replacement Policy
-- [ ] **1.3.1**: Implement always-replace policy
-- [ ] **1.3.2**: Implement depth-preferred replacement
-- [ ] **1.3.3**: Implement aging-based replacement
-- [ ] **1.3.4**: Add policy configuration
-- [ ] **1.3.5**: Implement replacement decision logic
-- [ ] **1.3.6**: Add replacement statistics
-- [ ] **1.3.7**: Implement two-tier cache (optional)
-- [ ] **1.3.8**: Add unit tests for replacement policies
-- [ ] **1.3.9**: Add performance tests for policies
-- [ ] **1.3.10**: Validate policy effectiveness
+#### Task 1.3: Cache Replacement Policy ✅ COMPLETED
+- [x] **1.3.1**: Implement always-replace policy
+- [x] **1.3.2**: Implement depth-preferred replacement
+- [x] **1.3.3**: Implement aging-based replacement
+- [x] **1.3.4**: Add policy configuration
+- [x] **1.3.5**: Implement replacement decision logic
+- [x] **1.3.6**: Add replacement statistics
+- [ ] **1.3.7**: Implement two-tier cache (optional) - Deferred to Phase 2
+- [x] **1.3.8**: Add unit tests for replacement policies
+- [x] **1.3.9**: Add performance tests for policies
+- [x] **1.3.10**: Validate policy effectiveness
 
-**Acceptance Criteria**:
-- Multiple replacement policies implemented
-- Policies can be configured at runtime
-- Statistics show policy effectiveness
-- All policy tests pass
+**Acceptance Criteria**: ✅
+- Multiple replacement policies implemented ✅
+- Policies can be configured at runtime ✅
+- Statistics show policy effectiveness ✅
+- All policy tests pass ✅
 
-#### Task 1.4: Cache Entry Management
-- [ ] **1.4.1**: Implement cache entry structure
-- [ ] **1.4.2**: Add evaluation score storage
-- [ ] **1.4.3**: Add depth information storage
-- [ ] **1.4.4**: Implement age tracking
-- [ ] **1.4.5**: Add entry validation
-- [ ] **1.4.6**: Implement entry expiration
-- [ ] **1.4.7**: Add entry statistics
-- [ ] **1.4.8**: Add unit tests for entry management
-- [ ] **1.4.9**: Add integration tests with cache
-- [ ] **1.4.10**: Add performance tests for entries
+#### Task 1.4: Cache Entry Management ✅ COMPLETED
+- [x] **1.4.1**: Implement cache entry structure
+- [x] **1.4.2**: Add evaluation score storage
+- [x] **1.4.3**: Add depth information storage
+- [x] **1.4.4**: Implement age tracking
+- [x] **1.4.5**: Add entry validation
+- [x] **1.4.6**: Implement entry expiration (via age tracking)
+- [x] **1.4.7**: Add entry statistics
+- [x] **1.4.8**: Add unit tests for entry management
+- [x] **1.4.9**: Add integration tests with cache
+- [x] **1.4.10**: Add performance tests for entries
 
-**Acceptance Criteria**:
-- Cache entries store all necessary data
-- Entry validation prevents corruption
-- Expiration works correctly
-- All entry tests pass
+**Acceptance Criteria**: ✅
+- Cache entries store all necessary data ✅
+- Entry validation prevents corruption ✅
+- Expiration works correctly ✅
+- All entry tests pass ✅
 
 ### Medium Priority Tasks
 
-#### Task 1.5: Cache Statistics and Monitoring
-- [ ] **1.5.1**: Implement hit/miss rate tracking
-- [ ] **1.5.2**: Add collision rate tracking
-- [ ] **1.5.3**: Implement utilization monitoring
-- [ ] **1.5.4**: Add performance metrics
-- [ ] **1.5.5**: Implement statistics export
-- [ ] **1.5.6**: Add real-time monitoring interface
-- [ ] **1.5.7**: Add unit tests for statistics
-- [ ] **1.5.8**: Add visualization support
+#### Task 1.5: Cache Statistics and Monitoring ✅ COMPLETED
+- [x] **1.5.1**: Implement hit/miss rate tracking
+- [x] **1.5.2**: Add collision rate tracking
+- [x] **1.5.3**: Implement utilization monitoring
+- [x] **1.5.4**: Add performance metrics
+- [x] **1.5.5**: Implement statistics export (JSON/CSV)
+- [x] **1.5.6**: Add real-time monitoring interface
+- [x] **1.5.7**: Add unit tests for statistics
+- [x] **1.5.8**: Add visualization support
 
-**Acceptance Criteria**:
-- Comprehensive statistics are tracked
-- Monitoring provides useful insights
-- Export functionality works correctly
-- All statistics tests pass
+**Acceptance Criteria**: ✅
+- Comprehensive statistics are tracked ✅
+- Monitoring provides useful insights ✅
+- Export functionality works correctly ✅
+- All statistics tests pass ✅
 
 ### Low Priority Tasks
 
-#### Task 1.6: Configuration System
-- [ ] **1.6.1**: Create `EvaluationCacheConfig` struct
-- [ ] **1.6.2**: Add cache size configuration
-- [ ] **1.6.3**: Add replacement policy configuration
-- [ ] **1.6.4**: Implement configuration loading from file
-- [ ] **1.6.5**: Add configuration validation
-- [ ] **1.6.6**: Add runtime configuration updates
-- [ ] **1.6.7**: Add unit tests for configuration
+#### Task 1.6: Configuration System ✅ COMPLETED
+- [x] **1.6.1**: Create `EvaluationCacheConfig` struct
+- [x] **1.6.2**: Add cache size configuration
+- [x] **1.6.3**: Add replacement policy configuration
+- [x] **1.6.4**: Implement configuration loading from file (JSON)
+- [x] **1.6.5**: Add configuration validation
+- [x] **1.6.6**: Add runtime configuration updates
+- [x] **1.6.7**: Add unit tests for configuration
 
-**Acceptance Criteria**:
-- Configuration system is flexible
-- All options are validated
-- Runtime updates work correctly
-- Configuration tests pass
+**Acceptance Criteria**: ✅
+- Configuration system is flexible ✅
+- All options are validated ✅
+- Runtime updates work correctly ✅
+- Configuration tests pass ✅
 
 ## Phase 2: Advanced Features (Week 2)
 

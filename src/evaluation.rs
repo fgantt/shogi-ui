@@ -23,6 +23,7 @@ pub mod advanced_interpolation;
 pub mod integration;
 pub mod wasm_compatibility;
 pub mod advanced_integration;
+pub mod eval_cache;
 
 use king_safety::KingSafetyEvaluator;
 use integration::IntegratedEvaluator;
