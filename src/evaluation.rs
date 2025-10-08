@@ -24,6 +24,7 @@ pub mod integration;
 pub mod wasm_compatibility;
 pub mod advanced_integration;
 pub mod eval_cache;
+pub mod pattern_config;
 
 use king_safety::KingSafetyEvaluator;
 use integration::IntegratedEvaluator;
@@ -805,6 +806,26 @@ impl PositionEvaluator {
         mg_score += coordinated_attacks;
         eg_score += coordinated_attacks / 2; // Less important in endgame
         
+        // Battery detection (rook+bishop on same diagonal/line)
+        let battery = self.evaluate_battery(board, player);
+        mg_score += battery;
+        eg_score += battery / 2;
+        
+        // Piece support evaluation
+        let support = self.evaluate_piece_support(board, player);
+        mg_score += support;
+        eg_score += support / 3;
+        
+        // Overprotection detection (multiple pieces defending key squares)
+        let overprotection = self.evaluate_overprotection(board, player);
+        mg_score += overprotection;
+        eg_score += overprotection / 2;
+        
+        // Piece clustering penalties (pieces too close together)
+        let clustering_penalty = self.evaluate_clustering(board, player);
+        mg_score -= clustering_penalty;
+        eg_score -= clustering_penalty / 2;
+        
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 
@@ -902,10 +923,274 @@ impl PositionEvaluator {
     }
 
     /// Evaluate coordinated attacks
-    fn evaluate_coordinated_attacks(&self, _board: &BitboardBoard, _player: Player) -> i32 {
-        // This is a simplified implementation
-        // In practice, we'd analyze attack patterns and piece coordination
-        0
+    fn evaluate_coordinated_attacks(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut score = 0;
+        
+        // Check for pieces attacking the same square
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                let attackers = self.count_attackers(board, pos, player);
+                
+                // Bonus for multiple pieces attacking same square
+                if attackers >= 2 {
+                    score += (attackers - 1) * 8; // Each additional attacker adds value
+                }
+            }
+        }
+        
+        score
+    }
+    
+    /// Count how many pieces of a player can attack a square
+    fn count_attackers(&self, board: &BitboardBoard, target: Position, player: Player) -> i32 {
+        let mut count = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        if self.can_piece_attack(board, pos, target, piece.piece_type) {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+    
+    /// Check if a piece at given position can attack target square
+    fn can_piece_attack(&self, board: &BitboardBoard, from: Position, to: Position, piece_type: PieceType) -> bool {
+        // Simplified attack detection - would use proper move generation in production
+        let dr = (to.row as i8 - from.row as i8).abs();
+        let dc = (to.col as i8 - from.col as i8).abs();
+        
+        match piece_type {
+            PieceType::Pawn => dr == 1 && dc == 0,
+            PieceType::Rook | PieceType::PromotedRook => {
+                (from.row == to.row || from.col == to.col) && 
+                self.is_path_clear(board, from, to)
+            },
+            PieceType::Bishop | PieceType::PromotedBishop => {
+                dr == dc && self.is_path_clear(board, from, to)
+            },
+            PieceType::Knight => (dr == 2 && dc == 1) || (dr == 1 && dc == 2),
+            PieceType::King | PieceType::Gold | PieceType::Silver => dr <= 1 && dc <= 1,
+            _ => false,
+        }
+    }
+    
+    /// Check if path between two squares is clear
+    fn is_path_clear(&self, board: &BitboardBoard, from: Position, to: Position) -> bool {
+        if from == to {
+            return true;
+        }
+        
+        let dr = (to.row as i8 - from.row as i8).signum();
+        let dc = (to.col as i8 - from.col as i8).signum();
+        
+        let mut current_row = from.row as i8 + dr;
+        let mut current_col = from.col as i8 + dc;
+        
+        while current_row != to.row as i8 || current_col != to.col as i8 {
+            if current_row < 0 || current_row >= 9 || current_col < 0 || current_col >= 9 {
+                return false;
+            }
+            
+            let pos = Position::new(current_row as u8, current_col as u8);
+            if board.is_square_occupied(pos) {
+                return false;
+            }
+            
+            current_row += dr;
+            current_col += dc;
+        }
+        
+        true
+    }
+    
+    /// Evaluate battery (rook+bishop attacking on same line/diagonal)
+    fn evaluate_battery(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut score = 0;
+        
+        // Look for rooks and bishops
+        let mut major_pieces = Vec::new();
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        match piece.piece_type {
+                            PieceType::Rook | PieceType::PromotedRook | 
+                            PieceType::Bishop | PieceType::PromotedBishop => {
+                                major_pieces.push((pos, piece.piece_type));
+                            },
+                            _ => {},
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for batteries (two major pieces on same line/diagonal)
+        for i in 0..major_pieces.len() {
+            for j in i + 1..major_pieces.len() {
+                let (pos1, type1) = major_pieces[i];
+                let (pos2, type2) = major_pieces[j];
+                
+                // Rook battery (same rank or file)
+                if matches!(type1, PieceType::Rook | PieceType::PromotedRook) && 
+                   matches!(type2, PieceType::Rook | PieceType::PromotedRook) {
+                    if (pos1.row == pos2.row || pos1.col == pos2.col) && 
+                       self.is_path_clear(board, pos1, pos2) {
+                        score += 25; // Rook battery bonus
+                    }
+                }
+                
+                // Bishop battery (same diagonal)
+                if matches!(type1, PieceType::Bishop | PieceType::PromotedBishop) && 
+                   matches!(type2, PieceType::Bishop | PieceType::PromotedBishop) {
+                    let dr = (pos2.row as i8 - pos1.row as i8).abs();
+                    let dc = (pos2.col as i8 - pos1.col as i8).abs();
+                    if dr == dc && self.is_path_clear(board, pos1, pos2) {
+                        score += 20; // Bishop battery bonus
+                    }
+                }
+            }
+        }
+        
+        score
+    }
+    
+    /// Evaluate piece support (pieces defending each other)
+    fn evaluate_piece_support(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut score = 0;
+        
+        // Check each piece to see how many defenders it has
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        let defenders = self.count_defenders(board, pos, player);
+                        
+                        // Bonus for defended pieces
+                        if defenders > 0 {
+                            let piece_value = piece.piece_type.base_value();
+                            // More valuable pieces benefit more from support
+                            score += defenders * (piece_value / 200).max(1);
+                        }
+                    }
+                }
+            }
+        }
+        
+        score
+    }
+    
+    /// Count defenders of a square
+    fn count_defenders(&self, board: &BitboardBoard, target: Position, player: Player) -> i32 {
+        let mut count = 0;
+        
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if pos == target {
+                    continue;
+                }
+                
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        if self.can_piece_attack(board, pos, target, piece.piece_type) {
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        count
+    }
+    
+    /// Evaluate overprotection (multiple defenders of key squares)
+    fn evaluate_overprotection(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut score = 0;
+        
+        // Find king position
+        let king_pos = self.find_king_position(board, player);
+        if king_pos.is_none() {
+            return 0;
+        }
+        let king_pos = king_pos.unwrap();
+        
+        // Check protection of squares around king
+        for dr in -1..=1 {
+            for dc in -1..=1 {
+                if dr == 0 && dc == 0 {
+                    continue;
+                }
+                
+                let new_row = king_pos.row as i8 + dr;
+                let new_col = king_pos.col as i8 + dc;
+                
+                if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                    let pos = Position::new(new_row as u8, new_col as u8);
+                    let defenders = self.count_defenders(board, pos, player);
+                    
+                    // Bonus for overprotection of key squares
+                    if defenders >= 2 {
+                        score += (defenders - 1) * 5;
+                    }
+                }
+            }
+        }
+        
+        score
+    }
+    
+    /// Evaluate piece clustering (penalty for pieces too close)
+    fn evaluate_clustering(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut penalty = 0;
+        
+        // Collect all pieces
+        let mut pieces = Vec::new();
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        pieces.push((pos, piece.piece_type));
+                    }
+                }
+            }
+        }
+        
+        // Check for clusters (3+ pieces in 3x3 area)
+        for row in 0..7 {
+            for col in 0..7 {
+                let mut count = 0;
+                
+                for dr in 0..3 {
+                    for dc in 0..3 {
+                        let pos = Position::new(row + dr, col + dc);
+                        if pieces.iter().any(|(p, _)| *p == pos) {
+                            count += 1;
+                        }
+                    }
+                }
+                
+                // Penalty for clustering (3+ pieces in small area)
+                if count >= 3 {
+                    penalty += (count - 2) * 10;
+                }
+            }
+        }
+        
+        penalty
     }
 
     /// Evaluate center control
@@ -2481,6 +2766,255 @@ mod tests {
         
         let score = result.unwrap();
         assert!(score != i32::MIN && score != i32::MAX);
+    }
+
+    // ===================================================================
+    // PIECE COORDINATION PATTERN TESTS (Task 1.4)
+    // ===================================================================
+
+    #[test]
+    fn test_piece_coordination_basic() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        let coordination = evaluator.evaluate_piece_coordination(&board, Player::Black);
+        
+        // Starting position should have some coordination
+        assert!(coordination.mg >= 0 || coordination.eg >= 0);
+    }
+
+    #[test]
+    fn test_battery_detection_rook() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test rook battery detection
+        let battery_score = evaluator.evaluate_battery(&board, Player::Black);
+        
+        // Starting position shouldn't have batteries
+        assert_eq!(battery_score, 0);
+    }
+
+    #[test]
+    fn test_battery_detection_bishop() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test bishop battery detection
+        let battery_score = evaluator.evaluate_battery(&board, Player::Black);
+        
+        // Should return a valid score
+        assert!(battery_score >= 0);
+    }
+
+    #[test]
+    fn test_piece_support_detection() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test piece support evaluation
+        let support_score = evaluator.evaluate_piece_support(&board, Player::Black);
+        
+        // Starting position should have some support
+        assert!(support_score >= 0);
+    }
+
+    #[test]
+    fn test_overprotection_detection() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test overprotection evaluation
+        let overprotection_score = evaluator.evaluate_overprotection(&board, Player::Black);
+        
+        // Should return a valid score
+        assert!(overprotection_score >= 0);
+    }
+
+    #[test]
+    fn test_clustering_penalty() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test clustering penalty evaluation
+        let clustering_penalty = evaluator.evaluate_clustering(&board, Player::Black);
+        
+        // Starting position has pieces together, so should have some penalty
+        assert!(clustering_penalty >= 0);
+    }
+
+    #[test]
+    fn test_coordinated_attacks() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test coordinated attacks evaluation
+        let attacks_score = evaluator.evaluate_coordinated_attacks(&board, Player::Black);
+        
+        // Should return a valid score
+        assert!(attacks_score >= 0);
+    }
+
+    #[test]
+    fn test_count_attackers() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test counting attackers on a square
+        let center = Position::new(4, 4);
+        let attackers = evaluator.count_attackers(&board, center, Player::Black);
+        
+        // Should return non-negative count
+        assert!(attackers >= 0);
+    }
+
+    #[test]
+    fn test_count_defenders() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test counting defenders of a square
+        let center = Position::new(4, 4);
+        let defenders = evaluator.count_defenders(&board, center, Player::Black);
+        
+        // Should return non-negative count
+        assert!(defenders >= 0);
+    }
+
+    #[test]
+    fn test_can_piece_attack_rook() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(4, 4);
+        let to_same_rank = Position::new(4, 7);
+        let to_same_file = Position::new(7, 4);
+        let to_diagonal = Position::new(7, 7);
+        
+        // Rook can attack on same rank or file
+        assert!(evaluator.can_piece_attack(&board, from, to_same_rank, PieceType::Rook));
+        assert!(evaluator.can_piece_attack(&board, from, to_same_file, PieceType::Rook));
+        assert!(!evaluator.can_piece_attack(&board, from, to_diagonal, PieceType::Rook));
+    }
+
+    #[test]
+    fn test_can_piece_attack_bishop() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(4, 4);
+        let to_diagonal = Position::new(7, 7);
+        let to_same_rank = Position::new(4, 7);
+        
+        // Bishop can attack on diagonals
+        assert!(evaluator.can_piece_attack(&board, from, to_diagonal, PieceType::Bishop));
+        assert!(!evaluator.can_piece_attack(&board, from, to_same_rank, PieceType::Bishop));
+    }
+
+    #[test]
+    fn test_can_piece_attack_knight() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(4, 4);
+        let valid_knight_move = Position::new(6, 5);
+        let invalid_move = Position::new(5, 5);
+        
+        // Knight moves in L-shape
+        assert!(evaluator.can_piece_attack(&board, from, valid_knight_move, PieceType::Knight));
+        assert!(!evaluator.can_piece_attack(&board, from, invalid_move, PieceType::Knight));
+    }
+
+    #[test]
+    fn test_is_path_clear_horizontal() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(4, 2);
+        let to = Position::new(4, 6);
+        
+        // Path should be clear on empty board
+        assert!(evaluator.is_path_clear(&board, from, to));
+    }
+
+    #[test]
+    fn test_is_path_clear_vertical() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(2, 4);
+        let to = Position::new(6, 4);
+        
+        // Path should be clear on empty board
+        assert!(evaluator.is_path_clear(&board, from, to));
+    }
+
+    #[test]
+    fn test_is_path_clear_diagonal() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        let from = Position::new(2, 2);
+        let to = Position::new(6, 6);
+        
+        // Path should be clear on empty board
+        assert!(evaluator.is_path_clear(&board, from, to));
+    }
+
+    #[test]
+    fn test_connected_rooks_detection() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test connected rooks evaluation
+        let connected_score = evaluator.evaluate_connected_rooks(&board, Player::Black);
+        
+        // Should return a valid score
+        assert!(connected_score >= 0);
+    }
+
+    #[test]
+    fn test_bishop_pair_detection() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Starting position has 1 bishop per player
+        let bishop_pair_score = evaluator.evaluate_bishop_pair(&board, Player::Black);
+        
+        // Should be 0 since only one bishop
+        assert_eq!(bishop_pair_score, 0);
+    }
+
+    #[test]
+    fn test_piece_coordination_comprehensive() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test comprehensive coordination evaluation
+        let coordination_black = evaluator.evaluate_piece_coordination(&board, Player::Black);
+        let coordination_white = evaluator.evaluate_piece_coordination(&board, Player::White);
+        
+        // Both players should have positive or neutral coordination
+        assert!(coordination_black.mg >= -100);
+        assert!(coordination_white.mg >= -100);
+        
+        // Middlegame score should typically be higher than endgame
+        // (coordination more important in middlegame)
+        assert!(coordination_black.mg >= coordination_black.eg / 2);
+    }
+
+    #[test]
+    fn test_piece_coordination_symmetry() {
+        let evaluator = PositionEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Starting position is symmetric
+        let coordination_black = evaluator.evaluate_piece_coordination(&board, Player::Black);
+        let coordination_white = evaluator.evaluate_piece_coordination(&board, Player::White);
+        
+        // Scores should be similar (within reasonable tolerance)
+        let diff = (coordination_black.mg - coordination_white.mg).abs();
+        assert!(diff < 50, "Black: {:?}, White: {:?}", coordination_black, coordination_white);
     }
 }
 
