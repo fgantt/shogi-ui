@@ -188,6 +188,7 @@ impl TestResults {
 
 /// Test position
 #[derive(Clone)]
+#[allow(dead_code)]
 struct TestPosition {
     board: BitboardBoard,
     player: Player,

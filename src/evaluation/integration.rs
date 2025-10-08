@@ -67,7 +67,8 @@ pub struct IntegratedEvaluator {
     tactical_patterns: RefCell<TacticalPatternRecognizer>,
     /// Positional pattern analyzer (Phase 2 - Task 2.2)
     positional_patterns: RefCell<PositionalPatternAnalyzer>,
-    /// Pattern result cache (Phase 2 - Task 2.4)
+    /// Pattern result cache (Phase 2 - Task 2.4, reserved for future optimization)
+    #[allow(dead_code)]
     pattern_cache: RefCell<PatternCache>,
     /// Optimized evaluator (for performance mode)
     optimized_eval: Option<OptimizedEvaluator>,

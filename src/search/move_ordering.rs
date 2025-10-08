@@ -1558,7 +1558,8 @@ pub struct MoveOrdering {
     simple_history_table: [[i32; 9]; 9],
     /// History update counter for aging
     history_update_counter: u64,
-    /// Pattern-based search integrator (Phase 3 - Task 3.2)
+    /// Pattern-based search integrator (Phase 3 - Task 3.2, available for search enhancements)
+    #[allow(dead_code)]
     pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator,
     /// SEE cache for performance optimization
     /// Maps (from_square, to_square) -> SEE value
