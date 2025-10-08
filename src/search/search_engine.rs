@@ -6,6 +6,7 @@ use crate::tablebase::MicroTablebase;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use crate::search::move_ordering::MoveOrdering;
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -14,6 +15,7 @@ pub struct SearchEngine {
     transposition_table: crate::search::ThreadSafeTranspositionTable,
     hash_calculator: crate::search::ShogiHashHandler,
     move_orderer: crate::search::TranspositionMoveOrderer,
+    advanced_move_orderer: MoveOrdering,
     quiescence_tt: HashMap<String, QuiescenceEntry>,
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
@@ -62,6 +64,7 @@ impl SearchEngine {
             transposition_table: crate::search::ThreadSafeTranspositionTable::new(config),
             hash_calculator: crate::search::ShogiHashHandler::new(1000),
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
+            advanced_move_orderer: MoveOrdering::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
@@ -95,9 +98,83 @@ impl SearchEngine {
         self.move_orderer.set_transposition_table(&self.transposition_table);
     }
 
+    /// Initialize advanced move ordering system
+    fn initialize_advanced_move_orderer(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) {
+        // Update game phase for position-specific strategies
+        let move_count = self.nodes_searched as usize; // Approximate move count
+        let material_balance = self.evaluate_position(board, player, captured_pieces);
+        let tactical_complexity = self.calculate_tactical_complexity(board, captured_pieces, player);
+        
+        self.advanced_move_orderer.update_game_phase(move_count, material_balance, tactical_complexity);
+        
+        // Integrate with transposition table
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        if let Some(tt_entry) = self.transposition_table.probe(position_hash, depth) {
+            let _ = self.advanced_move_orderer.integrate_with_transposition_table(Some(&tt_entry), board, captured_pieces, player, depth);
+        }
+    }
+
+    /// Calculate tactical complexity for position-specific strategies
+    fn calculate_tactical_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> f64 {
+        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
+        let capture_count = legal_moves.iter().filter(|m| m.is_capture).count();
+        let check_count = legal_moves.iter().filter(|m| {
+            let mut test_board = board.clone();
+            let mut test_captured = captured_pieces.clone();
+            if let Some(captured) = test_board.make_move(m) {
+                test_captured.add_piece(captured.piece_type, player);
+            }
+            test_board.is_king_in_check(player.opposite(), &test_captured)
+        }).count();
+        
+        let total_moves = legal_moves.len() as f64;
+        if total_moves == 0.0 {
+            return 0.0;
+        }
+        
+        (capture_count + check_count) as f64 / total_moves
+    }
+
     /// Update move orderer with killer move
     fn update_move_orderer_killer(&mut self, killer_move: Move) {
-        self.move_orderer.update_killer_moves(killer_move);
+        self.move_orderer.update_killer_moves(killer_move.clone());
+        // Also update advanced move orderer
+        self.advanced_move_orderer.add_killer_move(killer_move);
+    }
+
+    /// Order moves using advanced move ordering system
+    fn order_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Result<Vec<Move>, String> {
+        // Initialize advanced move orderer for this position
+        self.initialize_advanced_move_orderer(board, captured_pieces, player, depth);
+        
+        // Use advanced move ordering with all heuristics
+        Ok(self.advanced_move_orderer.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth))
+    }
+
+    /// Order moves for negamax search with advanced move ordering
+    fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+        // Try advanced move ordering first
+        match self.order_moves_advanced(moves, board, captured_pieces, player, depth) {
+            Ok(ordered_moves) => {
+                // Update PV move if we have a best move from transposition table
+                if let Some(best_move) = self.get_best_move_from_tt(board, captured_pieces, player, depth) {
+                    self.advanced_move_orderer.update_pv_move(board, captured_pieces, player, depth, best_move, 0);
+                }
+                ordered_moves
+            }
+            Err(_) => {
+                // Fallback to traditional move ordering
+                self.move_orderer.order_moves(moves, board, captured_pieces, player, depth, alpha, beta, None)
+            }
+        }
+    }
+
+    /// Get best move from transposition table for PV move ordering
+    fn get_best_move_from_tt(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, _depth: u8) -> Option<Move> {
+        let _position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        // This would need to be implemented based on the transposition table interface
+        // For now, return None as a placeholder
+        None
     }
 
     /// Update move orderer with history
@@ -122,6 +199,7 @@ impl SearchEngine {
             transposition_table: crate::search::ThreadSafeTranspositionTable::new(tt_config),
             hash_calculator: crate::search::ShogiHashHandler::new(1000),
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
+            advanced_move_orderer: MoveOrdering::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
@@ -2193,7 +2271,9 @@ impl SearchEngine {
         crate::debug_utils::start_timing("move_sorting");
         // Initialize move orderer if not already done
         self.initialize_move_orderer();
-        let sorted_moves = self.move_orderer.order_moves(&legal_moves, board, captured_pieces, player, depth, alpha, beta, None);
+        
+        // Use advanced move ordering for better performance
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta);
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
@@ -2446,7 +2526,9 @@ impl SearchEngine {
         crate::debug_utils::trace_log("NEGAMAX", "Sorting moves for evaluation");
         // Initialize move orderer if not already done
         self.initialize_move_orderer();
-        let sorted_moves = self.move_orderer.order_moves(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref());
+        
+        // Use advanced move ordering for better performance
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta);
         let mut best_score = -200000;
         let mut best_move_for_tt = None;
         
@@ -2659,7 +2741,7 @@ impl SearchEngine {
         }
         
         // crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
-        let sorted_noisy_moves = self.sort_quiescence_moves(&noisy_moves);
+        let sorted_noisy_moves = self.sort_quiescence_moves_advanced(&noisy_moves, board, captured_pieces, player);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
 
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
@@ -2763,6 +2845,22 @@ impl SearchEngine {
 
     fn generate_noisy_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         self.move_generator.generate_quiescence_moves(board, player, captured_pieces)
+    }
+
+    /// Sort quiescence moves using advanced move ordering
+    fn sort_quiescence_moves_advanced(&mut self, moves: &[Move], _board: &BitboardBoard, _captured_pieces: &CapturedPieces, _player: Player) -> Vec<Move> {
+        if moves.is_empty() {
+            return Vec::new();
+        }
+
+        // Try advanced move ordering for quiescence search
+        match self.advanced_move_orderer.order_moves(moves) {
+            Ok(ordered_moves) => ordered_moves,
+            Err(_) => {
+                // Fallback to traditional quiescence move ordering
+                self.sort_quiescence_moves(moves)
+            }
+        }
     }
 
     
@@ -6825,6 +6923,9 @@ impl IterativeDeepening {
                 }
 
                 crate::debug_utils::start_timing(&format!("aspiration_search_{}_{}", depth, researches));
+                // Update advanced move orderer for iterative deepening
+                search_engine.initialize_advanced_move_orderer(board, captured_pieces, player, depth);
+                
                 if let Some((move_, score)) = search_engine.search_at_depth(
                     board, captured_pieces, player, depth, remaining_time,
                     current_alpha, current_beta

@@ -13,10 +13,12 @@ pub mod performance_benchmarks;
 pub mod error_handling;
 pub mod advanced_statistics;
 pub mod search_integration;
+pub mod move_ordering;
 pub mod move_ordering_integration;
 pub mod move_ordering_tests;
 pub mod comprehensive_tests;
 pub mod test_runner;
+pub mod search_integration_tests;
 
 // Configuration and tuning modules
 pub mod runtime_configuration;
@@ -53,6 +55,28 @@ pub use performance_benchmarks::{PerformanceBenchmarks, BenchmarkResults as Perf
 pub use error_handling::{TranspositionError, TranspositionResult, ComprehensiveErrorHandler, ErrorLogger, GracefulDegradationHandler, ErrorRecoveryManager};
 pub use advanced_statistics::{AdvancedStatisticsManager, DetailedCacheStats, HitRateByDepth, CollisionMonitor, StatisticsExporter, PerformanceTrendAnalyzer};
 pub use search_integration::{EnhancedSearchEngine, SearchStats};
+pub use move_ordering::{
+    MoveOrdering, OrderingStats, OrderingWeights, MemoryUsage, MoveOrderingConfig,
+    CacheConfig, KillerConfig, HistoryConfig, PerformanceConfig, DebugConfig,
+    HotPathStats, PerformanceStats, CacheSizes, BottleneckAnalysis, Bottleneck,
+    BottleneckCategory, BottleneckSeverity, HeuristicStats, HeuristicPerformance,
+    TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats,
+    FragmentationStats, CacheStats, CachePerformance, StatisticsExport,
+    PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness,
+    MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis,
+    TrendDirection, MoveOrderingError, MoveOrderingResult, ErrorSeverity,
+    ErrorLogEntry, ErrorHandler, MemoryPool, MemoryPoolSizes, MemoryTracker,
+    MemoryUsageBreakdown, AllocationEvent, AllocationType, MemoryThresholds,
+    MemoryThresholdStatus, MemoryLeakWarning, MemoryLeakReport, MemoryCleanupReport,
+    MemoryPressureLevel, AdvancedFeatures, PositionSpecificStrategies, OrderingStrategy,
+    PriorityAdjustments, HeuristicPreferences, GamePhase, MachineLearningModel,
+    MLModelType, MLParameters, TrainingExample, PositionContext, DynamicWeightAdjuster,
+    WeightAdjustment, PerformanceTracker, PerformanceTrend, ThreadingSupport,
+    PredictiveOrdering, PredictionModel, PredictionModelType, PredictionParameters,
+    PredictionExample, MovePattern, AdvancedCacheWarming, CacheWarmingStrategy,
+    CacheWarmingType, CacheWarmingParameters, CacheWarmingPerformance,
+    AdvancedFeatureFlags, AdvancedFeatureStatus
+};
 pub use move_ordering_integration::{TranspositionMoveOrderer, MoveOrderingStats, MoveOrderingHints};
 pub use move_ordering_tests::{MoveOrderingTestSuite, MoveOrderingBenchmarks, TestResults};
 pub use comprehensive_tests::{ComprehensiveTestSuite, ComprehensiveTestResults, TestConfig, PerformanceTargets, KnownPosition};
@@ -66,7 +90,7 @@ pub use runtime_configuration::{
 
 pub use adaptive_configuration::{
     AdaptiveConfigurationManager, AdaptationRule, AdaptationCondition, AdaptationAction,
-    AdaptationState, AdaptationMode, PerformanceTrend
+    AdaptationState, AdaptationMode
 };
 
 pub use performance_tuning::{
@@ -118,10 +142,10 @@ pub use ml_replacement_policies::{
 
 pub use dynamic_table_sizing::{
     DynamicTableSizer, DynamicSizingConfig, ResizeDecision, ResizeReason,
-    MemoryStats, PerformanceStats, AccessPatternAnalysis, DynamicSizingStats
+    AccessPatternAnalysis, DynamicSizingStats
 };
 
 pub use advanced_cache_warming::{
     AdvancedCacheWarmer, CacheWarmingConfig, WarmingSession, WarmingResults,
-    WarmingStrategy, WarmingEntry, WarmingEntryType, PositionAnalysis, GamePhase
+    WarmingStrategy, WarmingEntry, WarmingEntryType, PositionAnalysis
 };
