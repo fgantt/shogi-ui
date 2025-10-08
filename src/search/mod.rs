@@ -19,6 +19,7 @@ pub mod move_ordering_tests;
 pub mod comprehensive_tests;
 pub mod test_runner;
 pub mod search_integration_tests;
+pub mod tapered_search_integration;
 
 // Configuration and tuning modules
 pub mod runtime_configuration;
