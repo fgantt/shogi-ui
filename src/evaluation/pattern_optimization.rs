@@ -24,7 +24,8 @@ pub struct OptimizedPatternDetector {
     /// Pre-computed attack lookup tables
     attack_tables: AttackLookupTables,
     
-    /// Pattern lookup tables
+    /// Pattern lookup tables (reserved for future use)
+    #[allow(dead_code)]
     pattern_tables: PatternLookupTables,
     
     /// Performance statistics
@@ -207,7 +208,8 @@ impl AttackLookupTables {
 
 /// Pattern-specific lookup tables
 struct PatternLookupTables {
-    /// King safety patterns by king position
+    /// King safety patterns by king position (reserved for future use)
+    #[allow(dead_code)]
     king_safety_patterns: HashMap<Position, i32>,
 }
 

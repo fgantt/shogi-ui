@@ -55,7 +55,7 @@ impl AdvancedPatternSystem {
 
         // Simplified ML weight optimization
         // Full implementation would use gradient descent or other ML techniques
-        let mut weights = vec![1.0; 8];  // 8 pattern types
+        let weights = vec![1.0; 8];  // 8 pattern types
         
         for position in training_data {
             // Adjust weights based on position evaluation error
@@ -271,7 +271,8 @@ pub struct PatternAnalytics {
     /// Pattern value distribution
     value_distribution: HashMap<String, Vec<i32>>,
     
-    /// Pattern correlation matrix
+    /// Pattern correlation matrix (reserved for future use)
+    #[allow(dead_code)]
     correlations: HashMap<(String, String), f32>,
 }
 
@@ -347,7 +348,7 @@ impl PatternVisualizer {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 
-                if let Some(piece) = board.get_piece(pos) {
+                if let Some(_piece) = board.get_piece(pos) {
                     // Check if this square is involved in a pattern
                     let in_pattern = patterns.iter().any(|p| p.squares.contains(&pos));
                     

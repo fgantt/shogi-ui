@@ -299,7 +299,7 @@ impl IncrementalPatternTracker {
     }
 
     /// Check if can do incremental update
-    pub fn can_update_incrementally(&self, current_hash: u64) -> bool {
+    pub fn can_update_incrementally(&self, _current_hash: u64) -> bool {
         self.enabled && self.last_position_hash.is_some()
     }
 
