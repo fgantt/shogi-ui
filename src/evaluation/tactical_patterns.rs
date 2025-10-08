@@ -272,7 +272,6 @@ impl TacticalPatternRecognizer {
         self.stats.pin_checks += 1;
 
         let mut mg_score = 0;
-        let mut eg_score = 0;
 
         // Find king position
         let king_pos = match self.find_king_position(board, player) {
@@ -284,7 +283,7 @@ impl TacticalPatternRecognizer {
         mg_score += self.check_pins_in_directions(board, king_pos, player, &[(1, 0), (-1, 0), (0, 1), (0, -1)]);
         mg_score += self.check_pins_in_directions(board, king_pos, player, &[(1, 1), (-1, 1), (1, -1), (-1, -1)]);
 
-        eg_score = mg_score / 2; // Pins slightly less critical in endgame
+        let eg_score = mg_score / 2; // Pins slightly less critical in endgame
 
         TaperedScore::new_tapered(mg_score, eg_score)
     }
@@ -352,7 +351,6 @@ impl TacticalPatternRecognizer {
         self.stats.skewer_checks += 1;
 
         let mut mg_score = 0;
-        let mut eg_score = 0;
 
         // Check each enemy sliding piece for skewer potential
         let opponent = player.opposite();
@@ -376,7 +374,7 @@ impl TacticalPatternRecognizer {
             }
         }
 
-        eg_score = mg_score / 2;
+        let eg_score = mg_score / 2;
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 

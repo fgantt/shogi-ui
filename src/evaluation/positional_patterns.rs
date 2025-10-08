@@ -427,7 +427,7 @@ impl PositionalPatternAnalyzer {
                 let forward = if player == Player::Black { -1 } else { 1 };
                 from_pos.row as i8 + forward == to_pos.row as i8 && from_pos.col == to_pos.col
             },
-            PieceType::Knight => (dr == 2 && dc == 1),
+            PieceType::Knight => dr == 2 && dc == 1,
             PieceType::King | PieceType::Gold | PieceType::Silver => dr <= 1 && dc <= 1,
             PieceType::Rook | PieceType::PromotedRook => from_pos.row == to_pos.row || from_pos.col == to_pos.col,
             PieceType::Bishop | PieceType::PromotedBishop => dr == dc,

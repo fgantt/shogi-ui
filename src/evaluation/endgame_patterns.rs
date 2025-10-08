@@ -698,7 +698,7 @@ impl EndgamePatternEvaluator {
     fn evaluate_piece_vs_pawns(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let player_pieces = self.count_pieces(board, player);
         let player_pawns = self.count_piece_type(board, player, PieceType::Pawn);
-        let opp_pieces = self.count_pieces(board, player.opposite());
+        let _opp_pieces = self.count_pieces(board, player.opposite());
         let opp_pawns = self.count_piece_type(board, player.opposite(), PieceType::Pawn);
         
         // Rook vs pawns
