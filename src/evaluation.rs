@@ -27,6 +27,9 @@ pub mod eval_cache;
 pub mod pattern_config;
 pub mod tactical_patterns;
 pub mod positional_patterns;
+pub mod pattern_cache;
+pub mod pattern_optimization;
+pub mod pattern_advanced;
 
 use king_safety::KingSafetyEvaluator;
 use integration::IntegratedEvaluator;
