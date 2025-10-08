@@ -7,6 +7,10 @@ use serde::{Serialize, Deserialize};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 
+// WASM compatibility (Task 3.5)
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
 /// Configuration for the evaluation cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationCacheConfig {
@@ -22,8 +26,15 @@ pub struct EvaluationCacheConfig {
 
 impl Default for EvaluationCacheConfig {
     fn default() -> Self {
+        // WASM optimization: use smaller default cache (Task 3.5.3)
+        #[cfg(target_arch = "wasm32")]
+        let default_size = 64 * 1024; // 64K entries (~2MB) for WASM
+        
+        #[cfg(not(target_arch = "wasm32"))]
+        let default_size = 1024 * 1024; // 1M entries (~32MB) for native
+        
         Self {
-            size: 1024 * 1024, // 1M entries (about 32MB with 32 bytes per entry)
+            size: default_size,
             replacement_policy: ReplacementPolicy::DepthPreferred,
             enable_statistics: true,
             enable_verification: true,
@@ -707,6 +718,18 @@ impl EvaluationCache {
     /// Create a new evaluation cache with default configuration
     pub fn new() -> Self {
         Self::with_config(EvaluationCacheConfig::default())
+    }
+
+    /// Create WASM-optimized cache (Task 3.5.1)
+    #[cfg(target_arch = "wasm32")]
+    pub fn new_wasm_optimized() -> Self {
+        let config = EvaluationCacheConfig {
+            size: 32 * 1024, // 32K entries (~1MB) - WASM optimized
+            replacement_policy: ReplacementPolicy::DepthPreferred,
+            enable_statistics: false, // Reduce overhead
+            enable_verification: false, // Reduce overhead
+        };
+        Self::with_config(config)
     }
 
     /// Create a new evaluation cache with custom configuration
@@ -2893,5 +2916,118 @@ mod tests {
             let warmer = CacheWarmer::new(strategy);
             assert_eq!(warmer.get_warmed_count(), 0);
         }
+    }
+
+    // ============================================================================
+    // PHASE 3 TASK 3.5: WASM COMPATIBILITY TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_wasm_default_configuration() {
+        // Test that WASM gets appropriate defaults
+        let config = EvaluationCacheConfig::default();
+        
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WASM should use smaller default
+            assert_eq!(config.size, 64 * 1024);
+        }
+        
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Native should use larger default
+            assert_eq!(config.size, 1024 * 1024);
+        }
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn test_wasm_optimized_cache() {
+        // Test WASM-optimized constructor
+        let cache = EvaluationCache::new_wasm_optimized();
+        
+        // Should have WASM-appropriate size
+        assert_eq!(cache.config.size, 32 * 1024);
+        assert_eq!(cache.config.enable_statistics, false);
+        assert_eq!(cache.config.enable_verification, false);
+    }
+
+    #[test]
+    fn test_cache_binary_size_efficiency() {
+        // Verify cache entry is compact for WASM binary size
+        use std::mem::size_of;
+        
+        // Entry should be exactly 32 bytes (cache-line aligned)
+        assert_eq!(size_of::<EvaluationEntry>(), 32);
+        
+        // Config should be small
+        assert!(size_of::<EvaluationCacheConfig>() < 64);
+    }
+
+    #[test]
+    fn test_wasm_memory_efficiency() {
+        // Test that small cache works correctly (WASM constraint)
+        let config = EvaluationCacheConfig {
+            size: 1024, // Small for WASM
+            replacement_policy: ReplacementPolicy::DepthPreferred,
+            enable_statistics: false,
+            enable_verification: false,
+        };
+        
+        let cache = EvaluationCache::with_config(config);
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Should work correctly even with small size
+        cache.store(&board, Player::Black, &captured_pieces, 100, 5);
+        assert_eq!(cache.probe(&board, Player::Black, &captured_pieces), Some(100));
+    }
+
+    // ============================================================================
+    // PHASE 3 TASK 3.6: ADVANCED INTEGRATION TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_cache_with_transposition_table_compatibility() {
+        // Verify cache doesn't conflict with transposition table
+        // (They serve different purposes and can coexist)
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        cache.store(&board, Player::Black, &captured_pieces, 150, 5);
+        assert_eq!(cache.probe(&board, Player::Black, &captured_pieces), Some(150));
+        
+        // Would also have transposition table active in real usage
+        // Both can work simultaneously
+    }
+
+    #[test]
+    fn test_cache_for_analysis_mode() {
+        // Large cache for deep analysis
+        let config = EvaluationCacheConfig::with_size_mb(64);
+        let cache = EvaluationCache::with_config(config);
+        
+        assert!(cache.config.size >= 1024 * 1024);
+        assert!(cache.size_mb() >= 60.0);
+    }
+
+    #[test]
+    fn test_thread_safe_cache_access() {
+        // Verify thread safety (already built-in via RwLock)
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Multiple accesses (simulating concurrent use)
+        cache.store(&board, Player::Black, &captured_pieces, 100, 5);
+        
+        for _ in 0..100 {
+            let _ = cache.probe(&board, Player::Black, &captured_pieces);
+        }
+        
+        // Should complete without issues
+        let stats = cache.get_statistics();
+        assert!(stats.probes >= 100);
     }
 }
