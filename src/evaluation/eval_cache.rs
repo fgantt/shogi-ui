@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, AtomicU32, Ordering};
 use std::sync::RwLock;
 use serde::{Serialize, Deserialize};
 use std::collections::VecDeque;
+use std::io::{Read, Write};
 
 /// Configuration for the evaluation cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1244,6 +1245,499 @@ impl Default for CachePrefetcher {
     }
 }
 
+// ============================================================================
+// PHASE 2 MEDIUM PRIORITY: CACHE PERSISTENCE (Task 2.4)
+// ============================================================================
+
+/// Version information for cache persistence
+const CACHE_VERSION: u32 = 1;
+const CACHE_MAGIC: u32 = 0x53484F47; // "SHOG" in hex
+
+/// Serializable cache data for persistence
+#[derive(Serialize, Deserialize)]
+struct SerializableCache {
+    version: u32,
+    magic: u32,
+    config: EvaluationCacheConfig,
+    entries: Vec<SerializableEntry>,
+}
+
+/// Serializable cache entry
+#[derive(Clone, Serialize, Deserialize)]
+struct SerializableEntry {
+    key: u64,
+    score: i32,
+    depth: u8,
+    age: u8,
+    verification: u16,
+}
+
+impl From<EvaluationEntry> for SerializableEntry {
+    fn from(entry: EvaluationEntry) -> Self {
+        Self {
+            key: entry.key,
+            score: entry.score,
+            depth: entry.depth,
+            age: entry.age,
+            verification: entry.verification,
+        }
+    }
+}
+
+impl From<SerializableEntry> for EvaluationEntry {
+    fn from(entry: SerializableEntry) -> Self {
+        Self {
+            key: entry.key,
+            score: entry.score,
+            depth: entry.depth,
+            age: entry.age,
+            verification: entry.verification,
+            _padding: [0; 16],
+        }
+    }
+}
+
+impl EvaluationCache {
+    /// Save cache to disk
+    pub fn save_to_file<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), String> {
+        // Collect valid entries
+        let entries: Vec<SerializableEntry> = self.entries
+            .iter()
+            .map(|e| e.read().unwrap())
+            .filter(|e| e.is_valid())
+            .map(|e| (*e).into())
+            .collect();
+
+        let serializable = SerializableCache {
+            version: CACHE_VERSION,
+            magic: CACHE_MAGIC,
+            config: self.config.clone(),
+            entries,
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&serializable)
+            .map_err(|e| format!("Failed to serialize cache: {}", e))?;
+
+        // Write to file
+        std::fs::write(path, json)
+            .map_err(|e| format!("Failed to write cache file: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Load cache from disk
+    pub fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, String> {
+        // Read file
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read cache file: {}", e))?;
+
+        // Deserialize
+        let serializable: SerializableCache = serde_json::from_str(&json)
+            .map_err(|e| format!("Failed to deserialize cache: {}", e))?;
+
+        // Verify version
+        if serializable.magic != CACHE_MAGIC {
+            return Err("Invalid cache file format".to_string());
+        }
+        if serializable.version != CACHE_VERSION {
+            return Err(format!("Unsupported cache version: {}", serializable.version));
+        }
+
+        // Create new cache with loaded config
+        let cache = Self::with_config(serializable.config);
+
+        // Load entries
+        for (i, ser_entry) in serializable.entries.iter().enumerate() {
+            if i >= cache.entries.len() {
+                break;
+            }
+            let entry: EvaluationEntry = (*ser_entry).clone().into();
+            let index = cache.get_index(entry.key);
+            *cache.entries[index].write().unwrap() = entry;
+        }
+
+        Ok(cache)
+    }
+
+    /// Save cache to disk with compression
+    pub fn save_to_file_compressed<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), String> {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+
+        // Collect valid entries
+        let entries: Vec<SerializableEntry> = self.entries
+            .iter()
+            .map(|e| e.read().unwrap())
+            .filter(|e| e.is_valid())
+            .map(|e| (*e).into())
+            .collect();
+
+        let serializable = SerializableCache {
+            version: CACHE_VERSION,
+            magic: CACHE_MAGIC,
+            config: self.config.clone(),
+            entries,
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&serializable)
+            .map_err(|e| format!("Failed to serialize cache: {}", e))?;
+
+        // Compress and write
+        let file = std::fs::File::create(path)
+            .map_err(|e| format!("Failed to create file: {}", e))?;
+        let mut encoder = GzEncoder::new(file, Compression::default());
+        encoder.write_all(json.as_bytes())
+            .map_err(|e| format!("Failed to write compressed data: {}", e))?;
+        encoder.finish()
+            .map_err(|e| format!("Failed to finish compression: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Load cache from compressed file
+    pub fn load_from_file_compressed<P: AsRef<std::path::Path>>(path: P) -> Result<Self, String> {
+        use flate2::read::GzDecoder;
+
+        // Read and decompress
+        let file = std::fs::File::open(path)
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+        let mut decoder = GzDecoder::new(file);
+        let mut json = String::new();
+        decoder.read_to_string(&mut json)
+            .map_err(|e| format!("Failed to decompress: {}", e))?;
+
+        // Deserialize
+        let serializable: SerializableCache = serde_json::from_str(&json)
+            .map_err(|e| format!("Failed to deserialize cache: {}", e))?;
+
+        // Verify version
+        if serializable.magic != CACHE_MAGIC {
+            return Err("Invalid cache file format".to_string());
+        }
+        if serializable.version != CACHE_VERSION {
+            return Err(format!("Unsupported cache version: {}", serializable.version));
+        }
+
+        // Create and load cache
+        let cache = Self::with_config(serializable.config);
+        for (i, ser_entry) in serializable.entries.iter().enumerate() {
+            if i >= cache.entries.len() {
+                break;
+            }
+            let entry: EvaluationEntry = (*ser_entry).clone().into();
+            let index = cache.get_index(entry.key);
+            *cache.entries[index].write().unwrap() = entry;
+        }
+
+        Ok(cache)
+    }
+}
+
+// ============================================================================
+// PHASE 2 MEDIUM PRIORITY: MEMORY MANAGEMENT (Task 2.5)
+// ============================================================================
+
+/// Memory usage information
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct MemoryUsage {
+    /// Total allocated memory in bytes
+    pub total_bytes: usize,
+    /// Used memory in bytes
+    pub used_bytes: usize,
+    /// Number of entries
+    pub entries: usize,
+    /// Number of filled entries
+    pub filled_entries: usize,
+}
+
+impl MemoryUsage {
+    /// Get memory utilization percentage
+    pub fn utilization(&self) -> f64 {
+        if self.total_bytes == 0 {
+            0.0
+        } else {
+            (self.used_bytes as f64 / self.total_bytes as f64) * 100.0
+        }
+    }
+
+    /// Get entry utilization percentage
+    pub fn entry_utilization(&self) -> f64 {
+        if self.entries == 0 {
+            0.0
+        } else {
+            (self.filled_entries as f64 / self.entries as f64) * 100.0
+        }
+    }
+}
+
+impl EvaluationCache {
+    /// Get current memory usage
+    pub fn get_memory_usage(&self) -> MemoryUsage {
+        let filled = self.entries.iter()
+            .filter(|e| e.read().unwrap().is_valid())
+            .count();
+
+        MemoryUsage {
+            total_bytes: self.size_bytes(),
+            used_bytes: self.size_bytes(), // Fixed allocation
+            entries: self.config.size,
+            filled_entries: filled,
+        }
+    }
+
+    /// Check if cache is under memory pressure
+    pub fn is_under_memory_pressure(&self) -> bool {
+        let usage = self.get_memory_usage();
+        usage.entry_utilization() > 90.0
+    }
+
+    /// Suggest optimal cache size based on usage patterns
+    pub fn suggest_cache_size(&self) -> usize {
+        let stats = self.get_statistics();
+        let usage = self.get_memory_usage();
+
+        // If utilization is high and hit rate is good, suggest larger cache
+        if usage.entry_utilization() > 80.0 && stats.hit_rate() > 60.0 {
+            return (self.config.size * 2).min(128 * 1024 * 1024);
+        }
+
+        // If utilization is low, suggest smaller cache
+        if usage.entry_utilization() < 20.0 {
+            return (self.config.size / 2).max(1024);
+        }
+
+        // Current size is okay
+        self.config.size
+    }
+
+    /// Resize cache (creates new cache with different size)
+    pub fn resize(&mut self, new_size: usize) -> Result<(), String> {
+        if !new_size.is_power_of_two() {
+            return Err(format!("New size must be power of 2: {}", new_size));
+        }
+
+        // Create new config with new size
+        let mut new_config = self.config.clone();
+        new_config.size = new_size;
+        new_config.validate()?;
+
+        // Collect valid entries from old cache
+        let old_entries: Vec<EvaluationEntry> = self.entries
+            .iter()
+            .map(|e| *e.read().unwrap())
+            .filter(|e| e.is_valid())
+            .collect();
+
+        // Create new cache
+        let new_entries = (0..new_size)
+            .map(|_| RwLock::new(EvaluationEntry::default()))
+            .collect();
+
+        self.entries = new_entries;
+        self.config = new_config;
+
+        // Reinsert valid entries
+        for entry in old_entries {
+            let index = self.get_index(entry.key);
+            *self.entries[index].write().unwrap() = entry;
+        }
+
+        Ok(())
+    }
+
+    /// Compact cache by removing old or low-value entries
+    pub fn compact(&self) {
+        for entry_lock in &self.entries {
+            let mut entry = entry_lock.write().unwrap();
+            // Remove very old entries (age > 200)
+            if entry.age > 200 {
+                *entry = EvaluationEntry::default();
+            }
+        }
+    }
+}
+
+// ============================================================================
+// PHASE 2 LOW PRIORITY: ADVANCED FEATURES (Task 2.6)
+// ============================================================================
+
+/// Cache warming strategy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WarmingStrategy {
+    /// No warming
+    None,
+    /// Warm common positions
+    Common,
+    /// Warm opening positions
+    Opening,
+    /// Warm endgame positions
+    Endgame,
+}
+
+/// Cache warmer for pre-populating cache
+pub struct CacheWarmer {
+    strategy: WarmingStrategy,
+    positions_warmed: AtomicU64,
+}
+
+impl CacheWarmer {
+    /// Create a new cache warmer
+    pub fn new(strategy: WarmingStrategy) -> Self {
+        Self {
+            strategy,
+            positions_warmed: AtomicU64::new(0),
+        }
+    }
+
+    /// Warm cache with common positions
+    pub fn warm_cache(&self, cache: &EvaluationCache, evaluator: &crate::evaluation::PositionEvaluator) {
+        match self.strategy {
+            WarmingStrategy::None => {},
+            WarmingStrategy::Common => self.warm_common_positions(cache, evaluator),
+            WarmingStrategy::Opening => self.warm_opening_positions(cache, evaluator),
+            WarmingStrategy::Endgame => self.warm_endgame_positions(cache, evaluator),
+        }
+    }
+
+    fn warm_common_positions(&self, cache: &EvaluationCache, evaluator: &crate::evaluation::PositionEvaluator) {
+        // Warm starting position
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        cache.store(&board, Player::Black, &captured_pieces, score, 0);
+        self.positions_warmed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn warm_opening_positions(&self, cache: &EvaluationCache, evaluator: &crate::evaluation::PositionEvaluator) {
+        // Warm common opening positions (starting position)
+        self.warm_common_positions(cache, evaluator);
+    }
+
+    fn warm_endgame_positions(&self, cache: &EvaluationCache, evaluator: &crate::evaluation::PositionEvaluator) {
+        // Would warm common endgame positions
+        // For now, just warm starting position as example
+        self.warm_common_positions(cache, evaluator);
+    }
+
+    /// Get number of positions warmed
+    pub fn get_warmed_count(&self) -> u64 {
+        self.positions_warmed.load(Ordering::Relaxed)
+    }
+}
+
+/// Adaptive cache sizing based on performance
+pub struct AdaptiveCacheSizer {
+    /// Minimum cache size
+    min_size: usize,
+    /// Maximum cache size
+    max_size: usize,
+    /// Target hit rate
+    target_hit_rate: f64,
+    /// Adjustment interval (number of probes between adjustments)
+    adjustment_interval: u64,
+    /// Last adjustment probe count
+    last_adjustment: AtomicU64,
+}
+
+impl AdaptiveCacheSizer {
+    /// Create a new adaptive sizer
+    pub fn new(min_size: usize, max_size: usize, target_hit_rate: f64) -> Self {
+        Self {
+            min_size,
+            max_size,
+            target_hit_rate,
+            adjustment_interval: 10000,
+            last_adjustment: AtomicU64::new(0),
+        }
+    }
+
+    /// Check if cache should be resized
+    pub fn should_resize(&self, cache: &EvaluationCache) -> Option<usize> {
+        let stats = cache.get_statistics();
+        
+        // Check if enough probes have happened since last adjustment
+        let last_adj = self.last_adjustment.load(Ordering::Relaxed);
+        if stats.probes < last_adj + self.adjustment_interval {
+            return None;
+        }
+
+        let hit_rate = stats.hit_rate();
+        let current_size = cache.config.size;
+
+        // If hit rate is too low and we can grow, suggest larger size
+        if hit_rate < self.target_hit_rate && current_size < self.max_size {
+            let new_size = (current_size * 2).min(self.max_size);
+            self.last_adjustment.store(stats.probes, Ordering::Relaxed);
+            return Some(new_size);
+        }
+
+        // If hit rate is excellent and utilization is low, suggest smaller size
+        if hit_rate > self.target_hit_rate + 20.0 {
+            let usage = cache.get_memory_usage();
+            if usage.entry_utilization() < 30.0 && current_size > self.min_size {
+                let new_size = (current_size / 2).max(self.min_size);
+                self.last_adjustment.store(stats.probes, Ordering::Relaxed);
+                return Some(new_size);
+            }
+        }
+
+        None
+    }
+}
+
+/// Advanced cache analytics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheAnalytics {
+    /// Distribution of depths in cache
+    pub depth_distribution: Vec<(u8, usize)>,
+    /// Age distribution
+    pub age_distribution: Vec<(u8, usize)>,
+    /// Collision hotspots (indices with high collision rates)
+    pub collision_hotspots: Vec<usize>,
+    /// Most accessed positions (top 10)
+    pub hot_positions: Vec<u64>,
+}
+
+impl EvaluationCache {
+    /// Get advanced analytics
+    pub fn get_analytics(&self) -> CacheAnalytics {
+        use std::collections::HashMap;
+
+        let mut depth_counts: HashMap<u8, usize> = HashMap::new();
+        let mut age_counts: HashMap<u8, usize> = HashMap::new();
+
+        for entry in &self.entries {
+            let entry = entry.read().unwrap();
+            if entry.is_valid() {
+                *depth_counts.entry(entry.depth).or_insert(0) += 1;
+                *age_counts.entry(entry.age).or_insert(0) += 1;
+            }
+        }
+
+        let mut depth_distribution: Vec<(u8, usize)> = depth_counts.into_iter().collect();
+        depth_distribution.sort_by_key(|(d, _)| *d);
+
+        let mut age_distribution: Vec<(u8, usize)> = age_counts.into_iter().collect();
+        age_distribution.sort_by_key(|(a, _)| *a);
+
+        CacheAnalytics {
+            depth_distribution,
+            age_distribution,
+            collision_hotspots: Vec::new(), // Would require collision tracking
+            hot_positions: Vec::new(), // Would require access tracking
+        }
+    }
+
+    /// Export analytics as JSON
+    pub fn export_analytics_json(&self) -> Result<String, String> {
+        let analytics = self.get_analytics();
+        serde_json::to_string_pretty(&analytics)
+            .map_err(|e| format!("Failed to serialize analytics: {}", e))
+    }
+}
+
 /// Prefetch statistics
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct PrefetchStatistics {
@@ -2144,5 +2638,260 @@ mod tests {
 
         cache.store(&board, Player::Black, &captured_pieces, 100, 5);
         assert_eq!(cache.probe(&board, Player::Black, &captured_pieces), Some(100));
+    }
+
+    // ============================================================================
+    // PHASE 2 MEDIUM PRIORITY TASKS TESTS
+    // ============================================================================
+
+    // Task 2.4: Cache Persistence Tests
+    #[test]
+    fn test_cache_save_load() {
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Store some entries
+        for i in 0..10 {
+            cache.store(&board, Player::Black, &captured_pieces, i * 10, 5);
+        }
+
+        // Save to temp file
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("test_cache_save.json");
+        
+        let save_result = cache.save_to_file(&temp_file);
+        assert!(save_result.is_ok());
+
+        // Load from file
+        let loaded = EvaluationCache::load_from_file(&temp_file);
+        assert!(loaded.is_ok());
+
+        let loaded_cache = loaded.unwrap();
+        assert_eq!(loaded_cache.config.size, cache.config.size);
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_cache_save_load_compressed() {
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Store entries
+        for i in 0..10 {
+            cache.store(&board, Player::Black, &captured_pieces, i * 10, 5);
+        }
+
+        // Save compressed
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("test_cache_compressed.gz");
+        
+        let save_result = cache.save_to_file_compressed(&temp_file);
+        assert!(save_result.is_ok());
+
+        // Load compressed
+        let loaded = EvaluationCache::load_from_file_compressed(&temp_file);
+        assert!(loaded.is_ok());
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_cache_versioning() {
+        // Test that version checking works
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("test_cache_version.json");
+        
+        // Write invalid version
+        let invalid = r#"{
+            "version": 999,
+            "magic": 1397441351,
+            "config": {"size": 1024, "replacement_policy": "DepthPreferred", "enable_statistics": true, "enable_verification": true},
+            "entries": []
+        }"#;
+        std::fs::write(&temp_file, invalid).unwrap();
+
+        // Should fail to load
+        let result = EvaluationCache::load_from_file(&temp_file);
+        assert!(result.is_err());
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_serializable_entry_conversion() {
+        let entry = EvaluationEntry::new(0x123456, 100, 5);
+        let ser: SerializableEntry = entry.into();
+        
+        assert_eq!(ser.key, 0x123456);
+        assert_eq!(ser.score, 100);
+        assert_eq!(ser.depth, 5);
+
+        let converted: EvaluationEntry = ser.into();
+        assert_eq!(converted.key, 0x123456);
+        assert_eq!(converted.score, 100);
+        assert_eq!(converted.depth, 5);
+    }
+
+    // Task 2.5: Memory Management Tests
+    #[test]
+    fn test_memory_usage_tracking() {
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        let usage_before = cache.get_memory_usage();
+        assert_eq!(usage_before.filled_entries, 0);
+
+        // Store some entries
+        for i in 0..10 {
+            cache.store(&board, Player::Black, &captured_pieces, i * 10, 5);
+        }
+
+        let usage_after = cache.get_memory_usage();
+        assert!(usage_after.filled_entries > 0);
+        assert_eq!(usage_after.entries, cache.config.size);
+    }
+
+    #[test]
+    fn test_memory_pressure_detection() {
+        let cache = EvaluationCache::new();
+        
+        // Fresh cache should not be under pressure
+        assert!(!cache.is_under_memory_pressure());
+    }
+
+    #[test]
+    fn test_cache_size_suggestion() {
+        let cache = EvaluationCache::new();
+        let suggested = cache.suggest_cache_size();
+        
+        // Should return a valid size
+        assert!(suggested.is_power_of_two());
+        assert!(suggested >= 1024);
+    }
+
+    #[test]
+    fn test_cache_resize() {
+        let mut cache = EvaluationCache::with_config(
+            EvaluationCacheConfig {
+                size: 1024,
+                replacement_policy: ReplacementPolicy::DepthPreferred,
+                enable_statistics: true,
+                enable_verification: true,
+            }
+        );
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Store some entries
+        cache.store(&board, Player::Black, &captured_pieces, 100, 5);
+
+        // Resize to larger
+        let result = cache.resize(2048);
+        assert!(result.is_ok());
+        assert_eq!(cache.config.size, 2048);
+
+        // Should still have the entry
+        assert_eq!(cache.probe(&board, Player::Black, &captured_pieces), Some(100));
+    }
+
+    #[test]
+    fn test_cache_compact() {
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Store and age entries
+        cache.store(&board, Player::Black, &captured_pieces, 100, 5);
+        cache.compact();
+
+        // Entry should still be there (not old enough)
+        assert_eq!(cache.probe(&board, Player::Black, &captured_pieces), Some(100));
+    }
+
+    #[test]
+    fn test_memory_usage_calculations() {
+        let usage = MemoryUsage {
+            total_bytes: 1000,
+            used_bytes: 600,
+            entries: 100,
+            filled_entries: 50,
+        };
+
+        assert_eq!(usage.utilization(), 60.0);
+        assert_eq!(usage.entry_utilization(), 50.0);
+    }
+
+    // Task 2.6: Advanced Features Tests
+    #[test]
+    fn test_cache_warmer_creation() {
+        let warmer = CacheWarmer::new(WarmingStrategy::Common);
+        assert_eq!(warmer.get_warmed_count(), 0);
+    }
+
+    #[test]
+    fn test_cache_warming() {
+        let cache = EvaluationCache::new();
+        let evaluator = crate::evaluation::PositionEvaluator::new();
+        let warmer = CacheWarmer::new(WarmingStrategy::Common);
+
+        warmer.warm_cache(&cache, &evaluator);
+        assert!(warmer.get_warmed_count() > 0);
+    }
+
+    #[test]
+    fn test_adaptive_cache_sizer() {
+        let sizer = AdaptiveCacheSizer::new(1024, 1024 * 1024, 60.0);
+        let cache = EvaluationCache::new();
+
+        // Should not resize immediately
+        assert_eq!(sizer.should_resize(&cache), None);
+    }
+
+    #[test]
+    fn test_cache_analytics() {
+        let cache = EvaluationCache::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Store entries with different depths
+        for depth in 1..=5 {
+            cache.store(&board, Player::Black, &captured_pieces, depth as i32 * 10, depth);
+        }
+
+        let analytics = cache.get_analytics();
+        assert!(!analytics.depth_distribution.is_empty());
+    }
+
+    #[test]
+    fn test_analytics_json_export() {
+        let cache = EvaluationCache::new();
+        let json = cache.export_analytics_json();
+        
+        assert!(json.is_ok());
+        let json_str = json.unwrap();
+        assert!(json_str.contains("depth_distribution"));
+        assert!(json_str.contains("age_distribution"));
+    }
+
+    #[test]
+    fn test_warming_strategies() {
+        let strategies = vec![
+            WarmingStrategy::None,
+            WarmingStrategy::Common,
+            WarmingStrategy::Opening,
+            WarmingStrategy::Endgame,
+        ];
+
+        for strategy in strategies {
+            let warmer = CacheWarmer::new(strategy);
+            assert_eq!(warmer.get_warmed_count(), 0);
+        }
     }
 }
