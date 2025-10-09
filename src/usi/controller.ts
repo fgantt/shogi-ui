@@ -5,6 +5,9 @@ import { EventEmitter } from '../utils/events';
 
 
 export class ShogiController extends EventEmitter {
+  private static instanceCount = 0;
+  private instanceId: string;
+  private instanceNumber: number;
   private record: Record;
   private sessions: Map<string, EngineAdapter> = new Map();
   private initialized = false;
@@ -21,6 +24,13 @@ export class ShogiController extends EventEmitter {
 
   constructor() {
     super();
+    this.instanceNumber = ++ShogiController.instanceCount;
+    this.instanceId = `CTRL-${this.instanceNumber}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`========================================`);
+    console.log(`[${this.instanceId}] Controller created`);
+    console.log(`[${this.instanceId}] Total controllers: ${ShogiController.instanceCount}`);
+    console.log(`========================================`);
+    
     const recordResult = Record.newByUSI(`sfen ${InitialPositionSFEN.STANDARD}`);
     if (recordResult instanceof Error) {
       throw new Error(`Failed to create initial record: ${recordResult.message}`);
@@ -39,16 +49,61 @@ export class ShogiController extends EventEmitter {
       this.initializeEngine(engine);
       
       engine.on('bestmove', ({ move: usiMove, sessionId: bestmoveSessionId }) => {
-        if (usiMove && usiMove !== 'resign') {
+        console.log(`[${this.instanceId}] [SEQ-4] bestmove received: ${usiMove}`);
+        console.log(`[${this.instanceId}] Session: ${bestmoveSessionId}`);
+        this.logRecordState('SEQ-4');
+        
+        // Handle AI resignation or no legal moves
+        // Trim the move to handle cases like "resign " with trailing space
+        const trimmedMove = usiMove?.trim();
+        console.log(`[${this.instanceId}] After trim:`, { trimmedMove, isResign: trimmedMove === 'resign', isEmpty: !trimmedMove });
+        
+        if (trimmedMove === 'resign' || !trimmedMove) {
+          console.log(`[${this.instanceId}] AI RESIGNED! usiMove: ${usiMove}, trimmed: ${trimmedMove}`);
+          const isBlackTurn = this.record.position.sfen.includes(' b ');
+          const winner = isBlackTurn ? 'player2' : 'player1';
+          console.log(`[${this.instanceId}] EMITTING GAME OVER EVENT! winner: ${winner}`);
+          this.emit('gameOver', { winner, position: this.record.position });
+          this.emitStateChanged();
+          return;
+        }
+        
+        if (trimmedMove && trimmedMove !== 'resign') {
           if (bestmoveSessionId === 'sente' || bestmoveSessionId === 'gote') {
             if (this.recommendationsEnabled && this.hasHumanPlayer() && !this.isCurrentPlayerAI()) {
-              this.parseRecommendation(usiMove);
+              this.parseRecommendation(trimmedMove);
             } else {
-              this.applyMove(usiMove);
-              this.emit('aiMoveMade', { move: usiMove });
+              console.log(`[${this.instanceId}] About to apply AI move: ${trimmedMove}`);
+              console.log(`[${this.instanceId}] AI session: ${bestmoveSessionId}`);
+              
+              const moveResult = this.applyMove(trimmedMove);
+              console.log(`[${this.instanceId}] [SEQ-5] applyMove result: ${moveResult ? 'SUCCESS' : 'FAILED'}`);
+              this.logRecordState('SEQ-5');
+              
+              if (!moveResult) {
+                // Move failed to apply - this should now properly indicate checkmate
+                // since we've fixed the synchronization bug
+                console.error(`[${this.instanceId}] AI MOVE REJECTED: ${trimmedMove}`);
+                console.error(`[${this.instanceId}] Session: ${bestmoveSessionId}`);
+                
+                // The engine returned an invalid move - opponent wins
+                const isBlackTurn = this.record.position.sfen.includes(' b ');
+                const winner = isBlackTurn ? 'player2' : 'player1';
+                console.log(`[${this.instanceId}] INVALID MOVE - GAME OVER! Winner: ${winner}`);
+                this.emit('gameOver', { winner, position: this.record.position });
+                this.emitStateChanged();
+                return;
+              }
+              
+              this.emit('aiMoveMade', { move: trimmedMove });
               this.emitStateChanged();
+              
+              console.log(`[${this.instanceId}] [SEQ-6] Checking if next player is AI`);
               if (this.isCurrentPlayerAI()) {
+                console.log(`[${this.instanceId}] [SEQ-7] Next player IS AI, requesting move`);
                 this.requestEngineMove();
+              } else {
+                console.log(`[${this.instanceId}] [SEQ-7] Next player is HUMAN, waiting`);
               }
             }
           }
@@ -68,13 +123,8 @@ export class ShogiController extends EventEmitter {
       // Now set the engine to the current position
       engine.newGame();
       const currentSfen = this.record.position.sfen;
-      const moves = this.record.moves.map(move => {
-        if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
-          return (move.move as any).toUSI();
-        }
-        return '';
-      }).filter(move => move !== '');
-      engine.setPosition(currentSfen, moves);
+      // Pass empty moves array - the SFEN already has the complete position
+      engine.setPosition(currentSfen, []);
     } catch (error) {
       console.error('Failed to initialize engine:', error);
     }
@@ -82,12 +132,14 @@ export class ShogiController extends EventEmitter {
 
   private async synchronizeAllEngines(currentSfen: string, moves: string[]): Promise<void> {
     // Synchronize all existing engines with the current position
+    // NOTE: We ignore the moves parameter and pass empty array - SFEN already has complete position
     const syncPromises = Array.from(this.sessions.values()).map(async (engine) => {
       try {
         await engine.init();
         await engine.isReady();
         engine.newGame();
-        engine.setPosition(currentSfen, moves);
+        // Pass empty moves array - the SFEN already has the complete position
+        engine.setPosition(currentSfen, []);
       } catch (error) {
         console.error('Failed to synchronize engine:', error);
       }
@@ -351,35 +403,79 @@ export class ShogiController extends EventEmitter {
     return false;
   }
 
+  private logRecordState(context: string): void {
+    const sfen = this.record.position.sfen;
+    const turn = sfen.includes(' b ') ? 'Black' : 'White';
+    const moveCount = this.record.moves.length;
+    
+    console.log(`[${this.instanceId}] [${context}] RECORD STATE:`);
+    console.log(`  SFEN: ${sfen}`);
+    console.log(`  Turn: ${turn}`);
+    console.log(`  Moves: ${moveCount}`);
+    console.log(`  Player1Type: ${this.player1Type}, Player2Type: ${this.player2Type}`);
+    console.log(`  isCurrentPlayerAI: ${this.isCurrentPlayerAI()}`);
+  }
+
   private applyMove(usiMove: string): Move | null {
+    console.log(`[${this.instanceId}] ========================================`);
+    console.log(`[${this.instanceId}] applyMove called`);
+    console.log(`[${this.instanceId}]   Move: ${usiMove}`);
+    this.logRecordState('BEFORE applyMove');
+    
     const move = this.record.position.createMoveByUSI(usiMove);
-    if (move && this.record.append(move)) {
-      return move;
+    console.log(`[${this.instanceId}]   createMoveByUSI result:`, move);
+    
+    if (move) {
+      const appendResult = this.record.append(move);
+      console.log(`[${this.instanceId}]   record.append result: ${appendResult}`);
+      if (appendResult) {
+        console.log(`[${this.instanceId}]   ✓ Move applied successfully`);
+        this.logRecordState('AFTER applyMove');
+        console.log(`[${this.instanceId}] ========================================`);
+        return move;
+      } else {
+        console.error(`[${this.instanceId}]   ✗ record.append returned false - move was rejected`);
+        console.error(`[${this.instanceId}] ========================================`);
+      }
+    } else {
+      console.error(`[${this.instanceId}]   ✗ createMoveByUSI returned null`);
+      console.error(`[${this.instanceId}]   This means the move is invalid for the current position`);
+      console.error(`[${this.instanceId}]   Possible reasons:`);
+      console.error(`[${this.instanceId}]     - Wrong player trying to move`);
+      console.error(`[${this.instanceId}]     - Illegal move (blocked, out of bounds, etc)`);
+      console.error(`[${this.instanceId}]     - Malformed USI string`);
+      console.error(`[${this.instanceId}] ========================================`);
     }
     return null;
   }
 
   public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
+    console.log(`[${this.instanceId}] [SEQ-1] requestEngineMove START`);
+    this.logRecordState('SEQ-1');
+    
     const isPlayer1Turn = this.record.position.sfen.includes(' b ');
     const sessionId = isPlayer1Turn ? 'sente' : 'gote';
     const engine = this.getEngine(sessionId);
     const level = isPlayer1Turn ? this.player1Level : this.player2Level;
     
-    // Get the current position SFEN and all moves from the record
+    // CRITICAL FIX: Pass the current position SFEN with NO moves
+    // The SFEN already represents the position after all moves have been applied
+    // If we pass moves here, the engine will double-apply them, causing desynchronization
     const currentSfen = this.record.position.sfen;
-    const moves = this.record.moves.map(move => {
-      if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
-        return (move.move as any).toUSI();
-      }
-      return '';
-    }).filter(move => move !== '');
+    console.log(`[${this.instanceId}] Setting engine position: ${currentSfen}`);
+    console.log(`[${this.instanceId}] Total moves in record: ${this.record.moves.length}`);
+    console.log(`[${this.instanceId}] Session ID: ${sessionId}, Level: ${level}`);
     
     // Use current clock times if provided, otherwise fall back to stored values
     const btime = currentBlackTime !== undefined ? currentBlackTime : this.btime;
     const wtime = currentWhiteTime !== undefined ? currentWhiteTime : this.wtime;
     
+    console.log(`[${this.instanceId}] [SEQ-2] Calling engine.setPosition`);
     engine.setSearchDepth(level);
-    engine.setPosition(currentSfen, moves);
+    // Pass empty moves array - the SFEN already has the complete position
+    engine.setPosition(currentSfen, []);
+    
+    console.log(`[${this.instanceId}] [SEQ-3] Calling engine.go`);
     engine.go({ 
       btime: btime, 
       wtime: wtime, 
@@ -471,13 +567,8 @@ export class ShogiController extends EventEmitter {
       engine.newGame();
       // Set the engine to the loaded position
       const currentSfen = this.record.position.sfen;
-      const moves = this.record.moves.map(move => {
-        if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
-          return (move.move as any).toUSI();
-        }
-        return '';
-      }).filter(move => move !== '');
-      engine.setPosition(currentSfen, moves);
+      // Pass empty moves array - the SFEN already has the complete position
+      engine.setPosition(currentSfen, []);
     });
     
     await Promise.all(engineUpdates);

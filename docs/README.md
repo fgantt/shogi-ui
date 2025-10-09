@@ -31,6 +31,7 @@ Documentation intended for end users, developers using the engine, and API consu
   - `fen_and_coordinates.md` - FEN notation and coordinate system
   - `Universal-Shogi-Interface.html` - USI protocol specification
   - `PROMOTION_MATCHING_EXERCISE.md` - Promotion rules exercise
+  - `SHOGI_ENDGAME_CONDITIONS.md` - Complete guide to all endgame conditions
 
 ### 🏗️ Design Documentation (`design/`)
 Technical design documents, architecture decisions, and implementation plans.
@@ -107,6 +108,9 @@ Technical design documents, architecture decisions, and implementation plans.
     - `DESIGN_TAPERED_EVALUATION.md` - Tapered evaluation design
     - `IMPLEMENT_TAPERED_EVALUATION.md` - Tapered evaluation implementation
     - `TASKS_TAPERED_EVALUATION.md` - Tapered evaluation tasks
+  - **`endgame-detection/`** - Endgame detection and game-over conditions
+    - `ENDGAME_DETECTION_IMPLEMENTATION_PLAN.md` - Complete implementation plan
+    - `ENDGAME_DETECTION_TASKS.md` - Actionable task breakdown
 
 ### 🔧 Development Documentation (`development/`)
 Development processes, project planning, and status tracking.
@@ -136,6 +140,9 @@ Development processes, project planning, and status tracking.
 
 - **`processes/`** - Development processes and workflows
   - `generate-tasks.md` - Task generation process
+
+- **`bug-fixes/`** - Bug fix documentation and analysis
+  - `BUG_FIX_INFINITE_SEARCH_LOOP.md` - Fix for AI infinite search when checkmated
 
 ### 📦 Archive (`archive/`)
 Deprecated, outdated, or experimental documentation.

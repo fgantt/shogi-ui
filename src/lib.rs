@@ -311,6 +311,16 @@ impl ShogiEngine {
     }
 
     pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+        // CRITICAL DEBUG: Log the engine's internal state at the very beginning
+        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+        crate::debug_utils::debug_log("========================================");
+        crate::debug_utils::debug_log("[GET_BEST_MOVE] CALLED - ENGINE INTERNAL STATE:");
+        crate::debug_utils::debug_log(&format!("[GET_BEST_MOVE]   Current Player: {:?}", self.current_player));
+        crate::debug_utils::debug_log(&format!("[GET_BEST_MOVE]   Position FEN: {}", fen));
+        crate::debug_utils::debug_log(&format!("[GET_BEST_MOVE]   Captured Pieces: black={:?}, white={:?}", 
+            self.captured_pieces.black, self.captured_pieces.white));
+        crate::debug_utils::debug_log("========================================");
+        
         crate::debug_utils::set_search_start_time();
         crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Starting search: depth={}, time_limit={}ms", depth, time_limit_ms));
         crate::debug_utils::start_timing("tablebase_check");
@@ -321,7 +331,6 @@ impl ShogiEngine {
             let _ = on_info.call1(&this, &s);
         }
 
-        let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
         crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Position FEN: {}", fen));
         
         // Check tablebase first
@@ -381,6 +390,23 @@ impl ShogiEngine {
             let s = wasm_bindgen::JsValue::from_str("info string DEBUG: No tablebase or opening book move, starting search");
             let _ = on_info.call1(&this, &s);
         }
+
+        // Check for legal moves BEFORE starting search to avoid panics
+        crate::debug_utils::debug_log("Checking for legal moves before search");
+        let move_generator = MoveGenerator::new();
+        let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
+        
+        if legal_moves.is_empty() {
+            crate::debug_utils::debug_log("No legal moves available - position is checkmate or stalemate");
+            if let Some(on_info) = &on_info {
+                let this = wasm_bindgen::JsValue::NULL;
+                let s = wasm_bindgen::JsValue::from_str("info string No legal moves available - game over");
+                let _ = on_info.call1(&this, &s);
+            }
+            return None;
+        }
+        
+        crate::debug_utils::debug_log(&format!("Found {} legal moves, proceeding with search", legal_moves.len()));
 
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
@@ -455,6 +481,9 @@ impl ShogiEngine {
         let sfen_str: String;
         let mut moves_start_index: Option<usize> = None;
 
+        crate::debug_utils::debug_log(&format!("handle_position called with {} parts", parts.len()));
+        crate::debug_utils::debug_log(&format!("Parts: {:?}", parts));
+
         if parts.is_empty() {
             output.push("info string error Invalid position command".to_string());
             return output;
@@ -462,6 +491,7 @@ impl ShogiEngine {
 
         if parts[0] == "startpos" {
             sfen_str = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+            crate::debug_utils::debug_log("Using startpos");
             if parts.len() > 1 && parts[1] == "moves" {
                 moves_start_index = Some(2);
             }
@@ -474,6 +504,7 @@ impl ShogiEngine {
                 current_index += 1;
             }
             sfen_str = sfen_parts.join(" ");
+            crate::debug_utils::debug_log(&format!("Parsed SFEN: '{}'", sfen_str));
             if current_index < parts.len() && parts[current_index] == "moves" {
                 moves_start_index = Some(current_index + 1);
             }
@@ -482,13 +513,26 @@ impl ShogiEngine {
             return output;
         }
 
+        crate::debug_utils::debug_log(&format!("About to parse SFEN: '{}'", sfen_str));
         match BitboardBoard::from_fen(&sfen_str) {
             Ok((board, player, captured_pieces)) => {
+                crate::debug_utils::debug_log(&format!("SFEN parsed successfully, player: {:?}", player));
                 self.board = board;
                 self.current_player = player;
                 self.captured_pieces = captured_pieces;
+                
+                // CRITICAL DEBUG: Verify the state was actually set
+                let verify_fen = self.board.to_fen(self.current_player, &self.captured_pieces);
+                crate::debug_utils::debug_log("========================================");
+                crate::debug_utils::debug_log("[HANDLE_POSITION] STATE SET - VERIFICATION:");
+                crate::debug_utils::debug_log(&format!("[HANDLE_POSITION]   self.current_player = {:?}", self.current_player));
+                crate::debug_utils::debug_log(&format!("[HANDLE_POSITION]   Verification FEN: {}", verify_fen));
+                crate::debug_utils::debug_log(&format!("[HANDLE_POSITION]   self.captured_pieces: black={:?}, white={:?}", 
+                    self.captured_pieces.black, self.captured_pieces.white));
+                crate::debug_utils::debug_log("========================================");
             }
             Err(e) => {
+                crate::debug_utils::debug_log(&format!("SFEN parse FAILED: {}", e));
                 output.push(format!("info string error Failed to parse FEN: {}", e));
                 return output;
             }

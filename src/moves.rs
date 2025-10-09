@@ -90,8 +90,11 @@ impl MoveGenerator {
 
     pub fn generate_legal_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
         let is_in_check = board.is_king_in_check(player, captured_pieces);
+        
+        crate::debug_utils::debug_log(&format!("[GENERATE_LEGAL_MOVES] Player: {:?}, In check: {}", player, is_in_check));
 
         let pseudo_legal_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
+        crate::debug_utils::debug_log(&format!("[GENERATE_LEGAL_MOVES] Generated {} pseudo-legal moves", pseudo_legal_moves.len()));
 
         let legal_moves: Vec<Move> = pseudo_legal_moves.into_iter().filter(|m| {
             let mut temp_board = board.clone();
@@ -104,10 +107,9 @@ impl MoveGenerator {
             !temp_board.is_king_in_check(player, &temp_captured)
         }).collect();
 
+        crate::debug_utils::debug_log(&format!("[GENERATE_LEGAL_MOVES] Final legal moves: {}", legal_moves.len()));
         if is_in_check {
-            // If in check, only moves that resolve the check are legal.
-            // The filtering above already handles this.
-            // If no moves are found, it's checkmate.
+            crate::debug_utils::debug_log(&format!("[GENERATE_LEGAL_MOVES] Player was in check, found {} legal moves", legal_moves.len()));
         }
         
         legal_moves

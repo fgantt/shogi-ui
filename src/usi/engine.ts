@@ -16,12 +16,23 @@ export interface EngineAdapter extends EventEmitter {
 
 // An adapter for a WASM engine running in a Web Worker
 export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
+  private static instanceCount = 0;
+  private instanceId: string;
+  private instanceNumber: number;
   private worker: Worker;
   public sessionId: string;
 
   constructor(sessionId: string) {
     super();
+    this.instanceNumber = ++WasmEngineAdapter.instanceCount;
+    this.instanceId = `ADAPTER-${sessionId}-${this.instanceNumber}-${Math.random().toString(36).substr(2, 9)}`;
     this.sessionId = sessionId;
+    
+    console.log(`========================================`);
+    console.log(`[${this.instanceId}] Adapter created for session: ${sessionId}`);
+    console.log(`[${this.instanceId}] Total adapters: ${WasmEngineAdapter.instanceCount}`);
+    console.log(`========================================`);
+    
     this.worker = new Worker(new URL('./shogi.worker.ts', import.meta.url), { type: 'module' });
 
     this.worker.onmessage = (e: MessageEvent) => {
@@ -106,7 +117,12 @@ export class WasmEngineAdapter extends EventEmitter implements EngineAdapter {
   async setPosition(sfen: string, moves: string[]): Promise<void> {
     const movesString = moves.length > 0 ? `moves ${moves.join(' ')}` : '';
     const positionCommand = `position sfen ${sfen} ${movesString}`;
-    console.log('WasmEngineAdapter: Setting position:', positionCommand);
+    console.log(`[${this.instanceId}] ========================================`);
+    console.log(`[${this.instanceId}] Setting position:`);
+    console.log(`[${this.instanceId}]   SFEN: ${sfen}`);
+    console.log(`[${this.instanceId}]   Moves: [${moves.join(', ')}]`);
+    console.log(`[${this.instanceId}]   Full command: ${positionCommand}`);
+    console.log(`[${this.instanceId}] ========================================`);
     this.sendUsiCommand(positionCommand);
   }
 

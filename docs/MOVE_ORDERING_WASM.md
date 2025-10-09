@@ -434,3 +434,4 @@ The move ordering system is **production-ready for WASM** with:
 Use `MoveOrdering::platform_optimized_config()` for automatic platform-specific optimization, or manually configure using the WASM-specific settings documented above.
 
 
+

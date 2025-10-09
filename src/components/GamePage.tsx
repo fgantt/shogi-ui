@@ -35,6 +35,97 @@ const isPiecePromoted = (pieceType: TsshogiPieceType): boolean => {
   ].includes(pieceType);
 };
 
+// Helper function to check if the game is over
+const checkGameOver = (position: ImmutablePosition): 'player1' | 'player2' | 'draw' | null => {
+  const isBlackTurn = position.sfen.includes(' b ');
+  const currentColor = isBlackTurn ? Color.BLACK : Color.WHITE;
+  
+  console.log('Checking game over for position:', position.sfen);
+  console.log('Current turn:', isBlackTurn ? 'Black' : 'White');
+  
+  // Check if current player has any legal moves
+  let hasLegalMoves = false;
+  
+  // Check for legal piece moves
+  for (let row = 0; row < 9; row++) {
+    for (let col = 0; col < 9; col++) {
+      const fromSquare = Square.newByXY(col, row);
+      if (!fromSquare) continue;
+      
+      const piece = position.board.at(fromSquare);
+      if (!piece || piece.color !== currentColor) continue;
+      
+      // Try all possible destination squares for this piece
+      for (let toRow = 0; toRow < 9; toRow++) {
+        for (let toCol = 0; toCol < 9; toCol++) {
+          const toSquare = Square.newByXY(toCol, toRow);
+          if (!toSquare) continue;
+          
+          const move = position.createMove(fromSquare, toSquare);
+          if (move && position.isValidMove(move)) {
+            hasLegalMoves = true;
+            console.log('Found legal move:', move);
+            break;
+          }
+        }
+        if (hasLegalMoves) break;
+      }
+      if (hasLegalMoves) break;
+    }
+    if (hasLegalMoves) break;
+  }
+  
+  // Check for legal drop moves if no piece moves found
+  if (!hasLegalMoves) {
+    const hand = position.hand(currentColor);
+    const dropPieceTypes = [
+      TsshogiPieceType.PAWN,
+      TsshogiPieceType.LANCE,
+      TsshogiPieceType.KNIGHT,
+      TsshogiPieceType.SILVER,
+      TsshogiPieceType.GOLD,
+      TsshogiPieceType.BISHOP,
+      TsshogiPieceType.ROOK
+    ];
+    
+    for (const pieceType of dropPieceTypes) {
+      if (hand.count(pieceType) > 0) {
+        // Try dropping on all empty squares
+        for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 9; col++) {
+            const toSquare = Square.newByXY(col, row);
+            if (!toSquare) continue;
+            
+            // Skip if square is occupied
+            if (position.board.at(toSquare)) continue;
+            
+            const move = position.createMove(pieceType, toSquare);
+            if (move && position.isValidMove(move)) {
+              hasLegalMoves = true;
+              console.log('Found legal drop:', move);
+              break;
+            }
+          }
+          if (hasLegalMoves) break;
+        }
+      }
+      if (hasLegalMoves) break;
+    }
+  }
+  
+  console.log('Has legal moves:', hasLegalMoves);
+  
+  if (!hasLegalMoves) {
+    // Current player has no legal moves - they lose
+    // In shogi, stalemate is also a loss for the player who can't move
+    const winner = isBlackTurn ? 'player2' : 'player1';
+    console.log('Game over! Winner:', winner);
+    return winner;
+  }
+  
+  return null;
+};
+
 interface GamePageProps {
   isUsiMonitorVisible: boolean;
   lastSentCommand: string;
@@ -75,7 +166,32 @@ const GamePage: React.FC<GamePageProps> = ({
   const [lastMove, setLastMove] = useState<{ from: Square | null; to: Square | null } | null>(null);
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square; pieceType: TsshogiPieceType; player: 'player1' | 'player2'; destinationSquareUsi: string } | null>(null);
-  const [winner, setWinner] = useState<'player1' | 'player2' | 'draw' | null>(null);
+  const [winner, setWinnerState] = useState<'player1' | 'player2' | 'draw' | null>(null);
+  const gameInitializedRef = useRef(false); // Prevent double initialization in strict mode
+  const componentId = useRef(`COMPONENT-${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Track component lifecycle
+  useEffect(() => {
+    console.log(`========================================`);
+    console.log(`[${componentId.current}] GamePage MOUNTED`);
+    console.log(`[${componentId.current}] gameInitializedRef.current: ${gameInitializedRef.current}`);
+    console.log(`========================================`);
+    
+    return () => {
+      console.log(`========================================`);
+      console.log(`[${componentId.current}] GamePage UNMOUNTING`);
+      console.log(`========================================`);
+    };
+  }, []);
+  
+  // Wrapper to log all winner state changes
+  const setWinner = (value: 'player1' | 'player2' | 'draw' | null) => {
+    console.log('[GAMEPAGE] ========================================');
+    console.log('[GAMEPAGE] setWinner called with:', value);
+    console.log('[GAMEPAGE] ========================================');
+    console.trace('Stack trace:');
+    setWinnerState(value);
+  };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
@@ -137,6 +253,17 @@ const GamePage: React.FC<GamePageProps> = ({
 
   // Handle navigation state from HomePage
   useEffect(() => {
+    console.log(`[${componentId.current}] Navigation effect triggered`);
+    console.log(`[${componentId.current}] gameInitializedRef.current: ${gameInitializedRef.current}`);
+    
+    // Prevent double initialization in React strict mode
+    if (gameInitializedRef.current) {
+      console.log(`[${componentId.current}] SKIPPING initialization - already initialized`);
+      return;
+    }
+    
+    console.log(`[${componentId.current}] PROCEEDING with initialization`);
+    
     if (location.state && controller.isInitialized()) {
       const { 
         player1Type, 
@@ -200,11 +327,21 @@ const GamePage: React.FC<GamePageProps> = ({
         }
 
         // Start a new game with the custom SFEN if provided
-        controller.newGame(stateInitialSfen).catch(error => {
-          console.error('Failed to start new game:', error);
+        // CRITICAL: Set the ref BEFORE the async call to prevent React Strict Mode double-initialization
+        gameInitializedRef.current = true;
+        console.log(`[${componentId.current}] Set gameInitializedRef to true, starting newGame`);
+        controller.newGame(stateInitialSfen).then(() => {
+          console.log(`[${componentId.current}] Game initialized successfully`);
+        }).catch(error => {
+          console.error(`[${componentId.current}] Failed to start new game:`, error);
+          // Reset on error to allow retry
+          gameInitializedRef.current = false;
         });
       }
     }
+    
+    // DON'T reset the ref in cleanup - it should persist across React Strict Mode re-mounts
+    // Only reset when actually starting a new game via handleStartGame
   }, [location.state, controller]);
 
   // Note: Initial AI move is now handled by the controller's newGame() method
@@ -236,6 +373,28 @@ const GamePage: React.FC<GamePageProps> = ({
 
     return () => {
       controller.off('aiMoveMade', handleAiMove);
+    };
+  }, [controller]);
+
+  // Listen for game over events from controller
+  useEffect(() => {
+    console.log('[GAMEPAGE] Setting up gameOver event listener');
+    
+    const handleGameOver = (data: { winner: 'player1' | 'player2' | 'draw' }) => {
+      console.log('[GAMEPAGE] ========================================');
+      console.log('[GAMEPAGE] GAME OVER EVENT RECEIVED!', data);
+      console.log('[GAMEPAGE] Setting winner to:', data.winner);
+      console.log('[GAMEPAGE] ========================================');
+      setWinner(data.winner);
+      console.log('[GAMEPAGE] Winner state updated');
+    };
+
+    controller.on('gameOver', handleGameOver);
+    console.log('[GAMEPAGE] gameOver event listener registered');
+
+    return () => {
+      console.log('[GAMEPAGE] Cleaning up gameOver event listener');
+      controller.off('gameOver', handleGameOver);
     };
   }, [controller]);
 
@@ -447,11 +606,15 @@ const GamePage: React.FC<GamePageProps> = ({
         setAttackingPieces([]);
       }
       
-      //TODO(feg): With the switch to tsshogi, need to determine checkmate and repetition from the newPosition object.
-      // if (newPosition.isCheckmate()) {
-      //   setWinner(newPosition.turn === 0 ? 'player2' : 'player1');
-      // } else if (newPosition.isRepetition()) {
-      //   setWinner('draw');
+      // Check for game over (checkmate or no legal moves)
+      // DISABLED: checkGameOver() has false positives - rely on controller/AI detection instead
+      // console.log('🔍 State changed, checking for game over...');
+      // const gameOverResult = checkGameOver(newPosition);
+      // console.log('🔍 checkGameOver returned:', gameOverResult);
+      // if (gameOverResult) {
+      //   console.log('🎊 UI DETECTED GAME OVER:', gameOverResult);
+      //   setWinner(gameOverResult);
+      //   console.log('🎊 Winner set by UI to:', gameOverResult);
       // }
     };
 
@@ -723,6 +886,7 @@ const GamePage: React.FC<GamePageProps> = ({
 
   const handleStartGame = (settings: GameSettings) => {
     clearUsiHistory();
+    gameInitializedRef.current = false; // Reset to allow re-initialization
     setPlayer1Type(settings.player1Type);
     setPlayer2Type(settings.player2Type);
     setPlayer1Level(settings.player1Level);
@@ -1133,6 +1297,13 @@ const GamePage: React.FC<GamePageProps> = ({
           onClose={() => setIsStartGameModalOpen(false)} 
           onStartGame={handleStartGame} 
         />
+        {winner && (
+          <CheckmateModal 
+            winner={winner}
+            onDismiss={handleDismiss}
+            onNewGame={handleNewGame}
+          />
+        )}
         
         {/* USI Monitor positioned below the game content */}
         <UsiMonitor
@@ -1364,6 +1535,13 @@ const GamePage: React.FC<GamePageProps> = ({
         onClose={() => setIsStartGameModalOpen(false)} 
         onStartGame={handleStartGame} 
       />
+      {winner && (
+        <CheckmateModal 
+          winner={winner}
+          onDismiss={handleDismiss}
+          onNewGame={handleNewGame}
+        />
+      )}
       {/* Debug modal state */}
       <div style={{ position: 'fixed', top: '10px', left: '10px', background: 'yellow', padding: '10px', zIndex: 10000 }}>
         Modal State: {isExitConfirmModalOpen ? 'TRUE' : 'FALSE'}

@@ -194,8 +194,16 @@ impl BitboardBoard {
 
     pub fn is_king_in_check(&self, player: Player, _captured_pieces: &CapturedPieces) -> bool {
         if let Some(king_pos) = self.find_king_position(player) {
-            return self.is_square_attacked_by(king_pos, player.opposite());
+            let is_attacked = self.is_square_attacked_by(king_pos, player.opposite());
+            crate::debug_utils::debug_log(&format!("[IS_KING_IN_CHECK] Player: {:?}, King at: {}{}, Attacked: {}", 
+                player, 
+                (b'a' + king_pos.col) as char, 
+                9 - king_pos.row,
+                is_attacked
+            ));
+            return is_attacked;
         }
+        crate::debug_utils::debug_log(&format!("[IS_KING_IN_CHECK] Player: {:?}, No king found!", player));
         false
     }
 
@@ -206,17 +214,20 @@ impl BitboardBoard {
     }
 
     pub fn is_square_attacked_by(&self, target_pos: Position, attacking_player: Player) -> bool {
+        // More efficient direct attack checking without generating all moves
         for r in 0..9 {
             for c in 0..9 {
                 let from_pos = Position::new(r, c);
                 if let Some(piece) = self.get_piece(from_pos) {
                     if piece.player == attacking_player {
-                        // Check if this piece attacks the target_pos
-                        let pseudo_moves = self.generate_pseudo_moves_for_piece(piece, from_pos);
-                        for m in pseudo_moves {
-                            if m.to == target_pos {
-                                return true;
-                            }
+                        // Check if this piece attacks the target_pos directly
+                        if self.piece_attacks_square(piece, from_pos, target_pos) {
+                            crate::debug_utils::debug_log(&format!("[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}", 
+                                piece.piece_type,
+                                (b'a' + from_pos.col) as char, 
+                                9 - from_pos.row
+                            ));
+                            return true;
                         }
                     }
                 }
@@ -225,94 +236,117 @@ impl BitboardBoard {
         false
     }
 
-    // Helper to generate pseudo-legal moves for a single piece
-    fn generate_pseudo_moves_for_piece(&self, piece: &Piece, pos: Position) -> Vec<Move> {
-        // Limit move generation to prevent memory issues in WASM
-        const MAX_MOVES_PER_PIECE: usize = 50;
-        let mut moves = Vec::with_capacity(MAX_MOVES_PER_PIECE);
+    // Direct attack checking without move generation
+    fn piece_attacks_square(&self, piece: &Piece, from_pos: Position, target_pos: Position) -> bool {
         let player = piece.player;
         
-        // Early return for invalid positions to prevent memory issues
-        if pos.row >= 9 || pos.col >= 9 {
-            return moves;
+        // Early bounds check
+        if from_pos.row >= 9 || from_pos.col >= 9 || target_pos.row >= 9 || target_pos.col >= 9 {
+            return false;
         }
-
-        let handle_move = |moves: &mut Vec<Move>, to_pos: Position| {
-            if moves.len() >= MAX_MOVES_PER_PIECE {
-                return; // Prevent excessive memory allocation
-            }
-            // Bounds check for target position
-            if to_pos.row >= 9 || to_pos.col >= 9 {
-                return;
-            }
-            if !self.is_square_occupied_by(to_pos, player) {
-                moves.push(Move::new_move(pos, to_pos, piece.piece_type, player, false));
-            }
-        };
 
         match piece.piece_type {
             PieceType::Pawn => {
                 let dir: i8 = if player == Player::Black { 1 } else { -1 };
-                let new_row = pos.row as i8 + dir;
+                let new_row = from_pos.row as i8 + dir;
                 if new_row >= 0 && new_row < 9 {
-                    handle_move(&mut moves, Position::new(new_row as u8, pos.col));
+                    let attack_pos = Position::new(new_row as u8, from_pos.col);
+                    return attack_pos == target_pos;
                 }
+                false
             },
             PieceType::Knight => {
                 let dir: i8 = if player == Player::Black { 1 } else { -1 };
                 let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
                 for (dr, dc) in move_offsets.iter() {
-                    let new_row = pos.row as i8 + dr;
-                    let new_col = pos.col as i8 + dc;
+                    let new_row = from_pos.row as i8 + dr;
+                    let new_col = from_pos.col as i8 + dc;
                     if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
-                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
+                        let attack_pos = Position::new(new_row as u8, new_col as u8);
+                        if attack_pos == target_pos {
+                            return true;
+                        }
                     }
                 }
+                false
             },
-            PieceType::Lance | PieceType::Rook | PieceType::Bishop | PieceType::PromotedBishop | PieceType::PromotedRook => {
-                let directions = match piece.piece_type {
-                    PieceType::Lance => if player == Player::Black { vec![(1, 0)] } else { vec![(-1, 0)] },
-                    PieceType::Rook => vec![(1, 0), (-1, 0), (0, 1), (0, -1)],
-                    PieceType::Bishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1)],
-                    PieceType::PromotedBishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)],
-                    PieceType::PromotedRook => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
-                    _ => vec![]
-                };
-
-                for (dr, dc) in directions {
-                    let mut current_pos = pos;
-                    let mut steps = 0;
-                    const MAX_SLIDING_STEPS: i32 = 8; // Prevent infinite loops
-                    
-                    loop {
-                        if steps >= MAX_SLIDING_STEPS { break; } // Safety limit
-                        steps += 1;
-                        
-                        let new_row = current_pos.row as i8 + dr;
-                        let new_col = current_pos.col as i8 + dc;
-                        if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 { break; } // Out of bounds
-                        
-                        current_pos = Position::new(new_row as u8, new_col as u8);
-                        handle_move(&mut moves, current_pos);
-
-                        if self.is_square_occupied(current_pos) { break; } // Blocked by a piece
-                    }
-                }
+            PieceType::Lance => {
+                let dir: i8 = if player == Player::Black { 1 } else { -1 };
+                self.check_ray_attack(from_pos, target_pos, (dir, 0))
+            },
+            PieceType::Rook => {
+                self.check_ray_attack(from_pos, target_pos, (1, 0)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, 0)) ||
+                self.check_ray_attack(from_pos, target_pos, (0, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (0, -1))
+            },
+            PieceType::Bishop => {
+                self.check_ray_attack(from_pos, target_pos, (1, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (1, -1)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, -1))
+            },
+            PieceType::PromotedBishop => {
+                // Bishop + King moves
+                self.check_ray_attack(from_pos, target_pos, (1, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (1, -1)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, -1)) ||
+                self.check_king_attack(from_pos, target_pos, player)
+            },
+            PieceType::PromotedRook => {
+                // Rook + King moves
+                self.check_ray_attack(from_pos, target_pos, (1, 0)) ||
+                self.check_ray_attack(from_pos, target_pos, (-1, 0)) ||
+                self.check_ray_attack(from_pos, target_pos, (0, 1)) ||
+                self.check_ray_attack(from_pos, target_pos, (0, -1)) ||
+                self.check_king_attack(from_pos, target_pos, player)
             },
             PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => {
-                let dir: i8 = if player == Player::Black { 1 } else { -1 };
-                let offsets = piece.piece_type.get_move_offsets(dir);
-                for (dr, dc) in offsets {
-                    let new_row = pos.row as i8 + dr;
-                    let new_col = pos.col as i8 + dc;
-                    if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
-                        handle_move(&mut moves, Position::new(new_row as u8, new_col as u8));
-                    }
-                }
+                self.check_king_attack(from_pos, target_pos, player)
             }
         }
-        moves
     }
+
+    // Check if a ray from from_pos in direction (dr, dc) hits target_pos
+    fn check_ray_attack(&self, from_pos: Position, target_pos: Position, direction: (i8, i8)) -> bool {
+        let (dr, dc) = direction;
+        let mut current_pos = from_pos;
+        
+        loop {
+            let new_row = current_pos.row as i8 + dr;
+            let new_col = current_pos.col as i8 + dc;
+            
+            // Out of bounds
+            if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
+                break;
+            }
+            
+            current_pos = Position::new(new_row as u8, new_col as u8);
+            
+            // Found target
+            if current_pos == target_pos {
+                return true;
+            }
+            
+            // Blocked by a piece
+            if self.is_square_occupied(current_pos) {
+                break;
+            }
+        }
+        
+        false
+    }
+
+    // Check if a king-like piece attacks target_pos
+    fn check_king_attack(&self, from_pos: Position, target_pos: Position, _player: Player) -> bool {
+        let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
+        let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
+        
+        // King attacks adjacent squares (including diagonals)
+        row_diff <= 1 && col_diff <= 1 && (row_diff != 0 || col_diff != 0)
+    }
+
 
     pub fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
         let mut temp_board = self.clone();
