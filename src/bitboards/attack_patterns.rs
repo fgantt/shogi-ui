@@ -165,64 +165,66 @@ impl AttackTables {
         match piece_type {
             PieceType::King => self.king_attacks[square as usize],
             PieceType::Knight => {
-                // Knight attacks are player-dependent, but we only store black patterns
-                // For white, we need to mirror the pattern vertically
-                let black_pattern = self.knight_attacks[square as usize];
+                // Knight attacks are player-dependent
+                // For White, use the pattern from the vertically mirrored square
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.knight_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.knight_attacks[square as usize]
                 }
             },
             PieceType::Gold => {
-                // Gold attacks are player-dependent, but we only store black patterns
-                let black_pattern = self.gold_attacks[square as usize];
+                // Gold attacks are player-dependent
+                // For White, use the pattern from the vertically mirrored square
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.gold_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.gold_attacks[square as usize]
                 }
             },
             PieceType::Silver => {
-                // Silver attacks are player-dependent, but we only store black patterns
-                let black_pattern = self.silver_attacks[square as usize];
+                // Silver attacks are player-dependent
+                // For White, use the pattern from the vertically mirrored square
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.silver_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.silver_attacks[square as usize]
                 }
             },
             PieceType::PromotedPawn => {
                 // Promoted pawn attacks are same as gold
-                let black_pattern = self.promoted_pawn_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.promoted_pawn_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.promoted_pawn_attacks[square as usize]
                 }
             },
             PieceType::PromotedLance => {
-                let black_pattern = self.promoted_lance_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.promoted_lance_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.promoted_lance_attacks[square as usize]
                 }
             },
             PieceType::PromotedKnight => {
-                let black_pattern = self.promoted_knight_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.promoted_knight_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.promoted_knight_attacks[square as usize]
                 }
             },
             PieceType::PromotedSilver => {
-                let black_pattern = self.promoted_silver_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_vertically(black_pattern)
+                    let mirrored_square = self.mirror_square(square);
+                    self.promoted_silver_attacks[mirrored_square as usize]
                 } else {
-                    black_pattern
+                    self.promoted_silver_attacks[square as usize]
                 }
             },
             PieceType::PromotedBishop => self.promoted_bishop_attacks[square as usize], // Same for both players
@@ -345,20 +347,13 @@ impl AttackTables {
         true
     }
     
-    /// Mirror a bitboard pattern vertically (for white player orientation)
-    /// Flips rows to convert Black's perspective to White's perspective
-    fn mirror_pattern_vertically(&self, pattern: Bitboard) -> Bitboard {
-        let mut mirrored = EMPTY_BITBOARD;
-        for square in 0..81 {
-            if (pattern & (1u128 << square)) != 0 {
-                let row = square / 9;
-                let col = square % 9;
-                let mirrored_row = 8 - row;  // Flip rows, not columns!
-                let mirrored_square = mirrored_row * 9 + col;
-                mirrored |= 1u128 << mirrored_square;
-            }
-        }
-        mirrored
+    /// Mirror a square vertically (flip row position)
+    /// Used to get the equivalent square from Black's perspective for White pieces
+    fn mirror_square(&self, square: u8) -> u8 {
+        let row = square / 9;
+        let col = square % 9;
+        let mirrored_row = 8 - row;
+        mirrored_row * 9 + col
     }
 }
 
