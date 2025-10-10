@@ -166,10 +166,10 @@ impl AttackTables {
             PieceType::King => self.king_attacks[square as usize],
             PieceType::Knight => {
                 // Knight attacks are player-dependent, but we only store black patterns
-                // For white, we need to mirror the pattern
+                // For white, we need to mirror the pattern vertically
                 let black_pattern = self.knight_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -178,7 +178,7 @@ impl AttackTables {
                 // Gold attacks are player-dependent, but we only store black patterns
                 let black_pattern = self.gold_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -187,7 +187,7 @@ impl AttackTables {
                 // Silver attacks are player-dependent, but we only store black patterns
                 let black_pattern = self.silver_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -196,7 +196,7 @@ impl AttackTables {
                 // Promoted pawn attacks are same as gold
                 let black_pattern = self.promoted_pawn_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -204,7 +204,7 @@ impl AttackTables {
             PieceType::PromotedLance => {
                 let black_pattern = self.promoted_lance_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -212,7 +212,7 @@ impl AttackTables {
             PieceType::PromotedKnight => {
                 let black_pattern = self.promoted_knight_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -220,7 +220,7 @@ impl AttackTables {
             PieceType::PromotedSilver => {
                 let black_pattern = self.promoted_silver_attacks[square as usize];
                 if player == Player::White {
-                    self.mirror_pattern_horizontally(black_pattern)
+                    self.mirror_pattern_vertically(black_pattern)
                 } else {
                     black_pattern
                 }
@@ -345,15 +345,16 @@ impl AttackTables {
         true
     }
     
-    /// Mirror a bitboard pattern horizontally (for white player)
-    fn mirror_pattern_horizontally(&self, pattern: Bitboard) -> Bitboard {
+    /// Mirror a bitboard pattern vertically (for white player orientation)
+    /// Flips rows to convert Black's perspective to White's perspective
+    fn mirror_pattern_vertically(&self, pattern: Bitboard) -> Bitboard {
         let mut mirrored = EMPTY_BITBOARD;
         for square in 0..81 {
             if (pattern & (1u128 << square)) != 0 {
                 let row = square / 9;
                 let col = square % 9;
-                let mirrored_col = 8 - col;
-                let mirrored_square = row * 9 + mirrored_col;
+                let mirrored_row = 8 - row;  // Flip rows, not columns!
+                let mirrored_square = mirrored_row * 9 + col;
                 mirrored |= 1u128 << mirrored_square;
             }
         }
