@@ -13,25 +13,28 @@ use std::time::Instant;
 #[derive(Clone)]
 #[repr(C, align(64))]
 pub struct AttackTables {
-    /// King attacks: 81 positions × 8 directions = 648 patterns
+    /// King attacks: 81 positions × 8 directions = 648 patterns (same for both players)
     pub king_attacks: [Bitboard; 81],
     
-    /// Knight attacks: 81 positions × 2 directions = 162 patterns  
-    pub knight_attacks: [Bitboard; 81],
+    /// Black piece attacks
+    pub black_knight_attacks: [Bitboard; 81],
+    pub black_gold_attacks: [Bitboard; 81],
+    pub black_silver_attacks: [Bitboard; 81],
+    pub black_promoted_pawn_attacks: [Bitboard; 81],
+    pub black_promoted_lance_attacks: [Bitboard; 81],
+    pub black_promoted_knight_attacks: [Bitboard; 81],
+    pub black_promoted_silver_attacks: [Bitboard; 81],
     
-    /// Gold attacks: 81 positions × 6 directions = 486 patterns
-    pub gold_attacks: [Bitboard; 81],
+    /// White piece attacks
+    pub white_knight_attacks: [Bitboard; 81],
+    pub white_gold_attacks: [Bitboard; 81],
+    pub white_silver_attacks: [Bitboard; 81],
+    pub white_promoted_pawn_attacks: [Bitboard; 81],
+    pub white_promoted_lance_attacks: [Bitboard; 81],
+    pub white_promoted_knight_attacks: [Bitboard; 81],
+    pub white_promoted_silver_attacks: [Bitboard; 81],
     
-    /// Silver attacks: 81 positions × 5 directions = 405 patterns
-    pub silver_attacks: [Bitboard; 81],
-    
-    /// Promoted piece attacks (same as Gold)
-    pub promoted_pawn_attacks: [Bitboard; 81],
-    pub promoted_lance_attacks: [Bitboard; 81],
-    pub promoted_knight_attacks: [Bitboard; 81],
-    pub promoted_silver_attacks: [Bitboard; 81],
-    
-    /// Promoted sliding pieces (King-like moves + original sliding)
+    /// Promoted sliding pieces (King-like moves + original sliding) - same for both players
     pub promoted_bishop_attacks: [Bitboard; 81],
     pub promoted_rook_attacks: [Bitboard; 81],
     
@@ -115,13 +118,20 @@ impl AttackTables {
     pub fn new() -> Self {
         let mut tables = Self {
             king_attacks: [EMPTY_BITBOARD; 81],
-            knight_attacks: [EMPTY_BITBOARD; 81],
-            gold_attacks: [EMPTY_BITBOARD; 81],
-            silver_attacks: [EMPTY_BITBOARD; 81],
-            promoted_pawn_attacks: [EMPTY_BITBOARD; 81],
-            promoted_lance_attacks: [EMPTY_BITBOARD; 81],
-            promoted_knight_attacks: [EMPTY_BITBOARD; 81],
-            promoted_silver_attacks: [EMPTY_BITBOARD; 81],
+            black_knight_attacks: [EMPTY_BITBOARD; 81],
+            black_gold_attacks: [EMPTY_BITBOARD; 81],
+            black_silver_attacks: [EMPTY_BITBOARD; 81],
+            black_promoted_pawn_attacks: [EMPTY_BITBOARD; 81],
+            black_promoted_lance_attacks: [EMPTY_BITBOARD; 81],
+            black_promoted_knight_attacks: [EMPTY_BITBOARD; 81],
+            black_promoted_silver_attacks: [EMPTY_BITBOARD; 81],
+            white_knight_attacks: [EMPTY_BITBOARD; 81],
+            white_gold_attacks: [EMPTY_BITBOARD; 81],
+            white_silver_attacks: [EMPTY_BITBOARD; 81],
+            white_promoted_pawn_attacks: [EMPTY_BITBOARD; 81],
+            white_promoted_lance_attacks: [EMPTY_BITBOARD; 81],
+            white_promoted_knight_attacks: [EMPTY_BITBOARD; 81],
+            white_promoted_silver_attacks: [EMPTY_BITBOARD; 81],
             promoted_bishop_attacks: [EMPTY_BITBOARD; 81],
             promoted_rook_attacks: [EMPTY_BITBOARD; 81],
             metadata: AttackTablesMetadata {
@@ -162,74 +172,35 @@ impl AttackTables {
     
     /// Get attack pattern for a piece at a given square
     pub fn get_attack_pattern(&self, square: u8, piece_type: PieceType, player: Player) -> Bitboard {
-        match piece_type {
-            PieceType::King => self.king_attacks[square as usize],
-            PieceType::Knight => {
-                // Knight attacks are player-dependent
-                // For White, use the pattern from the vertically mirrored square
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.knight_attacks[mirrored_square as usize]
-                } else {
-                    self.knight_attacks[square as usize]
-                }
-            },
-            PieceType::Gold => {
-                // Gold attacks are player-dependent
-                // For White, use the pattern from the vertically mirrored square
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.gold_attacks[mirrored_square as usize]
-                } else {
-                    self.gold_attacks[square as usize]
-                }
-            },
-            PieceType::Silver => {
-                // Silver attacks are player-dependent
-                // For White, use the pattern from the vertically mirrored square
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.silver_attacks[mirrored_square as usize]
-                } else {
-                    self.silver_attacks[square as usize]
-                }
-            },
-            PieceType::PromotedPawn => {
-                // Promoted pawn attacks are same as gold
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.promoted_pawn_attacks[mirrored_square as usize]
-                } else {
-                    self.promoted_pawn_attacks[square as usize]
-                }
-            },
-            PieceType::PromotedLance => {
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.promoted_lance_attacks[mirrored_square as usize]
-                } else {
-                    self.promoted_lance_attacks[square as usize]
-                }
-            },
-            PieceType::PromotedKnight => {
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.promoted_knight_attacks[mirrored_square as usize]
-                } else {
-                    self.promoted_knight_attacks[square as usize]
-                }
-            },
-            PieceType::PromotedSilver => {
-                if player == Player::White {
-                    let mirrored_square = self.mirror_square(square);
-                    self.promoted_silver_attacks[mirrored_square as usize]
-                } else {
-                    self.promoted_silver_attacks[square as usize]
-                }
-            },
-            PieceType::PromotedBishop => self.promoted_bishop_attacks[square as usize], // Same for both players
-            PieceType::PromotedRook => self.promoted_rook_attacks[square as usize], // Same for both players
-            _ => EMPTY_BITBOARD, // Sliding pieces handled by magic bitboards
+        let idx = square as usize;
+        match (piece_type, player) {
+            // King attacks are same for both players
+            (PieceType::King, _) => self.king_attacks[idx],
+            
+            // Black pieces
+            (PieceType::Knight, Player::Black) => self.black_knight_attacks[idx],
+            (PieceType::Gold, Player::Black) => self.black_gold_attacks[idx],
+            (PieceType::Silver, Player::Black) => self.black_silver_attacks[idx],
+            (PieceType::PromotedPawn, Player::Black) => self.black_promoted_pawn_attacks[idx],
+            (PieceType::PromotedLance, Player::Black) => self.black_promoted_lance_attacks[idx],
+            (PieceType::PromotedKnight, Player::Black) => self.black_promoted_knight_attacks[idx],
+            (PieceType::PromotedSilver, Player::Black) => self.black_promoted_silver_attacks[idx],
+            
+            // White pieces
+            (PieceType::Knight, Player::White) => self.white_knight_attacks[idx],
+            (PieceType::Gold, Player::White) => self.white_gold_attacks[idx],
+            (PieceType::Silver, Player::White) => self.white_silver_attacks[idx],
+            (PieceType::PromotedPawn, Player::White) => self.white_promoted_pawn_attacks[idx],
+            (PieceType::PromotedLance, Player::White) => self.white_promoted_lance_attacks[idx],
+            (PieceType::PromotedKnight, Player::White) => self.white_promoted_knight_attacks[idx],
+            (PieceType::PromotedSilver, Player::White) => self.white_promoted_silver_attacks[idx],
+            
+            // Promoted sliding pieces - same for both players
+            (PieceType::PromotedBishop, _) => self.promoted_bishop_attacks[idx],
+            (PieceType::PromotedRook, _) => self.promoted_rook_attacks[idx],
+            
+            // Sliding pieces handled by magic bitboards
+            _ => EMPTY_BITBOARD,
         }
     }
     
@@ -249,33 +220,35 @@ impl AttackTables {
             self.metadata.pattern_counts[PieceType::King.to_u8() as usize] += 1;
         }
         
-        // Generate knight patterns (player-dependent)
+        // Generate BLACK piece patterns
         for square in 0..81 {
-            // Black knight attacks (forward direction)
-            self.knight_attacks[square] = generator.generate_knight_attacks(square as u8, Player::Black);
+            self.black_knight_attacks[square] = generator.generate_knight_attacks(square as u8, Player::Black);
+            self.black_gold_attacks[square] = generator.generate_gold_attacks(square as u8, Player::Black);
+            self.black_silver_attacks[square] = generator.generate_silver_attacks(square as u8, Player::Black);
+            
+            // Promoted pieces move like gold
+            self.black_promoted_pawn_attacks[square] = self.black_gold_attacks[square];
+            self.black_promoted_lance_attacks[square] = self.black_gold_attacks[square];
+            self.black_promoted_knight_attacks[square] = self.black_gold_attacks[square];
+            self.black_promoted_silver_attacks[square] = self.black_gold_attacks[square];
+            
             self.metadata.pattern_counts[PieceType::Knight.to_u8() as usize] += 1;
-        }
-        
-        // Generate gold patterns (player-dependent)
-        for square in 0..81 {
-            // Black gold attacks
-            self.gold_attacks[square] = generator.generate_gold_attacks(square as u8, Player::Black);
             self.metadata.pattern_counts[PieceType::Gold.to_u8() as usize] += 1;
-        }
-        
-        // Generate silver patterns (player-dependent)
-        for square in 0..81 {
-            // Black silver attacks
-            self.silver_attacks[square] = generator.generate_silver_attacks(square as u8, Player::Black);
             self.metadata.pattern_counts[PieceType::Silver.to_u8() as usize] += 1;
         }
         
-        // Generate promoted piece patterns (same as gold for most)
+        // Generate WHITE piece patterns
         for square in 0..81 {
-            self.promoted_pawn_attacks[square] = self.gold_attacks[square];
-            self.promoted_lance_attacks[square] = self.gold_attacks[square];
-            self.promoted_knight_attacks[square] = self.gold_attacks[square];
-            self.promoted_silver_attacks[square] = self.gold_attacks[square];
+            self.white_knight_attacks[square] = generator.generate_knight_attacks(square as u8, Player::White);
+            self.white_gold_attacks[square] = generator.generate_gold_attacks(square as u8, Player::White);
+            self.white_silver_attacks[square] = generator.generate_silver_attacks(square as u8, Player::White);
+            
+            // Promoted pieces move like gold
+            self.white_promoted_pawn_attacks[square] = self.white_gold_attacks[square];
+            self.white_promoted_lance_attacks[square] = self.white_gold_attacks[square];
+            self.white_promoted_knight_attacks[square] = self.white_gold_attacks[square];
+            self.white_promoted_silver_attacks[square] = self.white_gold_attacks[square];
+            
             self.metadata.pattern_counts[PieceType::PromotedPawn.to_u8() as usize] += 1;
             self.metadata.pattern_counts[PieceType::PromotedLance.to_u8() as usize] += 1;
             self.metadata.pattern_counts[PieceType::PromotedKnight.to_u8() as usize] += 1;
@@ -283,6 +256,7 @@ impl AttackTables {
         }
         
         // Generate promoted sliding piece patterns (king + original sliding moves)
+        // These are the same for both players
         for square in 0..81 {
             // Promoted bishop: king moves + bishop moves
             self.promoted_bishop_attacks[square] = self.king_attacks[square] | 
@@ -296,7 +270,7 @@ impl AttackTables {
         }
         
         self.metadata.generation_stats = generator.get_validation_stats();
-        self.metadata.generation_stats.total_patterns_generated = 81 * 10; // 10 piece types × 81 squares
+        self.metadata.generation_stats.total_patterns_generated = 81 * 17; // Now we have separate patterns for Black and White
     }
     
     /// Get memory usage statistics
@@ -321,39 +295,50 @@ impl AttackTables {
                 return false;
             }
             
+            // Validate Black pieces
             // Knight should have 0-2 attack squares
-            let knight_attacks = self.knight_attacks[square].count_ones();
-            if knight_attacks > 2 {
+            let black_knight_attacks = self.black_knight_attacks[square].count_ones();
+            if black_knight_attacks > 2 {
                 return false;
             }
             
             // Gold should have 3-6 attack squares (fewer on edges/corners)
-            let gold_attacks = self.gold_attacks[square].count_ones();
+            let black_gold_attacks = self.black_gold_attacks[square].count_ones();
             let min_gold_attacks = if is_corner { 2 } else if is_edge { 3 } else { 4 };
             let max_gold_attacks = if is_corner { 3 } else if is_edge { 5 } else { 6 };
-            if gold_attacks < min_gold_attacks || gold_attacks > max_gold_attacks {
+            if black_gold_attacks < min_gold_attacks || black_gold_attacks > max_gold_attacks {
                 return false;
             }
             
             // Silver should have 3-5 attack squares (fewer on edges/corners)
-            let silver_attacks = self.silver_attacks[square].count_ones();
+            let black_silver_attacks = self.black_silver_attacks[square].count_ones();
             let min_silver_attacks = if is_corner { 1 } else if is_edge { 2 } else { 3 };
             let max_silver_attacks = if is_corner { 2 } else if is_edge { 4 } else { 5 };
-            if silver_attacks < min_silver_attacks || silver_attacks > max_silver_attacks {
+            if black_silver_attacks < min_silver_attacks || black_silver_attacks > max_silver_attacks {
+                return false;
+            }
+            
+            // Validate White pieces
+            // Knight should have 0-2 attack squares
+            let white_knight_attacks = self.white_knight_attacks[square].count_ones();
+            if white_knight_attacks > 2 {
+                return false;
+            }
+            
+            // Gold should have 3-6 attack squares (fewer on edges/corners)
+            let white_gold_attacks = self.white_gold_attacks[square].count_ones();
+            if white_gold_attacks < min_gold_attacks || white_gold_attacks > max_gold_attacks {
+                return false;
+            }
+            
+            // Silver should have 3-5 attack squares (fewer on edges/corners)
+            let white_silver_attacks = self.white_silver_attacks[square].count_ones();
+            if white_silver_attacks < min_silver_attacks || white_silver_attacks > max_silver_attacks {
                 return false;
             }
         }
         
         true
-    }
-    
-    /// Mirror a square vertically (flip row position)
-    /// Used to get the equivalent square from Black's perspective for White pieces
-    fn mirror_square(&self, square: u8) -> u8 {
-        let row = square / 9;
-        let col = square % 9;
-        let mirrored_row = 8 - row;
-        mirrored_row * 9 + col
     }
 }
 
@@ -516,51 +501,71 @@ mod tests {
     fn test_knight_attacks() {
         let tables = AttackTables::new();
         
-        // Test knight from center - should have 2 attacks
-        let center_attacks = tables.knight_attacks[40];
+        // Test Black knight from center - should have 2 attacks (forward)
+        let center_attacks = tables.black_knight_attacks[40];
         assert_eq!(center_attacks.count_ones(), 2);
         
-        // Test knight from edge - should have fewer attacks
-        let edge_attacks = tables.knight_attacks[4];
+        // Test Black knight from edge - should have fewer attacks
+        let edge_attacks = tables.black_knight_attacks[4];
         assert!(edge_attacks.count_ones() <= 2);
+        
+        // Test White knight from center - should have 2 attacks (forward from White's perspective)
+        let white_center_attacks = tables.white_knight_attacks[40];
+        assert_eq!(white_center_attacks.count_ones(), 2);
     }
 
     #[test]
     fn test_gold_attacks() {
         let tables = AttackTables::new();
         
-        // Test gold from center - should have 6 attacks
-        let center_attacks = tables.gold_attacks[40];
+        // Test Black gold from center - should have 6 attacks
+        let center_attacks = tables.black_gold_attacks[40];
         assert_eq!(center_attacks.count_ones(), 6);
         
-        // Test gold from edge - should have fewer attacks
-        let edge_attacks = tables.gold_attacks[4];
+        // Test Black gold from edge - should have fewer attacks
+        let edge_attacks = tables.black_gold_attacks[4];
         assert!(edge_attacks.count_ones() < 6);
+        
+        // Test White gold from center - should have 6 attacks
+        let white_center_attacks = tables.white_gold_attacks[40];
+        assert_eq!(white_center_attacks.count_ones(), 6);
     }
 
     #[test]
     fn test_silver_attacks() {
         let tables = AttackTables::new();
         
-        // Test silver from center - should have 5 attacks
-        let center_attacks = tables.silver_attacks[40];
+        // Test Black silver from center - should have 5 attacks
+        let center_attacks = tables.black_silver_attacks[40];
         assert_eq!(center_attacks.count_ones(), 5);
         
-        // Test silver from edge - should have fewer attacks
-        let edge_attacks = tables.silver_attacks[4];
+        // Test Black silver from edge - should have fewer attacks
+        let edge_attacks = tables.black_silver_attacks[4];
         assert!(edge_attacks.count_ones() < 5);
+        
+        // Test White silver from center - should have 5 attacks
+        let white_center_attacks = tables.white_silver_attacks[40];
+        assert_eq!(white_center_attacks.count_ones(), 5);
     }
 
     #[test]
     fn test_promoted_piece_attacks() {
         let tables = AttackTables::new();
         
-        // Promoted pieces should have same attacks as gold
+        // Black promoted pieces should have same attacks as Black gold
         for square in 0..81 {
-            assert_eq!(tables.promoted_pawn_attacks[square], tables.gold_attacks[square]);
-            assert_eq!(tables.promoted_lance_attacks[square], tables.gold_attacks[square]);
-            assert_eq!(tables.promoted_knight_attacks[square], tables.gold_attacks[square]);
-            assert_eq!(tables.promoted_silver_attacks[square], tables.gold_attacks[square]);
+            assert_eq!(tables.black_promoted_pawn_attacks[square], tables.black_gold_attacks[square]);
+            assert_eq!(tables.black_promoted_lance_attacks[square], tables.black_gold_attacks[square]);
+            assert_eq!(tables.black_promoted_knight_attacks[square], tables.black_gold_attacks[square]);
+            assert_eq!(tables.black_promoted_silver_attacks[square], tables.black_gold_attacks[square]);
+        }
+        
+        // White promoted pieces should have same attacks as White gold
+        for square in 0..81 {
+            assert_eq!(tables.white_promoted_pawn_attacks[square], tables.white_gold_attacks[square]);
+            assert_eq!(tables.white_promoted_lance_attacks[square], tables.white_gold_attacks[square]);
+            assert_eq!(tables.white_promoted_knight_attacks[square], tables.white_gold_attacks[square]);
+            assert_eq!(tables.white_promoted_silver_attacks[square], tables.white_gold_attacks[square]);
         }
     }
 
@@ -580,11 +585,27 @@ mod tests {
         let tables = AttackTables::new();
         let square = 40; // Center square
         
-        let king_attacks = tables.get_attack_pattern(square, PieceType::King, Player::Black);
-        assert_eq!(king_attacks, tables.king_attacks[square as usize]);
+        // Test King (same for both players)
+        let king_attacks_black = tables.get_attack_pattern(square, PieceType::King, Player::Black);
+        let king_attacks_white = tables.get_attack_pattern(square, PieceType::King, Player::White);
+        assert_eq!(king_attacks_black, tables.king_attacks[square as usize]);
+        assert_eq!(king_attacks_white, tables.king_attacks[square as usize]);
         
-        let knight_attacks = tables.get_attack_pattern(square, PieceType::Knight, Player::Black);
-        assert_eq!(knight_attacks, tables.knight_attacks[square as usize]);
+        // Test Black Knight
+        let black_knight_attacks = tables.get_attack_pattern(square, PieceType::Knight, Player::Black);
+        assert_eq!(black_knight_attacks, tables.black_knight_attacks[square as usize]);
+        
+        // Test White Knight
+        let white_knight_attacks = tables.get_attack_pattern(square, PieceType::Knight, Player::White);
+        assert_eq!(white_knight_attacks, tables.white_knight_attacks[square as usize]);
+        
+        // Test Black Gold
+        let black_gold_attacks = tables.get_attack_pattern(square, PieceType::Gold, Player::Black);
+        assert_eq!(black_gold_attacks, tables.black_gold_attacks[square as usize]);
+        
+        // Test White Gold
+        let white_gold_attacks = tables.get_attack_pattern(square, PieceType::Gold, Player::White);
+        assert_eq!(white_gold_attacks, tables.white_gold_attacks[square as usize]);
     }
 
     #[test]
