@@ -22,6 +22,7 @@ export class ShogiController extends EventEmitter {
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
   private positionHistory: Map<string, number> = new Map(); // Track position history for repetition detection
+  private gameOver = false; // Track if the game has ended
 
   constructor() {
     super();
@@ -64,6 +65,8 @@ export class ShogiController extends EventEmitter {
           const isBlackTurn = this.record.position.sfen.includes(' b ');
           const winner = isBlackTurn ? 'player2' : 'player1';
           console.log(`[${this.instanceId}] EMITTING GAME OVER EVENT! winner: ${winner}`);
+          this.gameOver = true; // Mark game as over
+          this.stopAllEngines(); // Stop any running engine operations
           this.emit('gameOver', { winner, position: this.record.position, endgameType: 'resignation' });
           this.emitStateChanged();
           return;
@@ -91,6 +94,8 @@ export class ShogiController extends EventEmitter {
                 const isBlackTurn = this.record.position.sfen.includes(' b ');
                 const winner = isBlackTurn ? 'player2' : 'player1';
                 console.log(`[${this.instanceId}] INVALID MOVE - GAME OVER! Winner: ${winner}`);
+                this.gameOver = true; // Mark game as over
+                this.stopAllEngines(); // Stop any running engine operations
                 this.emit('gameOver', { winner, position: this.record.position, endgameType: 'illegal' });
                 this.emitStateChanged();
                 return;
@@ -100,11 +105,12 @@ export class ShogiController extends EventEmitter {
               this.emitStateChanged();
               
               console.log(`[${this.instanceId}] [SEQ-6] Checking if next player is AI`);
-              if (this.isCurrentPlayerAI()) {
+              console.log(`[${this.instanceId}] Game over status: ${this.gameOver}`);
+              if (!this.gameOver && this.isCurrentPlayerAI()) {
                 console.log(`[${this.instanceId}] [SEQ-7] Next player IS AI, requesting move`);
                 this.requestEngineMove();
               } else {
-                console.log(`[${this.instanceId}] [SEQ-7] Next player is HUMAN, waiting`);
+                console.log(`[${this.instanceId}] [SEQ-7] Next player is HUMAN or game is over, waiting`);
               }
             }
           }
@@ -395,8 +401,8 @@ export class ShogiController extends EventEmitter {
       console.log('Clearing recommendation due to user move');
       this.currentRecommendation = null;
       this.emitStateChanged();
-      // Only request AI move if the next player is AI
-      if (this.isCurrentPlayerAI()) {
+      // Only request AI move if the next player is AI and game is not over
+      if (!this.gameOver && this.isCurrentPlayerAI()) {
         this.requestEngineMove();
       }
       return true;
@@ -472,11 +478,19 @@ export class ShogiController extends EventEmitter {
     // Check for four-fold repetition (Sennichite)
     if (count + 1 >= 4) {
       console.log(`[${this.instanceId}] FOUR-FOLD REPETITION DETECTED (Sennichite)!`);
+      this.gameOver = true; // Mark game as over
+      this.stopAllEngines(); // Stop any running engine operations
       this.emit('gameOver', { winner: 'draw', position: this.record.position, endgameType: 'repetition' });
     }
   }
 
   public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
+    // Guard: Don't request moves if game is over
+    if (this.gameOver) {
+      console.log(`[${this.instanceId}] [SEQ-1] requestEngineMove BLOCKED - game is over`);
+      return;
+    }
+    
     console.log(`[${this.instanceId}] [SEQ-1] requestEngineMove START`);
     this.logRecordState('SEQ-1');
     
@@ -562,6 +576,10 @@ export class ShogiController extends EventEmitter {
       }
       this.record = recordResult;
       
+      // Reset game over flag for new game
+      this.gameOver = false;
+      console.log(`[${this.instanceId}] Game over flag reset for new game`);
+      
       // Clear position history for new game
       this.positionHistory.clear();
       console.log(`[${this.instanceId}] Position history cleared for new game`);
@@ -578,7 +596,7 @@ export class ShogiController extends EventEmitter {
       await Promise.all(engineUpdates);
       this.emitStateChanged();
       
-      // Check if the first player is AI and request move
+      // Check if the first player is AI and request move (game is not over since we just started)
       if (this.isCurrentPlayerAI()) {
         this.requestEngineMove();
       }
@@ -590,6 +608,10 @@ export class ShogiController extends EventEmitter {
       throw new Error(`Failed to load SFEN: ${recordResult.message}`);
     }
     this.record = recordResult;
+    
+    // Reset game over flag when loading a position
+    this.gameOver = false;
+    console.log(`[${this.instanceId}] Game over flag reset for loaded position`);
     
     // Clear position history when loading a position
     this.positionHistory.clear();
@@ -613,6 +635,15 @@ export class ShogiController extends EventEmitter {
   public quit(): void {
     for (const engine of this.sessions.values()) {
       engine.quit();
+    }
+  }
+
+  private stopAllEngines(): void {
+    console.log(`[${this.instanceId}] Stopping all engines due to game over`);
+    for (const engine of this.sessions.values()) {
+      engine.stop().catch(err => {
+        console.error(`[${this.instanceId}] Error stopping engine:`, err);
+      });
     }
   }
 
@@ -794,6 +825,8 @@ export class ShogiController extends EventEmitter {
                      impasseResult.outcome === 'black_wins' ? 'player1' : 'player2';
       const details = `Black: ${impasseResult.blackPoints} points, White: ${impasseResult.whitePoints} points (24+ required for draw)`;
       
+      this.gameOver = true; // Mark game as over
+      this.stopAllEngines(); // Stop any running engine operations
       this.emit('gameOver', { 
         winner, 
         position: currentPosition, 
@@ -868,6 +901,8 @@ export class ShogiController extends EventEmitter {
         const endgameType = isInCheck ? 'checkmate' : 'no_moves';
         
         console.log(`[CONTROLLER] NO LEGAL MOVES - GAME OVER! Winner: ${winner}, Type: ${endgameType}`);
+        this.gameOver = true; // Mark game as over
+        this.stopAllEngines(); // Stop any running engine operations
         this.emit('gameOver', { winner, position: currentPosition, endgameType });
       }
       
