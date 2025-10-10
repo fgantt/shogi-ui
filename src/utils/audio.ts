@@ -30,7 +30,7 @@ class AudioManager {
       try {
         this.pieceMoveSound = new Audio('/sounds/piece-move.mp3');
         this.pieceMoveSound.preload = 'auto';
-        this.pieceMoveSound.volume = 0.7;
+        this.pieceMoveSound.volume = 0.9;
         
         // Test if the file exists
         this.pieceMoveSound.addEventListener('error', () => {
@@ -135,7 +135,7 @@ class AudioManager {
     const gainNode = this.audioContext.createGain();
     
     source.buffer = buffer;
-    gainNode.gain.value = 0.4; // Volume control
+    gainNode.gain.value = 0.6; // Volume control
     
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
