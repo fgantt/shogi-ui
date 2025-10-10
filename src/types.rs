@@ -232,7 +232,6 @@ impl Position {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[wasm_bindgen]
 pub struct Piece {
     pub piece_type: PieceType,
     pub player: Player,
@@ -240,6 +239,16 @@ pub struct Piece {
 
 impl Piece {
     pub fn new(piece_type: PieceType, player: Player) -> Self {
+        // Validate that piece_type is valid by checking its to_u8() value
+        let piece_idx = piece_type.to_u8();
+        if piece_idx >= 14 {
+            // This should never happen with valid PieceType, but protect against corruption
+            crate::debug_utils::debug_log(&format!(
+                "[PIECE::NEW ERROR] Invalid piece_type with to_u8() = {}. Defaulting to Pawn.",
+                piece_idx
+            ));
+            return Self { piece_type: PieceType::Pawn, player };
+        }
         Self { piece_type, player }
     }
 
@@ -290,6 +299,7 @@ pub struct Move {
     pub player: Player,
     pub is_promotion: bool,
     pub is_capture: bool,
+    #[wasm_bindgen(skip)]
     pub captured_piece: Option<Piece>,
     pub gives_check: bool,       // Whether this move gives check
     pub is_recapture: bool,      // Whether this is a recapture move

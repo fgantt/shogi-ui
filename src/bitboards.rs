@@ -125,8 +125,43 @@ impl BitboardBoard {
     }
 
     pub fn place_piece(&mut self, piece: Piece, position: Position) {
+        // Validate position
+        if !position.is_valid() {
+            crate::debug_utils::debug_log(&format!(
+                "[PLACE_PIECE ERROR] Invalid position: row={}, col={}",
+                position.row, position.col
+            ));
+            return;
+        }
+        
+        // Debug: Log piece before conversion
+        crate::debug_utils::debug_log(&format!(
+            "[PLACE_PIECE] Attempting to place {:?} {:?} at row={} col={}",
+            piece.player, piece.piece_type, position.row, position.col
+        ));
+        
         let player_idx = if piece.player == Player::Black { 0 } else { 1 };
+        
+        // Try to get piece_idx and catch any issue
         let piece_idx = piece.piece_type.to_u8() as usize;
+        
+        crate::debug_utils::debug_log(&format!(
+            "[PLACE_PIECE] Converted piece_type to index: {}",
+            piece_idx
+        ));
+        
+        // Validate piece index before array access
+        if piece_idx >= 14 {
+            crate::debug_utils::debug_log(&format!(
+                "[PLACE_PIECE ERROR] Invalid piece index: {} (piece_type: {:?}, position: row={} col={})",
+                piece_idx,
+                piece.piece_type,
+                position.row,
+                position.col
+            ));
+            return;
+        }
+        
         set_bit(&mut self.pieces[player_idx][piece_idx], position);
         match piece.player {
             Player::Black => set_bit(&mut self.black_occupied, position),
@@ -138,8 +173,27 @@ impl BitboardBoard {
 
     pub fn remove_piece(&mut self, position: Position) -> Option<Piece> {
         if let Some(piece) = self.piece_positions.remove(&position) {
+            crate::debug_utils::debug_log(&format!(
+                "[REMOVE_PIECE] Removing {:?} {:?} from row={} col={}",
+                piece.player, piece.piece_type, position.row, position.col
+            ));
+            
             let player_idx = if piece.player == Player::Black { 0 } else { 1 };
             let piece_idx = piece.piece_type.to_u8() as usize;
+            
+            // Validate piece index
+            if piece_idx >= 14 {
+                crate::debug_utils::debug_log(&format!(
+                    "[REMOVE_PIECE ERROR] Invalid piece index: {} (piece_type: {:?}, position: row={} col={})",
+                    piece_idx,
+                    piece.piece_type,
+                    position.row,
+                    position.col
+                ));
+                // Still return the piece but don't update bitboards
+                return Some(piece);
+            }
+            
             clear_bit(&mut self.pieces[player_idx][piece_idx], position);
             match piece.player {
                 Player::Black => clear_bit(&mut self.black_occupied, position),
@@ -173,6 +227,11 @@ impl BitboardBoard {
         let mut captured_piece = None;
         if let Some(from) = move_.from {
             if let Some(piece_to_move) = self.get_piece(from).cloned() {
+                crate::debug_utils::debug_log(&format!(
+                    "[MAKE_MOVE] Moving {:?} from row={} col={} to row={} col={}",
+                    piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
+                ));
+                
                 self.remove_piece(from);
                 if move_.is_capture {
                     if let Some(cp) = self.remove_piece(move_.to) {
@@ -184,9 +243,20 @@ impl BitboardBoard {
                 } else {
                     piece_to_move.piece_type
                 };
+                
+                crate::debug_utils::debug_log(&format!(
+                    "[MAKE_MOVE] Placing {:?} at row={} col={}",
+                    final_piece_type, move_.to.row, move_.to.col
+                ));
+                
                 self.place_piece(Piece::new(final_piece_type, piece_to_move.player), move_.to);
             }
         } else {
+            crate::debug_utils::debug_log(&format!(
+                "[MAKE_MOVE] Dropping {:?} at row={} col={}",
+                move_.piece_type, move_.to.row, move_.to.col
+            ));
+            
             self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
         }
         captured_piece
