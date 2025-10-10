@@ -1,4 +1,4 @@
-import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType } from 'tsshogi';
+import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType, Color } from 'tsshogi';
 import { EngineAdapter, WasmEngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
 
@@ -21,6 +21,7 @@ export class ShogiController extends EventEmitter {
   private recommendationsEnabled = false;
   private currentRecommendation: { from: Square | null; to: Square | null; isDrop?: boolean; pieceType?: string; isPromotion?: boolean } | null = null;
   private recommendationTimeout: NodeJS.Timeout | null = null;
+  private positionHistory: Map<string, number> = new Map(); // Track position history for repetition detection
 
   constructor() {
     super();
@@ -63,7 +64,7 @@ export class ShogiController extends EventEmitter {
           const isBlackTurn = this.record.position.sfen.includes(' b ');
           const winner = isBlackTurn ? 'player2' : 'player1';
           console.log(`[${this.instanceId}] EMITTING GAME OVER EVENT! winner: ${winner}`);
-          this.emit('gameOver', { winner, position: this.record.position });
+          this.emit('gameOver', { winner, position: this.record.position, endgameType: 'resignation' });
           this.emitStateChanged();
           return;
         }
@@ -90,7 +91,7 @@ export class ShogiController extends EventEmitter {
                 const isBlackTurn = this.record.position.sfen.includes(' b ');
                 const winner = isBlackTurn ? 'player2' : 'player1';
                 console.log(`[${this.instanceId}] INVALID MOVE - GAME OVER! Winner: ${winner}`);
-                this.emit('gameOver', { winner, position: this.record.position });
+                this.emit('gameOver', { winner, position: this.record.position, endgameType: 'illegal' });
                 this.emitStateChanged();
                 return;
               }
@@ -130,9 +131,9 @@ export class ShogiController extends EventEmitter {
     }
   }
 
-  private async synchronizeAllEngines(currentSfen: string, moves: string[]): Promise<void> {
+  private async synchronizeAllEngines(currentSfen: string, _moves: string[]): Promise<void> {
     // Synchronize all existing engines with the current position
-    // NOTE: We ignore the moves parameter and pass empty array - SFEN already has complete position
+    // NOTE: We ignore the _moves parameter and pass empty array - SFEN already has complete position
     const syncPromises = Array.from(this.sessions.values()).map(async (engine) => {
       try {
         await engine.init();
@@ -399,8 +400,13 @@ export class ShogiController extends EventEmitter {
         this.requestEngineMove();
       }
       return true;
+    } else {
+      // Move was rejected - this could be because the player is checkmated
+      // and trying to make an illegal move. Check endgame conditions.
+      console.log('Move rejected, checking endgame conditions...');
+      this.checkEndgameConditions();
+      return false;
     }
-    return false;
   }
 
   private logRecordState(context: string): void {
@@ -430,6 +436,10 @@ export class ShogiController extends EventEmitter {
       console.log(`[${this.instanceId}]   record.append result: ${appendResult}`);
       if (appendResult) {
         console.log(`[${this.instanceId}]   ✓ Move applied successfully`);
+        
+        // Update position history for repetition detection
+        this.updatePositionHistory();
+        
         this.logRecordState('AFTER applyMove');
         console.log(`[${this.instanceId}] ========================================`);
         return move;
@@ -447,6 +457,23 @@ export class ShogiController extends EventEmitter {
       console.error(`[${this.instanceId}] ========================================`);
     }
     return null;
+  }
+
+  private updatePositionHistory(): void {
+    // Get the current position SFEN (this uniquely identifies the position)
+    const currentSfen = this.record.position.sfen;
+    
+    // Increment the count for this position
+    const count = this.positionHistory.get(currentSfen) || 0;
+    this.positionHistory.set(currentSfen, count + 1);
+    
+    console.log(`[${this.instanceId}] Position history updated. Count for current position: ${count + 1}`);
+    
+    // Check for four-fold repetition (Sennichite)
+    if (count + 1 >= 4) {
+      console.log(`[${this.instanceId}] FOUR-FOLD REPETITION DETECTED (Sennichite)!`);
+      this.emit('gameOver', { winner: 'draw', position: this.record.position, endgameType: 'repetition' });
+    }
   }
 
   public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
@@ -535,6 +562,10 @@ export class ShogiController extends EventEmitter {
       }
       this.record = recordResult;
       
+      // Clear position history for new game
+      this.positionHistory.clear();
+      console.log(`[${this.instanceId}] Position history cleared for new game`);
+      
       // Reset all engines and set them to the starting position
       const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
         await engine.init();
@@ -559,6 +590,10 @@ export class ShogiController extends EventEmitter {
       throw new Error(`Failed to load SFEN: ${recordResult.message}`);
     }
     this.record = recordResult;
+    
+    // Clear position history when loading a position
+    this.positionHistory.clear();
+    console.log(`[${this.instanceId}] Position history cleared for loaded position`);
     
     // Reset all engines and set them to the loaded position
     const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
@@ -645,5 +680,91 @@ export class ShogiController extends EventEmitter {
     console.log('Emitting stateChanged event, current recommendation:', this.currentRecommendation);
     // Force a new reference to ensure React re-renders
     this.emit('stateChanged', this.record.position);
+    
+    // Check for endgame conditions after any move
+    this.checkEndgameConditions();
+  }
+
+  private checkEndgameConditions(): void {
+    console.log('[CONTROLLER] Checking endgame conditions...');
+    
+    // Check if current player has any legal moves
+    const currentPosition = this.record.position;
+    const isBlackTurn = currentPosition.sfen.includes(' b ');
+    const currentColor = isBlackTurn ? Color.BLACK : Color.WHITE;
+    
+    try {
+      // Check if current player has any legal moves
+      let hasLegalMoves = false;
+      
+      // Check for legal piece moves
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const fromSquare = Square.newByXY(col, row);
+          if (!fromSquare) continue;
+          
+          const piece = currentPosition.board.at(fromSquare);
+          if (!piece || piece.color !== currentColor) continue;
+          
+          // Try all possible destination squares for this piece
+          for (let toRow = 0; toRow < 9; toRow++) {
+            for (let toCol = 0; toCol < 9; toCol++) {
+              const toSquare = Square.newByXY(toCol, toRow);
+              if (!toSquare) continue;
+              
+              const move = currentPosition.createMove(fromSquare, toSquare);
+              if (move && currentPosition.isValidMove(move)) {
+                hasLegalMoves = true;
+                break;
+              }
+            }
+            if (hasLegalMoves) break;
+          }
+          if (hasLegalMoves) break;
+        }
+        if (hasLegalMoves) break;
+      }
+      
+      // Check for legal drop moves if no piece moves found
+      if (!hasLegalMoves) {
+        // Check if current player has any pieces in hand that can be dropped
+        const hand = currentPosition.hand(currentColor);
+        if (hand && hand.counts) {
+          // hand.counts is an array of { type: PieceType, count: number }
+          for (const { type: pieceType, count } of hand.counts) {
+            if (count > 0) {
+              // Check if this piece type can be dropped anywhere
+              const validDropSquares = this.getValidDropSquares(pieceType);
+              if (validDropSquares.length > 0) {
+                hasLegalMoves = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`[CONTROLLER] Legal moves available: ${hasLegalMoves}`);
+      
+      if (!hasLegalMoves) {
+        // No legal moves - in shogi, this means the player loses
+        // (whether it's checkmate or stalemate, both result in a loss for the player who can't move)
+        const winner = isBlackTurn ? 'player2' : 'player1';
+        
+        // Check if player is in check (checkmate) or not (stalemate/no legal moves)
+        const isInCheck = currentPosition.checked;
+        const endgameType = isInCheck ? 'checkmate' : 'no_moves';
+        
+        console.log(`[CONTROLLER] NO LEGAL MOVES - GAME OVER! Winner: ${winner}, Type: ${endgameType}`);
+        this.emit('gameOver', { winner, position: currentPosition, endgameType });
+      }
+      
+      // Note: Repetition detection is now handled in updatePositionHistory()
+      // which is called after each move in applyMove()
+      
+    } catch (error) {
+      console.error('[CONTROLLER] Error checking endgame conditions:', error);
+      // If there's an error checking legal moves, assume the game continues
+    }
   }
 }

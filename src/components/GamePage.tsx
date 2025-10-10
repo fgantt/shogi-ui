@@ -167,6 +167,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square; pieceType: TsshogiPieceType; player: 'player1' | 'player2'; destinationSquareUsi: string } | null>(null);
   const [winner, setWinnerState] = useState<'player1' | 'player2' | 'draw' | null>(null);
+  const [endgameType, setEndgameType] = useState<'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves'>('checkmate');
   const gameInitializedRef = useRef(false); // Prevent double initialization in strict mode
   const componentId = useRef(`COMPONENT-${Math.random().toString(36).substr(2, 9)}`);
   
@@ -380,12 +381,17 @@ const GamePage: React.FC<GamePageProps> = ({
   useEffect(() => {
     console.log('[GAMEPAGE] Setting up gameOver event listener');
     
-    const handleGameOver = (data: { winner: 'player1' | 'player2' | 'draw' }) => {
+    const handleGameOver = (data: { 
+      winner: 'player1' | 'player2' | 'draw';
+      endgameType?: 'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves';
+    }) => {
       console.log('[GAMEPAGE] ========================================');
       console.log('[GAMEPAGE] GAME OVER EVENT RECEIVED!', data);
       console.log('[GAMEPAGE] Setting winner to:', data.winner);
+      console.log('[GAMEPAGE] Endgame type:', data.endgameType);
       console.log('[GAMEPAGE] ========================================');
       setWinner(data.winner);
+      setEndgameType(data.endgameType || 'checkmate');
       console.log('[GAMEPAGE] Winner state updated');
     };
 
@@ -876,6 +882,7 @@ const GamePage: React.FC<GamePageProps> = ({
   };
 
   const handleNewGame = () => {
+    setWinner(null); // Clear winner state to dismiss CheckmateModal
     setIsStartGameModalOpen(true);
   };
 
@@ -1300,6 +1307,7 @@ const GamePage: React.FC<GamePageProps> = ({
         {winner && (
           <CheckmateModal 
             winner={winner}
+            endgameType={endgameType}
             onDismiss={handleDismiss}
             onNewGame={handleNewGame}
           />
@@ -1538,6 +1546,7 @@ const GamePage: React.FC<GamePageProps> = ({
       {winner && (
         <CheckmateModal 
           winner={winner}
+          endgameType={endgameType}
           onDismiss={handleDismiss}
           onNewGame={handleNewGame}
         />
