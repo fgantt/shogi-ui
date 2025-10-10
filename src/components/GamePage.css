@@ -482,3 +482,61 @@
     transform: scale(1);
   }
 }
+
+/* Game Over Animations */
+@keyframes gameOverFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes gameOverSlideDown {
+  from {
+    transform: translateY(-100px) scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes victoryPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes drawGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(100, 149, 237, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(100, 149, 237, 0.6);
+  }
+}
+
+/* Styles for game over modal overlay */
+.game-over-overlay {
+  animation: gameOverFadeIn 0.5s ease-out;
+}
+
+.game-over-modal {
+  animation: gameOverSlideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.game-over-victory {
+  animation: victoryPulse 1.5s ease-in-out infinite;
+}
+
+.game-over-draw {
+  animation: drawGlow 2s ease-in-out infinite;
+}

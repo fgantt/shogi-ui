@@ -806,4 +806,28 @@ impl WasmUsiHandler {
     pub fn is_debug_enabled(&self) -> bool {
         self.engine.is_debug_enabled()
     }
+
+    /// Check if the current position is an impasse (Jishōgi / 持将棋)
+    #[wasm_bindgen]
+    pub fn check_impasse(&self) -> JsValue {
+        if let Some(result) = self.engine.board.check_impasse_result(&self.engine.captured_pieces) {
+            let outcome_str = match result.outcome {
+                types::ImpasseOutcome::Draw => "draw",
+                types::ImpasseOutcome::BlackWins => "black_wins",
+                types::ImpasseOutcome::WhiteWins => "white_wins",
+            };
+            
+            let result_obj = js_sys::Object::new();
+            js_sys::Reflect::set(&result_obj, &JsValue::from_str("isImpasse"), &JsValue::from_bool(true)).unwrap();
+            js_sys::Reflect::set(&result_obj, &JsValue::from_str("blackPoints"), &JsValue::from_f64(result.black_points as f64)).unwrap();
+            js_sys::Reflect::set(&result_obj, &JsValue::from_str("whitePoints"), &JsValue::from_f64(result.white_points as f64)).unwrap();
+            js_sys::Reflect::set(&result_obj, &JsValue::from_str("outcome"), &JsValue::from_str(outcome_str)).unwrap();
+            
+            result_obj.into()
+        } else {
+            let result_obj = js_sys::Object::new();
+            js_sys::Reflect::set(&result_obj, &JsValue::from_str("isImpasse"), &JsValue::from_bool(false)).unwrap();
+            result_obj.into()
+        }
+    }
 }

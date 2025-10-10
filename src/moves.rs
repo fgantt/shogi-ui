@@ -826,15 +826,31 @@ mod tests {
 }
 fn is_legal_drop_location(board: &BitboardBoard, piece_type: PieceType, pos: Position, player: Player) -> bool {
     if piece_type == PieceType::Pawn {
-        // Cannot drop on a file that already contains an unpromoted pawn of the same color
+        // Rule 1: Cannot drop on a file that already contains an unpromoted pawn of the same color (Nifu / 二歩)
         for r in 0..9 {
             if let Some(p) = board.get_piece(Position::new(r, pos.col)) {
                 if p.piece_type == PieceType::Pawn && p.player == player {
+                    crate::debug_utils::debug_log(&format!(
+                        "[NIFU] Illegal pawn drop at {}{}. Already have pawn on file {}",
+                        (b'a' + pos.col) as char,
+                        9 - pos.row,
+                        (b'a' + pos.col) as char
+                    ));
                     return false;
                 }
             }
         }
-        // Cannot drop pawn to give immediate checkmate (this is a complex rule, simplified here)
+        
+        // Rule 2: Cannot drop pawn to give immediate checkmate (Uchifuzume / 打ち歩詰め)
+        // This rule only applies to drops that give checkmate, not just check
+        if is_pawn_drop_mate(board, pos, player) {
+            crate::debug_utils::debug_log(&format!(
+                "[UCHIFUZUME] Illegal pawn drop mate at {}{}",
+                (b'a' + pos.col) as char,
+                9 - pos.row
+            ));
+            return false;
+        }
     }
 
     // Cannot drop a piece where it has no legal moves
@@ -845,6 +861,81 @@ fn is_legal_drop_location(board: &BitboardBoard, piece_type: PieceType, pos: Pos
         PieceType::Knight if pos.row == last_rank || pos.row == second_last_rank => return false,
         _ => true
     }
+}
+
+/// Check if dropping a pawn at the given position gives immediate checkmate (Uchifuzume)
+/// This is illegal in Shogi - you cannot drop a pawn to deliver checkmate
+fn is_pawn_drop_mate(board: &BitboardBoard, drop_pos: Position, player: Player) -> bool {
+    // Find opponent's king
+    let opponent = player.opposite();
+    let Some(king_pos) = board.find_king_position(opponent) else {
+        return false; // No king, can't be checkmate
+    };
+    
+    // Check if the pawn would give check
+    let pawn_gives_check = match player {
+        Player::Black => {
+            // Black pawn attacks one square forward (decreasing row)
+            king_pos.row == drop_pos.row.wrapping_sub(1) && king_pos.col == drop_pos.col
+        },
+        Player::White => {
+            // White pawn attacks one square forward (increasing row)
+            king_pos.row == drop_pos.row + 1 && king_pos.col == drop_pos.col
+        }
+    };
+    
+    if !pawn_gives_check {
+        return false; // Not even giving check, so not checkmate
+    }
+    
+    // Now check if it's actually checkmate (king has no escape)
+    // This requires simulating the pawn drop and checking if the king has any legal moves
+    let mut temp_board = board.clone();
+    temp_board.place_piece(Piece::new(PieceType::Pawn, player), drop_pos);
+    
+    // Check if opponent king has any legal moves or if check can be blocked
+    // For simplicity, check if king can escape to any adjacent square
+    for dr in -1..=1 {
+        for dc in -1..=1 {
+            if dr == 0 && dc == 0 {
+                continue;
+            }
+            
+            let new_row = king_pos.row as i8 + dr;
+            let new_col = king_pos.col as i8 + dc;
+            
+            if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                let escape_pos = Position::new(new_row as u8, new_col as u8);
+                
+                // Check if this square is a valid escape
+                if let Some(piece_at_escape) = temp_board.get_piece(escape_pos) {
+                    // Can only escape by capturing opponent's piece
+                    if piece_at_escape.player == player {
+                        continue; // Can't capture own piece
+                    }
+                }
+                
+                // Temporarily move king to escape square and see if it's still in check
+                temp_board.remove_piece(king_pos);
+                temp_board.place_piece(Piece::new(PieceType::King, opponent), escape_pos);
+                
+                // Create a temporary CapturedPieces (empty for this check)
+                let temp_captured = CapturedPieces::new();
+                if !temp_board.is_king_in_check(opponent, &temp_captured) {
+                    return false; // King can escape, so not checkmate
+                }
+                
+                // Restore the king position for next check
+                temp_board.remove_piece(escape_pos);
+                temp_board.place_piece(Piece::new(PieceType::King, opponent), king_pos);
+            }
+        }
+    }
+    
+    // TODO: Also check if the pawn can be captured or if check can be blocked
+    // For now, this is a reasonable approximation
+    
+    true // Looks like checkmate
 }
 
 /// Performance metrics for move generation

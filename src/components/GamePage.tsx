@@ -20,7 +20,7 @@ import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceT
 import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
-import { playPieceMoveSound, setSoundsEnabled } from '../utils/audio';
+import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled } from '../utils/audio';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -167,7 +167,8 @@ const GamePage: React.FC<GamePageProps> = ({
   const [selectedCapturedPiece, setSelectedCapturedPiece] = useState<TsshogiPieceType | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square; pieceType: TsshogiPieceType; player: 'player1' | 'player2'; destinationSquareUsi: string } | null>(null);
   const [winner, setWinnerState] = useState<'player1' | 'player2' | 'draw' | null>(null);
-  const [endgameType, setEndgameType] = useState<'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves'>('checkmate');
+  const [endgameType, setEndgameType] = useState<'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves' | 'impasse'>('checkmate');
+  const [endgameDetails, setEndgameDetails] = useState<string | undefined>(undefined);
   const gameInitializedRef = useRef(false); // Prevent double initialization in strict mode
   const componentId = useRef(`COMPONENT-${Math.random().toString(36).substr(2, 9)}`);
   
@@ -383,15 +384,26 @@ const GamePage: React.FC<GamePageProps> = ({
     
     const handleGameOver = (data: { 
       winner: 'player1' | 'player2' | 'draw';
-      endgameType?: 'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves';
+      endgameType?: 'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves' | 'impasse';
+      details?: string;
     }) => {
       console.log('[GAMEPAGE] ========================================');
       console.log('[GAMEPAGE] GAME OVER EVENT RECEIVED!', data);
       console.log('[GAMEPAGE] Setting winner to:', data.winner);
       console.log('[GAMEPAGE] Endgame type:', data.endgameType);
+      console.log('[GAMEPAGE] Details:', data.details);
       console.log('[GAMEPAGE] ========================================');
       setWinner(data.winner);
       setEndgameType(data.endgameType || 'checkmate');
+      setEndgameDetails(data.details);
+      
+      // Play appropriate game over sound
+      if (data.winner === 'draw') {
+        playDrawSound();
+      } else {
+        playCheckmateSound();
+      }
+      
       console.log('[GAMEPAGE] Winner state updated');
     };
 
@@ -1308,6 +1320,7 @@ const GamePage: React.FC<GamePageProps> = ({
           <CheckmateModal 
             winner={winner}
             endgameType={endgameType}
+            details={endgameDetails}
             onDismiss={handleDismiss}
             onNewGame={handleNewGame}
           />
@@ -1547,6 +1560,7 @@ const GamePage: React.FC<GamePageProps> = ({
         <CheckmateModal 
           winner={winner}
           endgameType={endgameType}
+          details={endgameDetails}
           onDismiss={handleDismiss}
           onNewGame={handleNewGame}
         />

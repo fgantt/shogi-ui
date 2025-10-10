@@ -685,13 +685,125 @@ export class ShogiController extends EventEmitter {
     this.checkEndgameConditions();
   }
 
+  private checkImpasse(position: ImmutablePosition): { blackPoints: number; whitePoints: number; outcome: 'draw' | 'black_wins' | 'white_wins' } | null {
+    // First check if both kings are in their opponent's promotion zones
+    let blackKingSquare: Square | null = null;
+    let whiteKingSquare: Square | null = null;
+    
+    // Find both kings
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        const square = Square.newByXY(col, row);
+        if (!square) continue;
+        
+        const piece = position.board.at(square);
+        if (piece && piece.type === 'king') {
+          if (piece.color === Color.BLACK) {
+            blackKingSquare = square;
+          } else {
+            whiteKingSquare = square;
+          }
+        }
+      }
+    }
+    
+    if (!blackKingSquare || !whiteKingSquare) {
+      return null; // Can't determine impasse without both kings
+    }
+    
+    // Check if both kings are in their opponent's promotion zones
+    // Black king must be in ranks 0-2 (white's camp)
+    // White king must be in ranks 6-8 (black's camp)
+    const blackKingInPromoZone = blackKingSquare.rank <= 2;
+    const whiteKingInPromoZone = whiteKingSquare.rank >= 6;
+    
+    if (!blackKingInPromoZone || !whiteKingInPromoZone) {
+      return null; // Not an impasse condition
+    }
+    
+    // Count points for both players
+    let blackPoints = 0;
+    let whitePoints = 0;
+    
+    // Count pieces on board
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        const square = Square.newByXY(col, row);
+        if (!square) continue;
+        
+        const piece = position.board.at(square);
+        if (!piece) continue;
+        
+        const points = this.getPieceImpasseValue(piece.type);
+        if (piece.color === Color.BLACK) {
+          blackPoints += points;
+        } else {
+          whitePoints += points;
+        }
+      }
+    }
+    
+    // Count pieces in hand
+    const blackHand = position.hand(Color.BLACK);
+    const whiteHand = position.hand(Color.WHITE);
+    
+    for (const { type: pieceType, count } of blackHand.counts) {
+      blackPoints += this.getPieceImpasseValue(pieceType) * count;
+    }
+    
+    for (const { type: pieceType, count } of whiteHand.counts) {
+      whitePoints += this.getPieceImpasseValue(pieceType) * count;
+    }
+    
+    // Determine outcome based on 24-point rule
+    const outcome = blackPoints >= 24 && whitePoints >= 24 ? 'draw' :
+                    blackPoints < 24 ? 'white_wins' : 'black_wins';
+    
+    return { blackPoints, whitePoints, outcome };
+  }
+  
+  private getPieceImpasseValue(pieceType: TsshogiPieceType): number {
+    switch (pieceType) {
+      case TsshogiPieceType.ROOK:
+      case TsshogiPieceType.DRAGON:
+      case TsshogiPieceType.BISHOP:
+      case TsshogiPieceType.HORSE:
+        return 5;
+      case TsshogiPieceType.KING:
+        return 0;
+      default:
+        return 1; // All other pieces (Gold, Silver, Knight, Lance, Pawn, promoted pieces)
+    }
+  }
+
   private checkEndgameConditions(): void {
     console.log('[CONTROLLER] Checking endgame conditions...');
     
-    // Check if current player has any legal moves
     const currentPosition = this.record.position;
     const isBlackTurn = currentPosition.sfen.includes(' b ');
     const currentColor = isBlackTurn ? Color.BLACK : Color.WHITE;
+    
+    // Check for impasse (Jishōgi / 持将棋) first
+    const impasseResult = this.checkImpasse(currentPosition);
+    if (impasseResult) {
+      console.log(`[CONTROLLER] IMPASSE DETECTED (Jishōgi)!`);
+      console.log(`[CONTROLLER] Black points: ${impasseResult.blackPoints}, White points: ${impasseResult.whitePoints}`);
+      console.log(`[CONTROLLER] Outcome: ${impasseResult.outcome}`);
+      
+      const winner = impasseResult.outcome === 'draw' ? 'draw' :
+                     impasseResult.outcome === 'black_wins' ? 'player1' : 'player2';
+      const details = `Black: ${impasseResult.blackPoints} points, White: ${impasseResult.whitePoints} points (24+ required for draw)`;
+      
+      this.emit('gameOver', { 
+        winner, 
+        position: currentPosition, 
+        endgameType: 'impasse',
+        details 
+      });
+      return;
+    }
+    
+    // Check if current player has any legal moves
     
     try {
       // Check if current player has any legal moves

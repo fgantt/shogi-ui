@@ -2,7 +2,7 @@ import React from 'react';
 
 interface CheckmateModalProps {
   winner: 'player1' | 'player2' | 'draw' | null;
-  endgameType?: 'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves';
+  endgameType?: 'checkmate' | 'resignation' | 'repetition' | 'stalemate' | 'illegal' | 'no_moves' | 'impasse';
   details?: string;
   onDismiss: () => void;
   onNewGame: () => void;
@@ -24,6 +24,9 @@ const CheckmateModal: React.FC<CheckmateModalProps> = ({
     switch (endgameType) {
       case 'repetition':
         message = "The game is a draw by four-fold repetition (Sennichite / 千日手).";
+        break;
+      case 'impasse':
+        message = "The game is a draw by impasse (Jishōgi / 持将棋). Both players entered each other's camp with sufficient material.";
         break;
       default:
         message = "The game is a draw.";
@@ -54,6 +57,11 @@ const CheckmateModal: React.FC<CheckmateModalProps> = ({
         emoji = "⚠️";
         message = `${loserName} made an illegal move. ${winnerName} wins!`;
         break;
+      case 'impasse':
+        title = "Impasse Victory";
+        emoji = "🏯";
+        message = `${winnerName} wins by impasse (Jishōgi / 持将棋)! ${loserName} had insufficient material (less than 24 points).`;
+        break;
       default:
         title = "Game Over";
         emoji = "🎌";
@@ -63,10 +71,14 @@ const CheckmateModal: React.FC<CheckmateModalProps> = ({
     return null; // Should not happen
   }
 
+  const overlayClass = `settings-overlay game-over-overlay`;
+  const panelClass = `settings-panel game-over-modal`;
+  const emojiClass = winner === 'draw' ? 'game-over-draw' : 'game-over-victory';
+
   return (
-    <div className="settings-overlay">
-      <div className="settings-panel">
-        <div style={{ fontSize: '48px', textAlign: 'center', marginBottom: '16px' }}>{emoji}</div>
+    <div className={overlayClass}>
+      <div className={panelClass}>
+        <div className={emojiClass} style={{ fontSize: '48px', textAlign: 'center', marginBottom: '16px' }}>{emoji}</div>
         <h2 style={{ textAlign: 'center' }}>{title}</h2>
         <p style={{ textAlign: 'center', fontSize: '16px', margin: '16px 0' }}>{message}</p>
         {details && <p style={{ textAlign: 'center', fontSize: '14px', color: '#666', margin: '8px 0' }}>{details}</p>}

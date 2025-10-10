@@ -207,7 +207,7 @@ impl BitboardBoard {
         false
     }
 
-    fn find_king_position(&self, player: Player) -> Option<Position> {
+    pub fn find_king_position(&self, player: Player) -> Option<Position> {
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let king_bb = self.pieces[player_idx][PieceType::King.to_u8() as usize];
         if king_bb == 0 { None } else { get_lsb(king_bb) }
@@ -368,6 +368,79 @@ impl BitboardBoard {
     fn has_legal_moves(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
         let move_generator = crate::moves::MoveGenerator::new();
         !move_generator.generate_legal_moves(self, player, captured_pieces).is_empty()
+    }
+
+    /// Check if both kings are in their opponent's promotion zone (impasse condition)
+    /// In Shogi, this is called Jishōgi (持将棋)
+    pub fn is_impasse_condition(&self) -> bool {
+        let black_king_pos = self.find_king_position(Player::Black);
+        let white_king_pos = self.find_king_position(Player::White);
+        
+        if let (Some(black_pos), Some(white_pos)) = (black_king_pos, white_king_pos) {
+            // Black king in white's camp (ranks 0-2) AND white king in black's camp (ranks 6-8)
+            return black_pos.row <= 2 && white_pos.row >= 6;
+        }
+        false
+    }
+    
+    /// Count points for impasse resolution using the 24-point rule
+    /// King = 0, Rook/Dragon = 5, Bishop/Horse = 5, all others = 1
+    pub fn count_impasse_points(&self, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        let mut points = 0;
+        
+        // Count pieces on board
+        for (_, piece) in &self.piece_positions {
+            if piece.player == player {
+                points += match piece.piece_type {
+                    PieceType::Rook | PieceType::PromotedRook => 5,
+                    PieceType::Bishop | PieceType::PromotedBishop => 5,
+                    PieceType::King => 0,
+                    _ => 1, // Gold, Silver, Knight, Lance, Pawn, and all other promoted pieces
+                };
+            }
+        }
+        
+        // Count captured pieces (pieces in hand)
+        let hand_pieces = match player {
+            Player::Black => &captured_pieces.black,
+            Player::White => &captured_pieces.white,
+        };
+        
+        for piece_type in hand_pieces {
+            points += match piece_type {
+                PieceType::Rook => 5,
+                PieceType::Bishop => 5,
+                _ => 1,
+            };
+        }
+        
+        points
+    }
+    
+    /// Check impasse result and return the outcome
+    /// Returns None if not an impasse condition
+    /// Both players need 24+ points for a draw, otherwise the player with fewer points loses
+    pub fn check_impasse_result(&self, captured_pieces: &CapturedPieces) -> Option<ImpasseResult> {
+        if !self.is_impasse_condition() {
+            return None;
+        }
+        
+        let black_points = self.count_impasse_points(Player::Black, captured_pieces);
+        let white_points = self.count_impasse_points(Player::White, captured_pieces);
+        
+        let outcome = if black_points >= 24 && white_points >= 24 {
+            ImpasseOutcome::Draw
+        } else if black_points < 24 {
+            ImpasseOutcome::WhiteWins
+        } else {
+            ImpasseOutcome::BlackWins
+        };
+        
+        Some(ImpasseResult {
+            black_points,
+            white_points,
+            outcome,
+        })
     }
 
     pub fn to_fen(&self, player: Player, captured_pieces: &CapturedPieces) -> String {

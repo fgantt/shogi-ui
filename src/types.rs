@@ -474,6 +474,22 @@ impl CapturedPieces {
     }
 }
 
+/// Impasse (Jishōgi / 持将棋) detection result
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImpasseResult {
+    pub black_points: i32,
+    pub white_points: i32,
+    pub outcome: ImpasseOutcome,
+}
+
+/// Possible outcomes of an impasse situation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ImpasseOutcome {
+    Draw,         // Both players have 24+ points
+    BlackWins,    // White has < 24 points
+    WhiteWins,    // Black has < 24 points
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranspositionEntry {
     pub score: i32,
