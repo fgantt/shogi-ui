@@ -6,6 +6,9 @@ export interface GameSettings {
   minutesPerSide: number;
   byoyomiInSeconds: number;
   initialSfen?: string;
+  player1EngineId?: string | null;
+  player2EngineId?: string | null;
+  useTauriEngine?: boolean;
 }
 
 export interface GameState {

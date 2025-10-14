@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameSettings } from '../types';
 import { Record } from 'tsshogi';
+import { EngineSelector } from './EngineSelector';
 
 interface StartGameModalProps {
   isOpen: boolean;
@@ -33,6 +34,8 @@ const CANNED_POSITIONS = [
 const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStartGame }) => {
   const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>('human');
   const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>('ai');
+  const [player1EngineId, setPlayer1EngineId] = useState<string | null>(null);
+  const [player2EngineId, setPlayer2EngineId] = useState<string | null>(null);
   const [initialSfen, setInitialSfen] = useState<string>('');
   const [sfenError, setSfenError] = useState<string>('');
   const [selectedCannedPosition, setSelectedCannedPosition] = useState<string>('Standard');
@@ -42,6 +45,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
     if (isOpen) {
       setPlayer1Type('human');
       setPlayer2Type('ai');
+      setPlayer1EngineId(null);
+      setPlayer2EngineId(null);
       setInitialSfen('');
       setSfenError('');
       setSelectedCannedPosition('Standard');
@@ -114,6 +119,9 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       minutesPerSide: parseInt(formData.get('minutesPerSide') as string, 10) || 30,
       byoyomiInSeconds: parseInt(formData.get('byoyomiInSeconds') as string, 10) || 10,
       initialSfen: (selectedCannedPosition === 'Standard' || !initialSfen.trim()) ? undefined : initialSfen.trim(),
+      player1EngineId,
+      player2EngineId,
+      useTauriEngine: !!(player1EngineId || player2EngineId),
     };
     onStartGame(settings);
     onClose();
@@ -132,10 +140,17 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player1Type === 'ai' && (
-                <div className="setting-group">
-                  <label htmlFor="player1Level">Level (1-8)</label>
-                  <input id="player1Level" name="player1Level" type="number" min="1" max="8" defaultValue="5" />
-                </div>
+                <>
+                  <div className="setting-group">
+                    <label htmlFor="player1Level">Level (1-8)</label>
+                    <input id="player1Level" name="player1Level" type="number" min="1" max="8" defaultValue="5" />
+                  </div>
+                  <EngineSelector
+                    selectedEngineId={player1EngineId}
+                    onEngineSelect={setPlayer1EngineId}
+                    label="AI Engine:"
+                  />
+                </>
               )}
             </div>
           </section>
@@ -147,10 +162,17 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player2Type === 'ai' && (
-                <div className="setting-group">
-                  <label htmlFor="player2Level">Level (1-8)</label>
-                  <input id="player2Level" name="player2Level" type="number" min="1" max="8" defaultValue="5" />
-                </div>
+                <>
+                  <div className="setting-group">
+                    <label htmlFor="player2Level">Level (1-8)</label>
+                    <input id="player2Level" name="player2Level" type="number" min="1" max="8" defaultValue="5" />
+                  </div>
+                  <EngineSelector
+                    selectedEngineId={player2EngineId}
+                    onEngineSelect={setPlayer2EngineId}
+                    label="AI Engine:"
+                  />
+                </>
               )}
             </div>
           </section>

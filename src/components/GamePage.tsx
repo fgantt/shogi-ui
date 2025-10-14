@@ -14,6 +14,7 @@ import CheckmateModal from './CheckmateModal';
 import SaveGameModal from './SaveGameModal';
 import LoadGameModal from './LoadGameModal';
 import UsiMonitor from './UsiMonitor';
+import { TauriUsiMonitor } from './TauriUsiMonitor';
 import StartGameModal from './StartGameModal';
 import Clock from './Clock';
 import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceThemes';
@@ -21,6 +22,10 @@ import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled } from '../utils/audio';
+import { sendUsiCommand, parseBestMove } from '../utils/tauriEngine';
+import { invoke } from '@tauri-apps/api/core';
+import type { CommandResponse, EngineConfig } from '../types/engine';
+import { useTauriEvents } from '../hooks/useTauriEvents';
 import './GamePage.css';
 
 // Helper function to check if a piece is already promoted
@@ -220,6 +225,12 @@ const GamePage: React.FC<GamePageProps> = ({
   const [currentRecommendation, setCurrentRecommendation] = useState<{ from: Square | null; to: Square | null } | null>(null);
   const [isRequestingRecommendation, setIsRequestingRecommendation] = useState(false);
   const [highlightedCapturedPiece, setHighlightedCapturedPiece] = useState<string | null>(null);
+  
+  // Tauri engine state
+  const [useTauriEngine, setUseTauriEngine] = useState(false);
+  const [player1EngineId, setPlayer1EngineId] = useState<string | null>(null);
+  const [player2EngineId, setPlayer2EngineId] = useState<string | null>(null);
+  const [activeEngineIds, setActiveEngineIds] = useState<string[]>([]);
   
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
@@ -912,6 +923,17 @@ const GamePage: React.FC<GamePageProps> = ({
     setPlayer2Level(settings.player2Level);
     setMinutesPerSide(settings.minutesPerSide);
     setByoyomiInSeconds(settings.byoyomiInSeconds);
+    
+    // Handle Tauri engine configuration
+    if (settings.useTauriEngine) {
+      setUseTauriEngine(true);
+      setPlayer1EngineId(settings.player1EngineId || null);
+      setPlayer2EngineId(settings.player2EngineId || null);
+      initializeTauriEngines(settings);
+    } else {
+      setUseTauriEngine(false);
+    }
+    
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);
     controller.setAILevels(settings.player1Level, settings.player2Level);
     controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
@@ -935,6 +957,154 @@ const GamePage: React.FC<GamePageProps> = ({
     setWinner(null);
     setIsStartGameModalOpen(false);
   };
+
+  // Initialize Tauri engines when game starts with Tauri engine settings
+  const initializeTauriEngines = async (settings: GameSettings) => {
+    console.log('Initializing Tauri engines:', settings);
+    const engineIds: string[] = [];
+    
+    try {
+      // Load engine configs
+      const response = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+      if (!response.success || !response.data) {
+        console.error('Failed to load engines');
+        return;
+      }
+
+      // Spawn player 1 engine if AI
+      if (settings.player1Type === 'ai' && settings.player1EngineId) {
+        const engine = response.data.find(e => e.id === settings.player1EngineId);
+        if (engine) {
+          const spawnResult = await invoke<CommandResponse>('spawn_engine', {
+            engineId: settings.player1EngineId,
+            name: engine.name,
+            path: engine.path,
+          });
+          if (spawnResult.success) {
+            engineIds.push(settings.player1EngineId);
+            // Initialize engine
+            await sendUsiCommand(settings.player1EngineId, 'usinewgame');
+            await sendUsiCommand(settings.player1EngineId, 'isready');
+            await sendUsiCommand(settings.player1EngineId, `setoption name depth value ${settings.player1Level}`);
+          }
+        }
+      }
+
+      // Spawn player 2 engine if AI
+      if (settings.player2Type === 'ai' && settings.player2EngineId) {
+        const engine = response.data.find(e => e.id === settings.player2EngineId);
+        if (engine) {
+          const spawnResult = await invoke<CommandResponse>('spawn_engine', {
+            engineId: settings.player2EngineId,
+            name: engine.name,
+            path: engine.path,
+          });
+          if (spawnResult.success) {
+            engineIds.push(settings.player2EngineId);
+            // Initialize engine
+            await sendUsiCommand(settings.player2EngineId, 'usinewgame');
+            await sendUsiCommand(settings.player2EngineId, 'isready');
+            await sendUsiCommand(settings.player2EngineId, `setoption name depth value ${settings.player2Level}`);
+          }
+        }
+      }
+
+      setActiveEngineIds(engineIds);
+      console.log('Tauri engines initialized:', engineIds);
+    } catch (error) {
+      console.error('Error initializing Tauri engines:', error);
+    }
+  };
+
+  // Listen to Tauri engine events
+  useTauriEvents(useTauriEngine && activeEngineIds.length > 0 ? activeEngineIds[0] : null, {
+    onUsiMessage: (engineId, message) => {
+      console.log(`Tauri engine ${engineId}: ${message}`);
+      
+      if (message.startsWith('bestmove')) {
+        const { move } = parseBestMove(message);
+        if (move && move !== 'resign') {
+          // Apply the engine's move
+          controller.handleUserMove(move).catch(error => {
+            console.error('Failed to apply engine move:', error);
+          });
+        }
+      }
+    },
+    onUsiError: (engineId, error) => {
+      console.error(`Tauri engine ${engineId} error: ${error}`);
+    },
+  });
+
+  // Listen to second engine if both players are AI
+  useTauriEvents(useTauriEngine && activeEngineIds.length > 1 ? activeEngineIds[1] : null, {
+    onUsiMessage: (engineId, message) => {
+      console.log(`Tauri engine ${engineId}: ${message}`);
+      
+      if (message.startsWith('bestmove')) {
+        const { move } = parseBestMove(message);
+        if (move && move !== 'resign') {
+          controller.handleUserMove(move).catch(error => {
+            console.error('Failed to apply engine move:', error);
+          });
+        }
+      }
+    },
+    onUsiError: (engineId, error) => {
+      console.error(`Tauri engine ${engineId} error: ${error}`);
+    },
+  });
+
+  // Request move from Tauri engine
+  const requestTauriEngineMove = async (engineId: string) => {
+    if (!engineId || !position) return;
+
+    try {
+      const currentSfen = position.sfen;
+      const record = controller.getRecord();
+      const moveList = record.moves.map((m: any) => m.usi || '').filter(Boolean);
+
+      // Send position
+      const posCmd = moveList.length > 0
+        ? `position sfen ${currentSfen.split(' moves ')[0]} moves ${moveList.join(' ')}`
+        : `position sfen ${currentSfen}`;
+      await sendUsiCommand(engineId, posCmd);
+
+      // Send go command
+      const goCmd = `go btime ${blackTime} wtime ${whiteTime} byoyomi ${byoyomi}`;
+      await sendUsiCommand(engineId, goCmd);
+    } catch (error) {
+      console.error('Error requesting Tauri engine move:', error);
+    }
+  };
+
+  // Effect to request Tauri engine moves when it's AI's turn
+  useEffect(() => {
+    if (!useTauriEngine || !position || winner) return;
+
+    const isBlackTurn = position.sfen.includes(' b ');
+    const currentEngineId = isBlackTurn ? player1EngineId : player2EngineId;
+    
+    if (currentEngineId && controller.isCurrentPlayerAI()) {
+      // Small delay to allow UI to update
+      setTimeout(() => {
+        requestTauriEngineMove(currentEngineId);
+      }, 500);
+    }
+  }, [position, useTauriEngine, player1EngineId, player2EngineId, winner]);
+
+  // Cleanup Tauri engines on unmount
+  useEffect(() => {
+    return () => {
+      if (useTauriEngine && activeEngineIds.length > 0) {
+        activeEngineIds.forEach(engineId => {
+          invoke('stop_engine', { engineId }).catch(error => {
+            console.error('Error stopping engine:', error);
+          });
+        });
+      }
+    };
+  }, [useTauriEngine, activeEngineIds]);
 
   const handleDismiss = () => {
     setWinner(null);
@@ -1327,14 +1497,23 @@ const GamePage: React.FC<GamePageProps> = ({
         )}
         
         {/* USI Monitor positioned below the game content */}
-        <UsiMonitor
-          lastSentCommand={lastSentCommand}
-          lastReceivedCommand={lastReceivedCommand}
-          communicationHistory={communicationHistory}
-          sessions={sessions}
-          isVisible={isUsiMonitorVisible}
-          onToggle={onToggleUsiMonitor}
-        />
+        {useTauriEngine ? (
+          <TauriUsiMonitor
+            engineIds={activeEngineIds}
+            isVisible={isUsiMonitorVisible}
+            onToggle={onToggleUsiMonitor}
+            onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
+          />
+        ) : (
+          <UsiMonitor
+            lastSentCommand={lastSentCommand}
+            lastReceivedCommand={lastReceivedCommand}
+            communicationHistory={communicationHistory}
+            sessions={sessions}
+            isVisible={isUsiMonitorVisible}
+            onToggle={onToggleUsiMonitor}
+          />
+        )}
     </div>
     );
   }
@@ -1599,14 +1778,23 @@ const GamePage: React.FC<GamePageProps> = ({
       )}
       
       {/* USI Monitor positioned below the game content */}
-      <UsiMonitor
-        lastSentCommand={lastSentCommand}
-        lastReceivedCommand={lastReceivedCommand}
-        communicationHistory={communicationHistory}
-        sessions={sessions}
-        isVisible={isUsiMonitorVisible}
-        onToggle={onToggleUsiMonitor}
-      />
+      {useTauriEngine ? (
+        <TauriUsiMonitor
+          engineIds={activeEngineIds}
+          isVisible={isUsiMonitorVisible}
+          onToggle={onToggleUsiMonitor}
+          onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
+        />
+      ) : (
+        <UsiMonitor
+          lastSentCommand={lastSentCommand}
+          lastReceivedCommand={lastReceivedCommand}
+          communicationHistory={communicationHistory}
+          sessions={sessions}
+          isVisible={isUsiMonitorVisible}
+          onToggle={onToggleUsiMonitor}
+        />
+      )}
     </div>
   );
 };
