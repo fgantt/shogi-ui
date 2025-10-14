@@ -273,7 +273,7 @@ impl ShogiEngine {
     pub fn set_depth(&mut self, depth: u8) {
         self.depth = depth;
         crate::debug_utils::debug_log(&format!("Set depth to: {}", depth));
-        println!("DEBUG: Set depth to: {}", depth);
+        eprintln!("DEBUG: Set depth to: {}", depth);
     }
 
 
@@ -410,7 +410,7 @@ impl ShogiEngine {
 
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
-        println!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
+        eprintln!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
         let mut searcher = search::search_engine::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
         
         crate::debug_utils::debug_log("Trying to get search engine lock");

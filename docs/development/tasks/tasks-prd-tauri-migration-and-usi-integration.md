@@ -35,12 +35,12 @@
   - [x] 1.4 Update `package.json` with a `tauri:dev` script that runs `npm run dev` and `tauri dev` concurrently.
   - [x] 1.5 Verify that the existing React application loads and runs inside a basic Tauri window.
 
-- [ ] 2.0 **Create Standalone Built-in Engine Binary**
-  - [ ] 2.1 Create `src/bin/shogi_engine.rs` as a new binary target that wraps the existing engine with USI stdio communication.
-  - [ ] 2.2 Implement a USI protocol handler in the binary that reads from stdin and writes to stdout, using the existing `ShogiEngine` and move generation logic.
-  - [ ] 2.3 Update `Cargo.toml` to define the new binary target (`[[bin]]` section with `name = "shogi-engine"` and `path = "src/bin/shogi_engine.rs"`).
-  - [ ] 2.4 Configure `src-tauri/tauri.conf.json` to bundle the engine binary as a sidecar (in the `tauri.bundle.externalBin` array).
-  - [ ] 2.5 Test the standalone engine binary manually via command line to ensure it responds correctly to USI commands (`usi`, `isready`, `position`, `go`, etc.).
+- [x] 2.0 **Create Standalone Built-in Engine Binary**
+  - [x] 2.1 Create `src/bin/shogi_engine.rs` as a new binary target that wraps the existing engine with USI stdio communication.
+  - [x] 2.2 Implement a USI protocol handler in the binary that reads from stdin and writes to stdout, using the existing `ShogiEngine` and move generation logic.
+  - [x] 2.3 Update `Cargo.toml` to define the new binary target (`[[bin]]` section with `name = "shogi-engine"` and `path = "src/bin/shogi_engine.rs"`).
+  - [x] 2.4 Configure `src-tauri/tauri.conf.json` to bundle the engine binary as a sidecar (in the `tauri.bundle.externalBin` array).
+  - [x] 2.5 Test the standalone engine binary manually via command line to ensure it responds correctly to USI commands (`usi`, `isready`, `position`, `go`, etc.).
 
 - [ ] 3.0 **Implement Backend USI Engine Process Manager**
   - [ ] 3.1 In `engine_manager.rs`, create a struct to represent any USI engine (built-in or external), holding its process handle, stdin writer, and stdout reader.

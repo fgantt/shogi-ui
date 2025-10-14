@@ -6,8 +6,9 @@ use wasm_bindgen::prelude::*;
 use std::sync::Mutex;
 use std::collections::HashMap;
 
-// Global debug flag - set to true to enable debug logging by default
-static DEBUG_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+// Global debug flag - set to false to disable debug logging by default
+// Can be enabled via the USI "debug on" command
+static DEBUG_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 // Global timing context for tracking function execution times
 lazy_static::lazy_static! {
@@ -117,7 +118,7 @@ pub fn debug_log(message: &str) {
     
     #[cfg(not(target_arch = "wasm32"))]
     {
-        println!("DEBUG: {}", formatted_message);
+        eprintln!("DEBUG: {}", formatted_message);
     }
 }
 

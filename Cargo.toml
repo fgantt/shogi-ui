@@ -11,6 +11,10 @@ name = "usi-engine"
 path = "src/main.rs"
 
 [[bin]]
+name = "shogi-engine"
+path = "src/bin/shogi_engine.rs"
+
+[[bin]]
 name = "tuner"
 path = "src/bin/tuner.rs"
 
