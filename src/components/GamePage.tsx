@@ -1007,74 +1007,99 @@ const GamePage: React.FC<GamePageProps> = ({
 
   // Initialize Tauri engines when game starts with Tauri engine settings
   const initializeTauriEngines = async (settings: GameSettings) => {
-    console.log('Initializing Tauri engines:', settings);
+    console.log('[initializeTauriEngines] Starting with settings:', settings);
     const engineIds: string[] = [];
     
     try {
       // Load engine configs
+      console.log('[initializeTauriEngines] Loading engine configs...');
       const response = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+      console.log('[initializeTauriEngines] Engine configs response:', response);
+      
       if (!response.success || !response.data) {
-        console.error('Failed to load engines');
+        console.error('[initializeTauriEngines] Failed to load engines:', response);
         return;
       }
 
       // Spawn player 1 engine if AI
       if (settings.player1Type === 'ai' && settings.player1EngineId) {
+        console.log('[initializeTauriEngines] Player 1 is AI, spawning engine:', settings.player1EngineId);
         const engine = response.data.find(e => e.id === settings.player1EngineId);
+        console.log('[initializeTauriEngines] Player 1 engine found:', engine);
+        
         if (engine) {
+          console.log('[initializeTauriEngines] Spawning player 1 engine...');
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
             engineId: settings.player1EngineId,
             name: engine.name,
             path: engine.path,
           });
+          console.log('[initializeTauriEngines] Player 1 spawn result:', spawnResult);
+          
           if (spawnResult.success) {
             engineIds.push(settings.player1EngineId);
             // Initialize engine
+            console.log('[initializeTauriEngines] Initializing player 1 engine...');
             await sendUsiCommand(settings.player1EngineId, 'usinewgame');
             await sendUsiCommand(settings.player1EngineId, 'isready');
             await sendUsiCommand(settings.player1EngineId, `setoption name depth value ${settings.player1Level}`);
+            console.log('[initializeTauriEngines] Player 1 engine initialized');
           }
         }
       }
 
       // Spawn player 2 engine if AI
       if (settings.player2Type === 'ai' && settings.player2EngineId) {
+        console.log('[initializeTauriEngines] Player 2 is AI, spawning engine:', settings.player2EngineId);
         const engine = response.data.find(e => e.id === settings.player2EngineId);
+        console.log('[initializeTauriEngines] Player 2 engine found:', engine);
+        
         if (engine) {
+          console.log('[initializeTauriEngines] Spawning player 2 engine...');
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
             engineId: settings.player2EngineId,
             name: engine.name,
             path: engine.path,
           });
+          console.log('[initializeTauriEngines] Player 2 spawn result:', spawnResult);
+          
           if (spawnResult.success) {
             engineIds.push(settings.player2EngineId);
             // Initialize engine
+            console.log('[initializeTauriEngines] Initializing player 2 engine...');
             await sendUsiCommand(settings.player2EngineId, 'usinewgame');
             await sendUsiCommand(settings.player2EngineId, 'isready');
             await sendUsiCommand(settings.player2EngineId, `setoption name depth value ${settings.player2Level}`);
+            console.log('[initializeTauriEngines] Player 2 engine initialized');
           }
         }
       }
 
       setActiveEngineIds(engineIds);
-      console.log('Tauri engines initialized:', engineIds);
+      console.log('[initializeTauriEngines] All engines initialized. Active engine IDs:', engineIds);
     } catch (error) {
-      console.error('Error initializing Tauri engines:', error);
+      console.error('[initializeTauriEngines] Error:', error);
     }
   };
 
   // Listen to Tauri engine events
   useTauriEvents(useTauriEngine && activeEngineIds.length > 0 ? activeEngineIds[0] : null, {
     onUsiMessage: (engineId, message) => {
-      console.log(`Tauri engine ${engineId}: ${message}`);
+      console.log(`[Tauri Event] Engine ${engineId} message: ${message}`);
       
       if (message.startsWith('bestmove')) {
+        console.log('[Tauri Event] Received bestmove!');
         const { move } = parseBestMove(message);
+        console.log('[Tauri Event] Parsed move:', move);
+        
         if (move && move !== 'resign') {
+          console.log('[Tauri Event] Applying engine move to controller:', move);
           // Apply the engine's move
           controller.handleUserMove(move).catch(error => {
-            console.error('Failed to apply engine move:', error);
+            console.error('[Tauri Event] Failed to apply engine move:', error);
           });
+        } else {
+          console.log('[Tauri Event] Move is resign or invalid');
         }
       }
     },
@@ -1104,7 +1129,12 @@ const GamePage: React.FC<GamePageProps> = ({
 
   // Request move from Tauri engine
   const requestTauriEngineMove = async (engineId: string) => {
-    if (!engineId || !position) return;
+    console.log('[requestTauriEngineMove] Called with engineId:', engineId);
+    
+    if (!engineId || !position) {
+      console.log('[requestTauriEngineMove] Early return:', { hasEngineId: !!engineId, hasPosition: !!position });
+      return;
+    }
 
     try {
       const currentSfen = position.sfen;
@@ -1115,13 +1145,16 @@ const GamePage: React.FC<GamePageProps> = ({
       const posCmd = moveList.length > 0
         ? `position sfen ${currentSfen.split(' moves ')[0]} moves ${moveList.join(' ')}`
         : `position sfen ${currentSfen}`;
+      console.log('[requestTauriEngineMove] Sending position command:', posCmd);
       await sendUsiCommand(engineId, posCmd);
 
       // Send go command
       const goCmd = `go btime ${blackTime} wtime ${whiteTime} byoyomi ${byoyomi}`;
+      console.log('[requestTauriEngineMove] Sending go command:', goCmd);
       await sendUsiCommand(engineId, goCmd);
+      console.log('[requestTauriEngineMove] Commands sent successfully');
     } catch (error) {
-      console.error('Error requesting Tauri engine move:', error);
+      console.error('[requestTauriEngineMove] Error:', error);
     }
   };
 
