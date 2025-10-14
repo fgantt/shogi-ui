@@ -42,13 +42,13 @@
   - [x] 2.4 Configure `src-tauri/tauri.conf.json` to bundle the engine binary as a sidecar (in the `tauri.bundle.externalBin` array).
   - [x] 2.5 Test the standalone engine binary manually via command line to ensure it responds correctly to USI commands (`usi`, `isready`, `position`, `go`, etc.).
 
-- [ ] 3.0 **Implement Backend USI Engine Process Manager**
-  - [ ] 3.1 In `engine_manager.rs`, create a struct to represent any USI engine (built-in or external), holding its process handle, stdin writer, and stdout reader.
-  - [ ] 3.2 Implement a function to spawn any engine process using `tokio::process::Command`, supporting both the sidecar built-in engine and external engine executables.
-  - [ ] 3.3 Implement an async task for each spawned engine that continuously reads its stdout and emits its output to the frontend as a Tauri event (e.g., `usi-message::{engine_id}`).
-  - [ ] 3.4 Implement timeout handling (5 seconds for init, 60 seconds for moves) and watchdog timers to detect engine hangs or crashes.
-  - [ ] 3.5 Implement error handling to capture and log stderr output from engines, and emit error events to the frontend.
-  - [ ] 3.6 Create a Tauri command `send_usi_command(engine_id, command)` that writes a given USI command string to the specified engine's stdin.
+- [x] 3.0 **Implement Backend USI Engine Process Manager**
+  - [x] 3.1 In `engine_manager.rs`, create a struct to represent any USI engine (built-in or external), holding its process handle, stdin writer, and stdout reader.
+  - [x] 3.2 Implement a function to spawn any engine process using `tokio::process::Command`, supporting both the sidecar built-in engine and external engine executables.
+  - [x] 3.3 Implement an async task for each spawned engine that continuously reads its stdout and emits its output to the frontend as a Tauri event (e.g., `usi-message::{engine_id}`).
+  - [x] 3.4 Implement timeout handling (5 seconds for init, 60 seconds for moves) and watchdog timers to detect engine hangs or crashes.
+  - [x] 3.5 Implement error handling to capture and log stderr output from engines, and emit error events to the frontend.
+  - [x] 3.6 Create a Tauri command `send_usi_command(engine_id, command)` that writes a given USI command string to the specified engine's stdin.
 
 - [ ] 3.5 **Implement Engine Validation and Persistence**
   - [ ] 3.5.1 Create `engine_validator.rs` module with a function to validate USI engines by sending `usi` command and waiting up to 5 seconds for `usiok`.
