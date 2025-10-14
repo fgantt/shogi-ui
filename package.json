@@ -11,8 +11,9 @@
     "test": "vitest",
     "type-check": "tsc --noEmit",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "build:engine": "cargo build --bin shogi-engine --release",
+    "tauri:dev": "npm run build:engine && tauri dev",
+    "tauri:build": "npm run build:engine && tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
