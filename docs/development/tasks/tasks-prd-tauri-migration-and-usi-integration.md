@@ -67,7 +67,7 @@
   - [x] 4.4 Implement error handling and display clear error messages when engine validation fails, including any stderr output from the engine.
   - [x] 4.5 Show a loading/validation indicator while adding a new engine.
   - [x] 4.6 Implement the `useTauriEvents.ts` hook to listen for `usi-message` and engine error events, and update the application's state.
-  - [ ] 4.7 Integrate the `UsiMonitor.tsx` component to display messages received via the Tauri event listener.
+  - [x] 4.7 Integrate the `UsiMonitor.tsx` component to display messages received via the Tauri event listener.
   - [ ] 4.8 Add a dropdown/selector to the `GamePage.tsx` to allow users to choose between the built-in engine and any configured external engine before starting a game.
   - [ ] 4.9 Update the game logic to send commands to the currently selected engine via the appropriate Tauri command.
 

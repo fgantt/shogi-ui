@@ -251,6 +251,72 @@
   background: #a8a8a8;
 }
 
+/* Manual command input */
+.manual-command {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+}
+
+.manual-command input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.manual-command input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.manual-command button {
+  padding: 8px 16px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.manual-command button:hover:not(:disabled) {
+  background: #357abd;
+}
+
+.manual-command button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clear-button {
+  padding: 4px 12px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.clear-button:hover {
+  background: #f8f9fa;
+  border-color: #999;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .usi-monitor {
