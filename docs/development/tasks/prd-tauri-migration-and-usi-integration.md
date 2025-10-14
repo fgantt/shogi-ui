@@ -27,15 +27,18 @@ This document outlines the requirements for migrating the application to a Tauri
 | ID    | Requirement                                                                                                                            |
 | :---- | :------------------------------------------------------------------------------------------------------------------------------------- |
 | FR1   | The application **MUST** be packaged as a desktop application for Windows, macOS, and Linux using Tauri.                                 |
-| FR2   | The built-in Rust engine **MUST** be a standalone USI-compliant executable bundled with the application.                                 |
+| FR2   | The built-in Rust engine **MUST** be compiled as a standalone USI-compliant executable and bundled with the application using Tauri's sidecar feature. |
 | FR3   | The system **MUST** provide a dedicated "Engine Management" UI screen.                                                                 |
 | FR4   | From the Engine Management screen, a user **MUST** be able to add a new external USI-compliant engine by providing a name and a file path to its executable. |
+| FR4.1 | Engine configurations (engine_id, name, path, custom parameters, last_used timestamp) **MUST** persist across application restarts using platform-appropriate storage (e.g., `~/.config/shogi-vibe/engines.json` on Linux/macOS, AppData on Windows). |
+| FR4.2 | The system **MUST** validate that an added engine responds to the `usi` command with `id name` and `usiok` within 5 seconds before adding it to the configuration. |
+| FR4.3 | The system **SHOULD** display engine metadata (name, author, supported options) after successful validation of a newly added engine. |
 | FR5   | The Engine Management screen **MUST** display a list of all configured engines. The built-in engine **MUST** be included by default.      |
 | FR6   | From the Engine Management screen, a user **MUST** be able to remove a previously configured external engine.                           |
 | FR7   | The system **MUST** allow the user to select any configured engine (built-in or external) to play against before starting a game.      |
-| FR8   | The system **MUST** handle all communication with **all** engines (both built-in and external) using the USI protocol via standard input/output pipes. |
+| FR8   | The system **MUST** handle all communication with **all** engines (both built-in and external) consistently using the USI protocol via standard input/output pipes. No engine should be treated differently from a communication perspective. |
 | FR9   | The system **SHOULD** allow for engine-vs-engine matches where the user can spectate.                                                  |
-| FR10  | The UI **SHOULD** allow users to configure common USI engine parameters (e.g., `Hash`, `Threads`) for each external engine.             |
+| FR10  | The UI **SHOULD** allow users to configure common USI engine parameters (e.g., `Hash`, `Threads`) for each engine, including the built-in engine. |
 
 ## 5. Non-Goals (Out of Scope)
 
@@ -55,9 +58,23 @@ This document outlines the requirements for migrating the application to a Tauri
 ## 7. Technical Considerations
 
 *   The Rust backend (Tauri core) will be responsible for spawning and managing the lifecycle of **all** USI engine processes, including the bundled built-in engine and any user-added external engines.
-*   The built-in Rust engine will be compiled as a separate binary and included in the final application bundle using Tauri's `sidecar` feature.
+*   The built-in Rust engine will be compiled as a separate binary (e.g., `src/bin/shogi_engine.rs`) and included in the final application bundle using Tauri's `sidecar` feature. It will communicate via USI stdio like any external engine.
 *   Communication between the TypeScript frontend and the Rust backend will be handled via Tauri's `invoke` and `event` system.
 *   A robust module must be developed in the Rust backend to manage USI protocol communication, including sending commands, parsing responses, and handling engine state for all engines.
+*   **Engine Configuration Persistence:**
+    *   Engine configurations will be stored in a JSON file using Tauri's filesystem API or the Tauri Store plugin.
+    *   Storage location: `~/.config/shogi-vibe/engines.json` (Linux/macOS) or `%APPDATA%\shogi-vibe\engines.json` (Windows).
+    *   The built-in engine will be automatically registered on first launch if not present.
+*   **Engine Validation and Health Checks:**
+    *   When adding a new engine, the system must send `usi` command and wait up to 5 seconds for `usiok` response.
+    *   Parse and store engine metadata from `id name` and `id author` responses.
+    *   Implement health checks on application startup for all configured engines with timeout and error handling.
+    *   Display clear error messages to users if engines fail to start, crash, or become unresponsive, including any stderr output from the engine.
+    *   Implement graceful degradation if the built-in engine fails (e.g., disable AI mode until resolved).
+*   **Timeout and Error Handling:**
+    *   All engine communication should have configurable timeouts (default: 5 seconds for initialization, 60 seconds for moves).
+    *   Implement watchdog timers for engine processes to detect hangs or crashes.
+    *   Log all engine communication and errors for debugging purposes.
 *   All WASM-related code and dependencies (`wasm-bindgen`, `js-sys`, etc.) will be removed from the project.
 
 ## 8. Success Metrics
@@ -70,6 +87,7 @@ This document outlines the requirements for migrating the application to a Tauri
 
 ## 9. Open Questions
 
-*   What is the desired behavior if an external engine fails to start, crashes, or becomes unresponsive? How is this communicated to the user? An error message should be shown with any output from the engine.
-*   What is the complete list of USI `setoption` parameters we should support in the UI? Should we dynamically query the engine for its supported options? Yes, dynamically query.
-*   How should the application handle engines that require specific startup procedures or command-line arguments beyond the standard USI protocol? Use defaults if possible.
+*   ~~What is the desired behavior if an external engine fails to start, crashes, or becomes unresponsive? How is this communicated to the user?~~ **Resolved:** An error message should be shown with any stderr output from the engine. Implemented via FR4.2, FR4.3 and technical considerations.
+*   ~~What is the complete list of USI `setoption` parameters we should support in the UI? Should we dynamically query the engine for its supported options?~~ **Resolved:** Yes, dynamically query each engine for its supported options during validation.
+*   ~~How should the application handle engines that require specific startup procedures or command-line arguments beyond the standard USI protocol?~~ **Resolved:** Use defaults if possible. Future enhancement could allow custom command-line arguments per engine.
+*   ~~Should the built-in engine be embedded in the Tauri process or treated as a separate sidecar binary?~~ **Resolved:** The built-in engine will be a standalone sidecar binary communicating via USI stdio, ensuring consistency with external engines and true architectural decoupling.
