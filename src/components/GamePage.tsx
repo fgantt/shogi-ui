@@ -794,7 +794,9 @@ const GamePage: React.FC<GamePageProps> = ({
       } else {
         // Make the move directly
         const moveUsi = `${selectedSquare.usi}${clickedSquare.usi}`;
-        console.log('Click move handler - clearing recommendation');
+        console.log('[GamePage] User making move:', moveUsi);
+        console.log('[GamePage] useTauriEngine:', useTauriEngine);
+        console.log('[GamePage] Player types:', { player1Type, player2Type });
         setIsRequestingRecommendation(false);
         controller.clearRecommendation();
         setCurrentRecommendation(null);
@@ -964,17 +966,22 @@ const GamePage: React.FC<GamePageProps> = ({
       setPlayer1EngineId(player1Engine);
       setPlayer2EngineId(player2Engine);
       
+      // Set player types FIRST so controller knows who's AI
+      controller.setPlayerTypes(settings.player1Type, settings.player2Type);
+      
       // Disable automatic engine move requests in controller (Tauri handles it externally)
       controller.setDisableAutoEngineMove(true);
+      console.log('[GamePage] Tauri mode enabled, auto engine moves disabled');
       
       await initializeTauriEngines(updatedSettings);
     } else {
       setUseTauriEngine(false);
-      // Enable automatic engine move requests for non-Tauri mode (if ever used)
+      // Set player types and enable automatic engine move requests for non-Tauri mode
+      controller.setPlayerTypes(settings.player1Type, settings.player2Type);
       controller.setDisableAutoEngineMove(false);
     }
     
-    controller.setPlayerTypes(settings.player1Type, settings.player2Type);
+    // Player types already set above based on mode
     controller.setAILevels(settings.player1Level, settings.player2Level);
     controller.setTimeControls(settings.minutesPerSide * 60 * 1000, settings.minutesPerSide * 60 * 1000, settings.byoyomiInSeconds * 1000);
     setBlackTime(settings.minutesPerSide * 60 * 1000);
@@ -1120,18 +1127,44 @@ const GamePage: React.FC<GamePageProps> = ({
 
   // Effect to request Tauri engine moves when it's AI's turn
   useEffect(() => {
-    if (!useTauriEngine || !position || winner) return;
+    console.log('[GamePage AI Effect] Triggered', { 
+      useTauriEngine, 
+      hasPosition: !!position, 
+      winner,
+      player1EngineId,
+      player2EngineId 
+    });
+    
+    if (!useTauriEngine || !position || winner) {
+      console.log('[GamePage AI Effect] Early return:', { useTauriEngine, hasPosition: !!position, winner });
+      return;
+    }
 
     const isBlackTurn = position.sfen.includes(' b ');
     const currentEngineId = isBlackTurn ? player1EngineId : player2EngineId;
+    const isAITurn = controller.isCurrentPlayerAI();
     
-    if (currentEngineId && controller.isCurrentPlayerAI()) {
+    console.log('[GamePage AI Effect] Checking AI turn:', { 
+      isBlackTurn, 
+      currentEngineId, 
+      isAITurn,
+      player1Type,
+      player2Type
+    });
+    
+    if (currentEngineId && isAITurn) {
+      console.log('[GamePage AI Effect] Requesting AI move from engine:', currentEngineId);
       // Small delay to allow UI to update
       setTimeout(() => {
         requestTauriEngineMove(currentEngineId);
       }, 500);
+    } else {
+      console.log('[GamePage AI Effect] Not requesting move:', { 
+        hasEngineId: !!currentEngineId, 
+        isAITurn 
+      });
     }
-  }, [position, useTauriEngine, player1EngineId, player2EngineId, winner]);
+  }, [position, useTauriEngine, player1EngineId, player2EngineId, winner, player1Type, player2Type]);
 
   // Cleanup Tauri engines on unmount
   useEffect(() => {
