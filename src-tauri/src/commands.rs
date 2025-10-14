@@ -1,4 +1,6 @@
 use crate::engine_manager::EngineStatus;
+use crate::engine_storage::EngineConfig;
+use crate::engine_validator;
 use crate::state::AppState;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -206,5 +208,235 @@ pub async fn get_builtin_engine_path(
         log::warn!("{}", msg);
         Ok(CommandResponse::error(msg))
     }
+}
+
+/// Add a new engine to the configuration
+#[tauri::command]
+pub async fn add_engine(
+    name: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: add_engine - name: {}, path: {}", name, path);
+
+    // Validate the engine
+    let metadata = match engine_validator::validate_engine(&path).await {
+        Ok(meta) => {
+            log::info!("Engine validation successful: {}", meta.name);
+            Some(meta)
+        }
+        Err(e) => {
+            log::error!("Engine validation failed: {}", e);
+            return Ok(CommandResponse::error(format!("Engine validation failed: {}", e)));
+        }
+    };
+
+    // Create engine config
+    let config = EngineConfig::new(name, path, metadata, false);
+    let engine_id = config.id.clone();
+
+    // Add to storage
+    let mut storage = state.engine_storage.write().await;
+    match storage.add_engine(config.clone()) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+            }
+
+            log::info!("Engine added successfully: {}", engine_id);
+            Ok(CommandResponse::success_with_data(
+                serde_json::to_value(&config).unwrap_or(serde_json::json!({}))
+            ))
+        }
+        Err(e) => {
+            log::error!("Failed to add engine: {}", e);
+            Ok(CommandResponse::error(format!("Failed to add engine: {}", e)))
+        }
+    }
+}
+
+/// Remove an engine from the configuration
+#[tauri::command]
+pub async fn remove_engine(
+    engine_id: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: remove_engine - engine_id: {}", engine_id);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    // Check if it's the built-in engine
+    if let Some(engine) = storage.get_engine(&engine_id) {
+        if engine.is_builtin {
+            return Ok(CommandResponse::error("Cannot remove the built-in engine".to_string()));
+        }
+    }
+
+    match storage.remove_engine(&engine_id) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+            }
+
+            log::info!("Engine removed successfully: {}", engine_id);
+            Ok(CommandResponse::success())
+        }
+        Err(e) => {
+            log::error!("Failed to remove engine: {}", e);
+            Ok(CommandResponse::error(format!("Failed to remove engine: {}", e)))
+        }
+    }
+}
+
+/// Get all configured engines
+#[tauri::command]
+pub async fn get_engines(
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    let storage = state.engine_storage.read().await;
+    let engines = storage.get_all_engines();
+    
+    Ok(CommandResponse::success_with_data(
+        serde_json::to_value(engines).unwrap_or(serde_json::json!([]))
+    ))
+}
+
+/// Validate an engine at a given path
+#[tauri::command]
+pub async fn validate_engine_path(
+    path: String,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: validate_engine_path - path: {}", path);
+
+    match engine_validator::validate_engine(&path).await {
+        Ok(metadata) => {
+            log::info!("Engine validation successful: {}", metadata.name);
+            Ok(CommandResponse::success_with_data(
+                serde_json::to_value(&metadata).unwrap_or(serde_json::json!({}))
+            ))
+        }
+        Err(e) => {
+            log::error!("Engine validation failed: {}", e);
+            Ok(CommandResponse::error(format!("Validation failed: {}", e)))
+        }
+    }
+}
+
+/// Register the built-in engine if not already present
+#[tauri::command]
+pub async fn register_builtin_engine(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: register_builtin_engine");
+
+    let mut storage = state.engine_storage.write().await;
+
+    // Check if already registered
+    if storage.has_builtin_engine() {
+        log::info!("Built-in engine already registered");
+        return Ok(CommandResponse::success_with_data(
+            serde_json::json!({ "already_registered": true })
+        ));
+    }
+
+    // Get the built-in engine path
+    let path_response = get_builtin_engine_path(app_handle).await?;
+    if !path_response.success {
+        return Ok(path_response);
+    }
+
+    let engine_path = path_response
+        .data
+        .and_then(|d| d.get("path").and_then(|p| p.as_str().map(String::from)))
+        .ok_or_else(|| "Failed to get engine path".to_string())?;
+
+    // Validate the built-in engine
+    let metadata = match engine_validator::validate_engine(&engine_path).await {
+        Ok(meta) => Some(meta),
+        Err(e) => {
+            log::warn!("Built-in engine validation failed: {}", e);
+            None
+        }
+    };
+
+    // Create config for built-in engine
+    let config = EngineConfig::new(
+        "Built-in Engine".to_string(),
+        engine_path,
+        metadata,
+        true,
+    );
+
+    // Add to storage
+    match storage.add_engine(config.clone()) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+            }
+
+            log::info!("Built-in engine registered successfully");
+            Ok(CommandResponse::success_with_data(
+                serde_json::to_value(&config).unwrap_or(serde_json::json!({}))
+            ))
+        }
+        Err(e) => {
+            log::error!("Failed to register built-in engine: {}", e);
+            Ok(CommandResponse::error(format!("Failed to register engine: {}", e)))
+        }
+    }
+}
+
+/// Perform health checks on all configured engines
+#[tauri::command]
+pub async fn health_check_engines(
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: health_check_engines");
+
+    let storage = state.engine_storage.read().await;
+    let engines = storage.get_all_engines();
+    let mut results = Vec::new();
+
+    for engine in engines {
+        if !engine.enabled {
+            results.push(serde_json::json!({
+                "id": engine.id,
+                "name": engine.name,
+                "status": "disabled",
+            }));
+            continue;
+        }
+
+        log::info!("Health checking engine: {}", engine.name);
+        match engine_validator::validate_engine(&engine.path).await {
+            Ok(_) => {
+                results.push(serde_json::json!({
+                    "id": engine.id,
+                    "name": engine.name,
+                    "status": "healthy",
+                }));
+            }
+            Err(e) => {
+                log::warn!("Engine {} health check failed: {}", engine.name, e);
+                results.push(serde_json::json!({
+                    "id": engine.id,
+                    "name": engine.name,
+                    "status": "unhealthy",
+                    "error": e.to_string(),
+                }));
+            }
+        }
+    }
+
+    Ok(CommandResponse::success_with_data(
+        serde_json::json!({ "results": results })
+    ))
 }
 

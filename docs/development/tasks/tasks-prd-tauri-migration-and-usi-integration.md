@@ -50,15 +50,15 @@
   - [x] 3.5 Implement error handling to capture and log stderr output from engines, and emit error events to the frontend.
   - [x] 3.6 Create a Tauri command `send_usi_command(engine_id, command)` that writes a given USI command string to the specified engine's stdin.
 
-- [ ] 3.5 **Implement Engine Validation and Persistence**
-  - [ ] 3.5.1 Create `engine_validator.rs` module with a function to validate USI engines by sending `usi` command and waiting up to 5 seconds for `usiok`.
-  - [ ] 3.5.2 Parse and extract engine metadata from `id name`, `id author`, and `option` responses during validation.
-  - [ ] 3.5.3 Create `engine_storage.rs` module to handle persistence of engine configurations to/from JSON file.
-  - [ ] 3.5.4 Implement platform-appropriate storage paths: `~/.config/shogi-vibe/engines.json` (Linux/macOS) or `%APPDATA%\shogi-vibe\engines.json` (Windows).
-  - [ ] 3.5.5 Create a Tauri command `add_engine(name, path)` that validates the engine, extracts metadata, saves configuration, and returns the engine info or error.
-  - [ ] 3.5.6 Create Tauri commands `remove_engine(engine_id)` and `get_engines()` that manage the persisted engine list.
-  - [ ] 3.5.7 Implement automatic registration of the built-in engine on first application launch if not already present in the configuration.
-  - [ ] 3.5.8 Implement health checks on application startup for all configured engines, marking engines as unavailable if they fail to respond.
+- [x] 3.5 **Implement Engine Validation and Persistence**
+  - [x] 3.5.1 Create `engine_validator.rs` module with a function to validate USI engines by sending `usi` command and waiting up to 5 seconds for `usiok`.
+  - [x] 3.5.2 Parse and extract engine metadata from `id name`, `id author`, and `option` responses during validation.
+  - [x] 3.5.3 Create `engine_storage.rs` module to handle persistence of engine configurations to/from JSON file.
+  - [x] 3.5.4 Implement platform-appropriate storage paths: `~/.config/shogi-vibe/engines.json` (Linux/macOS) or `%APPDATA%\shogi-vibe\engines.json` (Windows).
+  - [x] 3.5.5 Create a Tauri command `add_engine(name, path)` that validates the engine, extracts metadata, saves configuration, and returns the engine info or error.
+  - [x] 3.5.6 Create Tauri commands `remove_engine(engine_id)` and `get_engines()` that manage the persisted engine list.
+  - [x] 3.5.7 Implement automatic registration of the built-in engine on first application launch if not already present in the configuration.
+  - [x] 3.5.8 Implement health checks on application startup for all configured engines, marking engines as unavailable if they fail to respond.
 
 - [ ] 4.0 **Overhaul Frontend for Engine Management and Game Interaction**
   - [ ] 4.1 Create the `EngineManagementPage.tsx` component with a UI to list, add, and remove engines, based on the PRD.
