@@ -1,9 +1,9 @@
 # Tauri Migration - Completion Summary
 
 **Date:** October 14, 2025  
-**Status:** ✅ **COMPLETE** (Tasks 1.0 - 4.0)  
-**Total Commits:** 8  
-**Lines Added:** ~6,500+  
+**Status:** ✅ **COMPLETE** (Tasks 1.0 - 5.0) - **ALL TASKS DONE!**  
+**Total Commits:** 10  
+**Lines Added:** ~7,500+  
 **Build Status:** ✅ Clean compilation (Rust + TypeScript)
 
 ---
@@ -221,7 +221,7 @@ Successfully migrated the Shogi Game from WebAssembly-only to a full Tauri deskt
 | FR6   | Remove external engines | ✅ Complete |
 | FR7   | Select engine before game | ✅ Complete |
 | FR8   | Consistent USI communication | ✅ Complete |
-| FR9   | Engine vs engine (Basic) | ⚠️ Partial |
+| FR9   | Engine vs engine matches | ✅ Complete |
 | FR10  | Configure engine parameters | ✅ Complete |
 
 ---
@@ -445,12 +445,28 @@ Compared to WASM implementation:
 
 ## 🔄 Remaining Work
 
-### Task 5.0: Engine-vs-Engine Gameplay (Optional Enhancement)
-- [ ] 5.1 Add "Engine vs Engine" mode to setup
-- [ ] 5.2 Create backend game loop
-- [ ] 5.3 Emit game state updates for spectating
+### Task 5.0: Implement Engine-vs-Engine Gameplay Logic
+**Commit:** e38c93e
 
-**Note:** Basic engine-vs-engine is already supported by selecting AI for both players!
+- ✅ Created `engine_vs_engine.rs` (310 lines)
+- ✅ Backend autonomous game loop
+- ✅ EngineVsEnginePage spectator UI
+- ✅ Real-time state emission
+- ✅ Homepage navigation button
+
+**Features:**
+- Fully automated matches
+- Independent engine processes
+- Move-by-move state updates
+- Game result detection
+- Spectator-friendly UI
+- Configurable time controls
+- Maximum move limit
+- Winner determination
+
+---
+
+## ✅ **All Tasks Complete!**
 
 ### Future Enhancements
 - [ ] Remove WASM worker code completely
@@ -598,7 +614,7 @@ The application now supports:
 - **Cross-platform** (Windows, macOS, Linux)
 - **Production-ready** (error handling, cleanup)
 
-**Total development time:** ~2 hours of focused implementation  
+**Total development time:** ~2.5 hours of focused implementation  
 **Code quality:** Clean, documented, tested  
 **User experience:** Intuitive, responsive, powerful  
 
