@@ -339,6 +339,52 @@ const GamePage: React.FC<GamePageProps> = ({
           setStartColor('black');
         }
 
+        // Initialize Tauri engines if any player is AI
+        const needsTauriEngine = player1Type === 'ai' || player2Type === 'ai';
+        console.log('[Navigation Init] Needs Tauri engine:', needsTauriEngine);
+        
+        if (needsTauriEngine) {
+          // Disable auto engine moves for Tauri mode
+          controller.setDisableAutoEngineMove(true);
+          setUseTauriEngine(true);
+          console.log('[Navigation Init] Tauri mode enabled, initializing engines...');
+          
+          // Get engines and auto-assign built-in if not specified
+          invoke<CommandResponse<EngineConfig[]>>('get_engines').then(response => {
+            if (response.success && response.data && response.data.length > 0) {
+              const builtinEngine = response.data.find(e => e.is_builtin);
+              const defaultEngine = builtinEngine || response.data[0];
+              
+              const engine1 = player1Type === 'ai' ? defaultEngine.id : null;
+              const engine2 = player2Type === 'ai' ? defaultEngine.id : null;
+              
+              setPlayer1EngineId(engine1);
+              setPlayer2EngineId(engine2);
+              
+              console.log('[Navigation Init] Engine IDs:', { engine1, engine2 });
+              
+              // Initialize engines
+              return initializeTauriEngines({
+                player1Type,
+                player2Type,
+                player1Level,
+                player2Level,
+                player1EngineId: engine1,
+                player2EngineId: engine2,
+                minutesPerSide,
+                byoyomiInSeconds,
+                useTauriEngine: true,
+                initialSfen: stateInitialSfen
+              });
+            }
+          }).catch(error => {
+            console.error('[Navigation Init] Failed to initialize Tauri engines:', error);
+          });
+        } else {
+          controller.setDisableAutoEngineMove(false);
+          setUseTauriEngine(false);
+        }
+
         // Start a new game with the custom SFEN if provided
         // CRITICAL: Set the ref BEFORE the async call to prevent React Strict Mode double-initialization
         gameInitializedRef.current = true;
