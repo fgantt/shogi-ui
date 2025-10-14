@@ -2,6 +2,7 @@ mod commands;
 mod engine_manager;
 mod engine_storage;
 mod engine_validator;
+mod engine_vs_engine;
 mod state;
 
 use engine_manager::EngineManager;
@@ -57,6 +58,7 @@ pub fn run() {
       commands::validate_engine_path,
       commands::register_builtin_engine,
       commands::health_check_engines,
+      commands::start_engine_vs_engine,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

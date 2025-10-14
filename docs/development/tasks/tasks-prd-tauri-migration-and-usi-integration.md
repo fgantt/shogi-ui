@@ -71,8 +71,8 @@
   - [x] 4.8 Add a dropdown/selector to the `GamePage.tsx` to allow users to choose between the built-in engine and any configured external engine before starting a game.
   - [x] 4.9 Update the game logic to send commands to the currently selected engine via the appropriate Tauri command.
 
-- [ ] 5.0 **Implement Engine-vs-Engine Gameplay Logic**
-  - [ ] 5.1 Add a "Engine vs. Engine" mode to the game setup screen.
-  - [ ] 5.2 Create a backend loop in Rust, triggered by a Tauri command, that manages the game state for an engine-vs-engine match.
-  - [ ] 5.3 The loop will send the current position to the active engine, wait for its `bestmove` response, update the board, and then repeat for the other engine.
-  - [ ] 5.4 The backend will emit game state updates (e.g., new move, board position) to the frontend, allowing the user to spectate the match in real-time.
+- [x] 5.0 **Implement Engine-vs-Engine Gameplay Logic**
+  - [x] 5.1 Add a "Engine vs. Engine" mode to the game setup screen.
+  - [x] 5.2 Create a backend loop in Rust, triggered by a Tauri command, that manages the game state for an engine-vs-engine match.
+  - [x] 5.3 The loop will send the current position to the active engine, wait for its `bestmove` response, update the board, and then repeat for the other engine.
+  - [x] 5.4 The backend will emit game state updates (e.g., new move, board position) to the frontend, allowing the user to spectate the match in real-time.

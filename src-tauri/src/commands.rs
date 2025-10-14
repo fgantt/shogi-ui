@@ -1,6 +1,7 @@
 use crate::engine_manager::EngineStatus;
 use crate::engine_storage::EngineConfig;
 use crate::engine_validator;
+use crate::engine_vs_engine::{EngineVsEngineConfig, EngineVsEngineManager};
 use crate::state::AppState;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -438,5 +439,52 @@ pub async fn health_check_engines(
     Ok(CommandResponse::success_with_data(
         serde_json::json!({ "results": results })
     ))
+}
+
+/// Start an engine-vs-engine match
+#[tauri::command]
+pub async fn start_engine_vs_engine(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    engine1_id: String,
+    engine2_id: String,
+    initial_sfen: Option<String>,
+    time_per_move_ms: Option<u64>,
+    max_moves: Option<usize>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: start_engine_vs_engine - {} vs {}", engine1_id, engine2_id);
+
+    // Get engine configurations
+    let storage = state.engine_storage.read().await;
+    
+    let engine1 = storage.get_engine(&engine1_id)
+        .ok_or_else(|| "Engine 1 not found".to_string())?;
+    let engine2 = storage.get_engine(&engine2_id)
+        .ok_or_else(|| "Engine 2 not found".to_string())?;
+
+    let config = EngineVsEngineConfig {
+        engine1_id: engine1_id.clone(),
+        engine1_path: engine1.path.clone(),
+        engine1_name: engine1.name.clone(),
+        engine2_id: engine2_id.clone(),
+        engine2_path: engine2.path.clone(),
+        engine2_name: engine2.name.clone(),
+        initial_sfen,
+        time_per_move_ms: time_per_move_ms.unwrap_or(5000),
+        max_moves: max_moves.unwrap_or(200),
+    };
+
+    drop(storage);
+
+    // Spawn the game loop in a background task
+    let manager = EngineVsEngineManager::new(app_handle, config);
+    
+    tokio::spawn(async move {
+        if let Err(e) = manager.run_match().await {
+            log::error!("Engine-vs-engine match error: {}", e);
+        }
+    });
+
+    Ok(CommandResponse::success())
 }
 

@@ -138,6 +138,14 @@ const HomePage: React.FC = () => {
           
           <button 
             className="nav-button"
+            onClick={() => navigate('/engine-vs-engine')}
+          >
+            <span className="button-icon japanese-spectate">⚔️</span>
+            <span className="button-text">Engine Battle</span>
+          </button>
+          
+          <button 
+            className="nav-button"
             onClick={handleOpenSettings}
           >
             <span className="button-icon japanese-settings">⚙️</span>
