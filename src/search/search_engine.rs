@@ -6884,22 +6884,22 @@ pub struct TroubleshootingReport {
 }
 
 
-use js_sys::Function;
+// js_sys::Function removed - no longer using WASM callbacks
 
 pub struct IterativeDeepening {
     max_depth: u8,
     time_limit_ms: u32,
     stop_flag: Option<Arc<AtomicBool>>,
-    on_info: Option<Function>,
+    // on_info removed - no longer using WASM callbacks
 }
 
 impl IterativeDeepening {
-    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<Function>) -> Self {
+    pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Self {
         Self {
             max_depth,
             time_limit_ms,
             stop_flag,
-            on_info,
+            // on_info removed,
         }
     }
 
@@ -7076,13 +7076,6 @@ impl IterativeDeepening {
                 crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, search_engine.nodes_searched, score, &pv_string);
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
-                if let Some(on_info) = &self.on_info {
-                    let this = wasm_bindgen::JsValue::NULL;
-                    let s = wasm_bindgen::JsValue::from_str(&info_string);
-                    if let Err(e) = on_info.call1(&this, &s) {
-                        crate::debug_utils::debug_log(&format!("Error calling on_info callback: {:?}", e));
-                    }
-                }
 
                 // Only break early for extremely winning positions (king capture level)
                 // and only at higher depths to allow deeper search logging for higher AI levels

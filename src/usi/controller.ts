@@ -1,6 +1,13 @@
 import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType, Color } from 'tsshogi';
-import { EngineAdapter, WasmEngineAdapter } from './engine';
 import { EventEmitter } from '../utils/events';
+
+// WASM engines are no longer supported - use Tauri engines instead
+// This controller is kept for backward compatibility but will not create engines
+
+// Minimal EngineAdapter interface for type compatibility (not used)
+interface EngineAdapter {
+  // Empty interface - WASM engines are deprecated
+}
 
 
 
@@ -40,135 +47,32 @@ export class ShogiController extends EventEmitter {
     this.record = recordResult;
   }
 
-  private getEngine(sessionId: string): EngineAdapter {
-    let engine = this.sessions.get(sessionId);
-    if (!engine) {
-      engine = new WasmEngineAdapter(sessionId);
-      this.sessions.set(sessionId, engine);
-      this.emit('sessionCreated', { sessionId, engine });
-      
-      // Initialize the engine asynchronously
-      this.initializeEngine(engine);
-      
-      engine.on('bestmove', ({ move: usiMove, sessionId: bestmoveSessionId }) => {
-        console.log(`[${this.instanceId}] [SEQ-4] bestmove received: ${usiMove}`);
-        console.log(`[${this.instanceId}] Session: ${bestmoveSessionId}`);
-        this.logRecordState('SEQ-4');
-        
-        // Handle AI resignation or no legal moves
-        // Trim the move to handle cases like "resign " with trailing space
-        const trimmedMove = usiMove?.trim();
-        console.log(`[${this.instanceId}] After trim:`, { trimmedMove, isResign: trimmedMove === 'resign', isEmpty: !trimmedMove });
-        
-        if (trimmedMove === 'resign' || !trimmedMove) {
-          console.log(`[${this.instanceId}] AI RESIGNED! usiMove: ${usiMove}, trimmed: ${trimmedMove}`);
-          const isBlackTurn = this.record.position.sfen.includes(' b ');
-          const winner = isBlackTurn ? 'player2' : 'player1';
-          console.log(`[${this.instanceId}] EMITTING GAME OVER EVENT! winner: ${winner}`);
-          this.gameOver = true; // Mark game as over
-          this.stopAllEngines(); // Stop any running engine operations
-          this.emit('gameOver', { winner, position: this.record.position, endgameType: 'resignation' });
-          this.emitStateChanged();
-          return;
-        }
-        
-        if (trimmedMove && trimmedMove !== 'resign') {
-          if (bestmoveSessionId === 'sente' || bestmoveSessionId === 'gote') {
-            if (this.recommendationsEnabled && this.hasHumanPlayer() && !this.isCurrentPlayerAI()) {
-              this.parseRecommendation(trimmedMove);
-            } else {
-              console.log(`[${this.instanceId}] About to apply AI move: ${trimmedMove}`);
-              console.log(`[${this.instanceId}] AI session: ${bestmoveSessionId}`);
-              
-              const moveResult = this.applyMove(trimmedMove);
-              console.log(`[${this.instanceId}] [SEQ-5] applyMove result: ${moveResult ? 'SUCCESS' : 'FAILED'}`);
-              this.logRecordState('SEQ-5');
-              
-              if (!moveResult) {
-                // Move failed to apply - this should now properly indicate checkmate
-                // since we've fixed the synchronization bug
-                console.error(`[${this.instanceId}] AI MOVE REJECTED: ${trimmedMove}`);
-                console.error(`[${this.instanceId}] Session: ${bestmoveSessionId}`);
-                
-                // The engine returned an invalid move - opponent wins
-                const isBlackTurn = this.record.position.sfen.includes(' b ');
-                const winner = isBlackTurn ? 'player2' : 'player1';
-                console.log(`[${this.instanceId}] INVALID MOVE - GAME OVER! Winner: ${winner}`);
-                this.gameOver = true; // Mark game as over
-                this.stopAllEngines(); // Stop any running engine operations
-                this.emit('gameOver', { winner, position: this.record.position, endgameType: 'illegal' });
-                this.emitStateChanged();
-                return;
-              }
-              
-              this.emit('aiMoveMade', { move: trimmedMove });
-              this.emitStateChanged();
-              
-              console.log(`[${this.instanceId}] [SEQ-6] Checking if next player is AI`);
-              console.log(`[${this.instanceId}] Game over status: ${this.gameOver}`);
-              if (!this.gameOver && this.isCurrentPlayerAI()) {
-                console.log(`[${this.instanceId}] [SEQ-7] Next player IS AI, requesting move`);
-                this.requestEngineMove();
-              } else {
-                console.log(`[${this.instanceId}] [SEQ-7] Next player is HUMAN or game is over, waiting`);
-              }
-            }
-          }
-        } else {
-          this.emitStateChanged();
-        }
-      });
-    }
-    return engine;
+  private getEngine(sessionId: string): EngineAdapter | null {
+    // WASM engines are no longer supported
+    // Games use Tauri engines via GamePage's useTauriEngine mode
+    // This method is kept for compatibility but always returns null
+    console.warn('[ShogiController] getEngine called but WASM engines are no longer supported.');
+    console.warn('[ShogiController] Use Tauri engine mode in GamePage instead.');
+    return null;
   }
 
-  private async initializeEngine(engine: EngineAdapter): Promise<void> {
-    try {
-      await engine.init();
-      await engine.isReady();
-      
-      // Now set the engine to the current position
-      engine.newGame();
-      const currentSfen = this.record.position.sfen;
-      // Pass empty moves array - the SFEN already has the complete position
-      engine.setPosition(currentSfen, []);
-    } catch (error) {
-      console.error('Failed to initialize engine:', error);
-    }
+  private async initializeEngine(_engine: EngineAdapter | null): Promise<void> {
+    // WASM engines no longer supported - deprecated method
+    console.warn('[ShogiController] initializeEngine called but WASM engines removed.');
+    return;
   }
 
-  private async synchronizeAllEngines(currentSfen: string, _moves: string[]): Promise<void> {
-    // Synchronize all existing engines with the current position
-    // NOTE: We ignore the _moves parameter and pass empty array - SFEN already has complete position
-    const syncPromises = Array.from(this.sessions.values()).map(async (engine) => {
-      try {
-        await engine.init();
-        await engine.isReady();
-        engine.newGame();
-        // Pass empty moves array - the SFEN already has the complete position
-        engine.setPosition(currentSfen, []);
-      } catch (error) {
-        console.error('Failed to synchronize engine:', error);
-      }
-    });
-    
-    await Promise.all(syncPromises);
+  private async synchronizeAllEngines(_currentSfen: string, _moves: string[]): Promise<void> {
+    // WASM engines no longer supported - deprecated method
+    console.warn('[ShogiController] synchronizeAllEngines called but WASM engines removed.');
+    return;
   }
 
   async initialize(): Promise<void> {
-    console.log('ShogiController: Initializing engines...');
-    const initializers = Array.from(this.sessions.values()).map(engine => engine.init());
-    await Promise.all(initializers);
-    console.log('ShogiController: Engines initialized. Checking readiness...');
-    const readinessCheckers = Array.from(this.sessions.values()).map(engine => engine.isReady());
-    await Promise.all(readinessCheckers);
-    console.log('ShogiController: Engines ready. Starting new game...');
-    const newGameStarters = Array.from(this.sessions.values()).map(engine => engine.newGame());
-    await Promise.all(newGameStarters);
-    console.log('ShogiController: Emitting stateChanged...');
-    this.emitStateChanged();
-    console.log('ShogiController: State changed emitted.');
+    // WASM engines no longer supported - deprecated method
+    console.warn('[ShogiController] initialize called but WASM engines removed.');
     this.initialized = true;
+    return;
   }
 
   public getPosition(): ImmutablePosition {
@@ -485,87 +389,18 @@ export class ShogiController extends EventEmitter {
   }
 
   public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
-    // Guard: Don't request moves if game is over
-    if (this.gameOver) {
-      console.log(`[${this.instanceId}] [SEQ-1] requestEngineMove BLOCKED - game is over`);
-      return;
-    }
-    
-    console.log(`[${this.instanceId}] [SEQ-1] requestEngineMove START`);
-    this.logRecordState('SEQ-1');
-    
-    const isPlayer1Turn = this.record.position.sfen.includes(' b ');
-    const sessionId = isPlayer1Turn ? 'sente' : 'gote';
-    const engine = this.getEngine(sessionId);
-    const level = isPlayer1Turn ? this.player1Level : this.player2Level;
-    
-    // CRITICAL FIX: Pass the current position SFEN with NO moves
-    // The SFEN already represents the position after all moves have been applied
-    // If we pass moves here, the engine will double-apply them, causing desynchronization
-    const currentSfen = this.record.position.sfen;
-    console.log(`[${this.instanceId}] Setting engine position: ${currentSfen}`);
-    console.log(`[${this.instanceId}] Total moves in record: ${this.record.moves.length}`);
-    console.log(`[${this.instanceId}] Session ID: ${sessionId}, Level: ${level}`);
-    
-    // Use current clock times if provided, otherwise fall back to stored values
-    const btime = currentBlackTime !== undefined ? currentBlackTime : this.btime;
-    const wtime = currentWhiteTime !== undefined ? currentWhiteTime : this.wtime;
-    
-    console.log(`[${this.instanceId}] [SEQ-2] Calling engine.setPosition`);
-    engine.setSearchDepth(level);
-    // Pass empty moves array - the SFEN already has the complete position
-    engine.setPosition(currentSfen, []);
-    
-    console.log(`[${this.instanceId}] [SEQ-3] Calling engine.go`);
-    engine.go({ 
-      btime: btime, 
-      wtime: wtime, 
-      byoyomi: this.byoyomi 
-    });
+    // WASM engines no longer supported - this method is deprecated
+    // Use Tauri engine mode in GamePage instead
+    console.warn('[ShogiController] requestEngineMove called but WASM engines removed.');
+    console.warn('[ShogiController] Game should be using useTauriEngine mode.');
+    return;
   }
 
   public async requestRecommendation(): Promise<void> {
-    if (!this.recommendationsEnabled || !this.hasHumanPlayer() || this.isCurrentPlayerAI()) {
-      return;
-    }
-
-    // Clear any existing timeout
-    if (this.recommendationTimeout) {
-      clearTimeout(this.recommendationTimeout);
-    }
-
-    const isPlayer1Turn = this.record.position.sfen.includes(' b ');
-    const sessionId = isPlayer1Turn ? 'sente' : 'gote';
-    const engine = this.getEngine(sessionId);
-    
-    // Get the current position SFEN and all moves from the record
-    const currentSfen = this.record.position.sfen;
-    const moves = this.record.moves.map(move => {
-      if ('move' in move && typeof move.move === 'object' && 'toUSI' in move.move) {
-        return (move.move as any).toUSI();
-      }
-      return '';
-    }).filter(move => move !== '');
-    
-    console.log('RequestRecommendation Debug:');
-    console.log('- Session ID:', sessionId);
-    console.log('- Is Player 1 Turn:', isPlayer1Turn);
-    console.log('- Current SFEN:', currentSfen);
-    console.log('- SFEN indicates turn:', currentSfen.includes(' b ') ? 'Player 1 (Black)' : 'Player 2 (White)');
-    console.log('- Move History:', moves);
-    console.log('- Total Moves:', this.record.moves.length);
-    console.log('- Record position turn:', this.record.position.sfen.includes(' b ') ? 'Player 1 (Black)' : 'Player 2 (White)');
-    
-    // Ensure both engines are synchronized with the current position
-    await this.synchronizeAllEngines(currentSfen, moves);
-    
-    // Request a quick recommendation with shorter time
-    engine.go({ btime: 1000, wtime: 1000, byoyomi: 500 });
-    
-    // Set a timeout to clear the recommendation request if it takes too long
-    this.recommendationTimeout = setTimeout(() => {
-      this.emit('recommendationTimeout');
-    }, 5000); // 5 second timeout
+    // WASM engines no longer supported - recommendations disabled
+    // Future: Implement recommendations via Tauri engines
+    console.warn('[ShogiController] requestRecommendation called but WASM engines removed.');
+    return;
   }
   
   public async newGame(customSfen?: string): Promise<void> {
@@ -633,18 +468,16 @@ export class ShogiController extends EventEmitter {
   }
 
   public quit(): void {
-    for (const engine of this.sessions.values()) {
-      engine.quit();
-    }
+    // WASM engines no longer supported - deprecated method
+    console.warn('[ShogiController] quit called but WASM engines removed.');
+    this.sessions.clear();
+    return;
   }
 
   private stopAllEngines(): void {
-    console.log(`[${this.instanceId}] Stopping all engines due to game over`);
-    for (const engine of this.sessions.values()) {
-      engine.stop().catch(err => {
-        console.error(`[${this.instanceId}] Error stopping engine:`, err);
-      });
-    }
+    // WASM engines no longer supported - deprecated method
+    console.warn('[ShogiController] stopAllEngines called but WASM engines removed.');
+    return;
   }
 
   private parseRecommendation(usiMove: string): void {

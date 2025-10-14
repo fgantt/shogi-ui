@@ -100,7 +100,6 @@ impl UsiHandler {
             self.engine.depth,
             time_to_use,
             Some(self.engine.stop_flag.clone()),
-            None, // No callback for native version
         );
         crate::debug_utils::end_timing("best_move_search", "USI_GO");
 

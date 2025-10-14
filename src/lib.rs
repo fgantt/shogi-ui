@@ -1,4 +1,3 @@
-use wasm_bindgen::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use rand::seq::SliceRandom;
@@ -68,7 +67,6 @@ struct CapturedPieceJson {
     player: String,
 }
 
-#[wasm_bindgen]
 #[derive(Clone)]
 pub struct ShogiEngine {
     board: BitboardBoard,
@@ -83,7 +81,6 @@ pub struct ShogiEngine {
     depth: u8,
 }
 
-#[wasm_bindgen]
 impl ShogiEngine {
     pub fn new() -> Self {
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -248,9 +245,6 @@ impl ShogiEngine {
     }
 
 
-    pub fn get_board_state(&self) -> JsValue {
-        serde_wasm_bindgen::to_value(&self.board.to_fen(self.current_player, &self.captured_pieces)).unwrap_or_else(|_| JsValue::NULL)
-    }
 
     // Methods needed for WebAssembly integration
     pub fn set_position(&mut self, board_json: &str) {
@@ -310,7 +304,7 @@ impl ShogiEngine {
         crate::debug_utils::is_debug_enabled()
     }
 
-    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, on_info: Option<js_sys::Function>) -> Option<Move> {
+    pub fn get_best_move(&mut self, depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Option<Move> {
         // CRITICAL DEBUG: Log the engine's internal state at the very beginning
         let fen = self.board.to_fen(self.current_player, &self.captured_pieces);
         crate::debug_utils::debug_log("========================================");
@@ -325,11 +319,6 @@ impl ShogiEngine {
         crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Starting search: depth={}, time_limit={}ms", depth, time_limit_ms));
         crate::debug_utils::start_timing("tablebase_check");
         
-        if let Some(on_info) = &on_info {
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Starting get_best_move");
-            let _ = on_info.call1(&this, &s);
-        }
 
         crate::debug_utils::trace_log("GET_BEST_MOVE", &format!("Position FEN: {}", fen));
         
@@ -337,17 +326,6 @@ impl ShogiEngine {
         if let Some(tablebase_result) = self.tablebase.probe(&self.board, self.current_player, &self.captured_pieces) {
             crate::debug_utils::end_timing("tablebase_check", "GET_BEST_MOVE");
             if let Some(best_move) = tablebase_result.best_move {
-                if let Some(on_info) = &on_info {
-                    let this = wasm_bindgen::JsValue::NULL;
-                    let move_info = format!(
-                        "info string Tablebase move: {} (outcome: {:?}, distance: {:?})",
-                        best_move.to_usi_string(),
-                        tablebase_result.outcome,
-                        tablebase_result.distance_to_mate
-                    );
-                    let s = wasm_bindgen::JsValue::from_str(&move_info);
-                    let _ = on_info.call1(&this, &s);
-                }
                 
                 crate::debug_utils::log_decision("GET_BEST_MOVE", "Tablebase hit", 
                     &format!("Move: {}, outcome: {:?}, distance: {:?}", 
@@ -366,15 +344,6 @@ impl ShogiEngine {
         crate::debug_utils::start_timing("opening_book_check");
         if self.opening_book.is_loaded() {
             if let Some(book_move) = self.opening_book.get_best_move(&fen) {
-                if let Some(on_info) = &on_info {
-                    let this = wasm_bindgen::JsValue::NULL;
-                    let move_info = format!(
-                        "info string Opening book move: {}",
-                        book_move.to_usi_string()
-                    );
-                    let s = wasm_bindgen::JsValue::from_str(&move_info);
-                    let _ = on_info.call1(&this, &s);
-                }
                 
                 crate::debug_utils::debug_log(&format!(
                     "Found opening book move: {}",
@@ -385,11 +354,6 @@ impl ShogiEngine {
             }
         }
 
-        if let Some(on_info) = &on_info {
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: No tablebase or opening book move, starting search");
-            let _ = on_info.call1(&this, &s);
-        }
 
         // Check for legal moves BEFORE starting search to avoid panics
         crate::debug_utils::debug_log("Checking for legal moves before search");
@@ -398,11 +362,6 @@ impl ShogiEngine {
         
         if legal_moves.is_empty() {
             crate::debug_utils::debug_log("No legal moves available - position is checkmate or stalemate");
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str("info string No legal moves available - game over");
-                let _ = on_info.call1(&this, &s);
-            }
             return None;
         }
         
@@ -411,67 +370,32 @@ impl ShogiEngine {
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
         eprintln!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
-        let mut searcher = search::search_engine::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag, on_info.clone());
+        let mut searcher = search::search_engine::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag);
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         
-        if let Some(on_info) = &on_info {
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Created searcher, trying to get search engine lock");
-            let _ = on_info.call1(&this, &s);
-        }
         
         // Try to get the search engine lock, but don't panic if it fails
         crate::debug_utils::debug_log("About to lock search engine");
         let search_result = self.search_engine.lock().map(|mut search_engine_guard| {
             crate::debug_utils::debug_log("Got search engine lock, starting search");
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Got search engine lock, starting search");
-                let _ = on_info.call1(&this, &s);
-            }
             searcher.search(&mut search_engine_guard, &self.board, &self.captured_pieces, self.current_player)
         });
         
         crate::debug_utils::debug_log("Search completed, checking result");
         
-        if let Some(on_info) = &on_info {
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Search completed, checking result");
-            let _ = on_info.call1(&this, &s);
-        }
         
         if let Ok(Some((move_, _score))) = search_result {
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Search found best move");
-                let _ = on_info.call1(&this, &s);
-            }
             Some(move_)
         } else {
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str("info string DEBUG: Search failed, trying fallback random move");
-                let _ = on_info.call1(&this, &s);
-            }
             // Fallback to random move if search fails
             let move_generator = MoveGenerator::new();
             let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
             if legal_moves.is_empty() {
-                if let Some(on_info) = &on_info {
-                    let this = wasm_bindgen::JsValue::NULL;
-                    let s = wasm_bindgen::JsValue::from_str("info string DEBUG: No legal moves available");
-                    let _ = on_info.call1(&this, &s);
-                }
                 return None;
             }
             // Use a seeded RNG that's WASM-compatible
             let mut rng = StdRng::seed_from_u64(42); // Fixed seed for deterministic behavior
-            if let Some(on_info) = &on_info {
-                let this = wasm_bindgen::JsValue::NULL;
-                let s = wasm_bindgen::JsValue::from_str(&format!("info string DEBUG: Found {} legal moves, choosing random", legal_moves.len()));
-                let _ = on_info.call1(&this, &s);
-            }
             legal_moves.choose(&mut rng).cloned()
         }
     }
@@ -676,158 +600,5 @@ pub fn is_debug_enabled() -> bool {
     debug_utils::is_debug_enabled()
 }
 
-#[wasm_bindgen]
-pub fn init_panic_hook() {
-    console_error_panic_hook::set_once();
-}
-
-
-#[wasm_bindgen]
-
-#[wasm_bindgen]
-pub struct WasmUsiHandler {
-    engine: ShogiEngine,
-}
-
-#[wasm_bindgen]
-impl WasmUsiHandler {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self {
-            engine: ShogiEngine::new(),
-        }
-    }
-
-    pub fn process_command(&mut self, command: &str) -> JsValue {
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
-        let output = match parts.get(0) {
-            Some(&"position") => self.engine.handle_position(&parts[1..]),
-            Some(&"setoption") => self.engine.handle_setoption(&parts[1..]),
-            Some(&"usinewgame") => self.engine.handle_usinewgame(),
-            Some(&"debug") => self.engine.handle_debug(&parts[1..]),
-            _ => vec!["info string unsupported command".to_string()],
-        };
-        serde_wasm_bindgen::to_value(&output).unwrap_or_else(|_| JsValue::NULL)
-    }
-
-    pub fn go_with_callback(&mut self, command: &str, on_info: &js_sys::Function) {
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
-        let mut btime = 0;
-        let mut wtime = 0;
-        let mut byoyomi = 0;
-
-        let mut i = 0;
-        while i < parts.len() {
-            match parts[i] {
-                "btime" => {
-                    if i + 1 < parts.len() {
-                        btime = parts[i+1].parse().unwrap_or(0);
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                },
-                "wtime" => {
-                    if i + 1 < parts.len() {
-                        wtime = parts[i+1].parse().unwrap_or(0);
-                        i += 2;
-                    }
-                    else {
-                        i += 1;
-                    }
-                },
-                "byoyomi" => {
-                    if i + 1 < parts.len() {
-                        byoyomi = parts[i+1].parse().unwrap_or(0);
-                        i += 2;
-                    } else {
-                        i += 1;
-                    }
-                },
-                _ => i += 1,
-            }
-        }
-
-        let time_to_use = {
-            let time_for_player = if self.engine.current_player == Player::Black { btime } else { wtime };
-            if time_for_player > 0 {
-                // Use the same time allocation logic as the standalone version
-                time_for_player / 40 // Use a fraction of the remaining time
-            } else if byoyomi > 0 {
-                // Only use byoyomi when main time is exhausted
-                byoyomi as u32
-            } else {
-                5000 // Default to 5 seconds if no time control is given
-            }
-        };
-
-        self.engine.stop_flag.store(false, Ordering::Relaxed);
-
-        let best_move = self.engine.get_best_move(
-            self.engine.depth,
-            time_to_use,
-            Some(self.engine.stop_flag.clone()),
-            Some(on_info.clone()),
-        );
-
-        if let Some(mv) = best_move {
-            let move_usi = mv.to_usi_string();
-            let debug_msg = format!("info string DEBUG: Generated move '{}' for player {:?}", move_usi, self.engine.current_player);
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str(&debug_msg);
-            let _ = on_info.call1(&this, &s);
-            
-            let best_move_message = format!("bestmove {}", move_usi);
-            let s = wasm_bindgen::JsValue::from_str(&best_move_message);
-            let _ = on_info.call1(&this, &s);
-        } else {
-            let best_move_message = "bestmove resign";
-            let this = wasm_bindgen::JsValue::NULL;
-            let s = wasm_bindgen::JsValue::from_str(best_move_message);
-            let _ = on_info.call1(&this, &s);
-        }
-    }
-
-    pub fn set_depth(&mut self, depth: u8) {
-        self.engine.set_depth(depth);
-    }
-
-    #[wasm_bindgen]
-    pub fn get_depth(&self) -> u8 {
-        self.engine.depth
-    }
-
-    #[wasm_bindgen]
-    pub fn set_debug_enabled(&self, enabled: bool) {
-        self.engine.set_debug_enabled(enabled);
-    }
-
-    #[wasm_bindgen]
-    pub fn is_debug_enabled(&self) -> bool {
-        self.engine.is_debug_enabled()
-    }
-
-    /// Check if the current position is an impasse (Jishōgi / 持将棋)
-    #[wasm_bindgen]
-    pub fn check_impasse(&self) -> JsValue {
-        if let Some(result) = self.engine.board.check_impasse_result(&self.engine.captured_pieces) {
-            let outcome_str = match result.outcome {
-                types::ImpasseOutcome::Draw => "draw",
-                types::ImpasseOutcome::BlackWins => "black_wins",
-                types::ImpasseOutcome::WhiteWins => "white_wins",
-            };
-            
-            let result_obj = js_sys::Object::new();
-            js_sys::Reflect::set(&result_obj, &JsValue::from_str("isImpasse"), &JsValue::from_bool(true)).unwrap();
-            js_sys::Reflect::set(&result_obj, &JsValue::from_str("blackPoints"), &JsValue::from_f64(result.black_points as f64)).unwrap();
-            js_sys::Reflect::set(&result_obj, &JsValue::from_str("whitePoints"), &JsValue::from_f64(result.white_points as f64)).unwrap();
-            js_sys::Reflect::set(&result_obj, &JsValue::from_str("outcome"), &JsValue::from_str(outcome_str)).unwrap();
-            
-            result_obj.into()
-        } else {
-            let result_obj = js_sys::Object::new();
-            js_sys::Reflect::set(&result_obj, &JsValue::from_str("isImpasse"), &JsValue::from_bool(false)).unwrap();
-            result_obj.into()
-        }
-    }
-}
+// WASM bindings removed - application now uses Tauri for desktop functionality
+// The engine is accessed via the standalone USI binary (src/bin/shogi_engine.rs)

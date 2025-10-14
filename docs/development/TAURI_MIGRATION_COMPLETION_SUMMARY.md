@@ -618,6 +618,49 @@ The application now supports:
 **Code quality:** Clean, documented, tested  
 **User experience:** Intuitive, responsive, powerful  
 
+---
+
+## Final Cleanup: Complete WASM Removal
+
+After the main migration, a comprehensive cleanup was performed to **completely remove all WebAssembly code and dependencies** from the codebase.
+
+### What Was Removed
+
+1. **Rust WASM Bindings:**
+   - All `#[wasm_bindgen]` attributes
+   - `WasmUsiHandler` struct and implementation (~150 lines)
+   - JavaScript callback parameters from engine methods
+   - `init_panic_hook()` and other WASM-specific functions
+
+2. **TypeScript WASM Code:**
+   - `src/usi/engine.ts` - WASM engine adapter
+   - `src/usi/shogi.worker.ts` - WASM worker
+   - `src/usi/mock.worker.ts` - Mock worker for tests
+   - `src/ai/computerPlayer.ts` - WASM-based AI
+   - Related test files
+
+3. **Build Configuration:**
+   - `vite-plugin-wasm` removed from Vite config
+   - WASM-related npm dependencies removed
+
+4. **Controller Cleanup:**
+   - All WASM engine methods in `ShogiController` deprecated
+   - Methods now log warnings directing users to Tauri engine mode
+   - No code paths remain that attempt to load WASM workers
+
+### Result
+
+- **Zero WASM dependencies** in the runtime code
+- **Single code path** for engine execution (Tauri + USI only)
+- **No import errors** related to missing WASM files
+- **Cleaner architecture** with pure Rust + Tauri + React stack
+
+### Documentation
+
+See `WASM_REMOVAL_SUMMARY.md` for complete technical details of the removal process.
+
+---
+
 ### 🌟 Outstanding Achievement!
 
 This migration demonstrates:
@@ -626,6 +669,7 @@ This migration demonstrates:
 - Comprehensive documentation
 - Production-quality code
 - User-centric design
+- Complete removal of legacy code
 
-The Shogi Game is now a **powerful, extensible desktop application** ready for advanced players and engine developers!
+The Shogi Game is now a **powerful, extensible desktop application** with a **pure Tauri architecture** ready for advanced players and engine developers!
 
