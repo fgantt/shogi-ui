@@ -28,12 +28,12 @@
 
 ## Tasks
 
-- [ ] 1.0 **Setup Tauri and Basic Application Scaffolding**
-  - [ ] 1.1 Add the Tauri CLI to the project's dev dependencies (`npm install -D @tauri-apps/cli`).
-  - [ ] 1.2 Initialize Tauri in the project, creating the `src-tauri` directory and `tauri.conf.json`.
-  - [ ] 1.3 Configure `tauri.conf.json` to point to the Vite dev server URL (`http://localhost:5173`) and the output directory (`../dist`).
-  - [ ] 1.4 Update `package.json` with a `tauri:dev` script that runs `npm run dev` and `tauri dev` concurrently.
-  - [ ] 1.5 Verify that the existing React application loads and runs inside a basic Tauri window.
+- [x] 1.0 **Setup Tauri and Basic Application Scaffolding**
+  - [x] 1.1 Add the Tauri CLI to the project's dev dependencies (`npm install -D @tauri-apps/cli`).
+  - [x] 1.2 Initialize Tauri in the project, creating the `src-tauri` directory and `tauri.conf.json`.
+  - [x] 1.3 Configure `tauri.conf.json` to point to the Vite dev server URL (`http://localhost:5173`) and the output directory (`../dist`).
+  - [x] 1.4 Update `package.json` with a `tauri:dev` script that runs `npm run dev` and `tauri dev` concurrently.
+  - [x] 1.5 Verify that the existing React application loads and runs inside a basic Tauri window.
 
 - [ ] 2.0 **Create Standalone Built-in Engine Binary**
   - [ ] 2.1 Create `src/bin/shogi_engine.rs` as a new binary target that wraps the existing engine with USI stdio communication.
