@@ -963,9 +963,15 @@ const GamePage: React.FC<GamePageProps> = ({
       setUseTauriEngine(true);
       setPlayer1EngineId(player1Engine);
       setPlayer2EngineId(player2Engine);
+      
+      // Disable automatic engine move requests in controller (Tauri handles it externally)
+      controller.setDisableAutoEngineMove(true);
+      
       await initializeTauriEngines(updatedSettings);
     } else {
       setUseTauriEngine(false);
+      // Enable automatic engine move requests for non-Tauri mode (if ever used)
+      controller.setDisableAutoEngineMove(false);
     }
     
     controller.setPlayerTypes(settings.player1Type, settings.player2Type);

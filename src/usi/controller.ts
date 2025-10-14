@@ -30,6 +30,7 @@ export class ShogiController extends EventEmitter {
   private recommendationTimeout: NodeJS.Timeout | null = null;
   private positionHistory: Map<string, number> = new Map(); // Track position history for repetition detection
   private gameOver = false; // Track if the game has ended
+  private disableAutoEngineMove = false; // Flag to disable automatic engine move requests (for Tauri mode)
 
   constructor() {
     super();
@@ -147,6 +148,16 @@ export class ShogiController extends EventEmitter {
 
   public areRecommendationsEnabled(): boolean {
     return this.recommendationsEnabled;
+  }
+
+  /**
+   * Set whether automatic engine move requests should be disabled
+   * When true, the controller won't call requestEngineMove() automatically
+   * This should be enabled when using Tauri engines (managed externally)
+   */
+  public setDisableAutoEngineMove(disable: boolean): void {
+    this.disableAutoEngineMove = disable;
+    console.log(`[${this.instanceId}] Auto engine moves ${disable ? 'disabled' : 'enabled'}`);
   }
 
   public   getCurrentRecommendation(): { from: Square | null; to: Square | null } | null {
@@ -305,8 +316,8 @@ export class ShogiController extends EventEmitter {
       console.log('Clearing recommendation due to user move');
       this.currentRecommendation = null;
       this.emitStateChanged();
-      // Only request AI move if the next player is AI and game is not over
-      if (!this.gameOver && this.isCurrentPlayerAI()) {
+      // Only request AI move if auto engine moves are enabled (not using Tauri engines)
+      if (!this.gameOver && this.isCurrentPlayerAI() && !this.disableAutoEngineMove) {
         this.requestEngineMove();
       }
       return true;
@@ -431,8 +442,8 @@ export class ShogiController extends EventEmitter {
       await Promise.all(engineUpdates);
       this.emitStateChanged();
       
-      // Check if the first player is AI and request move (game is not over since we just started)
-      if (this.isCurrentPlayerAI()) {
+      // Check if the first player is AI and request move (only if auto engine moves enabled - not in Tauri mode)
+      if (this.isCurrentPlayerAI() && !this.disableAutoEngineMove) {
         this.requestEngineMove();
       }
   }
