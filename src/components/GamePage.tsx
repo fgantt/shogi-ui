@@ -621,6 +621,9 @@ const GamePage: React.FC<GamePageProps> = ({
 
   useEffect(() => {
     const onStateChanged = (newPosition: ImmutablePosition) => {
+      console.log('[onStateChanged] Position updated, SFEN:', newPosition.sfen);
+      console.log('[onStateChanged] isCurrentPlayerAI:', controller.isCurrentPlayerAI());
+      
       // Force a re-render by updating both position and render key
       // The position object from tsshogi is mutable, so we need to trigger React's re-render
       setPosition(newPosition);
@@ -1243,7 +1246,7 @@ const GamePage: React.FC<GamePageProps> = ({
         isAITurn 
       });
     }
-  }, [position, useTauriEngine, player1EngineId, player2EngineId, winner, player1Type, player2Type]);
+  }, [position, renderKey, useTauriEngine, player1EngineId, player2EngineId, winner, player1Type, player2Type]);
 
   // Cleanup Tauri engines on unmount
   useEffect(() => {
