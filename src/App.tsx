@@ -5,6 +5,7 @@ import PracticePage from './components/PracticePage';
 import PracticeExerciseDetail from './components/PracticeExerciseDetail';
 import HelpPage from './components/HelpPage';
 import AboutPage from './components/AboutPage';
+import { EngineManagementPage } from './components/EngineManagementPage';
 
 
 import { ShogiController } from './usi/controller';
@@ -132,6 +133,7 @@ function App() {
           <Route path="/practice/:exerciseId" element={<PracticeExerciseDetail />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/engines" element={<EngineManagementPage />} />
 
         </Routes>
       </ShogiControllerProvider>

@@ -146,6 +146,14 @@ const HomePage: React.FC = () => {
           
           <button 
             className="nav-button"
+            onClick={() => navigate('/engines')}
+          >
+            <span className="button-icon japanese-engines">🤖</span>
+            <span className="button-text">Engines</span>
+          </button>
+          
+          <button 
+            className="nav-button"
             onClick={() => navigate('/about')}
           >
             <span className="button-icon japanese-about">🎋</span>
