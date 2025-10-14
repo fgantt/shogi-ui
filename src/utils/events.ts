@@ -29,4 +29,12 @@ export class EventEmitter {
     };
     this.on(event, onceListener);
   }
+
+  removeAllListeners(event?: string): void {
+    if (event) {
+      delete this.events[event];
+    } else {
+      this.events = {};
+    }
+  }
 }

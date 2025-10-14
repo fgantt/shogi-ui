@@ -6,6 +6,7 @@ import PracticeExerciseDetail from './components/PracticeExerciseDetail';
 import HelpPage from './components/HelpPage';
 import AboutPage from './components/AboutPage';
 import { EngineManagementPage } from './components/EngineManagementPage';
+import { TauriGameDemo } from './components/TauriGameDemo';
 
 
 import { ShogiController } from './usi/controller';
@@ -134,6 +135,7 @@ function App() {
           <Route path="/help" element={<HelpPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/engines" element={<EngineManagementPage />} />
+          <Route path="/demo" element={<TauriGameDemo />} />
 
         </Routes>
       </ShogiControllerProvider>

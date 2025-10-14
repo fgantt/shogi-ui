@@ -60,7 +60,7 @@
   - [x] 3.5.7 Implement automatic registration of the built-in engine on first application launch if not already present in the configuration.
   - [x] 3.5.8 Implement health checks on application startup for all configured engines, marking engines as unavailable if they fail to respond.
 
-- [ ] 4.0 **Overhaul Frontend for Engine Management and Game Interaction**
+- [x] 4.0 **Overhaul Frontend for Engine Management and Game Interaction**
   - [x] 4.1 Create the `EngineManagementPage.tsx` component with a UI to list, add, and remove engines, based on the PRD.
   - [x] 4.2 Display engine status (Ready, Error, Thinking, Unavailable) and metadata (name, author, supported options) in the engine list.
   - [x] 4.3 Use Tauri's `invoke` API within `EngineManagementPage.tsx` to call the backend engine management commands.
@@ -68,8 +68,8 @@
   - [x] 4.5 Show a loading/validation indicator while adding a new engine.
   - [x] 4.6 Implement the `useTauriEvents.ts` hook to listen for `usi-message` and engine error events, and update the application's state.
   - [x] 4.7 Integrate the `UsiMonitor.tsx` component to display messages received via the Tauri event listener.
-  - [ ] 4.8 Add a dropdown/selector to the `GamePage.tsx` to allow users to choose between the built-in engine and any configured external engine before starting a game.
-  - [ ] 4.9 Update the game logic to send commands to the currently selected engine via the appropriate Tauri command.
+  - [x] 4.8 Add a dropdown/selector to the `GamePage.tsx` to allow users to choose between the built-in engine and any configured external engine before starting a game.
+  - [x] 4.9 Update the game logic to send commands to the currently selected engine via the appropriate Tauri command.
 
 - [ ] 5.0 **Implement Engine-vs-Engine Gameplay Logic**
   - [ ] 5.1 Add a "Engine vs. Engine" mode to the game setup screen.

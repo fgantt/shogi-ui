@@ -1,0 +1,263 @@
+/**
+ * Utility functions for Tauri-based engine communication
+ * This module provides a bridge between the game logic and Tauri backend
+ */
+
+import { invoke } from '@tauri-apps/api/core';
+import type { CommandResponse } from '../types/engine';
+
+/**
+ * Spawn and initialize an engine
+ */
+export async function spawnEngine(
+  engineId: string,
+  name: string,
+  path: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await invoke<CommandResponse>('spawn_engine', {
+      engineId,
+      name,
+      path,
+    });
+
+    if (!response.success) {
+      return { success: false, error: response.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Send a USI command to an engine
+ */
+export async function sendUsiCommand(
+  engineId: string,
+  command: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await invoke<CommandResponse>('send_usi_command', {
+      engineId,
+      command,
+    });
+
+    if (!response.success) {
+      return { success: false, error: response.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Stop an engine
+ */
+export async function stopEngine(
+  engineId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await invoke<CommandResponse>('stop_engine', {
+      engineId,
+    });
+
+    if (!response.success) {
+      return { success: false, error: response.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Get the path to the built-in engine
+ */
+export async function getBuiltinEnginePath(): Promise<{
+  success: boolean;
+  path?: string;
+  error?: string;
+}> {
+  try {
+    const response = await invoke<CommandResponse<{ path: string }>>(
+      'get_builtin_engine_path'
+    );
+
+    if (!response.success || !response.data) {
+      return { success: false, error: response.message };
+    }
+
+    return { success: true, path: response.data.path };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Initialize a game session with an engine
+ * This sends the initial USI handshake and prepares the engine for play
+ */
+export async function initializeEngineSession(
+  engineId: string,
+  enginePath: string,
+  engineName: string
+): Promise<{ success: boolean; error?: string }> {
+  // First spawn the engine
+  const spawnResult = await spawnEngine(engineId, engineName, enginePath);
+  if (!spawnResult.success) {
+    return spawnResult;
+  }
+
+  // Give the engine a moment to initialize
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Send usinewgame command to reset for a new game
+  const newGameResult = await sendUsiCommand(engineId, 'usinewgame');
+  if (!newGameResult.success) {
+    return newGameResult;
+  }
+
+  // Send isready and wait for readyok
+  const readyResult = await sendUsiCommand(engineId, 'isready');
+  if (!readyResult.success) {
+    return readyResult;
+  }
+
+  return { success: true };
+}
+
+/**
+ * Request a move from the engine
+ */
+export async function requestEngineMove(
+  engineId: string,
+  position: string,
+  moves: string[],
+  timeControl: {
+    btime?: number;
+    wtime?: number;
+    byoyomi?: number;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  // Build position command
+  let positionCmd = `position ${position}`;
+  if (moves.length > 0) {
+    positionCmd += ` moves ${moves.join(' ')}`;
+  }
+
+  // Send position
+  const posResult = await sendUsiCommand(engineId, positionCmd);
+  if (!posResult.success) {
+    return posResult;
+  }
+
+  // Build go command
+  const goParams: string[] = [];
+  if (timeControl.btime !== undefined) {
+    goParams.push(`btime ${timeControl.btime}`);
+  }
+  if (timeControl.wtime !== undefined) {
+    goParams.push(`wtime ${timeControl.wtime}`);
+  }
+  if (timeControl.byoyomi !== undefined) {
+    goParams.push(`byoyomi ${timeControl.byoyomi}`);
+  }
+
+  const goCmd = goParams.length > 0 ? `go ${goParams.join(' ')}` : 'go';
+
+  // Send go command
+  const goResult = await sendUsiCommand(engineId, goCmd);
+  if (!goResult.success) {
+    return goResult;
+  }
+
+  return { success: true };
+}
+
+/**
+ * Stop the engine from thinking
+ */
+export async function stopEngineThinking(
+  engineId: string
+): Promise<{ success: boolean; error?: string }> {
+  return await sendUsiCommand(engineId, 'stop');
+}
+
+/**
+ * Parse a USI bestmove response
+ * Example: "bestmove 7g7f" or "bestmove 7g7f ponder 3c3d"
+ */
+export function parseBestMove(usiMessage: string): {
+  move: string | null;
+  ponder?: string;
+} {
+  const parts = usiMessage.trim().split(/\s+/);
+  
+  if (parts[0] !== 'bestmove') {
+    return { move: null };
+  }
+
+  const move = parts[1];
+  
+  // Check for ponder move
+  if (parts.length >= 4 && parts[2] === 'ponder') {
+    return { move, ponder: parts[3] };
+  }
+
+  return { move };
+}
+
+/**
+ * Parse engine info messages
+ * Example: "info depth 5 score cp 120 nodes 1234 nps 5000 pv 7g7f 3c3d"
+ */
+export function parseEngineInfo(usiMessage: string): {
+  depth?: number;
+  score?: number;
+  nodes?: number;
+  nps?: number;
+  pv?: string[];
+  time?: number;
+} {
+  if (!usiMessage.startsWith('info ')) {
+    return {};
+  }
+
+  const parts = usiMessage.split(/\s+/);
+  const info: ReturnType<typeof parseEngineInfo> = {};
+
+  for (let i = 1; i < parts.length; i++) {
+    switch (parts[i]) {
+      case 'depth':
+        info.depth = parseInt(parts[++i]);
+        break;
+      case 'score':
+        if (parts[i + 1] === 'cp') {
+          info.score = parseInt(parts[i + 2]);
+          i += 2;
+        }
+        break;
+      case 'nodes':
+        info.nodes = parseInt(parts[++i]);
+        break;
+      case 'nps':
+        info.nps = parseInt(parts[++i]);
+        break;
+      case 'time':
+        info.time = parseInt(parts[++i]);
+        break;
+      case 'pv':
+        info.pv = parts.slice(i + 1);
+        i = parts.length; // End loop
+        break;
+    }
+  }
+
+  return info;
+}
+
