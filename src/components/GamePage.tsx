@@ -914,7 +914,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [minutesPerSide, setMinutesPerSide] = useState(30);
   const [byoyomiInSeconds, setByoyomiInSeconds] = useState(10);
 
-  const handleStartGame = (settings: GameSettings) => {
+  const handleStartGame = async (settings: GameSettings) => {
     clearUsiHistory();
     gameInitializedRef.current = false; // Reset to allow re-initialization
     setPlayer1Type(settings.player1Type);
@@ -924,12 +924,46 @@ const GamePage: React.FC<GamePageProps> = ({
     setMinutesPerSide(settings.minutesPerSide);
     setByoyomiInSeconds(settings.byoyomiInSeconds);
     
-    // Handle Tauri engine configuration
-    if (settings.useTauriEngine) {
+    // Check if we need to use Tauri engines (any AI player selected)
+    const needsTauriEngine = settings.player1Type === 'ai' || settings.player2Type === 'ai';
+    
+    if (needsTauriEngine) {
+      // If AI selected but no engine ID, get the built-in engine
+      let player1Engine = settings.player1EngineId;
+      let player2Engine = settings.player2EngineId;
+      
+      // Load engines and auto-select built-in if needed
+      try {
+        const response = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+        if (response.success && response.data && response.data.length > 0) {
+          const builtinEngine = response.data.find(e => e.is_builtin);
+          const defaultEngine = builtinEngine || response.data[0];
+          
+          if (settings.player1Type === 'ai' && !player1Engine) {
+            player1Engine = defaultEngine.id;
+            console.log('Auto-selected engine for Player 1:', defaultEngine.name);
+          }
+          if (settings.player2Type === 'ai' && !player2Engine) {
+            player2Engine = defaultEngine.id;
+            console.log('Auto-selected engine for Player 2:', defaultEngine.name);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load engines for auto-selection:', error);
+      }
+      
+      // Update settings with auto-selected engines
+      const updatedSettings = {
+        ...settings,
+        player1EngineId: player1Engine,
+        player2EngineId: player2Engine,
+        useTauriEngine: true,
+      };
+      
       setUseTauriEngine(true);
-      setPlayer1EngineId(settings.player1EngineId || null);
-      setPlayer2EngineId(settings.player2EngineId || null);
-      initializeTauriEngines(settings);
+      setPlayer1EngineId(player1Engine);
+      setPlayer2EngineId(player2Engine);
+      await initializeTauriEngines(updatedSettings);
     } else {
       setUseTauriEngine(false);
     }
