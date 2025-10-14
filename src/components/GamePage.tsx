@@ -217,8 +217,8 @@ const GamePage: React.FC<GamePageProps> = ({
   const [moves, setMoves] = useState<any[]>([]);
   
   // Player type state (used for UI display and controller communication)
-  const [, setPlayer1Type] = useState<'human' | 'ai'>('human');
-  const [, setPlayer2Type] = useState<'human' | 'ai'>('ai');
+  const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>('human');
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>('ai');
   
   // Recommendation state
   const [recommendationsEnabled, setRecommendationsEnabled] = useState(false);
