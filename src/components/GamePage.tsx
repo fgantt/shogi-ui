@@ -987,8 +987,9 @@ const GamePage: React.FC<GamePageProps> = ({
   const [byoyomiInSeconds, setByoyomiInSeconds] = useState(10);
 
   const handleStartGame = async (settings: GameSettings) => {
+    console.log('[handleStartGame] Called with settings:', settings);
     clearUsiHistory();
-    gameInitializedRef.current = false; // Reset to allow re-initialization
+    gameInitializedRef.current = true; // Mark as initialized to prevent navigation override
     setPlayer1Type(settings.player1Type);
     setPlayer2Type(settings.player2Type);
     setPlayer1Level(settings.player1Level);
