@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import type { CommandResponse } from '../types/engine';
 
 /**
@@ -64,8 +65,7 @@ export function waitForUsiResponse(
   timeoutMs: number = 5000
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   return new Promise((resolve) => {
-    const { listen } = require('@tauri-apps/api/event');
-    let unlisten: (() => void) | null = null;
+    let unlisten: UnlistenFn | null = null;
     let timeout: NodeJS.Timeout | null = null;
 
     const cleanup = () => {
@@ -78,15 +78,18 @@ export function waitForUsiResponse(
       resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
     }, timeoutMs);
 
-    listen(`usi-message-${engineId}`, (event: any) => {
-      const message = event.payload as string;
+    listen<string>(`usi-message-${engineId}`, (event) => {
+      const message = event.payload;
       
       if (message.startsWith(expectedPrefix)) {
         cleanup();
         resolve({ success: true, message });
       }
-    }).then((unlistenFn: () => void) => {
+    }).then((unlistenFn) => {
       unlisten = unlistenFn;
+    }).catch((error) => {
+      cleanup();
+      resolve({ success: false, error: String(error) });
     });
   });
 }
