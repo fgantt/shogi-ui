@@ -288,7 +288,9 @@ const GamePage: React.FC<GamePageProps> = ({
         player2Level: statePlayer2Level,
         minutesPerSide: stateMinutesPerSide,
         byoyomiInSeconds: stateByoyomiInSeconds,
-        initialSfen: stateInitialSfen
+        initialSfen: stateInitialSfen,
+        player1EngineId: statePlayer1EngineId,
+        player2EngineId: statePlayer2EngineId
       } = location.state as any;
       
       if (player1Type && player2Type) {
@@ -296,7 +298,9 @@ const GamePage: React.FC<GamePageProps> = ({
           player1Type, 
           player2Type, 
           aiDifficulty, 
-          initialSfen: stateInitialSfen 
+          initialSfen: stateInitialSfen,
+          player1EngineId: statePlayer1EngineId,
+          player2EngineId: statePlayer2EngineId
         });
         
         // Set player types in controller
@@ -358,13 +362,22 @@ const GamePage: React.FC<GamePageProps> = ({
               const builtinEngine = response.data.find(e => e.is_builtin);
               const defaultEngine = builtinEngine || response.data[0];
               
-              const engine1 = player1Type === 'ai' ? defaultEngine.id : null;
-              const engine2 = player2Type === 'ai' ? defaultEngine.id : null;
+              // Use provided engine IDs from navigation state, or fall back to default
+              const engine1 = player1Type === 'ai' ? (statePlayer1EngineId || defaultEngine.id) : null;
+              const engine2 = player2Type === 'ai' ? (statePlayer2EngineId || defaultEngine.id) : null;
               
               setPlayer1EngineId(engine1);
               setPlayer2EngineId(engine2);
               
-              console.log('[Navigation Init] Engine IDs:', { engine1, engine2 });
+              console.log('[Navigation Init] Engine IDs:', { 
+                engine1, 
+                engine2,
+                fromState: { statePlayer1EngineId, statePlayer2EngineId },
+                usingDefault: { 
+                  player1: !statePlayer1EngineId && player1Type === 'ai',
+                  player2: !statePlayer2EngineId && player2Type === 'ai'
+                }
+              });
               
               // Initialize engines FIRST
               await initializeTauriEngines({
@@ -1023,12 +1036,19 @@ const GamePage: React.FC<GamePageProps> = ({
       setPlayer1EngineId(player1Engine);
       setPlayer2EngineId(player2Engine);
       
+      console.log('[handleStartGame] Using engines:', {
+        player1Engine,
+        player2Engine,
+        originalSettings: { p1: settings.player1EngineId, p2: settings.player2EngineId },
+        updated: { p1: player1Engine, p2: player2Engine }
+      });
+      
       // Set player types FIRST so controller knows who's AI
       controller.setPlayerTypes(settings.player1Type, settings.player2Type);
       
       // Disable automatic engine move requests in controller (Tauri handles it externally)
       controller.setDisableAutoEngineMove(true);
-      console.log('[GamePage] Tauri mode enabled, auto engine moves disabled');
+      console.log('[handleStartGame] Tauri mode enabled, auto engine moves disabled');
       
       await initializeTauriEngines(updatedSettings);
     } else {
