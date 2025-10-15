@@ -22,7 +22,7 @@ import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled } from '../utils/audio';
-import { sendUsiCommand, parseBestMove } from '../utils/tauriEngine';
+import { sendUsiCommand, parseBestMove, sendIsReadyAndWait } from '../utils/tauriEngine';
 import { invoke } from '@tauri-apps/api/core';
 import type { CommandResponse, EngineConfig } from '../types/engine';
 import { useTauriEvents } from '../hooks/useTauriEvents';
@@ -1119,7 +1119,9 @@ const GamePage: React.FC<GamePageProps> = ({
             // Initialize engine
             console.log('[initializeTauriEngines] Initializing player 1 engine...');
             await sendUsiCommand(settings.player1EngineId, 'usinewgame');
-            await sendUsiCommand(settings.player1EngineId, 'isready');
+            console.log('[initializeTauriEngines] Waiting for player 1 engine to be ready...');
+            await sendIsReadyAndWait(settings.player1EngineId);
+            console.log('[initializeTauriEngines] Player 1 engine is ready');
             await sendUsiCommand(settings.player1EngineId, `setoption name depth value ${settings.player1Level}`);
             console.log('[initializeTauriEngines] Player 1 engine initialized');
           }
@@ -1146,7 +1148,9 @@ const GamePage: React.FC<GamePageProps> = ({
             // Initialize engine
             console.log('[initializeTauriEngines] Initializing player 2 engine...');
             await sendUsiCommand(settings.player2EngineId, 'usinewgame');
-            await sendUsiCommand(settings.player2EngineId, 'isready');
+            console.log('[initializeTauriEngines] Waiting for player 2 engine to be ready...');
+            await sendIsReadyAndWait(settings.player2EngineId);
+            console.log('[initializeTauriEngines] Player 2 engine is ready');
             await sendUsiCommand(settings.player2EngineId, `setoption name depth value ${settings.player2Level}`);
             console.log('[initializeTauriEngines] Player 2 engine initialized');
           }

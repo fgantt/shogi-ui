@@ -55,6 +55,58 @@ export async function sendUsiCommand(
 }
 
 /**
+ * Wait for a specific USI response from the engine
+ * Returns a promise that resolves when the expected message is received
+ */
+export function waitForUsiResponse(
+  engineId: string,
+  expectedPrefix: string,
+  timeoutMs: number = 5000
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const { listen } = require('@tauri-apps/api/event');
+    let unlisten: (() => void) | null = null;
+    let timeout: NodeJS.Timeout | null = null;
+
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      if (unlisten) unlisten();
+    };
+
+    timeout = setTimeout(() => {
+      cleanup();
+      resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
+    }, timeoutMs);
+
+    listen(`usi-message-${engineId}`, (event: any) => {
+      const message = event.payload as string;
+      
+      if (message.startsWith(expectedPrefix)) {
+        cleanup();
+        resolve({ success: true, message });
+      }
+    }).then((unlistenFn: () => void) => {
+      unlisten = unlistenFn;
+    });
+  });
+}
+
+/**
+ * Send isready and wait for readyok
+ */
+export async function sendIsReadyAndWait(
+  engineId: string
+): Promise<{ success: boolean; error?: string }> {
+  const sendResult = await sendUsiCommand(engineId, 'isready');
+  if (!sendResult.success) {
+    return sendResult;
+  }
+
+  const waitResult = await waitForUsiResponse(engineId, 'readyok', 5000);
+  return waitResult;
+}
+
+/**
  * Stop an engine
  */
 export async function stopEngine(
