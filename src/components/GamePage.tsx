@@ -339,6 +339,9 @@ const GamePage: React.FC<GamePageProps> = ({
           setStartColor('black');
         }
 
+        // CRITICAL: Set the ref BEFORE async operations to prevent React Strict Mode double-initialization
+        gameInitializedRef.current = true;
+        
         // Initialize Tauri engines if any player is AI
         const needsTauriEngine = player1Type === 'ai' || player2Type === 'ai';
         console.log('[Navigation Init] Needs Tauri engine:', needsTauriEngine);
@@ -350,7 +353,7 @@ const GamePage: React.FC<GamePageProps> = ({
           console.log('[Navigation Init] Tauri mode enabled, initializing engines...');
           
           // Get engines and auto-assign built-in if not specified
-          invoke<CommandResponse<EngineConfig[]>>('get_engines').then(response => {
+          invoke<CommandResponse<EngineConfig[]>>('get_engines').then(async response => {
             if (response.success && response.data && response.data.length > 0) {
               const builtinEngine = response.data.find(e => e.is_builtin);
               const defaultEngine = builtinEngine || response.data[0];
@@ -363,8 +366,8 @@ const GamePage: React.FC<GamePageProps> = ({
               
               console.log('[Navigation Init] Engine IDs:', { engine1, engine2 });
               
-              // Initialize engines
-              return initializeTauriEngines({
+              // Initialize engines FIRST
+              await initializeTauriEngines({
                 player1Type,
                 player2Type,
                 player1Level,
@@ -376,26 +379,31 @@ const GamePage: React.FC<GamePageProps> = ({
                 useTauriEngine: true,
                 initialSfen: stateInitialSfen
               });
+              
+              console.log('[Navigation Init] Engines initialized, starting game...');
+              
+              // THEN start the game - this will trigger the AI effect with engines ready
+              return controller.newGame(stateInitialSfen).then(() => {
+                console.log(`[${componentId.current}] Game initialized successfully`);
+              });
             }
           }).catch(error => {
-            console.error('[Navigation Init] Failed to initialize Tauri engines:', error);
+            console.error('[Navigation Init] Failed to initialize:', error);
+            gameInitializedRef.current = false; // Reset on error
           });
         } else {
           controller.setDisableAutoEngineMove(false);
           setUseTauriEngine(false);
+          
+          // No Tauri engines needed, start game immediately
+          console.log(`[${componentId.current}] Starting game without Tauri engines`);
+          controller.newGame(stateInitialSfen).then(() => {
+            console.log(`[${componentId.current}] Game initialized successfully`);
+          }).catch(error => {
+            console.error(`[${componentId.current}] Failed to start new game:`, error);
+            gameInitializedRef.current = false;
+          });
         }
-
-        // Start a new game with the custom SFEN if provided
-        // CRITICAL: Set the ref BEFORE the async call to prevent React Strict Mode double-initialization
-        gameInitializedRef.current = true;
-        console.log(`[${componentId.current}] Set gameInitializedRef to true, starting newGame`);
-        controller.newGame(stateInitialSfen).then(() => {
-          console.log(`[${componentId.current}] Game initialized successfully`);
-        }).catch(error => {
-          console.error(`[${componentId.current}] Failed to start new game:`, error);
-          // Reset on error to allow retry
-          gameInitializedRef.current = false;
-        });
       }
     }
     
