@@ -81,9 +81,9 @@ export function waitForUsiResponse(
       resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
     }, timeoutMs);
 
-    console.log(`[waitForUsiResponse] Listening to event: usi-message-${engineId}`);
+    console.log(`[waitForUsiResponse] Listening to event: usi-message::${engineId}`);
     
-    listen<string>(`usi-message-${engineId}`, (event) => {
+    listen<string>(`usi-message::${engineId}`, (event) => {
       const message = event.payload;
       console.log(`[waitForUsiResponse] Received message: "${message}"`);
       
