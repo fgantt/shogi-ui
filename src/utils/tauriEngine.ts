@@ -64,6 +64,8 @@ export function waitForUsiResponse(
   expectedPrefix: string,
   timeoutMs: number = 5000
 ): Promise<{ success: boolean; message?: string; error?: string }> {
+  console.log(`[waitForUsiResponse] Setting up listener for "${expectedPrefix}" from engine ${engineId}`);
+  
   return new Promise((resolve) => {
     let unlisten: UnlistenFn | null = null;
     let timeout: NodeJS.Timeout | null = null;
@@ -74,20 +76,29 @@ export function waitForUsiResponse(
     };
 
     timeout = setTimeout(() => {
+      console.error(`[waitForUsiResponse] TIMEOUT waiting for "${expectedPrefix}" from engine ${engineId}`);
       cleanup();
       resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
     }, timeoutMs);
 
+    console.log(`[waitForUsiResponse] Listening to event: usi-message-${engineId}`);
+    
     listen<string>(`usi-message-${engineId}`, (event) => {
       const message = event.payload;
+      console.log(`[waitForUsiResponse] Received message: "${message}"`);
       
       if (message.startsWith(expectedPrefix)) {
+        console.log(`[waitForUsiResponse] Message matches "${expectedPrefix}"! Resolving.`);
         cleanup();
         resolve({ success: true, message });
+      } else {
+        console.log(`[waitForUsiResponse] Message doesn't match "${expectedPrefix}", continuing to wait...`);
       }
     }).then((unlistenFn) => {
       unlisten = unlistenFn;
+      console.log(`[waitForUsiResponse] Listener registered successfully`);
     }).catch((error) => {
+      console.error(`[waitForUsiResponse] Error setting up listener:`, error);
       cleanup();
       resolve({ success: false, error: String(error) });
     });
@@ -100,12 +111,27 @@ export function waitForUsiResponse(
 export async function sendIsReadyAndWait(
   engineId: string
 ): Promise<{ success: boolean; error?: string }> {
+  console.log('[sendIsReadyAndWait] Setting up listener for readyok from engine:', engineId);
+  
+  // CRITICAL: Set up listener BEFORE sending command to avoid race condition
+  const waitPromise = waitForUsiResponse(engineId, 'readyok', 5000);
+  
+  console.log('[sendIsReadyAndWait] Sending isready to engine:', engineId);
   const sendResult = await sendUsiCommand(engineId, 'isready');
   if (!sendResult.success) {
+    console.error('[sendIsReadyAndWait] Failed to send isready:', sendResult.error);
     return sendResult;
   }
 
-  const waitResult = await waitForUsiResponse(engineId, 'readyok', 5000);
+  console.log('[sendIsReadyAndWait] isready sent, waiting for readyok...');
+  const waitResult = await waitPromise;
+  
+  if (waitResult.success) {
+    console.log('[sendIsReadyAndWait] Received readyok!');
+  } else {
+    console.error('[sendIsReadyAndWait] Timeout or error waiting for readyok:', waitResult.error);
+  }
+  
   return waitResult;
 }
 

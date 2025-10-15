@@ -1119,8 +1119,15 @@ const GamePage: React.FC<GamePageProps> = ({
             // Initialize engine
             console.log('[initializeTauriEngines] Initializing player 1 engine...');
             await sendUsiCommand(settings.player1EngineId, 'usinewgame');
+            
             console.log('[initializeTauriEngines] Waiting for player 1 engine to be ready...');
-            await sendIsReadyAndWait(settings.player1EngineId);
+            const readyResult = await sendIsReadyAndWait(settings.player1EngineId);
+            
+            if (!readyResult.success) {
+              console.error('[initializeTauriEngines] Player 1 engine failed to become ready:', readyResult.error);
+              return; // Abort initialization
+            }
+            
             console.log('[initializeTauriEngines] Player 1 engine is ready');
             await sendUsiCommand(settings.player1EngineId, `setoption name depth value ${settings.player1Level}`);
             console.log('[initializeTauriEngines] Player 1 engine initialized');
@@ -1148,8 +1155,15 @@ const GamePage: React.FC<GamePageProps> = ({
             // Initialize engine
             console.log('[initializeTauriEngines] Initializing player 2 engine...');
             await sendUsiCommand(settings.player2EngineId, 'usinewgame');
+            
             console.log('[initializeTauriEngines] Waiting for player 2 engine to be ready...');
-            await sendIsReadyAndWait(settings.player2EngineId);
+            const readyResult = await sendIsReadyAndWait(settings.player2EngineId);
+            
+            if (!readyResult.success) {
+              console.error('[initializeTauriEngines] Player 2 engine failed to become ready:', readyResult.error);
+              return; // Abort initialization
+            }
+            
             console.log('[initializeTauriEngines] Player 2 engine is ready');
             await sendUsiCommand(settings.player2EngineId, `setoption name depth value ${settings.player2Level}`);
             console.log('[initializeTauriEngines] Player 2 engine initialized');
