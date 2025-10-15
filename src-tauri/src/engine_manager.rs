@@ -121,13 +121,27 @@ impl EngineManager {
         let mut engine = EngineInstance::new(id.clone(), name.clone(), path.clone());
         engine.status = EngineStatus::Starting;
 
+        // Determine working directory - use the engine's directory
+        let working_dir = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_path_buf());
+        
+        log::info!("Engine working directory: {:?}", working_dir);
+        
         // Spawn the process
-        let mut child = Command::new(&path)
+        let mut command = Command::new(&path);
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+            .kill_on_drop(true);
+        
+        // Set working directory if we have one
+        if let Some(dir) = working_dir {
+            command.current_dir(dir);
+        }
+        
+        let mut child = command.spawn()
             .map_err(|e| anyhow!("Failed to spawn engine process: {}", e))?;
 
         let stdin = child.stdin.take().ok_or_else(|| anyhow!("Failed to get stdin"))?;
