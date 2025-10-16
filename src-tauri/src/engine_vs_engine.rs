@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -74,9 +74,17 @@ impl EngineVsEngineManager {
     /// Spawn both engines
     async fn spawn_engines(&mut self) -> Result<()> {
         log::info!("Spawning engines for engine-vs-engine match");
+        log::info!("Engine 1 path: {}", self.config.engine1_path);
+        log::info!("Engine 2 path: {}", self.config.engine2_path);
 
         // Spawn engine 1
+        // Set working directory to the engine's directory so it can find its files
+        let engine1_dir = std::path::Path::new(&self.config.engine1_path)
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid engine 1 path"))?;
+        
         let engine1 = Command::new(&self.config.engine1_path)
+            .current_dir(engine1_dir)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -84,10 +92,16 @@ impl EngineVsEngineManager {
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn engine 1: {}", e))?;
 
+        log::info!("Engine 1 spawned successfully with working dir: {:?}", engine1_dir);
         self.engine1 = Some(engine1);
 
         // Spawn engine 2
+        let engine2_dir = std::path::Path::new(&self.config.engine2_path)
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid engine 2 path"))?;
+            
         let engine2 = Command::new(&self.config.engine2_path)
+            .current_dir(engine2_dir)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -95,6 +109,7 @@ impl EngineVsEngineManager {
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn engine 2: {}", e))?;
 
+        log::info!("Engine 2 spawned successfully");
         self.engine2 = Some(engine2);
 
         Ok(())
@@ -105,40 +120,78 @@ impl EngineVsEngineManager {
         stdin: &mut tokio::process::ChildStdin,
         stdout: &mut tokio::process::ChildStdout,
     ) -> Result<()> {
+        use tokio::io::AsyncBufReadExt;
+        
+        log::info!("Initializing engine with USI protocol");
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        
         // Send usi command
+        log::info!("Sending 'usi' command");
         stdin.write_all(b"usi\n").await?;
         stdin.flush().await?;
+        log::info!("'usi' command sent, waiting for response...");
 
         // Wait for usiok
-        let reader = BufReader::new(stdout);
-        let mut lines = reader.lines();
-        let usiok_future = async {
-            while let Some(line) = lines.next_line().await? {
-                if line == "usiok" {
-                    return Ok::<(), anyhow::Error>(());
+        let mut found_usiok = false;
+        let start = tokio::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(5) {
+            line.clear();
+            
+            // Use a short timeout for each read to allow checking elapsed time
+            match timeout(Duration::from_millis(100), reader.read_line(&mut line)).await {
+                Ok(Ok(0)) => return Err(anyhow!("Engine closed connection")),
+                Ok(Ok(_)) => {
+                    let trimmed = line.trim();
+                    log::debug!("Engine init response: {}", trimmed);
+                    if trimmed == "usiok" {
+                        found_usiok = true;
+                        break;
+                    }
                 }
+                Ok(Err(e)) => return Err(anyhow!("Failed to read from engine: {}", e)),
+                Err(_) => continue, // Timeout, try again
             }
-            Err(anyhow!("Engine did not respond with usiok"))
-        };
+        }
+        
+        if !found_usiok {
+            log::error!("Timeout waiting for usiok - no response from engine");
+            return Err(anyhow!("Timeout waiting for usiok"));
+        }
 
-        timeout(Duration::from_secs(5), usiok_future).await??;
-
+        log::info!("Received usiok, sending 'isready' command");
         // Send isready
         stdin.write_all(b"isready\n").await?;
         stdin.flush().await?;
+        log::info!("'isready' command sent, waiting for response...");
 
         // Wait for readyok
-        let readyok_future = async {
-            while let Some(line) = lines.next_line().await? {
-                if line == "readyok" {
-                    return Ok::<(), anyhow::Error>(());
+        let mut found_readyok = false;
+        let start = tokio::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(5) {
+            line.clear();
+            
+            match timeout(Duration::from_millis(100), reader.read_line(&mut line)).await {
+                Ok(Ok(0)) => return Err(anyhow!("Engine closed connection")),
+                Ok(Ok(_)) => {
+                    let trimmed = line.trim();
+                    log::debug!("Engine ready response: {}", trimmed);
+                    if trimmed == "readyok" {
+                        found_readyok = true;
+                        break;
+                    }
                 }
+                Ok(Err(e)) => return Err(anyhow!("Failed to read from engine: {}", e)),
+                Err(_) => continue, // Timeout, try again
             }
-            Err(anyhow!("Engine did not respond with readyok"))
-        };
+        }
+        
+        if !found_readyok {
+            log::error!("Timeout waiting for readyok - no response from engine");
+            return Err(anyhow!("Timeout waiting for readyok"));
+        }
 
-        timeout(Duration::from_secs(5), readyok_future).await??;
-
+        log::info!("Received readyok, engine initialization complete");
         Ok(())
     }
 
@@ -150,6 +203,8 @@ impl EngineVsEngineManager {
         moves: &[String],
         time_ms: u64,
     ) -> Result<String> {
+        use tokio::io::AsyncBufReadExt;
+        
         // Build position command
         let pos_cmd = if moves.is_empty() {
             format!("position sfen {}\n", position_sfen)
@@ -169,24 +224,32 @@ impl EngineVsEngineManager {
         stdin.flush().await?;
 
         // Wait for bestmove
-        let reader = BufReader::new(stdout);
-        let mut lines = reader.lines();
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        let timeout_duration = Duration::from_secs(time_ms / 1000 + 10);
+        let start = tokio::time::Instant::now();
         
-        let bestmove_future = async {
-            while let Some(line) = lines.next_line().await? {
-                if line.starts_with("bestmove ") {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        return Ok::<String, anyhow::Error>(parts[1].to_string());
+        while start.elapsed() < timeout_duration {
+            line.clear();
+            
+            match timeout(Duration::from_millis(100), reader.read_line(&mut line)).await {
+                Ok(Ok(0)) => return Err(anyhow!("Engine closed connection")),
+                Ok(Ok(_)) => {
+                    let trimmed = line.trim();
+                    log::debug!("Engine move response: {}", trimmed);
+                    if trimmed.starts_with("bestmove ") {
+                        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            return Ok(parts[1].to_string());
+                        }
                     }
                 }
+                Ok(Err(e)) => return Err(anyhow!("Failed to read from engine: {}", e)),
+                Err(_) => continue, // Timeout, try again
             }
-            Err(anyhow!("Engine did not respond with bestmove"))
-        };
-
-        let bestmove = timeout(Duration::from_secs(time_ms / 1000 + 10), bestmove_future).await??;
-
-        Ok(bestmove)
+        }
+        
+        Err(anyhow!("Timeout waiting for bestmove"))
     }
 
     /// Run the engine-vs-engine match
@@ -291,6 +354,14 @@ impl EngineVsEngineManager {
                 state.last_move = Some(best_move.clone());
                 state.current_player = if is_black_turn { "white".to_string() } else { "black".to_string() };
                 state.move_number = move_num;
+                
+                // Update position SFEN to include all moves played
+                let initial_sfen = current_sfen.split(" moves").next().unwrap_or(&current_sfen);
+                if state.move_history.is_empty() {
+                    state.position_sfen = initial_sfen.to_string();
+                } else {
+                    state.position_sfen = format!("{} moves {}", initial_sfen, state.move_history.join(" "));
+                }
 
                 // Emit update
                 let _ = self.app_handle.emit("engine-vs-engine-update", state.clone());

@@ -8,6 +8,7 @@ interface EngineSelectorProps {
   onEngineSelect: (engineId: string | null) => void;
   label?: string;
   includeNone?: boolean;
+  autoSelect?: boolean;
 }
 
 export function EngineSelector({
@@ -15,6 +16,7 @@ export function EngineSelector({
   onEngineSelect,
   label = 'Select Engine',
   includeNone = false,
+  autoSelect = true,
 }: EngineSelectorProps) {
   const [engines, setEngines] = useState<EngineConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,8 +36,8 @@ export function EngineSelector({
         const enabledEngines = response.data.filter(e => e.enabled);
         setEngines(enabledEngines);
         
-        // Auto-select built-in engine if nothing selected
-        if (!selectedEngineId && enabledEngines.length > 0) {
+        // Auto-select built-in engine if nothing selected (only if autoSelect is enabled)
+        if (autoSelect && !selectedEngineId && enabledEngines.length > 0) {
           const builtinEngine = enabledEngines.find(e => e.is_builtin);
           if (builtinEngine) {
             onEngineSelect(builtinEngine.id);
@@ -95,6 +97,7 @@ export function EngineSelector({
         onChange={(e) => onEngineSelect(e.target.value || null)}
         className="engine-select"
       >
+        {!autoSelect && !selectedEngineId && <option value="">-- Select an engine --</option>}
         {includeNone && <option value="">None (Human only)</option>}
         {engines.map((engine) => (
           <option key={engine.id} value={engine.id}>

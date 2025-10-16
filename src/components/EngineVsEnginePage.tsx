@@ -138,6 +138,7 @@ export function EngineVsEnginePage() {
               selectedEngineId={engine1Id}
               onEngineSelect={setEngine1Id}
               label="Select Engine:"
+              autoSelect={false}
             />
           </div>
 
@@ -151,6 +152,7 @@ export function EngineVsEnginePage() {
               selectedEngineId={engine2Id}
               onEngineSelect={setEngine2Id}
               label="Select Engine:"
+              autoSelect={false}
             />
           </div>
         </div>
