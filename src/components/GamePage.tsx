@@ -1116,21 +1116,18 @@ const GamePage: React.FC<GamePageProps> = ({
           
           if (spawnResult.success) {
             engineIds.push(settings.player1EngineId);
-            // Initialize engine
-            console.log('[initializeTauriEngines] Initializing player 1 engine...');
+            
+            // Engine is now initialized by the backend
+            console.log('[initializeTauriEngines] Player 1 engine spawned and initialized');
+            
+            // Send usinewgame to prepare for a new game
+            console.log('[initializeTauriEngines] Sending usinewgame to player 1 engine...');
             await sendUsiCommand(settings.player1EngineId, 'usinewgame');
             
-            console.log('[initializeTauriEngines] Waiting for player 1 engine to be ready...');
-            const readyResult = await sendIsReadyAndWait(settings.player1EngineId);
+            // Give it a moment to process
+            await new Promise(resolve => setTimeout(resolve, 300));
             
-            if (!readyResult.success) {
-              console.error('[initializeTauriEngines] Player 1 engine failed to become ready:', readyResult.error);
-              return; // Abort initialization
-            }
-            
-            console.log('[initializeTauriEngines] Player 1 engine is ready');
-            await sendUsiCommand(settings.player1EngineId, `setoption name depth value ${settings.player1Level}`);
-            console.log('[initializeTauriEngines] Player 1 engine initialized');
+            console.log('[initializeTauriEngines] Player 1 engine ready');
           }
         }
       }
@@ -1152,21 +1149,18 @@ const GamePage: React.FC<GamePageProps> = ({
           
           if (spawnResult.success) {
             engineIds.push(settings.player2EngineId);
-            // Initialize engine
-            console.log('[initializeTauriEngines] Initializing player 2 engine...');
+            
+            // Engine is now initialized by the backend
+            console.log('[initializeTauriEngines] Player 2 engine spawned and initialized');
+            
+            // Send usinewgame to prepare for a new game
+            console.log('[initializeTauriEngines] Sending usinewgame to player 2 engine...');
             await sendUsiCommand(settings.player2EngineId, 'usinewgame');
             
-            console.log('[initializeTauriEngines] Waiting for player 2 engine to be ready...');
-            const readyResult = await sendIsReadyAndWait(settings.player2EngineId);
+            // Give it a moment to process
+            await new Promise(resolve => setTimeout(resolve, 300));
             
-            if (!readyResult.success) {
-              console.error('[initializeTauriEngines] Player 2 engine failed to become ready:', readyResult.error);
-              return; // Abort initialization
-            }
-            
-            console.log('[initializeTauriEngines] Player 2 engine is ready');
-            await sendUsiCommand(settings.player2EngineId, `setoption name depth value ${settings.player2Level}`);
-            console.log('[initializeTauriEngines] Player 2 engine initialized');
+            console.log('[initializeTauriEngines] Player 2 engine ready');
           }
         }
       }

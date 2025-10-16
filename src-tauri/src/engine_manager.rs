@@ -121,13 +121,28 @@ impl EngineManager {
         let mut engine = EngineInstance::new(id.clone(), name.clone(), path.clone());
         engine.status = EngineStatus::Starting;
 
+        // Determine working directory - use the engine's directory
+        // This is critical for engines like Apery that need access to data files
+        let working_dir = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_path_buf());
+        
+        log::info!("Engine working directory: {:?}", working_dir);
+        
         // Spawn the process
-        let mut child = Command::new(&path)
+        let mut command = Command::new(&path);
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+            .kill_on_drop(true);
+        
+        // Set working directory if we have one
+        if let Some(dir) = working_dir {
+            command.current_dir(dir);
+        }
+        
+        let mut child = command.spawn()
             .map_err(|e| anyhow!("Failed to spawn engine process: {}", e))?;
 
         let stdin = child.stdin.take().ok_or_else(|| anyhow!("Failed to get stdin"))?;
@@ -293,17 +308,25 @@ impl EngineManager {
     pub async fn initialize_engine(&self, engine_id: &str) -> Result<()> {
         log::info!("Initializing engine: {}", engine_id);
 
-        // Send usi command with 5 second timeout
+        // Send usi command
+        log::info!("Sending 'usi' command to engine: {}", engine_id);
         self.send_command_with_timeout(engine_id, "usi", Duration::from_secs(5))
             .await?;
 
-        // Wait a bit for usiok response
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Wait for usiok response - give engines like Apery enough time to respond
+        log::info!("Waiting for usiok from engine: {}", engine_id);
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         // Send isready command
+        log::info!("Sending 'isready' command to engine: {}", engine_id);
         self.send_command_with_timeout(engine_id, "isready", Duration::from_secs(5))
             .await?;
 
+        // Wait for readyok response - give engines like Apery enough time to respond
+        log::info!("Waiting for readyok from engine: {}", engine_id);
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+
+        log::info!("Engine initialization complete: {}", engine_id);
         Ok(())
     }
 

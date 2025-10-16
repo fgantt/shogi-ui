@@ -59,14 +59,14 @@ export async function sendUsiCommand(
  * Wait for a specific USI response from the engine
  * Returns a promise that resolves when the expected message is received
  */
-export function waitForUsiResponse(
+export async function waitForUsiResponse(
   engineId: string,
   expectedPrefix: string,
   timeoutMs: number = 5000
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   console.log(`[waitForUsiResponse] Setting up listener for "${expectedPrefix}" from engine ${engineId}`);
   
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     let unlisten: UnlistenFn | null = null;
     let timeout: NodeJS.Timeout | null = null;
 
@@ -75,33 +75,37 @@ export function waitForUsiResponse(
       if (unlisten) unlisten();
     };
 
-    timeout = setTimeout(() => {
-      console.error(`[waitForUsiResponse] TIMEOUT waiting for "${expectedPrefix}" from engine ${engineId}`);
-      cleanup();
-      resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
-    }, timeoutMs);
-
     console.log(`[waitForUsiResponse] Listening to event: usi-message::${engineId}`);
     
-    listen<string>(`usi-message::${engineId}`, (event) => {
-      const message = event.payload;
-      console.log(`[waitForUsiResponse] Received message: "${message}"`);
+    // CRITICAL: Wait for listener to be registered BEFORE starting timeout
+    try {
+      unlisten = await listen<string>(`usi-message::${engineId}`, (event) => {
+        const message = event.payload;
+        console.log(`[waitForUsiResponse] Received message: "${message}"`);
+        
+        if (message.startsWith(expectedPrefix)) {
+          console.log(`[waitForUsiResponse] Message matches "${expectedPrefix}"! Resolving.`);
+          cleanup();
+          resolve({ success: true, message });
+        } else {
+          console.log(`[waitForUsiResponse] Message doesn't match "${expectedPrefix}", continuing to wait...`);
+        }
+      });
       
-      if (message.startsWith(expectedPrefix)) {
-        console.log(`[waitForUsiResponse] Message matches "${expectedPrefix}"! Resolving.`);
+      console.log(`[waitForUsiResponse] Listener registered successfully, starting timeout`);
+      
+      // Only start timeout AFTER listener is registered
+      timeout = setTimeout(() => {
+        console.error(`[waitForUsiResponse] TIMEOUT waiting for "${expectedPrefix}" from engine ${engineId}`);
         cleanup();
-        resolve({ success: true, message });
-      } else {
-        console.log(`[waitForUsiResponse] Message doesn't match "${expectedPrefix}", continuing to wait...`);
-      }
-    }).then((unlistenFn) => {
-      unlisten = unlistenFn;
-      console.log(`[waitForUsiResponse] Listener registered successfully`);
-    }).catch((error) => {
+        resolve({ success: false, error: `Timeout waiting for ${expectedPrefix}` });
+      }, timeoutMs);
+      
+    } catch (error) {
       console.error(`[waitForUsiResponse] Error setting up listener:`, error);
       cleanup();
       resolve({ success: false, error: String(error) });
-    });
+    }
   });
 }
 
@@ -113,26 +117,63 @@ export async function sendIsReadyAndWait(
 ): Promise<{ success: boolean; error?: string }> {
   console.log('[sendIsReadyAndWait] Setting up listener for readyok from engine:', engineId);
   
-  // CRITICAL: Set up listener BEFORE sending command to avoid race condition
-  const waitPromise = waitForUsiResponse(engineId, 'readyok', 5000);
-  
-  console.log('[sendIsReadyAndWait] Sending isready to engine:', engineId);
-  const sendResult = await sendUsiCommand(engineId, 'isready');
-  if (!sendResult.success) {
-    console.error('[sendIsReadyAndWait] Failed to send isready:', sendResult.error);
-    return sendResult;
-  }
-
-  console.log('[sendIsReadyAndWait] isready sent, waiting for readyok...');
-  const waitResult = await waitPromise;
-  
-  if (waitResult.success) {
-    console.log('[sendIsReadyAndWait] Received readyok!');
-  } else {
-    console.error('[sendIsReadyAndWait] Timeout or error waiting for readyok:', waitResult.error);
-  }
-  
-  return waitResult;
+  // Create a promise that will handle the entire flow
+  return new Promise(async (resolve) => {
+    console.log('[sendIsReadyAndWait] Registering listener...');
+    
+    // Set up the listener first and wait for it to be registered
+    let unlisten: (() => void) | null = null;
+    let timeout: NodeJS.Timeout | null = null;
+    
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      if (unlisten) unlisten();
+    };
+    
+    try {
+      // Import listen from Tauri
+      const { listen } = await import('@tauri-apps/api/event');
+      
+      console.log('[sendIsReadyAndWait] Setting up event listener for usi-message::' + engineId);
+      unlisten = await listen<string>(`usi-message::${engineId}`, (event) => {
+        const message = event.payload;
+        console.log(`[sendIsReadyAndWait] Received message: "${message}"`);
+        
+        if (message.startsWith('readyok')) {
+          console.log('[sendIsReadyAndWait] Received readyok! Resolving.');
+          cleanup();
+          resolve({ success: true });
+        }
+      });
+      
+      console.log('[sendIsReadyAndWait] Listener registered successfully');
+      
+      // Set timeout
+      timeout = setTimeout(() => {
+        console.error('[sendIsReadyAndWait] TIMEOUT waiting for readyok');
+        cleanup();
+        resolve({ success: false, error: 'Timeout waiting for readyok' });
+      }, 10000);
+      
+      // Now send the command
+      console.log('[sendIsReadyAndWait] Sending isready to engine:', engineId);
+      const sendResult = await sendUsiCommand(engineId, 'isready');
+      
+      if (!sendResult.success) {
+        console.error('[sendIsReadyAndWait] Failed to send isready:', sendResult.error);
+        cleanup();
+        resolve({ success: false, error: sendResult.error });
+        return;
+      }
+      
+      console.log('[sendIsReadyAndWait] isready sent successfully, waiting for response...');
+      
+    } catch (error) {
+      console.error('[sendIsReadyAndWait] Error:', error);
+      cleanup();
+      resolve({ success: false, error: String(error) });
+    }
+  });
 }
 
 /**
