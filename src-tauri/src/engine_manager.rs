@@ -145,6 +145,8 @@ impl EngineManager {
         let mut child = command.spawn()
             .map_err(|e| anyhow!("Failed to spawn engine process: {}", e))?;
 
+        log::info!("Engine process spawned, PID: {:?}", child.id());
+
         let stdin = child.stdin.take().ok_or_else(|| anyhow!("Failed to get stdin"))?;
         let stdout = child.stdout.take().ok_or_else(|| anyhow!("Failed to get stdout"))?;
         let stderr = child.stderr.take().ok_or_else(|| anyhow!("Failed to get stderr"))?;
@@ -169,6 +171,10 @@ impl EngineManager {
         // Spawn watchdog task
         self.spawn_watchdog(id.clone()).await;
 
+        // Give the engine process a moment to start up before we try to communicate
+        // This prevents race conditions where we try to write to stdin before the engine is ready
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
         log::info!("Engine {} spawned successfully", id);
         Ok(id)
     }
@@ -182,7 +188,9 @@ impl EngineManager {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
 
+            let mut line_count = 0;
             while let Ok(Some(line)) = lines.next_line().await {
+                line_count += 1;
                 log::debug!("Engine {} output: {}", engine_id, line);
 
                 // Update engine status based on output
@@ -207,7 +215,7 @@ impl EngineManager {
                 }
             }
 
-            log::info!("Engine {} stdout reader task ended", engine_id);
+            log::warn!("Engine {} stdout reader task ended after {} lines", engine_id, line_count);
         });
     }
 
@@ -219,7 +227,9 @@ impl EngineManager {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
 
+            let mut line_count = 0;
             while let Ok(Some(line)) = lines.next_line().await {
+                line_count += 1;
                 log::warn!("Engine {} stderr: {}", engine_id, line);
 
                 // Emit error event to frontend
@@ -229,7 +239,7 @@ impl EngineManager {
                 }
             }
 
-            log::info!("Engine {} stderr reader task ended", engine_id);
+            log::warn!("Engine {} stderr reader task ended after {} lines", engine_id, line_count);
         });
     }
 
@@ -313,18 +323,54 @@ impl EngineManager {
         self.send_command_with_timeout(engine_id, "usi", Duration::from_secs(5))
             .await?;
 
-        // Wait for usiok response - give engines like Apery enough time to respond
+        // Wait for usiok response by polling engine status
         log::info!("Waiting for usiok from engine: {}", engine_id);
-        tokio::time::sleep(Duration::from_millis(2000)).await;
+        let start = tokio::time::Instant::now();
+        loop {
+            if start.elapsed() > Duration::from_secs(10) {
+                return Err(anyhow!("Timeout waiting for usiok"));
+            }
+            
+            let engines = self.engines.read().await;
+            if let Some(engine) = engines.get(engine_id) {
+                let status = engine.lock().await.status.clone();
+                if matches!(status, EngineStatus::Ready) {
+                    log::info!("Received usiok from engine: {}", engine_id);
+                    break;
+                }
+            } else {
+                return Err(anyhow!("Engine not found"));
+            }
+            
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
 
         // Send isready command
         log::info!("Sending 'isready' command to engine: {}", engine_id);
         self.send_command_with_timeout(engine_id, "isready", Duration::from_secs(5))
             .await?;
 
-        // Wait for readyok response - give engines like Apery enough time to respond
+        // Wait for readyok response by polling engine status
         log::info!("Waiting for readyok from engine: {}", engine_id);
-        tokio::time::sleep(Duration::from_millis(2000)).await;
+        let start = tokio::time::Instant::now();
+        loop {
+            if start.elapsed() > Duration::from_secs(10) {
+                return Err(anyhow!("Timeout waiting for readyok"));
+            }
+            
+            let engines = self.engines.read().await;
+            if let Some(engine) = engines.get(engine_id) {
+                let status = engine.lock().await.status.clone();
+                if matches!(status, EngineStatus::Ready) {
+                    log::info!("Received readyok from engine: {}", engine_id);
+                    break;
+                }
+            } else {
+                return Err(anyhow!("Engine not found"));
+            }
+            
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
 
         log::info!("Engine initialization complete: {}", engine_id);
         Ok(())
