@@ -114,8 +114,6 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
     const settings: GameSettings = {
       player1Type: formData.get('player1Type') as GameSettings['player1Type'],
       player2Type: formData.get('player2Type') as GameSettings['player2Type'],
-      player1Level: parseInt(formData.get('player1Level') as string, 10) || 5,
-      player2Level: parseInt(formData.get('player2Level') as string, 10) || 5,
       minutesPerSide: parseInt(formData.get('minutesPerSide') as string, 10) || 30,
       byoyomiInSeconds: parseInt(formData.get('byoyomiInSeconds') as string, 10) || 10,
       initialSfen: (selectedCannedPosition === 'Standard' || !initialSfen.trim()) ? undefined : initialSfen.trim(),
@@ -140,17 +138,11 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player1Type === 'ai' && (
-                <>
-                  <div className="setting-group">
-                    <label htmlFor="player1Level">Level (1-8)</label>
-                    <input id="player1Level" name="player1Level" type="number" min="1" max="8" defaultValue="5" />
-                  </div>
-                  <EngineSelector
-                    selectedEngineId={player1EngineId}
-                    onEngineSelect={setPlayer1EngineId}
-                    label="AI Engine:"
-                  />
-                </>
+                <EngineSelector
+                  selectedEngineId={player1EngineId}
+                  onEngineSelect={setPlayer1EngineId}
+                  label="AI Engine:"
+                />
               )}
             </div>
           </section>
@@ -162,17 +154,11 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player2Type === 'ai' && (
-                <>
-                  <div className="setting-group">
-                    <label htmlFor="player2Level">Level (1-8)</label>
-                    <input id="player2Level" name="player2Level" type="number" min="1" max="8" defaultValue="5" />
-                  </div>
-                  <EngineSelector
-                    selectedEngineId={player2EngineId}
-                    onEngineSelect={setPlayer2EngineId}
-                    label="AI Engine:"
-                  />
-                </>
+                <EngineSelector
+                  selectedEngineId={player2EngineId}
+                  onEngineSelect={setPlayer2EngineId}
+                  label="AI Engine:"
+                />
               )}
             </div>
           </section>

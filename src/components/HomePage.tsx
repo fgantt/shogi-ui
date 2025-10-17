@@ -52,21 +52,15 @@ const HomePage: React.FC = () => {
   };
 
   const handleStartGameWithSettings = (settings: GameSettings) => {
-    // Map player levels to difficulty for backward compatibility
-    const avgLevel = (settings.player1Level + settings.player2Level) / 2;
-    const difficulty = avgLevel <= 3 ? 'easy' : avgLevel <= 5 ? 'medium' : 'hard';
-    
     navigate('/game', { 
       state: { 
-        aiDifficulty: difficulty,
+        aiDifficulty: 'medium', // Default difficulty, actual strength comes from engine options
         showAttackedPieces,
         showPieceTooltips,
         currentWallpaper,
         currentBoardBackground,
         player1Type: settings.player1Type,
         player2Type: settings.player2Type,
-        player1Level: settings.player1Level,
-        player2Level: settings.player2Level,
         player1EngineId: settings.player1EngineId,
         player2EngineId: settings.player2EngineId,
         minutesPerSide: settings.minutesPerSide,
