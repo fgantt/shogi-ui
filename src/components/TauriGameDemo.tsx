@@ -93,6 +93,7 @@ export function TauriGameDemo() {
             engineId: selectedEngineId,
             name: engine.name,
             path: engine.path,
+            tempOptions: null,
           });
 
           if (!spawnResponse.success) {

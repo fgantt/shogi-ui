@@ -7,13 +7,15 @@ interface EngineOptionsModalProps {
   isOpen: boolean;
   engine: EngineConfig | null;
   onClose: () => void;
+  onSave?: (options: OptionValue) => void;  // Optional: for temporary options mode
+  tempOptions?: OptionValue | null;  // Optional: pre-populated temporary options
 }
 
 interface OptionValue {
   [optionName: string]: string;
 }
 
-export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsModalProps) {
+export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOptions }: EngineOptionsModalProps) {
   const [optionValues, setOptionValues] = useState<OptionValue>({});
   const [savedOptions, setSavedOptions] = useState<OptionValue>({});
   const [displayName, setDisplayName] = useState('');
@@ -53,6 +55,14 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
       // Set display name
       setDisplayName(engine.display_name);
       setOriginalDisplayName(engine.display_name);
+      
+      // If tempOptions provided, use those (temporary mode for game)
+      if (tempOptions) {
+        setSavedOptions(tempOptions);
+        setOptionValues({ ...tempOptions });
+        setLoading(false);
+        return;
+      }
       
       // Try to load saved options first
       const response = await invoke<CommandResponse<OptionValue>>('get_engine_options', {
@@ -109,6 +119,17 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
       setSaving(true);
       setError(null);
 
+      // If onSave callback provided, use temporary mode (don't persist to storage)
+      if (onSave) {
+        onSave(optionValues);
+        setSavedOptions({ ...optionValues });
+        setHasChanges(false);
+        onClose();
+        setSaving(false);
+        return;
+      }
+
+      // Otherwise, save permanently to storage
       // Save engine options
       const optionsResponse = await invoke<CommandResponse>('save_engine_options', {
         engineId: engine.id,

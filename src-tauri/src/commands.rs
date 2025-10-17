@@ -54,16 +54,25 @@ pub async fn spawn_engine(
     engine_id: String,
     name: String,
     path: String,
+    temp_options: Option<std::collections::HashMap<String, String>>,
     state: State<'_, AppState>,
 ) -> Result<CommandResponse, String> {
     log::info!("Command: spawn_engine - id: {}, name: {}, path: {}", engine_id, name, path);
+    if let Some(ref opts) = temp_options {
+        log::info!("Using {} temporary options for this game", opts.len());
+    }
 
     let manager = &state.engine_manager;
     
     match manager.spawn_engine(engine_id.clone(), name, path).await {
         Ok(_) => {
-            // Initialize the engine with USI protocol and send saved options
-            if let Err(e) = manager.initialize_engine_with_options(&engine_id, &state.engine_storage).await {
+            // Initialize the engine with USI protocol and send options
+            // Use temp_options if provided, otherwise use saved options from storage
+            if let Err(e) = manager.initialize_engine_with_temp_options(
+                &engine_id, 
+                &state.engine_storage,
+                temp_options.as_ref()
+            ).await {
                 log::error!("Failed to initialize engine: {}", e);
                 let _ = manager.stop_engine(&engine_id).await;
                 return Ok(CommandResponse::error(format!("Failed to initialize engine: {}", e)));

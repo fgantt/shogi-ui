@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { GameSettings } from '../types';
 import { Record } from 'tsshogi';
 import { EngineSelector } from './EngineSelector';
+import { EngineOptionsModal } from './EngineOptionsModal';
+import type { EngineConfig } from '../types/engine';
+import { invoke } from '@tauri-apps/api/core';
 
 interface StartGameModalProps {
   isOpen: boolean;
@@ -39,6 +42,23 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
   const [initialSfen, setInitialSfen] = useState<string>('');
   const [sfenError, setSfenError] = useState<string>('');
   const [selectedCannedPosition, setSelectedCannedPosition] = useState<string>('Standard');
+  
+  // Temporary options for this game only
+  const [player1TempOptions, setPlayer1TempOptions] = useState<{[key: string]: string} | null>(null);
+  const [player2TempOptions, setPlayer2TempOptions] = useState<{[key: string]: string} | null>(null);
+  
+  // Options modal state
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [optionsModalPlayer, setOptionsModalPlayer] = useState<1 | 2 | null>(null);
+  const [selectedEngine, setSelectedEngine] = useState<EngineConfig | null>(null);
+  const [engines, setEngines] = useState<EngineConfig[]>([]);
+
+  // Load engines when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      loadEngines();
+    }
+  }, [isOpen]);
 
   // Reset form when modal opens
   React.useEffect(() => {
@@ -47,11 +67,50 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       setPlayer2Type('ai');
       setPlayer1EngineId(null);
       setPlayer2EngineId(null);
+      setPlayer1TempOptions(null);
+      setPlayer2TempOptions(null);
       setInitialSfen('');
       setSfenError('');
       setSelectedCannedPosition('Standard');
     }
   }, [isOpen]);
+
+  const loadEngines = async () => {
+    try {
+      const response = await invoke<any>('get_engines');
+      if (response.success && response.data) {
+        setEngines(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading engines:', error);
+    }
+  };
+
+  const handleOpenOptions = (player: 1 | 2, engineId: string | null) => {
+    if (!engineId) return;
+    
+    const engine = engines.find(e => e.id === engineId);
+    if (engine) {
+      setSelectedEngine(engine);
+      setOptionsModalPlayer(player);
+      setOptionsModalOpen(true);
+    }
+  };
+
+  const handleCloseOptions = () => {
+    setOptionsModalOpen(false);
+    setOptionsModalPlayer(null);
+    setSelectedEngine(null);
+  };
+
+  const handleSaveOptions = (options: {[key: string]: string}) => {
+    if (optionsModalPlayer === 1) {
+      setPlayer1TempOptions(options);
+    } else if (optionsModalPlayer === 2) {
+      setPlayer2TempOptions(options);
+    }
+    handleCloseOptions();
+  };
 
   if (!isOpen) return null;
 
@@ -119,6 +178,8 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       initialSfen: (selectedCannedPosition === 'Standard' || !initialSfen.trim()) ? undefined : initialSfen.trim(),
       player1EngineId,
       player2EngineId,
+      player1TempOptions: player1TempOptions || undefined,
+      player2TempOptions: player2TempOptions || undefined,
       useTauriEngine: !!(player1EngineId || player2EngineId),
     };
     onStartGame(settings);
@@ -138,11 +199,23 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player1Type === 'ai' && (
-                <EngineSelector
-                  selectedEngineId={player1EngineId}
-                  onEngineSelect={setPlayer1EngineId}
-                  label="AI Engine:"
-                />
+                <>
+                  <EngineSelector
+                    selectedEngineId={player1EngineId}
+                    onEngineSelect={setPlayer1EngineId}
+                    label="AI Engine:"
+                  />
+                  {player1EngineId && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenOptions(1, player1EngineId)}
+                      className="options-button-inline"
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      ⚙️ Engine Options {player1TempOptions ? '(Modified)' : ''}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -154,11 +227,23 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
                 <option value="ai">AI</option>
               </select>
               {player2Type === 'ai' && (
-                <EngineSelector
-                  selectedEngineId={player2EngineId}
-                  onEngineSelect={setPlayer2EngineId}
-                  label="AI Engine:"
-                />
+                <>
+                  <EngineSelector
+                    selectedEngineId={player2EngineId}
+                    onEngineSelect={setPlayer2EngineId}
+                    label="AI Engine:"
+                  />
+                  {player2EngineId && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenOptions(2, player2EngineId)}
+                      className="options-button-inline"
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      ⚙️ Engine Options {player2TempOptions ? '(Modified)' : ''}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -215,6 +300,15 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
           <button type="submit">Start Game</button>
         </form>
       </div>
+      
+      {/* Engine Options Modal - reused from EngineManagementPage */}
+      <EngineOptionsModal
+        isOpen={optionsModalOpen}
+        engine={selectedEngine}
+        onClose={handleCloseOptions}
+        onSave={handleSaveOptions}
+        tempOptions={optionsModalPlayer === 1 ? player1TempOptions : player2TempOptions}
+      />
     </div>
   );
 };

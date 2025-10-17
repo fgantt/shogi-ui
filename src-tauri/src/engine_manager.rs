@@ -393,6 +393,108 @@ impl EngineManager {
         Ok(())
     }
 
+    /// Initialize an engine with temporary options (for one-time game use)
+    /// If temp_options is Some, use those; otherwise fall back to saved options
+    pub async fn initialize_engine_with_temp_options(
+        &self, 
+        engine_id: &str, 
+        engine_storage: &tokio::sync::RwLock<crate::engine_storage::EngineStorage>,
+        temp_options: Option<&std::collections::HashMap<String, String>>
+    ) -> Result<()> {
+        log::info!("Initializing engine with {} options: {}", 
+            if temp_options.is_some() { "temporary" } else { "saved" }, 
+            engine_id
+        );
+
+        // Send usi command
+        log::info!("Sending 'usi' command to engine: {}", engine_id);
+        self.send_command_with_timeout(engine_id, "usi", Duration::from_secs(5))
+            .await?;
+
+        // Wait for usiok response by polling engine status
+        log::info!("Waiting for usiok from engine: {}", engine_id);
+        let start = tokio::time::Instant::now();
+        loop {
+            if start.elapsed() > Duration::from_secs(10) {
+                return Err(anyhow!("Timeout waiting for usiok"));
+            }
+            
+            let engines = self.engines.read().await;
+            if let Some(engine) = engines.get(engine_id) {
+                let status = engine.lock().await.status.clone();
+                if matches!(status, EngineStatus::Ready) {
+                    log::info!("Received usiok from engine: {}", engine_id);
+                    break;
+                }
+            } else {
+                return Err(anyhow!("Engine not found"));
+            }
+            
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Send options (temporary or saved)
+        if let Some(options) = temp_options {
+            // Use temporary options
+            if !options.is_empty() {
+                log::info!("Sending {} temporary options to engine: {}", options.len(), engine_id);
+                for (option_name, option_value) in options {
+                    let option_command = format!("setoption name {} value {}", option_name, option_value);
+                    log::debug!("Sending option command: {}", option_command);
+                    if let Err(e) = self.send_command_with_timeout(engine_id, &option_command, Duration::from_secs(2)).await {
+                        log::warn!("Failed to send option '{}' to engine {}: {}", option_name, engine_id, e);
+                    }
+                }
+            }
+        } else {
+            // Use saved options from storage
+            let storage = engine_storage.read().await;
+            if let Some(options) = storage.get_engine_options(engine_id) {
+                if !options.is_empty() {
+                    log::info!("Sending {} saved options to engine: {}", options.len(), engine_id);
+                    for (option_name, option_value) in options {
+                        let option_command = format!("setoption name {} value {}", option_name, option_value);
+                        log::debug!("Sending option command: {}", option_command);
+                        if let Err(e) = self.send_command_with_timeout(engine_id, &option_command, Duration::from_secs(2)).await {
+                            log::warn!("Failed to send option '{}' to engine {}: {}", option_name, engine_id, e);
+                        }
+                    }
+                }
+            }
+            drop(storage);
+        }
+
+        // Send isready command
+        log::info!("Sending 'isready' command to engine: {}", engine_id);
+        self.send_command_with_timeout(engine_id, "isready", Duration::from_secs(5))
+            .await?;
+
+        // Wait for readyok response by polling engine status
+        log::info!("Waiting for readyok from engine: {}", engine_id);
+        let start = tokio::time::Instant::now();
+        loop {
+            if start.elapsed() > Duration::from_secs(10) {
+                return Err(anyhow!("Timeout waiting for readyok"));
+            }
+            
+            let engines = self.engines.read().await;
+            if let Some(engine) = engines.get(engine_id) {
+                let status = engine.lock().await.status.clone();
+                if matches!(status, EngineStatus::Ready) {
+                    log::info!("Received readyok from engine: {}", engine_id);
+                    break;
+                }
+            } else {
+                return Err(anyhow!("Engine not found"));
+            }
+            
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        log::info!("Engine initialization complete: {}", engine_id);
+        Ok(())
+    }
+
     /// Initialize an engine with the USI protocol (legacy method without options)
     pub async fn initialize_engine(&self, engine_id: &str) -> Result<()> {
         log::info!("Initializing engine: {}", engine_id);

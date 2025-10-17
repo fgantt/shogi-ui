@@ -63,6 +63,8 @@ const HomePage: React.FC = () => {
         player2Type: settings.player2Type,
         player1EngineId: settings.player1EngineId,
         player2EngineId: settings.player2EngineId,
+        player1TempOptions: settings.player1TempOptions,
+        player2TempOptions: settings.player2TempOptions,
         minutesPerSide: settings.minutesPerSide,
         byoyomiInSeconds: settings.byoyomiInSeconds,
         initialSfen: settings.initialSfen

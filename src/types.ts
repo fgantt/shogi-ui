@@ -6,6 +6,8 @@ export interface GameSettings {
   initialSfen?: string;
   player1EngineId?: string | null;
   player2EngineId?: string | null;
+  player1TempOptions?: {[key: string]: string};
+  player2TempOptions?: {[key: string]: string};
   useTauriEngine?: boolean;
 }
 

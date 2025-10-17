@@ -200,3 +200,20 @@
   margin-top: 5px;
   font-style: italic;
 }
+
+.options-button-inline {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #1976d2;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.options-button-inline:hover {
+  background: #e3f2fd;
+  border-color: #1565c0;
+}

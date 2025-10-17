@@ -1111,6 +1111,7 @@ const GamePage: React.FC<GamePageProps> = ({
             engineId: settings.player1EngineId,
             name: engine.name,
             path: engine.path,
+            tempOptions: settings.player1TempOptions || null,
           });
           console.log('[initializeTauriEngines] Player 1 spawn result:', spawnResult);
           
@@ -1144,6 +1145,7 @@ const GamePage: React.FC<GamePageProps> = ({
             engineId: settings.player2EngineId,
             name: engine.name,
             path: engine.path,
+            tempOptions: settings.player2TempOptions || null,
           });
           console.log('[initializeTauriEngines] Player 2 spawn result:', spawnResult);
           
