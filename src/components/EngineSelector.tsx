@@ -101,7 +101,7 @@ export function EngineSelector({
         {includeNone && <option value="">None (Human only)</option>}
         {engines.map((engine) => (
           <option key={engine.id} value={engine.id}>
-            {engine.name} {engine.is_builtin ? '(Built-in)' : ''}
+            {engine.display_name} {engine.is_builtin ? '(Built-in)' : ''}
           </option>
         ))}
       </select>

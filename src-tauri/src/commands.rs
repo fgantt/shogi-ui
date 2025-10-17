@@ -539,3 +539,61 @@ pub async fn get_engine_options(
     }
 }
 
+/// Clone an engine with a new display name
+#[tauri::command]
+pub async fn clone_engine(
+    engine_id: String,
+    new_display_name: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: clone_engine - engine_id: {}, new_display_name: {}", engine_id, new_display_name);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    match storage.clone_engine(&engine_id, new_display_name) {
+        Ok(new_engine_id) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save cloned engine: {}", e)));
+            }
+            
+            log::info!("Engine cloned successfully: {} -> {}", engine_id, new_engine_id);
+            Ok(CommandResponse::success_with_data(serde_json::json!({ "new_engine_id": new_engine_id })))
+        }
+        Err(e) => {
+            log::error!("Failed to clone engine: {}", e);
+            Ok(CommandResponse::error(format!("Failed to clone engine: {}", e)))
+        }
+    }
+}
+
+/// Update engine display name
+#[tauri::command]
+pub async fn update_engine_display_name(
+    engine_id: String,
+    new_display_name: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: update_engine_display_name - engine_id: {}, new_display_name: {}", engine_id, new_display_name);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    match storage.update_display_name(&engine_id, new_display_name) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save display name: {}", e)));
+            }
+            
+            log::info!("Engine display name updated successfully: {}", engine_id);
+            Ok(CommandResponse::success())
+        }
+        Err(e) => {
+            log::error!("Failed to update display name: {}", e);
+            Ok(CommandResponse::error(format!("Failed to update display name: {}", e)))
+        }
+    }
+}
+

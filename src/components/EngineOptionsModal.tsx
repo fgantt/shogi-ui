@@ -16,6 +16,8 @@ interface OptionValue {
 export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsModalProps) {
   const [optionValues, setOptionValues] = useState<OptionValue>({});
   const [savedOptions, setSavedOptions] = useState<OptionValue>({});
+  const [displayName, setDisplayName] = useState('');
+  const [originalDisplayName, setOriginalDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,17 +30,18 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
     }
   }, [isOpen, engine]);
 
-  // Check for changes whenever option values change
+  // Check for changes whenever option values or display name change
   useEffect(() => {
     if (isOpen && engine) {
-      const changed = Object.keys(optionValues).some(key => 
+      const optionsChanged = Object.keys(optionValues).some(key => 
         optionValues[key] !== savedOptions[key]
       ) || Object.keys(savedOptions).some(key => 
         savedOptions[key] !== optionValues[key]
       );
-      setHasChanges(changed);
+      const displayNameChanged = displayName !== originalDisplayName;
+      setHasChanges(optionsChanged || displayNameChanged);
     }
-  }, [optionValues, savedOptions, isOpen, engine]);
+  }, [optionValues, savedOptions, displayName, originalDisplayName, isOpen, engine]);
 
   const loadSavedOptions = async () => {
     if (!engine) return;
@@ -46,6 +49,10 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
     try {
       setLoading(true);
       setError(null);
+      
+      // Set display name
+      setDisplayName(engine.display_name);
+      setOriginalDisplayName(engine.display_name);
       
       // Try to load saved options first
       const response = await invoke<CommandResponse<OptionValue>>('get_engine_options', {
@@ -102,18 +109,34 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
       setSaving(true);
       setError(null);
 
-      const response = await invoke<CommandResponse>('save_engine_options', {
+      // Save engine options
+      const optionsResponse = await invoke<CommandResponse>('save_engine_options', {
         engineId: engine.id,
         options: optionValues
       });
 
-      if (response.success) {
-        setSavedOptions({ ...optionValues });
-        setHasChanges(false);
-        // Don't close modal automatically, let user close manually
-      } else {
-        setError(response.message || 'Failed to save options');
+      if (!optionsResponse.success) {
+        setError(optionsResponse.message || 'Failed to save options');
+        return;
       }
+
+      // Save display name if it changed
+      if (displayName !== originalDisplayName) {
+        const displayNameResponse = await invoke<CommandResponse>('update_engine_display_name', {
+          engineId: engine.id,
+          newDisplayName: displayName
+        });
+
+        if (!displayNameResponse.success) {
+          setError(displayNameResponse.message || 'Failed to save display name');
+          return;
+        }
+      }
+
+      setSavedOptions({ ...optionValues });
+      setOriginalDisplayName(displayName);
+      setHasChanges(false);
+      // Don't close modal automatically, let user close manually
     } catch (err) {
       console.error('Error saving options:', err);
       setError(`Failed to save options: ${err}`);
@@ -241,7 +264,19 @@ export function EngineOptionsModal({ isOpen, engine, onClose }: EngineOptionsMod
 
         <div className="modal-body">
           <div className="engine-info">
-            <h3>{engine.name}</h3>
+            <div className="display-name-field">
+              <label htmlFor="display-name-input">
+                <strong>Display Name:</strong>
+              </label>
+              <input
+                id="display-name-input"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="display-name-input"
+                placeholder="Enter display name..."
+              />
+            </div>
             {engine.metadata?.author && (
               <p><strong>Author:</strong> {engine.metadata.author}</p>
             )}

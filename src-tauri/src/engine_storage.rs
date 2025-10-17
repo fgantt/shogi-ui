@@ -9,6 +9,8 @@ use uuid::Uuid;
 pub struct EngineConfig {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_display_name")]
+    pub display_name: String,
     pub path: String,
     pub metadata: Option<EngineMetadata>,
     pub is_builtin: bool,
@@ -18,12 +20,17 @@ pub struct EngineConfig {
     pub saved_options: Option<std::collections::HashMap<String, String>>,
 }
 
+fn default_display_name() -> String {
+    String::new()
+}
+
 impl EngineConfig {
     pub fn new(name: String, path: String, metadata: Option<EngineMetadata>, is_builtin: bool) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: Uuid::new_v4().to_string(),
-            name,
+            name: name.clone(),
+            display_name: name,
             path,
             metadata,
             is_builtin,
@@ -84,7 +91,23 @@ impl EngineStorage {
 
         log::info!("Loading engine storage from: {}", path.display());
         let contents = tokio::fs::read_to_string(&path).await?;
-        let storage: Self = serde_json::from_str(&contents)?;
+        let mut storage: Self = serde_json::from_str(&contents)?;
+        
+        // Migration: Set display_name to name if it's empty (for backwards compatibility)
+        let mut needs_migration = false;
+        for engine in &mut storage.engines {
+            if engine.display_name.is_empty() {
+                log::info!("Migrating engine '{}': setting display_name", engine.name);
+                engine.display_name = engine.name.clone();
+                needs_migration = true;
+            }
+        }
+        
+        // Save the migrated storage back to disk
+        if needs_migration {
+            log::info!("Saving migrated engine storage");
+            storage.save().await?;
+        }
         
         log::info!("Loaded {} engines from storage", storage.engines.len());
         Ok(storage)
@@ -182,6 +205,34 @@ impl EngineStorage {
     /// Get saved engine options
     pub fn get_engine_options(&self, engine_id: &str) -> Option<&std::collections::HashMap<String, String>> {
         self.get_engine(engine_id)?.saved_options.as_ref()
+    }
+
+    /// Clone an engine with a new display name
+    pub fn clone_engine(&mut self, engine_id: &str, new_display_name: String) -> Result<String> {
+        let source_engine = self.get_engine(engine_id)
+            .ok_or_else(|| anyhow!("Source engine not found: {}", engine_id))?
+            .clone();
+
+        let mut cloned_engine = source_engine;
+        cloned_engine.id = Uuid::new_v4().to_string();
+        cloned_engine.display_name = new_display_name;
+        cloned_engine.is_builtin = false; // Cloned engines are never built-in
+        cloned_engine.created_at = chrono::Utc::now().to_rfc3339();
+        cloned_engine.last_used = None;
+
+        let new_id = cloned_engine.id.clone();
+        self.engines.push(cloned_engine);
+        Ok(new_id)
+    }
+
+    /// Update display name for an engine
+    pub fn update_display_name(&mut self, engine_id: &str, new_display_name: String) -> Result<()> {
+        let engine = self
+            .get_engine_mut(engine_id)
+            .ok_or_else(|| anyhow!("Engine not found"))?;
+        
+        engine.display_name = new_display_name;
+        Ok(())
     }
 }
 

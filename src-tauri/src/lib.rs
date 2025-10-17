@@ -139,6 +139,8 @@ pub fn run() {
       commands::start_engine_vs_engine,
       commands::save_engine_options,
       commands::get_engine_options,
+      commands::clone_engine,
+      commands::update_engine_display_name,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

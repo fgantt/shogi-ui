@@ -65,12 +65,7 @@ export function EngineManagementPage() {
       const selected = await open({
         multiple: false,
         directory: false,
-        filters: [
-          {
-            name: 'Executable',
-            extensions: ['exe', 'app', ''],
-          },
-        ],
+        // No filters - allow all files to be selected
       });
 
       if (selected && typeof selected === 'string') {
@@ -80,6 +75,7 @@ export function EngineManagementPage() {
       }
     } catch (err) {
       console.error('Error browsing for engine:', err);
+      setError(`Failed to browse for engine: ${err}`);
     }
   };
 
@@ -174,6 +170,28 @@ export function EngineManagementPage() {
   const handleCloseOptions = () => {
     setOptionsModalOpen(false);
     setSelectedEngineForOptions(null);
+  };
+
+  const handleCloneEngine = async (engine: EngineConfig) => {
+    const newDisplayName = `${engine.display_name} (copy)`;
+    
+    try {
+      setError(null);
+      const response = await invoke<CommandResponse<{ new_engine_id: string }>>('clone_engine', {
+        engineId: engine.id,
+        newDisplayName: newDisplayName,
+      });
+
+      if (response.success) {
+        await loadEngines(); // Reload the engines list
+        console.log('Engine cloned successfully:', response.data?.new_engine_id);
+      } else {
+        setError(response.message || 'Failed to clone engine');
+      }
+    } catch (err) {
+      setError(`Error cloning engine: ${err}`);
+      console.error('Error cloning engine:', err);
+    }
   };
 
   const handleHealthCheck = async () => {
@@ -329,7 +347,7 @@ export function EngineManagementPage() {
                 <div className="engine-header">
                   <div className="engine-title">
                     <h3>
-                      {engine.name}
+                      {engine.display_name}
                       {engine.is_builtin && <span className="builtin-badge">Built-in</span>}
                     </h3>
                     {getEngineStatusBadge(engine)}
@@ -343,9 +361,16 @@ export function EngineManagementPage() {
                     >
                       Options
                     </button>
+                    <button
+                      onClick={() => handleCloneEngine(engine)}
+                      className="clone-button"
+                      title="Clone this engine"
+                    >
+                      Clone
+                    </button>
                     {!engine.is_builtin && (
                       <button
-                        onClick={() => handleRemoveEngine(engine.id, engine.name)}
+                        onClick={() => handleRemoveEngine(engine.id, engine.display_name)}
                         className="remove-button"
                         title="Remove engine"
                       >

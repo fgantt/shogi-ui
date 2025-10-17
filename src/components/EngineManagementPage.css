@@ -403,6 +403,22 @@
   color: #999;
 }
 
+.clone-button {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #1976d2;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.clone-button:hover {
+  background: #e3f2fd;
+  border-color: #1976d2;
+}
+
 /* Modal Styles */
 .modal-overlay {
   position: fixed;

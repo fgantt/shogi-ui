@@ -26,6 +26,7 @@ export interface EngineMetadata {
 export interface EngineConfig {
   id: string;
   name: string;
+  display_name: string;
   path: string;
   metadata?: EngineMetadata;
   is_builtin: boolean;
