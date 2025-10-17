@@ -5,30 +5,30 @@
 }
 
 .toggle-button {
-  background: #2c3e50;
-  color: white;
+  background: var(--color-button-primary);
+  color: var(--color-button-primary-text);
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   transition: background-color 0.2s;
 }
 
 .toggle-button:hover {
-  background: #34495e;
+  background: var(--color-button-primary-hover);
 }
 
 .usi-monitor {
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-medium);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
 }
@@ -38,15 +38,15 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #ddd;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
   border-radius: 8px 8px 0 0;
 }
 
 .usi-monitor-header h3 {
   margin: 0;
   font-size: 16px;
-  color: #2c3e50;
+  color: var(--color-heading);
 }
 
 .close-button {
@@ -54,7 +54,7 @@
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-muted);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -66,8 +66,8 @@
 }
 
 .close-button:hover {
-  background: #e9ecef;
-  color: #333;
+  background: var(--color-button-secondary-hover);
+  color: var(--color-text-primary);
 }
 
 .usi-monitor-content {
@@ -79,8 +79,8 @@
 
 .last-commands {
   padding: 16px;
-  border-bottom: 1px solid #eee;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
 }
 
 .last-command-item {
@@ -95,7 +95,7 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -113,16 +113,16 @@
 }
 
 .sent-command {
-  background: #e3f2fd;
-  border: 1px solid #bbdefb;
-  color: #0d47a1;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  color: var(--color-info-text);
   font-weight: 500;
 }
 
 .received-command {
-  background: #f3e5f5;
-  border: 1px solid #e1bee7;
-  color: #4a148c;
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
   font-weight: 500;
 }
 
@@ -138,14 +138,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #eee;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .history-header h4 {
   margin: 0;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--color-heading);
 }
 
 .debug-toggle {
@@ -154,7 +154,7 @@
   gap: 6px;
   cursor: pointer;
   font-size: 12px;
-  color: #555;
+  color: var(--color-text-secondary);
   user-select: none;
 }
 
@@ -176,7 +176,7 @@
 
 .no-history {
   text-align: center;
-  color: #333;
+  color: var(--color-text-primary);
   font-style: italic;
   padding: 20px;
   font-weight: 500;
@@ -200,26 +200,26 @@
 }
 
 .history-entry.sent {
-  background: #e3f2fd;
-  border-left: 3px solid #1976d2;
-  color: #0d47a1;
+  background: var(--color-info-bg);
+  border-left: 3px solid var(--color-info-border);
+  color: var(--color-info-text);
 }
 
 .history-entry.received {
-  background: #f3e5f5;
-  border-left: 3px solid #7b1fa2;
-  color: #4a148c;
+  background: var(--color-accent-light);
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-accent);
 }
 
 .direction-prefix {
   font-weight: bold;
   margin-right: 8px;
   min-width: 12px;
-  color: #333;
+  color: var(--color-text-primary);
 }
 
 .timestamp {
-  color: #555;
+  color: var(--color-text-secondary);
   margin-right: 8px;
   font-size: 11px;
   min-width: 60px;
@@ -256,29 +256,31 @@
   display: flex;
   gap: 8px;
   padding: 12px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #ddd;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .manual-command input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-family: 'Courier New', monospace;
   font-size: 13px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
 }
 
 .manual-command input:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 .manual-command button {
   padding: 8px 16px;
-  background: #4a90e2;
-  color: white;
+  background: var(--color-accent);
+  color: var(--color-button-primary-text);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -288,11 +290,11 @@
 }
 
 .manual-command button:hover:not(:disabled) {
-  background: #357abd;
+  background: var(--color-accent-hover);
 }
 
 .manual-command button:disabled {
-  background: #ccc;
+  background: var(--color-text-disabled);
   cursor: not-allowed;
 }
 
@@ -304,17 +306,18 @@
 
 .clear-button {
   padding: 4px 12px;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
+  color: var(--color-button-secondary-text);
   font-size: 12px;
   transition: all 0.2s;
 }
 
 .clear-button:hover {
-  background: #f8f9fa;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 /* Responsive design */

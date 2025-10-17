@@ -7,45 +7,47 @@
 
 .engine-selector label {
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-primary);
   min-width: 100px;
 }
 
 .engine-select {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 14px;
-  background: white;
+  background: var(--color-select-bg);
+  color: var(--color-select-text);
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
 .engine-select:hover {
-  border-color: #999;
+  border-color: var(--color-border-dark);
 }
 
 .engine-select:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 .refresh-button {
   padding: 8px 12px;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
+  color: var(--color-button-secondary-text);
   font-size: 16px;
   transition: all 0.2s;
   min-width: 40px;
 }
 
 .refresh-button:hover {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
   transform: rotate(180deg);
 }
 
@@ -59,42 +61,42 @@
 }
 
 .engine-selector-loading {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
 }
 
 .engine-selector-error {
-  background: #ffebee;
-  color: #c62828;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .engine-selector-empty {
-  background: #fff3e0;
-  color: #e65100;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .engine-selector-empty a {
-  color: #e65100;
+  color: var(--color-warning-text);
   font-weight: 600;
   text-decoration: underline;
 }
 
 .retry-button {
   padding: 4px 12px;
-  background: white;
-  border: 1px solid #c62828;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-button-danger);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  color: #c62828;
+  color: var(--color-button-danger);
   transition: all 0.2s;
 }
 
 .retry-button:hover {
-  background: #c62828;
-  color: white;
+  background: var(--color-button-danger);
+  color: var(--color-button-danger-text);
 }
 

@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--color-bg-overlay);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -13,9 +13,9 @@
 }
 
 .confirm-exit-modal {
-  background: white;
+  background: var(--color-bg-panel);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xl);
   width: 90%;
   max-width: 400px;
   max-height: 90vh;
@@ -39,12 +39,12 @@
   justify-content: center;
   align-items: center;
   padding: 24px 24px 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .confirm-exit-modal-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.5rem;
   font-weight: 600;
 }
@@ -71,7 +71,7 @@
 
 .confirm-exit-modal-content p {
   margin: 0;
-  color: #555;
+  color: var(--color-text-secondary);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -96,36 +96,36 @@
 }
 
 .cancel-button {
-  background-color: #f5f5f5;
-  color: #666;
-  border: 1px solid #ddd;
+  background-color: var(--color-button-secondary);
+  color: var(--color-button-secondary-text);
+  border: 1px solid var(--color-border-medium);
 }
 
 .cancel-button:hover {
-  background-color: #e8e8e8;
-  border-color: #bbb;
+  background-color: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 .confirm-button {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-button-danger);
+  color: var(--color-button-danger-text);
 }
 
 .confirm-button:hover {
-  background-color: #c82333;
+  background-color: var(--color-button-danger-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .confirm-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(220, 53, 69, 0.3);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Focus states for accessibility */
 .cancel-button:focus,
 .confirm-button:focus {
-  outline: 2px solid #4a90e2;
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 

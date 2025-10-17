@@ -1947,38 +1947,12 @@ const GamePage: React.FC<GamePageProps> = ({
           onNewGame={handleNewGame}
         />
       )}
-      {/* Debug modal state */}
-      <div style={{ position: 'fixed', top: '10px', left: '10px', background: 'yellow', padding: '10px', zIndex: 10000 }}>
-        Modal State: {isExitConfirmModalOpen ? 'TRUE' : 'FALSE'}
-      </div>
-      
-      {/* Simple modal test */}
-      {isExitConfirmModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(255, 0, 0, 0.8)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            textAlign: 'center'
-          }}>
-            <h2>EXIT MODAL TEST</h2>
-            <p>This should be visible!</p>
-            <button onClick={handleCancelExit}>Cancel</button>
-            <button onClick={handleConfirmExit}>Exit</button>
-          </div>
-        </div>
-      )}
+      {/* Exit Confirmation Modal */}
+      <ConfirmExitModal
+        isOpen={isExitConfirmModalOpen}
+        onConfirm={handleConfirmExit}
+        onCancel={handleCancelExit}
+      />
       
       {/* USI Monitor positioned below the game content */}
       {useTauriEngine ? (

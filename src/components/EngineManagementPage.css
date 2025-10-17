@@ -6,23 +6,23 @@
 
 .engine-management-page h1 {
   margin-bottom: 2rem;
-  color: #333;
+  color: var(--color-heading);
 }
 
 .loading {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 1.1rem;
 }
 
 .error-message {
-  background-color: #fee;
-  border: 1px solid #fcc;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 4px;
   padding: 1rem;
   margin-bottom: 1.5rem;
-  color: #c33;
+  color: var(--color-error-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -31,19 +31,19 @@
 .error-message button {
   background: none;
   border: none;
-  color: #c33;
+  color: var(--color-error-text);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 0 0.5rem;
 }
 
 .error-message button:hover {
-  color: #a11;
+  color: var(--color-button-danger-hover);
 }
 
 /* Add Engine Section */
 .add-engine-section {
-  background: #f9f9f9;
+  background: var(--color-bg-card);
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -52,7 +52,7 @@
 .add-engine-section h2 {
   margin-top: 0;
   margin-bottom: 1.5rem;
-  color: #444;
+  color: var(--color-heading);
 }
 
 .add-engine-form {
@@ -69,25 +69,28 @@
 .form-row label {
   font-weight: 500;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text-primary);
 }
 
 .form-row input[type="text"] {
   padding: 0.6rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 1rem;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
 }
 
 .form-row input[type="text"]:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 .form-row input[type="text"]:disabled {
-  background: #f0f0f0;
+  background: var(--color-bg-card);
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .path-input-group {
@@ -101,16 +104,17 @@
 
 .path-input-group button {
   padding: 0.6rem 1.2rem;
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
+  color: var(--color-button-secondary-text);
   font-size: 0.95rem;
 }
 
 .path-input-group button:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 .path-input-group button:disabled {
@@ -120,9 +124,9 @@
 
 .validation-status {
   padding: 0.8rem;
-  background: #e3f2fd;
+  background: var(--color-info-bg);
   border-radius: 4px;
-  color: #1976d2;
+  color: var(--color-info-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -144,16 +148,16 @@
 
 .validation-result {
   padding: 1rem;
-  background: #e8f5e9;
-  border: 1px solid #a5d6a7;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
   border-radius: 4px;
-  color: #2e7d32;
+  color: var(--color-success-text);
 }
 
 .validation-result h3 {
   margin: 0 0 0.75rem 0;
   font-size: 1rem;
-  color: #1b5e20;
+  color: var(--color-success-text);
 }
 
 .validation-result p {
@@ -172,31 +176,32 @@
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  border: 1px solid #ddd;
-  background: white;
+  border: 1px solid var(--color-border-medium);
+  background: var(--color-button-secondary);
+  color: var(--color-button-secondary-text);
   transition: all 0.2s;
 }
 
 .primary-button {
-  background: #4a90e2 !important;
-  color: white !important;
-  border-color: #4a90e2 !important;
+  background: var(--color-button-primary) !important;
+  color: var(--color-button-primary-text) !important;
+  border-color: var(--color-button-primary) !important;
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #357abd !important;
-  border-color: #357abd !important;
+  background: var(--color-button-primary-hover) !important;
+  border-color: var(--color-button-primary-hover) !important;
 }
 
 .primary-button:disabled {
-  background: #ccc !important;
-  border-color: #ccc !important;
+  background: var(--color-text-disabled) !important;
+  border-color: var(--color-text-disabled) !important;
   cursor: not-allowed;
 }
 
 .form-actions button:hover:not(:disabled) {
-  border-color: #999;
-  background: #f8f8f8;
+  border-color: var(--color-border-dark);
+  background: var(--color-button-secondary-hover);
 }
 
 .form-actions button:disabled {
@@ -218,30 +223,31 @@
 
 .section-header h2 {
   margin: 0;
-  color: #444;
+  color: var(--color-heading);
 }
 
 .secondary-button {
   padding: 0.6rem 1.2rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
+  color: var(--color-button-secondary-text);
   font-size: 0.95rem;
   transition: all 0.2s;
 }
 
 .secondary-button:hover {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 .empty-state {
   text-align: center;
   padding: 3rem;
-  background: #f9f9f9;
+  background: var(--color-bg-card);
   border-radius: 8px;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 .empty-state p {
@@ -254,15 +260,15 @@
 }
 
 .engine-card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   padding: 1.5rem;
   transition: box-shadow 0.2s;
 }
 
 .engine-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .engine-header {
@@ -281,7 +287,7 @@
 
 .engine-title h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.2rem;
   display: flex;
   align-items: center;
@@ -291,7 +297,7 @@
 .builtin-badge {
   display: inline-block;
   background: #ffd700;
-  color: #333;
+  color: #1a202c;
   padding: 0.2rem 0.6rem;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -307,43 +313,43 @@
 }
 
 .status-healthy {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .status-unhealthy {
-  background: #ffebee;
-  color: #c62828;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
 }
 
 .status-disabled {
-  background: #f5f5f5;
-  color: #757575;
+  background: var(--color-bg-card);
+  color: var(--color-text-disabled);
 }
 
 .status-unknown {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
 }
 
 .remove-button {
   padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
-  color: #d32f2f;
+  color: var(--color-button-danger);
   font-size: 0.9rem;
   transition: all 0.2s;
 }
 
 .remove-button:hover {
-  background: #ffebee;
-  border-color: #d32f2f;
+  background: var(--color-error-bg);
+  border-color: var(--color-button-danger);
 }
 
 .engine-details {
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.95rem;
 }
 
@@ -354,23 +360,23 @@
 .engine-path {
   word-break: break-all;
   font-family: 'Courier New', monospace;
-  background: #f5f5f5;
+  background: var(--color-bg-card);
   padding: 0.5rem;
   border-radius: 4px;
 }
 
 .last-used {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .engine-error {
   margin-top: 1rem;
   padding: 0.8rem;
-  background: #fff3e0;
-  border: 1px solid #ffb74d;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
   border-radius: 4px;
-  color: #e65100;
+  color: var(--color-warning-text);
   font-size: 0.9rem;
 }
 
@@ -383,50 +389,50 @@
 
 .options-button {
   padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
-  color: #1976d2;
+  color: var(--color-accent);
   font-size: 0.9rem;
   transition: all 0.2s;
 }
 
 .options-button:hover:not(:disabled) {
-  background: #e3f2fd;
-  border-color: #1976d2;
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
 }
 
 .options-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  color: #999;
+  color: var(--color-text-disabled);
 }
 
 .clone-button {
   padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
-  color: #1976d2;
+  color: var(--color-accent);
   font-size: 0.9rem;
   transition: all 0.2s;
 }
 
 .clone-button:hover {
-  background: #e3f2fd;
-  border-color: #1976d2;
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
 }
 
-/* Modal Styles */
+/* Modal Styles (duplicated from EngineOptionsModal.css for standalone usage) */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -435,13 +441,13 @@
 }
 
 .modal-content {
-  background: white;
+  background: var(--color-bg-panel);
   border-radius: 8px;
   max-width: 800px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-header {
@@ -449,12 +455,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.4rem;
 }
 
@@ -463,7 +469,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-muted);
   padding: 0;
   width: 2rem;
   height: 2rem;
@@ -474,8 +480,8 @@
 }
 
 .modal-close:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
 }
 
 .modal-body {
@@ -485,24 +491,24 @@
 .engine-info {
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .engine-info h3 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.2rem;
 }
 
 .engine-info p {
   margin: 0.5rem 0;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.95rem;
 }
 
 .options-section h4 {
   margin: 0 0 1rem 0;
-  color: #444;
+  color: var(--color-text-primary);
   font-size: 1.1rem;
 }
 
@@ -517,14 +523,14 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem;
-  background: #f9f9f9;
+  background: var(--color-bg-card);
   border-radius: 6px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border-light);
 }
 
 .option-name {
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary);
   font-size: 1rem;
 }
 
@@ -536,15 +542,15 @@
 }
 
 .option-type {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   font-style: italic;
 }
 
 .option-default {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
-  background: #e8f5e9;
+  background: var(--color-success-bg);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
@@ -552,7 +558,7 @@
 .no-options {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
@@ -561,16 +567,16 @@
   justify-content: flex-end;
   gap: 1rem;
   padding: 1.5rem;
-  border-top: 1px solid #e0e0e0;
-  background: #f9f9f9;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
 }
 
 .primary-button {
   padding: 0.6rem 1.5rem;
-  background: #1976d2;
+  background: var(--color-button-primary);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: var(--color-button-primary-text);
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
@@ -578,6 +584,6 @@
 }
 
 .primary-button:hover {
-  background: #1565c0;
+  background: var(--color-button-primary-hover);
 }
 

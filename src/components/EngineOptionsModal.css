@@ -5,7 +5,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,13 +14,13 @@
 }
 
 .modal-content {
-  background: white;
+  background: var(--color-bg-panel);
   border-radius: 8px;
   max-width: 900px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
 }
@@ -31,13 +31,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.4rem;
 }
 
@@ -46,7 +46,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-muted);
   padding: 0;
   width: 2rem;
   height: 2rem;
@@ -58,8 +58,8 @@
 }
 
 .modal-close:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
 }
 
 /* Modal Body */
@@ -73,18 +73,18 @@
 .engine-info {
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .engine-info h3 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.2rem;
 }
 
 .engine-info p {
   margin: 0.5rem 0;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.95rem;
 }
 
@@ -95,33 +95,34 @@
 .display-name-field label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #333;
+  color: var(--color-text-primary);
   font-size: 0.95rem;
 }
 
 .display-name-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 0.95rem;
-  background: white;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
 }
 
 .display-name-input:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
 }
 
 /* Error Message */
 .error-message {
-  background-color: #fee;
-  border: 1px solid #fcc;
+  background-color: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 4px;
   padding: 1rem;
   margin-bottom: 1.5rem;
-  color: #c33;
+  color: var(--color-error-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -130,28 +131,28 @@
 .error-message button {
   background: none;
   border: none;
-  color: #c33;
+  color: var(--color-error-text);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 0 0.5rem;
 }
 
 .error-message button:hover {
-  color: #a11;
+  color: var(--color-button-danger-hover);
 }
 
 /* Loading Message */
 .loading-message {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 /* Options Section */
 .options-section h4 {
   margin: 0 0 1rem 0;
-  color: #444;
+  color: var(--color-text-primary);
   font-size: 1.1rem;
 }
 
@@ -164,18 +165,18 @@
 
 .reset-button {
   padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
-  color: #666;
+  color: var(--color-button-secondary-text);
   font-size: 0.9rem;
   transition: all 0.2s;
 }
 
 .reset-button:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 .reset-button:disabled {
@@ -192,14 +193,14 @@
 
 .option-item {
   padding: 1.5rem;
-  background: #f9f9f9;
+  background: var(--color-bg-card);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border-light);
   transition: box-shadow 0.2s;
 }
 
 .option-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
 }
 
 .option-header {
@@ -211,15 +212,15 @@
 
 .option-name {
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary);
   font-size: 1rem;
 }
 
 .option-type {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   font-style: italic;
-  background: #e3f2fd;
+  background: var(--color-accent-light);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
@@ -236,9 +237,9 @@
 
 .option-default,
 .option-range {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
-  background: #e8f5e9;
+  background: var(--color-success-bg);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
@@ -266,7 +267,7 @@
 
 .checkbox-text {
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-primary);
   user-select: none;
 }
 
@@ -279,20 +280,22 @@
 
 .option-number {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 0.95rem;
   width: 120px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
 }
 
 .option-number:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
 }
 
 .option-range {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   font-style: italic;
 }
@@ -300,61 +303,64 @@
 /* Text input (string type) */
 .option-string {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 0.95rem;
   width: 100%;
   max-width: 300px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
 }
 
 .option-string:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
 }
 
 /* Select (combo type) */
 .option-select {
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-input-border);
   border-radius: 4px;
   font-size: 0.95rem;
-  background: white;
+  background: var(--color-select-bg);
+  color: var(--color-select-text);
   cursor: pointer;
   min-width: 150px;
 }
 
 .option-select:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  border-color: var(--color-input-focus);
+  box-shadow: 0 0 0 2px var(--color-accent-light);
 }
 
 /* Button (button type) */
 .option-button {
   padding: 0.5rem 1rem;
-  background: #1976d2;
+  background: var(--color-accent);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: var(--color-button-primary-text);
   cursor: pointer;
   font-size: 0.9rem;
   transition: background-color 0.2s;
 }
 
 .option-button:hover {
-  background: #1565c0;
+  background: var(--color-accent-hover);
 }
 
 /* No Options */
 .no-options {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--color-text-muted);
   font-style: italic;
-  background: #f9f9f9;
+  background: var(--color-bg-card);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border-light);
 }
 
 /* Modal Footer */
@@ -363,24 +369,25 @@
   justify-content: flex-end;
   gap: 1rem;
   padding: 1.5rem;
-  border-top: 1px solid #e0e0e0;
-  background: #f9f9f9;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
   flex-shrink: 0;
 }
 
 .secondary-button {
   padding: 0.6rem 1.2rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--color-button-secondary);
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
+  color: var(--color-button-secondary-text);
   font-size: 0.95rem;
   transition: all 0.2s;
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--color-button-secondary-hover);
+  border-color: var(--color-border-dark);
 }
 
 .secondary-button:disabled {
@@ -390,10 +397,10 @@
 
 .primary-button {
   padding: 0.6rem 1.5rem;
-  background: #1976d2;
+  background: var(--color-button-primary);
   border: none;
   border-radius: 4px;
-  color: white;
+  color: var(--color-button-primary-text);
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
@@ -401,13 +408,13 @@
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #1565c0;
+  background: var(--color-button-primary-hover);
 }
 
 .primary-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: #1976d2;
+  background: var(--color-button-primary);
 }
 
 /* Responsive Design */

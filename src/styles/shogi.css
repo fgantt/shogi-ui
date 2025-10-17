@@ -395,12 +395,12 @@
 }
 
 .promotion-modal {
-  background-color: #fff;
+  background-color: var(--color-bg-panel);
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-xl);
   text-align: center;
-  color: #000;
+  color: var(--color-text-primary);
 }
 
 .app {

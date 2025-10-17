@@ -1,0 +1,1159 @@
+/**
+ * Shogi Vibe - Comprehensive Theme System
+ * 
+ * This file defines CSS variables for consistent theming across the application.
+ * Five themes are available: Light, Dark, Traditional, Ocean Blue, and Forest Green.
+ * 
+ * To use: Add data-theme attribute to html element
+ * Example: <html data-theme="ocean">
+ */
+
+/* ===========================
+   DEFAULT THEME: LIGHT
+   =========================== */
+:root,
+[data-theme="light"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(255, 255, 255, 0.98);
+  --color-bg-panel: #ffffff;
+  --color-bg-card: #f8f9fa;
+  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* Text Colors */
+  --color-text-primary: #1a202c;
+  --color-text-secondary: #4a5568;
+  --color-text-muted: #718096;
+  --color-text-disabled: #a0aec0;
+  --color-heading: #2d3748;
+  
+  /* Border Colors */
+  --color-border-light: #e2e8f0;
+  --color-border-medium: #cbd5e0;
+  --color-border-dark: #a0aec0;
+  
+  /* Button - Primary */
+  --color-button-primary: #2c5282;
+  --color-button-primary-hover: #1e3a5f;
+  --color-button-primary-active: #152a46;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #edf2f7;
+  --color-button-secondary-hover: #e2e8f0;
+  --color-button-secondary-active: #cbd5e0;
+  --color-button-secondary-text: #2d3748;
+  
+  /* Button - Danger */
+  --color-button-danger: #c53030;
+  --color-button-danger-hover: #9b2c2c;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #ffffff;
+  --color-input-border: #cbd5e0;
+  --color-input-focus: #4299e1;
+  --color-input-text: #1a202c;
+  --color-input-placeholder: #a0aec0;
+  
+  /* Accent Colors */
+  --color-accent: #4299e1;
+  --color-accent-hover: #3182ce;
+  --color-accent-light: #bee3f8;
+  
+  /* Status Colors */
+  --color-success-bg: #c6f6d5;
+  --color-success-border: #9ae6b4;
+  --color-success-text: #22543d;
+  
+  --color-error-bg: #fed7d7;
+  --color-error-border: #fc8181;
+  --color-error-text: #742a2a;
+  
+  --color-warning-bg: #feebc8;
+  --color-warning-border: #fbd38d;
+  --color-warning-text: #744210;
+  
+  --color-info-bg: #bee3f8;
+  --color-info-border: #90cdf4;
+  --color-info-text: #2c5282;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #ffffff;
+  --color-select-border: #a0aec0;
+  --color-select-text: #1a202c;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #4299e1;
+  --color-tab-inactive: #718096;
+  --color-tab-hover: #e2e8f0;
+  
+  /* Link Colors */
+  --color-link: #3182ce;
+  --color-link-hover: #2c5282;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* ===========================
+   DARK THEME
+   =========================== */
+[data-theme="dark"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(26, 32, 44, 0.98);
+  --color-bg-panel: #1a202c;
+  --color-bg-card: #2d3748;
+  --color-bg-overlay: rgba(0, 0, 0, 0.7);
+  
+  /* Text Colors */
+  --color-text-primary: #f7fafc;
+  --color-text-secondary: #e2e8f0;
+  --color-text-muted: #cbd5e0;
+  --color-text-disabled: #718096;
+  --color-heading: #ffffff;
+  
+  /* Border Colors */
+  --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-border-medium: rgba(255, 255, 255, 0.2);
+  --color-border-dark: rgba(255, 255, 255, 0.3);
+  
+  /* Button - Primary */
+  --color-button-primary: #4299e1;
+  --color-button-primary-hover: #3182ce;
+  --color-button-primary-active: #2c5282;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #4a5568;
+  --color-button-secondary-hover: #2d3748;
+  --color-button-secondary-active: #1a202c;
+  --color-button-secondary-text: #e2e8f0;
+  
+  /* Button - Danger */
+  --color-button-danger: #fc8181;
+  --color-button-danger-hover: #f56565;
+  --color-button-danger-text: #1a202c;
+  
+  /* Input Fields */
+  --color-input-bg: #2d3748;
+  --color-input-border: #4a5568;
+  --color-input-focus: #63b3ed;
+  --color-input-text: #f7fafc;
+  --color-input-placeholder: #718096;
+  
+  /* Accent Colors */
+  --color-accent: #63b3ed;
+  --color-accent-hover: #4299e1;
+  --color-accent-light: #2c5282;
+  
+  /* Status Colors */
+  --color-success-bg: rgba(72, 187, 120, 0.15);
+  --color-success-border: #48bb78;
+  --color-success-text: #9ae6b4;
+  
+  --color-error-bg: rgba(245, 101, 101, 0.15);
+  --color-error-border: #f56565;
+  --color-error-text: #fc8181;
+  
+  --color-warning-bg: rgba(237, 137, 54, 0.15);
+  --color-warning-border: #ed8936;
+  --color-warning-text: #fbd38d;
+  
+  --color-info-bg: rgba(66, 153, 225, 0.15);
+  --color-info-border: #4299e1;
+  --color-info-text: #90cdf4;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #2d3748;
+  --color-select-border: #4a5568;
+  --color-select-text: #f7fafc;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #4299e1;
+  --color-tab-inactive: #a0aec0;
+  --color-tab-hover: #2d3748;
+  
+  /* Link Colors */
+  --color-link: #63b3ed;
+  --color-link-hover: #4299e1;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+/* ===========================
+   TRADITIONAL WOOD THEME
+   =========================== */
+[data-theme="traditional"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(139, 69, 19, 0.95);
+  --color-bg-panel: rgba(160, 82, 45, 0.92);
+  --color-bg-card: rgba(139, 69, 19, 0.8);
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  
+  /* Text Colors */
+  --color-text-primary: #f5f5dc;
+  --color-text-secondary: #f5deb3;
+  --color-text-muted: rgba(245, 245, 220, 0.7);
+  --color-text-disabled: rgba(245, 245, 220, 0.5);
+  --color-heading: #ffd700;
+  
+  /* Border Colors */
+  --color-border-light: rgba(210, 180, 140, 0.3);
+  --color-border-medium: rgba(210, 180, 140, 0.5);
+  --color-border-dark: rgba(210, 180, 140, 0.7);
+  
+  /* Button - Primary */
+  --color-button-primary: rgba(220, 20, 60, 0.85);
+  --color-button-primary-hover: rgba(178, 34, 34, 0.9);
+  --color-button-primary-active: rgba(139, 0, 0, 0.95);
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: rgba(160, 82, 45, 0.7);
+  --color-button-secondary-hover: rgba(139, 69, 19, 0.8);
+  --color-button-secondary-active: rgba(101, 67, 33, 0.9);
+  --color-button-secondary-text: #f5f5dc;
+  
+  /* Button - Danger */
+  --color-button-danger: rgba(178, 34, 34, 0.9);
+  --color-button-danger-hover: rgba(139, 0, 0, 0.95);
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: rgba(245, 222, 179, 0.2);
+  --color-input-border: rgba(210, 180, 140, 0.5);
+  --color-input-focus: #ffd700;
+  --color-input-text: #f5f5dc;
+  --color-input-placeholder: rgba(245, 245, 220, 0.5);
+  
+  /* Accent Colors */
+  --color-accent: #ffd700;
+  --color-accent-hover: #ffed4e;
+  --color-accent-light: rgba(255, 215, 0, 0.3);
+  
+  /* Status Colors */
+  --color-success-bg: rgba(46, 125, 50, 0.3);
+  --color-success-border: #66bb6a;
+  --color-success-text: #a5d6a7;
+  
+  --color-error-bg: rgba(211, 47, 47, 0.3);
+  --color-error-border: #ef5350;
+  --color-error-text: #ffcdd2;
+  
+  --color-warning-bg: rgba(245, 124, 0, 0.3);
+  --color-warning-border: #ffa726;
+  --color-warning-text: #ffcc80;
+  
+  --color-info-bg: rgba(25, 118, 210, 0.3);
+  --color-info-border: #42a5f5;
+  --color-info-text: #90caf9;
+  
+  /* Select/Dropdown */
+  --color-select-bg: rgba(245, 222, 179, 0.15);
+  --color-select-border: rgba(210, 180, 140, 0.5);
+  --color-select-text: #f5f5dc;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #ffd700;
+  --color-tab-inactive: #f5deb3;
+  --color-tab-hover: rgba(255, 215, 0, 0.2);
+  
+  /* Link Colors */
+  --color-link: #ffd700;
+  --color-link-hover: #ffed4e;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+/* ===========================
+   OCEAN BLUE THEME
+   =========================== */
+[data-theme="ocean"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(13, 71, 161, 0.96);
+  --color-bg-panel: #0d47a1;
+  --color-bg-card: #1565c0;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  
+  /* Text Colors */
+  --color-text-primary: #e3f2fd;
+  --color-text-secondary: #bbdefb;
+  --color-text-muted: #90caf9;
+  --color-text-disabled: rgba(227, 242, 253, 0.5);
+  --color-heading: #ffffff;
+  
+  /* Border Colors */
+  --color-border-light: rgba(144, 202, 249, 0.2);
+  --color-border-medium: rgba(144, 202, 249, 0.4);
+  --color-border-dark: rgba(144, 202, 249, 0.6);
+  
+  /* Button - Primary */
+  --color-button-primary: #0277bd;
+  --color-button-primary-hover: #01579b;
+  --color-button-primary-active: #004c8c;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #1976d2;
+  --color-button-secondary-hover: #1565c0;
+  --color-button-secondary-active: #0d47a1;
+  --color-button-secondary-text: #e3f2fd;
+  
+  /* Button - Danger */
+  --color-button-danger: #d32f2f;
+  --color-button-danger-hover: #c62828;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: rgba(227, 242, 253, 0.1);
+  --color-input-border: rgba(144, 202, 249, 0.4);
+  --color-input-focus: #4fc3f7;
+  --color-input-text: #e3f2fd;
+  --color-input-placeholder: rgba(187, 222, 251, 0.6);
+  
+  /* Accent Colors */
+  --color-accent: #29b6f6;
+  --color-accent-hover: #03a9f4;
+  --color-accent-light: rgba(41, 182, 246, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: rgba(56, 142, 60, 0.25);
+  --color-success-border: #66bb6a;
+  --color-success-text: #a5d6a7;
+  
+  --color-error-bg: rgba(211, 47, 47, 0.25);
+  --color-error-border: #ef5350;
+  --color-error-text: #ffcdd2;
+  
+  --color-warning-bg: rgba(245, 124, 0, 0.25);
+  --color-warning-border: #ffa726;
+  --color-warning-text: #ffcc80;
+  
+  --color-info-bg: rgba(0, 188, 212, 0.25);
+  --color-info-border: #26c6da;
+  --color-info-text: #b2ebf2;
+  
+  /* Select/Dropdown */
+  --color-select-bg: rgba(227, 242, 253, 0.08);
+  --color-select-border: rgba(144, 202, 249, 0.4);
+  --color-select-text: #e3f2fd;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #29b6f6;
+  --color-tab-inactive: #90caf9;
+  --color-tab-hover: rgba(41, 182, 246, 0.2);
+  
+  /* Link Colors */
+  --color-link: #4fc3f7;
+  --color-link-hover: #29b6f6;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+}
+
+/* ===========================
+   FOREST GREEN THEME
+   =========================== */
+[data-theme="forest"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(27, 94, 32, 0.96);
+  --color-bg-panel: #1b5e20;
+  --color-bg-card: #2e7d32;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  
+  /* Text Colors */
+  --color-text-primary: #e8f5e9;
+  --color-text-secondary: #c5e1a5;
+  --color-text-muted: #aed581;
+  --color-text-disabled: rgba(232, 245, 233, 0.5);
+  --color-heading: #ffffff;
+  
+  /* Border Colors */
+  --color-border-light: rgba(174, 213, 129, 0.2);
+  --color-border-medium: rgba(174, 213, 129, 0.4);
+  --color-border-dark: rgba(174, 213, 129, 0.6);
+  
+  /* Button - Primary */
+  --color-button-primary: #388e3c;
+  --color-button-primary-hover: #2e7d32;
+  --color-button-primary-active: #1b5e20;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #43a047;
+  --color-button-secondary-hover: #388e3c;
+  --color-button-secondary-active: #2e7d32;
+  --color-button-secondary-text: #e8f5e9;
+  
+  /* Button - Danger */
+  --color-button-danger: #d32f2f;
+  --color-button-danger-hover: #c62828;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: rgba(232, 245, 233, 0.1);
+  --color-input-border: rgba(174, 213, 129, 0.4);
+  --color-input-focus: #81c784;
+  --color-input-text: #e8f5e9;
+  --color-input-placeholder: rgba(197, 225, 165, 0.6);
+  
+  /* Accent Colors */
+  --color-accent: #66bb6a;
+  --color-accent-hover: #4caf50;
+  --color-accent-light: rgba(102, 187, 106, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: rgba(102, 187, 106, 0.25);
+  --color-success-border: #81c784;
+  --color-success-text: #c8e6c9;
+  
+  --color-error-bg: rgba(211, 47, 47, 0.25);
+  --color-error-border: #ef5350;
+  --color-error-text: #ffcdd2;
+  
+  --color-warning-bg: rgba(255, 160, 0, 0.25);
+  --color-warning-border: #ffb74d;
+  --color-warning-text: #ffe082;
+  
+  --color-info-bg: rgba(3, 169, 244, 0.25);
+  --color-info-border: #42a5f5;
+  --color-info-text: #90caf9;
+  
+  /* Select/Dropdown */
+  --color-select-bg: rgba(232, 245, 233, 0.08);
+  --color-select-border: rgba(174, 213, 129, 0.4);
+  --color-select-text: #e8f5e9;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #66bb6a;
+  --color-tab-inactive: #aed581;
+  --color-tab-hover: rgba(102, 187, 106, 0.2);
+  
+  /* Link Colors */
+  --color-link: #81c784;
+  --color-link-hover: #66bb6a;
+  
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+}
+
+/* ===========================
+   GLOBAL NUMBER INPUT SPINNER STYLING
+   =========================== */
+
+/* Style number input spinners for better visibility across all themes */
+
+/* Light theme - dark visible spinners */
+[data-theme="light"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="light"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: #cbd5e0;
+  border-left: 1px solid #a0aec0;
+  cursor: pointer;
+}
+
+[data-theme="light"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="light"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: #a0aec0;
+}
+
+/* Dark theme - light visible spinners */
+[data-theme="dark"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="dark"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: #4a5568;
+  border-left: 1px solid #718096;
+  cursor: pointer;
+}
+
+[data-theme="dark"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="dark"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: #718096;
+}
+
+/* Traditional theme */
+[data-theme="traditional"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="traditional"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(210, 180, 140, 0.3);
+  border-left: 1px solid rgba(210, 180, 140, 0.5);
+  cursor: pointer;
+}
+
+[data-theme="traditional"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="traditional"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(210, 180, 140, 0.5);
+}
+
+/* Ocean theme */
+[data-theme="ocean"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="ocean"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(144, 202, 249, 0.2);
+  border-left: 1px solid rgba(144, 202, 249, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="ocean"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="ocean"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(144, 202, 249, 0.4);
+}
+
+/* Forest theme */
+[data-theme="forest"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="forest"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(174, 213, 129, 0.2);
+  border-left: 1px solid rgba(174, 213, 129, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="forest"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="forest"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(174, 213, 129, 0.4);
+}
+
+/* ===========================
+   THEME: MIDNIGHT PURPLE
+   =========================== */
+[data-theme="midnight"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(26, 26, 46, 0.98);
+  --color-bg-panel: #1a1a2e;
+  --color-bg-card: #16213e;
+  --color-bg-overlay: rgba(0, 0, 0, 0.7);
+  
+  /* Text Colors */
+  --color-text-primary: #e1bee7;
+  --color-text-secondary: #ce93d8;
+  --color-text-muted: #ba68c8;
+  --color-text-disabled: #9c27b0;
+  --color-heading: #f3e5f5;
+  
+  /* Border Colors */
+  --color-border-light: #4a148c;
+  --color-border-medium: #6a1b9a;
+  --color-border-dark: #8e24aa;
+  
+  /* Button - Primary */
+  --color-button-primary: #7b1fa2;
+  --color-button-primary-hover: #6a1b9a;
+  --color-button-primary-active: #4a148c;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #2d1b69;
+  --color-button-secondary-hover: #3d2b79;
+  --color-button-secondary-active: #4d3b89;
+  --color-button-secondary-text: #e1bee7;
+  
+  /* Button - Danger */
+  --color-button-danger: #d32f2f;
+  --color-button-danger-hover: #c62828;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #16213e;
+  --color-input-border: #6a1b9a;
+  --color-input-focus: #9c27b0;
+  --color-input-text: #e1bee7;
+  --color-input-placeholder: #ba68c8;
+  
+  /* Accent Colors */
+  --color-accent: #9c27b0;
+  --color-accent-hover: #8e24aa;
+  --color-accent-light: rgba(156, 39, 176, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #1b5e20;
+  --color-success-border: #2e7d32;
+  --color-success-text: #a5d6a7;
+  
+  --color-error-bg: #b71c1c;
+  --color-error-border: #d32f2f;
+  --color-error-text: #ffcdd2;
+  
+  --color-warning-bg: #e65100;
+  --color-warning-border: #ff9800;
+  --color-warning-text: #ffe0b2;
+  
+  --color-info-bg: #0d47a1;
+  --color-info-border: #1976d2;
+  --color-info-text: #bbdefb;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #16213e;
+  --color-select-border: #6a1b9a;
+  --color-select-text: #e1bee7;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #9c27b0;
+  --color-tab-inactive: #ba68c8;
+  --color-tab-hover: #ce93d8;
+  
+  /* Links */
+  --color-link: #ba68c8;
+  --color-link-hover: #ce93d8;
+  --color-link-visited: #ab47bc;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+}
+
+/* ===========================
+   THEME: SUNSET ORANGE
+   =========================== */
+[data-theme="sunset"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(255, 243, 224, 0.98);
+  --color-bg-panel: #fff3e0;
+  --color-bg-card: #ffe0b2;
+  --color-bg-overlay: rgba(255, 152, 0, 0.5);
+  
+  /* Text Colors */
+  --color-text-primary: #bf360c;
+  --color-text-secondary: #d84315;
+  --color-text-muted: #ff5722;
+  --color-text-disabled: #ff8a65;
+  --color-heading: #d84315;
+  
+  /* Border Colors */
+  --color-border-light: #ffcc02;
+  --color-border-medium: #ff9800;
+  --color-border-dark: #f57c00;
+  
+  /* Button - Primary */
+  --color-button-primary: #e64a19;
+  --color-button-primary-hover: #d84315;
+  --color-button-primary-active: #bf360c;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #ffe0b2;
+  --color-button-secondary-hover: #ffcc02;
+  --color-button-secondary-active: #ffb300;
+  --color-button-secondary-text: #d84315;
+  
+  /* Button - Danger */
+  --color-button-danger: #d32f2f;
+  --color-button-danger-hover: #c62828;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #ffffff;
+  --color-input-border: #ff9800;
+  --color-input-focus: #ff5722;
+  --color-input-text: #bf360c;
+  --color-input-placeholder: #ff8a65;
+  
+  /* Accent Colors */
+  --color-accent: #ff5722;
+  --color-accent-hover: #e64a19;
+  --color-accent-light: rgba(255, 87, 34, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #c8e6c9;
+  --color-success-border: #4caf50;
+  --color-success-text: #1b5e20;
+  
+  --color-error-bg: #ffcdd2;
+  --color-error-border: #f44336;
+  --color-error-text: #b71c1c;
+  
+  --color-warning-bg: #ffe0b2;
+  --color-warning-border: #ff9800;
+  --color-warning-text: #e65100;
+  
+  --color-info-bg: #bbdefb;
+  --color-info-border: #2196f3;
+  --color-info-text: #0d47a1;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #ffffff;
+  --color-select-border: #ff9800;
+  --color-select-text: #bf360c;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #ff5722;
+  --color-tab-inactive: #ff8a65;
+  --color-tab-hover: #ffab91;
+  
+  /* Links */
+  --color-link: #ff5722;
+  --color-link-hover: #e64a19;
+  --color-link-visited: #d84315;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(255, 152, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(255, 152, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(255, 152, 0, 0.4);
+  --shadow-xl: 0 20px 25px rgba(255, 152, 0, 0.5);
+}
+
+/* ===========================
+   THEME: CYBERPUNK NEON
+   =========================== */
+[data-theme="cyberpunk"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(13, 17, 23, 0.98);
+  --color-bg-panel: #0d1117;
+  --color-bg-card: #161b22;
+  --color-bg-overlay: rgba(0, 255, 65, 0.3);
+  
+  /* Text Colors */
+  --color-text-primary: #f0f6fc;
+  --color-text-secondary: #c9d1d9;
+  --color-text-muted: #8b949e;
+  --color-text-disabled: #6e7681;
+  --color-heading: #ffffff;
+  
+  /* Border Colors */
+  --color-border-light: #21262d;
+  --color-border-medium: #30363d;
+  --color-border-dark: #484f58;
+  
+  /* Button - Primary */
+  --color-button-primary: #238636;
+  --color-button-primary-hover: #2ea043;
+  --color-button-primary-active: #1a7f37;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #21262d;
+  --color-button-secondary-hover: #30363d;
+  --color-button-secondary-active: #484f58;
+  --color-button-secondary-text: #c9d1d9;
+  
+  /* Button - Danger */
+  --color-button-danger: #da3633;
+  --color-button-danger-hover: #f85149;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #161b22;
+  --color-input-border: #30363d;
+  --color-input-focus: #00ff41;
+  --color-input-text: #f0f6fc;
+  --color-input-placeholder: #8b949e;
+  
+  /* Accent Colors */
+  --color-accent: #00ff41;
+  --color-accent-hover: #2ea043;
+  --color-accent-light: rgba(0, 255, 65, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #0d4429;
+  --color-success-border: #238636;
+  --color-success-text: #7ee787;
+  
+  --color-error-bg: #490202;
+  --color-error-border: #da3633;
+  --color-error-text: #ffa198;
+  
+  --color-warning-bg: #4d2c00;
+  --color-warning-border: #d29922;
+  --color-warning-text: #f0b72f;
+  
+  --color-info-bg: #0c2d6b;
+  --color-info-border: #1f6feb;
+  --color-info-text: #79c0ff;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #161b22;
+  --color-select-border: #30363d;
+  --color-select-text: #f0f6fc;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #00ff41;
+  --color-tab-inactive: #8b949e;
+  --color-tab-hover: #c9d1d9;
+  
+  /* Links */
+  --color-link: #58a6ff;
+  --color-link-hover: #79c0ff;
+  --color-link-visited: #a5a5a5;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 255, 65, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 255, 65, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 255, 65, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 255, 65, 0.6);
+}
+
+/* ===========================
+   THEME: CHERRY BLOSSOM
+   =========================== */
+[data-theme="cherry"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(252, 228, 236, 0.98);
+  --color-bg-panel: #fce4ec;
+  --color-bg-card: #f8bbd9;
+  --color-bg-overlay: rgba(233, 30, 99, 0.5);
+  
+  /* Text Colors */
+  --color-text-primary: #880e4f;
+  --color-text-secondary: #ad1457;
+  --color-text-muted: #c2185b;
+  --color-text-disabled: #e91e63;
+  --color-heading: #4a148c;
+  
+  /* Border Colors */
+  --color-border-light: #f8bbd9;
+  --color-border-medium: #f48fb1;
+  --color-border-dark: #f06292;
+  
+  /* Button - Primary */
+  --color-button-primary: #c2185b;
+  --color-button-primary-hover: #ad1457;
+  --color-button-primary-active: #880e4f;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #f8bbd9;
+  --color-button-secondary-hover: #f48fb1;
+  --color-button-secondary-active: #f06292;
+  --color-button-secondary-text: #880e4f;
+  
+  /* Button - Danger */
+  --color-button-danger: #d32f2f;
+  --color-button-danger-hover: #c62828;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #ffffff;
+  --color-input-border: #f48fb1;
+  --color-input-focus: #e91e63;
+  --color-input-text: #880e4f;
+  --color-input-placeholder: #f06292;
+  
+  /* Accent Colors */
+  --color-accent: #e91e63;
+  --color-accent-hover: #c2185b;
+  --color-accent-light: rgba(233, 30, 99, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #c8e6c9;
+  --color-success-border: #4caf50;
+  --color-success-text: #1b5e20;
+  
+  --color-error-bg: #ffcdd2;
+  --color-error-border: #f44336;
+  --color-error-text: #b71c1c;
+  
+  --color-warning-bg: #ffe0b2;
+  --color-warning-border: #ff9800;
+  --color-warning-text: #e65100;
+  
+  --color-info-bg: #bbdefb;
+  --color-info-border: #2196f3;
+  --color-info-text: #0d47a1;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #ffffff;
+  --color-select-border: #f48fb1;
+  --color-select-text: #880e4f;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #e91e63;
+  --color-tab-inactive: #f06292;
+  --color-tab-hover: #f8bbd9;
+  
+  /* Links */
+  --color-link: #e91e63;
+  --color-link-hover: #c2185b;
+  --color-link-visited: #ad1457;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(233, 30, 99, 0.2);
+  --shadow-md: 0 4px 6px rgba(233, 30, 99, 0.3);
+  --shadow-lg: 0 10px 15px rgba(233, 30, 99, 0.4);
+  --shadow-xl: 0 20px 25px rgba(233, 30, 99, 0.5);
+}
+
+/* ===========================
+   THEME: MONOCHROME
+   =========================== */
+[data-theme="monochrome"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(255, 255, 255, 0.98);
+  --color-bg-panel: #ffffff;
+  --color-bg-card: #f5f5f5;
+  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+  
+  /* Text Colors */
+  --color-text-primary: #212121;
+  --color-text-secondary: #424242;
+  --color-text-muted: #616161;
+  --color-text-disabled: #9e9e9e;
+  --color-heading: #000000;
+  
+  /* Border Colors */
+  --color-border-light: #e0e0e0;
+  --color-border-medium: #bdbdbd;
+  --color-border-dark: #757575;
+  
+  /* Button - Primary */
+  --color-button-primary: #616161;
+  --color-button-primary-hover: #424242;
+  --color-button-primary-active: #212121;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #f5f5f5;
+  --color-button-secondary-hover: #eeeeee;
+  --color-button-secondary-active: #e0e0e0;
+  --color-button-secondary-text: #424242;
+  
+  /* Button - Danger */
+  --color-button-danger: #424242;
+  --color-button-danger-hover: #212121;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #ffffff;
+  --color-input-border: #bdbdbd;
+  --color-input-focus: #424242;
+  --color-input-text: #212121;
+  --color-input-placeholder: #9e9e9e;
+  
+  /* Accent Colors */
+  --color-accent: #424242;
+  --color-accent-hover: #212121;
+  --color-accent-light: rgba(66, 66, 66, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #e8f5e8;
+  --color-success-border: #4caf50;
+  --color-success-text: #1b5e20;
+  
+  --color-error-bg: #ffebee;
+  --color-error-border: #f44336;
+  --color-error-text: #b71c1c;
+  
+  --color-warning-bg: #fff3e0;
+  --color-warning-border: #ff9800;
+  --color-warning-text: #e65100;
+  
+  --color-info-bg: #e3f2fd;
+  --color-info-border: #2196f3;
+  --color-info-text: #0d47a1;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #ffffff;
+  --color-select-border: #bdbdbd;
+  --color-select-text: #212121;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #424242;
+  --color-tab-inactive: #9e9e9e;
+  --color-tab-hover: #616161;
+  
+  /* Links */
+  --color-link: #424242;
+  --color-link-hover: #212121;
+  --color-link-visited: #757575;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* ===========================
+   THEME: SEPIA VINTAGE
+   =========================== */
+[data-theme="sepia"] {
+  /* Background Colors */
+  --color-bg-modal: rgba(245, 245, 220, 0.98);
+  --color-bg-panel: #f5f5dc;
+  --color-bg-card: #f0e68c;
+  --color-bg-overlay: rgba(139, 69, 19, 0.5);
+  
+  /* Text Colors */
+  --color-text-primary: #654321;
+  --color-text-secondary: #8b4513;
+  --color-text-muted: #a0522d;
+  --color-text-disabled: #cd853f;
+  --color-heading: #4a2c2a;
+  
+  /* Border Colors */
+  --color-border-light: #daa520;
+  --color-border-medium: #b8860b;
+  --color-border-dark: #8b7355;
+  
+  /* Button - Primary */
+  --color-button-primary: #a0522d;
+  --color-button-primary-hover: #8b4513;
+  --color-button-primary-active: #654321;
+  --color-button-primary-text: #ffffff;
+  
+  /* Button - Secondary */
+  --color-button-secondary: #f0e68c;
+  --color-button-secondary-hover: #daa520;
+  --color-button-secondary-active: #b8860b;
+  --color-button-secondary-text: #654321;
+  
+  /* Button - Danger */
+  --color-button-danger: #8b4513;
+  --color-button-danger-hover: #654321;
+  --color-button-danger-text: #ffffff;
+  
+  /* Input Fields */
+  --color-input-bg: #ffffff;
+  --color-input-border: #b8860b;
+  --color-input-focus: #8b4513;
+  --color-input-text: #654321;
+  --color-input-placeholder: #cd853f;
+  
+  /* Accent Colors */
+  --color-accent: #8b4513;
+  --color-accent-hover: #654321;
+  --color-accent-light: rgba(139, 69, 19, 0.2);
+  
+  /* Status Colors */
+  --color-success-bg: #d4edda;
+  --color-success-border: #28a745;
+  --color-success-text: #155724;
+  
+  --color-error-bg: #f8d7da;
+  --color-error-border: #dc3545;
+  --color-error-text: #721c24;
+  
+  --color-warning-bg: #fff3cd;
+  --color-warning-border: #ffc107;
+  --color-warning-text: #856404;
+  
+  --color-info-bg: #d1ecf1;
+  --color-info-border: #17a2b8;
+  --color-info-text: #0c5460;
+  
+  /* Select/Dropdown */
+  --color-select-bg: #ffffff;
+  --color-select-border: #b8860b;
+  --color-select-text: #654321;
+  
+  /* Tab/Navigation */
+  --color-tab-active: #8b4513;
+  --color-tab-inactive: #cd853f;
+  --color-tab-hover: #a0522d;
+  
+  /* Links */
+  --color-link: #8b4513;
+  --color-link-hover: #654321;
+  --color-link-visited: #a0522d;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(139, 69, 19, 0.2);
+  --shadow-md: 0 4px 6px rgba(139, 69, 19, 0.3);
+  --shadow-lg: 0 10px 15px rgba(139, 69, 19, 0.4);
+  --shadow-xl: 0 20px 25px rgba(139, 69, 19, 0.5);
+}
+
+/* ===========================
+   NUMBER INPUT SPINNER STYLING FOR NEW THEMES
+   =========================== */
+
+/* Midnight Purple spinners */
+[data-theme="midnight"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="midnight"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(156, 39, 176, 0.2);
+  border-left: 1px solid rgba(156, 39, 176, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="midnight"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="midnight"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(156, 39, 176, 0.4);
+}
+
+/* Sunset Orange spinners */
+[data-theme="sunset"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="sunset"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(255, 87, 34, 0.2);
+  border-left: 1px solid rgba(255, 87, 34, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="sunset"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="sunset"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(255, 87, 34, 0.4);
+}
+
+/* Cyberpunk Neon spinners */
+[data-theme="cyberpunk"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="cyberpunk"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(0, 255, 65, 0.2);
+  border-left: 1px solid rgba(0, 255, 65, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="cyberpunk"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="cyberpunk"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(0, 255, 65, 0.4);
+}
+
+/* Cherry Blossom spinners */
+[data-theme="cherry"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="cherry"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(233, 30, 99, 0.2);
+  border-left: 1px solid rgba(233, 30, 99, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="cherry"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="cherry"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(233, 30, 99, 0.4);
+}
+
+/* Monochrome spinners */
+[data-theme="monochrome"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="monochrome"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(66, 66, 66, 0.2);
+  border-left: 1px solid rgba(66, 66, 66, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="monochrome"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="monochrome"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(66, 66, 66, 0.4);
+}
+
+/* Sepia Vintage spinners */
+[data-theme="sepia"] input[type="number"]::-webkit-inner-spin-button,
+[data-theme="sepia"] input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  background: rgba(139, 69, 19, 0.2);
+  border-left: 1px solid rgba(139, 69, 19, 0.4);
+  cursor: pointer;
+}
+
+[data-theme="sepia"] input[type="number"]::-webkit-inner-spin-button:hover,
+[data-theme="sepia"] input[type="number"]::-webkit-outer-spin-button:hover {
+  background: rgba(139, 69, 19, 0.4);
+}

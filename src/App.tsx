@@ -12,6 +12,7 @@ import { TauriGameDemo } from './components/TauriGameDemo';
 import { ShogiController } from './usi/controller';
 import { ShogiControllerProvider } from './context/ShogiControllerContext';
 
+import './styles/themes.css';
 import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';

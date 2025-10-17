@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
+import { useTheme, getThemeDisplayName, getThemeDescription, type Theme } from '../hooks/useTheme';
 import '../styles/settings.css';
 
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
@@ -51,6 +52,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 }) => {
   const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(true);
   const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(true);
+  const { theme, setTheme } = useTheme();
 
   const toggleBoardBackgroundCollapse = () => {
     setIsBoardBackgroundCollapsed(!isBoardBackgroundCollapsed);
@@ -66,12 +68,32 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     return fileName;
   };
 
+  const themes: Theme[] = ['light', 'dark', 'traditional', 'ocean', 'forest', 'midnight', 'sunset', 'cyberpunk', 'cherry', 'monochrome', 'sepia'];
+
   return (
     <div className="settings-overlay">
       <div className="settings-panel">
         <h2>Settings</h2>
 
-
+        <section>
+          <h3>Color Theme</h3>
+          <div className="setting-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            {themes.map((themeOption) => (
+              <label key={themeOption} className="notation-option" style={{ cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  value={themeOption}
+                  checked={theme === themeOption}
+                  onChange={() => setTheme(themeOption)}
+                />
+                <div className="notation-label">
+                  <span className="notation-name">{getThemeDisplayName(themeOption)}</span>
+                  <span className="notation-example">{getThemeDescription(themeOption)}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
 
         <section>
           <h3>Piece Themes</h3>
