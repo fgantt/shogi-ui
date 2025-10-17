@@ -62,8 +62,8 @@ pub async fn spawn_engine(
     
     match manager.spawn_engine(engine_id.clone(), name, path).await {
         Ok(_) => {
-            // Initialize the engine with USI protocol
-            if let Err(e) = manager.initialize_engine(&engine_id).await {
+            // Initialize the engine with USI protocol and send saved options
+            if let Err(e) = manager.initialize_engine_with_options(&engine_id, &state.engine_storage).await {
                 log::error!("Failed to initialize engine: {}", e);
                 let _ = manager.stop_engine(&engine_id).await;
                 return Ok(CommandResponse::error(format!("Failed to initialize engine: {}", e)));
@@ -477,7 +477,7 @@ pub async fn start_engine_vs_engine(
     drop(storage);
 
     // Spawn the game loop in a background task
-    let manager = EngineVsEngineManager::new(app_handle, config);
+    let manager = EngineVsEngineManager::new(app_handle, config, state.engine_storage.clone());
     
     tokio::spawn(async move {
         if let Err(e) = manager.run_match().await {
@@ -486,5 +486,56 @@ pub async fn start_engine_vs_engine(
     });
 
     Ok(CommandResponse::success())
+}
+
+/// Save engine options
+#[tauri::command]
+pub async fn save_engine_options(
+    engine_id: String,
+    options: std::collections::HashMap<String, String>,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: save_engine_options - engine_id: {}, options: {:?}", engine_id, options);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    match storage.save_engine_options(&engine_id, options) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save options: {}", e)));
+            }
+            
+            log::info!("Engine options saved successfully for engine: {}", engine_id);
+            Ok(CommandResponse::success())
+        }
+        Err(e) => {
+            log::error!("Failed to save engine options: {}", e);
+            Ok(CommandResponse::error(format!("Failed to save options: {}", e)))
+        }
+    }
+}
+
+/// Get saved engine options
+#[tauri::command]
+pub async fn get_engine_options(
+    engine_id: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: get_engine_options - engine_id: {}", engine_id);
+
+    let storage = state.engine_storage.read().await;
+    
+    match storage.get_engine_options(&engine_id) {
+        Some(options) => {
+            log::info!("Retrieved {} saved options for engine: {}", options.len(), engine_id);
+            Ok(CommandResponse::success_with_data(serde_json::to_value(options).unwrap()))
+        }
+        None => {
+            log::info!("No saved options found for engine: {}", engine_id);
+            Ok(CommandResponse::success_with_data(serde_json::Value::Object(serde_json::Map::new())))
+        }
+    }
 }
 

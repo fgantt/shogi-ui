@@ -15,6 +15,7 @@ pub struct EngineConfig {
     pub enabled: bool,
     pub last_used: Option<String>,
     pub created_at: String,
+    pub saved_options: Option<std::collections::HashMap<String, String>>,
 }
 
 impl EngineConfig {
@@ -29,6 +30,7 @@ impl EngineConfig {
             enabled: true,
             last_used: None,
             created_at: now,
+            saved_options: None,
         }
     }
 }
@@ -165,6 +167,21 @@ impl EngineStorage {
         
         engine.enabled = enabled;
         Ok(())
+    }
+
+    /// Save engine options
+    pub fn save_engine_options(&mut self, engine_id: &str, options: std::collections::HashMap<String, String>) -> Result<()> {
+        let engine = self
+            .get_engine_mut(engine_id)
+            .ok_or_else(|| anyhow!("Engine not found"))?;
+        
+        engine.saved_options = Some(options);
+        Ok(())
+    }
+
+    /// Get saved engine options
+    pub fn get_engine_options(&self, engine_id: &str) -> Option<&std::collections::HashMap<String, String>> {
+        self.get_engine(engine_id)?.saved_options.as_ref()
     }
 }
 

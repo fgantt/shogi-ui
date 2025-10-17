@@ -44,10 +44,11 @@ pub struct EngineVsEngineManager {
     state: Arc<Mutex<EngineVsEngineState>>,
     engine1: Option<Child>,
     engine2: Option<Child>,
+    engine_storage: Arc<tokio::sync::RwLock<crate::engine_storage::EngineStorage>>,
 }
 
 impl EngineVsEngineManager {
-    pub fn new(app_handle: AppHandle, config: EngineVsEngineConfig) -> Self {
+    pub fn new(app_handle: AppHandle, config: EngineVsEngineConfig, engine_storage: Arc<tokio::sync::RwLock<crate::engine_storage::EngineStorage>>) -> Self {
         let initial_sfen = config.initial_sfen.clone()
             .unwrap_or_else(|| "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string());
 
@@ -68,6 +69,7 @@ impl EngineVsEngineManager {
             state: Arc::new(Mutex::new(state)),
             engine1: None,
             engine2: None,
+            engine_storage,
         }
     }
 
@@ -115,10 +117,12 @@ impl EngineVsEngineManager {
         Ok(())
     }
 
-    /// Initialize an engine with USI protocol
-    async fn initialize_engine(
+    /// Initialize an engine with USI protocol and send saved options
+    async fn initialize_engine_with_options(
         stdin: &mut tokio::process::ChildStdin,
         stdout: &mut tokio::process::ChildStdout,
+        engine_id: &str,
+        engine_storage: &tokio::sync::RwLock<crate::engine_storage::EngineStorage>,
     ) -> Result<()> {
         use tokio::io::AsyncBufReadExt;
         
@@ -159,7 +163,27 @@ impl EngineVsEngineManager {
             return Err(anyhow!("Timeout waiting for usiok"));
         }
 
-        log::info!("Received usiok, sending 'isready' command");
+        log::info!("Received usiok, sending saved options");
+
+        // Send saved options if any
+        let storage = engine_storage.read().await;
+        if let Some(options) = storage.get_engine_options(engine_id) {
+            if !options.is_empty() {
+                log::info!("Sending {} saved options to engine: {}", options.len(), engine_id);
+                for (option_name, option_value) in options {
+                    let option_command = format!("setoption name {} value {}\n", option_name, option_value);
+                    log::debug!("Sending option command: {}", option_command.trim());
+                    if let Err(e) = stdin.write_all(option_command.as_bytes()).await {
+                        log::warn!("Failed to send option '{}' to engine {}: {}", option_name, engine_id, e);
+                        // Continue with other options even if one fails
+                    }
+                }
+                stdin.flush().await?;
+            }
+        }
+        drop(storage);
+
+        log::info!("Sending 'isready' command");
         // Send isready
         stdin.write_all(b"isready\n").await?;
         stdin.flush().await?;
@@ -279,9 +303,9 @@ impl EngineVsEngineManager {
         let mut engine2_stdin = engine2_stdin;
         let mut engine2_stdout = engine2_stdout;
 
-        // Initialize both engines
-        Self::initialize_engine(&mut engine1_stdin, &mut engine1_stdout).await?;
-        Self::initialize_engine(&mut engine2_stdin, &mut engine2_stdout).await?;
+        // Initialize both engines with saved options
+        Self::initialize_engine_with_options(&mut engine1_stdin, &mut engine1_stdout, &self.config.engine1_id, &self.engine_storage).await?;
+        Self::initialize_engine_with_options(&mut engine2_stdin, &mut engine2_stdout, &self.config.engine2_id, &self.engine_storage).await?;
 
         // Send usinewgame to both
         engine1_stdin.write_all(b"usinewgame\n").await?;

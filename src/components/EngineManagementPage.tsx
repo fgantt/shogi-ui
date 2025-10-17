@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { EngineConfig, CommandResponse, EngineMetadata, EngineHealthResult } from '../types/engine';
+import { EngineOptionsModal } from './EngineOptionsModal';
 import './EngineManagementPage.css';
 
 export function EngineManagementPage() {
@@ -16,6 +17,10 @@ export function EngineManagementPage() {
   const [newEngineName, setNewEngineName] = useState('');
   const [newEnginePath, setNewEnginePath] = useState('');
   const [validationResult, setValidationResult] = useState<EngineMetadata | null>(null);
+
+  // Engine options modal state
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [selectedEngineForOptions, setSelectedEngineForOptions] = useState<EngineConfig | null>(null);
 
   // Load engines on mount
   useEffect(() => {
@@ -159,6 +164,16 @@ export function EngineManagementPage() {
     } catch (err) {
       setError(`Error removing engine: ${err}`);
     }
+  };
+
+  const handleOpenOptions = (engine: EngineConfig) => {
+    setSelectedEngineForOptions(engine);
+    setOptionsModalOpen(true);
+  };
+
+  const handleCloseOptions = () => {
+    setOptionsModalOpen(false);
+    setSelectedEngineForOptions(null);
   };
 
   const handleHealthCheck = async () => {
@@ -319,15 +334,25 @@ export function EngineManagementPage() {
                     </h3>
                     {getEngineStatusBadge(engine)}
                   </div>
-                  {!engine.is_builtin && (
+                  <div className="engine-actions">
                     <button
-                      onClick={() => handleRemoveEngine(engine.id, engine.name)}
-                      className="remove-button"
-                      title="Remove engine"
+                      onClick={() => handleOpenOptions(engine)}
+                      className="options-button"
+                      title="Configure engine options"
+                      disabled={!engine.metadata || engine.metadata.options.length === 0}
                     >
-                      Remove
+                      Options
                     </button>
-                  )}
+                    {!engine.is_builtin && (
+                      <button
+                        onClick={() => handleRemoveEngine(engine.id, engine.name)}
+                        className="remove-button"
+                        title="Remove engine"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="engine-details">
@@ -365,6 +390,13 @@ export function EngineManagementPage() {
           </div>
         )}
       </section>
+
+      {/* Engine Options Modal */}
+      <EngineOptionsModal
+        isOpen={optionsModalOpen}
+        engine={selectedEngineForOptions}
+        onClose={handleCloseOptions}
+      />
     </div>
   );
 }

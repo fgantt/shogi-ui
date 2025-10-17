@@ -137,6 +137,8 @@ pub fn run() {
       commands::register_builtin_engine,
       commands::health_check_engines,
       commands::start_engine_vs_engine,
+      commands::save_engine_options,
+      commands::get_engine_options,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
