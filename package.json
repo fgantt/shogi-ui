@@ -13,7 +13,8 @@
     "tauri": "tauri",
     "build:engine": "cargo build --bin shogi-engine --release",
     "tauri:dev": "npm run build:engine && tauri dev",
-    "tauri:build": "npm run build:engine && tauri build"
+    "tauri:build": "npm run build:engine && tauri build",
+    "version:update": "bash scripts/update-version.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

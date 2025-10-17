@@ -1,6 +1,16 @@
-# Shogi Game (Vite + React)
+# Shogi Vibe
 
-This is a browser-based implementation of Shogi, also known as Japanese Chess. It allows a single player to play against a computer opponent with varying difficulty levels.
+A high-performance desktop Shogi (Japanese Chess) game with advanced AI, built with Tauri and React. Play against an intelligent computer opponent with multiple difficulty levels, opening book strategies, and beautiful themes.
+
+## 🎮 Download & Install
+
+**[Download Latest Release](https://github.com/yourusername/shogi-game/releases/latest)**
+
+- **macOS**: Download `.dmg` installer
+- **Windows**: Download `.exe` or `.msi` installer  
+- **Linux**: Download `.deb`, `.AppImage`, or `.rpm` package
+
+See [BUILDING.md](BUILDING.md) for developer build instructions.
 
 ## Table of Contents
 - [About Shogi](#about-shogi)
@@ -8,7 +18,7 @@ This is a browser-based implementation of Shogi, also known as Japanese Chess. I
 - [Piece Kanji Legend](#piece-kanji-legend)
 - [Features](#features)
 - [Getting Started](#getting-started)
-- [WebAssembly Engine](#webassembly-engine)
+- [Distribution](#distribution)
 
 
 ## About Shogi
@@ -101,39 +111,69 @@ When a piece moves onto a square occupied by an opponent's piece, the opponent's
 
 ## Features
 
-*   **High-performance game engine:** The core game logic, including move generation, validation, and AI, is implemented in Rust and compiled to WebAssembly for native-like performance in the browser.
-*   **Advanced opening book system:** Professional-grade opening book with binary format for fast lookups, lazy loading for memory efficiency, and intelligent caching for optimal performance.
-*   **WASM-optimized performance:** Memory-efficient binary storage, FNV-1a hashing, streaming support for large opening books, and comprehensive memory monitoring.
-*   Single-player mode against an AI opponent.
-*   Three AI difficulty levels: Easy, Medium, and Hard.
-*   Click-to-move and drag-and-drop functionality for pieces.
-*   Visual highlighting of legal moves.
-*   Promotion prompt for optional promotions.
-*   Visual indicator for King in check.
-*   Visual indicator for the opponent's last move.
-*   Move history log.
-*   New Game and Undo Move buttons.
-*   **Sound effects:** Realistic piece movement sounds with configurable audio settings.
+### 🚀 High Performance
+*   **Native Desktop App:** Built with Tauri for native performance and small bundle size
+*   **Rust Engine:** Core game logic written in Rust with optimized move generation
+*   **Advanced Opening Book:** Professional-grade opening strategies with intelligent caching
+*   **Fast AI:** Multiple difficulty levels with optimized search algorithms
+
+### 🎯 Gameplay
+*   Single-player mode against an AI opponent
+*   Three AI difficulty levels: Easy, Medium, and Hard
+*   Click-to-move and drag-and-drop piece movement
+*   Visual highlighting of legal moves
+*   Promotion prompts for optional promotions
+*   Visual indicators for check and last move
+*   Complete move history log
+*   Undo move functionality
+
+### 🎨 User Experience
+*   Beautiful, modern UI with multiple themes
+*   Realistic piece movement sounds with audio controls
+*   Customizable board and piece themes
+*   Responsive design for various screen sizes
+*   Smooth animations and transitions
 
 ## Getting Started
 
-To run the game locally, follow these steps:
+### For End Users
+
+Download the installer for your platform from the [Releases](https://github.com/yourusername/shogi-game/releases) page and install it like any other application.
+
+### For Developers
+
+**Prerequisites:**
+- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
+- [Node.js](https://nodejs.org/) (v20 or later)
+
+**Setup:**
 
 1.  **Clone the repository:**
     ```bash
     git clone <repository_url>
-    cd shogi-ui
+    cd shogi-game/worktrees/tauri
     ```
+
 2.  **Install dependencies:**
     ```bash
     npm install
     ```
-3.  **Start the development server:**
+
+3.  **Run in development mode:**
     ```bash
-    npm run dev
+    npm run tauri:dev
     ```
 
-    The game should now be accessible in your browser at `http://localhost:5173` (or another port if 5173 is in use).
+    This will build the Rust engine and launch the desktop app with hot-reload enabled.
+
+4.  **Build for production:**
+    ```bash
+    npm run tauri:build
+    ```
+
+    Installers will be created in `src-tauri/target/release/bundle/`
+
+See [BUILDING.md](BUILDING.md) for more details.
 
 ## WebAssembly Engine
 
@@ -266,4 +306,91 @@ let optimization_result = engine.optimize_memory_usage();
 println!("Applied {} optimizations", optimization_result.optimizations_applied);
 ```
 
+## Distribution
+
+### Building Installers
+
+To create distributable installers for end users:
+
+```bash
+npm run tauri:build
+```
+
+This creates platform-specific installers in `src-tauri/target/release/bundle/`:
+
+- **macOS**: `.dmg` disk image (Universal binary - Intel + Apple Silicon)
+- **Windows**: `.exe` and `.msi` installers
+- **Linux**: `.deb`, `.AppImage`, and `.rpm` packages
+
+### Distribution Options
+
+1. **GitHub Releases** (Recommended for open source)
+   - Upload installers to GitHub Releases
+   - Users download appropriate installer for their platform
+   - Free hosting with version tracking
+
+2. **Direct Download**
+   - Host installers on your own website
+   - Link directly to download files
+
+3. **App Stores**
+   - Mac App Store (requires Apple Developer account)
+   - Microsoft Store (requires one-time fee)
+   - Snap Store / Flathub (free for Linux)
+
+### Code Signing
+
+For production distribution, consider code signing to avoid security warnings:
+
+- **macOS**: Requires Apple Developer account ($99/year) and notarization
+- **Windows**: Requires code signing certificate ($100-400/year)
+- **Linux**: Generally not required
+
+### Complete Guide
+
+For comprehensive instructions including:
+- Code signing setup
+- Auto-updates configuration
+- CI/CD automation
+- Optimization tips
+- Troubleshooting
+
+See the [**Distribution Guide**](docs/DISTRIBUTION_GUIDE.md).
+
+## Technology Stack
+
+- **Desktop Framework:** [Tauri 2.x](https://tauri.app/)
+- **Frontend:** React 19 + TypeScript + Vite
+- **Engine:** Rust (standalone binary via USI protocol)
+- **Styling:** CSS with custom themes
+- **Build System:** Cargo + npm
+
+## Project Structure
+
+```
+.
+├── src/                    # React frontend source
+│   ├── components/         # React components
+│   ├── hooks/              # Custom React hooks
+│   ├── services/           # USI engine communication
+│   └── styles/             # CSS and themes
+├── src-tauri/              # Tauri backend
+│   ├── src/                # Rust Tauri application
+│   └── Cargo.toml          # Tauri dependencies
+├── src/                    # Rust engine source
+│   ├── ai/                 # AI implementation
+│   ├── bin/                # Binary entry points
+│   └── lib.rs              # Engine library
+├── docs/                   # Documentation
+├── public/                 # Static assets
+└── Cargo.toml              # Engine dependencies
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## License
+
+MIT License - see LICENSE file for details.
 

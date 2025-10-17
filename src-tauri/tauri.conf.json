@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Shogi Game",
+  "productName": "Shogi Vibe",
   "version": "0.1.0",
   "identifier": "com.shogigame.app",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Shogi Game",
+        "title": "Shogi Vibe",
         "width": 1400,
         "height": 1000,
         "resizable": true,
@@ -33,6 +33,26 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": []
+    "externalBin": [],
+    "publisher": "Shogi Vibe",
+    "category": "Game",
+    "shortDescription": "Play Shogi (Japanese Chess) against AI",
+    "longDescription": "A high-performance Shogi game with advanced AI powered by Rust. Features multiple difficulty levels, opening book, and beautiful themes.",
+    "resources": [],
+    "copyright": "",
+    "licenseFile": "",
+    "macOS": {
+      "minimumSystemVersion": "10.13"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
   }
 }

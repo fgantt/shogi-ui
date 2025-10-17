@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "shogi-vibe"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "A high-performance Shogi game with advanced AI"
+authors = ["Shogi Vibe Team"]
+license = "MIT"
+repository = "https://github.com/yourusername/shogi-game"
 edition = "2021"
 rust-version = "1.77.2"
 
