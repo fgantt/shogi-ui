@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMultipleEngineEvents } from '../hooks/useTauriEvents';
+import type { EngineConfig } from '../types/engine';
 import './UsiMonitor.css';
 
 interface UsiMessage {
@@ -12,6 +13,7 @@ interface UsiMessage {
 
 interface TauriUsiMonitorProps {
   engineIds: string[];
+  engines?: EngineConfig[];  // Optional: for displaying engine names
   isVisible: boolean;
   onToggle: () => void;
   onSendCommand?: (engineId: string, command: string) => void;
@@ -19,6 +21,7 @@ interface TauriUsiMonitorProps {
 
 export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   engineIds,
+  engines,
   isVisible,
   onToggle,
   onSendCommand,
@@ -28,6 +31,13 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   const [selectedEngine, setSelectedEngine] = useState<string>('all');
   const [communicationHistory, setCommunicationHistory] = useState<UsiMessage[]>([]);
   const [manualCommand, setManualCommand] = useState('');
+
+  // Helper to get engine display name
+  const getEngineDisplayName = (engineId: string): string => {
+    if (!engines) return engineId.substring(0, 8) + '...';
+    const engine = engines.find(e => e.id === engineId);
+    return engine?.display_name || engineId.substring(0, 8) + '...';
+  };
 
   // Listen to all engine messages
   useMultipleEngineEvents(engineIds, {
@@ -126,7 +136,7 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
           >
             <option value="all">All Engines</option>
             {engineIds.map(engineId => (
-              <option key={engineId} value={engineId}>{engineId.substring(0, 8)}...</option>
+              <option key={engineId} value={engineId}>{getEngineDisplayName(engineId)}</option>
             ))}
           </select>
         </div>
@@ -200,7 +210,7 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
                     {entry.timestamp.toLocaleTimeString()}
                   </span>
                   <span className="session-id">
-                    [{entry.engineId.substring(0, 8)}]
+                    [{getEngineDisplayName(entry.engineId)}]
                   </span>
                   <span className="command">
                     {entry.message}

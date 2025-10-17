@@ -231,6 +231,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [player1EngineId, setPlayer1EngineId] = useState<string | null>(null);
   const [player2EngineId, setPlayer2EngineId] = useState<string | null>(null);
   const [activeEngineIds, setActiveEngineIds] = useState<string[]>([]);
+  const [availableEngines, setAvailableEngines] = useState<EngineConfig[]>([]);
   
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
@@ -1099,6 +1100,9 @@ const GamePage: React.FC<GamePageProps> = ({
         return;
       }
 
+      // Store engines for display name lookup in USI monitor
+      setAvailableEngines(response.data);
+
       // Spawn player 1 engine if AI
       if (settings.player1Type === 'ai' && settings.player1EngineId) {
         console.log('[initializeTauriEngines] Player 1 is AI, spawning engine:', settings.player1EngineId);
@@ -1698,6 +1702,7 @@ const GamePage: React.FC<GamePageProps> = ({
         {useTauriEngine ? (
           <TauriUsiMonitor
             engineIds={activeEngineIds}
+            engines={availableEngines}
             isVisible={isUsiMonitorVisible}
             onToggle={onToggleUsiMonitor}
             onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
@@ -1979,6 +1984,7 @@ const GamePage: React.FC<GamePageProps> = ({
       {useTauriEngine ? (
         <TauriUsiMonitor
           engineIds={activeEngineIds}
+          engines={availableEngines}
           isVisible={isUsiMonitorVisible}
           onToggle={onToggleUsiMonitor}
           onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
