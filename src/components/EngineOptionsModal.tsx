@@ -333,7 +333,9 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
                   <div key={index} className="option-item">
                     <div className="option-header">
                       <label className="option-name">{option.name}</label>
-                      <span className="option-type">({option.option_type})</span>
+                      <span className={`option-type-badge option-type-${option.option_type}`}>
+                        {option.option_type}
+                      </span>
                     </div>
                     
                     <div className="option-controls">
@@ -344,14 +346,6 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
                       <div className="option-info">
                         <span className="option-default">
                           Default: {option.default}
-                        </span>
-                      </div>
-                    )}
-
-                    {option.min && option.max && (
-                      <div className="option-info">
-                        <span className="option-range">
-                          Range: {option.min} - {option.max}
                         </span>
                       </div>
                     )}

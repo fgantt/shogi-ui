@@ -216,13 +216,38 @@
   font-size: 1rem;
 }
 
-.option-type {
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-style: italic;
+.option-type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.7rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.option-type-check {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.option-type-spin {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.option-type-string {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.option-type-combo {
+  background: #e9d5ff;
+  color: #7c3aed;
+}
+
+.option-type-button {
   background: var(--color-accent-light);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  color: var(--color-accent);
 }
 
 .option-controls {
