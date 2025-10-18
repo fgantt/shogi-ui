@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import SettingsPanel from './SettingsPanel';
 import StartGameModal from './StartGameModal';
 import { GameSettings } from '../types';
+import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import './HomePage.css';
 
 const HomePage: React.FC = () => {
@@ -20,10 +21,35 @@ const HomePage: React.FC = () => {
   const [showPieceTooltips, setShowPieceTooltips] = useState<boolean>(false);
 
   useEffect(() => {
-    const importWallpapers = async () => {
-      const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
-      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
-      setWallpaperList(paths);
+    const loadAssets = async () => {
+      let finalWallpaperPaths: string[] = [];
+      let finalBoardPaths: string[] = [];
+
+      try {
+        // Try to dynamically load images from directories
+        const [wallpaperPaths, boardPaths] = await Promise.all([
+          loadWallpaperImages(),
+          loadBoardImages()
+        ]);
+
+        // If dynamic loading returns empty arrays, fall back to hardcoded lists
+        finalWallpaperPaths = wallpaperPaths.length > 0 ? wallpaperPaths : getFallbackWallpaperImages();
+        finalBoardPaths = boardPaths.length > 0 ? boardPaths : getFallbackBoardImages();
+
+        setWallpaperList(finalWallpaperPaths);
+        setBoardBackgroundList(finalBoardPaths);
+
+        console.log('Loaded wallpapers:', finalWallpaperPaths.length, 'images');
+        console.log('Loaded boards:', finalBoardPaths.length, 'images');
+      } catch (error) {
+        console.error('Error loading images dynamically, using fallback lists:', error);
+        // Fall back to hardcoded lists if dynamic loading fails
+        finalWallpaperPaths = getFallbackWallpaperImages();
+        finalBoardPaths = getFallbackBoardImages();
+        setWallpaperList(finalWallpaperPaths);
+        setBoardBackgroundList(finalBoardPaths);
+      }
+
       // Set current wallpaper to match the one set by App.jsx
       const currentBodyBackground = document.body.style.backgroundImage;
       if (currentBodyBackground && currentBodyBackground !== 'none') {
@@ -33,18 +59,15 @@ const HomePage: React.FC = () => {
           setCurrentWallpaper(urlMatch[1]);
         }
       }
-    };
-    const importBoardBackgrounds = async () => {
-      const modules = import.meta.glob('/public/boards/*.{jpg,svg}');
-      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
-      setBoardBackgroundList(paths);
-      if (paths.length > 0) {
-        const initialBoardBackground = paths[Math.floor(Math.random() * paths.length)];
+
+      // Set random board background if not already set
+      if (finalBoardPaths.length > 0 && !currentBoardBackground) {
+        const initialBoardBackground = finalBoardPaths[Math.floor(Math.random() * finalBoardPaths.length)];
         setCurrentBoardBackground(initialBoardBackground);
       }
     };
-    importWallpapers();
-    importBoardBackgrounds();
+
+    loadAssets();
   }, []);
 
   const handleStartGame = () => {
