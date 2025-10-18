@@ -456,12 +456,15 @@ const GamePage: React.FC<GamePageProps> = ({
   // Listen for AI moves to play sound
   useEffect(() => {
     const handleAiMove = () => {
+      console.log('[GamePage] AI move made, playing sound');
       playPieceMoveSound();
     };
 
+    console.log('[GamePage] Registering aiMoveMade listener');
     controller.on('aiMoveMade', handleAiMove);
 
     return () => {
+      console.log('[GamePage] Unregistering aiMoveMade listener');
       controller.off('aiMoveMade', handleAiMove);
     };
   }, [controller]);
@@ -1209,6 +1212,9 @@ const GamePage: React.FC<GamePageProps> = ({
           controller.handleUserMove(move).catch(error => {
             console.error('[Tauri Event] Failed to apply engine move:', error);
           });
+          // Play sound for AI move
+          console.log('[Tauri Event] Playing piece move sound for AI');
+          playPieceMoveSound();
         } else {
           console.log('[Tauri Event] Move is resign or invalid');
         }
@@ -1230,6 +1236,9 @@ const GamePage: React.FC<GamePageProps> = ({
           controller.handleUserMove(move).catch(error => {
             console.error('Failed to apply engine move:', error);
           });
+          // Play sound for AI move
+          console.log('[Tauri Event] Playing piece move sound for second AI');
+          playPieceMoveSound();
         }
       }
     },
