@@ -40,13 +40,43 @@
   padding: 12px 16px;
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border-light);
-  border-radius: 8px 8px 0 0;
 }
 
 .usi-monitor-header h3 {
   margin: 0;
   font-size: 16px;
   color: var(--color-heading);
+}
+
+/* Tabs */
+.usi-monitor-tabs {
+  display: flex;
+  background: var(--color-bg-card);
+  border-bottom: 2px solid var(--color-border-medium);
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
+}
+
+.tab-button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-button-secondary-hover);
+}
+
+.tab-button.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  background: var(--color-bg-panel);
 }
 
 .close-button {
@@ -73,14 +103,43 @@
 .usi-monitor-content {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
-.last-commands {
+/* Engine Monitor Tab */
+.engine-monitor-tab {
+  display: flex;
+  flex-direction: column;
+}
+
+.engine-section {
   padding: 16px;
-  border-bottom: 1px solid var(--color-border-light);
   background: var(--color-bg-card);
+}
+
+.engine-header {
+  margin-bottom: 12px;
+  font-size: 15px;
+  color: var(--color-text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.engine-nps {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
+}
+
+.engine-divider {
+  height: 2px;
+  background: var(--color-border-medium);
+  margin: 0;
 }
 
 .last-command-item {
@@ -88,7 +147,7 @@
 }
 
 .last-command-item:last-child {
-  margin-bottom: 0;
+  margin-bottom: 12px;
 }
 
 .last-command-item label {
@@ -255,9 +314,7 @@
 .manual-command {
   display: flex;
   gap: 8px;
-  padding: 12px;
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border-light);
+  margin-top: 8px;
 }
 
 .manual-command input {
@@ -320,11 +377,113 @@
   border-color: var(--color-border-dark);
 }
 
+/* Search Tab */
+.search-tab {
+  display: flex;
+  flex-direction: column;
+}
+
+.no-search-info {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 20px;
+}
+
+.search-table-container {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.search-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.search-table thead {
+  background: var(--color-bg-panel);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.search-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  border-bottom: 2px solid var(--color-border-medium);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.search-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+  vertical-align: top;
+}
+
+.search-table tbody tr:hover {
+  background: var(--color-button-secondary-hover);
+}
+
+.search-table .pv-cell {
+  font-size: 11px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-move {
+  margin-right: 8px;
+  display: inline-block;
+}
+
+.sente-symbol {
+  color: #1976d2;
+  font-weight: bold;
+  margin-right: 2px;
+}
+
+.gote-symbol {
+  color: #c62828;
+  font-weight: bold;
+  margin-right: 2px;
+}
+
+.search-table .score-positive {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.search-table .score-negative {
+  color: #c62828;
+  font-weight: 600;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .usi-monitor {
     width: calc(100vw - 40px);
     max-width: none;
     margin: 0 20px;
+  }
+  
+  .search-table {
+    font-size: 10px;
+  }
+  
+  .search-table th,
+  .search-table td {
+    padding: 4px 6px;
+  }
+  
+  .search-table .pv-cell {
+    max-width: 150px;
   }
 }

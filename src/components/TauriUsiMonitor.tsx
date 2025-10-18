@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMultipleEngineEvents } from '../hooks/useTauriEvents';
+import { parseEngineInfo } from '../utils/tauriEngine';
 import type { EngineConfig } from '../types/engine';
 import './UsiMonitor.css';
 
@@ -10,6 +11,20 @@ interface UsiMessage {
   message: string;
   engineId: string;
 }
+
+interface SearchInfo {
+  id: string;
+  timestamp: Date;
+  elapsed: number; // time in seconds
+  rank: number; // multipv rank
+  depth: number;
+  seldepth?: number;
+  nodes: number;
+  score: number;
+  pv: string; // space-separated move list
+}
+
+type TabType = 'engine' | 'search';
 
 interface TauriUsiMonitorProps {
   engineIds: string[];
@@ -26,11 +41,11 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   onToggle,
   onSendCommand,
 }) => {
-  const historyRef = useRef<HTMLDivElement>(null);
-  const [showDebugMessages, setShowDebugMessages] = useState(false);
-  const [selectedEngine, setSelectedEngine] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<TabType>('engine');
   const [communicationHistory, setCommunicationHistory] = useState<UsiMessage[]>([]);
-  const [manualCommand, setManualCommand] = useState('');
+  const [searchInfoByEngine, setSearchInfoByEngine] = useState<Map<string, SearchInfo[]>>(new Map());
+  const [manualCommands, setManualCommands] = useState<Map<string, string>>(new Map());
+  const [npsPerEngine, setNpsPerEngine] = useState<Map<string, number>>(new Map());
 
   // Helper to get engine display name
   const getEngineDisplayName = (engineId: string): string => {
@@ -38,6 +53,63 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
     const engine = engines.find(e => e.id === engineId);
     return engine?.display_name || engineId.substring(0, 8) + '...';
   };
+
+  // Helper to get player name from engine ID
+  const getPlayerFromEngineId = (engineId: string): string => {
+    if (!engines) return 'Unknown';
+    const engine = engines.find(e => e.id === engineId);
+    if (!engine) return 'Unknown';
+    // Assuming engine config has a player field or we can infer from the order
+    const index = engineIds.indexOf(engineId);
+    return index === 0 ? 'Sente' : 'Gote';
+  };
+
+  // Listen to sent command events
+  useEffect(() => {
+    const handleCommandSent = (engineId: string) => (event: Event) => {
+      const customEvent = event as CustomEvent<{ command: string }>;
+      const command = customEvent.detail.command;
+      
+      const newMessage: UsiMessage = {
+        id: `sent-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        direction: 'sent',
+        message: command,
+        engineId,
+      };
+      setCommunicationHistory(prev => [...prev, newMessage]);
+
+      // Clear search info when a new "go" command is sent
+      if (command.startsWith('go')) {
+        setSearchInfoByEngine(prev => {
+          const newMap = new Map(prev);
+          newMap.set(engineId, []);
+          return newMap;
+        });
+        // Reset NPS for this engine
+        setNpsPerEngine(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(engineId);
+          return newMap;
+        });
+      }
+    };
+
+    // Register listeners for each engine
+    const listeners: Array<{ engineId: string; handler: (event: Event) => void }> = [];
+    engineIds.forEach(engineId => {
+      const handler = handleCommandSent(engineId);
+      window.addEventListener(`usi-command-sent::${engineId}`, handler);
+      listeners.push({ engineId, handler });
+    });
+
+    // Cleanup
+    return () => {
+      listeners.forEach(({ engineId, handler }) => {
+        window.removeEventListener(`usi-command-sent::${engineId}`, handler);
+      });
+    };
+  }, [engineIds]);
 
   // Listen to all engine messages
   useMultipleEngineEvents(engineIds, {
@@ -50,6 +122,57 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
         engineId,
       };
       setCommunicationHistory(prev => [...prev, newMessage]);
+
+      // Parse info messages for search tab
+      if (message.startsWith('info ')) {
+        const info = parseEngineInfo(message);
+        
+        // Update NPS if available
+        if (info.nps !== undefined) {
+          setNpsPerEngine(prev => {
+            const newMap = new Map(prev);
+            newMap.set(engineId, info.nps!);
+            return newMap;
+          });
+        } else if (info.nodes !== undefined && info.time !== undefined && info.time > 0) {
+          // Calculate NPS if not provided directly
+          const calculatedNps = Math.round((info.nodes * 1000) / info.time);
+          setNpsPerEngine(prev => {
+            const newMap = new Map(prev);
+            newMap.set(engineId, calculatedNps);
+            return newMap;
+          });
+        }
+        
+        // Only add to search info if it has the key fields
+        if (info.depth !== undefined && info.score !== undefined && info.nodes !== undefined) {
+          const searchInfo: SearchInfo = {
+            id: `search-${Date.now()}-${Math.random()}`,
+            timestamp: new Date(),
+            elapsed: info.time !== undefined ? info.time / 1000 : 0, // Convert ms to seconds
+            rank: info.multipv || 1,
+            depth: info.depth,
+            seldepth: info.seldepth,
+            nodes: info.nodes,
+            score: info.score,
+            pv: info.pv ? info.pv.join(' ') : '',
+          };
+
+          setSearchInfoByEngine(prev => {
+            const newMap = new Map(prev);
+            const engineInfo = newMap.get(engineId) || [];
+            // Add to the beginning (newest first)
+            newMap.set(engineId, [searchInfo, ...engineInfo]);
+            return newMap;
+          });
+        }
+      }
+
+      // Check for bestmove to clear search info for new move
+      if (message.startsWith('bestmove')) {
+        // Don't clear immediately - keep the last move's info visible
+        // We'll clear when a new "go" command is sent
+      }
     },
     onUsiError: (engineId, error) => {
       const errorMessage: UsiMessage = {
@@ -63,54 +186,80 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
     },
   });
 
-  // Add sent messages to history
-  const addSentMessage = (engineId: string, command: string) => {
-    const newMessage: UsiMessage = {
-      id: `sent-${Date.now()}-${Math.random()}`,
-      timestamp: new Date(),
-      direction: 'sent',
-      message: command,
-      engineId,
-    };
-    setCommunicationHistory(prev => [...prev, newMessage]);
-  };
-
-  // Filter history based on debug toggle and selected engine
-  const filteredHistory = communicationHistory.filter(entry => {
-    const isDebug = entry.message.includes('DEBUG:') || entry.message.includes('info string');
-    const engineMatch = selectedEngine === 'all' || entry.engineId === selectedEngine;
-    return (!isDebug || showDebugMessages) && engineMatch;
-  });
-
-  // Get last sent and received commands
-  const lastSentCommand = communicationHistory
-    .filter(entry => entry.direction === 'sent')
-    .slice(-1)[0]?.message || 'None';
-
-  const lastReceivedCommand = communicationHistory
-    .filter(entry => entry.direction === 'received' && (!entry.message.includes('DEBUG:') || showDebugMessages))
-    .slice(-1)[0]?.message || 'None';
-
-  // Auto-scroll to bottom when new messages are added
-  useEffect(() => {
-    if (historyRef.current) {
-      historyRef.current.scrollTop = historyRef.current.scrollHeight;
-    }
-  }, [filteredHistory]);
-
-  const handleSendCommand = () => {
-    if (!manualCommand.trim() || !onSendCommand) return;
+  const handleSendCommand = (engineId: string) => {
+    const command = manualCommands.get(engineId);
+    if (!command?.trim() || !onSendCommand) return;
     
-    const targetEngine = selectedEngine === 'all' ? engineIds[0] : selectedEngine;
-    if (targetEngine) {
-      onSendCommand(targetEngine, manualCommand.trim());
-      addSentMessage(targetEngine, manualCommand.trim());
-      setManualCommand('');
-    }
+    // The onSendCommand callback (sendUsiCommand) will emit an event that we listen to
+    onSendCommand(engineId, command.trim());
+    
+    // Clear the input for this engine
+    setManualCommands(prev => {
+      const newMap = new Map(prev);
+      newMap.set(engineId, '');
+      return newMap;
+    });
   };
 
-  const handleClearHistory = () => {
-    setCommunicationHistory([]);
+  const updateManualCommand = (engineId: string, value: string) => {
+    setManualCommands(prev => {
+      const newMap = new Map(prev);
+      newMap.set(engineId, value);
+      return newMap;
+    });
+  };
+
+  // Get last sent and received for each engine
+  const getLastSent = (engineId: string): { timestamp: Date | null; message: string } => {
+    const messages = communicationHistory.filter(
+      entry => entry.engineId === engineId && entry.direction === 'sent'
+    );
+    const last = messages[messages.length - 1];
+    return last 
+      ? { timestamp: last.timestamp, message: last.message }
+      : { timestamp: null, message: 'None' };
+  };
+
+  const getLastReceived = (engineId: string): { timestamp: Date | null; message: string } => {
+    const messages = communicationHistory.filter(
+      entry => entry.engineId === engineId && entry.direction === 'received'
+    );
+    const last = messages[messages.length - 1];
+    return last 
+      ? { timestamp: last.timestamp, message: last.message }
+      : { timestamp: null, message: 'None' };
+  };
+
+  const formatTimestamp = (timestamp: Date | null): string => {
+    if (!timestamp) return 'N/A';
+    return timestamp.toLocaleTimeString();
+  };
+
+  const formatNumber = (num: number): string => {
+    return num.toLocaleString();
+  };
+
+  // Format PV with player symbols
+  const formatPV = (pv: string, engineId: string): JSX.Element[] => {
+    if (!pv) return [];
+    
+    const moves = pv.split(' ').filter(m => m.trim());
+    const isSenteEngine = engineIds.indexOf(engineId) === 0;
+    
+    return moves.map((move, index) => {
+      // Determine which player makes this move
+      // For Sente engine: first move is Sente (☗), then Gote (☖), etc.
+      // For Gote engine: first move is Gote (☖), then Sente (☗), etc.
+      const isSenteMove = isSenteEngine ? index % 2 === 0 : index % 2 === 1;
+      const symbol = isSenteMove ? '☗' : '☖';
+      
+      return (
+        <span key={index} className="pv-move">
+          <span className={isSenteMove ? 'sente-symbol' : 'gote-symbol'}>{symbol}</span>
+          {move}
+        </span>
+      );
+    });
   };
 
   if (!isVisible) {
@@ -127,99 +276,141 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
     <div className="usi-monitor">
       <div className="usi-monitor-header">
         <h3>USI Communication Monitor</h3>
-        <div className="session-selector">
-          <label htmlFor="engine-select">Engine:</label>
-          <select 
-            id="engine-select" 
-            value={selectedEngine} 
-            onChange={(e) => setSelectedEngine(e.target.value)}
-          >
-            <option value="all">All Engines</option>
-            {engineIds.map(engineId => (
-              <option key={engineId} value={engineId}>{getEngineDisplayName(engineId)}</option>
-            ))}
-          </select>
-        </div>
         <button onClick={onToggle} className="close-button">
           ×
         </button>
       </div>
       
-      <div className="usi-monitor-content">
-        <div className="last-commands">
-          <div className="last-command-item">
-            <label>Last Sent:</label>
-            <div className="command-text sent-command">
-              {lastSentCommand}
-            </div>
-          </div>
-          <div className="last-command-item">
-            <label>Last Received:</label>
-            <div className="command-text received-command">
-              {lastReceivedCommand}
-            </div>
-          </div>
-        </div>
+      <div className="usi-monitor-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'engine' ? 'active' : ''}`}
+          onClick={() => setActiveTab('engine')}
+        >
+          Engine Monitor
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'search' ? 'active' : ''}`}
+          onClick={() => setActiveTab('search')}
+        >
+          Search
+        </button>
+      </div>
 
-        {onSendCommand && (
-          <div className="manual-command">
-            <input
-              type="text"
-              placeholder="Enter USI command..."
-              value={manualCommand}
-              onChange={(e) => setManualCommand(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendCommand()}
-            />
-            <button onClick={handleSendCommand} disabled={!manualCommand.trim()}>
-              Send
-            </button>
+      <div className="usi-monitor-content">
+        {activeTab === 'engine' && (
+          <div className="engine-monitor-tab">
+            {engineIds.map((engineId, index) => {
+              const lastSent = getLastSent(engineId);
+              const lastReceived = getLastReceived(engineId);
+              const player = getPlayerFromEngineId(engineId);
+              
+              return (
+                <div key={engineId} className="engine-section">
+                  {index > 0 && <div className="engine-divider" />}
+                  
+                  <div className="engine-header">
+                    <strong>{player}:</strong> {getEngineDisplayName(engineId)}
+                  </div>
+
+                  <div className="last-command-item">
+                    <label>Last Sent: {formatTimestamp(lastSent.timestamp)}</label>
+                    <div className="command-text sent-command">
+                      {lastSent.message}
+                    </div>
+                  </div>
+
+                  <div className="last-command-item">
+                    <label>Last Received: {formatTimestamp(lastReceived.timestamp)}</label>
+                    <div className="command-text received-command">
+                      {lastReceived.message}
+                    </div>
+                  </div>
+
+                  {onSendCommand && (
+                    <div className="manual-command">
+                      <input
+                        type="text"
+                        placeholder="Enter USI command..."
+                        value={manualCommands.get(engineId) || ''}
+                        onChange={(e) => updateManualCommand(engineId, e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSendCommand(engineId)}
+                      />
+                      <button 
+                        onClick={() => handleSendCommand(engineId)} 
+                        disabled={!manualCommands.get(engineId)?.trim()}
+                      >
+                        SEND
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-        
-        <div className="communication-history">
-          <div className="history-header">
-            <h4>Communication History ({filteredHistory.length})</h4>
-            <div className="history-controls">
-              <label className="debug-toggle">
-                <input
-                  type="checkbox"
-                  checked={showDebugMessages}
-                  onChange={(e) => setShowDebugMessages(e.target.checked)}
-                />
-                <span className="toggle-label">Show Debug</span>
-              </label>
-              <button onClick={handleClearHistory} className="clear-button">
-                Clear
-              </button>
-            </div>
-          </div>
-          <div className="history-container" ref={historyRef}>
-            {filteredHistory.length === 0 ? (
-              <div className="no-history">
-                {communicationHistory.length === 0 
-                  ? 'No communication yet' 
-                  : 'No messages match the current filter'}
-              </div>
-            ) : (
-              filteredHistory.map((entry) => (
-                <div key={entry.id} className={`history-entry ${entry.direction}`}>
-                  <span className="direction-prefix">
-                    {entry.direction === 'sent' ? '→' : '←'}
-                  </span>
-                  <span className="timestamp">
-                    {entry.timestamp.toLocaleTimeString()}
-                  </span>
-                  <span className="session-id">
-                    [{getEngineDisplayName(entry.engineId)}]
-                  </span>
-                  <span className="command">
-                    {entry.message}
-                  </span>
+
+        {activeTab === 'search' && (
+          <div className="search-tab">
+            {engineIds.map((engineId, index) => {
+              const searchInfo = searchInfoByEngine.get(engineId) || [];
+              const player = getPlayerFromEngineId(engineId);
+              const nps = npsPerEngine.get(engineId);
+              
+              return (
+                <div key={engineId} className="engine-section">
+                  {index > 0 && <div className="engine-divider" />}
+                  
+                  <div className="engine-header">
+                    <div>
+                      <strong>{player}:</strong> {getEngineDisplayName(engineId)}
+                    </div>
+                    {nps !== undefined && (
+                      <div className="engine-nps">
+                        NPS: {formatNumber(nps)}
+                      </div>
+                    )}
+                  </div>
+
+                  {searchInfo.length === 0 ? (
+                    <div className="no-search-info">No search information available</div>
+                  ) : (
+                    <div className="search-table-container">
+                      <table className="search-table">
+                        <thead>
+                          <tr>
+                            <th>Elapsed</th>
+                            <th>Rank</th>
+                            <th>Depth</th>
+                            <th>Nodes</th>
+                            <th>Score</th>
+                            <th>PV</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {searchInfo.map((info) => (
+                            <tr key={info.id}>
+                              <td>{info.elapsed.toFixed(1)}s</td>
+                              <td>{info.rank}</td>
+                              <td>
+                                {info.depth}
+                                {info.seldepth !== undefined && `/${info.seldepth}`}
+                              </td>
+                              <td>{formatNumber(info.nodes)}</td>
+                              <td className={info.score > 0 ? 'score-positive' : info.score < 0 ? 'score-negative' : ''}>
+                                {info.score > 0 ? '+' : ''}{info.score}
+                              </td>
+                              <td className="pv-cell">{formatPV(info.pv, engineId)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -49,6 +49,11 @@ export async function sendUsiCommand(
       return { success: false, error: response.message };
     }
 
+    // Emit a custom event for sent commands so the monitor can track them
+    window.dispatchEvent(new CustomEvent(`usi-command-sent::${engineId}`, {
+      detail: { command }
+    }));
+
     return { success: true };
   } catch (error) {
     return { success: false, error: String(error) };
@@ -336,15 +341,17 @@ export function parseBestMove(usiMessage: string): {
 
 /**
  * Parse engine info messages
- * Example: "info depth 5 score cp 120 nodes 1234 nps 5000 pv 7g7f 3c3d"
+ * Example: "info depth 5 seldepth 8 score cp 120 nodes 1234 nps 5000 time 1000 multipv 1 pv 7g7f 3c3d"
  */
 export function parseEngineInfo(usiMessage: string): {
   depth?: number;
+  seldepth?: number;
   score?: number;
   nodes?: number;
   nps?: number;
   pv?: string[];
   time?: number;
+  multipv?: number;
 } {
   if (!usiMessage.startsWith('info ')) {
     return {};
@@ -357,6 +364,9 @@ export function parseEngineInfo(usiMessage: string): {
     switch (parts[i]) {
       case 'depth':
         info.depth = parseInt(parts[++i]);
+        break;
+      case 'seldepth':
+        info.seldepth = parseInt(parts[++i]);
         break;
       case 'score':
         if (parts[i + 1] === 'cp') {
@@ -372,6 +382,9 @@ export function parseEngineInfo(usiMessage: string): {
         break;
       case 'time':
         info.time = parseInt(parts[++i]);
+        break;
+      case 'multipv':
+        info.multipv = parseInt(parts[++i]);
         break;
       case 'pv':
         info.pv = parts.slice(i + 1);
