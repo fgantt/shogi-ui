@@ -42,6 +42,7 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
   const [initialSfen, setInitialSfen] = useState<string>('');
   const [sfenError, setSfenError] = useState<string>('');
   const [selectedCannedPosition, setSelectedCannedPosition] = useState<string>('Standard');
+  const [isInitialPositionCollapsed, setIsInitialPositionCollapsed] = useState(true);
   
   // Temporary options for this game only
   const [player1TempOptions, setPlayer1TempOptions] = useState<{[key: string]: string} | null>(null);
@@ -72,6 +73,7 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       setInitialSfen('');
       setSfenError('');
       setSelectedCannedPosition('Standard');
+      setIsInitialPositionCollapsed(true);
     }
   }, [isOpen]);
 
@@ -110,6 +112,10 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       setPlayer2TempOptions(options);
     }
     handleCloseOptions();
+  };
+
+  const toggleInitialPositionCollapse = () => {
+    setIsInitialPositionCollapsed(!isInitialPositionCollapsed);
   };
 
   if (!isOpen) return null;
@@ -190,6 +196,7 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
     <div className="settings-overlay">
       <div className="settings-panel">
         <h2>New Game</h2>
+        <button className="settings-close-btn" onClick={onClose}>×</button>
         <form onSubmit={handleSubmit}>
           <section>
             <h3>Player 1 (Black)</h3>
@@ -259,45 +266,55 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             </div>
           </section>
           <section>
-            <h3>Initial Position (Optional)</h3>
-            <div className="setting-group">
-              <label htmlFor="cannedPosition">Starting Position</label>
-              <select 
-                id="cannedPosition"
-                value={selectedCannedPosition}
-                onChange={(e) => handleCannedPositionChange(e.target.value)}
-              >
-                {CANNED_POSITIONS.map((position) => (
-                  <option key={position.name} value={position.name}>
-                    {position.name}
-                  </option>
-                ))}
-                <option value="Custom">Custom SFEN</option>
-              </select>
-            </div>
-            <div className="setting-group">
-              <label htmlFor="initialSfen">SFEN String</label>
-              <input 
-                id="initialSfen" 
-                name="initialSfen" 
-                type="text" 
-                value={initialSfen}
-                onChange={(e) => handleSfenChange(e.target.value)}
-                placeholder={selectedCannedPosition === 'Standard' ? 'Leave empty for standard starting position' : 'Enter or edit SFEN string'}
-                className={sfenError ? 'error' : ''}
-              />
-              {sfenError && <div className="error-message">{sfenError}</div>}
-              <div className="help-text">
-                {selectedCannedPosition === 'Standard' 
-                  ? 'Leave empty to use the standard starting position, or enter a custom SFEN string.'
-                  : selectedCannedPosition === 'Custom'
-                    ? 'Enter a SFEN string to start from a custom position.'
-                    : 'You can edit this SFEN string or select a different starting position.'
-                }
-              </div>
-            </div>
+            <h3 onClick={toggleInitialPositionCollapse} style={{ cursor: 'pointer' }}>
+              Initial Position (Optional)
+              <span className={`collapse-arrow ${isInitialPositionCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+            </h3>
+            {!isInitialPositionCollapsed && (
+              <>
+                <div className="setting-group">
+                  <label htmlFor="cannedPosition">Starting Position</label>
+                  <select 
+                    id="cannedPosition"
+                    value={selectedCannedPosition}
+                    onChange={(e) => handleCannedPositionChange(e.target.value)}
+                  >
+                    {CANNED_POSITIONS.map((position) => (
+                      <option key={position.name} value={position.name}>
+                        {position.name}
+                      </option>
+                    ))}
+                    <option value="Custom">Custom SFEN</option>
+                  </select>
+                </div>
+                <div className="setting-group">
+                  <label htmlFor="initialSfen">SFEN String</label>
+                  <input 
+                    id="initialSfen" 
+                    name="initialSfen" 
+                    type="text" 
+                    value={initialSfen}
+                    onChange={(e) => handleSfenChange(e.target.value)}
+                    placeholder={selectedCannedPosition === 'Standard' ? 'Leave empty for standard starting position' : 'Enter or edit SFEN string'}
+                    className={sfenError ? 'error' : ''}
+                  />
+                  {sfenError && <div className="error-message">{sfenError}</div>}
+                  <div className="help-text">
+                    {selectedCannedPosition === 'Standard' 
+                      ? 'Leave empty to use the standard starting position, or enter a custom SFEN string.'
+                      : selectedCannedPosition === 'Custom'
+                        ? 'Enter a SFEN string to start from a custom position.'
+                        : 'You can edit this SFEN string or select a different starting position.'
+                    }
+                  </div>
+                </div>
+              </>
+            )}
           </section>
-          <button type="submit">Start Game</button>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit">Start Game</button>
+          </div>
         </form>
       </div>
       
