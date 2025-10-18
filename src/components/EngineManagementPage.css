@@ -13,8 +13,8 @@
 
 .back-button {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 2rem;
+  left: 2rem;
   background: linear-gradient(135deg, rgba(139, 69, 19, 0.9) 0%, rgba(160, 82, 45, 0.8) 100%);
   border: 2px solid rgba(210, 180, 140, 0.4);
   color: #f5f5dc;
