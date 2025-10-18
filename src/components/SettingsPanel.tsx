@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
 import { useTheme, getThemeDisplayName, getThemeDescription, type Theme } from '../hooks/useTheme';
+import { playPreviewSound } from '../utils/audio';
 import '../styles/settings.css';
 
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
@@ -27,6 +28,8 @@ interface SettingsPanelProps {
   onGameLayoutChange: (layout: 'classic' | 'compact') => void;
   soundsEnabled: boolean;
   onSoundsEnabledChange: (enabled: boolean) => void;
+  soundVolume: number;
+  onSoundVolumeChange: (volume: number) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -49,6 +52,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onGameLayoutChange,
   soundsEnabled,
   onSoundsEnabledChange,
+  soundVolume,
+  onSoundVolumeChange,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
   const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(false);
@@ -56,6 +61,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [isColorThemeCollapsed, setIsColorThemeCollapsed] = useState(false);
   const [isPieceThemesCollapsed, setIsPieceThemesCollapsed] = useState(false);
   const { theme, setTheme } = useTheme();
+  const volumePreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (volumePreviewTimeoutRef.current) {
+        clearTimeout(volumePreviewTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const toggleBoardBackgroundCollapse = () => {
     setIsBoardBackgroundCollapsed(!isBoardBackgroundCollapsed);
@@ -71,6 +86,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const togglePieceThemesCollapse = () => {
     setIsPieceThemesCollapsed(!isPieceThemesCollapsed);
+  };
+
+  const handleVolumeChange = (volume: number) => {
+    // Update the volume immediately
+    onSoundVolumeChange(volume);
+    
+    // Clear any existing timeout
+    if (volumePreviewTimeoutRef.current) {
+      clearTimeout(volumePreviewTimeoutRef.current);
+    }
+    
+    // Set a new timeout to play the preview sound after user stops dragging
+    volumePreviewTimeoutRef.current = setTimeout(() => {
+      playPreviewSound();
+    }, 150); // 150ms delay after user stops moving the slider
   };
   
   const getFileName = (path: string): string => {
@@ -200,6 +230,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   Play clacking sound when pieces are moved
                 </span>
               </div>
+              {soundsEnabled && (
+                <div className="setting-group" style={{ marginTop: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)', minWidth: '60px' }}>
+                      Volume:
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round(soundVolume * 100)}
+                      onChange={(e) => handleVolumeChange(Number(e.target.value) / 100)}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)', minWidth: '40px', textAlign: 'right' }}>
+                      {Math.round(soundVolume * 100)}%
+                    </span>
+                  </label>
+                </div>
+              )}
             </section>
           </>
         );

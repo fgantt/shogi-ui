@@ -4,21 +4,33 @@ import SettingsPanel from './SettingsPanel';
 import StartGameModal from './StartGameModal';
 import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
+import { setSoundsEnabled, setVolume } from '../utils/audio';
 import './HomePage.css';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isStartGameModalOpen, setIsStartGameModalOpen] = useState<boolean>(false);
-  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [pieceLabelType, setPieceLabelType] = useState<string>('kanji');
-  const [notation, setNotation] = useState<'western' | 'kifu' | 'usi' | 'csa'>('kifu');
+  const [pieceLabelType, setPieceLabelType] = useState<string>(localStorage.getItem('shogi-piece-label-type') || 'kanji');
+  const [notation, setNotation] = useState<'western' | 'kifu' | 'usi' | 'csa'>((localStorage.getItem('shogi-notation') as any) || 'kifu');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
   const [boardBackgroundList, setBoardBackgroundList] = useState<string[]>([]);
   const [currentWallpaper, setCurrentWallpaper] = useState<string>('');
   const [currentBoardBackground, setCurrentBoardBackground] = useState<string>('');
-  const [showAttackedPieces, setShowAttackedPieces] = useState<boolean>(true);
-  const [showPieceTooltips, setShowPieceTooltips] = useState<boolean>(false);
+  const [showAttackedPieces, setShowAttackedPieces] = useState<boolean>(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
+  const [showPieceTooltips, setShowPieceTooltips] = useState<boolean>(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
+  const [soundsEnabled, setSoundsEnabledState] = useState<boolean>(localStorage.getItem('shogi-sounds-enabled') !== 'false');
+  const [soundVolume, setSoundVolumeState] = useState<number>(() => {
+    const stored = localStorage.getItem('shogi-sound-volume');
+    return stored ? parseFloat(stored) : 0.9;
+  });
+  const [gameLayout, setGameLayoutState] = useState<'classic' | 'compact'>((localStorage.getItem('shogi-game-layout') as any) || 'compact');
+
+  // Sync sound settings with audio manager on mount
+  useEffect(() => {
+    setSoundsEnabled(soundsEnabled);
+    setVolume(soundVolume);
+  }, [soundsEnabled, soundVolume]);
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -126,6 +138,43 @@ const HomePage: React.FC = () => {
     window.dispatchEvent(event);
   };
 
+  const handleNotationChange = (newNotation: 'western' | 'kifu' | 'usi' | 'csa') => {
+    setNotation(newNotation);
+    localStorage.setItem('shogi-notation', newNotation);
+  };
+
+  const handleShowAttackedPiecesChange = (show: boolean) => {
+    setShowAttackedPieces(show);
+    localStorage.setItem('shogi-show-attacked-pieces', show.toString());
+  };
+
+  const handleShowPieceTooltipsChange = (show: boolean) => {
+    setShowPieceTooltips(show);
+    localStorage.setItem('shogi-show-piece-tooltips', show.toString());
+  };
+
+  const handleSoundsEnabledChange = (enabled: boolean) => {
+    setSoundsEnabledState(enabled);
+    localStorage.setItem('shogi-sounds-enabled', enabled.toString());
+    setSoundsEnabled(enabled);
+  };
+
+  const handleSoundVolumeChange = (volume: number) => {
+    setSoundVolumeState(volume);
+    localStorage.setItem('shogi-sound-volume', volume.toString());
+    setVolume(volume);
+  };
+
+  const handleGameLayoutChange = (layout: 'classic' | 'compact') => {
+    setGameLayoutState(layout);
+    localStorage.setItem('shogi-game-layout', layout);
+  };
+
+  const handleBoardBackgroundChange = (background: string) => {
+    setCurrentBoardBackground(background);
+    localStorage.setItem('shogi-board-background', background);
+  };
+
   return (
     <div className="home-page">
       <div className="home-content">
@@ -191,23 +240,27 @@ const HomePage: React.FC = () => {
 
       {isSettingsOpen && (
         <SettingsPanel
-          aiDifficulty={aiDifficulty}
-          onDifficultyChange={setAiDifficulty}
           pieceThemeType={pieceLabelType}
           onPieceThemeTypeChange={handlePieceThemeChange}
           notation={notation}
-          onNotationChange={setNotation}
+          onNotationChange={handleNotationChange}
           wallpaperList={wallpaperList}
           onSelectWallpaper={handleSelectWallpaper}
           boardBackgroundList={boardBackgroundList}
-          onSelectBoardBackground={handleSelectBoardBackground}
+          onSelectBoardBackground={handleBoardBackgroundChange}
           onClose={handleCloseSettings}
           currentWallpaper={currentWallpaper}
           currentBoardBackground={currentBoardBackground}
           showAttackedPieces={showAttackedPieces}
-          onShowAttackedPiecesChange={setShowAttackedPieces}
+          onShowAttackedPiecesChange={handleShowAttackedPiecesChange}
           showPieceTooltips={showPieceTooltips}
-          onShowPieceTooltipsChange={setShowPieceTooltips}
+          onShowPieceTooltipsChange={handleShowPieceTooltipsChange}
+          gameLayout={gameLayout}
+          onGameLayoutChange={handleGameLayoutChange}
+          soundsEnabled={soundsEnabled}
+          onSoundsEnabledChange={handleSoundsEnabledChange}
+          soundVolume={soundVolume}
+          onSoundVolumeChange={handleSoundVolumeChange}
         />
       )}
       

@@ -21,7 +21,7 @@ import { getAvailablePieceThemes, AVAILABLE_PIECE_THEMES } from '../utils/pieceT
 import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
-import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled } from '../utils/audio';
+import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled, setVolume, getVolume } from '../utils/audio';
 import { sendUsiCommand, parseBestMove, sendIsReadyAndWait } from '../utils/tauriEngine';
 import { invoke } from '@tauri-apps/api/core';
 import type { CommandResponse, EngineConfig } from '../types/engine';
@@ -432,6 +432,10 @@ const GamePage: React.FC<GamePageProps> = ({
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
   const [soundsEnabled, setSoundsEnabledState] = useState(localStorage.getItem('shogi-sounds-enabled') !== 'false'); // Default to true
+  const [soundVolume, setSoundVolumeState] = useState(() => {
+    const stored = localStorage.getItem('shogi-sound-volume');
+    return stored ? parseFloat(stored) : 0.9; // Default to 90%
+  });
   const [wallpaper, setWallpaper] = useState(localStorage.getItem('shogi-wallpaper') || '');
   const [boardBackground, setBoardBackground] = useState(localStorage.getItem('shogi-board-background') || '');
   const [wallpaperList, setWallpaperList] = useState<string[]>([]);
@@ -443,6 +447,11 @@ const GamePage: React.FC<GamePageProps> = ({
   useEffect(() => {
     setSoundsEnabled(soundsEnabled);
   }, [soundsEnabled]);
+
+  // Sync volume settings with audio manager
+  useEffect(() => {
+    setVolume(soundVolume);
+  }, [soundVolume]);
 
   // Listen for AI moves to play sound
   useEffect(() => {
@@ -499,6 +508,12 @@ const GamePage: React.FC<GamePageProps> = ({
   const handleSoundsEnabledChange = (enabled: boolean) => {
     setSoundsEnabledState(enabled);
     setSoundsEnabled(enabled);
+  };
+
+  // Wrapper function for setting sound volume
+  const handleSoundVolumeChange = (volume: number) => {
+    setSoundVolumeState(volume);
+    setVolume(volume);
   };
 
   useEffect(() => {
@@ -1668,6 +1683,8 @@ const GamePage: React.FC<GamePageProps> = ({
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
           soundsEnabled={soundsEnabled}
           onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
+          soundVolume={soundVolume}
+          onSoundVolumeChange={handleSettingChange(handleSoundVolumeChange, 'shogi-sound-volume')}
         />}
         <SaveGameModal 
           isOpen={isSaveModalOpen} 
@@ -1918,6 +1935,8 @@ const GamePage: React.FC<GamePageProps> = ({
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
         soundsEnabled={soundsEnabled}
         onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
+        soundVolume={soundVolume}
+        onSoundVolumeChange={handleSettingChange(handleSoundVolumeChange, 'shogi-sound-volume')}
       />}
       <SaveGameModal 
         isOpen={isSaveModalOpen} 

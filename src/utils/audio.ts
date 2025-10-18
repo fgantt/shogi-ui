@@ -9,8 +9,15 @@ class AudioManager {
   private checkmateSound: HTMLAudioElement | null = null;
   private drawSound: HTMLAudioElement | null = null;
   private soundsEnabled: boolean = true;
+  private volume: number = 0.9; // Default volume (0.0 to 1.0)
 
   private constructor() {
+    // Load volume from localStorage if available
+    const storedVolume = localStorage.getItem('shogi-sound-volume');
+    if (storedVolume) {
+      this.volume = parseFloat(storedVolume);
+    }
+    
     this.initializeAudio();
   }
 
@@ -30,7 +37,7 @@ class AudioManager {
       try {
         this.pieceMoveSound = new Audio('/sounds/piece-move.mp3');
         this.pieceMoveSound.preload = 'auto';
-        this.pieceMoveSound.volume = 0.9;
+        this.pieceMoveSound.volume = this.volume;
         
         // Test if the file exists
         this.pieceMoveSound.addEventListener('error', () => {
@@ -46,7 +53,7 @@ class AudioManager {
       try {
         this.checkmateSound = new Audio('/sounds/checkmate.mp3');
         this.checkmateSound.preload = 'auto';
-        this.checkmateSound.volume = 0.8;
+        this.checkmateSound.volume = this.volume * 0.9;
         this.checkmateSound.addEventListener('error', () => {
           console.log('Checkmate sound file not found, will use synthetic sound');
           this.checkmateSound = null;
@@ -59,7 +66,7 @@ class AudioManager {
       try {
         this.drawSound = new Audio('/sounds/draw.mp3');
         this.drawSound.preload = 'auto';
-        this.drawSound.volume = 0.7;
+        this.drawSound.volume = this.volume * 0.8;
         this.drawSound.addEventListener('error', () => {
           console.log('Draw sound file not found, will use synthetic sound');
           this.drawSound = null;
@@ -79,6 +86,7 @@ class AudioManager {
   }
 
   public setSoundsEnabled(enabled: boolean): void {
+    console.log('[AudioManager] Setting sounds enabled:', enabled);
     this.soundsEnabled = enabled;
   }
 
@@ -86,23 +94,86 @@ class AudioManager {
     return this.soundsEnabled;
   }
 
-  public async playPieceMoveSound(): Promise<void> {
-    if (!this.soundsEnabled) {
-      return;
+  public setVolume(volume: number): void {
+    // Clamp volume between 0 and 1
+    this.volume = Math.max(0, Math.min(1, volume));
+    
+    // Update volume on all loaded audio elements
+    if (this.pieceMoveSound) {
+      this.pieceMoveSound.volume = this.volume;
     }
+    if (this.checkmateSound) {
+      this.checkmateSound.volume = this.volume * 0.9; // Slightly quieter
+    }
+    if (this.drawSound) {
+      this.drawSound.volume = this.volume * 0.8; // Even quieter
+    }
+  }
 
+  public getVolume(): number {
+    return this.volume;
+  }
+
+  public async playPreviewSound(): Promise<void> {
+    // Play preview sound regardless of soundsEnabled setting (for testing volume)
     try {
-      // Resume audio context if suspended (required for user interaction)
+      // Resume audio context if suspended
       if (this.audioContext && this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
 
       // Use audio file if available, otherwise generate synthetic sound
       if (this.pieceMoveSound) {
-        this.pieceMoveSound.currentTime = 0;
-        await this.pieceMoveSound.play();
+        // Clone the audio element to allow concurrent playback without conflicts
+        const soundClone = this.pieceMoveSound.cloneNode(true) as HTMLAudioElement;
+        soundClone.volume = this.volume;
+        
+        // Play the cloned sound
+        try {
+          await soundClone.play();
+        } catch (error) {
+          console.warn('Preview sound play failed:', error);
+        }
       } else if (this.audioContext) {
         await this.playSyntheticClackSound();
+      }
+    } catch (error) {
+      console.warn('Failed to play preview sound:', error);
+    }
+  }
+
+  public async playPieceMoveSound(): Promise<void> {
+    if (!this.soundsEnabled) {
+      console.log('[AudioManager] Sounds disabled, skipping piece move sound');
+      return;
+    }
+
+    try {
+      // Resume audio context if suspended (required for user interaction)
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        console.log('[AudioManager] Resuming suspended audio context');
+        await this.audioContext.resume();
+      }
+
+      // Use audio file if available, otherwise generate synthetic sound
+      if (this.pieceMoveSound) {
+        console.log('[AudioManager] Playing piece move sound from file, volume:', this.volume);
+        
+        // Clone the audio element to allow concurrent playback without conflicts
+        const soundClone = this.pieceMoveSound.cloneNode(true) as HTMLAudioElement;
+        soundClone.volume = this.volume;
+        
+        // Play the cloned sound
+        try {
+          await soundClone.play();
+        } catch (error) {
+          console.warn('Piece move sound play failed:', error);
+        }
+      } else if (this.audioContext) {
+        console.log('[AudioManager] Playing synthetic clack sound, volume:', this.volume);
+        await this.playSyntheticClackSound();
+      } else {
+        console.warn('[AudioManager] No audio context or sound file available');
       }
     } catch (error) {
       console.warn('Failed to play piece move sound:', error);
@@ -135,7 +206,7 @@ class AudioManager {
     const gainNode = this.audioContext.createGain();
     
     source.buffer = buffer;
-    gainNode.gain.value = 0.6; // Volume control
+    gainNode.gain.value = 0.6 * this.volume; // Apply user volume setting
     
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
@@ -171,8 +242,16 @@ class AudioManager {
 
       // Use audio file if available, otherwise generate synthetic sound
       if (this.checkmateSound) {
-        this.checkmateSound.currentTime = 0;
-        await this.checkmateSound.play();
+        // Clone the audio element to allow concurrent playback without conflicts
+        const soundClone = this.checkmateSound.cloneNode(true) as HTMLAudioElement;
+        soundClone.volume = this.volume * 0.9;
+        
+        // Play the cloned sound
+        try {
+          await soundClone.play();
+        } catch (error) {
+          console.warn('Checkmate sound play failed:', error);
+        }
       } else if (this.audioContext) {
         await this.playSyntheticVictorySound();
       }
@@ -194,8 +273,16 @@ class AudioManager {
 
       // Use audio file if available, otherwise generate synthetic sound
       if (this.drawSound) {
-        this.drawSound.currentTime = 0;
-        await this.drawSound.play();
+        // Clone the audio element to allow concurrent playback without conflicts
+        const soundClone = this.drawSound.cloneNode(true) as HTMLAudioElement;
+        soundClone.volume = this.volume * 0.8;
+        
+        // Play the cloned sound
+        try {
+          await soundClone.play();
+        } catch (error) {
+          console.warn('Draw sound play failed:', error);
+        }
       } else if (this.audioContext) {
         await this.playSyntheticDrawSound();
       }
@@ -233,7 +320,7 @@ class AudioManager {
     const gainNode = this.audioContext.createGain();
     
     source.buffer = buffer;
-    gainNode.gain.value = 0.5;
+    gainNode.gain.value = 0.5 * this.volume; // Apply user volume setting
     
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
@@ -270,7 +357,7 @@ class AudioManager {
     const gainNode = this.audioContext.createGain();
     
     source.buffer = buffer;
-    gainNode.gain.value = 0.4;
+    gainNode.gain.value = 0.4 * this.volume; // Apply user volume setting
     
     source.connect(gainNode);
     gainNode.connect(this.audioContext.destination);
@@ -286,5 +373,8 @@ export const audioManager = AudioManager.getInstance();
 export const playPieceMoveSound = () => audioManager.playPieceMoveSound();
 export const playCheckmateSound = () => audioManager.playCheckmateSound();
 export const playDrawSound = () => audioManager.playDrawSound();
+export const playPreviewSound = () => audioManager.playPreviewSound();
 export const setSoundsEnabled = (enabled: boolean) => audioManager.setSoundsEnabled(enabled);
 export const isSoundsEnabled = () => audioManager.isSoundsEnabled();
+export const setVolume = (volume: number) => audioManager.setVolume(volume);
+export const getVolume = () => audioManager.getVolume();
