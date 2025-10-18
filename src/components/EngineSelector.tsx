@@ -36,13 +36,20 @@ export function EngineSelector({
         const enabledEngines = response.data.filter(e => e.enabled);
         setEngines(enabledEngines);
         
-        // Auto-select built-in engine if nothing selected (only if autoSelect is enabled)
+        // Auto-select favorite engine if nothing selected (only if autoSelect is enabled)
         if (autoSelect && !selectedEngineId && enabledEngines.length > 0) {
-          const builtinEngine = enabledEngines.find(e => e.is_builtin);
-          if (builtinEngine) {
-            onEngineSelect(builtinEngine.id);
-          } else if (enabledEngines.length > 0) {
-            onEngineSelect(enabledEngines[0].id);
+          // First, try to find the favorite engine
+          const favoriteEngine = enabledEngines.find(e => e.is_favorite);
+          if (favoriteEngine) {
+            onEngineSelect(favoriteEngine.id);
+          } else {
+            // Fallback to built-in engine if no favorite is set
+            const builtinEngine = enabledEngines.find(e => e.is_builtin);
+            if (builtinEngine) {
+              onEngineSelect(builtinEngine.id);
+            } else if (enabledEngines.length > 0) {
+              onEngineSelect(enabledEngines[0].id);
+            }
           }
         }
       } else {
@@ -101,7 +108,7 @@ export function EngineSelector({
         {includeNone && <option value="">None (Human only)</option>}
         {engines.map((engine) => (
           <option key={engine.id} value={engine.id}>
-            {engine.display_name} {engine.is_builtin ? '(Built-in)' : ''}
+            {engine.is_favorite ? '⭐ ' : ''}{engine.display_name} {engine.is_builtin ? '(Built-in)' : ''}
           </option>
         ))}
       </select>

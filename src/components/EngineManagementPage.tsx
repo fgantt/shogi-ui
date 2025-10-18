@@ -213,6 +213,24 @@ export function EngineManagementPage() {
     }
   };
 
+  const handleToggleFavorite = async (engineId: string) => {
+    try {
+      setError(null);
+      const response = await invoke<CommandResponse>('set_favorite_engine', {
+        engineId,
+      });
+
+      if (response.success) {
+        await loadEngines(); // Reload to show updated favorite status
+      } else {
+        setError(response.message || 'Failed to set favorite engine');
+      }
+    } catch (err) {
+      setError(`Error setting favorite engine: ${err}`);
+      console.error('Error setting favorite engine:', err);
+    }
+  };
+
   const getEngineStatusBadge = (engine: EngineConfig) => {
     const healthResult = healthCheckResults.get(engine.id);
     
@@ -347,6 +365,13 @@ export function EngineManagementPage() {
                 <div className="engine-header">
                   <div className="engine-title">
                     <h3>
+                      <button
+                        onClick={() => handleToggleFavorite(engine.id)}
+                        className="favorite-button"
+                        title={engine.is_favorite ? "Unmark as favorite" : "Mark as favorite"}
+                      >
+                        {engine.is_favorite ? '⭐' : '☆'}
+                      </button>
                       {engine.display_name}
                       {engine.is_builtin && <span className="builtin-badge">Built-in</span>}
                     </h3>

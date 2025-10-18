@@ -606,3 +606,31 @@ pub async fn update_engine_display_name(
     }
 }
 
+/// Set an engine as favorite
+#[tauri::command]
+pub async fn set_favorite_engine(
+    engine_id: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: set_favorite_engine - engine_id: {}", engine_id);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    match storage.set_favorite_engine(&engine_id) {
+        Ok(_) => {
+            // Save to disk
+            if let Err(e) = storage.save().await {
+                log::error!("Failed to save engine storage: {}", e);
+                return Ok(CommandResponse::error(format!("Failed to save favorite status: {}", e)));
+            }
+            
+            log::info!("Engine set as favorite successfully: {}", engine_id);
+            Ok(CommandResponse::success())
+        }
+        Err(e) => {
+            log::error!("Failed to set favorite engine: {}", e);
+            Ok(CommandResponse::error(format!("Failed to set favorite engine: {}", e)))
+        }
+    }
+}
+

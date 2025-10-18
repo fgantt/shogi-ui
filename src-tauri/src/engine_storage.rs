@@ -18,10 +18,16 @@ pub struct EngineConfig {
     pub last_used: Option<String>,
     pub created_at: String,
     pub saved_options: Option<std::collections::HashMap<String, String>>,
+    #[serde(default = "default_is_favorite")]
+    pub is_favorite: bool,
 }
 
 fn default_display_name() -> String {
     String::new()
+}
+
+fn default_is_favorite() -> bool {
+    false
 }
 
 impl EngineConfig {
@@ -38,6 +44,7 @@ impl EngineConfig {
             last_used: None,
             created_at: now,
             saved_options: None,
+            is_favorite: false,
         }
     }
 }
@@ -99,6 +106,22 @@ impl EngineStorage {
             if engine.display_name.is_empty() {
                 log::info!("Migrating engine '{}': setting display_name", engine.name);
                 engine.display_name = engine.name.clone();
+                needs_migration = true;
+            }
+        }
+        
+        // Migration: Ensure favorite engine logic
+        // If only one engine exists, mark it as favorite
+        // If no engine is marked as favorite, mark the built-in engine as favorite
+        if storage.engines.len() == 1 && !storage.engines[0].is_favorite {
+            log::info!("Migrating: marking single engine as favorite");
+            storage.engines[0].is_favorite = true;
+            needs_migration = true;
+        } else if !storage.engines.iter().any(|e| e.is_favorite) {
+            // No favorite set, try to set the built-in engine as favorite
+            if let Some(builtin_engine) = storage.engines.iter_mut().find(|e| e.is_builtin) {
+                log::info!("Migrating: marking built-in engine as favorite");
+                builtin_engine.is_favorite = true;
                 needs_migration = true;
             }
         }
@@ -233,6 +256,32 @@ impl EngineStorage {
         
         engine.display_name = new_display_name;
         Ok(())
+    }
+
+    /// Set an engine as the favorite (and unset all others)
+    pub fn set_favorite_engine(&mut self, engine_id: &str) -> Result<()> {
+        // First, verify the engine exists
+        if !self.engines.iter().any(|e| e.id == engine_id) {
+            return Err(anyhow!("Engine not found: {}", engine_id));
+        }
+
+        // Unset all favorites
+        for engine in &mut self.engines {
+            engine.is_favorite = false;
+        }
+
+        // Set the new favorite
+        let engine = self
+            .get_engine_mut(engine_id)
+            .ok_or_else(|| anyhow!("Engine not found"))?;
+        
+        engine.is_favorite = true;
+        Ok(())
+    }
+
+    /// Get the favorite engine
+    pub fn get_favorite_engine(&self) -> Option<&EngineConfig> {
+        self.engines.iter().find(|e| e.is_favorite)
     }
 }
 

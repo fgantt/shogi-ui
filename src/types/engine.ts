@@ -33,6 +33,7 @@ export interface EngineConfig {
   enabled: boolean;
   last_used?: string;
   created_at: string;
+  is_favorite: boolean;
 }
 
 export interface CommandResponse<T = any> {
