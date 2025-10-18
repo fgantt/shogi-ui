@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { EngineConfig, CommandResponse, EngineMetadata, EngineHealthResult } from '../types/engine';
@@ -6,6 +7,7 @@ import { EngineOptionsModal } from './EngineOptionsModal';
 import './EngineManagementPage.css';
 
 export function EngineManagementPage() {
+  const navigate = useNavigate();
   const [engines, setEngines] = useState<EngineConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -260,7 +262,12 @@ export function EngineManagementPage() {
 
   return (
     <div className="engine-management-page">
-      <h1>Engine Management</h1>
+      <div className="page-header">
+        <button className="back-button" onClick={() => navigate('/')}>
+          ← Back to Home
+        </button>
+        <h1>Engine Management</h1>
+      </div>
 
       {error && (
         <div className="error-message">
