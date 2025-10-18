@@ -30,8 +30,113 @@
   color: var(--color-heading);
 }
 
+/* Tabbed settings panel specific styles */
+.settings-panel-tabbed {
+  width: 85%;
+  max-width: 900px;
+  height: 85vh;
+  max-height: 700px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.settings-panel-tabbed .settings-header {
+  padding: 20px 20px 15px 20px;
+  border-bottom: 1px solid var(--color-border-medium);
+}
+
+.settings-panel-tabbed .settings-header h2 {
+  margin: 0;
+  color: var(--color-heading);
+}
+
+.settings-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  margin: 0 !important;
+  width: auto;
+  height: auto;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-family: Arial, sans-serif;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.settings-close-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.settings-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  min-width: 180px;
+  border-right: 1px solid var(--color-border-medium);
+  background-color: var(--color-bg-card);
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-radius: 0 !important;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s, color 0.2s;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  width: 100%;
+  justify-content: flex-start;
+  margin: 0 !important;
+}
+
+.settings-tab:hover {
+  background-color: var(--color-tab-hover);
+  color: var(--color-text-primary);
+}
+
+.settings-tab.active {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.settings-tab .tab-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+
+.settings-tab .tab-label {
+  font-weight: 500;
+}
+
+.settings-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
 .settings-panel section {
-  margin-bottom: 20px;
+  margin-bottom: 0;
   border: 1px solid var(--color-border-medium);
   padding: 15px;
   border-radius: 5px;

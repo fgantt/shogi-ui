@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
 import { useTheme, getThemeDisplayName, getThemeDescription, type Theme } from '../hooks/useTheme';
 import '../styles/settings.css';
 
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
+type SettingsTab = 'appearance' | 'display' | 'notation' | 'backgrounds';
 
 interface SettingsPanelProps {
   pieceThemeType: string;
@@ -50,8 +50,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   soundsEnabled,
   onSoundsEnabledChange,
 }) => {
-  const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(true);
-  const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(true);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
+  const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(false);
+  const [isWallpaperCollapsed, setIsWallpaperCollapsed] = useState(false);
+  const [isColorThemeCollapsed, setIsColorThemeCollapsed] = useState(false);
+  const [isPieceThemesCollapsed, setIsPieceThemesCollapsed] = useState(false);
   const { theme, setTheme } = useTheme();
 
   const toggleBoardBackgroundCollapse = () => {
@@ -61,6 +64,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const toggleWallpaperCollapse = () => {
     setIsWallpaperCollapsed(!isWallpaperCollapsed);
   };
+
+  const toggleColorThemeCollapse = () => {
+    setIsColorThemeCollapsed(!isColorThemeCollapsed);
+  };
+
+  const togglePieceThemesCollapse = () => {
+    setIsPieceThemesCollapsed(!isPieceThemesCollapsed);
+  };
+  
   const getFileName = (path: string): string => {
     const parts = path.split('/');
     const fileNameWithExtension = parts[parts.length - 1];
@@ -70,206 +82,281 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const themes: Theme[] = ['light', 'dark', 'traditional', 'ocean', 'forest', 'midnight', 'sunset', 'cyberpunk', 'cherry', 'monochrome', 'sepia'];
 
-  return (
-    <div className="settings-overlay">
-      <div className="settings-panel">
-        <h2>Settings</h2>
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'appearance':
+        return (
+          <>
+            <section>
+              <h3 onClick={toggleColorThemeCollapse} style={{ cursor: 'pointer' }}>
+                Color Theme
+                <span className={`collapse-arrow ${isColorThemeCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+              </h3>
+              {!isColorThemeCollapsed && (
+                <div className="setting-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  {themes.map((themeOption) => (
+                    <label key={themeOption} className="notation-option" style={{ cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        value={themeOption}
+                        checked={theme === themeOption}
+                        onChange={() => setTheme(themeOption)}
+                      />
+                      <div className="notation-label">
+                        <span className="notation-name">{getThemeDisplayName(themeOption)}</span>
+                        <span className="notation-example">{getThemeDescription(themeOption)}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
 
-        <section>
-          <h3>Color Theme</h3>
-          <div className="setting-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            {themes.map((themeOption) => (
-              <label key={themeOption} className="notation-option" style={{ cursor: 'pointer' }}>
+            <section>
+              <h3 onClick={togglePieceThemesCollapse} style={{ cursor: 'pointer' }}>
+                Piece Themes
+                <span className={`collapse-arrow ${isPieceThemesCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+              </h3>
+              {!isPieceThemesCollapsed && (
+                <>
+                  <ThemeSelector 
+                    selectedTheme={pieceThemeType} 
+                    onThemeChange={onPieceThemeTypeChange} 
+                  />
+                  <PiecePreview theme={pieceThemeType} />
+                </>
+              )}
+            </section>
+          </>
+        );
+
+      case 'display':
+        return (
+          <>
+            <section>
+              <h3>Game Layout</h3>
+              <div className="setting-group">
+                <label>
+                  <input
+                    type="radio"
+                    value="classic"
+                    checked={gameLayout === 'classic'}
+                    onChange={() => onGameLayoutChange('classic')}
+                  />
+                  Slim Shogi
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    value="compact"
+                    checked={gameLayout === 'compact'}
+                    onChange={() => onGameLayoutChange('compact')}
+                  />
+                  Classic Shogi
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h3>Show Attacked Pieces</h3>
+              <div className="setting-group">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showAttackedPieces}
+                    onChange={(e) => onShowAttackedPiecesChange(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h3>Show Piece Tooltips</h3>
+              <div className="setting-group">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showPieceTooltips}
+                    onChange={(e) => onShowPieceTooltipsChange(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h3>Piece Movement Sounds</h3>
+              <div className="setting-group">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={soundsEnabled}
+                    onChange={(e) => onSoundsEnabledChange(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
+                </label>
+                <span style={{ marginLeft: '10px', fontSize: '14px', color: 'var(--color-text-secondary)' }}>
+                  Play clacking sound when pieces are moved
+                </span>
+              </div>
+            </section>
+          </>
+        );
+
+      case 'notation':
+        return (
+          <section>
+            <h3>Move Log Notation</h3>
+            <div className="setting-group">
+              <label className="notation-option">
                 <input
                   type="radio"
-                  value={themeOption}
-                  checked={theme === themeOption}
-                  onChange={() => setTheme(themeOption)}
+                  value="western"
+                  checked={notation === 'western'}
+                  onChange={() => onNotationChange('western')}
                 />
                 <div className="notation-label">
-                  <span className="notation-name">{getThemeDisplayName(themeOption)}</span>
-                  <span className="notation-example">{getThemeDescription(themeOption)}</span>
+                  <span className="notation-name">English</span>
+                  <span className="notation-example">P-7f, Rx2d</span>
                 </div>
               </label>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <h3>Piece Themes</h3>
-          <ThemeSelector 
-            selectedTheme={pieceThemeType} 
-            onThemeChange={onPieceThemeTypeChange} 
-          />
-          <PiecePreview theme={pieceThemeType} />
-        </section>
-
-        <section>
-          <h3>Move Log Notation</h3>
-          <div className="setting-group">
-            <label className="notation-option">
-              <input
-                type="radio"
-                value="western"
-                checked={notation === 'western'}
-                onChange={() => onNotationChange('western')}
-              />
-              <div className="notation-label">
-                <span className="notation-name">English</span>
-                <span className="notation-example">P-7f, Rx2d</span>
-              </div>
-            </label>
-            <label className="notation-option">
-              <input
-                type="radio"
-                value="kifu"
-                checked={notation === 'kifu'}
-                onChange={() => onNotationChange('kifu')}
-              />
-              <div className="notation-label">
-                <span className="notation-name">KIF</span>
-                <span className="notation-example">７六歩, ２四飛</span>
-              </div>
-            </label>
-            <label className="notation-option">
-              <input
-                type="radio"
-                value="usi"
-                checked={notation === 'usi'}
-                onChange={() => onNotationChange('usi')}
-              />
-              <div className="notation-label">
-                <span className="notation-name">USI</span>
-                <span className="notation-example">7g7f, 2d2b</span>
-              </div>
-            </label>
-            <label className="notation-option">
-              <input
-                type="radio"
-                value="csa"
-                checked={notation === 'csa'}
-                onChange={() => onNotationChange('csa')}
-              />
-              <div className="notation-label">
-                <span className="notation-name">CSA</span>
-                <span className="notation-example">+7776FU, -2424HI</span>
-              </div>
-            </label>
-          </div>
-        </section>
-
-        <section>
-          <h3 onClick={toggleBoardBackgroundCollapse} style={{ cursor: 'pointer' }}>
-            Board Background
-            <span className={`collapse-arrow ${isBoardBackgroundCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
-          </h3>
-          {!isBoardBackgroundCollapsed && (
-            <div className="setting-group setting-thumbnails">
-              {boardBackgroundList.map((bg, index) => (
-                <img
-                  key={index}
-                  src={bg}
-                  alt={`Board Background ${index + 1}`}
-                  className={`thumbnail ${bg === currentBoardBackground ? 'selected-thumbnail' : ''}`}
-                  onClick={() => onSelectBoardBackground(bg)}
-                  title={getFileName(bg)}
+              <label className="notation-option">
+                <input
+                  type="radio"
+                  value="kifu"
+                  checked={notation === 'kifu'}
+                  onChange={() => onNotationChange('kifu')}
                 />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h3 onClick={toggleWallpaperCollapse} style={{ cursor: 'pointer' }}>
-            Wallpaper
-            <span className={`collapse-arrow ${isWallpaperCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
-          </h3>
-          {!isWallpaperCollapsed && (
-            <div className="setting-group setting-thumbnails">
-              {wallpaperList.map((wp, index) => (
-                <img
-                  key={index}
-                  src={wp}
-                  alt={`Wallpaper ${index + 1}`}
-                  className={`thumbnail ${wp === currentWallpaper ? 'selected-thumbnail' : ''}`}
-                  onClick={() => onSelectWallpaper(wp)}
-                  title={getFileName(wp)}
+                <div className="notation-label">
+                  <span className="notation-name">KIF</span>
+                  <span className="notation-example">７六歩, ２四飛</span>
+                </div>
+              </label>
+              <label className="notation-option">
+                <input
+                  type="radio"
+                  value="usi"
+                  checked={notation === 'usi'}
+                  onChange={() => onNotationChange('usi')}
                 />
-              ))}
+                <div className="notation-label">
+                  <span className="notation-name">USI</span>
+                  <span className="notation-example">7g7f, 2d2b</span>
+                </div>
+              </label>
+              <label className="notation-option">
+                <input
+                  type="radio"
+                  value="csa"
+                  checked={notation === 'csa'}
+                  onChange={() => onNotationChange('csa')}
+                />
+                <div className="notation-label">
+                  <span className="notation-name">CSA</span>
+                  <span className="notation-example">+7776FU, -2424HI</span>
+                </div>
+              </label>
             </div>
-          )}
-        </section>
+          </section>
+        );
 
-        <section>
-          <h3>Show Attacked Pieces</h3>
-          <div className="setting-group">
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={showAttackedPieces}
-                onChange={(e) => onShowAttackedPiecesChange(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
+      case 'backgrounds':
+        return (
+          <>
+            <section>
+              <h3 onClick={toggleBoardBackgroundCollapse} style={{ cursor: 'pointer' }}>
+                Board Background
+                <span className={`collapse-arrow ${isBoardBackgroundCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+              </h3>
+              {!isBoardBackgroundCollapsed && (
+                <div className="setting-group setting-thumbnails">
+                  {boardBackgroundList.map((bg, index) => (
+                    <img
+                      key={index}
+                      src={bg}
+                      alt={`Board Background ${index + 1}`}
+                      className={`thumbnail ${bg === currentBoardBackground ? 'selected-thumbnail' : ''}`}
+                      onClick={() => onSelectBoardBackground(bg)}
+                      title={getFileName(bg)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section>
+              <h3 onClick={toggleWallpaperCollapse} style={{ cursor: 'pointer' }}>
+                Wallpaper
+                <span className={`collapse-arrow ${isWallpaperCollapsed ? 'collapsed' : ''}`}>&#9660;</span>
+              </h3>
+              {!isWallpaperCollapsed && (
+                <div className="setting-group setting-thumbnails">
+                  {wallpaperList.map((wp, index) => (
+                    <img
+                      key={index}
+                      src={wp}
+                      alt={`Wallpaper ${index + 1}`}
+                      className={`thumbnail ${wp === currentWallpaper ? 'selected-thumbnail' : ''}`}
+                      onClick={() => onSelectWallpaper(wp)}
+                      title={getFileName(wp)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="settings-overlay">
+      <div className="settings-panel settings-panel-tabbed">
+        <div className="settings-header">
+          <h2>Settings</h2>
+        </div>
+        <button className="settings-close-btn" onClick={onClose}>×</button>
+        
+        <div className="settings-content">
+          <div className="settings-tabs">
+            <button 
+              className={`settings-tab ${activeTab === 'appearance' ? 'active' : ''}`}
+              onClick={() => setActiveTab('appearance')}
+            >
+              <span className="tab-icon">🎨</span>
+              <span className="tab-label">Appearance</span>
+            </button>
+            <button 
+              className={`settings-tab ${activeTab === 'display' ? 'active' : ''}`}
+              onClick={() => setActiveTab('display')}
+            >
+              <span className="tab-icon">⚙️</span>
+              <span className="tab-label">Display</span>
+            </button>
+            <button 
+              className={`settings-tab ${activeTab === 'notation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notation')}
+            >
+              <span className="tab-icon">📝</span>
+              <span className="tab-label">Notation</span>
+            </button>
+            <button 
+              className={`settings-tab ${activeTab === 'backgrounds' ? 'active' : ''}`}
+              onClick={() => setActiveTab('backgrounds')}
+            >
+              <span className="tab-icon">🖼️</span>
+              <span className="tab-label">Backgrounds</span>
+            </button>
           </div>
-        </section>
-
-        <section>
-          <h3>Show Piece Tooltips</h3>
-          <div className="setting-group">
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={showPieceTooltips}
-                onChange={(e) => onShowPieceTooltipsChange(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
+          
+          <div className="settings-tab-content">
+            {renderTabContent()}
           </div>
-        </section>
-
-        <section>
-          <h3>Piece Movement Sounds</h3>
-          <div className="setting-group">
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={soundsEnabled}
-                onChange={(e) => onSoundsEnabledChange(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-            <span style={{ marginLeft: '10px', fontSize: '14px', color: '#666' }}>
-              Play clacking sound when pieces are moved
-            </span>
-          </div>
-        </section>
-
-        <section>
-          <h3>Game Layout</h3>
-          <div className="setting-group">
-            <label>
-              <input
-                type="radio"
-                value="classic"
-                checked={gameLayout === 'classic'}
-                onChange={() => onGameLayoutChange('classic')}
-              />
-              Slim Shogi
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="compact"
-                checked={gameLayout === 'compact'}
-                onChange={() => onGameLayoutChange('compact')}
-              />
-              Classic Shogi
-            </label>
-          </div>
-        </section>
-
-        <button onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );
