@@ -1208,13 +1208,15 @@ const GamePage: React.FC<GamePageProps> = ({
         
         if (move && move !== 'resign') {
           console.log('[Tauri Event] Applying engine move to controller:', move);
-          // Apply the engine's move
-          controller.handleUserMove(move).catch(error => {
-            console.error('[Tauri Event] Failed to apply engine move:', error);
-          });
-          // Play sound for AI move
-          console.log('[Tauri Event] Playing piece move sound for AI');
-          playPieceMoveSound();
+          // Apply the engine's move (handleUserMove returns boolean, not Promise)
+          const moveResult = controller.handleUserMove(move);
+          if (moveResult) {
+            // Play sound for AI move
+            console.log('[Tauri Event] Move successful, playing piece move sound for AI');
+            playPieceMoveSound();
+          } else {
+            console.error('[Tauri Event] Failed to apply engine move:', move);
+          }
         } else {
           console.log('[Tauri Event] Move is resign or invalid');
         }
@@ -1233,12 +1235,15 @@ const GamePage: React.FC<GamePageProps> = ({
       if (message.startsWith('bestmove')) {
         const { move } = parseBestMove(message);
         if (move && move !== 'resign') {
-          controller.handleUserMove(move).catch(error => {
-            console.error('Failed to apply engine move:', error);
-          });
-          // Play sound for AI move
-          console.log('[Tauri Event] Playing piece move sound for second AI');
-          playPieceMoveSound();
+          // Apply the engine's move (handleUserMove returns boolean, not Promise)
+          const moveResult = controller.handleUserMove(move);
+          if (moveResult) {
+            // Play sound for AI move
+            console.log('[Tauri Event] Move successful, playing piece move sound for second AI');
+            playPieceMoveSound();
+          } else {
+            console.error('[Tauri Event] Failed to apply second engine move:', move);
+          }
         }
       }
     },
