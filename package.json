@@ -11,7 +11,7 @@
     "test": "vitest",
     "type-check": "tsc --noEmit",
     "tauri": "tauri",
-    "build:engine": "cargo build --bin shogi-engine --release",
+    "build:engine": "cargo build --bin usi-engine --release",
     "tauri:dev": "npm run build:engine && tauri dev",
     "tauri:build": "npm run build:engine && tauri build",
     "version:update": "bash scripts/update-version.sh"
