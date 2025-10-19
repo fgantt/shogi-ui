@@ -7076,6 +7076,11 @@ impl IterativeDeepening {
                 crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, search_engine.nodes_searched, score, &pv_string);
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
+                
+                // Print the info message to stdout for USI protocol
+                println!("{}", info_string);
+                // Explicitly flush stdout to ensure info messages are sent immediately
+                let _ = std::io::Write::flush(&mut std::io::stdout());
 
                 // Only break early for extremely winning positions (king capture level)
                 // and only at higher depths to allow deeper search logging for higher AI levels

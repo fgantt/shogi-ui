@@ -51,7 +51,7 @@ pub fn run() {
                 .and_then(|p| p.parent())
                 .and_then(|p| p.parent())
                 .and_then(|p| p.parent()) {
-                let engine_path = workspace_root.join("target/release/shogi-engine");
+                let engine_path = workspace_root.join("target/release/usi-engine");
                 if engine_path.exists() {
                   found_path = Some(engine_path.display().to_string());
                   log::info!("Found engine via workspace root: {:?}", found_path);
@@ -60,7 +60,7 @@ pub fn run() {
               
               // Method 2: Try relative to executable
               if found_path.is_none() {
-                let engine_path = exe_dir.join("../../../target/release/shogi-engine");
+                let engine_path = exe_dir.join("../../../target/release/usi-engine");
                 if engine_path.exists() {
                   found_path = Some(engine_path.display().to_string());
                   log::info!("Found engine via relative path: {:?}", found_path);
@@ -72,7 +72,7 @@ pub fn run() {
           // Method 3: Try current directory
           if found_path.is_none() {
             if let Ok(current_dir) = std::env::current_dir() {
-              let engine_path = current_dir.join("target/release/shogi-engine");
+              let engine_path = current_dir.join("target/release/usi-engine");
               if engine_path.exists() {
                 found_path = Some(engine_path.display().to_string());
                 log::info!("Found engine via current dir: {:?}", found_path);

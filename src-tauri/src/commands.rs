@@ -197,13 +197,13 @@ pub async fn get_builtin_engine_path(
             .and_then(|dir| {
                 // Try to find the engine in the workspace
                 let workspace_root = dir.parent()?.parent()?.parent()?.parent()?;
-                Some(workspace_root.join("target/release/shogi-engine"))
+                Some(workspace_root.join("target/release/usi-engine"))
             })
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "../target/release/shogi-engine".to_string())
+            .unwrap_or_else(|| "../target/release/usi-engine".to_string())
     } else {
         // Production mode - engine should be bundled
-        app_dir.join("shogi-engine").display().to_string()
+        app_dir.join("usi-engine").display().to_string()
     };
 
     log::info!("Built-in engine path: {}", engine_path);
