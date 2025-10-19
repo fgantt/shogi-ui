@@ -2357,6 +2357,26 @@ impl SearchEngine {
         // Validate move tracking consistency
         self.validate_move_tracking(&best_move, best_score, sorted_moves.len());
 
+        // Store the root position in the transposition table so get_pv can extract it
+        if let Some(ref best_move_ref) = best_move {
+            let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+            let flag = if best_score <= alpha {
+                TranspositionFlag::UpperBound
+            } else if best_score >= beta {
+                TranspositionFlag::LowerBound
+            } else {
+                TranspositionFlag::Exact
+            };
+            let entry = TranspositionEntry::new_with_age(
+                best_score,
+                depth,
+                flag,
+                Some(best_move_ref.clone()),
+                position_hash
+            );
+            self.transposition_table.store(entry);
+        }
+
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Search completed: best_move={:?}, best_score={}", 
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
@@ -3166,7 +3186,8 @@ impl SearchEngine {
     
         for _ in 0..depth {
             let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
-            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
+            // Probe with depth=0 to accept entries from any search depth
+            if let Some(entry) = self.transposition_table.probe(position_hash, 0) {
                 if let Some(move_) = &entry.best_move {
                     pv.push(move_.clone());
                     if let Some(captured) = current_board.make_move(move_) {
