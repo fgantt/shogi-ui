@@ -292,21 +292,25 @@
 }
 
 /* Scrollbar styling */
-.history-container::-webkit-scrollbar {
+.history-container::-webkit-scrollbar,
+.search-table-container::-webkit-scrollbar {
   width: 6px;
 }
 
-.history-container::-webkit-scrollbar-track {
+.history-container::-webkit-scrollbar-track,
+.search-table-container::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 3px;
 }
 
-.history-container::-webkit-scrollbar-thumb {
+.history-container::-webkit-scrollbar-thumb,
+.search-table-container::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
-.history-container::-webkit-scrollbar-thumb:hover {
+.history-container::-webkit-scrollbar-thumb:hover,
+.search-table-container::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
 
@@ -392,7 +396,9 @@
 
 .search-table-container {
   overflow-x: auto;
+  overflow-y: auto;
   margin-top: 8px;
+  max-height: 220px; /* Approximately 5 rows + header */
 }
 
 .search-table {
