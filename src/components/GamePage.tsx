@@ -232,6 +232,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [player2EngineId, setPlayer2EngineId] = useState<string | null>(null);
   const [activeEngineIds, setActiveEngineIds] = useState<string[]>([]);
   const [availableEngines, setAvailableEngines] = useState<EngineConfig[]>([]);
+  const [engineNames, setEngineNames] = useState<Map<string, string>>(new Map());
   
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
@@ -1106,6 +1107,9 @@ const GamePage: React.FC<GamePageProps> = ({
   const initializeTauriEngines = async (settings: GameSettings) => {
     console.log('[initializeTauriEngines] Starting with settings:', settings);
     const engineIds: string[] = [];
+    const names = new Map<string, string>();
+    let runtimePlayer1Id: string | null = null;
+    let runtimePlayer2Id: string | null = null;
     
     try {
       // Load engine configs
@@ -1128,9 +1132,11 @@ const GamePage: React.FC<GamePageProps> = ({
         console.log('[initializeTauriEngines] Player 1 engine found:', engine);
         
         if (engine) {
-          console.log('[initializeTauriEngines] Spawning player 1 engine...');
+          // Generate unique runtime ID (timestamp + random) to allow same engine for both players
+          const runtimeId = `${settings.player1EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          console.log('[initializeTauriEngines] Spawning player 1 engine with runtime ID:', runtimeId);
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
-            engineId: settings.player1EngineId,
+            engineId: runtimeId,
             name: engine.name,
             path: engine.path,
             tempOptions: settings.player1TempOptions || null,
@@ -1138,14 +1144,16 @@ const GamePage: React.FC<GamePageProps> = ({
           console.log('[initializeTauriEngines] Player 1 spawn result:', spawnResult);
           
           if (spawnResult.success) {
-            engineIds.push(settings.player1EngineId);
+            engineIds.push(runtimeId);
+            runtimePlayer1Id = runtimeId;
+            names.set(runtimeId, engine.display_name || engine.name);
             
             // Engine is now initialized by the backend
             console.log('[initializeTauriEngines] Player 1 engine spawned and initialized');
             
             // Send usinewgame to prepare for a new game
             console.log('[initializeTauriEngines] Sending usinewgame to player 1 engine...');
-            await sendUsiCommand(settings.player1EngineId, 'usinewgame');
+            await sendUsiCommand(runtimeId, 'usinewgame');
             
             // Give it a moment to process
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -1162,9 +1170,11 @@ const GamePage: React.FC<GamePageProps> = ({
         console.log('[initializeTauriEngines] Player 2 engine found:', engine);
         
         if (engine) {
-          console.log('[initializeTauriEngines] Spawning player 2 engine...');
+          // Generate unique runtime ID (timestamp + random) to allow same engine for both players
+          const runtimeId = `${settings.player2EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          console.log('[initializeTauriEngines] Spawning player 2 engine with runtime ID:', runtimeId);
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
-            engineId: settings.player2EngineId,
+            engineId: runtimeId,
             name: engine.name,
             path: engine.path,
             tempOptions: settings.player2TempOptions || null,
@@ -1172,14 +1182,16 @@ const GamePage: React.FC<GamePageProps> = ({
           console.log('[initializeTauriEngines] Player 2 spawn result:', spawnResult);
           
           if (spawnResult.success) {
-            engineIds.push(settings.player2EngineId);
+            engineIds.push(runtimeId);
+            runtimePlayer2Id = runtimeId;
+            names.set(runtimeId, engine.display_name || engine.name);
             
             // Engine is now initialized by the backend
             console.log('[initializeTauriEngines] Player 2 engine spawned and initialized');
             
             // Send usinewgame to prepare for a new game
             console.log('[initializeTauriEngines] Sending usinewgame to player 2 engine...');
-            await sendUsiCommand(settings.player2EngineId, 'usinewgame');
+            await sendUsiCommand(runtimeId, 'usinewgame');
             
             // Give it a moment to process
             await new Promise(resolve => setTimeout(resolve, 300));
@@ -1190,6 +1202,10 @@ const GamePage: React.FC<GamePageProps> = ({
       }
 
       setActiveEngineIds(engineIds);
+      setEngineNames(names);
+      // Update the player engine IDs with runtime IDs so AI move logic uses correct IDs
+      setPlayer1EngineId(runtimePlayer1Id);
+      setPlayer2EngineId(runtimePlayer2Id);
       console.log('[initializeTauriEngines] All engines initialized. Active engine IDs:', engineIds);
     } catch (error) {
       console.error('[initializeTauriEngines] Error:', error);
@@ -1734,6 +1750,7 @@ const GamePage: React.FC<GamePageProps> = ({
           <TauriUsiMonitor
             engineIds={activeEngineIds}
             engines={availableEngines}
+            engineNames={engineNames}
             isVisible={isUsiMonitorVisible}
             onToggle={onToggleUsiMonitor}
             onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
@@ -1992,6 +2009,7 @@ const GamePage: React.FC<GamePageProps> = ({
         <TauriUsiMonitor
           engineIds={activeEngineIds}
           engines={availableEngines}
+          engineNames={engineNames}
           isVisible={isUsiMonitorVisible}
           onToggle={onToggleUsiMonitor}
           onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}

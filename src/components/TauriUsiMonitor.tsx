@@ -29,6 +29,7 @@ type TabType = 'engine' | 'search';
 interface TauriUsiMonitorProps {
   engineIds: string[];
   engines?: EngineConfig[];  // Optional: for displaying engine names
+  engineNames?: Map<string, string>;  // Map from runtime ID to engine display name
   isVisible: boolean;
   onToggle: () => void;
   onSendCommand?: (engineId: string, command: string) => void;
@@ -37,6 +38,7 @@ interface TauriUsiMonitorProps {
 export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   engineIds,
   engines,
+  engineNames,
   isVisible,
   onToggle,
   onSendCommand,
@@ -49,6 +51,12 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
 
   // Helper to get engine display name
   const getEngineDisplayName = (engineId: string): string => {
+    // First try the runtime ID mapping
+    if (engineNames) {
+      const name = engineNames.get(engineId);
+      if (name) return name;
+    }
+    // Fall back to config ID lookup
     if (!engines) return engineId.substring(0, 8) + '...';
     const engine = engines.find(e => e.id === engineId);
     return engine?.display_name || engineId.substring(0, 8) + '...';
@@ -56,11 +64,9 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
 
   // Helper to get player name from engine ID
   const getPlayerFromEngineId = (engineId: string): string => {
-    if (!engines) return 'Unknown';
-    const engine = engines.find(e => e.id === engineId);
-    if (!engine) return 'Unknown';
-    // Assuming engine config has a player field or we can infer from the order
+    // Infer from the order in engineIds
     const index = engineIds.indexOf(engineId);
+    if (index === -1) return 'Unknown';
     return index === 0 ? 'Sente' : 'Gote';
   };
 
