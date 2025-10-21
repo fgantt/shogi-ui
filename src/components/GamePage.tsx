@@ -602,45 +602,78 @@ const GamePage: React.FC<GamePageProps> = ({
       const isBlackTurn = position.sfen.includes(' b ');
 
       if (isBlackTurn) {
-        if (isByoyomiWhite) {
-          setWhiteTime(byoyomi);
-          setIsByoyomiWhite(false);
-        }
+        // Black's turn - count down black's time
         if (blackTime > 0) {
           setBlackTime(prev => prev - 1000);
-        } else {
+        } else if (!isByoyomiBlack) {
+          // Enter byoyomi when main time runs out
           setIsByoyomiBlack(true);
           setBlackTime(byoyomi);
+        } else {
+          // In byoyomi, count down the byoyomi time
+          setBlackTime(prev => {
+            const newTime = Math.max(0, prev - 1000);
+            if (newTime === 0) {
+              // Black ran out of byoyomi time - they lose
+              setWinnerState('player2'); // White wins
+              setEndgameType('timeout');
+              setEndgameDetails('Black ran out of time');
+            }
+            return newTime;
+          });
         }
       } else {
-        if (isByoyomiBlack) {
-          setBlackTime(byoyomi);
-          setIsByoyomiBlack(false);
-        }
+        // White's turn - count down white's time
         if (whiteTime > 0) {
           setWhiteTime(prev => prev - 1000);
-        } else {
+        } else if (!isByoyomiWhite) {
+          // Enter byoyomi when main time runs out
           setIsByoyomiWhite(true);
           setWhiteTime(byoyomi);
+        } else {
+          // In byoyomi, count down the byoyomi time
+          setWhiteTime(prev => {
+            const newTime = Math.max(0, prev - 1000);
+            if (newTime === 0) {
+              // White ran out of byoyomi time - they lose
+              setWinnerState('player1'); // Black wins
+              setEndgameType('timeout');
+              setEndgameDetails('White ran out of time');
+            }
+            return newTime;
+          });
         }
       }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [position, controller, moves]); // Added moves dependency
+  }, [position, controller, moves, blackTime, whiteTime, isByoyomiBlack, isByoyomiWhite, byoyomi]); // Added all dependencies
 
-  // Handle byoyomi state changes
+  // Reset byoyomi timer when a move is made
   useEffect(() => {
-    if (isByoyomiBlack) {
-      setBlackTime(byoyomi);
-    }
-  }, [isByoyomiBlack, byoyomi]);
+    const actualMoves = moves.filter(move => {
+      if ('move' in move && typeof move.move === 'object' && 'type' in move.move) {
+        return move.move.type !== 'start';
+      }
+      return true;
+    });
 
-  useEffect(() => {
-    if (isByoyomiWhite) {
-      setWhiteTime(byoyomi);
+    if (actualMoves.length > 0) {
+      const isBlackTurn = position?.sfen.includes(' b ');
+      
+      if (isBlackTurn) {
+        // It's black's turn, so white just made a move - reset white's byoyomi if they were in it
+        if (isByoyomiWhite) {
+          setWhiteTime(byoyomi);
+        }
+      } else {
+        // It's white's turn, so black just made a move - reset black's byoyomi if they were in it
+        if (isByoyomiBlack) {
+          setBlackTime(byoyomi);
+        }
+      }
     }
-  }, [isByoyomiWhite, byoyomi]);
+  }, [moves, position, isByoyomiBlack, isByoyomiWhite, byoyomi]);
 
   // Update controller with current clock times
   useEffect(() => {
