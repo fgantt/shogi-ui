@@ -613,7 +613,7 @@ const GamePage: React.FC<GamePageProps> = ({
           // In byoyomi, count down the byoyomi time
           setBlackTime(prev => {
             const newTime = Math.max(0, prev - 1000);
-            if (newTime === 0) {
+            if (newTime === 0 && !winner) {
               // Black ran out of byoyomi time - they lose
               setWinnerState('player2'); // White wins
               setEndgameType('timeout');
@@ -634,7 +634,7 @@ const GamePage: React.FC<GamePageProps> = ({
           // In byoyomi, count down the byoyomi time
           setWhiteTime(prev => {
             const newTime = Math.max(0, prev - 1000);
-            if (newTime === 0) {
+            if (newTime === 0 && !winner) {
               // White ran out of byoyomi time - they lose
               setWinnerState('player1'); // Black wins
               setEndgameType('timeout');
@@ -647,7 +647,7 @@ const GamePage: React.FC<GamePageProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [position, controller, moves, blackTime, whiteTime, isByoyomiBlack, isByoyomiWhite, byoyomi]); // Added all dependencies
+  }, [position, controller, moves, blackTime, whiteTime, isByoyomiBlack, isByoyomiWhite, byoyomi, winner]); // Added all dependencies
 
   // Reset byoyomi timer when a move is made
   useEffect(() => {
