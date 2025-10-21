@@ -70,3 +70,4 @@ pkg-bundler/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+package-lock.json
