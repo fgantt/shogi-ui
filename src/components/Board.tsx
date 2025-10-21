@@ -22,6 +22,7 @@ interface BoardProps {
   notation?: 'western' | 'kifu' | 'usi' | 'csa';
   promotionModalContent?: React.ReactNode;
   promotionTargetUsi?: string;
+  thinkingMove?: string | null;
 }
 
 // Define the ref type that will be exposed
@@ -34,7 +35,7 @@ function toOurPlayer(color: string): 'player1' | 'player2' {
     return color === 'black' ? 'player1' : 'player2';
 }
 
-const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips, notation = 'kifu', promotionModalContent, promotionTargetUsi }, ref) => {
+const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDragStart, onDragEnd, onDragOver, selectedSquare, legalMoves, lastMove, isSquareAttacked, isInCheck, kingInCheckSquare, attackingPieces, boardBackground, pieceThemeType, showPieceTooltips, notation = 'kifu', promotionModalContent, promotionTargetUsi, thinkingMove }, ref) => {
   const columnNumbers = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const squareRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -111,6 +112,42 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDra
     
     return { x, y };
   };
+
+  // Parse thinking move USI string to get from and to squares
+  // Uses the same approach as the check indicator - leverage tsshogi's createMoveByUSI
+  const parseThinkingMove = (moveUsi: string | null | undefined): { from: Square | null; to: Square | null } => {
+    if (!moveUsi || moveUsi.length < 4) {
+      return { from: null, to: null };
+    }
+
+    // Handle drop moves (e.g., "P*2e") - don't show arrow for drops
+    if (moveUsi.includes('*')) {
+      return { from: null, to: null };
+    }
+
+    try {
+      // Use tsshogi's createMoveByUSI to parse the move - same approach as the rest of the codebase
+      const move = position.createMoveByUSI(moveUsi);
+      
+      if (move && 'from' in move && 'to' in move) {
+        // Regular move has from and to squares
+        return { from: move.from, to: move.to };
+      }
+      
+      return { from: null, to: null };
+    } catch (e) {
+      console.error('[Board] Error parsing thinking move:', moveUsi, e);
+      return { from: null, to: null };
+    }
+  };
+
+  const thinkingMoveSquares = parseThinkingMove(thinkingMove);
+
+  // Debug logging for thinking move
+  if (thinkingMove) {
+    console.log('[Board] Thinking move received:', thinkingMove);
+    console.log('[Board] Parsed squares:', thinkingMoveSquares);
+  }
 
   return (
     <div className={`shogi-board-container`}>
@@ -220,6 +257,59 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDra
                   </g>
                 );
               })}
+            </svg>
+          )}
+          
+          {/* Thinking arrow for engine moves */}
+          {thinkingMoveSquares.from && thinkingMoveSquares.to && (
+            <svg className="thinking-arrow-svg" width="630" height="684">
+              <defs>
+                <marker
+                  id="arrowhead-thinking"
+                  markerWidth="6"
+                  markerHeight="6"
+                  refX="5"
+                  refY="2"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  {/* Open arrowhead - just two lines forming a V shape */}
+                  <polyline
+                    points="0 0, 5 2, 0 4"
+                    fill="none"
+                    stroke="rgba(0, 150, 255, 0.8)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </marker>
+              </defs>
+              {(() => {
+                const fromPos = squareToPixel(thinkingMoveSquares.from);
+                const toPos = squareToPixel(thinkingMoveSquares.to);
+                
+                // Calculate arrow direction to shorten it slightly before the arrowhead
+                const dx = toPos.x - fromPos.x;
+                const dy = toPos.y - fromPos.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                const shortenBy = 10; // Shorten by 10 pixels to make room for smaller arrowhead
+                const ratio = (length - shortenBy) / length;
+                const endX = fromPos.x + dx * ratio;
+                const endY = fromPos.y + dy * ratio;
+                
+                return (
+                  <line
+                    x1={fromPos.x}
+                    y1={fromPos.y}
+                    x2={endX}
+                    y2={endY}
+                    stroke="rgba(0, 150, 255, 0.8)"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    markerEnd="url(#arrowhead-thinking)"
+                  />
+                );
+              })()}
             </svg>
           )}
           

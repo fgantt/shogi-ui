@@ -62,6 +62,14 @@
   z-index: 1; /* Place it above the board but below the pieces */
 }
 
+.thinking-arrow-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none; /* Make sure it doesn't interfere with clicks */
+  z-index: 2; /* Place it above the check line but below the pieces */
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(9, 70px);

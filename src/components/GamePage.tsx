@@ -22,7 +22,7 @@ import { GameSettings } from '../types';
 import { loadWallpaperImages, loadBoardImages, getFallbackWallpaperImages, getFallbackBoardImages } from '../utils/imageLoader';
 import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled, setVolume, getVolume } from '../utils/audio';
-import { sendUsiCommand, parseBestMove, sendIsReadyAndWait } from '../utils/tauriEngine';
+import { sendUsiCommand, parseBestMove, parseEngineInfo, sendIsReadyAndWait } from '../utils/tauriEngine';
 import { invoke } from '@tauri-apps/api/core';
 import type { CommandResponse, EngineConfig } from '../types/engine';
 import { useTauriEvents } from '../hooks/useTauriEvents';
@@ -234,6 +234,19 @@ const GamePage: React.FC<GamePageProps> = ({
   const [availableEngines, setAvailableEngines] = useState<EngineConfig[]>([]);
   const [engineNames, setEngineNames] = useState<Map<string, string>>(new Map());
   
+  // Engine thinking state - track the current thinking move (first PV) for each engine
+  const [thinkingMovePlayer1, setThinkingMovePlayer1] = useState<string | null>(null);
+  const [thinkingMovePlayer2, setThinkingMovePlayer2] = useState<string | null>(null);
+  
+  // Debug: Log when thinking moves change
+  useEffect(() => {
+    console.log('[GamePage] Thinking move Player 1 updated:', thinkingMovePlayer1);
+  }, [thinkingMovePlayer1]);
+  
+  useEffect(() => {
+    console.log('[GamePage] Thinking move Player 2 updated:', thinkingMovePlayer2);
+  }, [thinkingMovePlayer2]);
+  
   // Refs for board containers to get actual dimensions
   const compactBoardRef = useRef<HTMLDivElement | null>(null);
   const classicBoardRef = useRef<HTMLDivElement | null>(null);
@@ -432,6 +445,7 @@ const GamePage: React.FC<GamePageProps> = ({
   const [notation, setNotation] = useState(localStorage.getItem('shogi-notation') || 'kifu');
   const [showAttackedPieces, setShowAttackedPieces] = useState(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
   const [showPieceTooltips, setShowPieceTooltips] = useState(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
+  const [showEngineThinking, setShowEngineThinking] = useState(localStorage.getItem('shogi-show-engine-thinking') !== 'false'); // Default to true
   const [soundsEnabled, setSoundsEnabledState] = useState(localStorage.getItem('shogi-sounds-enabled') !== 'false'); // Default to true
   const [soundVolume, setSoundVolumeState] = useState(() => {
     const stored = localStorage.getItem('shogi-sound-volume');
@@ -1255,6 +1269,9 @@ const GamePage: React.FC<GamePageProps> = ({
         const { move } = parseBestMove(message);
         console.log('[Tauri Event] Parsed move:', move);
         
+        // Clear thinking move when bestmove is received
+        setThinkingMovePlayer1(null);
+        
         if (move && move !== 'resign') {
           console.log('[Tauri Event] Applying engine move to controller:', move);
           // Apply the engine's move (handleUserMove returns boolean, not Promise)
@@ -1270,6 +1287,19 @@ const GamePage: React.FC<GamePageProps> = ({
           console.log('[Tauri Event] Move is resign or invalid');
         }
       }
+      
+      // Parse info messages to track thinking move
+      if (message.startsWith('info ')) {
+        const info = parseEngineInfo(message);
+        console.log(`[Tauri Event] Parsed info:`, info);
+        if (info.pv && info.pv.length > 0) {
+          const firstPvMove = info.pv[0];
+          console.log(`[Tauri Event] Engine ${engineId} thinking move: ${firstPvMove}`);
+          setThinkingMovePlayer1(firstPvMove);
+        } else {
+          console.log(`[Tauri Event] No PV in info message`);
+        }
+      }
     },
     onUsiError: (engineId, error) => {
       console.error(`Tauri engine ${engineId} error: ${error}`);
@@ -1283,6 +1313,10 @@ const GamePage: React.FC<GamePageProps> = ({
       
       if (message.startsWith('bestmove')) {
         const { move } = parseBestMove(message);
+        
+        // Clear thinking move when bestmove is received
+        setThinkingMovePlayer2(null);
+        
         if (move && move !== 'resign') {
           // Apply the engine's move (handleUserMove returns boolean, not Promise)
           const moveResult = controller.handleUserMove(move);
@@ -1293,6 +1327,19 @@ const GamePage: React.FC<GamePageProps> = ({
           } else {
             console.error('[Tauri Event] Failed to apply second engine move:', move);
           }
+        }
+      }
+      
+      // Parse info messages to track thinking move
+      if (message.startsWith('info ')) {
+        const info = parseEngineInfo(message);
+        console.log(`[Tauri Event] Parsed info:`, info);
+        if (info.pv && info.pv.length > 0) {
+          const firstPvMove = info.pv[0];
+          console.log(`[Tauri Event] Engine ${engineId} thinking move: ${firstPvMove}`);
+          setThinkingMovePlayer2(firstPvMove);
+        } else {
+          console.log(`[Tauri Event] No PV in info message`);
         }
       }
     },
@@ -1667,6 +1714,7 @@ const GamePage: React.FC<GamePageProps> = ({
                 showPieceTooltips={showPieceTooltips}
                 notation={notation as 'western' | 'kifu' | 'usi' | 'csa'}
                 promotionTargetUsi={promotionMove?.to.usi}
+                thinkingMove={showEngineThinking ? (thinkingMovePlayer1 || thinkingMovePlayer2) : null}
                 promotionModalContent={promotionMove && boardComponentRef.current && <PromotionModal 
                   onPromote={handlePromotion} 
                   pieceType={promotionMove.pieceType}
@@ -1995,6 +2043,8 @@ const GamePage: React.FC<GamePageProps> = ({
         onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
         showPieceTooltips={showPieceTooltips}
         onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
+        showEngineThinking={showEngineThinking}
+        onShowEngineThinkingChange={handleSettingChange(setShowEngineThinking, 'shogi-show-engine-thinking')}
         gameLayout={gameLayout}
         onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
         soundsEnabled={soundsEnabled}

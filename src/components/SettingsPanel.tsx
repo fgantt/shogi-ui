@@ -24,6 +24,8 @@ interface SettingsPanelProps {
   onShowAttackedPiecesChange: (show: boolean) => void;
   showPieceTooltips: boolean;
   onShowPieceTooltipsChange: (show: boolean) => void;
+  showEngineThinking: boolean;
+  onShowEngineThinkingChange: (show: boolean) => void;
   gameLayout: 'classic' | 'compact';
   onGameLayoutChange: (layout: 'classic' | 'compact') => void;
   soundsEnabled: boolean;
@@ -48,6 +50,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onShowAttackedPiecesChange,
   showPieceTooltips,
   onShowPieceTooltipsChange,
+  showEngineThinking,
+  onShowEngineThinkingChange,
   gameLayout,
   onGameLayoutChange,
   soundsEnabled,
@@ -213,6 +217,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <span className="slider round"></span>
                 </label>
               </div>
+            </section>
+
+            <section>
+              <h3>Show Engine Thinking</h3>
+              <div className="setting-group">
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showEngineThinking}
+                    onChange={(e) => onShowEngineThinkingChange(e.target.checked)}
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+              <p className="setting-description">Display an arrow showing the AI's current thinking move</p>
             </section>
 
             <section>

@@ -19,6 +19,7 @@ const HomePage: React.FC = () => {
   const [currentBoardBackground, setCurrentBoardBackground] = useState<string>('');
   const [showAttackedPieces, setShowAttackedPieces] = useState<boolean>(localStorage.getItem('shogi-show-attacked-pieces') === 'true' || true);
   const [showPieceTooltips, setShowPieceTooltips] = useState<boolean>(localStorage.getItem('shogi-show-piece-tooltips') === 'true' || false);
+  const [showEngineThinking, setShowEngineThinking] = useState<boolean>(localStorage.getItem('shogi-show-engine-thinking') !== 'false'); // Default to true
   const [soundsEnabled, setSoundsEnabledState] = useState<boolean>(localStorage.getItem('shogi-sounds-enabled') !== 'false');
   const [soundVolume, setSoundVolumeState] = useState<number>(() => {
     const stored = localStorage.getItem('shogi-sound-volume');
@@ -153,6 +154,11 @@ const HomePage: React.FC = () => {
     localStorage.setItem('shogi-show-piece-tooltips', show.toString());
   };
 
+  const handleShowEngineThinkingChange = (show: boolean) => {
+    setShowEngineThinking(show);
+    localStorage.setItem('shogi-show-engine-thinking', show.toString());
+  };
+
   const handleSoundsEnabledChange = (enabled: boolean) => {
     setSoundsEnabledState(enabled);
     localStorage.setItem('shogi-sounds-enabled', enabled.toString());
@@ -255,6 +261,8 @@ const HomePage: React.FC = () => {
           onShowAttackedPiecesChange={handleShowAttackedPiecesChange}
           showPieceTooltips={showPieceTooltips}
           onShowPieceTooltipsChange={handleShowPieceTooltipsChange}
+          showEngineThinking={showEngineThinking}
+          onShowEngineThinkingChange={handleShowEngineThinkingChange}
           gameLayout={gameLayout}
           onGameLayoutChange={handleGameLayoutChange}
           soundsEnabled={soundsEnabled}
