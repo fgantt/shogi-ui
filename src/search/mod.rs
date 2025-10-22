@@ -27,10 +27,7 @@ pub mod adaptive_configuration;
 pub mod performance_tuning;
 pub mod configuration_templates;
 
-// WASM compatibility modules
-pub mod wasm_compatibility;
-pub mod wasm_transposition_table;
-pub mod wasm_benchmarks;
+// WASM compatibility modules removed - no longer needed
 
 // Advanced features modules
 pub mod multi_level_transposition_table;
@@ -105,20 +102,7 @@ pub use configuration_templates::{
     ValidationResult, ValidationSeverity, PerformanceBenchmark, BenchmarkResults
 };
 
-// WASM compatibility re-exports
-pub use wasm_compatibility::{
-    WasmTime, WasmDuration, WasmMemoryManager, WasmPerformanceCounter, 
-    WasmTranspositionConfig, wasm_utils
-};
-
-pub use wasm_transposition_table::{
-    WasmTranspositionTable, WasmTranspositionEntry, WasmTranspositionStats
-};
-
-pub use wasm_benchmarks::{
-    WasmBenchmarkSuite, WasmBenchmarkResults, WasmBenchmarkSummary,
-    WasmPerformanceProfiler, WasmOperationStats, WasmSpecificMetrics
-};
+// WASM compatibility re-exports removed - no longer needed
 
 // Advanced features re-exports
 pub use multi_level_transposition_table::{

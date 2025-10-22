@@ -1,8 +1,6 @@
-use wasm_bindgen::prelude::*;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[wasm_bindgen]
 pub enum Player {
     Black,
     White,
@@ -18,7 +16,6 @@ impl Player {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[wasm_bindgen]
 pub enum PieceType {
     Pawn,
     Lance,
@@ -164,7 +161,6 @@ impl PieceType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[wasm_bindgen]
 pub struct Position {
     pub row: u8,
     pub col: u8,
@@ -291,7 +287,6 @@ impl Piece {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[wasm_bindgen]
 pub struct Move {
     pub from: Option<Position>,  // None for drops
     pub to: Position,
@@ -299,7 +294,6 @@ pub struct Move {
     pub player: Player,
     pub is_promotion: bool,
     pub is_capture: bool,
-    #[wasm_bindgen(skip)]
     pub captured_piece: Option<Piece>,
     pub gives_check: bool,       // Whether this move gives check
     pub is_recapture: bool,      // Whether this is a recapture move

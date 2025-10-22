@@ -1,7 +1,4 @@
-// Debug logging utilities that work in both WASM and standalone environments
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+// Debug logging utilities for standalone environments
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -16,21 +13,13 @@ lazy_static::lazy_static! {
     static ref SEARCH_START_TIME: Mutex<Option<f64>> = Mutex::new(None);
 }
 
-/// Get current time in milliseconds (WASM-compatible)
+/// Get current time in milliseconds
 fn get_current_time_ms() -> f64 {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use web_sys::js_sys::Date;
-        Date::new_0().get_time()
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as f64
-    }
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as f64
 }
 
 /// Enable or disable debug logging
@@ -101,7 +90,7 @@ pub fn trace_log(feature: &str, message: &str) {
     debug_log(&formatted_message);
 }
 
-/// Debug logging that works in both WASM and standalone environments
+/// Debug logging for standalone environments
 pub fn debug_log(message: &str) {
     if !is_debug_enabled() {
         return;
@@ -110,16 +99,7 @@ pub fn debug_log(message: &str) {
     let search_elapsed = get_search_elapsed_ms();
     let formatted_message = format!("[{}ms] {}", search_elapsed, message);
     
-    #[cfg(target_arch = "wasm32")]
-    {
-        use web_sys::console;
-        console::log(&js_sys::Array::of1(&JsValue::from_str(&formatted_message)));
-    }
-    
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        eprintln!("DEBUG: {}", formatted_message);
-    }
+    eprintln!("DEBUG: {}", formatted_message);
 }
 
 /// Log decision points with context

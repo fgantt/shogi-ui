@@ -21,7 +21,7 @@ pub mod tuning;
 pub mod statistics;
 pub mod advanced_interpolation;
 pub mod integration;
-pub mod wasm_compatibility;
+// pub mod wasm_compatibility; // Removed - no longer needed
 pub mod advanced_integration;
 pub mod eval_cache;
 pub mod pattern_config;
