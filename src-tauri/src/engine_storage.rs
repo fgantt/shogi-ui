@@ -279,9 +279,5 @@ impl EngineStorage {
         Ok(())
     }
 
-    /// Get the favorite engine
-    pub fn get_favorite_engine(&self) -> Option<&EngineConfig> {
-        self.engines.iter().find(|e| e.is_favorite)
-    }
 }
 

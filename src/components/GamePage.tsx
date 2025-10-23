@@ -163,6 +163,15 @@ const GamePage: React.FC<GamePageProps> = ({
 
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Get player types from navigation state directly
+  const getPlayerTypesFromState = () => {
+    const state = location.state as any;
+    return {
+      player1Type: state?.player1Type || 'human',
+      player2Type: state?.player2Type || 'ai'
+    };
+  };
   const controller = useShogiController();
   const [position, setPosition] = useState<ImmutablePosition | null>(null);
   const [renderKey, setRenderKey] = useState(0); // Force re-render counter
@@ -393,6 +402,10 @@ const GamePage: React.FC<GamePageProps> = ({
                   player2: !statePlayer2EngineId && player2Type === 'ai'
                 }
               });
+              
+              // Set player types FIRST
+              setPlayer1Type(player1Type);
+              setPlayer2Type(player2Type);
               
               // Initialize engines FIRST
               await initializeTauriEngines({
@@ -1253,6 +1266,11 @@ const GamePage: React.FC<GamePageProps> = ({
       setActiveEngineIds(engineIds);
       setEngineNames(names);
       // Update the player engine IDs with runtime IDs so AI move logic uses correct IDs
+      console.log('[initializeTauriEngines] Setting player engine IDs:', {
+        runtimePlayer1Id,
+        runtimePlayer2Id,
+        engineIds
+      });
       setPlayer1EngineId(runtimePlayer1Id);
       setPlayer2EngineId(runtimePlayer2Id);
       console.log('[initializeTauriEngines] All engines initialized. Active engine IDs:', engineIds);
@@ -1830,14 +1848,22 @@ const GamePage: React.FC<GamePageProps> = ({
         
         {/* USI Monitor positioned below the game content */}
         {useTauriEngine ? (
-          <TauriUsiMonitor
-            engineIds={activeEngineIds}
-            engines={availableEngines}
-            engineNames={engineNames}
-            isVisible={isUsiMonitorVisible}
-            onToggle={onToggleUsiMonitor}
-            onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
-          />
+          // Only render TauriUsiMonitor when engines are properly initialized
+          activeEngineIds.length > 0 ? (
+            <TauriUsiMonitor
+              key={`${player1EngineId}-${player2EngineId}-${activeEngineIds.join(',')}`}
+              engineIds={activeEngineIds}
+              engines={availableEngines}
+              engineNames={engineNames}
+              isVisible={isUsiMonitorVisible}
+              onToggle={onToggleUsiMonitor}
+              onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
+              player1EngineId={player1EngineId}
+              player2EngineId={player2EngineId}
+              player1Type={getPlayerTypesFromState().player1Type}
+              player2Type={getPlayerTypesFromState().player2Type}
+            />
+          ) : null
         ) : (
           <UsiMonitor
             lastSentCommand={lastSentCommand}
@@ -2091,14 +2117,22 @@ const GamePage: React.FC<GamePageProps> = ({
       
       {/* USI Monitor positioned below the game content */}
       {useTauriEngine ? (
-        <TauriUsiMonitor
-          engineIds={activeEngineIds}
-          engines={availableEngines}
-          engineNames={engineNames}
-          isVisible={isUsiMonitorVisible}
-          onToggle={onToggleUsiMonitor}
-          onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
-        />
+        // Only render TauriUsiMonitor when engines are properly initialized
+        activeEngineIds.length > 0 ? (
+          <TauriUsiMonitor
+            key={`${player1EngineId}-${player2EngineId}-${activeEngineIds.join(',')}`}
+            engineIds={activeEngineIds}
+            engines={availableEngines}
+            engineNames={engineNames}
+            isVisible={isUsiMonitorVisible}
+            onToggle={onToggleUsiMonitor}
+            onSendCommand={(engineId, command) => sendUsiCommand(engineId, command)}
+            player1EngineId={player1EngineId}
+            player2EngineId={player2EngineId}
+            player1Type={getPlayerTypesFromState().player1Type}
+            player2Type={getPlayerTypesFromState().player2Type}
+          />
+        ) : null
       ) : (
         <UsiMonitor
           lastSentCommand={lastSentCommand}

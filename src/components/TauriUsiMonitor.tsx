@@ -33,6 +33,10 @@ interface TauriUsiMonitorProps {
   isVisible: boolean;
   onToggle: () => void;
   onSendCommand?: (engineId: string, command: string) => void;
+  player1EngineId?: string | null;  // Runtime ID of player 1's engine (if any)
+  player2EngineId?: string | null;  // Runtime ID of player 2's engine (if any)
+  player1Type?: 'human' | 'ai';  // Type of player 1
+  player2Type?: 'human' | 'ai';  // Type of player 2
 }
 
 export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
@@ -42,6 +46,10 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   isVisible,
   onToggle,
   onSendCommand,
+  player1EngineId,
+  player2EngineId,
+  player1Type,
+  player2Type,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('engine');
   const [communicationHistory, setCommunicationHistory] = useState<UsiMessage[]>([]);
@@ -64,8 +72,32 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
 
   // Helper to get player name from engine ID
   const getPlayerFromEngineId = (engineId: string): string => {
-    // Infer from the order in engineIds
+    console.log('[TauriUsiMonitor] getPlayerFromEngineId called:', { 
+      engineId, 
+      player1EngineId, 
+      player2EngineId,
+      player1Type,
+      player2Type,
+      engineIds 
+    });
+    
+    // Check if this engine is player 1's engine (Sente)
+    if (player1EngineId === engineId) {
+      console.log('[TauriUsiMonitor] Engine matches player1EngineId, returning Sente');
+      return 'Sente';
+    }
+    // Check if this engine is player 2's engine (Gote)
+    if (player2EngineId === engineId) {
+      console.log('[TauriUsiMonitor] Engine matches player2EngineId, returning Gote');
+      return 'Gote';
+    }
+    
+    // If the engine IDs are not set correctly, we need to fix that
+    console.log('[TauriUsiMonitor] Engine ID not found in player engine IDs - this should not happen');
+    
+    // Fallback: infer from the order in engineIds (for backwards compatibility)
     const index = engineIds.indexOf(engineId);
+    console.log('[TauriUsiMonitor] Using fallback logic, index:', index);
     if (index === -1) return 'Unknown';
     return index === 0 ? 'Sente' : 'Gote';
   };
@@ -250,7 +282,8 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
     if (!pv) return [];
     
     const moves = pv.split(' ').filter(m => m.trim());
-    const isSenteEngine = engineIds.indexOf(engineId) === 0;
+    const playerRole = getPlayerFromEngineId(engineId);
+    const isSenteEngine = playerRole === 'Sente';
     
     return moves.map((move, index) => {
       // Determine which player makes this move
