@@ -33,6 +33,57 @@ Documentation intended for end users, developers using the engine, and API consu
   - `PROMOTION_MATCHING_EXERCISE.md` - Promotion rules exercise
   - `SHOGI_ENDGAME_CONDITIONS.md` - Complete guide to all endgame conditions
 
+### 🔧 API Documentation (`api/`)
+Technical API references and developer documentation for engine components.
+
+- **Bit-scanning API** - High-performance bit manipulation operations
+  - `bit-scanning-api.md` - Core bit-scanning API documentation
+  - `bit-scanning-api-reference.md` - Complete API reference
+  - `bit-scanning-migration-guide.md` - Migration guide for bit-scanning updates
+  - `bit-scanning-performance-guide.md` - Performance optimization guide
+
+- **Move Ordering API** - Move prioritization and search optimization
+  - `MOVE_ORDERING_API.md` - Complete move ordering API reference
+  - `MOVE_ORDERING_BEST_PRACTICES.md` - Best practices for move ordering
+  - `MOVE_ORDERING_PERFORMANCE_GUIDE.md` - Performance tuning guide
+  - `MOVE_ORDERING_TROUBLESHOOTING.md` - Common issues and solutions
+
+- **Evaluation Cache API** - Position evaluation caching system
+  - `EVALUATION_CACHE_API.md` - Complete evaluation cache API
+  - `EVALUATION_CACHE_BEST_PRACTICES.md` - Best practices for cache usage
+  - `EVALUATION_CACHE_EXAMPLES.md` - Usage examples and code snippets
+  - `EVALUATION_CACHE_TROUBLESHOOTING.md` - Common issues and solutions
+  - `EVALUATION_CACHE_TUNING_GUIDE.md` - Performance tuning guide
+  - `EVALUATION_CACHE_ADVANCED_INTEGRATION.md` - Advanced integration patterns
+
+- **Transposition Tables** - Position caching and lookup systems
+  - `TRANSPOSITION_TABLE_API_REFERENCE.md` - Transposition table API reference
+  - `TR posITION_TABLE_API_REFERENCE.md` - Position table API reference
+
+### 🚀 Release Management (`release/`)
+Documentation for creating and managing releases.
+
+- `RELEASE_CHECKLIST.md` - Step-by-step release process checklist
+
+### 📦 Distribution (`distribution/`)
+Documentation for packaging and distributing the application.
+
+- `DISTRIBUTION_GUIDE.md` - Complete packaging and distribution guide
+- `DISTRIBUTION_INDEX.md` - Distribution documentation index and navigation
+- `PACKAGING_QUICK_START.md` - Fast track to creating your first release
+- `WHERE_ARE_MY_INSTALLERS.md` - Guide to finding built installer files
+
+### ⚙️ Implementation (`implementation/`)
+Documentation for specific implementation features and changes.
+
+- `THEME_CHANGES_SUMMARY.md` - Summary of theme system changes
+- `THEME_IMPLEMENTATION_SUMMARY.md` - Detailed theme system implementation
+
+### 🧹 Cleanup (`cleanup/`)
+Documentation for codebase cleanup and maintenance tasks.
+
+- `CLEANUP_PLAN.md` - WASM to Tauri migration cleanup plan
+
 ### 🏗️ Design Documentation (`design/`)
 Technical design documents, architecture decisions, and implementation plans.
 
@@ -151,10 +202,20 @@ Deprecated, outdated, or experimental documentation.
 Start with `user/guides/USER_GUIDE.md` for the main user guide, or check `user/guides/FAQ.md` for common questions.
 
 ### For Developers
-Begin with `design/architecture/README_WASM_IMPLEMENTATION.md` for system architecture, then explore `design/implementation/` for AI implementation details organized by subject area.
+Begin with `design/architecture/` for system architecture, then explore `design/implementation/` for AI implementation details organized by subject area.
 
 ### For API Consumers
-Check `user/api/API_DOCUMENTATION.md` for complete API reference and `user/api/CODE_EXAMPLES.md` for usage examples.
+Check `api/` for complete API references including:
+- `api/bit-scanning-api.md` - Bit manipulation operations
+- `api/MOVE_ORDERING_API.md` - Move ordering system
+- `api/EVALUATION_CACHE_API.md` - Position evaluation caching
+- `user/api/API_DOCUMENTATION.md` - Complete API reference
+- `user/api/CODE_EXAMPLES.md` - Usage examples
+
+### For Release Management
+- `release/RELEASE_CHECKLIST.md` - Step-by-step release process
+- `distribution/PACKAGING_QUICK_START.md` - Fast track to first release
+- `distribution/WHERE_ARE_MY_INSTALLERS.md` - Finding built files
 
 ### For Contributors
 Review `development/tasks/` for current development tasks and `development/status/` for project status.
