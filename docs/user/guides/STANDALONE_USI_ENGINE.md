@@ -71,7 +71,7 @@ The engine is designed with a flexible architecture that allows it to be used in
 
 -   **Command-Line Interface (`src/main.rs`):** The `usi-engine` binary is a thin wrapper around the core library. It reads commands from standard input, passes them to the `UsiHandler`, and prints the output to standard output.
 
--   **WebAssembly Interface (`src/lib.rs`):** The `WasmUsiHandler` struct exposes the engine's functionality to JavaScript. It allows the web application to send USI commands to the engine and poll for asynchronous output (like `info` and `bestmove` commands from an ongoing search).
+-   **Tauri Integration:** The engine is integrated with the Tauri desktop application, allowing the frontend to communicate with the engine via USI protocol through Tauri commands and events.
 
 ## USI Command Support Status
 

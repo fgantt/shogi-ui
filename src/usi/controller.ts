@@ -1,13 +1,8 @@
 import { Record, InitialPositionSFEN, Move, ImmutablePosition, Square, PieceType as TsshogiPieceType, Color } from 'tsshogi';
 import { EventEmitter } from '../utils/events';
 
-// WASM engines are no longer supported - use Tauri engines instead
-// This controller is kept for backward compatibility but will not create engines
-
-// Minimal EngineAdapter interface for type compatibility (not used)
-interface EngineAdapter {
-  // Empty interface - WASM engines are deprecated
-}
+// ShogiController - handles game state management
+// Engine communication is handled by Tauri engines in GamePage
 
 
 
@@ -16,7 +11,7 @@ export class ShogiController extends EventEmitter {
   private instanceId: string;
   private instanceNumber: number;
   private record: Record;
-  private sessions: Map<string, EngineAdapter> = new Map();
+  // Engine sessions removed - handled by Tauri engines in GamePage
   private initialized = false;
   private player1Type: 'human' | 'ai' = 'human';
   private player2Type: 'human' | 'ai' = 'human';
@@ -48,32 +43,11 @@ export class ShogiController extends EventEmitter {
     this.record = recordResult;
   }
 
-  private getEngine(sessionId: string): EngineAdapter | null {
-    // WASM engines are no longer supported
-    // Games use Tauri engines via GamePage's useTauriEngine mode
-    // This method is kept for compatibility but always returns null
-    console.warn('[ShogiController] getEngine called but WASM engines are no longer supported.');
-    console.warn('[ShogiController] Use Tauri engine mode in GamePage instead.');
-    return null;
-  }
-
-  private async initializeEngine(_engine: EngineAdapter | null): Promise<void> {
-    // WASM engines no longer supported - deprecated method
-    console.warn('[ShogiController] initializeEngine called but WASM engines removed.');
-    return;
-  }
-
-  private async synchronizeAllEngines(_currentSfen: string, _moves: string[]): Promise<void> {
-    // WASM engines no longer supported - deprecated method
-    console.warn('[ShogiController] synchronizeAllEngines called but WASM engines removed.');
-    return;
-  }
+  // WASM engine methods removed - use Tauri engines via GamePage instead
 
   async initialize(): Promise<void> {
-    // WASM engines no longer supported - deprecated method
-    console.warn('[ShogiController] initialize called but WASM engines removed.');
+    // Simple initialization - no engine setup needed
     this.initialized = true;
-    return;
   }
 
   public getPosition(): ImmutablePosition {
@@ -316,10 +290,7 @@ export class ShogiController extends EventEmitter {
       console.log('Clearing recommendation due to user move');
       this.currentRecommendation = null;
       this.emitStateChanged();
-      // Only request AI move if auto engine moves are enabled (not using Tauri engines)
-      if (!this.gameOver && this.isCurrentPlayerAI() && !this.disableAutoEngineMove) {
-        this.requestEngineMove();
-      }
+      // AI move requests handled by Tauri engines in GamePage
       return true;
     } else {
       // Move was rejected - this could be because the player is checkmated
@@ -399,20 +370,7 @@ export class ShogiController extends EventEmitter {
     }
   }
 
-  public requestEngineMove(currentBlackTime?: number, currentWhiteTime?: number): void {
-    // WASM engines no longer supported - this method is deprecated
-    // Use Tauri engine mode in GamePage instead
-    console.warn('[ShogiController] requestEngineMove called but WASM engines removed.');
-    console.warn('[ShogiController] Game should be using useTauriEngine mode.');
-    return;
-  }
-
-  public async requestRecommendation(): Promise<void> {
-    // WASM engines no longer supported - recommendations disabled
-    // Future: Implement recommendations via Tauri engines
-    console.warn('[ShogiController] requestRecommendation called but WASM engines removed.');
-    return;
-  }
+  // Engine move methods removed - use Tauri engines via GamePage instead
   
   public async newGame(customSfen?: string): Promise<void> {
       const sfenToUse = customSfen || InitialPositionSFEN.STANDARD;
@@ -430,22 +388,10 @@ export class ShogiController extends EventEmitter {
       this.positionHistory.clear();
       console.log(`[${this.instanceId}] Position history cleared for new game`);
       
-      // Reset all engines and set them to the starting position
-      const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
-        await engine.init();
-        await engine.isReady();
-        engine.newGame();
-        // Set the engine to the starting position
-        engine.setPosition(this.record.position.sfen, []);
-      });
-      
-      await Promise.all(engineUpdates);
+      // Engine management removed - handled by Tauri engines in GamePage
       this.emitStateChanged();
       
-      // Check if the first player is AI and request move (only if auto engine moves enabled - not in Tauri mode)
-      if (this.isCurrentPlayerAI() && !this.disableAutoEngineMove) {
-        this.requestEngineMove();
-      }
+      // AI move requests handled by Tauri engines in GamePage
   }
 
   public async loadSfen(sfen: string): Promise<void> {
@@ -463,32 +409,18 @@ export class ShogiController extends EventEmitter {
     this.positionHistory.clear();
     console.log(`[${this.instanceId}] Position history cleared for loaded position`);
     
-    // Reset all engines and set them to the loaded position
-    const engineUpdates = Array.from(this.sessions.values()).map(async (engine) => {
-      await engine.init();
-      await engine.isReady();
-      engine.newGame();
-      // Set the engine to the loaded position
-      const currentSfen = this.record.position.sfen;
-      // Pass empty moves array - the SFEN already has the complete position
-      engine.setPosition(currentSfen, []);
-    });
-    
-    await Promise.all(engineUpdates);
+    // Engine management removed - handled by Tauri engines in GamePage
     this.emitStateChanged();
   }
 
   public quit(): void {
-    // WASM engines no longer supported - deprecated method
-    console.warn('[ShogiController] quit called but WASM engines removed.');
-    this.sessions.clear();
-    return;
+    // Clean up controller state
+    this.positionHistory.clear();
+    this.currentRecommendation = null;
   }
 
   private stopAllEngines(): void {
-    // WASM engines no longer supported - deprecated method
-    console.warn('[ShogiController] stopAllEngines called but WASM engines removed.');
-    return;
+    // Engine management removed - handled by Tauri engines in GamePage
   }
 
   private parseRecommendation(usiMove: string): void {

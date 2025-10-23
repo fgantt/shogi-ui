@@ -54,25 +54,31 @@ This document outlines the systematic cleanup of WebAssembly (WASM) code and dep
 
 ## Phase 2: Clean Up Deprecated Code (Medium Priority)
 
-### 2.1 Simplify ShogiController
-- [ ] Remove all deprecated WASM methods from `src/usi/controller.ts`:
-  - [ ] Remove `getEngine()` method
-  - [ ] Remove `initializeEngine()` method
-  - [ ] Remove `synchronizeAllEngines()` method
-  - [ ] Remove `requestEngineMove()` method
-  - [ ] Remove `requestRecommendation()` method
-  - [ ] Remove `stopAllEngines()` method
-  - [ ] Remove `quit()` method
-- [ ] Remove WASM-related imports and interfaces
-- [ ] Simplify controller to only handle game state management
-- [ ] Update any code that calls these deprecated methods
-- [ ] Test that game functionality still works with Tauri engines
+### 2.1 Remove Unused TauriShogiController
+- [x] Delete `src/usi/tauriController.ts` (unused/abandoned implementation)
+- [x] Verify no imports or references to TauriShogiController exist
+- [x] Test that application still works after removal
 
-### 2.2 Clean Up TypeScript/JavaScript Files
-- [ ] Remove any remaining WASM worker references
-- [ ] Update imports that reference deleted WASM files
-- [ ] Remove unused WASM-related type definitions
-- [ ] Test TypeScript compilation
+### 2.2 Simplify ShogiController
+- [x] Remove all deprecated WASM methods from `src/usi/controller.ts`:
+  - [x] Remove `getEngine()` method
+  - [x] Remove `initializeEngine()` method
+  - [x] Remove `synchronizeAllEngines()` method
+  - [x] Remove `requestEngineMove()` method
+  - [x] Remove `requestRecommendation()` method
+  - [x] Remove `stopAllEngines()` method
+  - [x] Remove `quit()` method
+- [x] Remove WASM-related imports and interfaces
+- [x] Simplify controller to only handle game state management
+- [x] Update any code that calls these deprecated methods
+- [x] Test that game functionality still works with Tauri engines
+- [x] Fix runtime errors caused by removed methods (App.tsx, GamePage.tsx)
+
+### 2.3 Clean Up TypeScript/JavaScript Files
+- [x] Remove any remaining WASM worker references
+- [x] Update imports that reference deleted WASM files
+- [x] Remove unused WASM-related type definitions
+- [x] Test TypeScript compilation
 
 ---
 
@@ -93,10 +99,10 @@ This document outlines the systematic cleanup of WebAssembly (WASM) code and dep
 - [x] Move `docs/design/implementation/bitboard-optimizations/bit-scanning/BIT_SCANNING_OPTIMIZATION_DESIGN.md` to `docs/archive/`
 
 ### 3.2 Update Remaining Documentation
-- [ ] Update `docs/README.md` to remove WASM references
-- [ ] Update `docs/architecture/` files to reflect Tauri-only architecture
-- [ ] Update API documentation to focus on Tauri/USI integration
-- [ ] Remove WASM references from development guides
+- [x] Update `docs/README.md` to remove WASM references
+- [x] Update `docs/architecture/` files to reflect Tauri-only architecture
+- [x] Update API documentation to focus on Tauri/USI integration
+- [x] Remove WASM references from development guides
 
 ---
 
@@ -169,9 +175,9 @@ This document outlines the systematic cleanup of WebAssembly (WASM) code and dep
 ## Progress Tracking
 
 **Phase 1 Progress:** 15/15 tasks completed ✅  
-**Phase 2 Progress:** 0/10 tasks completed  
-**Phase 3 Progress:** 11/11 tasks completed ✅  
+**Phase 2 Progress:** 12/12 tasks completed ✅  
+**Phase 3 Progress:** 15/15 tasks completed ✅  
 **Phase 4 Progress:** 0/4 tasks completed  
 **Phase 5 Progress:** 0/8 tasks completed  
 
-**Overall Progress:** 26/48 tasks completed (54%)
+**Overall Progress:** 42/54 tasks completed (78%)

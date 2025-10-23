@@ -740,7 +740,8 @@ const GamePage: React.FC<GamePageProps> = ({
             !isRequestingRecommendation &&
             !controller.getCurrentRecommendation()) {
           setIsRequestingRecommendation(true);
-          controller.requestRecommendation();
+          // Recommendations handled by Tauri engines in GamePage
+          console.log('Recommendation request - handled by Tauri engines');
         }
       }
       
@@ -815,7 +816,8 @@ const GamePage: React.FC<GamePageProps> = ({
     // If enabling recommendations and it's a human player's turn, request recommendation
     if (newEnabled && controller.hasHumanPlayer() && !controller.isCurrentPlayerAI()) {
       setIsRequestingRecommendation(true);
-      controller.requestRecommendation();
+      // Recommendations handled by Tauri engines in GamePage
+      console.log('Recommendation request - handled by Tauri engines');
     }
   };
 
@@ -1538,7 +1540,7 @@ const GamePage: React.FC<GamePageProps> = ({
             const success = controller.handleUserMove(move);
             if (!success) {
               console.warn(`Failed to apply move ${i + 1}: ${move}`);
-              console.warn(`Current position SFEN: ${controller.getCurrentSfen()}`);
+              console.warn(`Current position SFEN: ${controller.getPosition().sfen}`);
               break;
             }
           }

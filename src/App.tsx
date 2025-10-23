@@ -98,11 +98,7 @@ function App() {
 
     return () => {
       shogiController.off('sessionCreated', onSessionCreated);
-      const engines = (shogiController as any).sessions as Map<string, any>;
-      for (const engine of engines.values()) {
-        engine.off('usiCommandSent', onUsiCommandSent);
-        engine.off('usiCommandReceived', onUsiCommandReceived);
-      }
+      // Engine cleanup is now handled by Tauri engines in GamePage
     };
   }, []); // Empty dependency array to run only once
 

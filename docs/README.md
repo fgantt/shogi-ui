@@ -38,10 +38,6 @@ Technical design documents, architecture decisions, and implementation plans.
 
 - **`architecture/`** - System architecture and high-level design
   - `Universal-Shogi-Interface-Implementation.md` - USI implementation details
-  - `README_WASM_IMPLEMENTATION.md` - WebAssembly implementation guide
-  - `WEBASSEMBLY_BITBOARDS_IMPLEMENTATION.md` - WASM bitboards implementation
-  - `WEBASSEMBLY_INTEGRATION_GUIDE.md` - WASM integration guide
-  - `JS_vs_WASM_engine.md` - JavaScript vs WASM engine comparison
   - `computer_player_flow_diagram.md` - Computer player architecture
   - `Streaming between UI and Engine - Gemini.md` - UI-Engine communication
   - `INTEGRATION_GUIDE.md` - System integration guide
