@@ -200,8 +200,7 @@ mod unit_tests {
         let caps = get_platform_capabilities();
         
         // Platform capabilities should be detected
-        assert!(caps.has_popcnt || caps.is_wasm); // Should have POPCNT or be WASM
-        assert!(caps.has_bmi1 || caps.is_wasm);   // Should have BMI1 or be WASM
+        assert!(caps.has_popcnt || caps.has_bmi1); // Should have hardware acceleration
         
         // Test best implementation selection
         let popcount_impl = get_best_popcount_impl();
@@ -556,27 +555,7 @@ mod cross_platform_tests {
         }
     }
     
-    /// Test WASM compatibility
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_wasm_compatibility() {
-        // Test that all functions work in WASM environment
-        let bb = 0b1010u128;
-        
-        assert_eq!(popcount(bb), 2);
-        assert_eq!(bit_scan_forward(bb), Some(1));
-        assert_eq!(bit_scan_reverse(bb), Some(3));
-        
-        // Test that prefetching functions are no-ops
-        unsafe {
-            prefetch_bitboard(bb);
-            prefetch_bitboard_sequence(&[bb]);
-        }
-        
-        // Test that cache optimization works
-        assert_eq!(popcount_cache_optimized(bb), 2);
-        assert_eq!(get_bit_positions_cache_optimized(bb), vec![1, 3]);
-    }
+    // WASM compatibility tests removed - no longer needed
     
     /// Test platform detection across architectures
     #[test]
@@ -584,7 +563,7 @@ mod cross_platform_tests {
         let caps = get_platform_capabilities();
         
         // Platform capabilities should be consistently detected
-        assert!(caps.is_wasm || caps.has_popcnt || caps.has_bmi1);
+        assert!(caps.has_popcnt || caps.has_bmi1);
         
         // Best implementations should be selected appropriately
         let popcount_impl = get_best_popcount_impl();

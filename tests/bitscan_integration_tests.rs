@@ -22,20 +22,8 @@ fn test_platform_detection_integration() {
     // Verify basic structure
     assert!(capabilities.architecture != shogi_engine::bitboards::platform_detection::Architecture::Unknown);
     
-    // Verify WASM detection works
-    #[cfg(target_arch = "wasm32")]
-    {
-        assert!(capabilities.is_wasm);
-        assert!(capabilities.is_web_assembly);
-        assert_eq!(capabilities.architecture, shogi_engine::bitboards::platform_detection::Architecture::Wasm32);
-    }
-    
-    // Verify native detection works
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        assert!(!capabilities.is_wasm);
-        assert!(!capabilities.is_web_assembly);
-    }
+    // Verify platform detection works
+    // Platform capabilities should be detected correctly
     
     // Verify implementation selection works
     let popcount_impl = get_best_popcount_impl();
@@ -317,41 +305,7 @@ fn test_existing_bitboard_integration() {
     assert_eq!(bit_scan_reverse(file_mask), Some(56));
 }
 
-/// Test WASM-specific functionality
-#[cfg(target_arch = "wasm32")]
-#[test]
-fn test_wasm_specific_functionality() {
-    let capabilities = get_platform_capabilities();
-    
-    // Verify WASM detection
-    assert!(capabilities.is_wasm);
-    assert!(capabilities.is_web_assembly);
-    assert_eq!(capabilities.architecture, shogi_engine::bitboards::platform_detection::Architecture::Wasm32);
-    
-    // Verify no hardware acceleration is detected
-    assert!(!capabilities.has_popcnt);
-    assert!(!capabilities.has_bmi1);
-    assert!(!capabilities.has_bmi2);
-    
-    // Verify SWAR implementations are selected
-    let popcount_impl = get_best_popcount_impl();
-    let bitscan_impl = get_best_bitscan_impl();
-    
-    // On WASM, we should use SWAR/DeBruijn implementations
-    assert!(matches!(popcount_impl, shogi_engine::bitboards::platform_detection::PopcountImpl::BitParallel));
-    assert!(matches!(bitscan_impl, shogi_engine::bitboards::platform_detection::BitscanImpl::DeBruijn));
-    
-    // Test that functions work correctly on WASM
-    let test_bitboard = 0x123456789ABCDEF0u128;
-    let result = popcount(test_bitboard);
-    assert_eq!(result, 32); // Should be correct regardless of implementation
-    
-    let forward_result = bit_scan_forward(test_bitboard);
-    assert!(forward_result.is_some());
-    
-    let reverse_result = bit_scan_reverse(test_bitboard);
-    assert!(reverse_result.is_some());
-}
+// WASM-specific functionality removed - no longer needed
 
 /// Test native platform functionality
 #[cfg(not(target_arch = "wasm32"))]

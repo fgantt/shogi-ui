@@ -95,13 +95,13 @@ fn test_tablebase_configurations() {
     assert!(move2.is_some());
 }
 
-/// Test tablebase with WASM optimizations
+/// Test tablebase optimizations
 #[test]
-fn test_tablebase_wasm_optimizations() {
+fn test_tablebase_optimizations() {
     let mut engine = ShogiEngine::new();
     engine.enable_tablebase();
     
-    // Test WASM compatibility
+    // Test tablebase functionality
     let stats = engine.get_tablebase_stats();
     assert!(!stats.is_empty());
     

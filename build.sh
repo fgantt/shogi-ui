@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# Build script for Shogi WebAssembly engine
+# Build script for Shogi Tauri application
 
-echo "Building Shogi WebAssembly engine..."
-
-# Check if wasm-pack is installed
-if ! command -v wasm-pack &> /dev/null; then
-    echo "Installing wasm-pack..."
-    cargo install wasm-pack
-fi
+echo "Building Shogi Tauri application..."
 
 # Check if Python is available for opening book conversion
 if ! command -v python3 &> /dev/null; then
@@ -18,7 +12,6 @@ fi
 
 # Clean previous builds
 echo "Cleaning previous builds..."
-rm -rf pkg/
 rm -rf target/
 
 # Generate opening book binary from JSON (if Python is available)
@@ -38,25 +31,31 @@ else
     echo "Skipping opening book conversion (Python3 not available)"
 fi
 
-# Build for web target
-echo "Building for web target..."
-wasm-pack build --target web --dev --out-dir pkg
+# Build the Rust engine
+echo "Building Rust engine..."
+cargo build --bin usi-engine --release
 
-# Build for bundler target (for use with webpack/vite)
-echo "Building for bundler target..."
-wasm-pack build --target bundler --dev --out-dir pkg-bundler
+if [ $? -eq 0 ]; then
+    echo "Rust engine built successfully!"
+else
+    echo "Error: Failed to build Rust engine"
+    exit 1
+fi
 
-# Copy opening book binary to output directories (if it exists)
-if [ -f "dist/opening_book.bin" ]; then
-    echo "Copying opening book binary to output directories..."
-    cp dist/opening_book.bin pkg/
-    cp dist/opening_book.bin pkg-bundler/
-    echo "Opening book binary copied to pkg/ and pkg-bundler/"
+# Build the Tauri application
+echo "Building Tauri application..."
+npm run tauri:build
+
+if [ $? -eq 0 ]; then
+    echo "Tauri application built successfully!"
+    echo "Build artifacts are available in src-tauri/target/release/"
+else
+    echo "Error: Failed to build Tauri application"
+    exit 1
 fi
 
 echo "Build complete!"
-echo "Web target: pkg/"
-echo "Bundler target: pkg-bundler/"
+echo "Tauri application: src-tauri/target/release/"
 if [ -f "dist/opening_book.bin" ]; then
     echo "Opening book binary: dist/opening_book.bin"
 fi

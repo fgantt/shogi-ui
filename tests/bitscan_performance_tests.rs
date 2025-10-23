@@ -42,7 +42,7 @@ fn test_popcount_performance_benchmarks() {
         println!("\n=== Popcount Performance: {} ===", name);
         
         // Benchmark hardware implementation
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             let start = Instant::now();
             for _ in 0..iterations {
@@ -112,7 +112,7 @@ fn test_bitscan_performance_benchmarks() {
         println!("\n=== Bit Scan Forward Performance: {} ===", name);
         
         // Benchmark hardware implementation
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             let start = Instant::now();
             for _ in 0..iterations {
@@ -167,7 +167,7 @@ fn test_bitscan_performance_benchmarks() {
         println!("\n=== Bit Scan Reverse Performance: {} ===", name);
         
         // Benchmark hardware implementation
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             let start = Instant::now();
             for _ in 0..iterations {
@@ -377,17 +377,13 @@ fn test_platform_specific_performance() {
     println!("Bit scan forward: {}ns per call", avg_ns);
     
     // Platform-specific performance expectations
-    #[cfg(target_arch = "wasm32")]
-    {
-        // WASM should use SWAR/DeBruijn implementations
-        // Performance should be reasonable but not hardware-accelerated
-        assert!(popcount_duration.as_nanos() / iterations < 2000,
-                "WASM popcount too slow: {}ns per call", avg_ns);
-        assert!(bitscan_duration.as_nanos() / iterations < 3000,
-                "WASM bitscan too slow: {}ns per call", avg_ns);
-    }
+    // Performance should be reasonable
+    assert!(popcount_duration.as_nanos() / iterations < 2000,
+            "Popcount too slow: {}ns per call", avg_ns);
+    assert!(bitscan_duration.as_nanos() / iterations < 3000,
+            "Bitscan too slow: {}ns per call", avg_ns);
     
-    #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+    #[cfg(target_arch = "x86_64")]
     {
         // x86_64 should potentially use hardware acceleration
         if capabilities.has_popcnt {
@@ -400,7 +396,7 @@ fn test_platform_specific_performance() {
         }
     }
     
-    #[cfg(all(target_arch = "aarch64", not(target_arch = "wasm32")))]
+    #[cfg(target_arch = "aarch64")]
     {
         // ARM should use native instructions where available
         assert!(popcount_duration.as_nanos() / iterations < 1000,
