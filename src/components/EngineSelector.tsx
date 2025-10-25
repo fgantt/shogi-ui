@@ -37,7 +37,7 @@ export function EngineSelector({
         setEngines(enabledEngines);
         
         // Auto-select favorite engine if nothing selected (only if autoSelect is enabled)
-        if (autoSelect && !selectedEngineId && enabledEngines.length > 0) {
+        if (autoSelect && !selectedEngineId && enabledEngines.length > 0 && onEngineSelect) {
           // First, try to find the favorite engine
           const favoriteEngine = enabledEngines.find(e => e.is_favorite);
           if (favoriteEngine) {
@@ -101,10 +101,14 @@ export function EngineSelector({
       <select
         id="engine-select"
         value={selectedEngineId || ''}
-        onChange={(e) => onEngineSelect(e.target.value || null)}
+        onChange={(e) => {
+          if (onEngineSelect) {
+            onEngineSelect(e.target.value || null);
+          }
+        }}
         className="engine-select"
       >
-        {!autoSelect && !selectedEngineId && <option value="">-- Select an engine --</option>}
+        {!autoSelect && !selectedEngineId && includeNone && <option value="">-- Select an engine --</option>}
         {includeNone && <option value="">None (Human only)</option>}
         {engines.map((engine) => (
           <option key={engine.id} value={engine.id}>

@@ -26,12 +26,38 @@ const HomePage: React.FC = () => {
     return stored ? parseFloat(stored) : 0.9;
   });
   const [gameLayout, setGameLayoutState] = useState<'classic' | 'compact'>((localStorage.getItem('shogi-game-layout') as any) || 'compact');
+  
+  // Recommendation engine state
+  const [recommendationEngineId, setRecommendationEngineId] = useState<string | null>(() => {
+    return localStorage.getItem('shogi-recommendation-engine-id');
+  });
+  const [recommendationEngineOptions, setRecommendationEngineOptions] = useState<{[key: string]: string} | null>(() => {
+    const stored = localStorage.getItem('shogi-recommendation-engine-options');
+    return stored ? JSON.parse(stored) : null;
+  });
 
   // Sync sound settings with audio manager on mount
   useEffect(() => {
     setSoundsEnabled(soundsEnabled);
     setVolume(soundVolume);
   }, [soundsEnabled, soundVolume]);
+
+  // Persist recommendation engine settings
+  useEffect(() => {
+    if (recommendationEngineId) {
+      localStorage.setItem('shogi-recommendation-engine-id', recommendationEngineId);
+    } else {
+      localStorage.removeItem('shogi-recommendation-engine-id');
+    }
+  }, [recommendationEngineId]);
+
+  useEffect(() => {
+    if (recommendationEngineOptions) {
+      localStorage.setItem('shogi-recommendation-engine-options', JSON.stringify(recommendationEngineOptions));
+    } else {
+      localStorage.removeItem('shogi-recommendation-engine-options');
+    }
+  }, [recommendationEngineOptions]);
 
   useEffect(() => {
     const loadAssets = async () => {
@@ -103,7 +129,10 @@ const HomePage: React.FC = () => {
         player2TempOptions: settings.player2TempOptions,
         minutesPerSide: settings.minutesPerSide,
         byoyomiInSeconds: settings.byoyomiInSeconds,
-        initialSfen: settings.initialSfen
+        initialSfen: settings.initialSfen,
+        // Recommendation engine settings
+        recommendationEngineId,
+        recommendationEngineOptions
       } 
     });
     setIsStartGameModalOpen(false);
@@ -269,6 +298,11 @@ const HomePage: React.FC = () => {
           onSoundsEnabledChange={handleSoundsEnabledChange}
           soundVolume={soundVolume}
           onSoundVolumeChange={handleSoundVolumeChange}
+          // Recommendation engine settings
+          recommendationEngineId={recommendationEngineId}
+          onRecommendationEngineChange={setRecommendationEngineId}
+          recommendationEngineOptions={recommendationEngineOptions}
+          onRecommendationEngineOptionsChange={setRecommendationEngineOptions}
         />
       )}
       

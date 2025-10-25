@@ -3,10 +3,14 @@ import PiecePreview from './PiecePreview';
 import ThemeSelector from './ThemeSelector';
 import { useTheme, getThemeDisplayName, getThemeDescription, type Theme } from '../hooks/useTheme';
 import { playPreviewSound } from '../utils/audio';
+import { EngineSelector } from './EngineSelector';
+import { EngineOptionsModal } from './EngineOptionsModal';
+import type { EngineConfig } from '../types/engine';
+import { invoke } from '@tauri-apps/api/core';
 import '../styles/settings.css';
 
 type Notation = 'western' | 'kifu' | 'usi' | 'csa';
-type SettingsTab = 'appearance' | 'display' | 'notation' | 'backgrounds';
+type SettingsTab = 'appearance' | 'display' | 'notation' | 'backgrounds' | 'engines';
 
 interface SettingsPanelProps {
   pieceThemeType: string;
@@ -32,6 +36,11 @@ interface SettingsPanelProps {
   onSoundsEnabledChange: (enabled: boolean) => void;
   soundVolume: number;
   onSoundVolumeChange: (volume: number) => void;
+  // Recommendation engine settings
+  recommendationEngineId: string | null;
+  onRecommendationEngineChange: (engineId: string | null) => void;
+  recommendationEngineOptions: {[key: string]: string} | null;
+  onRecommendationEngineOptionsChange: (options: {[key: string]: string} | null) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -58,6 +67,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onSoundsEnabledChange,
   soundVolume,
   onSoundVolumeChange,
+  // Recommendation engine settings
+  recommendationEngineId,
+  onRecommendationEngineChange,
+  recommendationEngineOptions,
+  onRecommendationEngineOptionsChange,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
   const [isBoardBackgroundCollapsed, setIsBoardBackgroundCollapsed] = useState(false);
@@ -66,6 +80,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [isPieceThemesCollapsed, setIsPieceThemesCollapsed] = useState(false);
   const { theme, setTheme } = useTheme();
   const volumePreviewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Recommendation engine options modal state
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [selectedEngine, setSelectedEngine] = useState<EngineConfig | null>(null);
+  const [engines, setEngines] = useState<EngineConfig[]>([]);
+
+  // Load engines when component mounts
+  useEffect(() => {
+    loadEngines();
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -75,6 +99,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       }
     };
   }, []);
+
+  const loadEngines = async () => {
+    try {
+      const response = await invoke<any>('get_engines');
+      if (response.success && response.data) {
+        setEngines(response.data);
+        
+        // Auto-select favorite engine if no recommendation engine is selected
+        if (!recommendationEngineId && response.data.length > 0) {
+          const favoriteEngine = response.data.find(e => e.is_favorite);
+          const defaultEngine = favoriteEngine || response.data.find(e => e.is_builtin) || response.data[0];
+          if (defaultEngine) {
+            onRecommendationEngineChange(defaultEngine.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading engines:', error);
+    }
+  };
+
+  const handleOpenRecommendationEngineOptions = () => {
+    if (!recommendationEngineId) return;
+    
+    const engine = engines.find(e => e.id === recommendationEngineId);
+    if (engine) {
+      setSelectedEngine(engine);
+      setOptionsModalOpen(true);
+    }
+  };
+
+  const handleCloseRecommendationEngineOptions = () => {
+    setOptionsModalOpen(false);
+    setSelectedEngine(null);
+  };
+
+  const handleSaveRecommendationEngineOptions = (options: {[key: string]: string}) => {
+    onRecommendationEngineOptionsChange(options);
+    setOptionsModalOpen(false);
+    setSelectedEngine(null);
+  };
 
   const toggleBoardBackgroundCollapse = () => {
     setIsBoardBackgroundCollapsed(!isBoardBackgroundCollapsed);
@@ -377,6 +442,48 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </>
         );
 
+        case 'engines':
+          return (
+            <>
+              <section>
+                <h3>Recommendation Engine</h3>
+                <p className="setting-description">
+                  Select the engine to use for move recommendations when hints are enabled.
+                  This engine will analyze the position and suggest moves for human players.
+                </p>
+                <div className="setting-group">
+                  <EngineSelector
+                    selectedEngineId={recommendationEngineId}
+                  onEngineSelect={(engineId) => {
+                    console.log('[SettingsPanel] Engine selection changed:', engineId);
+                    onRecommendationEngineChange(engineId);
+                  }}
+                    label="Recommendation Engine"
+                    autoSelect={false}
+                  />
+                  {recommendationEngineId && (
+                    <button
+                      className="engine-options-btn"
+                      onClick={handleOpenRecommendationEngineOptions}
+                      style={{
+                        marginTop: '10px',
+                        padding: '8px 16px',
+                        backgroundColor: 'var(--color-primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      Engine Options
+                    </button>
+                  )}
+                </div>
+              </section>
+            </>
+          );
+
       default:
         return null;
     }
@@ -420,6 +527,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <span className="tab-icon">🖼️</span>
               <span className="tab-label">Backgrounds</span>
             </button>
+            <button 
+              className={`settings-tab ${activeTab === 'engines' ? 'active' : ''}`}
+              onClick={() => setActiveTab('engines')}
+            >
+              <span className="tab-icon">🤖</span>
+              <span className="tab-label">Engines</span>
+            </button>
           </div>
           
           <div className="settings-tab-content">
@@ -427,6 +541,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Engine Options Modal */}
+      {optionsModalOpen && selectedEngine && (
+        <EngineOptionsModal
+          isOpen={optionsModalOpen}
+          engine={selectedEngine}
+          onClose={handleCloseRecommendationEngineOptions}
+          onSave={handleSaveRecommendationEngineOptions}
+          tempOptions={recommendationEngineOptions}
+        />
+      )}
     </div>
   );
 };

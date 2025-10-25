@@ -24,6 +24,7 @@ import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 import { playPieceMoveSound, playCheckmateSound, playDrawSound, setSoundsEnabled, setVolume, getVolume } from '../utils/audio';
 import { sendUsiCommand, parseBestMove, parseEngineInfo, sendIsReadyAndWait } from '../utils/tauriEngine';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { CommandResponse, EngineConfig } from '../types/engine';
 import { useTauriEvents } from '../hooks/useTauriEvents';
 import './GamePage.css';
@@ -231,9 +232,50 @@ const GamePage: React.FC<GamePageProps> = ({
   
   // Recommendation state
   const [recommendationsEnabled, setRecommendationsEnabled] = useState(false);
-  const [currentRecommendation, setCurrentRecommendation] = useState<{ from: Square | null; to: Square | null } | null>(null);
+  const [currentRecommendation, setCurrentRecommendation] = useState<{ 
+    from: Square | null; 
+    to: Square | null; 
+    isDrop?: boolean; 
+    pieceType?: string; 
+    isPromotion?: boolean; 
+  } | null>(null);
+  
+  // Recommendation engine state
+  const [recommendationEngineId, setRecommendationEngineId] = useState<string | null>(() => {
+    return localStorage.getItem('shogi-recommendation-engine-id');
+  });
+  
+  // Debug: Log when recommendationEngineId changes
+  useEffect(() => {
+    console.log('[GamePage] recommendationEngineId changed:', recommendationEngineId);
+  }, [recommendationEngineId]);
+
+  const [recommendationEngineOptions, setRecommendationEngineOptions] = useState<{[key: string]: string} | null>(() => {
+    const stored = localStorage.getItem('shogi-recommendation-engine-options');
+    return stored ? JSON.parse(stored) : null;
+  });
+
+  // Persist recommendation engine settings
+  useEffect(() => {
+    if (recommendationEngineId) {
+      localStorage.setItem('shogi-recommendation-engine-id', recommendationEngineId);
+    } else {
+      localStorage.removeItem('shogi-recommendation-engine-id');
+    }
+  }, [recommendationEngineId]);
+
+  useEffect(() => {
+    if (recommendationEngineOptions) {
+      localStorage.setItem('shogi-recommendation-engine-options', JSON.stringify(recommendationEngineOptions));
+    } else {
+      localStorage.removeItem('shogi-recommendation-engine-options');
+    }
+  }, [recommendationEngineOptions]);
   const [isRequestingRecommendation, setIsRequestingRecommendation] = useState(false);
   const [highlightedCapturedPiece, setHighlightedCapturedPiece] = useState<string | null>(null);
+  
+  // Recommendation engine settings
+  
   
   // Tauri engine state
   const [useTauriEngine, setUseTauriEngine] = useState(false);
@@ -261,10 +303,6 @@ const GamePage: React.FC<GamePageProps> = ({
   const classicBoardRef = useRef<HTMLDivElement | null>(null);
   const boardComponentRef = useRef<BoardRef | null>(null);
   
-  // Debug recommendation state changes
-  useEffect(() => {
-    console.log('Recommendation state changed to:', currentRecommendation);
-  }, [currentRecommendation]);
   
 
   // Helper function to find the king square for a given player
@@ -314,7 +352,9 @@ const GamePage: React.FC<GamePageProps> = ({
         byoyomiInSeconds: stateByoyomiInSeconds,
         initialSfen: stateInitialSfen,
         player1EngineId: statePlayer1EngineId,
-        player2EngineId: statePlayer2EngineId
+        player2EngineId: statePlayer2EngineId,
+        recommendationEngineId: stateRecommendationEngineId,
+        recommendationEngineOptions: stateRecommendationEngineOptions
       } = location.state as any;
       
       if (player1Type && player2Type) {
@@ -359,6 +399,14 @@ const GamePage: React.FC<GamePageProps> = ({
           setShowPieceTooltips(stateShowPieceTooltips);
         }
         
+        // Set recommendation engine settings from navigation state
+        if (stateRecommendationEngineId !== undefined) {
+          setRecommendationEngineId(stateRecommendationEngineId);
+        }
+        if (stateRecommendationEngineOptions !== undefined) {
+          setRecommendationEngineOptions(stateRecommendationEngineOptions);
+        }
+        
         // Determine start color from SFEN
         if (stateInitialSfen) {
           const turn = stateInitialSfen.split(' ')[1];
@@ -370,8 +418,8 @@ const GamePage: React.FC<GamePageProps> = ({
         // CRITICAL: Set the ref BEFORE async operations to prevent React Strict Mode double-initialization
         gameInitializedRef.current = true;
         
-        // Initialize Tauri engines if any player is AI
-        const needsTauriEngine = player1Type === 'ai' || player2Type === 'ai';
+        // Initialize Tauri engines if any player is AI or if we have recommendation engine settings
+        const needsTauriEngine = player1Type === 'ai' || player2Type === 'ai' || (player1Type === 'human' && player2Type === 'human');
         console.log('[Navigation Init] Needs Tauri engine:', needsTauriEngine);
         
         if (needsTauriEngine) {
@@ -745,18 +793,6 @@ const GamePage: React.FC<GamePageProps> = ({
         setCurrentRecommendation(null);
       }
       
-      // Request recommendation if enabled, it's a human player's turn, and we're not already requesting one
-      if (controller.areRecommendationsEnabled()) {
-        if (
-            controller.hasHumanPlayer() && 
-            !controller.isCurrentPlayerAI() && 
-            !isRequestingRecommendation &&
-            !controller.getCurrentRecommendation()) {
-          setIsRequestingRecommendation(true);
-          // Recommendations handled by Tauri engines in GamePage
-          console.log('Recommendation request - handled by Tauri engines');
-        }
-      }
       
       // Check for check state
       const checked = newPosition.checked;
@@ -806,6 +842,7 @@ const GamePage: React.FC<GamePageProps> = ({
     controller.on('recommendationTimeout', () => {
       setIsRequestingRecommendation(false);
     });
+
     
     
     setPosition(controller.getPosition());
@@ -818,6 +855,7 @@ const GamePage: React.FC<GamePageProps> = ({
       controller.off('recommendationTimeout', () => {
         setIsRequestingRecommendation(false);
       });
+      
     };
   }, [controller]);
 
@@ -825,12 +863,52 @@ const GamePage: React.FC<GamePageProps> = ({
     const newEnabled = !recommendationsEnabled;
     setRecommendationsEnabled(newEnabled);
     controller.setRecommendationsEnabled(newEnabled);
-    
-    // If enabling recommendations and it's a human player's turn, request recommendation
-    if (newEnabled && controller.hasHumanPlayer() && !controller.isCurrentPlayerAI()) {
-      setIsRequestingRecommendation(true);
-      // Recommendations handled by Tauri engines in GamePage
-      console.log('Recommendation request - handled by Tauri engines');
+  };
+
+  // Parse recommendation move from USI string
+  const parseRecommendationMove = (usiMove: string) => {
+    try {
+      console.log('Parsing recommendation move:', usiMove);
+      
+      // Create a move from the USI string
+      const move = controller.getPosition().createMoveByUSI(usiMove);
+      if (!move) {
+        console.error('Failed to parse USI move:', usiMove);
+        return;
+      }
+      
+      // Extract move information
+      const fromSquare = typeof move.from === 'object' && 'x' in move.from 
+        ? move.from as Square 
+        : null;
+      const toSquare = move.to as Square;
+      
+      // Check if this is a drop move
+      const isDrop = fromSquare === null;
+      let pieceType = '';
+      
+      if (isDrop) {
+        // Extract piece type from USI move string (e.g., "P*5d" -> "P")
+        const match = usiMove.match(/^([A-Z])\*/);
+        pieceType = match ? match[1] : '';
+      }
+      
+      // Check if this is a promotion move
+      const isPromotion = usiMove.endsWith('+');
+      
+      console.log('Recommendation parsed:', { from: fromSquare, to: toSquare, isDrop, pieceType, isPromotion });
+      
+      // Set the recommendation
+      setCurrentRecommendation({
+        from: fromSquare,
+        to: toSquare,
+        isDrop,
+        pieceType,
+        isPromotion
+      });
+      
+    } catch (error) {
+      console.error('Error parsing recommendation move:', error);
     }
   };
 
@@ -890,10 +968,9 @@ const GamePage: React.FC<GamePageProps> = ({
         const pieceChar = controller.pieceTypeToUsiChar(selectedCapturedPiece);
         if (pieceChar) {
           const dropMove = `${pieceChar}*${clickedSquare.usi}`;
-          console.log('Drop move handler - clearing recommendation');
-          setIsRequestingRecommendation(false);
-          controller.clearRecommendation();
-          setCurrentRecommendation(null);
+        console.log('Drop move handler - clearing recommendation');
+        setIsRequestingRecommendation(false);
+        setCurrentRecommendation(null);
           controller.handleUserMove(dropMove);
           playPieceMoveSound();
         }
@@ -950,7 +1027,6 @@ const GamePage: React.FC<GamePageProps> = ({
         console.log('[GamePage] useTauriEngine:', useTauriEngine);
         console.log('[GamePage] Player types:', { player1Type, player2Type });
         setIsRequestingRecommendation(false);
-        controller.clearRecommendation();
         setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
         playPieceMoveSound();
@@ -1026,7 +1102,6 @@ const GamePage: React.FC<GamePageProps> = ({
         // Make the move directly
         const moveUsi = `${selectedSquare.usi}${droppedSquare.usi}`;
         setIsRequestingRecommendation(false);
-        controller.clearRecommendation();
         setCurrentRecommendation(null);
         controller.handleUserMove(moveUsi);
         playPieceMoveSound();
@@ -1079,8 +1154,8 @@ const GamePage: React.FC<GamePageProps> = ({
     setMinutesPerSide(settings.minutesPerSide);
     setByoyomiInSeconds(settings.byoyomiInSeconds);
     
-    // Check if we need to use Tauri engines (any AI player selected)
-    const needsTauriEngine = settings.player1Type === 'ai' || settings.player2Type === 'ai';
+    // Check if we need to use Tauri engines (any AI player selected, or human vs human for recommendations)
+    const needsTauriEngine = settings.player1Type === 'ai' || settings.player2Type === 'ai' || (settings.player1Type === 'human' && settings.player2Type === 'human');
     
     if (needsTauriEngine) {
       // If AI selected but no engine ID, get the built-in engine
@@ -1096,11 +1171,23 @@ const GamePage: React.FC<GamePageProps> = ({
           
           if (settings.player1Type === 'ai' && !player1Engine) {
             player1Engine = defaultEngine.id;
-            console.log('Auto-selected engine for Player 1:', defaultEngine.name);
+            console.log('Auto-selected engine for Player 1 (AI):', defaultEngine.name);
           }
           if (settings.player2Type === 'ai' && !player2Engine) {
             player2Engine = defaultEngine.id;
-            console.log('Auto-selected engine for Player 2:', defaultEngine.name);
+            console.log('Auto-selected engine for Player 2 (AI):', defaultEngine.name);
+          }
+          
+          // For human vs human games, also auto-select engines for recommendations
+          if (settings.player1Type === 'human' && settings.player2Type === 'human') {
+            if (!player1Engine) {
+              player1Engine = defaultEngine.id;
+              console.log('Auto-selected recommendation engine for Player 1 (Human):', defaultEngine.name);
+            }
+            if (!player2Engine) {
+              player2Engine = defaultEngine.id;
+              console.log('Auto-selected recommendation engine for Player 2 (Human):', defaultEngine.name);
+            }
           }
         }
       } catch (error) {
@@ -1187,15 +1274,27 @@ const GamePage: React.FC<GamePageProps> = ({
       // Store engines for display name lookup in USI monitor
       setAvailableEngines(response.data);
 
-      // Spawn player 1 engine if AI
-      if (settings.player1Type === 'ai' && settings.player1EngineId) {
-        console.log('[initializeTauriEngines] Player 1 is AI, spawning engine:', settings.player1EngineId);
-        const engine = response.data.find(e => e.id === settings.player1EngineId);
+      // Always spawn player 1 engine (AI or recommendation engine for human)
+      let player1EngineId = settings.player1EngineId;
+      if (settings.player1Type === 'human') {
+        // For human players, use the recommendation engine from settings, or fall back to favorite
+        if (recommendationEngineId) {
+          player1EngineId = recommendationEngineId;
+        } else {
+          const favoriteEngine = response.data.find(e => e.is_favorite);
+          const defaultEngine = favoriteEngine || response.data.find(e => e.is_builtin) || response.data[0];
+          player1EngineId = defaultEngine?.id;
+        }
+      }
+      
+      if (player1EngineId) {
+        console.log('[initializeTauriEngines] Player 1 engine (AI or recommendation):', player1EngineId);
+        const engine = response.data.find(e => e.id === player1EngineId);
         console.log('[initializeTauriEngines] Player 1 engine found:', engine);
         
         if (engine) {
           // Generate unique runtime ID (timestamp + random) to allow same engine for both players
-          const runtimeId = `${settings.player1EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const runtimeId = `${player1EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
           console.log('[initializeTauriEngines] Spawning player 1 engine with runtime ID:', runtimeId);
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
             engineId: runtimeId,
@@ -1225,15 +1324,27 @@ const GamePage: React.FC<GamePageProps> = ({
         }
       }
 
-      // Spawn player 2 engine if AI
-      if (settings.player2Type === 'ai' && settings.player2EngineId) {
-        console.log('[initializeTauriEngines] Player 2 is AI, spawning engine:', settings.player2EngineId);
-        const engine = response.data.find(e => e.id === settings.player2EngineId);
+      // Always spawn player 2 engine (AI or recommendation engine for human)
+      let player2EngineId = settings.player2EngineId;
+      if (settings.player2Type === 'human') {
+        // For human players, use the recommendation engine from settings, or fall back to favorite
+        if (recommendationEngineId) {
+          player2EngineId = recommendationEngineId;
+        } else {
+          const favoriteEngine = response.data.find(e => e.is_favorite);
+          const defaultEngine = favoriteEngine || response.data.find(e => e.is_builtin) || response.data[0];
+          player2EngineId = defaultEngine?.id;
+        }
+      }
+      
+      if (player2EngineId) {
+        console.log('[initializeTauriEngines] Player 2 engine (AI or recommendation):', player2EngineId);
+        const engine = response.data.find(e => e.id === player2EngineId);
         console.log('[initializeTauriEngines] Player 2 engine found:', engine);
         
         if (engine) {
           // Generate unique runtime ID (timestamp + random) to allow same engine for both players
-          const runtimeId = `${settings.player2EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const runtimeId = `${player2EngineId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
           console.log('[initializeTauriEngines] Spawning player 2 engine with runtime ID:', runtimeId);
           const spawnResult = await invoke<CommandResponse>('spawn_engine', {
             engineId: runtimeId,
@@ -1292,17 +1403,25 @@ const GamePage: React.FC<GamePageProps> = ({
         // Clear thinking move when bestmove is received
         setThinkingMovePlayer1(null);
         
-        if (move && move !== 'resign') {
-          console.log('[Tauri Event] Applying engine move to controller:', move);
+        // Only apply moves if it's an AI player's turn
+        const isBlackTurn = position?.sfen.includes(' b ');
+        const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
+        
+        if (move && move !== 'resign' && isAITurn) {
+          console.log('[Tauri Event] Applying AI engine move to controller:', move);
           // Apply the engine's move (handleUserMove returns boolean, not Promise)
           const moveResult = controller.handleUserMove(move);
           if (moveResult) {
             // Play sound for AI move
-            console.log('[Tauri Event] Move successful, playing piece move sound for AI');
+            console.log('[Tauri Event] AI move successful, playing piece move sound for AI');
             playPieceMoveSound();
           } else {
-            console.error('[Tauri Event] Failed to apply engine move:', move);
+            console.error('[Tauri Event] Failed to apply AI engine move:', move);
           }
+        } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
+          console.log('[Tauri Event] Received recommendation for human player:', move);
+          // Parse and display recommendation instead of applying move
+          parseRecommendationMove(move);
         } else {
           console.log('[Tauri Event] Move is resign or invalid');
         }
@@ -1337,16 +1456,24 @@ const GamePage: React.FC<GamePageProps> = ({
         // Clear thinking move when bestmove is received
         setThinkingMovePlayer2(null);
         
-        if (move && move !== 'resign') {
+        // Only apply moves if it's an AI player's turn
+        const isBlackTurn = position?.sfen.includes(' b ');
+        const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
+        
+        if (move && move !== 'resign' && isAITurn) {
           // Apply the engine's move (handleUserMove returns boolean, not Promise)
           const moveResult = controller.handleUserMove(move);
           if (moveResult) {
             // Play sound for AI move
-            console.log('[Tauri Event] Move successful, playing piece move sound for second AI');
+            console.log('[Tauri Event] AI move successful, playing piece move sound for second AI');
             playPieceMoveSound();
           } else {
-            console.error('[Tauri Event] Failed to apply second engine move:', move);
+            console.error('[Tauri Event] Failed to apply second AI engine move:', move);
           }
+        } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
+          console.log('[Tauri Event] Received recommendation for human player from second engine:', move);
+          // Parse and display recommendation instead of applying move
+          parseRecommendationMove(move);
         }
       }
       
@@ -1367,6 +1494,7 @@ const GamePage: React.FC<GamePageProps> = ({
       console.error(`Tauri engine ${engineId} error: ${error}`);
     },
   });
+
 
   // Request move from Tauri engine
   const requestTauriEngineMove = async (engineId: string) => {
@@ -1399,6 +1527,37 @@ const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
+  // Request recommendation from Tauri engine
+  const requestRecommendationFromEngine = async (engineId: string) => {
+    console.log('[requestRecommendationFromEngine] Called with engineId:', engineId);
+    
+    if (!engineId || !position) {
+      console.log('[requestRecommendationFromEngine] Early return:', { hasEngineId: !!engineId, hasPosition: !!position });
+      return;
+    }
+
+    try {
+      const currentSfen = position.sfen;
+      const record = controller.getRecord();
+      const moveList = record.moves.map((m: any) => m.usi || '').filter(Boolean);
+
+      // Send position
+      const posCmd = moveList.length > 0
+        ? `position sfen ${currentSfen.split(' moves ')[0]} moves ${moveList.join(' ')}`
+        : `position sfen ${currentSfen}`;
+      console.log('[requestRecommendationFromEngine] Sending position command:', posCmd);
+      await sendUsiCommand(engineId, posCmd);
+
+      // Send go command with shorter time for recommendations
+      const goCmd = `go movetime 5000`;
+      console.log('[requestRecommendationFromEngine] Sending go command:', goCmd);
+      await sendUsiCommand(engineId, goCmd);
+      console.log('[requestRecommendationFromEngine] Commands sent successfully');
+    } catch (error) {
+      console.error('[requestRecommendationFromEngine] Error:', error);
+    }
+  };
+
   // Effect to request Tauri engine moves when it's AI's turn
   useEffect(() => {
     console.log('[GamePage AI Effect] Triggered', { 
@@ -1423,7 +1582,9 @@ const GamePage: React.FC<GamePageProps> = ({
       currentEngineId, 
       isAITurn,
       player1Type,
-      player2Type
+      player2Type,
+      recommendationsEnabled,
+      activeEngineIds
     });
     
     if (currentEngineId && isAITurn) {
@@ -1432,13 +1593,20 @@ const GamePage: React.FC<GamePageProps> = ({
       setTimeout(() => {
         requestTauriEngineMove(currentEngineId);
       }, 500);
+    } else if (currentEngineId && !isAITurn && recommendationsEnabled) {
+      // Request recommendation for human player when hints are enabled
+      console.log('[GamePage AI Effect] Requesting recommendation from engine:', currentEngineId);
+      setTimeout(() => {
+        requestRecommendationFromEngine(currentEngineId);
+      }, 500);
     } else {
       console.log('[GamePage AI Effect] Not requesting move:', { 
         hasEngineId: !!currentEngineId, 
-        isAITurn 
+        isAITurn,
+        recommendationsEnabled
       });
     }
-  }, [position, renderKey, useTauriEngine, player1EngineId, player2EngineId, winner, player1Type, player2Type]);
+  }, [position, renderKey, useTauriEngine, player1EngineId, player2EngineId, winner, player1Type, player2Type, recommendationsEnabled]);
 
   // Cleanup Tauri engines on unmount
   useEffect(() => {
@@ -1810,12 +1978,19 @@ const GamePage: React.FC<GamePageProps> = ({
           onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
           showPieceTooltips={showPieceTooltips}
           onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
+          showEngineThinking={showEngineThinking}
+          onShowEngineThinkingChange={handleSettingChange(setShowEngineThinking, 'shogi-show-engine-thinking')}
           gameLayout={gameLayout}
           onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
           soundsEnabled={soundsEnabled}
           onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
           soundVolume={soundVolume}
           onSoundVolumeChange={handleSettingChange(handleSoundVolumeChange, 'shogi-sound-volume')}
+          // Recommendation engine settings
+          recommendationEngineId={recommendationEngineId}
+          onRecommendationEngineChange={setRecommendationEngineId}
+          recommendationEngineOptions={recommendationEngineOptions}
+          onRecommendationEngineOptionsChange={setRecommendationEngineOptions}
         />}
         <SaveGameModal 
           isOpen={isSaveModalOpen} 
@@ -2055,31 +2230,6 @@ const GamePage: React.FC<GamePageProps> = ({
       <div className="sente-captured-pieces">
         <CapturedPieces captured={position.blackHand as any} player={'player1'} onPieceClick={(pieceType) => handleCapturedPieceClick(pieceType, 'player1')} selectedCapturedPiece={selectedCapturedPiece} boardBackground={boardBackground} pieceThemeType={pieceLabelType as any} showTooltips={showPieceTooltips} highlightedPiece={getHighlightedPieceForPlayer('player1')} />
       </div>
-      {isSettingsOpen && <SettingsPanel 
-        pieceThemeType={pieceLabelType as any}
-        onPieceThemeTypeChange={handleSettingChange(setPieceLabelType, 'shogi-piece-label-type')}
-        notation={notation as any}
-        onNotationChange={handleSettingChange(setNotation, 'shogi-notation')}
-        wallpaperList={wallpaperList}
-        onSelectWallpaper={handleWallpaperChange}
-        boardBackgroundList={boardBackgroundList}
-        onSelectBoardBackground={handleSettingChange(setBoardBackground, 'shogi-board-background')}
-        onClose={() => setIsSettingsOpen(false)}
-        currentWallpaper={wallpaper}
-        currentBoardBackground={boardBackground}
-        showAttackedPieces={showAttackedPieces}
-        onShowAttackedPiecesChange={handleSettingChange(setShowAttackedPieces, 'shogi-show-attacked-pieces')}
-        showPieceTooltips={showPieceTooltips}
-        onShowPieceTooltipsChange={handleSettingChange(setShowPieceTooltips, 'shogi-show-piece-tooltips')}
-        showEngineThinking={showEngineThinking}
-        onShowEngineThinkingChange={handleSettingChange(setShowEngineThinking, 'shogi-show-engine-thinking')}
-        gameLayout={gameLayout}
-        onGameLayoutChange={handleSettingChange(setGameLayout, 'shogi-game-layout')}
-        soundsEnabled={soundsEnabled}
-        onSoundsEnabledChange={handleSettingChange(handleSoundsEnabledChange, 'shogi-sounds-enabled')}
-        soundVolume={soundVolume}
-        onSoundVolumeChange={handleSettingChange(handleSoundVolumeChange, 'shogi-sound-volume')}
-      />}
       <SaveGameModal 
         isOpen={isSaveModalOpen} 
         onClose={() => setIsSaveModalOpen(false)} 
