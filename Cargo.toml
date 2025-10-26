@@ -18,6 +18,10 @@ path = "src/bin/tuner.rs"
 name = "analyzer"
 path = "src/bin/analyzer.rs"
 
+[[bin]]
+name = "move-assessor"
+path = "src/bin/move_assessor.rs"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
