@@ -2,6 +2,26 @@
 
 This directory contains all documentation for the Shogi game engine, organized by audience and purpose.
 
+## 🛠️ Engine Utilities
+
+Documentation for command-line utilities and tools built using the Shogi Engine.
+
+- **`ENGINE_UTILITIES_GUIDE.md`** - Complete guide to all engine utilities
+- **`UTILITIES_QUICK_REFERENCE.md`** - Quick reference for implemented utilities
+
+### Available Utilities
+- **USI Engine** (`usi-engine`) - Universal Shogi Interface engine
+- **Parameter Tuner** (`tuner`) - Automated evaluation parameter optimization
+- **Position Analyzer** (`analyzer`) - Detailed position analysis tool
+
+### Planned Utilities
+- **Move Quality Assessor** - Game move analysis and blunder detection
+- **Engine Strength Tester** - Self-play testing and ELO estimation
+- **Tactical Puzzle Generator** - Extract puzzles from games
+- **Game Database Analyzer** - Bulk analysis of game collections
+- **Opening Book Manager** - Convert and manage opening books
+- **Interactive Analysis Mode** - Real-time position analysis
+
 ## 📁 Directory Structure
 
 ### 👥 User Documentation (`user/`)
