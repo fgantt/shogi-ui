@@ -50,9 +50,6 @@ struct Cli {
 enum Commands {
     /// Analyze a single game file
     Analyze {
-        /// Input file
-        #[arg(short, long)]
-        input: PathBuf,
         /// Output file
         #[arg(short, long)]
         output: Option<PathBuf>,
@@ -62,10 +59,7 @@ enum Commands {
     },
     /// Find blunders in game
     FindBlunders {
-        /// Input file
-        #[arg(short, long)]
-        input: PathBuf,
-        /// Blunder threshold
+        /// Blunder threshold in centipawns
         #[arg(long, default_value_t = 200)]
         threshold: i32,
         /// Output to console
@@ -74,9 +68,6 @@ enum Commands {
     },
     /// Annotate game with quality marks
     Annotate {
-        /// Input file
-        #[arg(short, long)]
-        input: PathBuf,
         /// Output file
         #[arg(short, long)]
         output: PathBuf,
@@ -144,14 +135,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Analyze { input, output, depth }) => {
-            analyze_game(input, output.as_ref(), *depth, cli.verbose)?;
+        Some(Commands::Analyze { output, depth }) => {
+            analyze_game(&cli.input, output.as_ref(), *depth, cli.verbose)?;
         }
-        Some(Commands::FindBlunders { input, threshold, console }) => {
-            find_blunders(input, *threshold, *console, cli.verbose)?;
+        Some(Commands::FindBlunders { threshold, console }) => {
+            find_blunders(&cli.input, *threshold, *console, cli.verbose)?;
         }
-        Some(Commands::Annotate { input, output }) => {
-            annotate_game(input, output, cli.depth, cli.verbose)?;
+        Some(Commands::Annotate { output }) => {
+            annotate_game(&cli.input, output, cli.depth, cli.verbose)?;
         }
         None => {
             analyze_game(&cli.input, cli.output.as_ref(), cli.depth, cli.verbose)?;
@@ -406,19 +397,44 @@ fn print_analysis(analysis: &GameAnalysis, verbose: bool) {
 }
 
 fn find_blunders(
-    _input: &PathBuf,
+    input: &PathBuf,
     threshold: i32,
-    _console: bool,
+    console: bool,
     _verbose: bool
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Finding blunders with threshold: {} centipawns", threshold);
-    println!("Note: Full KIF parsing implementation needed");
     
-    // In real implementation:
-    // 1. Parse KIF file
-    // 2. Analyze each move
-    // 3. Find moves where score drop > threshold
-    // 4. Report positions and suggested improvements
+    // Load and analyze the game
+    let analysis = analyze_kif_game(input, 6, false)?;
+    
+    println!("\n=== Blunder Analysis ===");
+    println!("Total blunders found: {}", analysis.blunders);
+    
+    if analysis.blunders > 0 {
+        println!("\nBlunders (losing >{} centipawns):", threshold);
+        
+        for (move_num, move_, quality) in &analysis.move_analyses {
+            if matches!(quality, MoveQuality::Blunder(_)) {
+                let loss = quality.centipawn_loss();
+                println!("  Move {}: {} ({})", move_num, move_, loss);
+                
+                if !console {
+                    break; // Only show first blunder if not in console mode
+                }
+            }
+        }
+    }
+    
+    if analysis.mistakes > 0 {
+        println!("\nMistakes (losing 100-{} centipawns): {}", threshold, analysis.mistakes);
+    }
+    
+    if analysis.inaccuracies > 0 {
+        println!("Inaccuracies (losing 50-100 centipawns): {}", analysis.inaccuracies);
+    }
+    
+    println!("\nOverall accuracy: {:.1}%", 
+        ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64) * 100.0);
     
     Ok(())
 }
