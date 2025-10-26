@@ -254,6 +254,35 @@ fn assess_move_quality(move_num: usize, _move_str: &str) -> MoveQuality {
     }
 }
 
+/// Real move quality assessment using engine evaluation
+fn assess_move_quality_real(
+    engine: &mut ShogiEngine,
+    player_move: &str,
+    depth: u8,
+    _time_limit: u32
+) -> Option<MoveQuality> {
+    // Get engine's best move for comparison
+    if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
+        let best_move_str = best_move.to_usi_string();
+        
+        // Compare the player's move with the engine's best move
+        if player_move == best_move_str {
+            return Some(MoveQuality::Excellent(0));
+        }
+        
+        // For simplicity, we simulate the score difference
+        // In a full implementation, we would:
+        // 1. Apply the player's move to get position A
+        // 2. Apply engine's best move to get position B
+        // 3. Evaluate both positions
+        // 4. Calculate the score difference
+        
+        Some(MoveQuality::Good)
+    } else {
+        None
+    }
+}
+
 fn print_analysis(analysis: &GameAnalysis, verbose: bool) {
     println!("\n=== Game Analysis Summary ===");
     println!("Total moves analyzed: {}", analysis.total_moves);
@@ -320,17 +349,54 @@ fn annotate_game(
     Ok(())
 }
 
-fn save_analysis(output: &PathBuf, _analysis: &GameAnalysis) -> Result<(), Box<dyn std::error::Error>> {
+fn save_analysis(output: &PathBuf, analysis: &GameAnalysis) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs::File;
     use serde_json;
     
-    // For now, just create an empty file
-    // In full implementation, serialize the analysis structure
-    let file = File::create(output)?;
-    let empty: HashMap<String, String> = HashMap::new();
-    serde_json::to_writer_pretty(file, &empty)?;
+    #[derive(serde::Serialize)]
+    struct AnalysisResult {
+        total_moves: usize,
+        excellent_moves: usize,
+        good_moves: usize,
+        inaccuracies: usize,
+        mistakes: usize,
+        blunders: usize,
+        accuracy_percent: f64,
+        worst_move: Option<String>,
+        best_move: Option<String>,
+        moves: Vec<MoveAnalysis>,
+    }
     
-    println!("Analysis structure would be saved here");
+    #[derive(serde::Serialize)]
+    struct MoveAnalysis {
+        move_number: usize,
+        move_: String,
+        quality: String,
+        annotation: String,
+    }
+    
+    let result = AnalysisResult {
+        total_moves: analysis.total_moves,
+        excellent_moves: analysis.excellent_moves,
+        good_moves: analysis.good_moves,
+        inaccuracies: analysis.inaccuracies,
+        mistakes: analysis.mistakes,
+        blunders: analysis.blunders,
+        accuracy_percent: ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64) * 100.0,
+        worst_move: analysis.worst_move.as_ref().map(|(n, m, _)| format!("Move #{}: {}", n, m)),
+        best_move: analysis.best_move.as_ref().map(|(n, m, _)| format!("Move #{}: {}", n, m)),
+        moves: analysis.move_analyses.iter().map(|(num, mv, q)| MoveAnalysis {
+            move_number: *num,
+            move_: mv.clone(),
+            quality: q.name(),
+            annotation: q.to_string(),
+        }).collect(),
+    };
+    
+    let file = File::create(output)?;
+    serde_json::to_writer_pretty(file, &result)?;
+    
+    println!("Analysis saved to {:?}", output);
     
     Ok(())
 }
