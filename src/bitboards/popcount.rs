@@ -48,7 +48,7 @@ pub fn popcount(bb: Bitboard) -> u32 {
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// POPCNT support has been verified by the platform detection system.
-#[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+#[cfg(target_arch = "x86_64")]
 pub fn popcount_hardware(bb: Bitboard) -> u32 {
     unsafe {
         // Use the native POPCNT instruction
@@ -64,7 +64,7 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
 }
 
 /// Fallback hardware implementation for non-x86_64 platforms
-#[cfg(not(all(target_arch = "x86_64", not(target_arch = "wasm32"))))]
+#[cfg(not(target_arch = "x86_64"))]
 pub fn popcount_hardware(bb: Bitboard) -> u32 {
     // Fallback to SWAR implementation on non-x86_64 platforms
     popcount_bit_parallel(bb)
@@ -405,7 +405,7 @@ mod performance_tests {
         let iterations = 1_000_000;
 
         // Benchmark hardware implementation
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             let start = Instant::now();
             for _ in 0..iterations {
@@ -439,7 +439,7 @@ mod performance_tests {
         assert!(swar_duration <= software_duration, 
                 "SWAR implementation should be faster than software");
 
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             // Hardware should be fastest on x86_64
             assert!(hardware_duration <= swar_duration,

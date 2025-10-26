@@ -109,15 +109,7 @@ pub struct MoveOrderingHints {
 }
 
 impl TranspositionMoveOrderer {
-    /// Get current time (WASM-compatible)
-    #[allow(dead_code)] // Used conditionally based on target architecture
-    #[cfg(target_arch = "wasm32")]
-    fn get_current_time() -> std::time::Instant {
-        unsafe { std::mem::zeroed() }
-    }
-    
-    #[allow(dead_code)] // Used conditionally based on target architecture
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Get current time
     fn get_current_time() -> std::time::Instant {
         std::time::Instant::now()
     }
@@ -151,7 +143,6 @@ impl TranspositionMoveOrderer {
         _beta: i32,
         iid_move: Option<&Move>,
     ) -> Vec<Move> {
-        #[cfg(not(target_arch = "wasm32"))]
         let start_time = Self::get_current_time();
         
         // Get move ordering hints from transposition table

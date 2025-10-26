@@ -197,7 +197,7 @@ lazy_static::lazy_static! {
 /// # Safety
 /// This function is safe as it only provides prefetch hints and doesn't
 /// modify memory or cause undefined behavior.
-#[cfg(all(not(target_arch = "wasm32"), target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 pub unsafe fn prefetch_bitboard(bb: Bitboard) {
     if PREFETCH_ENABLED.load(Ordering::Relaxed) {
         // Prefetch for read access
@@ -209,7 +209,7 @@ pub unsafe fn prefetch_bitboard(bb: Bitboard) {
 }
 
 /// Generic prefetch function for non-x86_64 platforms (no-op)
-#[cfg(not(all(not(target_arch = "wasm32"), target_arch = "x86_64")))]
+#[cfg(not(target_arch = "x86_64"))]
 pub unsafe fn prefetch_bitboard(_bb: Bitboard) {
     // No-op for non-x86_64 platforms - prefetching not available
 }

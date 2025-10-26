@@ -66,32 +66,10 @@ impl Default for PlatformCapabilities {
 impl PlatformCapabilities {
     /// Detect platform capabilities at runtime
     pub fn detect() -> Self {
-        #[cfg(target_arch = "wasm32")]
-        {
-            Self::detect_wasm_capabilities()
-        }
-        
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            Self::detect_native_capabilities()
-        }
-    }
-
-    /// Detect capabilities for WASM environment
-    #[cfg(target_arch = "wasm32")]
-    fn detect_wasm_capabilities() -> Self {
-        Self {
-            has_popcnt: false,  // WASM doesn't support CPU feature detection
-            has_bmi1: false,
-            has_bmi2: false,
-            architecture: Architecture::Wasm32,
-            is_wasm: true,
-            is_web_assembly: true,
-        }
+        Self::detect_native_capabilities()
     }
 
     /// Detect capabilities for native platforms
-    #[cfg(not(target_arch = "wasm32"))]
     fn detect_native_capabilities() -> Self {
         let architecture = Self::detect_architecture();
         
@@ -106,7 +84,6 @@ impl PlatformCapabilities {
     }
 
     /// Detect CPU architecture
-    #[cfg(not(target_arch = "wasm32"))]
     fn detect_architecture() -> Architecture {
         #[cfg(target_arch = "x86_64")]
         {
@@ -125,7 +102,7 @@ impl PlatformCapabilities {
     }
 
     /// Detect x86_64 POPCNT instruction support
-    #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+    #[cfg(target_arch = "x86_64")]
     fn detect_popcnt_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;
@@ -137,7 +114,7 @@ impl PlatformCapabilities {
     }
 
     /// Detect x86_64 BMI1 instruction support
-    #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+    #[cfg(target_arch = "x86_64")]
     fn detect_bmi1_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;
@@ -149,7 +126,7 @@ impl PlatformCapabilities {
     }
 
     /// Detect x86_64 BMI2 instruction support
-    #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+    #[cfg(target_arch = "x86_64")]
     fn detect_bmi2_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;

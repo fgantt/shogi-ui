@@ -676,7 +676,7 @@ impl WasmConfig {
 
     /// Check if running in WASM environment
     pub fn is_wasm_environment() -> bool {
-        cfg!(target_arch = "wasm32")
+        false
     }
 
     /// Validate the configuration

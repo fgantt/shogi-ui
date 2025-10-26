@@ -77,7 +77,7 @@ pub fn bit_scan_reverse(bb: Bitboard) -> Option<u8> {
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// BMI1 support has been verified by the platform detection system.
-#[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+#[cfg(target_arch = "x86_64")]
 pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
@@ -110,7 +110,7 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// BMI1 support has been verified by the platform detection system.
-#[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+#[cfg(target_arch = "x86_64")]
 pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
@@ -138,7 +138,7 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 /// 
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
-#[cfg(all(target_arch = "aarch64", not(target_arch = "wasm32")))]
+#[cfg(target_arch = "aarch64")]
 pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
@@ -165,7 +165,7 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
 /// 
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
-#[cfg(all(target_arch = "aarch64", not(target_arch = "wasm32")))]
+#[cfg(target_arch = "aarch64")]
 pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
@@ -183,16 +183,16 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 
 /// Fallback hardware implementation for non-x86_64/non-ARM platforms
 #[cfg(not(any(
-    all(target_arch = "x86_64", not(target_arch = "wasm32")),
-    all(target_arch = "aarch64", not(target_arch = "wasm32"))
+    all(target_arch = "x86_64"),
+    all(target_arch = "aarch64")
 )))]
 pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     bit_scan_forward_debruijn(bb)
 }
 
 #[cfg(not(any(
-    all(target_arch = "x86_64", not(target_arch = "wasm32")),
-    all(target_arch = "aarch64", not(target_arch = "wasm32"))
+    all(target_arch = "x86_64"),
+    all(target_arch = "aarch64")
 )))]
 pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     bit_scan_reverse_debruijn(bb)
@@ -626,7 +626,7 @@ mod performance_tests {
         let iterations = 1_000_000;
 
         // Benchmark hardware implementation
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             let start = Instant::now();
             for _ in 0..iterations {
@@ -660,7 +660,7 @@ mod performance_tests {
         assert!(debruijn_duration <= software_duration, 
                 "DeBruijn implementation should be faster than software");
 
-        #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
+        #[cfg(target_arch = "x86_64")]
         {
             // Hardware should be fastest on x86_64
             assert!(hardware_duration <= debruijn_duration,
