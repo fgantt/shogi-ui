@@ -41,6 +41,18 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ./target/release/analyzer compare "startpos" "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
 ```
 
+### **Move Quality Assessor** (`move-assessor`)
+```bash
+# Analyze game moves
+./target/release/move-assessor --input game.kif --depth 6 --output analysis.json
+
+# Find blunders
+./target/release/move-assessor find-blunders --input game.kif --threshold 200
+
+# Verbose output
+./target/release/move-assessor --input game.kif --depth 4 --verbose
+```
+
 ## 🔧 Build Commands
 
 ```bash
