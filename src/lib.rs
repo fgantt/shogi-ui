@@ -408,6 +408,58 @@ impl ShogiEngine {
         }
     }
 
+    /// Apply a move to the engine's board
+    pub fn apply_move(&mut self, move_: &Move) -> bool {
+        use crate::moves::MoveGenerator;
+        
+        // Get current legal moves to validate
+        let move_generator = MoveGenerator::new();
+        let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
+        
+        // Check if move is legal
+        if !legal_moves.contains(move_) {
+            crate::debug_utils::debug_log(&format!("Move {} is not legal in current position", move_.to_usi_string()));
+            return false;
+        }
+        
+        // Apply the move
+        if let Some(captured_piece) = self.board.make_move(move_) {
+            self.captured_pieces.add_piece(captured_piece.piece_type, self.current_player);
+        }
+        
+        // Switch turns
+        self.current_player = self.current_player.opposite();
+        
+        crate::debug_utils::debug_log(&format!("Applied move: {}", move_.to_usi_string()));
+        true
+    }
+
+    /// Check if the current position is a terminal state (checkmate, stalemate)
+    pub fn is_game_over(&self) -> Option<GameResult> {
+        use crate::moves::MoveGenerator;
+        
+        let move_generator = MoveGenerator::new();
+        let legal_moves = move_generator.generate_legal_moves(&self.board, self.current_player, &self.captured_pieces);
+        
+        if legal_moves.is_empty() {
+            // Check if in check (checkmate) or not (stalemate)
+            let in_check = self.board.is_king_in_check(self.current_player, &self.captured_pieces);
+            
+            Some(if in_check {
+                // Checkmate - current player loses
+                if self.current_player == Player::Black {
+                    GameResult::Loss  // Black is mated, Black loses
+                } else {
+                    GameResult::Win   // White is mated, White loses
+                }
+            } else {
+                GameResult::Draw     // Stalemate
+            })
+        } else {
+            None  // Game not over
+        }
+    }
+
     pub fn handle_position(&mut self, parts: &[&str]) -> Vec<String> {
         let mut output = Vec::new();
         let sfen_str: String;

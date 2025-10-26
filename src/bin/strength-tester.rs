@@ -118,37 +118,62 @@ fn test_strength(time_control: &str, games: u32, depth: u8, verbose: bool) -> Re
 fn play_game_direct(depth: u8, verbose: bool) -> Result<GameResult, Box<dyn std::error::Error>> {
     let mut engine = ShogiEngine::new();
     let mut move_count = 0;
-    let mut moves = Vec::new();
+    let mut consecutive_passes = 0;
+    let mut last_move: Option<Move> = None;
     
     // Play a game by having engine play against itself
     loop {
+        // Check if game is over
+        if let Some(result) = engine.is_game_over() {
+            if verbose {
+                println!("Game over: {:?}", result);
+            }
+            return Ok(result);
+        }
+        
         // Get engine's best move
         if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
             if verbose && move_count < 10 {
                 println!("Move {}: {}", move_count + 1, best_move.to_usi_string());
             }
             
-            // Apply the move to the engine's internal board
-            // Note: In a full implementation, we would apply the move here
-            // For now, we simulate by just counting moves
+            // Check if same move repeated (possible infinite loop)
+            if last_move.as_ref().map(|m| m.to_usi_string()) == Some(best_move.to_usi_string()) {
+                consecutive_passes += 1;
+                if consecutive_passes >= 3 {
+                    if verbose {
+                        println!("Consecutive repeated moves detected, ending game as draw");
+                    }
+                    return Ok(GameResult::Draw);
+                }
+            } else {
+                consecutive_passes = 0;
+            }
             
-            moves.push(best_move);
-            move_count += 1;
+            last_move = Some(best_move.clone());
             
-            // End game conditions
-            if move_count >= 50 {
-                // Simulate game ending
+            // Apply the move to the engine
+            if !engine.apply_move(&best_move) {
+                if verbose {
+                    println!("Failed to apply move: {}, ending game", best_move.to_usi_string());
+                }
                 return Ok(GameResult::Draw);
             }
             
-            // In real implementation, check for checkmate, stalemate, etc.
-            // For now, just return a result after a fixed number of moves
-            if move_count >= 20 {
-                // Random result for demonstration
-                return Ok(if move_count % 2 == 0 { GameResult::Win } else { GameResult::Loss });
+            move_count += 1;
+            
+            // Safety limit to avoid infinite games
+            if move_count >= 200 {
+                if verbose {
+                    println!("Maximum move limit reached, ending as draw");
+                }
+                return Ok(GameResult::Draw);
             }
         } else {
             // No legal moves - game ended
+            if let Some(result) = engine.is_game_over() {
+                return Ok(result);
+            }
             return Ok(GameResult::Draw);
         }
     }
