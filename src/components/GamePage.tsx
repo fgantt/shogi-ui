@@ -1741,9 +1741,23 @@ const GamePage: React.FC<GamePageProps> = ({
 
   const getCurrentGameData = (): GameData => {
     const position = controller.getPosition();
+    const record = controller.getRecord();
+    
+    // Debug logging - check the structure of moves
+    console.log('getCurrentGameData - record.moves length:', record.moves.length);
+    if (record.moves.length > 0) {
+      const firstMove = record.moves[0];
+      if (firstMove && typeof firstMove === 'object' && 'move' in firstMove) {
+        console.log('getCurrentGameData - first move.move.usi:', (firstMove as any).move?.usi);
+      }
+    }
+    
+    // Extract USI moves - based on how MoveLog component accesses them
+    const moves = record.moves.map((m: any) => m.move?.usi || '').filter(Boolean);
+    
     return {
       position: position.sfen,
-      moves: [], // TODO: Extract move history from controller
+      moves: moves,
       metadata: {
         date: new Date().toISOString(),
         player1Name: 'Player 1',

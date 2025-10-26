@@ -73,14 +73,30 @@ function usiToCsaMove(usiMove: string): string {
   if (usiMove.includes('*')) {
     const piece = usiToCsaPiece(usiMove[0]);
     const destination = usiMove.substring(2);
-    return `${piece}*${destination}`;
+    const file = destination[0];
+    const rank = destination[1];
+    const rankNum = rank.charCodeAt(0) - 96; // Convert 'a'=1, 'b'=2, etc.
+    return `${piece}*${file}${rankNum}`;
   }
   
   // Handle normal moves (e.g., 7g7f)
   if (usiMove.length >= 4) {
-    const from = usiMove.substring(0, 2);
-    const to = usiMove.substring(2, 4);
-    const piece = usiMove.length > 4 ? usiToCsaPiece(usiMove[4]) : 'FU'; // Default to pawn
+    const fromFile = usiMove[0];
+    const fromRank = usiMove[1];
+    const toFile = usiMove[2];
+    const toRank = usiMove[3];
+    
+    // Convert letter ranks to numeric (a=1, b=2, ..., i=9)
+    const fromRankNum = fromRank.charCodeAt(0) - 96;
+    const toRankNum = toRank.charCodeAt(0) - 96;
+    
+    const from = `${fromFile}${fromRankNum}`;
+    const to = `${toFile}${toRankNum}`;
+    
+    // For normal moves, we need to determine piece type from the move context
+    // Since we don't have access to the board state here, we'll use a default
+    // In a full implementation, this would need to be passed the move object
+    const piece = 'FU'; // Default to pawn - this is a limitation of the current approach
     const promotion = usiMove.includes('+') ? '+' : '';
     return `${piece}${from}${promotion}${to}`;
   }
@@ -313,7 +329,7 @@ function usiToKifMove(usiMove: string, moveNumber: number): string {
     };
     const pieceName = pieceMap[piece] || '歩';
     const file = parseInt(destination[0]);
-    const rank = parseInt(destination[1]);
+    const rank = destination[1].charCodeAt(0) - 96; // Convert 'a'=1, 'b'=2, etc.
     const fileNames = ['', '１', '２', '３', '４', '５', '６', '７', '８', '９'];
     const rankNames = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
     return `${moveNumber} ${fileNames[file]}${rankNames[rank]}${pieceName}打`;
@@ -321,14 +337,13 @@ function usiToKifMove(usiMove: string, moveNumber: number): string {
   
   // Normal move
   const fromFile = parseInt(usiMove[0]);
-  const fromRank = parseInt(usiMove[1]);
+  const fromRank = usiMove[1].charCodeAt(0) - 96; // Convert 'a'=1, 'b'=2, etc.
   const toFile = parseInt(usiMove[2]);
-  const toRank = parseInt(usiMove[3]);
+  const toRank = usiMove[3].charCodeAt(0) - 96; // Convert 'a'=1, 'b'=2, etc.
   const promotion = usiMove.includes('+') ? '成' : '';
   
   const fileNames = ['', '１', '２', '３', '４', '５', '６', '７', '８', '９'];
   const rankNames = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
-  const pieceNames = ['', '歩', '香', '桂', '銀', '金', '角', '飛', '玉'];
   
   // Simplified - would need full piece tracking for accurate piece names
   const piece = '歩'; // Default to pawn for now

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './SaveGameModal.css';
-import { GameFormat, GameData, generateGame, detectFormat } from '../utils/gameFormats';
+import { GameFormat, GameData, generateGame } from '../utils/gameFormats';
 
 interface SaveGameModalProps {
   isOpen: boolean;
@@ -17,10 +17,12 @@ const SaveGameModal: React.FC<SaveGameModalProps> = ({ isOpen, onClose, onSave, 
 
   useEffect(() => {
     if (gameData && isOpen) {
+      console.log('SaveGameModal - moves count:', gameData.moves?.length || 0);
       try {
         const generated = generateGame(gameData, format);
         setExportText(generated);
       } catch (error) {
+        console.error('SaveGameModal - error generating game:', error);
         setExportText(`Error generating ${format.toUpperCase()} format: ${error}`);
       }
     }
