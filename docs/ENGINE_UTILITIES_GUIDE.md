@@ -192,7 +192,7 @@ Objectively measure your engine's playing strength, verify that changes improve 
 - ⚠️ Configuration comparison needs implementation
 
 ### 5. **Move Quality Assessor** (`move-assessor`)
-**Status:** ✅ Complete  
+**Status:** ✅ Complete
 **Binary:** `./target/release/move-assessor`
 
 **What it is:**
@@ -516,6 +516,53 @@ println!("Opening book loaded: {}", engine.is_opening_book_loaded());
 - **Opening Book**: Load and query opening positions
 - **Tablebase**: Probe endgame positions
 
+### **Future: USI Engine Abstraction**
+To make these utilities more generally useful beyond our specific engine implementation:
+
+**Current State:** Utilities are tightly integrated with `ShogiEngine` struct and use direct API calls for performance and functionality.
+
+**Future Enhancement:** Add a USI engine abstraction layer to support any USI-compatible engine:
+
+```rust
+// Proposed abstraction
+trait UsiEngine {
+    fn get_best_move(&mut self, depth: u32, time_limit: Duration) -> Option<Move>;
+    fn analyze_position(&mut self, sfen: &str, depth: u32) -> Analysis;
+    // ... other common operations
+}
+
+// Implementation for our engine
+impl UsiEngine for ShogiEngine { /* ... */ }
+
+// Implementation for external USI engines via subprocess
+struct UsiProtocolEngine {
+    process: Child,
+    // communication via USI protocol
+}
+impl UsiEngine for UsiProtocolEngine { /* ... */ }
+```
+
+**Benefits:**
+- ✅ Works with any USI-compatible engine (YaneuraOu, elmo, etc.)
+- ✅ Allows users to choose their preferred engine for analysis
+- ✅ Enables comparing different engines
+- ✅ Makes utilities more universally useful
+
+**Current Priority:** Keep direct integration for now as it provides:
+- Better performance (no process overhead)
+- Access to internal state and debugging features
+- Simpler implementation and maintenance
+- Immediate functionality for our use case
+
+**Migration Path:** When ready to generalize:
+1. Create trait abstraction
+2. Implement trait for our engine (trivial)
+3. Add USI subprocess wrapper
+4. Make utilities engine-agnostic
+5. Add `--engine` flag to utilities to choose engine
+
+This can be done incrementally without breaking existing functionality.
+
 ### **File Format Support**
 - **KIF**: Japanese notation format
 - **CSA**: Computer Shogi Association format
@@ -546,6 +593,14 @@ println!("Opening book loaded: {}", engine.is_opening_book_loaded());
 ---
 
 ## Future Enhancements
+
+### **Engine Compatibility**
+- **USI Abstraction Layer**: Generalize utilities to work with any USI-compatible engine
+  - Add trait abstraction for engine operations
+  - Implement USI subprocess communication for external engines
+  - Enable `--engine` flag to choose analysis engine
+  - Allow comparing different engine strengths and styles
+  - Make utilities universally useful beyond our specific implementation
 
 ### **Advanced Features**
 - Machine learning integration
