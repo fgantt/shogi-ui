@@ -4,7 +4,7 @@
 //! Evaluates each move in a game and provides detailed analysis.
 
 use clap::{Parser, Subcommand};
-use shogi_engine::ShogiEngine;
+use shogi_engine::{ShogiEngine, kif_parser::KifGame};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -161,6 +161,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn analyze_kif_game(file_path: &PathBuf, depth: u8, verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
+    // Load KIF game
+    let kif_game = KifGame::from_file(file_path.to_str().unwrap())?;
+    
+    if verbose {
+        println!("Loaded KIF game with {} moves", kif_game.moves.len());
+        if let Some(player1) = &kif_game.metadata.player1_name {
+            println!("Player 1 (先手): {}", player1);
+        }
+        if let Some(player2) = &kif_game.metadata.player2_name {
+            println!("Player 2 (後手): {}", player2);
+        }
+    }
+    
+    let mut engine = ShogiEngine::new();
+    let mut analyses = Vec::new();
+    let mut move_number = 1;
+    
+    // Analyze each move in the game
+    for kif_move in &kif_game.moves {
+        let move_str = if let Some(usi) = &kif_move.usi_move {
+            usi.clone()
+        } else {
+            format!("KIF:{}", kif_move.move_text)
+        };
+        
+        // Assess move quality
+        let quality = assess_move_quality(move_number, &move_str);
+        analyses.push((move_number, move_str, quality));
+        
+        // In real implementation, we would apply the move to the engine
+        // and evaluate the position
+        
+        move_number += 1;
+    }
+    
+    // Count classifications
+    let excellent = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_))).count();
+    let good = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Good)).count();
+    let inaccuracies = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Inaccuracy(_))).count();
+    let mistakes = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Mistake(_))).count();
+    let blunders = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_))).count();
+    
+    Ok(GameAnalysis {
+        total_moves: move_number - 1,
+        excellent_moves: excellent,
+        good_moves: good,
+        inaccuracies,
+        mistakes,
+        blunders,
+        average_score_change: 0.0,
+        worst_move: analyses.iter()
+            .filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_)))
+            .max_by_key(|(_, _, q)| q.centipawn_loss())
+            .map(|(num, mv, _)| (*num, mv.clone(), 0)),
+        best_move: analyses.iter()
+            .filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_)))
+            .max_by_key(|(_, _, q)| q.centipawn_loss())
+            .map(|(num, mv, _)| (*num, mv.clone(), 0)),
+        move_analyses: analyses,
+    })
+}
+
 fn analyze_game(
     input: &PathBuf,
     output: Option<&PathBuf>,
@@ -172,9 +235,24 @@ fn analyze_game(
     println!("Analyzing game: {:?}", input);
     println!("Search depth: {}", depth);
 
-    // For now, we'll simulate game analysis since we need game parsing
-    // In a real implementation, you would parse KIF/CSA/PGN files
-    let analysis = simulate_game_analysis(depth, verbose)?;
+    // Detect file format and parse accordingly
+    let analysis = if let Some(ext) = input.extension() {
+        match ext.to_str().unwrap() {
+            "kif" | "KIF" => {
+                if verbose {
+                    println!("Detected KIF format");
+                }
+                analyze_kif_game(input, depth, verbose)?
+            }
+            _ => {
+                println!("File format not supported, using simulated analysis");
+                simulate_game_analysis(depth, verbose)?
+            }
+        }
+    } else {
+        println!("No file extension detected, using simulated analysis");
+        simulate_game_analysis(depth, verbose)?
+    };
 
     print_analysis(&analysis, verbose);
 
@@ -187,22 +265,36 @@ fn analyze_game(
 }
 
 fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
-    // Simulate analyzing a game by playing several moves
+    // For demonstration, analyze a short simulated game
     let mut engine = ShogiEngine::new();
     
     let mut analyses = Vec::new();
     let mut move_number = 1;
+    let mut previous_score = 0i32;
 
-    // Simulate first 10 moves of the game
+    // Analyze first 10 moves
     for _ in 0..10 {
-        if let Some(move_) = engine.get_best_move(depth, 2000, None) {
-            let move_str = move_.to_usi_string();
+        if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
+            let move_str = best_move.to_usi_string();
             
-            // Simulate move quality assessment
-            // In real implementation, compare with engine's best move
-            let quality = assess_move_quality(move_number, &move_str);
+            // In real implementation, we would:
+            // 1. Evaluate position before move
+            // 2. Apply move and evaluate position after
+            // 3. Compare with engine's best move
+            // 4. Calculate score difference
+            
+            let score_change = (move_number * 17) as i32 % 300 - 150;
+            previous_score = score_change;
+            
+            let quality = match score_change {
+                change if change < -200 => MoveQuality::Blunder(change),
+                change if change < -100 => MoveQuality::Mistake(change),
+                change if change < -50 => MoveQuality::Inaccuracy(change),
+                change if change > 50 => MoveQuality::Excellent(-change),
+                _ => MoveQuality::Good,
+            };
+            
             analyses.push((move_number, move_str, quality));
-
             move_number += 1;
         } else {
             break;

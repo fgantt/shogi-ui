@@ -17,6 +17,7 @@ pub mod debug_utils;
 pub mod tuning;
 pub mod weights;
 pub mod tablebase;
+pub mod kif_parser;
 
 // Advanced alpha-beta pruning tests
 // Note: Comprehensive tests are implemented in the core functionality
