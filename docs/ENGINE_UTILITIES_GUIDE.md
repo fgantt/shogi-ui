@@ -100,46 +100,37 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 - Position comparison capabilities
 - Verbose analysis mode
 
-### 4. **Move Quality Assessor** (`move-assessor`)
+### 4. **Engine Strength Tester** (`strength-tester`)
 **Status:** ✅ Complete  
-**Binary:** `./target/release/move-assessor`
-
-See section 5 below for full details.
-
----
-
-## High-Priority Utilities to Implement
-
-### 4. **Engine Strength Tester**
-**Priority:** 🔥 High  
-**Estimated Effort:** 2-3 weeks
+**Binary:** `./target/release/strength-tester`
 
 ```bash
-# Test engine strength
-./strength-tester --time-control "10+0.1" --games 100 --depth 6
+# Test engine strength with self-play
+./target/release/strength-tester --games 10 --depth 3 --verbose
 
-# Compare configurations
-./strength-tester compare --config1 default.json --config2 aggressive.json
-
-# ELO rating estimation
-./strength-tester elo --opponent "stockfish-shogi" --games 50
+# Run strength testing with configurable time control
+./target/release/strength-tester --time-control "10+0.1" --games 50 --depth 4
 ```
 
 **Features:**
-- Self-play strength testing
-- ELO rating estimation
-- Time control analysis
-- Configuration comparison
-- Performance regression testing
-- Statistical analysis of results
+- ✅ Self-play strength testing
+- ✅ Configurable games and search depth
+- ✅ Game result tracking (wins, losses, draws)
+- ✅ Game state management with move application
+- ✅ Checkmate and stalemate detection
+- ✅ Infinite loop prevention
+- ⚠️ Configuration comparison (planned)
+- ⚠️ ELO estimation (planned)
 
 **Implementation Notes:**
-- Use existing `ShogiEngine` API
-- Implement USI protocol communication
-- Add statistical analysis for ELO calculation
-- Create configuration management system
+- ✅ Uses direct `ShogiEngine` API
+- ✅ Implements position tracking with `apply_move()`
+- ✅ Terminal condition detection with `is_game_over()`
+- ✅ Game result statistics
+- ⚠️ ELO calculation needs statistical framework
+- ⚠️ Configuration comparison needs implementation
 
-### 6. **Move Quality Assessor** (`move-assessor`)
+### 5. **Move Quality Assessor** (`move-assessor`)
 **Status:** ✅ Complete  
 **Binary:** `./target/release/move-assessor`
 
@@ -161,9 +152,9 @@ See section 5 below for full details.
 - Improvement suggestions
 - Game annotation with quality marks
 - Statistical analysis of player performance
-- **KIF format parsing with UTF-8 safe handling**
-- **Real engine evaluation integration**
-- **JSON output with detailed analysis**
+- KIF format parsing with UTF-8 safe handling
+- Real engine evaluation integration
+- JSON output with detailed analysis
 
 **Implementation Notes:**
 - ✅ KIF format parsing implemented
@@ -172,7 +163,11 @@ See section 5 below for full details.
 - ✅ Game annotation capabilities ready
 - ✅ JSON output format with structured analysis
 
-### 7. **Tactical Puzzle Generator**
+---
+
+## High-Priority Utilities to Implement
+
+### 6. **Tactical Puzzle Generator**
 **Priority:** 🔥 High  
 **Estimated Effort:** 3-4 weeks
 
@@ -315,13 +310,14 @@ See section 5 below for full details.
 
 ### Phase 1: Core Analysis Tools (Weeks 1-6) ✅ COMPLETE
 1. ✅ **Move Quality Assessor** - Essential for game analysis - **COMPLETE**
-2. **Engine Strength Tester** - Critical for development
+2. ✅ **Engine Strength Tester** - Critical for development - **COMPLETE**
 3. **Tactical Puzzle Generator** - High educational value
 
 ### Phase 2: Database Tools (Weeks 7-12)
-4. **Game Database Analyzer** - Powerful research capabilities
-5. **Opening Book Manager** - Specialized but useful
-6. **Interactive Analysis Mode** - User-friendly interface
+7. **Tactical Puzzle Generator** - High educational value
+8. **Game Database Analyzer** - Powerful research capabilities
+9. **Opening Book Manager** - Specialized but useful
+10. **Interactive Analysis Mode** - User-friendly interface
 
 ### Phase 3: Development Tools (Weeks 13-18)
 7. **Performance Profiler** - Development optimization
@@ -401,7 +397,7 @@ println!("Opening book loaded: {}", engine.is_opening_book_loaded());
 
 ## Conclusion
 
-The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Move Quality Assessor) demonstrate the engine's capabilities, while the planned utilities will significantly expand its usefulness for players, researchers, and developers.
+The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Engine Strength Tester, Move Quality Assessor) demonstrate the engine's capabilities, while the planned utilities will significantly expand its usefulness for players, researchers, and developers.
 
 The modular architecture and comprehensive feature set make it straightforward to implement additional utilities that leverage the engine's sophisticated search and evaluation capabilities.
 
