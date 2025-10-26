@@ -10,6 +10,11 @@
 
 This document outlines useful utilities that can be built leveraging the sophisticated Shogi Engine. The engine provides a powerful foundation with advanced search algorithms, evaluation functions, and analysis capabilities that enable the creation of various specialized tools.
 
+Each utility includes:
+- **What it is**: A clear description of what the tool does
+- **Purpose**: Why the tool exists and what problems it solves
+- **When to use**: Specific scenarios where the tool provides value
+
 ## Current Engine Capabilities
 
 ### ✅ **Core Features Available**
@@ -36,6 +41,19 @@ This document outlines useful utilities that can be built leveraging the sophist
 **Status:** ✅ Complete  
 **Binary:** `./target/release/usi-engine`
 
+**What it is:**
+A Universal Shogi Interface (USI) protocol engine that provides a command-line interface for chess engines to communicate with shogi GUI applications.
+
+**Purpose:**
+Act as the communication layer between your shogi engine and graphical user interfaces like ShogiGUI, ShogiWars, or custom applications.
+
+**When to use:**
+- Connect your engine to external shogi GUIs
+- Test engine compatibility with standard protocols
+- Integrate your engine into existing shogi software ecosystems
+- Debug engine behavior through standardized commands
+- Play online shogi with your engine
+
 ```bash
 # Run interactive USI engine
 ./target/release/usi-engine
@@ -54,6 +72,20 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ### 2. **Parameter Tuner** (`tuner`)
 **Status:** ✅ Complete  
 **Binary:** `./target/release/tuner`
+
+**What it is:**
+An automated evaluation parameter tuning tool that uses machine learning algorithms to optimize your engine's evaluation function weights.
+
+**Purpose:**
+Automatically find optimal weight values for your evaluation function by learning from high-quality game data, eliminating manual parameter tweaking.
+
+**When to use:**
+- Optimize your engine's strength without manual parameter adjustment
+- Improve evaluation accuracy using real game data
+- Experiment with different optimization algorithms
+- Generate synthetic test data for development
+- Validate that your parameter changes improve engine performance
+- Compare different evaluation function configurations
 
 ```bash
 # Tune evaluation parameters
@@ -81,6 +113,20 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Status:** ✅ Complete  
 **Binary:** `./target/release/analyzer`
 
+**What it is:**
+A position analysis tool that evaluates shogi positions and provides detailed information about move quality, evaluation scores, and search statistics.
+
+**Purpose:**
+Provide quick, detailed analysis of specific positions for study, opening preparation, or game analysis.
+
+**When to use:**
+- Analyze specific positions from your games
+- Study opening positions and find best moves
+- Compare different positions to understand strategic differences
+- Debug engine behavior at specific positions
+- Explore tactical positions and see engine's recommended lines
+- Quick analysis during game study sessions
+
 ```bash
 # Analyze starting position
 ./target/release/analyzer startpos --depth 6
@@ -103,6 +149,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ### 4. **Engine Strength Tester** (`strength-tester`)
 **Status:** ✅ Complete  
 **Binary:** `./target/release/strength-tester`
+
+**What it is:**
+A self-play testing tool that runs your engine against itself to evaluate strength, measure improvements, and test engine reliability.
+
+**Purpose:**
+Objectively measure your engine's playing strength, verify that changes improve engine performance, and identify weaknesses or bugs through automated testing.
+
+**When to use:**
+- Before releasing a new engine version to verify improvements
+- After making evaluation changes to measure impact
+- To benchmark engine speed vs. strength tradeoffs
+- When debugging engine bugs in game playing
+- To ensure engine stability over many games
+- When comparing different configuration settings
+- To test that engine correctly handles all game termination conditions
 
 ```bash
 # Test engine strength with self-play
@@ -133,6 +194,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ### 5. **Move Quality Assessor** (`move-assessor`)
 **Status:** ✅ Complete  
 **Binary:** `./target/release/move-assessor`
+
+**What it is:**
+A game analysis tool that evaluates every move in a shogi game, categorizes them by quality, and identifies blunders, mistakes, and excellent moves.
+
+**Purpose:**
+Provide objective analysis of your games to identify learning opportunities, track improvement over time, and understand where you lose or gain advantage.
+
+**When to use:**
+- After playing a game to review and learn from mistakes
+- To identify your most common error patterns
+- When studying professional games to understand move quality
+- Before teaching games to prepare explanations
+- To track your improvement by measuring error rates
+- When analyzing specific positions where you blundered
+- As a training tool to focus practice on your weaknesses
 
 ```bash
 # Analyze game moves
@@ -171,6 +247,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Priority:** 🔥 High  
 **Estimated Effort:** 3-4 weeks
 
+**What it is:**
+An automated puzzle generator that extracts tactical positions from games and creates training puzzles with varying difficulty levels.
+
+**Purpose:**
+Generate educational puzzles that help players practice specific tactical patterns, improve tactical vision, and train for common game situations.
+
+**When to use:**
+- To create training materials for students learning shogi
+- When building a puzzle collection for teaching specific tactical patterns
+- To extract interesting positions from large game databases
+- When you want puzzles sorted by difficulty for progressive learning
+- To practice specific tactical motifs (forks, pins, skewers)
+- As part of a puzzle-of-the-day system
+- To convert your played games into personalized training puzzles
+
 ```bash
 # Generate puzzles from games
 ./puzzle-gen --input games.json --output puzzles.json --difficulty medium
@@ -204,6 +295,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Priority:** 🟡 Medium  
 **Estimated Effort:** 3-4 weeks
 
+**What it is:**
+A comprehensive database analysis tool that processes thousands of shogi games to extract patterns, statistics, and insights.
+
+**Purpose:**
+Analyze large game collections to understand opening trends, identify common endgame patterns, study player styles, and extract data for research or training.
+
+**When to use:**
+- To understand which openings are most popular at different skill levels
+- To study endgame patterns and their success rates
+- When researching specific positional structures (anaguma, ibisha, etc.)
+- To convert between different database formats (KIF, CSA, PGN, JSON)
+- When preparing opening book material from professional games
+- To analyze player styles and preferences
+- When extracting statistics for research papers or articles
+
 ```bash
 # Analyze large databases
 ./db-analyzer --input games.json --output analysis.json --threads 8
@@ -227,6 +333,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Priority:** 🟡 Medium  
 **Estimated Effort:** 2-3 weeks
 
+**What it is:**
+A specialized tool for managing opening books that converts formats, generates opening lines, and analyzes book coverage.
+
+**Purpose:**
+Create, maintain, and analyze opening books for use with your engine, extracting knowledge from professional games and optimizing book quality.
+
+**When to use:**
+- To create an opening book from a professional game database
+- When converting opening books between different formats
+- To merge multiple opening books into one comprehensive database
+- When analyzing which openings are covered in your book
+- To find gaps or holes in your opening book coverage
+- To extract popular opening lines and recent novelties
+- When maintaining an engine's opening repertoire
+
 ```bash
 # Convert formats
 ./book-manager convert --input games.kif --output opening_book.json
@@ -249,6 +370,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Priority:** 🟡 Medium  
 **Estimated Effort:** 2-3 weeks
 
+**What it is:**
+An interactive command-line interface that provides real-time position analysis, allowing you to explore moves, understand evaluations, and analyze positions dynamically.
+
+**Purpose:**
+Provide an interactive learning and analysis experience where you can explore positions, compare moves, and understand the engine's thinking in real-time.
+
+**When to use:**
+- During game study when you want to explore variations interactively
+- When teaching and need to demonstrate different move options
+- To understand why the engine prefers certain moves over others
+- When analyzing complex positions with many candidate moves
+- To explore opening theory interactively
+- As a debugging tool to understand engine behavior
+- For self-study of specific positions or patterns
+
 ```bash
 # Real-time analysis
 ./interactive-analyzer
@@ -270,6 +406,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 **Priority:** 🟢 Low  
 **Estimated Effort:** 1-2 weeks
 
+**What it is:**
+A profiling tool that analyzes engine performance, memory usage, cache efficiency, and identifies optimization opportunities.
+
+**Purpose:**
+Monitor and optimize engine performance, understand resource usage, and identify bottlenecks for improvement.
+
+**When to use:**
+- When optimizing engine speed and efficiency
+- To understand memory usage patterns
+- When debugging performance issues
+- To compare different engine configurations
+- To measure cache hit rates and transposition table effectiveness
+- Before deploying to production to ensure performance
+- When tuning hash table sizes and search parameters
+
 ```bash
 # Profile engine performance
 ./profiler --position startpos --depth 8 --output profile.json
@@ -288,6 +439,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ### 11. **Endgame Tablebase Builder**
 **Priority:** 🟢 Low  
 **Estimated Effort:** 4-6 weeks
+
+**What it is:**
+A tool for building custom endgame tablebases that pre-calculate perfect play for specific endgame positions with limited pieces.
+
+**Purpose:**
+Create perfect play databases for endgame positions, enabling the engine to play endgames flawlessly and verify tablebase correctness.
+
+**When to use:**
+- To build perfect play databases for specific endgame material
+- When verifying the correctness of existing tablebases
+- To improve engine endgame strength for specific piece configurations
+- When researching endgame theory and optimal play
+- To create tablebases for experimental or uncommon piece combinations
+- As part of engine development and testing
+- To optimize tablebase storage and lookup performance
 
 ```bash
 # Build custom tablebases
@@ -397,7 +563,14 @@ println!("Opening book loaded: {}", engine.is_opening_book_loaded());
 
 ## Conclusion
 
-The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Engine Strength Tester, Move Quality Assessor) demonstrate the engine's capabilities, while the planned utilities will significantly expand its usefulness for players, researchers, and developers.
+The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The five implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Engine Strength Tester, Move Quality Assessor) demonstrate the engine's capabilities across different use cases:
+
+- **Engine Development**: Use the Parameter Tuner to optimize evaluation and the Strength Tester to measure improvements
+- **Game Analysis**: Use the Move Quality Assessor to review games and learn from mistakes
+- **Position Study**: Use the Position Analyzer for opening preparation and tactical exploration
+- **Integration**: Use the USI Engine to connect to external applications and play online
+
+The planned utilities will significantly expand the engine's usefulness for players, researchers, and developers. Each utility serves a specific purpose and addresses real needs in the shogi community.
 
 The modular architecture and comprehensive feature set make it straightforward to implement additional utilities that leverage the engine's sophisticated search and evaluation capabilities.
 
