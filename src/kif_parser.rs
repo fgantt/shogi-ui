@@ -69,19 +69,19 @@ impl KifGame {
                 continue;
             }
             
-            // Parse metadata
+            // Parse metadata using substring to avoid UTF-8 boundary issues
             if trimmed.starts_with("開始日時：") {
-                metadata.date = Some(trimmed[6..].to_string());
+                metadata.date = Some(trimmed.split_once("開始日時：").map(|(_, v)| v).unwrap_or("").to_string());
             } else if trimmed.starts_with("終了日時：") {
                 // End date - could be used for game duration
             } else if trimmed.starts_with("持ち時間：") {
-                metadata.time_control = Some(trimmed[6..].to_string());
+                metadata.time_control = Some(trimmed.split_once("持ち時間：").map(|(_, v)| v).unwrap_or("").to_string());
             } else if trimmed.starts_with("先手：") {
-                metadata.player1_name = Some(trimmed[4..].to_string());
+                metadata.player1_name = Some(trimmed.split_once("先手：").map(|(_, v)| v).unwrap_or("").to_string());
             } else if trimmed.starts_with("後手：") {
-                metadata.player2_name = Some(trimmed[4..].to_string());
+                metadata.player2_name = Some(trimmed.split_once("後手：").map(|(_, v)| v).unwrap_or("").to_string());
             } else if trimmed.starts_with("手合割：") {
-                metadata.game_type = Some(trimmed[5..].to_string());
+                metadata.game_type = Some(trimmed.split_once("手合割：").map(|(_, v)| v).unwrap_or("").to_string());
             } else if trimmed.starts_with("手数") || trimmed.starts_with("手-----") {
                 // Move header - start of move section
                 in_move_section = true;
@@ -137,30 +137,12 @@ impl KifGame {
         // This is a simplified converter
         // Real implementation would need full Japanese notation parsing
         
-        // For example: "７六歩" -> "7g" (pawn advances)
-        // This is a placeholder implementation
+        // For now, skip conversion and return None
+        // This avoids UTF-8 boundary issues with Japanese characters
+        // A full implementation would use proper character-based indexing
         
-        // Try to detect basic patterns
-        if kif_text.contains('歩') || kif_text.contains('兵') {
-            // Pawn move - simplified conversion
-            if kif_text.len() >= 3 {
-                let rank = Self::parse_japanese_number(&kif_text[1..2])?;
-                let file = Self::parse_japanese_number(&kif_text[0..1])?;
-                
-                if rank > 0 && file > 0 {
-                    // Convert to USI format (1-9, a-i)
-                    let file_char = char::from_u32('a' as u32 + (file - 1) as u32)?;
-                    Some(format!("{}{}{}", file, file_char, rank))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            // For other pieces, return simplified format
-            None
-        }
+        // Return None to indicate no conversion available
+        None
     }
     
     /// Parse Japanese number to integer
