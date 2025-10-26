@@ -19,6 +19,8 @@ name = "analyzer"
 path = "src/bin/analyzer.rs"
 
 [[bin]]
+name = "strength-tester"
+path = "src/bin/strength-tester.rs"
 name = "move-assessor"
 path = "src/bin/move_assessor.rs"
 

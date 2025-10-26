@@ -291,6 +291,14 @@ impl ShogiEngine {
         s.push_str(&format!("Current player: {:?}\n", self.current_player));
         s
     }
+
+    pub fn get_fen(&self) -> String {
+        self.board.to_fen(self.current_player, &self.captured_pieces)
+    }
+
+    pub fn current_player(&self) -> Player {
+        self.current_player
+    }
 }
 
 impl ShogiEngine {

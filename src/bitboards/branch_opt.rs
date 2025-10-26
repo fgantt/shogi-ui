@@ -228,11 +228,8 @@ pub mod optimized {
     unsafe fn popcount_hardware_optimized(bb: Bitboard) -> u32 {
         let low = bb as u64;
         let high = (bb >> 64) as u64;
-        
-        let low_count = std::arch::x86_64::_mm_popcnt_u64(low);
-        let high_count = std::arch::x86_64::_mm_popcnt_u64(high);
-        
-        low_count + high_count
+
+        low.count_ones() + high.count_ones()
     }
     
     /// Software bit scan forward with branch prediction optimization
@@ -500,8 +497,8 @@ pub mod critical_paths {
     unsafe fn popcount_hardware_critical(bb: Bitboard) -> u32 {
         let low = bb as u64;
         let high = (bb >> 64) as u64;
-        
-        std::arch::x86_64::_mm_popcnt_u64(low) + std::arch::x86_64::_mm_popcnt_u64(high)
+
+        low.count_ones() + high.count_ones()
     }
     
     /// Hardware-accelerated bit scan forward for critical paths
