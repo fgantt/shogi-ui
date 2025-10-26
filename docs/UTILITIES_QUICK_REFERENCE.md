@@ -41,13 +41,25 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ./target/release/analyzer compare "startpos" "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
 ```
 
+### **Engine Strength Tester** (`strength-tester`)
+```bash
+# Test engine with self-play
+./target/release/strength-tester --games 10 --depth 3 --verbose
+
+# Run multiple games
+./target/release/strength-tester --games 50 --depth 4
+
+# Compare configurations
+./target/release/strength-tester compare --config1 config1.json --config2 config2.json
+```
+
 ### **Move Quality Assessor** (`move-assessor`)
 ```bash
 # Analyze game moves
 ./target/release/move-assessor --input game.kif --depth 6 --output analysis.json
 
 # Find blunders
-./target/release/move-assessor find-blunders --input game.kif --threshold 200
+./target/release/move-assessor --input game.kif find-blunders --threshold 200
 
 # Verbose output
 ./target/release/move-assessor --input game.kif --depth 4 --verbose
@@ -63,6 +75,8 @@ cargo build --release
 cargo build --release --bin usi-engine
 cargo build --release --bin tuner
 cargo build --release --bin analyzer
+cargo build --release --bin strength-tester
+cargo build --release --bin move-assessor
 ```
 
 ## 📊 Engine Capabilities
@@ -76,12 +90,10 @@ cargo build --release --bin analyzer
 
 ## 🎯 Next Utilities (Planned)
 
-1. **Move Quality Assessor** - Analyze game moves for blunders/mistakes
-2. **Engine Strength Tester** - Self-play testing and ELO estimation
-3. **Tactical Puzzle Generator** - Extract puzzles from games
-4. **Game Database Analyzer** - Bulk analysis of game collections
-5. **Opening Book Manager** - Convert and manage opening books
-6. **Interactive Analysis Mode** - Real-time position analysis
+1. **Tactical Puzzle Generator** - Extract puzzles from games
+2. **Game Database Analyzer** - Bulk analysis of game collections
+3. **Opening Book Manager** - Convert and manage opening books
+4. **Interactive Analysis Mode** - Real-time position analysis
 
 ## 📁 File Locations
 
