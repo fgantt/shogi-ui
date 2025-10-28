@@ -550,24 +550,114 @@ impl ShogiEngine {
     }
 
     pub fn handle_setoption(&mut self, parts: &[&str]) -> Vec<String> {
+        let mut output = Vec::new();
         if parts.len() >= 4 && parts[0] == "name" && parts[2] == "value" {
             match parts[1] {
                 "USI_Hash" => {
                     if let Ok(size) = parts[3].parse::<usize>() {
                         if let Ok(mut search_engine_guard) = self.search_engine.lock() {
                             *search_engine_guard = SearchEngine::new(Some(self.stop_flag.clone()), size);
+                            output.push(format!("info string Set USI_Hash to {} MB", size));
                         }
                     }
                 }
                 "depth" => {
                     if let Ok(depth) = parts[3].parse::<u8>() {
                         self.set_depth(depth);
+                        output.push(format!("info string Set depth to {}", depth));
                     }
                 }
-                _ => {}
+                // Quiescence search options
+                "QuiescenceDepth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.quiescence.max_depth = depth;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string Set quiescence max_depth to {}", depth));
+                        }
+                    }
+                }
+                "EnableQuiescence" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.quiescence.enabled = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} quiescence search", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                // Null-move pruning options
+                "EnableNullMove" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.null_move.enabled = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} null-move pruning", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                "NullMoveMinDepth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.null_move.min_depth = depth;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string Set null-move min_depth to {}", depth));
+                        }
+                    }
+                }
+                // Late move reduction options
+                "EnableLMR" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.lmr.enabled = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} late move reduction", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                // IID options
+                "EnableIID" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.iid.enabled = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} internal iterative deepening", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                // Aspiration windows options
+                "EnableAspirationWindows" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.aspiration_windows.enabled = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} aspiration windows", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                // Tablebase options
+                "EnableTablebase" => {
+                    if parts[3] == "true" {
+                        self.enable_tablebase();
+                        output.push("info string Enabled tablebase".to_string());
+                    } else if parts[3] == "false" {
+                        self.disable_tablebase();
+                        output.push("info string Disabled tablebase".to_string());
+                    }
+                }
+                _ => {
+                    output.push(format!("info string Unknown option: {}", parts[1]));
+                }
             }
         }
-        Vec::new()
+        output
     }
 
     pub fn handle_usinewgame(&mut self) -> Vec<String> {
