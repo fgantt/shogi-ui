@@ -579,12 +579,11 @@ impl ShogiEngine {
                     }
                 }
                 "EnableQuiescence" => {
-                    if let Ok(enabled) = parts[3].parse::<bool>() {
-                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
-                            let mut config = search_engine_guard.get_engine_config();
-                            config.quiescence.enabled = enabled;
-                            let _ = search_engine_guard.update_engine_config(config);
-                            output.push(format!("info string {} quiescence search", if enabled { "Enabled" } else { "Disabled" }));
+                    if let Ok(_enabled) = parts[3].parse::<bool>() {
+                        // Note: QuiescenceConfig doesn't have an 'enabled' field
+                        // Quiescence search is always enabled in the engine
+                        if let Ok(_search_engine_guard) = self.search_engine.lock() {
+                            output.push(format!("info string Quiescence search is always enabled in the engine"));
                         }
                     }
                 }

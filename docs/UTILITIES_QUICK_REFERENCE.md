@@ -65,6 +65,21 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ./target/release/move-assessor --input game.kif --depth 4 --verbose
 ```
 
+### **Tactical Puzzle Generator** (`puzzle-gen`)
+```bash
+# Generate puzzles from games
+./target/release/puzzle-gen --input games.json --output puzzles.json --count 50
+
+# Create specific pattern puzzles
+./target/release/puzzle-gen --input games.json --pattern "fork" --count 50
+
+# Extract by difficulty
+./target/release/puzzle-gen --input games.json --difficulty "medium" --count 100
+
+# Extract from KIF games
+./target/release/puzzle-gen extract --input game.kif --output puzzles.json --count 20
+```
+
 ## 🔧 Build Commands
 
 ```bash
@@ -77,6 +92,7 @@ cargo build --release --bin tuner
 cargo build --release --bin analyzer
 cargo build --release --bin strength-tester
 cargo build --release --bin move-assessor
+cargo build --release --bin puzzle-gen
 ```
 
 ## 📊 Engine Capabilities
@@ -90,10 +106,10 @@ cargo build --release --bin move-assessor
 
 ## 🎯 Next Utilities (Planned)
 
-1. **Tactical Puzzle Generator** - Extract puzzles from games
-2. **Game Database Analyzer** - Bulk analysis of game collections
-3. **Opening Book Manager** - Convert and manage opening books
-4. **Interactive Analysis Mode** - Real-time position analysis
+1. **Game Database Analyzer** - Bulk analysis of game collections
+2. **Opening Book Manager** - Convert and manage opening books
+3. **Interactive Analysis Mode** - Real-time position analysis
+4. **Enhanced Tactical Pattern Detection** - Full integration improvements
 
 ## 📁 File Locations
 
