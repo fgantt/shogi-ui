@@ -175,6 +175,63 @@ pub async fn stop_all_engines(
     }
 }
 
+/// Helper function to find the workspace root by looking for the root Cargo.toml
+/// that defines the usi-engine binary
+pub fn find_workspace_root() -> Option<std::path::PathBuf> {
+    // Start from current directory or executable location
+    let start_dir = std::env::current_dir().ok()
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+        })?;
+    
+    // Walk up from current directory to find workspace root
+    let mut current = start_dir.as_path();
+    loop {
+        let cargo_toml = current.join("Cargo.toml");
+        if cargo_toml.exists() {
+            // Check if this Cargo.toml defines the usi-engine binary
+            if let Ok(contents) = std::fs::read_to_string(&cargo_toml) {
+                // Look for [[bin]] section with name = "usi-engine"
+                // The pattern should be [[bin]] followed by name = "usi-engine" (usually on next line)
+                let has_bin_def = if contents.contains("[[bin]]") {
+                    // Check if "name = \"usi-engine\"" appears near a [[bin]] declaration
+                    // Try to find [[bin]] and then check within next 10 lines
+                    let lines: Vec<&str> = contents.lines().collect();
+                    for (i, line) in lines.iter().enumerate() {
+                        if line.trim() == "[[bin]]" && i + 1 < lines.len() {
+                            // Check next few lines for name = "usi-engine"
+                            for j in (i + 1)..std::cmp::min(i + 5, lines.len()) {
+                                if lines[j].contains("name = \"usi-engine\"") || lines[j].contains("name = 'usi-engine'") {
+                                    return Some(current.to_path_buf());
+                                }
+                            }
+                        }
+                    }
+                    false
+                } else {
+                    false
+                };
+                
+                if has_bin_def {
+                    // Found the root Cargo.toml with usi-engine definition
+                    return Some(current.to_path_buf());
+                }
+            }
+        }
+        
+        // Check if we're at the filesystem root
+        if let Some(parent) = current.parent() {
+            current = parent;
+        } else {
+            break;
+        }
+    }
+    
+    None
+}
+
 /// Get the path to the bundled built-in engine
 #[tauri::command]
 pub async fn get_builtin_engine_path(
@@ -182,42 +239,106 @@ pub async fn get_builtin_engine_path(
 ) -> Result<CommandResponse, String> {
     use tauri::Manager;
 
-    // For development, use the release build from the project
-    // In production, this would be bundled with the app
-    let app_dir = app_handle.path().app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
-    
-    // For now, return the path to the development build
-    // This will need to be updated for production deployment
-    let engine_path = if cfg!(debug_assertions) {
-        // Development mode - use the target/release build
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-            .and_then(|dir| {
-                // Try to find the engine in the workspace
-                let workspace_root = dir.parent()?.parent()?.parent()?.parent()?;
-                Some(workspace_root.join("target/release/usi-engine"))
-            })
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "../target/release/usi-engine".to_string())
-    } else {
-        // Production mode - engine should be bundled
-        app_dir.join("usi-engine").display().to_string()
-    };
-
-    log::info!("Built-in engine path: {}", engine_path);
-    
-    // Check if the engine exists
-    if std::path::Path::new(&engine_path).exists() {
-        Ok(CommandResponse::success_with_data(
-            serde_json::json!({ "path": engine_path })
-        ))
-    } else {
-        let msg = format!("Engine not found at path: {}", engine_path);
-        log::warn!("{}", msg);
-        Ok(CommandResponse::error(msg))
+    if cfg!(debug_assertions) {
+        // Development mode - find the engine in the workspace
+        let workspace_root = find_workspace_root()
+            .ok_or_else(|| "Could not find workspace root".to_string())?;
+        
+        let engine_path = workspace_root.join("target/release/usi-engine");
+        let engine_path_str = engine_path.display().to_string();
+        
+        if !engine_path.exists() {
+            log::warn!("Engine not found at: {}. Attempting to build it...", engine_path_str);
+            return Ok(CommandResponse::error(format!(
+                "Engine not found at: {}. Please run 'cargo build --bin usi-engine --release' first.",
+                engine_path_str
+            )));
+        }
+        
+        log::info!("Built-in engine path: {}", engine_path_str);
+        return Ok(CommandResponse::success_with_data(
+            serde_json::json!({ "path": engine_path_str })
+        ));
     }
+    
+    // Production mode - try to find the engine relative to the executable
+    // In a bundled Tauri app, the executable is in the app bundle
+    // The engine should be in the same directory or a resources directory
+    
+    // First, try to find it relative to the executable
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            // Try common locations in a Tauri bundle
+            let mut possible_paths = vec![
+                exe_dir.join("usi-engine"),
+                exe_dir.join("resources").join("usi-engine"),
+            ];
+            
+            // Add macOS Resources path if it exists
+            if let Some(resources_path) = exe_dir.parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("Resources").join("usi-engine")) {
+                possible_paths.push(resources_path);
+            }
+            
+            // On Windows, also try with .exe extension
+            #[cfg(target_os = "windows")]
+            {
+                let mut windows_paths = Vec::new();
+                for p in &possible_paths {
+                    if let Some(parent) = p.parent() {
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            windows_paths.push(parent.join(format!("{}.exe", stem)));
+                        }
+                    }
+                }
+                // Check Windows paths first
+                if let Some(path) = windows_paths.iter().find(|p| p.exists()) {
+                    log::info!("Built-in engine path: {}", path.display());
+                    return Ok(CommandResponse::success_with_data(
+                        serde_json::json!({ "path": path.display().to_string() })
+                    ));
+                }
+            }
+            
+            if let Some(path) = possible_paths.iter().find(|p| p.exists()) {
+                log::info!("Built-in engine path: {}", path.display());
+                return Ok(CommandResponse::success_with_data(
+                    serde_json::json!({ "path": path.display().to_string() })
+                ));
+            }
+        }
+    }
+    
+    // Fallback: try resource directory
+    if let Ok(resource_dir) = app_handle.path().resource_dir() {
+        let engine_path = resource_dir.join("usi-engine");
+        #[cfg(target_os = "windows")]
+        let engine_path = resource_dir.join("usi-engine.exe");
+        
+        if engine_path.exists() {
+            log::info!("Built-in engine path: {}", engine_path.display());
+            return Ok(CommandResponse::success_with_data(
+                serde_json::json!({ "path": engine_path.display().to_string() })
+            ));
+        }
+    }
+    
+    // Last resort: try workspace root (for development builds that are "release")
+    if let Some(workspace_root) = find_workspace_root() {
+        let engine_path = workspace_root.join("target/release/usi-engine");
+        if engine_path.exists() {
+            log::info!("Built-in engine path: {}", engine_path.display());
+            return Ok(CommandResponse::success_with_data(
+                serde_json::json!({ "path": engine_path.display().to_string() })
+            ));
+        }
+    }
+    
+    // Could not find engine
+    Ok(CommandResponse::error(
+        "Engine binary not found in production bundle".to_string()
+    ))
 }
 
 /// Add a new engine to the configuration
@@ -336,7 +457,7 @@ pub async fn validate_engine_path(
     }
 }
 
-/// Register the built-in engine if not already present
+/// Register the built-in engine if not already present, or update the path if it's incorrect
 #[tauri::command]
 pub async fn register_builtin_engine(
     app_handle: tauri::AppHandle,
@@ -344,17 +465,7 @@ pub async fn register_builtin_engine(
 ) -> Result<CommandResponse, String> {
     log::info!("Command: register_builtin_engine");
 
-    let mut storage = state.engine_storage.write().await;
-
-    // Check if already registered
-    if storage.has_builtin_engine() {
-        log::info!("Built-in engine already registered");
-        return Ok(CommandResponse::success_with_data(
-            serde_json::json!({ "already_registered": true })
-        ));
-    }
-
-    // Get the built-in engine path
+    // Get the correct built-in engine path first
     let path_response = get_builtin_engine_path(app_handle).await?;
     if !path_response.success {
         return Ok(path_response);
@@ -365,7 +476,47 @@ pub async fn register_builtin_engine(
         .and_then(|d| d.get("path").and_then(|p| p.as_str().map(String::from)))
         .ok_or_else(|| "Failed to get engine path".to_string())?;
 
-    // Validate the built-in engine
+    let mut storage = state.engine_storage.write().await;
+
+    // Check if already registered - if so, update path if it's different
+    if let Some(builtin_engine) = storage.engines.iter_mut().find(|e| e.is_builtin) {
+        let path_exists = std::path::Path::new(&builtin_engine.path).exists();
+        let path_is_correct = builtin_engine.path == engine_path;
+        
+        if path_is_correct && path_exists {
+            log::info!("Built-in engine already registered with correct path");
+            return Ok(CommandResponse::success_with_data(
+                serde_json::json!({ "already_registered": true })
+            ));
+        }
+        
+        // Path is incorrect or file doesn't exist - update it
+        log::info!("Updating built-in engine path from '{}' to '{}'", builtin_engine.path, engine_path);
+        builtin_engine.path = engine_path.clone();
+        
+        // Validate the new path and update metadata
+        let metadata = match engine_validator::validate_engine(&engine_path).await {
+            Ok(meta) => Some(meta),
+            Err(e) => {
+                log::warn!("Built-in engine validation failed: {}", e);
+                None
+            }
+        };
+        builtin_engine.metadata = metadata;
+        
+        // Save to disk
+        if let Err(e) = storage.save().await {
+            log::error!("Failed to save engine storage: {}", e);
+            return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+        }
+        
+        log::info!("Built-in engine path updated successfully");
+        return Ok(CommandResponse::success_with_data(
+            serde_json::json!({ "updated": true, "path": engine_path })
+        ));
+    }
+
+    // Validate the built-in engine (for new registration)
     let metadata = match engine_validator::validate_engine(&engine_path).await {
         Ok(meta) => Some(meta),
         Err(e) => {

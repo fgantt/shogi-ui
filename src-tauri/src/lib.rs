@@ -35,55 +35,21 @@ pub fn run() {
         }
       };
       
-      // Auto-register built-in engine if not present
+      // Auto-register built-in engine if not present, or fix path if it's incorrect
+      // Get the correct path first
+      let correct_path = if cfg!(debug_assertions) {
+        commands::find_workspace_root()
+          .map(|workspace_root| workspace_root.join("target/release/usi-engine"))
+          .filter(|engine_path| engine_path.exists())
+          .map(|engine_path| engine_path.display().to_string())
+      } else {
+        None
+      };
+      
       if !engine_storage.has_builtin_engine() {
         log::info!("Built-in engine not registered, registering now...");
         
-        // Get the built-in engine path - try multiple locations
-        let builtin_path_result = {
-          let mut found_path: Option<String> = None;
-          
-          // Method 1: Try workspace root (development mode)
-          if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-              // Navigate up to workspace root
-              if let Some(workspace_root) = exe_dir.parent()
-                .and_then(|p| p.parent())
-                .and_then(|p| p.parent())
-                .and_then(|p| p.parent()) {
-                let engine_path = workspace_root.join("target/release/usi-engine");
-                if engine_path.exists() {
-                  found_path = Some(engine_path.display().to_string());
-                  log::info!("Found engine via workspace root: {:?}", found_path);
-                }
-              }
-              
-              // Method 2: Try relative to executable
-              if found_path.is_none() {
-                let engine_path = exe_dir.join("../../../target/release/usi-engine");
-                if engine_path.exists() {
-                  found_path = Some(engine_path.display().to_string());
-                  log::info!("Found engine via relative path: {:?}", found_path);
-                }
-              }
-            }
-          }
-          
-          // Method 3: Try current directory
-          if found_path.is_none() {
-            if let Ok(current_dir) = std::env::current_dir() {
-              let engine_path = current_dir.join("target/release/usi-engine");
-              if engine_path.exists() {
-                found_path = Some(engine_path.display().to_string());
-                log::info!("Found engine via current dir: {:?}", found_path);
-              }
-            }
-          }
-          
-          found_path
-        };
-
-        if let Some(engine_path) = builtin_path_result {
+        if let Some(engine_path) = correct_path.as_ref() {
           log::info!("Found built-in engine at: {}", engine_path);
           
           // Validate the engine
@@ -94,7 +60,7 @@ pub fn run() {
           // Create config
           let config = crate::engine_storage::EngineConfig::new(
             "Built-in Engine".to_string(),
-            engine_path,
+            engine_path.clone(),
             metadata,
             true,
           );
@@ -110,6 +76,32 @@ pub fn run() {
           }
         } else {
           log::warn!("Could not find built-in engine executable");
+        }
+      } else if let Some(correct_path) = correct_path.as_ref() {
+        // Builtin engine exists - check if path needs updating
+        if let Some(builtin_engine) = engine_storage.engines.iter_mut().find(|e| e.is_builtin) {
+          let path_exists = std::path::Path::new(&builtin_engine.path).exists();
+          let path_is_correct = builtin_engine.path == *correct_path;
+          
+          if !path_is_correct || !path_exists {
+            log::info!("Updating built-in engine path from '{}' to '{}'", builtin_engine.path, correct_path);
+            builtin_engine.path = correct_path.clone();
+            
+            // Validate the engine and update metadata
+            let metadata = tauri::async_runtime::block_on(
+              crate::engine_validator::validate_engine(correct_path)
+            ).ok();
+            builtin_engine.metadata = metadata;
+            
+            // Save to disk
+            if let Err(e) = tauri::async_runtime::block_on(engine_storage.save()) {
+              log::error!("Failed to save engine storage: {}", e);
+            } else {
+              log::info!("Built-in engine path updated successfully");
+            }
+          } else {
+            log::info!("Built-in engine already has correct path: {}", correct_path);
+          }
         }
       }
       
