@@ -1,10 +1,10 @@
 # Shogi Vibe
 
-A high-performance desktop Shogi (Japanese Chess) game with advanced AI, built with Tauri and React. Play against an intelligent computer opponent with multiple difficulty levels, opening book strategies, and beautiful themes.
+A modern, high-performance desktop Shogi (Japanese Chess) application built with Tauri. It features a clean, intuitive interface and a pluggable engine system that supports any standard USI-compliant Shogi engine.
 
 ## 🎮 Download & Install
 
-**[Download Latest Release](https://github.com/yourusername/shogi-game/releases/latest)**
+**[Download Latest Release](https://github.com/fgantt/shogi-game/releases/latest)**
 
 - **macOS**: Download `.dmg` installer
 - **Windows**: Download `.exe` or `.msi` installer  
@@ -111,47 +111,35 @@ When a piece moves onto a square occupied by an opponent's piece, the opponent's
 
 ## Features
 
-### 🚀 High Performance
-*   **Native Desktop App:** Built with Tauri for native performance and small bundle size
-*   **Rust Engine:** Core game logic written in Rust with optimized move generation
-*   **Advanced Opening Book:** Professional-grade opening strategies with intelligent caching
-*   **Fast AI:** Multiple difficulty levels with optimized search algorithms
+### Engine
+*   **Pluggable USI Engines:** Add any USI-compliant engine.
+*   **Engine Configuration:** Adjust engine settings directly from the UI.
+*   **Included Engine:** Comes with a built-in, powerful Rust-based engine.
 
-### 🎯 Gameplay
-*   Single-player mode against an AI opponent
-*   Three AI difficulty levels: Easy, Medium, and Hard
-*   Click-to-move and drag-and-drop piece movement
-*   Visual highlighting of legal moves
-*   Promotion prompts for optional promotions
-*   Visual indicators for check and last move
-*   Complete move history log
-*   Undo move functionality
+### Gameplay
+*   **AI Opponent:** Play against a variety of configured engines.
+*   **Move Analysis:** Analyze positions with the engine's help.
+*   **Game History:** Full move history with easy navigation.
 
-### 🎨 User Experience
-*   Beautiful, modern UI with multiple themes
-*   Realistic piece movement sounds with audio controls
-*   Customizable board and piece themes
-*   Responsive design for various screen sizes
-*   Smooth animations and transitions
+### User Experience
+*   **Modern UI:** Clean and intuitive interface built with React and Tauri.
+*   **Theming:** Customizable board and piece themes.
+*   **Cross-Platform:** Native performance on Windows, macOS, and Linux.
 
 ## Getting Started
 
-### For End Users
+### For Users
 
-Download the installer for your platform from the [Releases](https://github.com/yourusername/shogi-game/releases) page and install it like any other application.
+Download the latest version for your operating system from the [**Releases**](https://github.com/yourusername/shogi-game/releases) page.
 
 ### For Developers
 
-**Prerequisites:**
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-- [Node.js](https://nodejs.org/) (v20 or later)
-
-**Setup:**
+This project uses Rust and Node.js. Make sure you have both installed.
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
-    cd shogi-game/worktrees/tauri
+    git clone https://github.com/fgantt/shogi-game.git
+    cd shogi-game
     ```
 
 2.  **Install dependencies:**
@@ -164,226 +152,34 @@ Download the installer for your platform from the [Releases](https://github.com/
     npm run tauri:dev
     ```
 
-    This will build the Rust engine and launch the desktop app with hot-reload enabled.
-
-4.  **Build for production:**
-    ```bash
-    npm run tauri:build
-    ```
-
-    Installers will be created in `src-tauri/target/release/bundle/`
-
-See [BUILDING.md](BUILDING.md) for more details.
-
-## WebAssembly Engine
-
-The core game logic of this Shogi application is powered by a Rust-based engine compiled to WebAssembly (WASM). This allows for high-performance move calculation and AI, running directly in the browser.
-
-### Building the WASM module
-
-The pre-compiled WebAssembly module is included in the `pkg/` directory. However, if you make changes to the Rust source code (`.rs` files), you will need to rebuild the module.
-
-**Prerequisites:**
-
-*   [Rust](https://www.rust-lang.org/tools/install)
-*   [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-
-**Build command:**
-
-To rebuild the WebAssembly module, run the following command from the project root:
-
-```bash
-wasm-pack build --target web
-```
-
-This command will compile the Rust code, generate the necessary JavaScript bindings, and place the output in the `pkg/` directory.
-
-## Sound Effects System
-
-The game includes an immersive audio system that provides realistic sound effects for piece movements, enhancing the traditional shogi playing experience.
-
-### Features
-
-*   **Realistic Clacking Sounds:** Authentic wooden piece placement sounds that mimic traditional shogi gameplay
-*   **Configurable Audio Settings:** Toggle sound effects on/off in the settings panel (enabled by default)
-*   **Comprehensive Coverage:** Sound effects for all move types including:
-    - Regular piece movements (clicks and drags)
-    - Captured piece drops
-    - Promotion moves
-    - AI opponent moves
-*   **Cross-Browser Compatibility:** Works across modern browsers with graceful fallbacks
-*   **Synthetic Sound Generation:** Built-in Web Audio API sound generation when audio files are unavailable
-
-### Audio Technology
-
-The sound system uses modern web audio technologies:
-
-*   **Web Audio API:** For high-quality sound generation and playback
-*   **AudioContext Management:** Handles browser audio context suspension and user interaction requirements
-*   **Fallback System:** Generates synthetic clacking sounds using noise and envelope shaping
-*   **Memory Efficient:** Minimal memory footprint with on-demand audio generation
-
-### Settings
-
-Sound effects can be controlled through the game's settings panel:
-
-1. Open the settings panel (gear icon)
-2. Find the "Piece Movement Sounds" section
-3. Toggle the switch to enable/disable sounds
-4. Settings are automatically saved and persist between sessions
-
-### Custom Audio Files
-
-To use custom sound files:
-
-1. Place your audio file as `public/sounds/piece-move.mp3`
-2. Recommended format: MP3, 0.1-0.3 seconds duration
-3. The system will automatically load the custom file
-4. If no file is found, the system falls back to synthetic sound generation
-
-## Opening Book System
-
-The Shogi engine includes a sophisticated opening book system designed for high performance in WebAssembly environments. The opening book provides instant move suggestions for early-game positions, improving both AI play quality and response time.
-
-### Key Features
-
-*   **Binary Format:** Efficient binary storage format optimized for fast lookups and minimal memory usage
-*   **Lazy Loading:** Positions are loaded on-demand to conserve memory, especially important for large opening books
-*   **LRU Caching:** Frequently accessed positions are cached for optimal performance
-*   **Streaming Support:** Large opening books can be loaded in chunks to handle memory constraints
-*   **Memory Monitoring:** Built-in memory usage tracking and automatic optimization
-*   **WASM Optimization:** FNV-1a hashing and `Box<[u8]>` storage for optimal WebAssembly performance
-
-### Opening Book API
-
-The opening book provides several methods for move selection:
-
-```rust
-// Get the best move for a position
-let best_move = engine.get_best_move(&fen_string);
-
-// Get a random move (weighted by frequency)
-let random_move = engine.get_random_move(&fen_string);
-
-// Get all available moves for a position
-let all_moves = engine.get_all_opening_book_moves(&fen_string);
-
-// Get opening book statistics
-let stats = engine.get_opening_book_stats();
-```
-
-### Performance Benefits
-
-*   **Instant Early-Game Moves:** No calculation time for common opening positions
-*   **Memory Efficient:** Lazy loading and streaming support for large databases
-*   **High Performance:** O(1) lookup time with intelligent caching
-*   **WASM Optimized:** Designed specifically for WebAssembly constraints
-
-### Building with Opening Book
-
-The build script automatically converts the JSON opening book to binary format:
-
-```bash
-./build.sh
-```
-
-This will:
-1. Convert `src/ai/openingBook.json` to binary format
-2. Build the WebAssembly module
-3. Copy the binary opening book to output directories
-
-### Memory Usage
-
-The opening book system includes comprehensive memory monitoring:
-
-```rust
-let memory_stats = engine.get_memory_usage();
-println!("Total memory usage: {} bytes", memory_stats.total_size);
-println!("Memory efficiency: {:.1}%", memory_stats.memory_efficiency);
-
-// Automatic optimization
-let optimization_result = engine.optimize_memory_usage();
-println!("Applied {} optimizations", optimization_result.optimizations_applied);
-```
+For more detailed instructions, see [BUILDING.md](BUILDING.md).
 
 ## Distribution
 
-### Building Installers
-
-To create distributable installers for end users:
+To build the application for production, run:
 
 ```bash
 npm run tauri:build
 ```
 
-This creates platform-specific installers in `src-tauri/target/release/bundle/`:
-
-- **macOS**: `.dmg` disk image (Universal binary - Intel + Apple Silicon)
-- **Windows**: `.exe` and `.msi` installers
-- **Linux**: `.deb`, `.AppImage`, and `.rpm` packages
-
-### Distribution Options
-
-1. **GitHub Releases** (Recommended for open source)
-   - Upload installers to GitHub Releases
-   - Users download appropriate installer for their platform
-   - Free hosting with version tracking
-
-2. **Direct Download**
-   - Host installers on your own website
-   - Link directly to download files
-
-3. **App Stores**
-   - Mac App Store (requires Apple Developer account)
-   - Microsoft Store (requires one-time fee)
-   - Snap Store / Flathub (free for Linux)
-
-### Code Signing
-
-For production distribution, consider code signing to avoid security warnings:
-
-- **macOS**: Requires Apple Developer account ($99/year) and notarization
-- **Windows**: Requires code signing certificate ($100-400/year)
-- **Linux**: Generally not required
-
-### Complete Guide
-
-For comprehensive instructions including:
-- Code signing setup
-- Auto-updates configuration
-- CI/CD automation
-- Optimization tips
-- Troubleshooting
-
-See the [**Distribution Guide**](docs/DISTRIBUTION_GUIDE.md).
+This will create installers for your operating system in the `src-tauri/target/release/bundle/` directory. For more details on cross-compilation, code signing, and app store distribution, see [BUILDING.md](BUILDING.md).
 
 ## Technology Stack
 
-- **Desktop Framework:** [Tauri 2.x](https://tauri.app/)
-- **Frontend:** React 19 + TypeScript + Vite
-- **Engine:** Rust (standalone binary via USI protocol)
-- **Styling:** CSS with custom themes
-- **Build System:** Cargo + npm
+- **Framework:** [Tauri](https://tauri.app/)
+- **Frontend:** React + TypeScript + Vite
+- **Engine:** Rust (via USI protocol)
+- **Build:** Cargo + npm
 
 ## Project Structure
 
 ```
 .
-├── src/                    # React frontend source
-│   ├── components/         # React components
-│   ├── hooks/              # Custom React hooks
-│   ├── services/           # USI engine communication
-│   └── styles/             # CSS and themes
-├── src-tauri/              # Tauri backend
-│   ├── src/                # Rust Tauri application
-│   └── Cargo.toml          # Tauri dependencies
-├── src/                    # Rust engine source
-│   ├── ai/                 # AI implementation
-│   ├── bin/                # Binary entry points
-│   └── lib.rs              # Engine library
-├── docs/                   # Documentation
-├── public/                 # Static assets
-└── Cargo.toml              # Engine dependencies
+├── src/              # Frontend source (React)
+├── src-tauri/        # Tauri application source (Rust)
+├── src-engine/       # USI engine source (Rust)
+├── public/           # Static assets
+└── Cargo.toml        # Workspace dependencies
 ```
 
 ## Contributing
