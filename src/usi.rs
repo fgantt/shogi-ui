@@ -1,6 +1,7 @@
 
 use std::io::{self, BufRead, Write};
 use crate::ShogiEngine;
+use num_cpus;
 
 pub struct UsiHandler {
     engine: ShogiEngine,
@@ -113,11 +114,13 @@ impl UsiHandler {
     }
 
     fn handle_usi(&self) -> Vec<String> {
+        let thread_count = num_cpus::get();
         vec![
             "id name Shogi Engine".to_string(),
             "id author Gemini".to_string(),
             "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
             "option name depth type spin default 5 min 1 max 8".to_string(),
+            format!("option name USI_Threads type spin default {} min 1 max 32", thread_count),
             "usiok".to_string(),
         ]
     }

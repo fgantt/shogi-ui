@@ -5,15 +5,18 @@ use crate::moves::*;
 use crate::tablebase::MicroTablebase;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, RwLock, atomic::{AtomicBool, Ordering, AtomicU64}};
 use crate::search::move_ordering::MoveOrdering;
 use crate::search::tapered_search_integration::TaperedSearchEnhancer;
+use crate::search::{ParallelSearchEngine, ParallelSearchConfig};
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
     move_generator: MoveGenerator,
     tablebase: MicroTablebase,
     transposition_table: crate::search::ThreadSafeTranspositionTable,
+    /// Optional shared transposition table for parallel search contexts
+    shared_transposition_table: Option<Arc<RwLock<crate::search::ThreadSafeTranspositionTable>>>,
     hash_calculator: crate::search::ShogiHashHandler,
     move_orderer: crate::search::TranspositionMoveOrderer,
     advanced_move_orderer: MoveOrdering,
@@ -46,6 +49,9 @@ pub struct SearchEngine {
     search_start_time: Option<TimeSource>,
 }
 
+/// Global aggregate of nodes searched across all threads for live reporting.
+pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
+
 #[allow(dead_code)]
 impl SearchEngine {
     pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
@@ -65,6 +71,7 @@ impl SearchEngine {
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
             transposition_table: crate::search::ThreadSafeTranspositionTable::new(config),
+            shared_transposition_table: None,
             hash_calculator: crate::search::ShogiHashHandler::new(1000),
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
             advanced_move_orderer: MoveOrdering::new(),
@@ -112,11 +119,30 @@ impl SearchEngine {
         
         self.advanced_move_orderer.update_game_phase(move_count, material_balance, tactical_complexity);
         
-        // Integrate with transposition table
+        // Integrate with transposition table (prefer shared TT when available)
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-        if let Some(tt_entry) = self.transposition_table.probe(position_hash, depth) {
+        let tt_entry_opt = if let Some(ref shared_tt) = self.shared_transposition_table {
+            if let Ok(guard) = shared_tt.try_read() {
+                guard.probe(position_hash, depth)
+            } else {
+                self.transposition_table.probe(position_hash, depth)
+            }
+        } else {
+            self.transposition_table.probe(position_hash, depth)
+        };
+        if let Some(tt_entry) = tt_entry_opt {
             let _ = self.advanced_move_orderer.integrate_with_transposition_table(Some(&tt_entry), board, captured_pieces, player, depth);
         }
+    }
+
+    /// Expose nodes searched for external aggregators/monitors.
+    pub fn get_nodes_searched(&self) -> u64 {
+        self.nodes_searched
+    }
+
+    /// Set a shared transposition table for reporting and ordering in parallel contexts.
+    pub fn set_shared_transposition_table(&mut self, shared: Arc<RwLock<crate::search::ThreadSafeTranspositionTable>>) {
+        self.shared_transposition_table = Some(shared);
     }
 
     /// Calculate tactical complexity for position-specific strategies
@@ -202,6 +228,7 @@ impl SearchEngine {
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
             transposition_table: crate::search::ThreadSafeTranspositionTable::new(tt_config),
+            shared_transposition_table: None,
             hash_calculator: crate::search::ShogiHashHandler::new(1000),
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
             advanced_move_orderer: MoveOrdering::new(),
@@ -778,7 +805,6 @@ impl SearchEngine {
         
         key
     }
-
     /// Calculate material balance efficiently
     pub fn calculate_material_balance(&self, board: &BitboardBoard, _captured_pieces: &CapturedPieces) -> i32 {
         let mut balance = 0;
@@ -1562,7 +1588,6 @@ impl SearchEngine {
         
         promising_moves
     }
-
     /// Probe promising moves with deeper search
     fn probe_promising_moves(&mut self,
                             board: &mut BitboardBoard,
@@ -2209,8 +2234,6 @@ impl SearchEngine {
         
         println!("IID move ordering tests passed!");
     }
-
-
     pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Starting search at depth {} (alpha: {}, beta: {})", depth, alpha, beta));
         crate::debug_utils::start_timing(&format!("search_at_depth_{}", depth));
@@ -2374,7 +2397,13 @@ impl SearchEngine {
                 Some(best_move_ref.clone()),
                 position_hash
             );
-            self.transposition_table.store(entry);
+            if let Some(ref shared_tt) = self.shared_transposition_table {
+                if let Ok(mut guard) = shared_tt.write() {
+                    guard.store(entry);
+                }
+            } else {
+                self.transposition_table.store(entry);
+            }
         }
 
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
@@ -2439,6 +2468,7 @@ impl SearchEngine {
             return 0; 
         }
         self.nodes_searched += 1;
+        GLOBAL_NODES_SEARCHED.fetch_add(1, Ordering::Relaxed);
         let fen_key = board.to_fen(player, captured_pieces);
         if history.contains(&fen_key) {
             crate::debug_utils::trace_log("NEGAMAX", "Repetition detected, returning 0 (draw)");
@@ -2675,7 +2705,15 @@ impl SearchEngine {
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
         // Use the position hash we calculated earlier for proper TT storage
         let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt, position_hash);
-        self.transposition_table.store(entry);
+        if let Some(ref shared_tt) = self.shared_transposition_table {
+            if let Ok(mut guard) = shared_tt.try_write() {
+                guard.store(entry);
+            } else {
+                self.transposition_table.store(entry);
+            }
+        } else {
+            self.transposition_table.store(entry);
+        }
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
         
@@ -3004,7 +3042,6 @@ impl SearchEngine {
         }
         score
     }
-    
     /// Score a move based on pruning effectiveness
     fn score_move_for_pruning(&self, move_: &Move, _board: &BitboardBoard, depth: Option<u8>, alpha: Option<i32>, beta: Option<i32>) -> i32 {
         let mut pruning_score = 0;
@@ -3202,6 +3239,33 @@ impl SearchEngine {
             }
         }
         pv
+    }
+
+    /// Public wrapper to fetch principal variation for reporting.
+    pub fn get_pv_for_reporting(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+        // Prefer building PV from shared TT when available for cross-thread consistency
+        if let Some(ref shared_tt) = self.shared_transposition_table {
+            if let Ok(tt) = shared_tt.try_read() {
+                let mut pv = Vec::new();
+                let mut current_board = board.clone();
+                let mut current_captured = captured_pieces.clone();
+                let mut current_player = player;
+                for _ in 0..depth {
+                    let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
+                    if let Some(entry) = tt.probe(position_hash, 0) {
+                        if let Some(move_) = &entry.best_move {
+                            pv.push(move_.clone());
+                            if let Some(captured) = current_board.make_move(move_) {
+                                current_captured.add_piece(captured.piece_type, current_player);
+                            }
+                            current_player = current_player.opposite();
+                        } else { break; }
+                    } else { break; }
+                }
+                return pv;
+            }
+        }
+        self.get_pv(board, captured_pieces, player, depth)
     }
 
     /// Check if a move should be pruned using delta pruning
@@ -3789,9 +3853,7 @@ impl SearchEngine {
             } else { 0.0 },
         }
     }
-
     // ===== NULL MOVE PRUNING METHODS =====
-
     /// Check if null move pruning should be attempted in the current position
     fn should_attempt_null_move(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
                                player: Player, depth: u8, can_null_move: bool) -> bool {
@@ -4591,7 +4653,6 @@ impl SearchEngine {
             "success"
         }
     }
-
     /// Update fail-low performance metrics
     fn update_fail_low_metrics(&mut self, previous_score: i32, window_size: i32) {
         if self.aspiration_config.enable_statistics {
@@ -5362,7 +5423,6 @@ impl SearchEngine {
             },
         }
     }
-
     /// Auto-tune LMR parameters based on performance
     pub fn auto_tune_lmr_parameters(&mut self) -> Result<(), String> {
         let metrics = self.get_lmr_performance_metrics();
@@ -6156,12 +6216,11 @@ impl SearchEngine {
             "Disabled aspiration windows, using full-width search");
         true
     }
-
     /// Monitor system health and trigger degradation if needed
     fn monitor_system_health(&mut self, alpha: i32, beta: i32, previous_score: i32, 
-                            depth: u8, researches: u8) -> bool {
+                             depth: u8, researches: u8) -> bool {
         let health_score = self.calculate_system_health_score(alpha, beta, previous_score, 
-                                                             depth, researches);
+                                                            depth, researches);
         
         crate::debug_utils::trace_log("SYSTEM_HEALTH", 
             &format!("System health score: {}", health_score));
@@ -6178,7 +6237,7 @@ impl SearchEngine {
 
     /// Calculate system health score (0.0 = critical, 1.0 = healthy)
     fn calculate_system_health_score(&self, alpha: i32, beta: i32, previous_score: i32, 
-                                    _depth: u8, researches: u8) -> f64 {
+                                     _depth: u8, researches: u8) -> f64 {
         let mut score = 1.0;
         
         // Factor 1: Window validity
@@ -6912,15 +6971,40 @@ pub struct IterativeDeepening {
     time_limit_ms: u32,
     stop_flag: Option<Arc<AtomicBool>>,
     // on_info removed - no longer using WASM callbacks
+    /// Number of threads to use for parallel root search (1 = single-threaded)
+    thread_count: usize,
+    /// Optional parallel search engine for root move search
+    parallel_engine: Option<ParallelSearchEngine>,
 }
-
 impl IterativeDeepening {
     pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Self {
         Self {
             max_depth,
             time_limit_ms,
             stop_flag,
-            // on_info removed,
+            thread_count: 1,
+            parallel_engine: None,
+        }
+    }
+
+    pub fn new_with_threads(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, thread_count: usize) -> Self {
+        let threads = thread_count.clamp(1, 32);
+        let parallel_engine = if threads > 1 {
+            let config = ParallelSearchConfig::new(threads);
+            match ParallelSearchEngine::new_with_stop_flag(config, stop_flag.clone()) {
+                Ok(engine) => Some(engine),
+                Err(_e) => None, // Fallback to single-threaded if thread pool creation fails
+            }
+        } else {
+            None
+        };
+
+        Self {
+            max_depth,
+            time_limit_ms,
+            stop_flag,
+            thread_count: threads,
+            parallel_engine,
         }
     }
 
@@ -6960,6 +7044,8 @@ impl IterativeDeepening {
         crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Starting depth iteration loop");
 
         for depth in 1..=effective_max_depth {
+            // Reset global node counter for this depth and start periodic reporter
+            GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
             if self.should_stop(&start_time, search_time_limit) { 
                 crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Time limit reached, stopping search");
                 break; 
@@ -6969,6 +7055,9 @@ impl IterativeDeepening {
 
             crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Searching at depth {} (elapsed: {}ms, remaining: {}ms)", depth, elapsed_ms, remaining_time));
             crate::debug_utils::start_timing(&format!("depth_{}", depth));
+
+            // Reset global nodes aggregator at the start of each depth
+            GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
 
             // Calculate aspiration window parameters
             let (alpha, beta) = if depth == 1 || !search_engine.aspiration_config.enabled {
@@ -7009,10 +7098,31 @@ impl IterativeDeepening {
                 // Update advanced move orderer for iterative deepening
                 search_engine.initialize_advanced_move_orderer(board, captured_pieces, player, depth);
                 
-                if let Some((move_, score)) = search_engine.search_at_depth(
-                    board, captured_pieces, player, depth, remaining_time,
-                    current_alpha, current_beta
-                ) {
+                let parallel_result = if self.thread_count > 1 {
+                    if let Some(ref parallel_engine) = self.parallel_engine {
+                        parallel_engine.search_root_moves(
+                            board,
+                            captured_pieces,
+                            player,
+                            &legal_moves,
+                            depth,
+                            remaining_time,
+                            current_alpha,
+                            current_beta,
+                        )
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                if let Some((move_, score)) = parallel_result.or_else(|| {
+                    search_engine.search_at_depth(
+                        board, captured_pieces, player, depth, remaining_time,
+                        current_alpha, current_beta,
+                    )
+                }) {
                     crate::debug_utils::end_timing(&format!("aspiration_search_{}_{}", depth, researches), "ASPIRATION_WINDOW");
                     search_result = Some((move_.clone(), score));
                     
@@ -7088,15 +7198,21 @@ impl IterativeDeepening {
             search_engine.update_aspiration_stats(researches > 0, researches);
             crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
-            if let Some((_move_, score)) = search_result {
+            if let Some((mv_final, score)) = search_result {
                 let pv = search_engine.get_pv(board, captured_pieces, player, depth);
-                let pv_string = pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ");
+                let pv_string = if pv.is_empty() {
+                    // Fallback to at least show the best root move when PV unavailable (e.g., parallel path)
+                    mv_final.to_usi_string()
+                } else {
+                    pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ")
+                };
                 let time_searched = start_time.elapsed_ms();
-                let nps = if time_searched > 0 { search_engine.nodes_searched * 1000 / time_searched as u64 } else { 0 };
+                let nodes_for_info = search_engine.nodes_searched;
+                let nps = if time_searched > 0 { nodes_for_info * 1000 / time_searched as u64 } else { 0 };
 
-                crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, search_engine.nodes_searched, score, &pv_string);
+                crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, nodes_for_info, score, &pv_string);
 
-                let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, search_engine.nodes_searched, nps, pv_string);
+                let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, nodes_for_info, nps, pv_string);
                 
                 // Print the info message to stdout for USI protocol
                 println!("{}", info_string);

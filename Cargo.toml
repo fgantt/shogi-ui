@@ -37,6 +37,7 @@ lru = "0.12"
 rand = { version = "0.8", features = ["getrandom"] }
 getrandom = { version = "0.2", features = ["std"] }
 num_cpus = "1.0"
+rayon = "1.8"
 clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
 log = "0.4"
@@ -74,6 +75,10 @@ harness = false
 
 [[bench]]
 name = "attack_pattern_performance_benchmarks"
+harness = false
+
+[[bench]]
+name = "parallel_search_performance_benchmarks"
 harness = false
 
 [[example]]

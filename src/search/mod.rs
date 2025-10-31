@@ -4,6 +4,11 @@ pub mod search_engine;
 pub mod board_trait;
 pub mod shogi_hash;
 pub mod shogi_position_tests;
+pub mod parallel_search;
+pub use parallel_search::{
+    ParallelSearchConfig, ParallelSearchEngine, ThreadLocalSearchContext,
+    WorkUnit, WorkStealingQueue, WorkDistributionStats
+};
 pub mod transposition_config;
 pub mod replacement_policies;
 pub mod cache_management;

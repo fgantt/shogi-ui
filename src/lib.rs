@@ -79,11 +79,13 @@ pub struct ShogiEngine {
     debug_mode: bool,
     pondering: bool,
     depth: u8,
+    thread_count: usize,
 }
 
 impl ShogiEngine {
     pub fn new() -> Self {
         let stop_flag = Arc::new(AtomicBool::new(false));
+        let thread_count = num_cpus::get();
         let mut engine = Self {
             board: BitboardBoard::new(),
             captured_pieces: CapturedPieces::new(),
@@ -95,6 +97,7 @@ impl ShogiEngine {
             debug_mode: true,
             pondering: false,
             depth: 5, // Default to medium depth
+            thread_count,
         };
         
         // Try to load default opening book if available
@@ -377,8 +380,12 @@ impl ShogiEngine {
 
         let actual_depth = if depth == 0 { 1 } else { depth };
         crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
-        eprintln!("DEBUG: Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms);
-        let mut searcher = search::search_engine::IterativeDeepening::new(actual_depth, time_limit_ms, stop_flag);
+        let mut searcher = search::search_engine::IterativeDeepening::new_with_threads(
+            actual_depth,
+            time_limit_ms,
+            stop_flag,
+            self.thread_count,
+        );
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         
@@ -649,6 +656,14 @@ impl ShogiEngine {
                     } else if parts[3] == "false" {
                         self.disable_tablebase();
                         output.push("info string Disabled tablebase".to_string());
+                    }
+                }
+                "USI_Threads" => {
+                    if let Ok(threads) = parts[3].parse::<usize>() {
+                        self.thread_count = threads.clamp(1, 32);
+                        output.push(format!("info string Set USI_Threads to {}", self.thread_count));
+                    } else {
+                        output.push("info string error Invalid thread count value".to_string());
                     }
                 }
                 _ => {

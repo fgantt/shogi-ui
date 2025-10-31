@@ -800,6 +800,7 @@ dependencies = [
  "lru",
  "num_cpus",
  "rand",
+ "rayon",
  "serde",
  "serde_json",
  "tempfile",

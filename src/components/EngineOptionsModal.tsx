@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { EngineConfig, EngineOption, CommandResponse } from '../types/engine';
 import './EngineOptionsModal.css';
@@ -73,15 +73,14 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
         setSavedOptions(response.data);
         setOptionValues({ ...response.data });
       } else {
-        // No saved options, use defaults from engine metadata
+        // No saved options, use defaults from engine metadata (with fallback injection)
         const defaults: OptionValue = {};
-        if (engine.metadata?.options) {
-          engine.metadata.options.forEach(option => {
-            if (option.default) {
-              defaults[option.name] = option.default;
-            }
-          });
-        }
+        const opts = effectiveOptions;
+        opts.forEach(option => {
+          if (option.default) {
+            defaults[option.name] = option.default;
+          }
+        });
         setSavedOptions(defaults);
         setOptionValues({ ...defaults });
       }
@@ -89,15 +88,14 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
       console.error('Error loading saved options:', err);
       setError(`Failed to load saved options: ${err}`);
       
-      // Fallback to defaults
+      // Fallback to defaults (with fallback injection)
       const defaults: OptionValue = {};
-      if (engine.metadata?.options) {
-        engine.metadata.options.forEach(option => {
-          if (option.default) {
-            defaults[option.name] = option.default;
-          }
-        });
-      }
+      const opts = effectiveOptions;
+      opts.forEach(option => {
+        if (option.default) {
+          defaults[option.name] = option.default;
+        }
+      });
       setSavedOptions(defaults);
       setOptionValues({ ...defaults });
     } finally {
@@ -167,10 +165,8 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
   };
 
   const handleResetToDefaults = () => {
-    if (!engine?.metadata?.options) return;
-
     const defaults: OptionValue = {};
-    engine.metadata.options.forEach(option => {
+    effectiveOptions.forEach(option => {
       if (option.default) {
         defaults[option.name] = option.default;
       }
@@ -269,6 +265,24 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
     }
   };
 
+  // Build effective options list, injecting USI_Threads if engine didn't expose it in metadata
+  const effectiveOptions = useMemo(() => {
+    const opts = engine?.metadata?.options ? [...engine.metadata.options] : [] as EngineOption[];
+    const hasThreads = opts.some(o => o.name === 'USI_Threads');
+    if (!hasThreads) {
+      const cores = (typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency) ? String((navigator as any).hardwareConcurrency) : '2';
+      opts.push({
+        name: 'USI_Threads',
+        option_type: 'spin',
+        default: cores,
+        min: '1',
+        max: '32',
+        var: [],
+      });
+    }
+    return opts;
+  }, [engine]);
+
   if (!isOpen || !engine) {
     return null;
   }
@@ -315,7 +329,7 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
             <div className="loading-message">
               Loading options...
             </div>
-          ) : engine.metadata?.options && engine.metadata.options.length > 0 ? (
+          ) : effectiveOptions.length > 0 ? (
             <div className="options-section">
               <div className="options-header">
                 <h4>Available Options:</h4>
@@ -329,7 +343,7 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
               </div>
 
               <div className="options-list">
-                {engine.metadata.options.map((option, index) => (
+                {effectiveOptions.map((option, index) => (
                   <div key={index} className="option-item">
                     <div className="option-header">
                       <label className="option-name">{option.name}</label>

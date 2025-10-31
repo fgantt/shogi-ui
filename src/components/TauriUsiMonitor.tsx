@@ -117,20 +117,7 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
       };
       setCommunicationHistory(prev => [...prev, newMessage]);
 
-      // Clear search info when a new "go" command is sent
-      if (command.startsWith('go')) {
-        setSearchInfoByEngine(prev => {
-          const newMap = new Map(prev);
-          newMap.set(engineId, []);
-          return newMap;
-        });
-        // Reset NPS for this engine
-        setNpsPerEngine(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(engineId);
-          return newMap;
-        });
-      }
+      // Do not clear search info on new "go"; keep last results visible until replaced by new info
     };
 
     // Register listeners for each engine
