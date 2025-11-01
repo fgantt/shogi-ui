@@ -100,10 +100,38 @@ impl ShogiEngine {
             thread_count,
         };
         
+        // Try to load persisted preferences (thread count)
+        engine.load_prefs();
         // Try to load default opening book if available
         engine.load_default_opening_book();
         
         engine
+    }
+
+    fn prefs_path() -> std::path::PathBuf {
+        let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let dir = base.join("shogi-vibe");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("engine_prefs.json")
+    }
+
+    fn load_prefs(&mut self) {
+        let path = Self::prefs_path();
+        if let Ok(data) = std::fs::read(&path) {
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&data) {
+                if let Some(tc) = json.get("thread_count").and_then(|v| v.as_u64()) {
+                    self.thread_count = (tc as usize).clamp(1, 32);
+                }
+            }
+        }
+    }
+
+    fn save_prefs(&self) {
+        let path = Self::prefs_path();
+        let obj = serde_json::json!({
+            "thread_count": self.thread_count
+        });
+        let _ = std::fs::write(path, serde_json::to_vec_pretty(&obj).unwrap_or_default());
     }
 
     /// Load default opening book from embedded data
@@ -661,6 +689,7 @@ impl ShogiEngine {
                 "USI_Threads" => {
                     if let Ok(threads) = parts[3].parse::<usize>() {
                         self.thread_count = threads.clamp(1, 32);
+                        self.save_prefs();
                         output.push(format!("info string Set USI_Threads to {}", self.thread_count));
                     } else {
                         output.push("info string error Invalid thread count value".to_string());

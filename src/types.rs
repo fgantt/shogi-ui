@@ -3576,6 +3576,8 @@ pub struct EngineConfig {
     pub max_depth: u8,
     /// Time management settings
     pub time_management: TimeManagementConfig,
+    /// Number of threads for parallel search (USI_Threads)
+    pub thread_count: usize,
 }
 
 impl Default for EngineConfig {
@@ -3590,6 +3592,7 @@ impl Default for EngineConfig {
             debug_logging: false,
             max_depth: 20,
             time_management: TimeManagementConfig::default(),
+            thread_count: num_cpus::get(),
         }
     }
 }
@@ -3622,6 +3625,7 @@ impl EngineConfig {
             debug_logging,
             max_depth,
             time_management,
+            thread_count: num_cpus::get(),
         }
     }
 
@@ -3705,6 +3709,7 @@ impl EngineConfig {
                 debug_logging: false,
                 max_depth: 25,
                 time_management: TimeManagementConfig::default(),
+                thread_count: num_cpus::get(),
             },
             EnginePreset::Conservative => Self {
                 quiescence: QuiescenceConfig {
@@ -3760,6 +3765,7 @@ impl EngineConfig {
                 debug_logging: false,
                 max_depth: 30,
                 time_management: TimeManagementConfig::default(),
+                thread_count: num_cpus::get(),
             },
             EnginePreset::Balanced => Self {
                 quiescence: QuiescenceConfig::default(),
@@ -3771,6 +3777,7 @@ impl EngineConfig {
                 debug_logging: false,
                 max_depth: 25,
                 time_management: TimeManagementConfig::default(),
+                thread_count: num_cpus::get(),
             },
         }
     }
@@ -3904,6 +3911,7 @@ impl ConfigMigration {
             debug_logging: false,
             max_depth: 20,
             time_management: TimeManagementConfig::default(),
+            thread_count: num_cpus::get(),
         }
     }
 

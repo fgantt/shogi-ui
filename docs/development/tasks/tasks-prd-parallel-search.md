@@ -152,6 +152,8 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - [ ] 5.29 Verify speedup targets met: ≥3x on 4 cores, test on multiple hardware configurations
     - Current run (depth 5/6) peaks at ≈1.18× on 8 threads; target not met.
     - Actions: gate TT writes, deepen YBWC parallelism beyond root, buffer per-thread writes, tune granularity.
+    - New: Added silent bench mode and aggregated lock/YBWC metrics to quantify contention and parallelism usage during benches.
+      - Metrics (aggregate example): `tt_reads=292,199`, `tt_writes=137` (1 write failure), `ybwc_batches=0`, `ybwc_siblings=0` for the current benchmark mix → YBWC not triggering often at benchmark positions/settings; consider deeper-trigger conditions or alternative bench positions to exercise YBWC.
   - [x] 5.30 Create correctness test suite with 100+ tactical positions comparing parallel vs single-threaded (dataset added; param suite implemented)
   - [x] 5.31 Create thread safety tests - run multiple searches concurrently, verify consistency
   - [x] 5.32 Create stress test suite: 1000-game test, long-running searches (5+ minutes), high thread count (16+) (added #[ignore] stress test)
@@ -172,7 +174,8 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - [ ] 5.47 Run end-to-end integration tests with USI protocol
   - [ ] 5.48 Test configuration persistence - verify thread count setting survives engine restart
   - [ ] 5.49 Perform final code review - verify code quality, naming conventions, error handling
-  - [ ] 5.50 Create summary document of performance results, speedup achieved, and any known limitations
+- [x] 5.50 Create summary document of performance results, speedup achieved, and any known limitations
+    - Done: `docs/release/PERFORMANCE_SUMMARY.md` created and updated with depth 5/6/7/8 results, notes, and next steps.
 
 
 ## Group B Performance Results (Benchmarks)

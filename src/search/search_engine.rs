@@ -526,6 +526,7 @@ impl SearchEngine {
             debug_logging: false, // This would need to be tracked separately
             max_depth: 20, // This would need to be tracked separately
             time_management: TimeManagementConfig::default(),
+            thread_count: num_cpus::get(),
         }
     }
 
