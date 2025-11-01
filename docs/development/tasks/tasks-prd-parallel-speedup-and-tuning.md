@@ -29,10 +29,10 @@
   - [x] 2.5 Re-run deep benches and confirm `ybwc_batches > 0` and `ybwc_siblings > 0`.
 
 - [ ] 3.0 TT contention reduction
-  - [ ] 3.1 Tighten exact-only gating threshold at shallow depths (configurable).
-  - [ ] 3.2 Increase per-thread TT buffer flush threshold for batching.
-  - [ ] 3.3 Audit `try_read`/`try_write` coverage in probes/stores; minimize blocking.
-  - [ ] 3.4 Capture/store contention metrics in the aggregated JSON (if available) and review.
+  - [x] 3.1 Tighten exact-only gating threshold at shallow depths (configurable).
+  - [x] 3.2 Increase per-thread TT buffer flush threshold for batching.
+  - [x] 3.3 Audit `try_read`/`try_write` coverage in probes/stores; minimize blocking.
+  - [x] 3.4 Capture/store contention metrics in the aggregated JSON (if available) and review.
 
 - [ ] 4.0 Benchmark signal and positions
   - [ ] 4.1 Add high-branching positions (or enable a dataset switch) for benches.
