@@ -72,6 +72,17 @@ pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
 
 #[allow(dead_code)]
 impl SearchEngine {
+    fn ybwc_dynamic_sibling_cap(&self, depth: u8, branch_len: usize) -> usize {
+        if branch_len == 0 { return 0; }
+        let over_min = depth.saturating_sub(self.ybwc_min_depth);
+        let divisor = match over_min {
+            0 => 4usize,
+            1 => 3usize,
+            _ => 2usize,
+        };
+        let scaled = (branch_len / divisor).max(1);
+        scaled.min(self.ybwc_max_siblings)
+    }
     #[inline]
     fn tt_write_min_depth(&self) -> u8 { self.tt_write_min_depth_value }
     fn tt_exact_only_max_depth(&self) -> u8 { self.tt_exact_only_max_depth_value }
@@ -2467,7 +2478,8 @@ impl SearchEngine {
             // YBWC: after first move, evaluate siblings in parallel if enabled
             if self.ybwc_enabled && depth >= self.ybwc_min_depth && move_index == 0 && sorted_moves.len() >= self.ybwc_min_branch {
                 let all_siblings = &sorted_moves[1..];
-                let sib_limit = all_siblings.len().min(self.ybwc_max_siblings);
+                let dyn_cap = self.ybwc_dynamic_sibling_cap(depth, all_siblings.len());
+                let sib_limit = dyn_cap.min(all_siblings.len());
                 let siblings = &all_siblings[..sib_limit];
                 let stop_flag = self.stop_flag.clone();
                 let shared_tt = self.shared_transposition_table.clone();
