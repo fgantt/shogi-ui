@@ -19,6 +19,7 @@ This document summarizes benchmark results and how to run/interpret them for the
 - Tune YBWC/TT in benches:
   - `SHOGI_YBWC_SCALING=6,4,2 SHOGI_YBWC_BRANCH=20 SHOGI_YBWC_MAX_SIBLINGS=6 SHOGI_YBWC_MIN_DEPTH=6`
   - `SHOGI_TT_GATING=8,9,512`
+  - `SHOGI_BENCH_SAMPLES=10` (reduce sample size for faster sweeps)
 
 Example quick command:
 ```

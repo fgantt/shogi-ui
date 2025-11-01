@@ -28,6 +28,11 @@ fn bench_root_search(c: &mut Criterion) {
     std::env::set_var("SHOGI_AGGREGATE_METRICS", "1");
     let mut group = c.benchmark_group("parallel_root_search");
     group.sampling_mode(SamplingMode::Auto);
+    if let Ok(samples) = std::env::var("SHOGI_BENCH_SAMPLES") {
+        if let Ok(n) = samples.parse::<usize>() {
+            group.sample_size(n);
+        }
+    }
 
     let board = BitboardBoard::new();
     let captured = CapturedPieces::new();

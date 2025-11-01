@@ -22,10 +22,10 @@
   - [x] 1.5 Commit documentation updates.
 
 - [ ] 2.0 YBWC activation and sibling parallelism
-  - [ ] 2.1 Lower/tune `ybwc_min_depth` and widen activation via `ybwc_min_branch`.
-  - [ ] 2.2 Implement/tune dynamic sibling caps by depth/branching factor.
-  - [ ] 2.3 Ensure TLS engine pool reuse is engaged for siblings; check allocations.
-  - [ ] 2.4 Expose sibling cap/scaling via env in benches and validate propagation.
+  - [x] 2.1 Lower/tune `ybwc_min_depth` and widen activation via `ybwc_min_branch`.
+  - [x] 2.2 Implement/tune dynamic sibling caps by depth/branching factor.
+  - [x] 2.3 Ensure TLS engine pool reuse is engaged for siblings; check allocations.
+  - [x] 2.4 Expose sibling cap/scaling via env in benches and validate propagation.
   - [ ] 2.5 Re-run deep benches and confirm `ybwc_batches > 0` and `ybwc_siblings > 0`.
 
 - [ ] 3.0 TT contention reduction
