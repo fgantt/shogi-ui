@@ -7350,10 +7350,12 @@ impl IterativeDeepening {
 
                 let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, nodes_for_info, nps, pv_string);
                 
-                // Print the info message to stdout for USI protocol
-                println!("{}", info_string);
-                // Explicitly flush stdout to ensure info messages are sent immediately
-                let _ = std::io::Write::flush(&mut std::io::stdout());
+                // Print the info message to stdout for USI protocol (skip during silent benches)
+                if std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                    println!("{}", info_string);
+                    // Explicitly flush stdout to ensure info messages are sent immediately
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
 
                 // Only break early for extremely winning positions (king capture level)
                 // and only at higher depths to allow deeper search logging for higher AI levels

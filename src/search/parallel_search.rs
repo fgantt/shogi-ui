@@ -711,16 +711,18 @@ impl ParallelSearchEngine {
                 let elapsed = bench_start.elapsed().as_millis() as u64;
                 let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
                 let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
-                // Emit real USI info line with score and PV
-                if !best_pv.is_empty() {
-                    println!(
-                        "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
-                        depth, depth, // seldepth approximated as depth for now
-                        if let Ok(g) = best_for_consumer.lock() { g.1 } else { score },
-                        elapsed, nodes, nps, best_pv
-                    );
+                // Emit real USI info line with score and PV (skip during silent benches)
+                if std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                    if !best_pv.is_empty() {
+                        println!(
+                            "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
+                            depth, depth, // seldepth approximated as depth for now
+                            if let Ok(g) = best_for_consumer.lock() { g.1 } else { score },
+                            elapsed, nodes, nps, best_pv
+                        );
+                    }
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
                 }
-                let _ = std::io::Write::flush(&mut std::io::stdout());
             }
         });
 

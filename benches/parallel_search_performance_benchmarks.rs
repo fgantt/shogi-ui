@@ -5,6 +5,8 @@ use shogi_engine::moves::MoveGenerator;
 use shogi_engine::search::search_engine::{SearchEngine, IterativeDeepening};
 
 fn bench_root_search(c: &mut Criterion) {
+    // Silence USI info output during benches to avoid measurement distortion
+    std::env::set_var("SHOGI_SILENT_BENCH", "1");
     let mut group = c.benchmark_group("parallel_root_search");
     group.sampling_mode(SamplingMode::Auto);
 
