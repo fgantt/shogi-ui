@@ -9,6 +9,25 @@ This document summarizes benchmark results and how to run/interpret them for the
 2. Run the Criterion benchmarks for parallel search:
    - `cargo bench --bench parallel_search_performance_benchmarks`
 
+### Quick, configurable runs (env overrides)
+
+- Silence USI output and aggregate metrics:
+  - `SHOGI_SILENT_BENCH=1 SHOGI_AGGREGATE_METRICS=1`
+- Limit depths/threads for faster runs (examples):
+  - `SHOGI_BENCH_DEPTHS=3`
+  - `SHOGI_BENCH_THREADS=1,4`
+- Tune YBWC/TT in benches:
+  - `SHOGI_YBWC_SCALING=6,4,2 SHOGI_YBWC_BRANCH=20 SHOGI_YBWC_MAX_SIBLINGS=6 SHOGI_YBWC_MIN_DEPTH=6`
+  - `SHOGI_TT_GATING=8,9,512`
+
+Example quick command:
+```
+SHOGI_BENCH_DEPTHS=3 SHOGI_BENCH_THREADS=1,4 SHOGI_SILENT_BENCH=1 \
+cargo bench --bench parallel_search_performance_benchmarks
+```
+
+Metrics JSON: `target/criterion/metrics-summary.json` (written at the end of the bench group).
+
 ## Where to View Reports
 
 Criterion stores HTML reports under `target/criterion/`.

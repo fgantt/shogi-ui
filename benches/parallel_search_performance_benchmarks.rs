@@ -1,3 +1,20 @@
+// Bench: Parallel root search
+//
+// Env overrides (optional):
+// - SHOGI_BENCH_DEPTHS: comma list of depths (e.g., "7,8")
+// - SHOGI_BENCH_THREADS: comma list of thread counts (e.g., "1,4")
+// - SHOGI_YBWC_SCALING: shallow,mid,deep divisors (e.g., "6,4,2")
+// - SHOGI_YBWC_BRANCH: ybwc_min_branch (e.g., "20")
+// - SHOGI_YBWC_MAX_SIBLINGS: max siblings to parallelize (e.g., "6")
+// - SHOGI_YBWC_MIN_DEPTH: activation depth (e.g., "6")
+// - SHOGI_TT_GATING: exact_only_max_depth,min_store_depth,buffer_flush_threshold (e.g., "8,9,512")
+// - SHOGI_SILENT_BENCH: set to "1" to silence USI info output
+// - SHOGI_AGGREGATE_METRICS: set to "1" to enable aggregated TT/YBWC metrics
+//
+// Example quick run:
+// SHOGI_BENCH_DEPTHS=3 SHOGI_BENCH_THREADS=1,4 SHOGI_SILENT_BENCH=1 \
+// cargo bench --bench parallel_search_performance_benchmarks
+
 use criterion::{criterion_group, criterion_main, Criterion, Throughput, SamplingMode, BenchmarkId};
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::types::{CapturedPieces, Player};
