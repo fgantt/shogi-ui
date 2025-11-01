@@ -15,25 +15,36 @@
 ## Tasks
 
 - [ ] 1.0 Bench configurability and controls
-  - Ensure env overrides (depths/threads/YBWC/TT) are documented and stable across runs.
-  - Verify silent bench mode and aggregated metrics output are functioning.
+  - [ ] 1.1 Document all bench env overrides in PRD and bench file header.
+  - [ ] 1.2 Add a usage snippet to `docs/release/PERFORMANCE_SUMMARY.md` for quick runs.
+  - [ ] 1.3 Run a limited bench (depths 7/8; threads 1/4) to validate env parsing.
+  - [ ] 1.4 Verify `target/criterion/metrics-summary.json` exists and includes TT/YBWC fields.
+  - [ ] 1.5 Commit documentation updates.
 
 - [ ] 2.0 YBWC activation and sibling parallelism
-  - Lower/parameterize `ybwc_min_depth` and widen activation conditions (min branch).
-  - Implement/tune dynamic sibling caps; validate reuse of per-thread engine pool.
-  - Confirm YBWC metrics (batches/siblings) become non-zero on deep runs.
+  - [ ] 2.1 Lower/tune `ybwc_min_depth` and widen activation via `ybwc_min_branch`.
+  - [ ] 2.2 Implement/tune dynamic sibling caps by depth/branching factor.
+  - [ ] 2.3 Ensure TLS engine pool reuse is engaged for siblings; check allocations.
+  - [ ] 2.4 Expose sibling cap/scaling via env in benches and validate propagation.
+  - [ ] 2.5 Re-run deep benches and confirm `ybwc_batches > 0` and `ybwc_siblings > 0`.
 
 - [ ] 3.0 TT contention reduction
-  - Tighten exact-only gating at shallow depths; increase per-thread buffer thresholds.
-  - Audit `try_read`/`try_write` usage to minimize stalls; measure lock/sync counters.
+  - [ ] 3.1 Tighten exact-only gating threshold at shallow depths (configurable).
+  - [ ] 3.2 Increase per-thread TT buffer flush threshold for batching.
+  - [ ] 3.3 Audit `try_read`/`try_write` coverage in probes/stores; minimize blocking.
+  - [ ] 3.4 Capture/store contention metrics in the aggregated JSON (if available) and review.
 
 - [ ] 4.0 Benchmark signal and positions
-  - Add or select positions with higher branching factor; adjust bench time limits at depths 7/8.
-  - Re-run limited sweeps (e.g., depths 7/8; threads 1/4) and confirm YBWC activity.
+  - [ ] 4.1 Add high-branching positions (or enable a dataset switch) for benches.
+  - [ ] 4.2 Add env override for per-depth time limits and increase for 7/8.
+  - [ ] 4.3 Re-run limited sweeps (7/8; 1/4 threads) and capture reports.
+  - [ ] 4.4 Confirm YBWC metrics non-zero and collect speedup numbers.
 
 - [ ] 5.0 Tuning and validation to ≥3× @ 4 cores
-  - Sweep YBWC scaling/branch/sibling caps and TT gating; record best configs.
-  - Update `docs/release/PERFORMANCE_SUMMARY.md` and PRD with results and chosen defaults.
-  - Verify no correctness regressions; finalize default thresholds.
+  - [ ] 5.1 Sweep YBWC scaling/branch/sibling caps and TT gating; record grid and results.
+  - [ ] 5.2 Select a configuration achieving ≥3× @ 4 cores (or document gap and follow-ups).
+  - [ ] 5.3 Update defaults (safe, conservative) in code or presets if warranted.
+  - [ ] 5.4 Update `docs/release/PERFORMANCE_SUMMARY.md` and PRD with final results.
+  - [ ] 5.5 Re-run correctness and E2E USI tests; commit final changes.
 
 
