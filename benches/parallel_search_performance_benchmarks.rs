@@ -22,6 +22,9 @@ fn bench_root_search(c: &mut Criterion) {
                 b.iter(|| {
                     // New engine per iteration to avoid cross-benchmark state
                     let mut engine = SearchEngine::new(None, 16);
+                    // Enable deeper parallelism (YBWC) for benchmark
+                    engine.set_ybwc(true, 5);
+                    engine.set_ybwc_branch(16);
                     let mut id = if t > 1 {
                         IterativeDeepening::new_with_threads(depth, 1000, None, t)
                     } else {

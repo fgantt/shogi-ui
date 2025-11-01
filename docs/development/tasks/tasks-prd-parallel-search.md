@@ -150,7 +150,9 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - [x] 5.27 Measure lock contention overhead using profiling tools
   - [x] 5.28 Measure synchronization overhead (should be < 10%)
   - [ ] 5.29 Verify speedup targets met: ≥3x on 4 cores, test on multiple hardware configurations
-  - [~] 5.30 Create correctness test suite with 100+ tactical positions comparing parallel vs single-threaded (initial suite in place; expand to 100+)
+    - Current run (depth 5/6) peaks at ≈1.18× on 8 threads; target not met.
+    - Actions: gate TT writes, deepen YBWC parallelism beyond root, buffer per-thread writes, tune granularity.
+  - [x] 5.30 Create correctness test suite with 100+ tactical positions comparing parallel vs single-threaded (dataset added; param suite implemented)
   - [x] 5.31 Create thread safety tests - run multiple searches concurrently, verify consistency
   - [x] 5.32 Create stress test suite: 1000-game test, long-running searches (5+ minutes), high thread count (16+) (added #[ignore] stress test)
   - [x] 5.33 Update existing tests for parallel compatibility - modify assertions that assume single-threaded behavior (default tests to single-thread unless SHOGI_TEST_ALLOW_PARALLEL=1)

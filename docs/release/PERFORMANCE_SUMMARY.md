@@ -24,24 +24,31 @@ The JSON estimates (for automation) are in `.../base/estimates.json` in each dir
 - Throughput (elem/s) is inversely related to time; higher is better. We benchmark per-root search, so comparing mean times is straightforward.
 - Compare 1 thread to 2/4/8 threads to understand scaling.
 
-## Current Results (mean times)
+## Latest Results (mean time, lower is better)
 
-Depth 5:
-- 1 thread: 1.427 s
-- 2 threads: 0.919 s (≈1.55×)
-- 4 threads: 0.946 s (≈1.51×)
-- 8 threads: 0.917 s (≈1.56×)
+- Automation note: pulled from `target/criterion/parallel_root_search/depth{5,6}/{1,2,4,8}/new/estimates.json` (mean.point_estimate)
 
-Depth 6:
-- 1 thread: 1.405 s
-- 2 threads: 0.918 s (≈1.53×)
-- 4 threads: 0.946 s (≈1.49×)
-- 8 threads: 1.213 s mean (median ≈0.922 s → ≈1.52×); mean impacted by outliers
+Depth 5 (s) after TT write gating/buffering:
+- 1 thread: 1.440
+- 2 threads: 1.464 (speedup 0.98×)
+- 4 threads: 1.833 (speedup 0.79×)
+- 8 threads: 1.203 (speedup 1.20×)
+
+Depth 6 (s) after TT write gating/buffering:
+- 1 thread: 1.445
+- 2 threads: 1.457 (speedup 0.99×)
+- 4 threads: 1.686 (speedup 0.86×)
+- 8 threads: 1.196 (speedup 1.21×)
 
 ## Notes and Next Steps
 
-- Shared transposition table (reads + writes) across workers improved reuse and PV consistency, yielding ~1.5× speedups at deeper depths.
-- Remaining overhead limits scaling >1.5×; additional gains will likely come from deeper parallelization (beyond root), reducing synchronization/lock contention, and further memory reuse.
+- Shared transposition table (reads + writes) across workers improves reuse and PV consistency.
+- This run shows limited speedup (best ≈1.21× at 8 threads). TT write gating alone isn’t sufficient; contention and work granularity still dominate. Deeper parallelism and reduced shared writes should help.
+- Next steps to hit ≥3× on 4 cores:
+  - Gate shared TT writes (write-back only for exact or deep entries); buffer writes per-thread and flush periodically
+  - Reduce shared TT lock scope; prefer try_read/try_write + skip on contention
+  - Increase task granularity: parallelize deeper siblings (YBWC cut nodes) not just root; tune with_min_len per depth
+  - Reuse/arena allocate per-thread buffers to minimize alloc traffic during make/undo paths
 
 
 

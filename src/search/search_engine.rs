@@ -6,9 +6,15 @@ use crate::tablebase::MicroTablebase;
 use std::collections::HashMap;
 use crate::time_utils::TimeSource;
 use std::sync::{Arc, RwLock, atomic::{AtomicBool, Ordering, AtomicU64}};
+use crate::{TranspositionEntry, TranspositionFlag};
+use rayon::prelude::*;
 use crate::search::move_ordering::MoveOrdering;
 use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 use crate::search::{ParallelSearchEngine, ParallelSearchConfig};
+
+thread_local! {
+    static YBWC_ENGINE_TLS: std::cell::RefCell<Option<SearchEngine>> = std::cell::RefCell::new(None);
+}
 
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
@@ -47,6 +53,15 @@ pub struct SearchEngine {
     current_best_score: i32,
     current_depth: u8,
     search_start_time: Option<TimeSource>,
+    // Buffered TT writes to reduce lock contention when using shared TT
+    tt_write_buffer: Vec<TranspositionEntry>,
+    tt_write_buffer_capacity: usize,
+    // YBWC configuration (scaffold)
+    ybwc_enabled: bool,
+    ybwc_min_depth: u8,
+    ybwc_min_branch: usize,
+    // TT write gating threshold (min depth to store non-Exact entries)
+    tt_write_min_depth_value: u8,
 }
 
 /// Global aggregate of nodes searched across all threads for live reporting.
@@ -54,6 +69,49 @@ pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
 
 #[allow(dead_code)]
 impl SearchEngine {
+    #[inline]
+    fn tt_write_min_depth(&self) -> u8 { self.tt_write_min_depth_value }
+
+    pub fn set_ybwc(&mut self, enabled: bool, min_depth: u8) {
+        self.ybwc_enabled = enabled;
+        self.ybwc_min_depth = min_depth;
+    }
+
+    pub fn set_ybwc_branch(&mut self, min_branch: usize) {
+        self.ybwc_min_branch = min_branch;
+    }
+
+    fn flush_tt_buffer(&mut self) {
+        if self.tt_write_buffer.is_empty() { return; }
+        if let Some(ref shared_tt) = self.shared_transposition_table {
+            if let Ok(mut guard) = shared_tt.try_write() {
+                for e in self.tt_write_buffer.drain(..) {
+                    guard.store(e);
+                }
+                return;
+            }
+        }
+        // Fallback: write to local TT without holding shared lock
+        for e in self.tt_write_buffer.drain(..) {
+            self.transposition_table.store(e);
+        }
+    }
+
+    #[inline]
+    fn maybe_buffer_tt_store(&mut self, entry: TranspositionEntry, depth: u8, flag: TranspositionFlag) {
+        // Gate writes: store only Exact or deeper-than-threshold entries
+        if !(matches!(flag, TranspositionFlag::Exact) || depth >= self.tt_write_min_depth()) {
+            return;
+        }
+        if self.shared_transposition_table.is_some() {
+            self.tt_write_buffer.push(entry);
+            if self.tt_write_buffer.len() >= self.tt_write_buffer_capacity {
+                self.flush_tt_buffer();
+            }
+        } else {
+            self.transposition_table.store(entry);
+        }
+    }
     pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
         Self::new_with_config(stop_flag, hash_size_mb, QuiescenceConfig::default())
     }
@@ -102,6 +160,12 @@ impl SearchEngine {
             current_best_score: 0,
             current_depth: 0,
             search_start_time: None,
+            tt_write_buffer: Vec::with_capacity(64),
+            tt_write_buffer_capacity: 64,
+            ybwc_enabled: false,
+            ybwc_min_depth: 4,
+            ybwc_min_branch: 8,
+            tt_write_min_depth_value: 5,
         }
     }
 
@@ -259,6 +323,12 @@ impl SearchEngine {
             current_best_score: 0,
             current_depth: 0,
             search_start_time: None,
+            tt_write_buffer: Vec::with_capacity(64),
+            tt_write_buffer_capacity: 64,
+            ybwc_enabled: false,
+            ybwc_min_depth: 4,
+            ybwc_min_branch: 8,
+            tt_write_min_depth_value: 5,
         }
     }
 
@@ -583,7 +653,6 @@ impl SearchEngine {
     pub fn trigger_iid_adaptation(&mut self) {
         self.adapt_iid_configuration();
     }
-
     /// Assess position complexity for dynamic IID depth adjustment
     fn assess_position_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> PositionComplexity {
         let mut complexity_score = 0;
@@ -733,7 +802,6 @@ impl SearchEngine {
         
         threats
     }
-
     /// Calculate dynamic IID depth based on position complexity
     pub fn calculate_dynamic_iid_depth(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, base_depth: u8) -> u8 {
         if !self.iid_config.enable_adaptive_tuning {
@@ -1133,7 +1201,6 @@ impl SearchEngine {
 
         recommendations
     }
-
     /// Multi-PV IID search to find multiple principal variations
     pub fn perform_multi_pv_iid_search(&mut self,
                                       board: &mut BitboardBoard,
@@ -1515,7 +1582,6 @@ impl SearchEngine {
 
         best_result
     }
-
     /// Identify promising moves from initial shallow search
     pub fn identify_promising_moves(&mut self,
                                board: &mut BitboardBoard,
@@ -1757,7 +1823,6 @@ impl SearchEngine {
             5
         }
     }
-
     /// Performance benchmark comparing IID vs non-IID search
     pub fn benchmark_iid_performance(&mut self,
                                    board: &mut BitboardBoard,
@@ -2376,6 +2441,55 @@ impl SearchEngine {
                     Some(score));
                 alpha = score;
             }
+
+            // YBWC: after first move, evaluate siblings in parallel if enabled
+            if self.ybwc_enabled && depth >= self.ybwc_min_depth && move_index == 0 && sorted_moves.len() >= self.ybwc_min_branch {
+                let siblings = &sorted_moves[1..];
+                let stop_flag = self.stop_flag.clone();
+                let shared_tt = self.shared_transposition_table.clone();
+                let quiescence_cfg = self.quiescence_config.clone();
+                let sibling_results: Vec<(i32, usize)> = siblings.par_iter().enumerate().with_min_len(4).map(|(sib_idx, sib_mv)| {
+                    // Prepare child position
+                    let mut sib_board = board.clone();
+                    let mut sib_captured = captured_pieces.clone();
+                    if let Some(captured) = sib_board.make_move(sib_mv) {
+                        sib_captured.add_piece(captured.piece_type, player);
+                    }
+                    // Reuse a per-thread engine from thread-local storage
+                    let s = YBWC_ENGINE_TLS.with(|cell| {
+                        let mut opt = cell.borrow_mut();
+                        if opt.is_none() {
+                            let mut e = SearchEngine::new_with_config(stop_flag.clone(), 16, quiescence_cfg.clone());
+                            if let Some(ref shared) = shared_tt {
+                                e.set_shared_transposition_table(shared.clone());
+                            }
+                            e.set_ybwc(true, self.ybwc_min_depth);
+                            e.set_ybwc_branch(self.ybwc_min_branch);
+                            *opt = Some(e);
+                        }
+                        let eng = opt.as_mut().unwrap();
+                        -eng.negamax(&mut sib_board, &sib_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut vec![], true)
+                    });
+                    (s, sib_idx + 1) // store original index offset by 1
+                }).collect();
+
+                for (s, idx) in sibling_results.into_iter() {
+                    let mv = sorted_moves[idx].clone();
+                    if s > best_score {
+                        best_score = s;
+                        best_move = Some(mv);
+                    }
+                    if s > alpha { alpha = s; }
+                    if alpha >= beta { 
+                        crate::debug_utils::log_decision("NEGAMAX", "Beta cutoff (YBWC)", 
+                            &format!("Alpha {} >= beta {} after parallel siblings, cutting off", alpha, beta), 
+                            Some(alpha));
+                        self.flush_tt_buffer();
+                        break;
+                    }
+                }
+                break; // we handled all remaining siblings
+            }
         }
 
         // CRITICAL FIX: Fallback move selection to prevent returning None when moves exist
@@ -2410,13 +2524,7 @@ impl SearchEngine {
                 Some(best_move_ref.clone()),
                 position_hash
             );
-            if let Some(ref shared_tt) = self.shared_transposition_table {
-                if let Ok(mut guard) = shared_tt.write() {
-                    guard.store(entry);
-                }
-            } else {
-                self.transposition_table.store(entry);
-            }
+            self.maybe_buffer_tt_store(entry, depth, flag);
         }
 
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
@@ -2429,6 +2537,8 @@ impl SearchEngine {
                 "Search result validation failed, attempting recovery");
             // Recovery logic here - for now just return the result anyway
         }
+        // Ensure buffered entries are flushed at the end of a root search
+        self.flush_tt_buffer();
         result
     }
 
@@ -2708,6 +2818,8 @@ impl SearchEngine {
                             crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
                         }
                     }
+                    // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
+                    self.flush_tt_buffer();
                     break; 
                 }
             }
@@ -2718,21 +2830,12 @@ impl SearchEngine {
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
         // Use the position hash we calculated earlier for proper TT storage
         let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt, position_hash);
-        if let Some(ref shared_tt) = self.shared_transposition_table {
-            if let Ok(mut guard) = shared_tt.try_write() {
-                guard.store(entry);
-            } else {
-                self.transposition_table.store(entry);
-            }
-        } else {
-            self.transposition_table.store(entry);
-        }
+        self.maybe_buffer_tt_store(entry, depth, flag);
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
         
         best_score
     }
-
     fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
         if self.should_stop(&start_time, time_limit_ms) { 
             // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, returning 0");
@@ -3001,7 +3104,6 @@ impl SearchEngine {
         
         result
     }
-
     /// Check if a move is a tablebase move by probing the tablebase
     fn is_tablebase_move(&mut self, move_: &Move, board: &BitboardBoard) -> bool {
         // Create a temporary board state to check if this move leads to a tablebase position
@@ -3020,7 +3122,6 @@ impl SearchEngine {
             false
         }
     }
-
     pub fn score_move(&self, move_: &Move, _board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
         // Priority 1: IID move gets maximum score
         if let Some(iid_mv) = iid_move {
@@ -3367,7 +3468,6 @@ impl SearchEngine {
         let material_gain = move_.captured_piece_value();
         stand_pat + material_gain + futility_margin <= alpha
     }
-
     /// Check if a move should be extended in quiescence search
     fn should_extend(&self, move_: &Move, _depth: u8) -> bool {
         if !self.quiescence_config.enable_selective_extensions {
@@ -3805,7 +3905,6 @@ impl SearchEngine {
             self.quiescence_stats.extension_rate()
         )
     }
-
     /// Profile quiescence search performance
     pub fn profile_quiescence_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iterations: usize) -> QuiescenceProfile {
         let mut profile = QuiescenceProfile::new();
@@ -4018,7 +4117,6 @@ impl SearchEngine {
     pub fn get_aspiration_window_stats(&self) -> &AspirationWindowStats {
         &self.aspiration_stats
     }
-    
     /// Reset aspiration window statistics
     pub fn reset_aspiration_window_stats(&mut self) {
         self.aspiration_stats = AspirationWindowStats::default();
@@ -4605,7 +4703,6 @@ impl SearchEngine {
         
         true
     }
-
     /// Check if window is in a stable state
     fn is_window_stable(&self, alpha: i32, beta: i32, previous_score: i32) -> bool {
         let window_size = (beta as i64).saturating_sub(alpha as i64);
@@ -5312,7 +5409,6 @@ impl SearchEngine {
         // LMR is effective if we're reducing many moves but not re-searching too many
         efficiency > 20.0 && research_rate < 0.4
     }
-
     /// Get recommended LMR parameters based on position
     fn get_adaptive_lmr_params(&self) -> (u8, u8) {
         let complexity = self.get_position_complexity();
@@ -5389,7 +5485,6 @@ impl SearchEngine {
         reduction.min(self.lmr_config.max_reduction)
             .min(depth.saturating_sub(2))
     }
-
     /// Optimized adaptive reduction with early returns
     fn apply_adaptive_reduction_optimized(&self, base_reduction: u8, move_: &Move, _depth: u8) -> u8 {
         let mut reduction = base_reduction;
@@ -5963,7 +6058,6 @@ impl SearchEngine {
             false
         }
     }
-
     /// Recovery strategy 3: Fall back to full-width search
     fn recover_with_full_width(&self, alpha: &mut i32, beta: &mut i32) -> bool {
         *alpha = i32::MIN + 1;
@@ -6182,10 +6276,9 @@ impl SearchEngine {
         
         level.min(4) // Cap at level 4
     }
-
     /// Level 1 degradation: Reduce window aggressiveness
     fn degrade_window_aggressiveness(&self, alpha: &mut i32, beta: &mut i32, 
-                                    previous_score: i32) -> bool {
+                                     previous_score: i32) -> bool {
         let conservative_window = 25; // Very conservative window
         *alpha = previous_score - conservative_window;
         *beta = previous_score + conservative_window;
@@ -6197,7 +6290,7 @@ impl SearchEngine {
 
     /// Level 2 degradation: Disable adaptive features
     fn degrade_adaptive_features(&self, alpha: &mut i32, beta: &mut i32, 
-                                previous_score: i32) -> bool {
+                                 previous_score: i32) -> bool {
         let fixed_window = 50; // Fixed window size
         *alpha = previous_score - fixed_window;
         *beta = previous_score + fixed_window;
@@ -6209,7 +6302,7 @@ impl SearchEngine {
 
     /// Level 3 degradation: Use conservative defaults
     fn degrade_to_conservative_defaults(&self, alpha: &mut i32, beta: &mut i32, 
-                                       previous_score: i32) -> bool {
+                                         previous_score: i32) -> bool {
         let safe_score = previous_score.clamp(-1000, 1000);
         let safe_window = 30;
         *alpha = safe_score - safe_window;
@@ -6233,7 +6326,7 @@ impl SearchEngine {
     fn monitor_system_health(&mut self, alpha: i32, beta: i32, previous_score: i32, 
                              depth: u8, researches: u8) -> bool {
         let health_score = self.calculate_system_health_score(alpha, beta, previous_score, 
-                                                            depth, researches);
+                                                             depth, researches);
         
         crate::debug_utils::trace_log("SYSTEM_HEALTH", 
             &format!("System health score: {}", health_score));
@@ -6250,7 +6343,7 @@ impl SearchEngine {
 
     /// Calculate system health score (0.0 = critical, 1.0 = healthy)
     fn calculate_system_health_score(&self, alpha: i32, beta: i32, previous_score: i32, 
-                                     _depth: u8, researches: u8) -> f64 {
+                                      _depth: u8, researches: u8) -> f64 {
         let mut score = 1.0;
         
         // Factor 1: Window validity
@@ -6274,7 +6367,7 @@ impl SearchEngine {
         // Factor 4: Failure rate
         let total_searches = self.aspiration_stats.total_searches.max(1);
         let failure_rate = (self.aspiration_stats.fail_lows + self.aspiration_stats.fail_highs) as f64 
-                          / total_searches as f64;
+                           / total_searches as f64;
         score -= failure_rate * 0.3;
         
         score.max(0.0).min(1.0)
@@ -6594,7 +6687,6 @@ impl SearchEngine {
     // ============================================================================
     // RUNTIME VALIDATION AND MONITORING
     // ============================================================================
-
     /// Perform runtime validation of search consistency
     /// 
     /// This method performs various runtime checks to ensure the search
@@ -6975,8 +7067,6 @@ pub struct TroubleshootingReport {
     pub performance_metrics: PerformanceMetrics,
     pub recommendations: Vec<String>,
 }
-
-
 // js_sys::Function removed - no longer using WASM callbacks
 
 pub struct IterativeDeepening {
