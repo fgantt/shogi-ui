@@ -198,3 +198,12 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - Minor contention profiling added to work-stealing queue
 
 - Takeaway: At deeper depths (5/6), parallel speedups stabilize around ~1.5× on 2–8 threads with current configuration; further gains likely require additional parallelization within deeper nodes and contention reductions.
+
+Additional runs (depth 7/8, stricter TT gating + YBWC thresholds):
+
+- Depth 7 (mean): 1t 1.947s; 2t 2.560s (0.76×); 4t 2.222s (0.88×); 8t 1.728s (1.13×)
+- Depth 8 (mean): 1t 2.287s; 2t 3.608s (0.63×); 4t 2.302s (0.99×); 8t 2.696s (0.85×)
+
+Notes:
+- Results indicate regression at higher depths with current thresholds; likely overhead-bound (including verbose USI info during benches) and insufficient deep-node parallelization.
+- Next steps: add a silent bench mode to suppress USI info lines, increase YBWC granularity deeper in the tree, and continue TT write gating refinements.

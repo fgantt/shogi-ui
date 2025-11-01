@@ -15,6 +15,8 @@ Criterion stores HTML reports under `target/criterion/`.
 
 - Depth 5: `target/criterion/parallel_root_search/depth5/{1,2,4,8}/report/index.html`
 - Depth 6: `target/criterion/parallel_root_search/depth6/{1,2,4,8}/report/index.html`
+- Depth 7: `target/criterion/parallel_root_search/depth7/{1,2,4,8}/report/index.html`
+- Depth 8: `target/criterion/parallel_root_search/depth8/{1,2,4,8}/report/index.html`
 
 The JSON estimates (for automation) are in `.../base/estimates.json` in each directory.
 
@@ -40,15 +42,29 @@ Depth 6 (s) after TT write gating/buffering:
 - 4 threads: 1.686 (speedup 0.86×)
 - 8 threads: 1.196 (speedup 1.21×)
 
+Depth 7 (s) with tightened TT gating and YBWC thresholds:
+- 1 thread: 1.947
+- 2 threads: 2.560 (speedup 0.76×)
+- 4 threads: 2.222 (speedup 0.88×)
+- 8 threads: 1.728 (speedup 1.13×)
+
+Depth 8 (s) with tightened TT gating and YBWC thresholds:
+- 1 thread: 2.287
+- 2 threads: 3.608 (speedup 0.63×)
+- 4 threads: 2.302 (speedup 0.99×)
+- 8 threads: 2.696 (speedup 0.85×)
+
 ## Notes and Next Steps
 
 - Shared transposition table (reads + writes) across workers improves reuse and PV consistency.
-- This run shows limited speedup (best ≈1.21× at 8 threads). TT write gating alone isn’t sufficient; contention and work granularity still dominate. Deeper parallelism and reduced shared writes should help.
+- Depth 5/6 runs showed limited speedup (best ≈1.21× at 8 threads). At depths 7/8 with stricter gating, current configuration regresses on 2–4 threads and is only modestly positive at 8 threads; likely dominated by overhead (including verbose USI info output during benches) and insufficient deep parallel granularity.
 - Next steps to hit ≥3× on 4 cores:
   - Gate shared TT writes (write-back only for exact or deep entries); buffer writes per-thread and flush periodically
   - Reduce shared TT lock scope; prefer try_read/try_write + skip on contention
   - Increase task granularity: parallelize deeper siblings (YBWC cut nodes) not just root; tune with_min_len per depth
   - Reuse/arena allocate per-thread buffers to minimize alloc traffic during make/undo paths
+ - Suppress USI info output during Criterion runs to avoid measurement distortion; add a silent mode in benches
+ - Raise YBWC depth threshold and refine sibling caps dynamically based on branching factor
 
 
 
