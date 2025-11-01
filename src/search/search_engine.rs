@@ -69,10 +69,27 @@ pub struct SearchEngine {
     tt_write_min_depth_value: u8,
     // Up to and including this search depth, only write Exact entries to TT
     tt_exact_only_max_depth_value: u8,
+    // Instrumentation counters for shared TT usage (bench/profiling)
+    shared_tt_probe_attempts: u64,
+    shared_tt_probe_hits: u64,
+    shared_tt_store_attempts: u64,
+    shared_tt_store_writes: u64,
+    tt_buffer_flushes: u64,
+    tt_buffer_entries_written: u64,
 }
 
 /// Global aggregate of nodes searched across all threads for live reporting.
 pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
+// Global contention metrics for shared TT
+pub static TT_TRY_READS: AtomicU64 = AtomicU64::new(0);
+pub static TT_TRY_READ_SUCCESSES: AtomicU64 = AtomicU64::new(0);
+pub static TT_TRY_READ_FAILS: AtomicU64 = AtomicU64::new(0);
+pub static TT_TRY_WRITES: AtomicU64 = AtomicU64::new(0);
+pub static TT_TRY_WRITE_SUCCESSES: AtomicU64 = AtomicU64::new(0);
+pub static TT_TRY_WRITE_FAILS: AtomicU64 = AtomicU64::new(0);
+// YBWC metrics
+pub static YBWC_SIBLING_BATCHES: AtomicU64 = AtomicU64::new(0);
+pub static YBWC_SIBLINGS_EVALUATED: AtomicU64 = AtomicU64::new(0);
 
 #[allow(dead_code)]
 impl SearchEngine {
@@ -119,11 +136,19 @@ impl SearchEngine {
     fn flush_tt_buffer(&mut self) {
         if self.tt_write_buffer.is_empty() { return; }
         if let Some(ref shared_tt) = self.shared_transposition_table {
+            TT_TRY_WRITES.fetch_add(1, Ordering::Relaxed);
             if let Ok(mut guard) = shared_tt.try_write() {
+                TT_TRY_WRITE_SUCCESSES.fetch_add(1, Ordering::Relaxed);
+                let to_write = self.tt_write_buffer.len() as u64;
+                self.tt_buffer_flushes += 1;
+                self.tt_buffer_entries_written += to_write;
                 for e in self.tt_write_buffer.drain(..) {
+                    self.shared_tt_store_writes += 1;
                     guard.store(e);
                 }
                 return;
+            } else {
+                TT_TRY_WRITE_FAILS.fetch_add(1, Ordering::Relaxed);
             }
         }
         // Fallback: write to local TT without holding shared lock
@@ -143,6 +168,7 @@ impl SearchEngine {
             return;
         }
         if self.shared_transposition_table.is_some() {
+            self.shared_tt_store_attempts += 1;
             self.tt_write_buffer.push(entry);
             if self.tt_write_buffer.len() >= self.tt_write_buffer_capacity {
                 self.flush_tt_buffer();
@@ -210,6 +236,12 @@ impl SearchEngine {
             ybwc_div_deep: 2,
             tt_write_min_depth_value: 9,
             tt_exact_only_max_depth_value: 8,
+            shared_tt_probe_attempts: 0,
+            shared_tt_probe_hits: 0,
+            shared_tt_store_attempts: 0,
+            shared_tt_store_writes: 0,
+            tt_buffer_flushes: 0,
+            tt_buffer_entries_written: 0,
         }
     }
 
@@ -230,9 +262,15 @@ impl SearchEngine {
         // Integrate with transposition table (prefer shared TT when available)
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         let tt_entry_opt = if let Some(ref shared_tt) = self.shared_transposition_table {
+            self.shared_tt_probe_attempts += 1;
+            TT_TRY_READS.fetch_add(1, Ordering::Relaxed);
             if let Ok(guard) = shared_tt.try_read() {
-                guard.probe(position_hash, depth)
+                TT_TRY_READ_SUCCESSES.fetch_add(1, Ordering::Relaxed);
+                let r = guard.probe(position_hash, depth);
+                if r.is_some() { self.shared_tt_probe_hits += 1; }
+                r
             } else {
+                TT_TRY_READ_FAILS.fetch_add(1, Ordering::Relaxed);
                 self.transposition_table.probe(position_hash, depth)
             }
         } else {
@@ -378,6 +416,12 @@ impl SearchEngine {
             ybwc_div_deep: 2,
             tt_write_min_depth_value: 9,
             tt_exact_only_max_depth_value: 8,
+            shared_tt_probe_attempts: 0,
+            shared_tt_probe_hits: 0,
+            shared_tt_store_attempts: 0,
+            shared_tt_store_writes: 0,
+            tt_buffer_flushes: 0,
+            tt_buffer_entries_written: 0,
         }
     }
 
@@ -2497,6 +2541,8 @@ impl SearchEngine {
                 let dyn_cap = self.ybwc_dynamic_sibling_cap(depth, all_siblings.len());
                 let sib_limit = dyn_cap.min(all_siblings.len());
                 let siblings = &all_siblings[..sib_limit];
+                YBWC_SIBLING_BATCHES.fetch_add(1, Ordering::Relaxed);
+                YBWC_SIBLINGS_EVALUATED.fetch_add(siblings.len() as u64, Ordering::Relaxed);
                 let stop_flag = self.stop_flag.clone();
                 let shared_tt = self.shared_transposition_table.clone();
                 let quiescence_cfg = self.quiescence_config.clone();
@@ -3413,14 +3459,18 @@ impl SearchEngine {
     pub fn get_pv_for_reporting(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
         // Prefer building PV from shared TT when available for cross-thread consistency
         if let Some(ref shared_tt) = self.shared_transposition_table {
+            TT_TRY_READS.fetch_add(1, Ordering::Relaxed);
             if let Ok(tt) = shared_tt.try_read() {
+                TT_TRY_READ_SUCCESSES.fetch_add(1, Ordering::Relaxed);
                 let mut pv = Vec::new();
                 let mut current_board = board.clone();
                 let mut current_captured = captured_pieces.clone();
                 let mut current_player = player;
                 for _ in 0..depth {
                     let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
+                    self.shared_tt_probe_attempts += 1;
                     if let Some(entry) = tt.probe(position_hash, 0) {
+                        self.shared_tt_probe_hits += 1;
                         if let Some(move_) = &entry.best_move {
                             pv.push(move_.clone());
                             if let Some(captured) = current_board.make_move(move_) {
@@ -3433,6 +3483,7 @@ impl SearchEngine {
                 return pv;
             }
         }
+        if self.shared_transposition_table.is_some() { TT_TRY_READ_FAILS.fetch_add(1, Ordering::Relaxed); }
         self.get_pv(board, captured_pieces, player, depth)
     }
 
