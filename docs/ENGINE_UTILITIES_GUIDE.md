@@ -452,9 +452,9 @@ Provide an interactive learning and analysis experience where you can explore po
 
 ## Development Utilities
 
-### 10. **Performance Profiler**
-**Priority:** 🟢 Low  
-**Estimated Effort:** 1-2 weeks
+### 10. **Performance Profiler** (`profiler`)
+**Status:** ✅ Complete  
+**Binary:** `./target/release/profiler`
 
 **What it is:**
 A profiling tool that analyzes engine performance, memory usage, cache efficiency, and identifies optimization opportunities.
@@ -473,16 +473,16 @@ Monitor and optimize engine performance, understand resource usage, and identify
 
 ```bash
 # Profile engine performance
-./profiler --position startpos --depth 8 --output profile.json
+./target/release/profiler --position startpos --depth 8 --output profile.json --verbose
 
-# Compare optimizations
-./profiler compare --config1 default --config2 optimized
+# Compare two profiles (use JSON outputs from previous runs)
+./target/release/profiler compare --config1 profile_default.json --config2 profile_optimized.json
 ```
 
 **Features:**
-- Detailed performance profiling
-- Memory usage analysis
-- Cache hit rate monitoring
+- Detailed performance profiling (time, nodes, NPS)
+- Transposition table contention and hit-rate monitoring
+- YBWC-related parallel search diagnostics
 - Search efficiency metrics
 - Optimization recommendations
 
@@ -536,7 +536,7 @@ Create perfect play databases for endgame positions, enabling the engine to play
 10. **Enhanced Tactical Pattern Detection** - Full integration of TacticalPatternRecognizer
 
 ### Phase 3: Development Tools (Weeks 13-18)
-7. **Performance Profiler** - Development optimization
+7. ✅ **Performance Profiler** - Development optimization - **COMPLETE**
 8. **Endgame Tablebase Builder** - Advanced feature
 
 ---
@@ -668,7 +668,7 @@ This can be done incrementally without breaking existing functionality.
 
 ## Conclusion
 
-The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The six implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Engine Strength Tester, Move Quality Assessor, Tactical Puzzle Generator) demonstrate the engine's capabilities across different use cases:
+The Shogi Engine provides an excellent foundation for building powerful analysis utilities. The implemented tools (USI Engine, Parameter Tuner, Position Analyzer, Engine Strength Tester, Move Quality Assessor, Tactical Puzzle Generator, Performance Profiler) demonstrate the engine's capabilities across different use cases:
 
 - **Engine Development**: Use the Parameter Tuner to optimize evaluation and the Strength Tester to measure improvements
 - **Game Analysis**: Use the Move Quality Assessor to review games and learn from mistakes

@@ -80,6 +80,15 @@ echo -e "usi\nisready\nposition startpos\ngo depth 3\nquit" | ./target/release/u
 ./target/release/puzzle-gen extract --input game.kif --output puzzles.json --count 20
 ```
 
+### **Performance Profiler** (`profiler`)
+```bash
+# Profile engine performance and save JSON report
+./target/release/profiler --position startpos --depth 8 --output profile.json --verbose
+
+# Compare two saved profiles
+./target/release/profiler compare --config1 profile_default.json --config2 profile_optimized.json
+```
+
 ## 🔧 Build Commands
 
 ```bash
@@ -93,6 +102,7 @@ cargo build --release --bin analyzer
 cargo build --release --bin strength-tester
 cargo build --release --bin move-assessor
 cargo build --release --bin puzzle-gen
+cargo build --release --bin profiler
 ```
 
 ## 📊 Engine Capabilities
