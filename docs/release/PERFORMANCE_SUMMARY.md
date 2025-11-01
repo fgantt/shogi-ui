@@ -86,5 +86,16 @@ Depth 8 (s) with tightened TT gating and YBWC thresholds:
  - Suppress USI info output during Criterion runs to avoid measurement distortion; add a silent mode in benches
  - Raise YBWC depth threshold and refine sibling caps dynamically based on branching factor
 
+### Depth 7 sweeps (focused, samples=10)
+
+- Config A (min_depth=2, branch=8, siblings=8, scaling=6,4,2; TT gating 10/11/2048):
+  - 1 thread ≈ 1.501 s; 4 threads ≈ 1.84–1.95 s (≤1× speedup)
+  - YBWC: batches ~1058; siblings ~5014
+- Config B (min_depth=2, branch=6, siblings=12, scaling=5,3,2; TT gating 10/12/4096):
+  - 1 thread ≈ 1.508 s; 4 threads ≈ 1.70–1.87 s (≤1× speedup)
+  - YBWC: batches ~1056; siblings ~5172
+
+Takeaway: Deeper-node YBWC now engages (non-zero metrics), but 4-thread scaling at depth 7 is still <1× on this host under current per-iteration limits/position mix. Further work per 5.0 plan is needed.
+
 
 

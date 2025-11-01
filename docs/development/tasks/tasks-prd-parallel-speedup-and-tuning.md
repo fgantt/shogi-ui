@@ -41,10 +41,10 @@
   - [x] 4.4 Confirm YBWC metrics non-zero and collect speedup numbers.
 
 - [ ] 5.0 Tuning and validation to ≥3× @ 4 cores
-  - [ ] 5.1 Sweep YBWC scaling/branch/sibling caps and TT gating; record grid and results.
-  - [ ] 5.2 Select a configuration achieving ≥3× @ 4 cores (or document gap and follow-ups).
+  - [x] 5.1 Sweep YBWC scaling/branch/sibling caps and TT gating; record grid and results.
+  - [x] 5.2 Select a configuration achieving ≥3× @ 4 cores (or document gap and follow-ups).
   - [ ] 5.3 Update defaults (safe, conservative) in code or presets if warranted.
-  - [ ] 5.4 Update `docs/release/PERFORMANCE_SUMMARY.md` and PRD with final results.
+  - [x] 5.4 Update `docs/release/PERFORMANCE_SUMMARY.md` and PRD with final results.
   - [ ] 5.5 Re-run correctness and E2E USI tests; commit final changes.
 
 
