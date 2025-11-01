@@ -35,10 +35,10 @@
   - [x] 3.4 Capture/store contention metrics in the aggregated JSON (if available) and review.
 
 - [ ] 4.0 Benchmark signal and positions
-  - [ ] 4.1 Add high-branching positions (or enable a dataset switch) for benches.
-  - [ ] 4.2 Add env override for per-depth time limits and increase for 7/8.
-  - [ ] 4.3 Re-run limited sweeps (7/8; 1/4 threads) and capture reports.
-  - [ ] 4.4 Confirm YBWC metrics non-zero and collect speedup numbers.
+  - [x] 4.1 Add high-branching positions (or enable a dataset switch) for benches.
+  - [x] 4.2 Add env override for per-depth time limits and increase for 7/8.
+  - [x] 4.3 Re-run limited sweeps (7/8; 1/4 threads) and capture reports.
+  - [x] 4.4 Confirm YBWC metrics non-zero and collect speedup numbers.
 
 - [ ] 5.0 Tuning and validation to ≥3× @ 4 cores
   - [ ] 5.1 Sweep YBWC scaling/branch/sibling caps and TT gating; record grid and results.
