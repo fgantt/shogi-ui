@@ -179,13 +179,13 @@ impl SearchEngine {
             current_depth: 0,
             search_start_time: None,
             tt_write_buffer: Vec::with_capacity(64),
-            tt_write_buffer_capacity: 256,
+            tt_write_buffer_capacity: 512,
             ybwc_enabled: false,
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
             ybwc_max_siblings: 8,
-            tt_write_min_depth_value: 7,
-            tt_exact_only_max_depth_value: 6,
+            tt_write_min_depth_value: 9,
+            tt_exact_only_max_depth_value: 8,
         }
     }
 
@@ -344,13 +344,13 @@ impl SearchEngine {
             current_depth: 0,
             search_start_time: None,
             tt_write_buffer: Vec::with_capacity(64),
-            tt_write_buffer_capacity: 256,
+            tt_write_buffer_capacity: 512,
             ybwc_enabled: false,
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
             ybwc_max_siblings: 8,
-            tt_write_min_depth_value: 7,
-            tt_exact_only_max_depth_value: 6,
+            tt_write_min_depth_value: 9,
+            tt_exact_only_max_depth_value: 8,
         }
     }
 
