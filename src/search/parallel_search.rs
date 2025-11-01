@@ -668,6 +668,7 @@ impl ParallelSearchEngine {
         // Reset global nodes counter for this depth
         GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
         let start_time = TimeSource::now();
+        let bench_start = std::time::Instant::now();
         let watchdog_cancel = Arc::new(AtomicBool::new(false));
         // Start a watchdog to enforce time limit and propagate external stop
         let wd_cancel = watchdog_cancel.clone();
@@ -707,7 +708,7 @@ impl ParallelSearchEngine {
                         best_pv = pv.clone();
                     }
                 }
-                let elapsed = start_time.elapsed_ms();
+                let elapsed = bench_start.elapsed().as_millis() as u64;
                 let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
                 let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
                 // Emit real USI info line with score and PV
@@ -806,6 +807,31 @@ impl ParallelSearchEngine {
         } else {
             None
         };
+
+        // Aggregate queue stats to estimate contention and synchronization overhead
+        let mut total_pushes: u64 = 0;
+        let mut total_pops: u64 = 0;
+        let mut total_steals: u64 = 0;
+        let mut total_lock_wait_ns: u64 = 0;
+        let mut total_poison_recoveries: u64 = 0;
+        for q in &self.work_queues {
+            let (pushes, pops, steals, lock_wait_ns, poison_recoveries) = q.get_stats();
+            total_pushes += pushes;
+            total_pops += pops;
+            total_steals += steals;
+            total_lock_wait_ns += lock_wait_ns;
+            total_poison_recoveries += poison_recoveries;
+        }
+        let elapsed_ms = bench_start.elapsed().as_millis() as u64;
+        let elapsed_ms = elapsed_ms.max(1); // avoid div by zero
+        let elapsed_ns = (elapsed_ms as u64) * 1_000_000u64;
+        let sync_overhead_pct = if elapsed_ns > 0 {
+            (total_lock_wait_ns as f64 / elapsed_ns as f64) * 100.0
+        } else { 0.0 };
+        crate::debug_utils::debug_log(&format!(
+            "PARALLEL_PROF: pushes={}, pops={}, steals={}, lock_wait_ns={}, poison_recoveries={}, sync_overhead~{:.2}%",
+            total_pushes, total_pops, total_steals, total_lock_wait_ns, total_poison_recoveries, sync_overhead_pct
+        ));
         result
     }
     
