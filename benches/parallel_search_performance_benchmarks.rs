@@ -25,6 +25,7 @@ fn bench_root_search(c: &mut Criterion) {
                     // Enable deeper parallelism (YBWC) for benchmark
                     engine.set_ybwc(true, 5);
                     engine.set_ybwc_branch(16);
+                    engine.set_ybwc_max_siblings(8);
                     engine.set_tt_gating(6, 7, 256);
                     let mut id = if t > 1 {
                         IterativeDeepening::new_with_threads(depth, 1000, None, t)

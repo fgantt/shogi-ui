@@ -60,6 +60,7 @@ pub struct SearchEngine {
     ybwc_enabled: bool,
     ybwc_min_depth: u8,
     ybwc_min_branch: usize,
+    ybwc_max_siblings: usize,
     // TT write gating threshold (min depth to store non-Exact entries)
     tt_write_min_depth_value: u8,
     // Up to and including this search depth, only write Exact entries to TT
@@ -88,6 +89,10 @@ impl SearchEngine {
         self.tt_exact_only_max_depth_value = exact_only_max_depth;
         self.tt_write_min_depth_value = non_exact_min_depth;
         self.tt_write_buffer_capacity = buffer_capacity;
+    }
+
+    pub fn set_ybwc_max_siblings(&mut self, max_siblings: usize) {
+        self.ybwc_max_siblings = max_siblings.max(1);
     }
 
     fn flush_tt_buffer(&mut self) {
@@ -178,6 +183,7 @@ impl SearchEngine {
             ybwc_enabled: false,
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
+            ybwc_max_siblings: 8,
             tt_write_min_depth_value: 7,
             tt_exact_only_max_depth_value: 6,
         }
@@ -342,6 +348,7 @@ impl SearchEngine {
             ybwc_enabled: false,
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
+            ybwc_max_siblings: 8,
             tt_write_min_depth_value: 7,
             tt_exact_only_max_depth_value: 6,
         }
@@ -2459,7 +2466,9 @@ impl SearchEngine {
 
             // YBWC: after first move, evaluate siblings in parallel if enabled
             if self.ybwc_enabled && depth >= self.ybwc_min_depth && move_index == 0 && sorted_moves.len() >= self.ybwc_min_branch {
-                let siblings = &sorted_moves[1..];
+                let all_siblings = &sorted_moves[1..];
+                let sib_limit = all_siblings.len().min(self.ybwc_max_siblings);
+                let siblings = &all_siblings[..sib_limit];
                 let stop_flag = self.stop_flag.clone();
                 let shared_tt = self.shared_transposition_table.clone();
                 let quiescence_cfg = self.quiescence_config.clone();
