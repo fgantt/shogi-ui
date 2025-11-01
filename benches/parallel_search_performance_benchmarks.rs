@@ -10,6 +10,9 @@
 // - SHOGI_TT_GATING: exact_only_max_depth,min_store_depth,buffer_flush_threshold (e.g., "8,9,512")
 // - SHOGI_SILENT_BENCH: set to "1" to silence USI info output
 // - SHOGI_AGGREGATE_METRICS: set to "1" to enable aggregated TT/YBWC metrics
+// - SHOGI_BENCH_FEN: custom FEN (board player captured) to override default start position
+// - SHOGI_BENCH_TIME_MS: per-iteration time limit override (applies to all depths)
+// - SHOGI_BENCH_TIME_MS_7 / SHOGI_BENCH_TIME_MS_8: per-depth overrides when set
 //
 // Example quick run:
 // SHOGI_BENCH_DEPTHS=3 SHOGI_BENCH_THREADS=1,4 SHOGI_SILENT_BENCH=1 \
@@ -34,9 +37,19 @@ fn bench_root_search(c: &mut Criterion) {
         }
     }
 
-    let board = BitboardBoard::new();
-    let captured = CapturedPieces::new();
-    let player = Player::Black;
+    let (board, captured, player) = if let Ok(fen) = std::env::var("SHOGI_BENCH_FEN") {
+        if !fen.trim().is_empty() {
+            if let Ok((b, p, c)) = BitboardBoard::from_fen(&fen) {
+                (b, c, p)
+            } else {
+                (BitboardBoard::new(), CapturedPieces::new(), Player::Black)
+            }
+        } else {
+            (BitboardBoard::new(), CapturedPieces::new(), Player::Black)
+        }
+    } else {
+        (BitboardBoard::new(), CapturedPieces::new(), Player::Black)
+    };
     let mg = MoveGenerator::new();
     let legal = mg.generate_legal_moves(&board, player, &captured);
     group.throughput(Throughput::Elements(legal.len() as u64));
@@ -94,7 +107,13 @@ fn bench_root_search(c: &mut Criterion) {
                     engine.set_ybwc_max_siblings(ybwc_max_siblings);
                     engine.set_ybwc_scaling(ybwc_shallow, ybwc_mid, ybwc_deep);
                     engine.set_tt_gating(tt_exact_only_max_depth_value, tt_min_store_depth, tt_buffer_flush_threshold);
-                    let time_limit = match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 };
+                    let time_limit = if let Ok(ms) = std::env::var("SHOGI_BENCH_TIME_MS") { ms.parse::<u64>().unwrap_or(1000) as u32 } else {
+                        // Per-depth env overrides
+                        let key = format!("SHOGI_BENCH_TIME_MS_{}", depth);
+                        if let Ok(msd) = std::env::var(key) { msd.parse::<u64>().unwrap_or(0) as u32 } else {
+                            match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 }
+                        }
+                    };
                     let mut id = if t > 1 {
                         IterativeDeepening::new_with_threads(depth, time_limit, None, t)
                     } else {
