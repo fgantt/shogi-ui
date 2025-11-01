@@ -74,6 +74,11 @@ pub struct WorkUnit {
 /// - Push/pop operations from the owner thread (lock-free when uncontended)
 /// - Steal operations from other threads
 /// - Thread-safe synchronization
+/// Thread-safe work-stealing deque used by the parallel search engine.
+///
+/// Thread safety:
+/// - Uses a `Mutex<VecDeque<WorkUnit>>` internally; short critical sections reduce contention.
+/// - Recovers from poisoned locks to keep the engine running under panic scenarios.
 pub struct WorkStealingQueue {
     /// The underlying deque protected by a mutex.
     queue: Arc<Mutex<VecDeque<WorkUnit>>>,
@@ -101,6 +106,7 @@ struct WorkQueueStats {
 
 impl WorkStealingQueue {
     /// Create a new work-stealing queue.
+    /// Construct a new empty queue.
     pub fn new() -> Self {
         Self {
             queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -109,6 +115,9 @@ impl WorkStealingQueue {
     }
     
     /// Push a work unit to the back of the queue (owner thread operation).
+    /// Push a work unit to the back of the queue.
+    ///
+    /// Error handling: Recovers from poisoned lock and logs a debug message.
     pub fn push_back(&self, work: WorkUnit) {
         let t0 = std::time::Instant::now();
         match self.queue.lock() {
@@ -132,6 +141,8 @@ impl WorkStealingQueue {
     }
     
     /// Pop a work unit from the front of the queue (owner thread operation).
+    /// Pop a work unit from the front of the queue.
+    /// Returns `None` if the queue is empty.
     pub fn pop_front(&self) -> Option<WorkUnit> {
         let t0 = std::time::Instant::now();
         match self.queue.lock() {
@@ -163,6 +174,8 @@ impl WorkStealingQueue {
     }
     
     /// Steal a work unit from the back of the queue (other thread operation).
+    /// Attempt to steal a work unit from the back of the queue.
+    /// Returns `None` when the queue is empty or lock acquisition fails.
     pub fn steal(&self) -> Option<WorkUnit> {
         if let Ok(mut queue) = self.queue.lock() {
             if let Some(work) = queue.pop_back() {
@@ -465,6 +478,10 @@ impl ParallelSearchEngine {
     /// # Errors
     ///
     /// Returns an error if the thread pool cannot be created.
+    /// Create a new engine using an internal shared transposition table.
+    ///
+    /// Thread safety: the shared TT is protected by `RwLock`.
+    /// Error handling: returns `Err(String)` on thread pool creation failure.
     pub fn new(config: ParallelSearchConfig) -> Result<Self, String> {
         if env::var("SHOGI_FORCE_POOL_FAIL").ok().as_deref() == Some("1") {
             return Err("Forced pool failure via SHOGI_FORCE_POOL_FAIL".to_string());
@@ -511,6 +528,9 @@ impl ParallelSearchEngine {
     /// # Returns
     ///
     /// A new `ParallelSearchEngine` instance, or an error if thread pool creation fails.
+    /// Create a new engine with an optional external stop flag.
+    ///
+    /// When the stop flag is set, workers observe it and stop after current work.
     pub fn new_with_stop_flag(config: ParallelSearchConfig, stop_flag: Option<Arc<AtomicBool>>) -> Result<Self, String> {
         if env::var("SHOGI_FORCE_POOL_FAIL").ok().as_deref() == Some("1") {
             return Err("Forced pool failure via SHOGI_FORCE_POOL_FAIL".to_string());
@@ -588,6 +608,9 @@ impl ParallelSearchEngine {
     /// # Returns
     ///
     /// A new `ParallelSearchEngine` instance with shared TT, or an error if thread pool creation fails.
+    /// Create a new engine with a provided shared transposition table.
+    ///
+    /// Useful when composing with an existing `SearchEngine` TT to maximize reuse.
     pub fn new_with_shared_tt(
         config: ParallelSearchConfig,
         transposition_table: Arc<RwLock<ThreadSafeTranspositionTable>>,
