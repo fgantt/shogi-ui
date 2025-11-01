@@ -7253,8 +7253,12 @@ impl IterativeDeepening {
     }
 
     pub fn new_with_threads(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, thread_count: usize) -> Self {
-        let threads = thread_count.clamp(1, 32);
+        let base_threads = thread_count.clamp(1, 32);
+        #[cfg(not(test))]
+        let threads = base_threads;
         // For test stability, default tests to single-thread unless explicitly allowed
+        #[cfg(test)]
+        let mut threads = base_threads;
         #[cfg(test)]
         {
             if std::env::var("SHOGI_TEST_ALLOW_PARALLEL").is_err() {
