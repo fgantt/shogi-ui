@@ -16,7 +16,7 @@ fn bench_root_search(c: &mut Criterion) {
     group.throughput(Throughput::Elements(legal.len() as u64));
 
     // Test across depths and thread counts
-    for &depth in &[3u8, 5u8, 6u8] {
+    for &depth in &[3u8, 5u8, 6u8, 7u8, 8u8] {
         for &threads in &[1usize, 2, 4, 8] {
             group.bench_with_input(BenchmarkId::new(format!("depth{}", depth), threads), &threads, |b, &t| {
                 b.iter(|| {
@@ -27,10 +27,11 @@ fn bench_root_search(c: &mut Criterion) {
                     engine.set_ybwc_branch(20);
                     engine.set_ybwc_max_siblings(6);
                     engine.set_tt_gating(8, 9, 512);
+                    let time_limit = match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 };
                     let mut id = if t > 1 {
-                        IterativeDeepening::new_with_threads(depth, 1000, None, t)
+                        IterativeDeepening::new_with_threads(depth, time_limit, None, t)
                     } else {
-                        IterativeDeepening::new(depth, 1000, None)
+                        IterativeDeepening::new(depth, time_limit, None)
                     };
                     let _ = id.search(&mut engine, &board, &captured, player);
                 });
