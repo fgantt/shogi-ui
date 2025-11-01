@@ -1,0 +1,11 @@
+# Endgame tablebase positions
+# Format: fen,expected_outcome
+# Notes:
+# - expected_outcome: win|loss|draw
+# - Only positions solvable by built-in micro tablebase solvers will yield results.
+# - Leave additional rows commented if uncertain.
+
+# Candidate K+G vs K position (may depend on FEN parser conventions). If solvable, expect win.
+4k4/9/9/9/9/9/9/9/3G1K3 b -,win
+
+

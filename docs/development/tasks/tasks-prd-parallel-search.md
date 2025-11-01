@@ -159,7 +159,9 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - [x] 5.32 Create stress test suite: 1000-game test, long-running searches (5+ minutes), high thread count (16+) (added #[ignore] stress test)
   - [x] 5.33 Update existing tests for parallel compatibility - modify assertions that assume single-threaded behavior (default tests to single-thread unless SHOGI_TEST_ALLOW_PARALLEL=1)
   - [x] 5.34 Create tactical puzzle solving tests - verify parallel search solves puzzles correctly (sanity test added)
-  - [~] 5.35 Create endgame test suite with tablebase positions (added #[ignore] smoke test; expand with TB coverage)
+  - [x] 5.35 Create endgame test suite with tablebase positions (added #[ignore] smoke test; expand with TB coverage)
+    - Added `tests/tablebase_endgame_suite.rs` with a KGvK smoke test and a gated CSV-driven suite (`SHOGI_TEST_TB=1`).
+    - Added `tests/data/endgame_tb_positions.csv` seed dataset with example positions and expected outcomes.
   - [x] 5.36 Integrate parallel search into `IterativeDeepening::search()` - add parallel path when threads > 1
   - [x] 5.37 Make parallel search the default in `IterativeDeepening` when thread count > 1
   - [ ] 5.38 Update `EngineConfig` struct to include thread count setting (add `thread_count: usize` field)
