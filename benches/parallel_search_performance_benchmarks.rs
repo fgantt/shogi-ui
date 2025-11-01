@@ -19,19 +19,59 @@ fn bench_root_search(c: &mut Criterion) {
     let legal = mg.generate_legal_moves(&board, player, &captured);
     group.throughput(Throughput::Elements(legal.len() as u64));
 
+    // Optional env overrides for depths and threads
+    let depths_env = std::env::var("SHOGI_BENCH_DEPTHS").ok();
+    let depths: Vec<u8> = depths_env
+        .as_deref()
+        .map(|s| s.split(',').filter_map(|p| p.trim().parse::<u8>().ok()).collect())
+        .filter(|v: &Vec<u8>| !v.is_empty())
+        .unwrap_or_else(|| vec![3u8, 5u8, 6u8, 7u8, 8u8]);
+
+    let threads_env = std::env::var("SHOGI_BENCH_THREADS").ok();
+    let thread_counts: Vec<usize> = threads_env
+        .as_deref()
+        .map(|s| s.split(',').filter_map(|p| p.trim().parse::<usize>().ok()).collect())
+        .filter(|v: &Vec<usize>| !v.is_empty())
+        .unwrap_or_else(|| vec![1usize, 2, 4, 8]);
+
+    // Config overrides for YBWC/TT gating
+    let ybwc_min_depth: u8 = std::env::var("SHOGI_YBWC_MIN_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(6);
+    let (ybwc_shallow, ybwc_mid, ybwc_deep) = {
+        if let Ok(cfg) = std::env::var("SHOGI_YBWC_SCALING") {
+            let parts: Vec<_> = cfg.split(',').collect();
+            if parts.len() == 3 {
+                if let (Ok(a), Ok(b), Ok(c)) = (parts[0].trim().parse::<usize>(), parts[1].trim().parse::<usize>(), parts[2].trim().parse::<usize>()) {
+                    (a, b, c)
+                } else { (6, 4, 2) }
+            } else { (6, 4, 2) }
+        } else { (6, 4, 2) }
+    };
+    let ybwc_branch: usize = std::env::var("SHOGI_YBWC_BRANCH").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
+    let ybwc_max_siblings: usize = std::env::var("SHOGI_YBWC_MAX_SIBLINGS").ok().and_then(|v| v.parse().ok()).unwrap_or(6);
+    let (tt_exact_only_max_depth_value, tt_min_store_depth, tt_buffer_flush_threshold) = {
+        if let Ok(cfg) = std::env::var("SHOGI_TT_GATING") {
+            let parts: Vec<_> = cfg.split(',').collect();
+            if parts.len() == 3 {
+                if let (Ok(a), Ok(b), Ok(c)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<usize>()) {
+                    (a, b, c)
+                } else { (8, 9, 512) }
+            } else { (8, 9, 512) }
+        } else { (8, 9, 512) }
+    };
+
     // Test across depths and thread counts
-    for &depth in &[3u8, 5u8, 6u8, 7u8, 8u8] {
-        for &threads in &[1usize, 2, 4, 8] {
+    for &depth in &depths {
+        for &threads in &thread_counts {
             group.bench_with_input(BenchmarkId::new(format!("depth{}", depth), threads), &threads, |b, &t| {
                 b.iter(|| {
                     // New engine per iteration to avoid cross-benchmark state
                     let mut engine = SearchEngine::new(None, 16);
                     // Enable deeper parallelism (YBWC) for benchmark
-                    engine.set_ybwc(true, 6);
-                    engine.set_ybwc_branch(20);
-                    engine.set_ybwc_max_siblings(6);
-                    engine.set_ybwc_scaling(6, 4, 2);
-                    engine.set_tt_gating(8, 9, 512);
+                    engine.set_ybwc(true, ybwc_min_depth);
+                    engine.set_ybwc_branch(ybwc_branch);
+                    engine.set_ybwc_max_siblings(ybwc_max_siblings);
+                    engine.set_ybwc_scaling(ybwc_shallow, ybwc_mid, ybwc_deep);
+                    engine.set_tt_gating(tt_exact_only_max_depth_value, tt_min_store_depth, tt_buffer_flush_threshold);
                     let time_limit = match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 };
                     let mut id = if t > 1 {
                         IterativeDeepening::new_with_threads(depth, time_limit, None, t)
