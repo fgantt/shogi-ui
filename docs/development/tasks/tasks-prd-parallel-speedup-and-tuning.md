@@ -14,12 +14,12 @@
 
 ## Tasks
 
-- [ ] 1.0 Bench configurability and controls
-  - [ ] 1.1 Document all bench env overrides in PRD and bench file header.
-  - [ ] 1.2 Add a usage snippet to `docs/release/PERFORMANCE_SUMMARY.md` for quick runs.
-  - [ ] 1.3 Run a limited bench (depths 7/8; threads 1/4) to validate env parsing.
-  - [ ] 1.4 Verify `target/criterion/metrics-summary.json` exists and includes TT/YBWC fields.
-  - [ ] 1.5 Commit documentation updates.
+- [x] 1.0 Bench configurability and controls
+  - [x] 1.1 Document all bench env overrides in PRD and bench file header.
+  - [x] 1.2 Add a usage snippet to `docs/release/PERFORMANCE_SUMMARY.md` for quick runs.
+  - [x] 1.3 Run a limited bench (depths 7/8; threads 1/4) to validate env parsing.
+  - [x] 1.4 Verify `target/criterion/metrics-summary.json` exists and includes TT/YBWC fields.
+  - [x] 1.5 Commit documentation updates.
 
 - [ ] 2.0 YBWC activation and sibling parallelism
   - [ ] 2.1 Lower/tune `ybwc_min_depth` and widen activation via `ybwc_min_branch`.
