@@ -62,6 +62,8 @@ pub struct SearchEngine {
     ybwc_min_branch: usize,
     // TT write gating threshold (min depth to store non-Exact entries)
     tt_write_min_depth_value: u8,
+    // Up to and including this search depth, only write Exact entries to TT
+    tt_exact_only_max_depth_value: u8,
 }
 
 /// Global aggregate of nodes searched across all threads for live reporting.
@@ -71,6 +73,7 @@ pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
 impl SearchEngine {
     #[inline]
     fn tt_write_min_depth(&self) -> u8 { self.tt_write_min_depth_value }
+    fn tt_exact_only_max_depth(&self) -> u8 { self.tt_exact_only_max_depth_value }
 
     pub fn set_ybwc(&mut self, enabled: bool, min_depth: u8) {
         self.ybwc_enabled = enabled;
@@ -79,6 +82,12 @@ impl SearchEngine {
 
     pub fn set_ybwc_branch(&mut self, min_branch: usize) {
         self.ybwc_min_branch = min_branch;
+    }
+
+    pub fn set_tt_gating(&mut self, exact_only_max_depth: u8, non_exact_min_depth: u8, buffer_capacity: usize) {
+        self.tt_exact_only_max_depth_value = exact_only_max_depth;
+        self.tt_write_min_depth_value = non_exact_min_depth;
+        self.tt_write_buffer_capacity = buffer_capacity;
     }
 
     fn flush_tt_buffer(&mut self) {
@@ -99,7 +108,11 @@ impl SearchEngine {
 
     #[inline]
     fn maybe_buffer_tt_store(&mut self, entry: TranspositionEntry, depth: u8, flag: TranspositionFlag) {
-        // Gate writes: store only Exact or deeper-than-threshold entries
+        // Gate writes: at shallow depths, only store Exact entries
+        if depth <= self.tt_exact_only_max_depth() && !matches!(flag, TranspositionFlag::Exact) {
+            return;
+        }
+        // Gate non-Exact writes: allow only deeper-than-threshold entries
         if !(matches!(flag, TranspositionFlag::Exact) || depth >= self.tt_write_min_depth()) {
             return;
         }
@@ -161,11 +174,12 @@ impl SearchEngine {
             current_depth: 0,
             search_start_time: None,
             tt_write_buffer: Vec::with_capacity(64),
-            tt_write_buffer_capacity: 64,
+            tt_write_buffer_capacity: 256,
             ybwc_enabled: false,
             ybwc_min_depth: 4,
-            ybwc_min_branch: 8,
-            tt_write_min_depth_value: 5,
+            ybwc_min_branch: 12,
+            tt_write_min_depth_value: 7,
+            tt_exact_only_max_depth_value: 6,
         }
     }
 
@@ -324,11 +338,12 @@ impl SearchEngine {
             current_depth: 0,
             search_start_time: None,
             tt_write_buffer: Vec::with_capacity(64),
-            tt_write_buffer_capacity: 64,
+            tt_write_buffer_capacity: 256,
             ybwc_enabled: false,
             ybwc_min_depth: 4,
-            ybwc_min_branch: 8,
-            tt_write_min_depth_value: 5,
+            ybwc_min_branch: 12,
+            tt_write_min_depth_value: 7,
+            tt_exact_only_max_depth_value: 6,
         }
     }
 
@@ -2448,7 +2463,7 @@ impl SearchEngine {
                 let stop_flag = self.stop_flag.clone();
                 let shared_tt = self.shared_transposition_table.clone();
                 let quiescence_cfg = self.quiescence_config.clone();
-                let sibling_results: Vec<(i32, usize)> = siblings.par_iter().enumerate().with_min_len(4).map(|(sib_idx, sib_mv)| {
+                let sibling_results: Vec<(i32, usize)> = siblings.par_iter().enumerate().with_min_len(8).map(|(sib_idx, sib_mv)| {
                     // Prepare child position
                     let mut sib_board = board.clone();
                     let mut sib_captured = captured_pieces.clone();
@@ -2468,7 +2483,9 @@ impl SearchEngine {
                             *opt = Some(e);
                         }
                         let eng = opt.as_mut().unwrap();
-                        -eng.negamax(&mut sib_board, &sib_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut vec![], true)
+                        let score = -eng.negamax(&mut sib_board, &sib_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut vec![], true);
+                        eng.flush_tt_buffer();
+                        score
                     });
                     (s, sib_idx + 1) // store original index offset by 1
                 }).collect();
