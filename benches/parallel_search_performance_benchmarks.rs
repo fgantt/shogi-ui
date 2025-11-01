@@ -28,6 +28,7 @@ fn bench_root_search(c: &mut Criterion) {
                     engine.set_ybwc(true, 6);
                     engine.set_ybwc_branch(20);
                     engine.set_ybwc_max_siblings(6);
+                    engine.set_ybwc_scaling(5, 3, 2);
                     engine.set_tt_gating(8, 9, 512);
                     let time_limit = match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 };
                     let mut id = if t > 1 {

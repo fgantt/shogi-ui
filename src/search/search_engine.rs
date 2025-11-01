@@ -61,6 +61,10 @@ pub struct SearchEngine {
     ybwc_min_depth: u8,
     ybwc_min_branch: usize,
     ybwc_max_siblings: usize,
+    // Dynamic scaling divisors for sibling cap based on depth tier
+    ybwc_div_shallow: usize,
+    ybwc_div_mid: usize,
+    ybwc_div_deep: usize,
     // TT write gating threshold (min depth to store non-Exact entries)
     tt_write_min_depth_value: u8,
     // Up to and including this search depth, only write Exact entries to TT
@@ -76,9 +80,9 @@ impl SearchEngine {
         if branch_len == 0 { return 0; }
         let over_min = depth.saturating_sub(self.ybwc_min_depth);
         let divisor = match over_min {
-            0 => 4usize,
-            1 => 3usize,
-            _ => 2usize,
+            0 => self.ybwc_div_shallow.max(1),
+            1 => self.ybwc_div_mid.max(1),
+            _ => self.ybwc_div_deep.max(1),
         };
         let scaled = (branch_len / divisor).max(1);
         scaled.min(self.ybwc_max_siblings)
@@ -104,6 +108,12 @@ impl SearchEngine {
 
     pub fn set_ybwc_max_siblings(&mut self, max_siblings: usize) {
         self.ybwc_max_siblings = max_siblings.max(1);
+    }
+
+    pub fn set_ybwc_scaling(&mut self, shallow_divisor: usize, mid_divisor: usize, deep_divisor: usize) {
+        self.ybwc_div_shallow = shallow_divisor.max(1);
+        self.ybwc_div_mid = mid_divisor.max(1);
+        self.ybwc_div_deep = deep_divisor.max(1);
     }
 
     fn flush_tt_buffer(&mut self) {
@@ -195,6 +205,9 @@ impl SearchEngine {
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
             ybwc_max_siblings: 8,
+            ybwc_div_shallow: 4,
+            ybwc_div_mid: 3,
+            ybwc_div_deep: 2,
             tt_write_min_depth_value: 9,
             tt_exact_only_max_depth_value: 8,
         }
@@ -360,6 +373,9 @@ impl SearchEngine {
             ybwc_min_depth: 4,
             ybwc_min_branch: 12,
             ybwc_max_siblings: 8,
+            ybwc_div_shallow: 4,
+            ybwc_div_mid: 3,
+            ybwc_div_deep: 2,
             tt_write_min_depth_value: 9,
             tt_exact_only_max_depth_value: 8,
         }
