@@ -133,7 +133,7 @@ impl KifGame {
     }
     
     /// Convert KIF notation to USI format (simplified)
-    fn kif_to_usi(kif_text: &str) -> Option<String> {
+    fn kif_to_usi(_kif_text: &str) -> Option<String> {
         // This is a simplified converter
         // Real implementation would need full Japanese notation parsing
         
@@ -146,6 +146,7 @@ impl KifGame {
     }
     
     /// Parse Japanese number to integer
+    #[allow(dead_code)]
     fn parse_japanese_number(s: &str) -> Option<u32> {
         match s {
             "一" => Some(1),

@@ -112,12 +112,14 @@ struct PuzzleMetadata {
     pub puzzle_score: i32,
 }
 
+#[allow(dead_code)]
 struct PuzzleGenerator {
     engine: ShogiEngine,
     recognizer: TacticalPatternRecognizer,
     puzzles: Vec<Puzzle>,
 }
 
+#[allow(dead_code)]
 impl PuzzleGenerator {
     fn new() -> Self {
         Self {
@@ -128,6 +130,7 @@ impl PuzzleGenerator {
     }
 
     /// Generate puzzles from a game
+    #[allow(dead_code)]
     fn generate_from_game(&mut self, game: &KifGame, target_pattern: Option<&str>) -> Vec<Puzzle> {
         let mut found_puzzles = Vec::new();
         let mut puzzle_id = 1;
@@ -170,6 +173,7 @@ impl PuzzleGenerator {
     }
 
     /// Detect if current position has a tactical pattern
+    #[allow(dead_code)]
     fn detect_tactical_pattern(&mut self, filter: Option<&str>) -> Option<String> {
         // If a specific pattern is requested, return it
         if let Some(pattern) = filter {
@@ -181,7 +185,7 @@ impl PuzzleGenerator {
         let fen = self.engine.get_fen();
         
         // Parse board from FEN
-        if let Ok((board, player, _)) = BitboardBoard::from_fen(&fen) {
+        if let Ok((_board, player, _)) = BitboardBoard::from_fen(&fen) {
             // Analyze tactical patterns for current player
             let mut patterns_detected = Vec::new();
             
@@ -207,6 +211,7 @@ impl PuzzleGenerator {
     }
     
     /// Simulate pattern detection (placeholder for real implementation)
+    #[allow(dead_code)]
     fn simulate_pattern_detection(&mut self, _player: Player) -> Option<String> {
         // In real implementation:
         // 1. Use TacticalPatternRecognizer to analyze position

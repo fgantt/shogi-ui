@@ -7253,7 +7253,7 @@ impl IterativeDeepening {
     }
 
     pub fn new_with_threads(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>, thread_count: usize) -> Self {
-        let mut threads = thread_count.clamp(1, 32);
+        let threads = thread_count.clamp(1, 32);
         // For test stability, default tests to single-thread unless explicitly allowed
         #[cfg(test)]
         {

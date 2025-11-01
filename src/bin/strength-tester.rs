@@ -3,8 +3,8 @@
 //! A command-line tool for testing the strength of the shogi engine.
 
 use clap::{Parser, Subcommand};
-use shogi_engine::{ShogiEngine, types::{GameResult, Player, Move}};
-use std::path::PathBuf;
+use shogi_engine::{ShogiEngine, types::{GameResult, Move}};
+// use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

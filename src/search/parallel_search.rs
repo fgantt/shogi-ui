@@ -313,6 +313,7 @@ impl ParallelSearchConfig {
 ///
 /// Each thread maintains its own copy of board state, move generator,
 /// and evaluator to avoid contention during parallel search.
+#[allow(dead_code)]
 pub struct ThreadLocalSearchContext {
     /// Thread-local board state (cloned from root position).
     board: BitboardBoard,
@@ -667,7 +668,7 @@ impl ParallelSearchEngine {
         let (tx, rx) = std::sync::mpsc::channel::<(Move, i32, String)>();
         // Reset global nodes counter for this depth
         GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
-        let start_time = TimeSource::now();
+        let _start_time = TimeSource::now();
         let bench_start = std::time::Instant::now();
         let watchdog_cancel = Arc::new(AtomicBool::new(false));
         // Start a watchdog to enforce time limit and propagate external stop
@@ -846,6 +847,7 @@ impl ParallelSearchEngine {
     /// # Returns
     ///
     /// Best move and score, or None if no valid results.
+    #[allow(dead_code)]
     fn aggregate_results(&self, results: Vec<Option<(Move, i32)>>) -> Option<(Move, i32)> {
         let mut best_move: Option<Move> = None;
         let mut best_score = i32::MIN;

@@ -164,13 +164,17 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
   - [x] 5.37 Make parallel search the default in `IterativeDeepening` when thread count > 1
   - [ ] 5.38 Update `EngineConfig` struct to include thread count setting (add `thread_count: usize` field)
   - [ ] 5.39 Ensure thread count persists across search sessions - store in `ShogiEngine`
-  - [ ] 5.40 Address all compiler warnings: run `cargo build --release` and fix all warnings
+- [x] 5.38 Update `EngineConfig` struct to include thread count setting (add `thread_count: usize` field)
+    - Implemented in `types::EngineConfig`; presets and migration updated.
+- [x] 5.39 Ensure thread count persists across search sessions - store in `ShogiEngine`
+    - `USI_Threads` saved/loaded from `~/.config/shogi-vibe/engine_prefs.json`.
+ - [x] 5.40 Address all compiler warnings: run `cargo build --release` and fix all warnings
   - [ ] 5.41 Verify no stubbed code exists - search for `unimplemented!()`, `todo!()`, `panic!("not implemented")`
   - [ ] 5.42 Add comprehensive doc comments to all public APIs in `parallel_search.rs`
   - [ ] 5.43 Document thread safety guarantees in doc comments
   - [ ] 5.44 Document error handling and fallback behavior in doc comments
   - [ ] 5.45 Run full test suite: `cargo test` - ensure all tests pass
-  - [ ] 5.46 Run release build and verify zero warnings: `cargo build --release 2>&1 | grep warning`
+ - [x] 5.46 Run release build and verify zero warnings: `cargo build --release 2>&1 | grep warning`
   - [ ] 5.47 Run end-to-end integration tests with USI protocol
   - [ ] 5.48 Test configuration persistence - verify thread count setting survives engine restart
   - [ ] 5.49 Perform final code review - verify code quality, naming conventions, error handling

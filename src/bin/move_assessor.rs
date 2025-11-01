@@ -5,7 +5,7 @@
 
 use clap::{Parser, Subcommand};
 use shogi_engine::{ShogiEngine, kif_parser::KifGame};
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -118,6 +118,7 @@ impl MoveQuality {
 
 /// Game analysis result
 #[derive(Debug)]
+#[allow(dead_code)]
 struct GameAnalysis {
     total_moves: usize,
     excellent_moves: usize,
@@ -152,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn analyze_kif_game(file_path: &PathBuf, depth: u8, verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
+fn analyze_kif_game(file_path: &PathBuf, _depth: u8, verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
     // Load KIF game
     let kif_game = KifGame::from_file(file_path.to_str().unwrap())?;
     
@@ -166,7 +167,7 @@ fn analyze_kif_game(file_path: &PathBuf, depth: u8, verbose: bool) -> Result<Gam
         }
     }
     
-    let mut engine = ShogiEngine::new();
+    let _engine = ShogiEngine::new();
     let mut analyses = Vec::new();
     let mut move_number = 1;
     
@@ -261,7 +262,7 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
     
     let mut analyses = Vec::new();
     let mut move_number = 1;
-    let mut previous_score = 0i32;
+    let mut _previous_score = 0i32;
 
     // Analyze first 10 moves
     for _ in 0..10 {
@@ -275,7 +276,7 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
             // 4. Calculate score difference
             
             let score_change = (move_number * 17) as i32 % 300 - 150;
-            previous_score = score_change;
+            _previous_score = score_change;
             
             let quality = match score_change {
                 change if change < -200 => MoveQuality::Blunder(change),
@@ -338,6 +339,7 @@ fn assess_move_quality(move_num: usize, _move_str: &str) -> MoveQuality {
 }
 
 /// Real move quality assessment using engine evaluation
+#[allow(dead_code)]
 fn assess_move_quality_real(
     engine: &mut ShogiEngine,
     player_move: &str,
