@@ -773,6 +773,12 @@ impl ParallelSearchEngine {
                     );
                 // Provide shared TT to improve ordering/PV consistency across workers
                 context.search_engine_mut().set_shared_transposition_table(self.transposition_table.clone());
+                // Enable intra-node YBWC for worker engines with reasonable defaults
+                // (These can be tuned in the main SearchEngine as needed.)
+                context.search_engine_mut().set_ybwc(true, 2);
+                context.search_engine_mut().set_ybwc_branch(8);
+                context.search_engine_mut().set_ybwc_max_siblings(8);
+                context.search_engine_mut().set_ybwc_scaling(6, 4, 2);
 
                 // Clone board and apply move
                 let mut test_board = board.clone();

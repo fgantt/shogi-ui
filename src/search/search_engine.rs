@@ -90,6 +90,11 @@ pub static TT_TRY_WRITE_FAILS: AtomicU64 = AtomicU64::new(0);
 // YBWC metrics
 pub static YBWC_SIBLING_BATCHES: AtomicU64 = AtomicU64::new(0);
 pub static YBWC_SIBLINGS_EVALUATED: AtomicU64 = AtomicU64::new(0);
+// YBWC trigger diagnostics
+pub static YBWC_TRIGGER_OPPORTUNITIES: AtomicU64 = AtomicU64::new(0);
+pub static YBWC_TRIGGER_ELIGIBLE_DEPTH: AtomicU64 = AtomicU64::new(0);
+pub static YBWC_TRIGGER_ELIGIBLE_BRANCH: AtomicU64 = AtomicU64::new(0);
+pub static YBWC_TRIGGERED: AtomicU64 = AtomicU64::new(0);
 
 #[inline]
 fn take(a: &AtomicU64) -> u64 { a.swap(0, Ordering::Relaxed) }
@@ -104,6 +109,10 @@ pub struct SearchMetrics {
     pub tt_try_write_fails: u64,
     pub ybwc_sibling_batches: u64,
     pub ybwc_siblings_evaluated: u64,
+    pub ybwc_trigger_opportunities: u64,
+    pub ybwc_trigger_eligible_depth: u64,
+    pub ybwc_trigger_eligible_branch: u64,
+    pub ybwc_triggered: u64,
 }
 
 pub fn snapshot_and_reset_metrics() -> SearchMetrics {
@@ -116,6 +125,10 @@ pub fn snapshot_and_reset_metrics() -> SearchMetrics {
         tt_try_write_fails: take(&TT_TRY_WRITE_FAILS),
         ybwc_sibling_batches: take(&YBWC_SIBLING_BATCHES),
         ybwc_siblings_evaluated: take(&YBWC_SIBLINGS_EVALUATED),
+        ybwc_trigger_opportunities: take(&YBWC_TRIGGER_OPPORTUNITIES),
+        ybwc_trigger_eligible_depth: take(&YBWC_TRIGGER_ELIGIBLE_DEPTH),
+        ybwc_trigger_eligible_branch: take(&YBWC_TRIGGER_ELIGIBLE_BRANCH),
+        ybwc_triggered: take(&YBWC_TRIGGERED),
     }
 }
 
@@ -286,7 +299,7 @@ impl SearchEngine {
             tt_write_buffer: Vec::with_capacity(64),
             tt_write_buffer_capacity: 512,
             ybwc_enabled: false,
-            ybwc_min_depth: 4,
+            ybwc_min_depth: 2,
             ybwc_min_branch: 8,
             ybwc_max_siblings: 8,
             ybwc_div_shallow: 4,
@@ -466,7 +479,7 @@ impl SearchEngine {
             tt_write_buffer: Vec::with_capacity(64),
             tt_write_buffer_capacity: 512,
             ybwc_enabled: false,
-            ybwc_min_depth: 4,
+            ybwc_min_depth: 2,
             ybwc_min_branch: 8,
             ybwc_max_siblings: 8,
             ybwc_div_shallow: 4,
@@ -2595,7 +2608,17 @@ impl SearchEngine {
             }
 
             // YBWC: after first move, evaluate siblings in parallel if enabled
+            if move_index == 0 {
+                YBWC_TRIGGER_OPPORTUNITIES.fetch_add(1, Ordering::Relaxed);
+                if self.ybwc_enabled && depth >= self.ybwc_min_depth {
+                    YBWC_TRIGGER_ELIGIBLE_DEPTH.fetch_add(1, Ordering::Relaxed);
+                }
+                if sorted_moves.len() >= self.ybwc_min_branch {
+                    YBWC_TRIGGER_ELIGIBLE_BRANCH.fetch_add(1, Ordering::Relaxed);
+                }
+            }
             if self.ybwc_enabled && depth >= self.ybwc_min_depth && move_index == 0 && sorted_moves.len() >= self.ybwc_min_branch {
+                YBWC_TRIGGERED.fetch_add(1, Ordering::Relaxed);
                 let all_siblings = &sorted_moves[1..];
                 let dyn_cap = self.ybwc_dynamic_sibling_cap(depth, all_siblings.len());
                 let sib_limit = dyn_cap.min(all_siblings.len());

@@ -26,7 +26,7 @@
   - [x] 2.2 Implement/tune dynamic sibling caps by depth/branching factor.
   - [x] 2.3 Ensure TLS engine pool reuse is engaged for siblings; check allocations.
   - [x] 2.4 Expose sibling cap/scaling via env in benches and validate propagation.
-  - [ ] 2.5 Re-run deep benches and confirm `ybwc_batches > 0` and `ybwc_siblings > 0`.
+  - [x] 2.5 Re-run deep benches and confirm `ybwc_batches > 0` and `ybwc_siblings > 0`.
 
 - [ ] 3.0 TT contention reduction
   - [ ] 3.1 Tighten exact-only gating threshold at shallow depths (configurable).

@@ -110,11 +110,12 @@ fn bench_root_search(c: &mut Criterion) {
     // Snapshot aggregated profiling metrics for this run and write JSON summary
     let m = snapshot_and_reset_metrics();
     let summary = format!(
-        "{{\n  \"tag\": \"{}\",\n  \"tt_reads\": {},\n  \"tt_read_ok\": {},\n  \"tt_read_fail\": {},\n  \"tt_writes\": {},\n  \"tt_write_ok\": {},\n  \"tt_write_fail\": {},\n  \"ybwc_batches\": {},\n  \"ybwc_siblings\": {}\n}}\n",
+        "{{\n  \"tag\": \"{}\",\n  \"tt_reads\": {},\n  \"tt_read_ok\": {},\n  \"tt_read_fail\": {},\n  \"tt_writes\": {},\n  \"tt_write_ok\": {},\n  \"tt_write_fail\": {},\n  \"ybwc_batches\": {},\n  \"ybwc_siblings\": {},\n  \"ybwc_trigger_opportunities\": {},\n  \"ybwc_trigger_eligible_depth\": {},\n  \"ybwc_trigger_eligible_branch\": {},\n  \"ybwc_triggered\": {}\n}}\n",
         "criterion_group:parallel_root_search",
         m.tt_try_reads, m.tt_try_read_successes, m.tt_try_read_fails,
         m.tt_try_writes, m.tt_try_write_successes, m.tt_try_write_fails,
-        m.ybwc_sibling_batches, m.ybwc_siblings_evaluated
+        m.ybwc_sibling_batches, m.ybwc_siblings_evaluated,
+        m.ybwc_trigger_opportunities, m.ybwc_trigger_eligible_depth, m.ybwc_trigger_eligible_branch, m.ybwc_triggered
     );
     let out_dir = std::path::Path::new("target/criterion");
     let _ = std::fs::create_dir_all(out_dir);
@@ -122,8 +123,9 @@ fn bench_root_search(c: &mut Criterion) {
     let _ = std::fs::write(&out_path, summary.as_bytes());
     // Also echo a concise summary line
     println!(
-        "metrics summary written: {:?} (tt_reads={}, tt_writes={}, ybwc_batches={}, ybwc_siblings={})",
-        out_path, m.tt_try_reads, m.tt_try_writes, m.ybwc_sibling_batches, m.ybwc_siblings_evaluated
+        "metrics summary written: {:?} (tt_reads={}, tt_writes={}, ybwc_batches={}, ybwc_siblings={}, ybwc_triggers={}/{}/{}/{})",
+        out_path, m.tt_try_reads, m.tt_try_writes, m.ybwc_sibling_batches, m.ybwc_siblings_evaluated,
+        m.ybwc_trigger_opportunities, m.ybwc_trigger_eligible_depth, m.ybwc_trigger_eligible_branch, m.ybwc_triggered
     );
 }
 
