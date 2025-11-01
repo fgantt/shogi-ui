@@ -91,6 +91,64 @@ pub static TT_TRY_WRITE_FAILS: AtomicU64 = AtomicU64::new(0);
 pub static YBWC_SIBLING_BATCHES: AtomicU64 = AtomicU64::new(0);
 pub static YBWC_SIBLINGS_EVALUATED: AtomicU64 = AtomicU64::new(0);
 
+#[inline]
+fn take(a: &AtomicU64) -> u64 { a.swap(0, Ordering::Relaxed) }
+
+/// Snapshot and reset global search metrics.
+pub struct SearchMetrics {
+    pub tt_try_reads: u64,
+    pub tt_try_read_successes: u64,
+    pub tt_try_read_fails: u64,
+    pub tt_try_writes: u64,
+    pub tt_try_write_successes: u64,
+    pub tt_try_write_fails: u64,
+    pub ybwc_sibling_batches: u64,
+    pub ybwc_siblings_evaluated: u64,
+}
+
+pub fn snapshot_and_reset_metrics() -> SearchMetrics {
+    SearchMetrics {
+        tt_try_reads: take(&TT_TRY_READS),
+        tt_try_read_successes: take(&TT_TRY_READ_SUCCESSES),
+        tt_try_read_fails: take(&TT_TRY_READ_FAILS),
+        tt_try_writes: take(&TT_TRY_WRITES),
+        tt_try_write_successes: take(&TT_TRY_WRITE_SUCCESSES),
+        tt_try_write_fails: take(&TT_TRY_WRITE_FAILS),
+        ybwc_sibling_batches: take(&YBWC_SIBLING_BATCHES),
+        ybwc_siblings_evaluated: take(&YBWC_SIBLINGS_EVALUATED),
+    }
+}
+
+fn maybe_print_search_metrics(tag: &str) {
+    let silent_bench = std::env::var("SHOGI_SILENT_BENCH").is_ok();
+    let manual_print = std::env::var("SHOGI_PRINT_METRICS").is_ok();
+    let aggregate = std::env::var("SHOGI_AGGREGATE_METRICS").is_ok();
+    // In aggregate mode, skip per-iteration printing — we'll print once at the end
+    if aggregate || !(silent_bench || manual_print) { return; }
+    let m = snapshot_and_reset_metrics();
+    println!(
+        "metrics tag={} tt_reads={} tt_read_ok={} tt_read_fail={} tt_writes={} tt_write_ok={} tt_write_fail={} ybwc_batches={} ybwc_siblings={}",
+        tag,
+        m.tt_try_reads, m.tt_try_read_successes, m.tt_try_read_fails,
+        m.tt_try_writes, m.tt_try_write_successes, m.tt_try_write_fails,
+        m.ybwc_sibling_batches, m.ybwc_siblings_evaluated
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+}
+
+/// Print and reset aggregated metrics once (used by benches when SHOGI_AGGREGATE_METRICS=1)
+pub fn print_and_reset_search_metrics(tag: &str) {
+    let m = snapshot_and_reset_metrics();
+    println!(
+        "metrics tag={} (aggregate) tt_reads={} tt_read_ok={} tt_read_fail={} tt_writes={} tt_write_ok={} tt_write_fail={} ybwc_batches={} ybwc_siblings={}",
+        tag,
+        m.tt_try_reads, m.tt_try_read_successes, m.tt_try_read_fails,
+        m.tt_try_writes, m.tt_try_write_successes, m.tt_try_write_fails,
+        m.ybwc_sibling_batches, m.ybwc_siblings_evaluated
+    );
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+}
+
 #[allow(dead_code)]
 impl SearchEngine {
     fn ybwc_dynamic_sibling_cap(&self, depth: u8, branch_len: usize) -> usize {
@@ -3468,9 +3526,7 @@ impl SearchEngine {
                 let mut current_player = player;
                 for _ in 0..depth {
                     let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
-                    self.shared_tt_probe_attempts += 1;
                     if let Some(entry) = tt.probe(position_hash, 0) {
-                        self.shared_tt_probe_hits += 1;
                         if let Some(move_) = &entry.best_move {
                             pv.push(move_.clone());
                             if let Some(captured) = current_board.make_move(move_) {
@@ -7449,6 +7505,8 @@ impl IterativeDeepening {
         }
         
         crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+        // Print aggregated metrics (benches or manual on demand)
+        maybe_print_search_metrics("iterative_deepening");
         
         // Fallback: if we're in check and didn't find a move, just pick the first legal move
         if is_in_check && best_move.is_none() && !legal_moves.is_empty() {
