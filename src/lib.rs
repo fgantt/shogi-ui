@@ -109,6 +109,11 @@ impl ShogiEngine {
     }
 
     fn prefs_path() -> std::path::PathBuf {
+        if let Ok(dir) = std::env::var("SHOGI_PREFS_DIR") {
+            let p = std::path::PathBuf::from(dir);
+            let _ = std::fs::create_dir_all(&p);
+            return p.join("engine_prefs.json");
+        }
         let base = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
         let dir = base.join("shogi-vibe");
         let _ = std::fs::create_dir_all(&dir);

@@ -177,6 +177,10 @@ This task list is derived from the PRD for adding parallel search to the Shogi e
  - [x] 5.46 Run release build and verify zero warnings: `cargo build --release 2>&1 | grep warning`
   - [ ] 5.47 Run end-to-end integration tests with USI protocol
   - [ ] 5.48 Test configuration persistence - verify thread count setting survives engine restart
+ - [x] 5.47 Run end-to-end integration tests with USI protocol
+    - Added `tests/usi_e2e_tests.rs`: sets options, starts new game, performs a shallow search.
+ - [x] 5.48 Test configuration persistence - verify thread count setting survives engine restart
+    - Implemented `SHOGI_PREFS_DIR` override; tests write/read `engine_prefs.json` and validate round-trip.
   - [ ] 5.49 Perform final code review - verify code quality, naming conventions, error handling
 - [x] 5.50 Create summary document of performance results, speedup achieved, and any known limitations
     - Done: `docs/release/PERFORMANCE_SUMMARY.md` created and updated with depth 5/6/7/8 results, notes, and next steps.
