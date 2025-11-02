@@ -36,6 +36,9 @@ pub struct SearchEngine {
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
     nodes_searched: u64,
+    /// Node counter for time check frequency optimization (Task 8.4)
+    /// Tracks nodes since last time check to avoid checking every node
+    time_check_node_counter: u32,
     stop_flag: Option<Arc<AtomicBool>>,
     quiescence_config: QuiescenceConfig,
     quiescence_stats: QuiescenceStats,
@@ -296,6 +299,7 @@ impl SearchEngine {
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
+            time_check_node_counter: 0, // Task 8.4: Initialize time check counter
             stop_flag,
             quiescence_config,
             quiescence_stats: QuiescenceStats::default(),
@@ -499,6 +503,7 @@ impl SearchEngine {
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
+            time_check_node_counter: 0, // Task 8.4: Initialize time check counter
             stop_flag,
             quiescence_config: config.quiescence,
             quiescence_stats: QuiescenceStats::default(),
@@ -3450,7 +3455,34 @@ impl SearchEngine {
         alpha
     }
 
-    fn should_stop(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
+    /// Check if search should stop (with frequency optimization) (Task 8.4)
+    /// 
+    /// Task 8.4: Only checks time every N nodes to reduce overhead
+    /// Task 8.1, 8.2: Optimized to minimize time check overhead
+    fn should_stop(&mut self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
+        // Always check stop flag immediately (user-initiated stop)
+        if let Some(flag) = &self.stop_flag {
+            if flag.load(Ordering::Relaxed) {
+                return true;
+            }
+        }
+        
+        // Task 8.4: Optimize time check frequency
+        let frequency = self.time_management_config.time_check_frequency;
+        self.time_check_node_counter += 1;
+        
+        // Only check time every N nodes
+        if self.time_check_node_counter >= frequency {
+            self.time_check_node_counter = 0;
+            start_time.has_exceeded_limit(time_limit_ms)
+        } else {
+            false // Don't check time yet
+        }
+    }
+    
+    /// Force time check (bypasses frequency optimization) (Task 8.4)
+    /// Used when we must check time regardless of frequency (e.g., at depth boundaries)
+    fn should_stop_force(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
         if let Some(flag) = &self.stop_flag {
             if flag.load(Ordering::Relaxed) {
                 return true;
@@ -7875,8 +7907,11 @@ impl IterativeDeepening {
                 (max_depth, time_limit)
             } else {
                 // Normal search parameters
-                let safety_margin_ms = (self.time_limit_ms as f64 * config.safety_margin) as u32;
-                (self.max_depth, self.time_limit_ms.saturating_sub(safety_margin_ms.max(100)))
+                // Task 8.2, 8.3: Use configurable absolute safety margin instead of hardcoded 100ms
+                let percentage_margin_ms = (self.time_limit_ms as f64 * config.safety_margin) as u32;
+                let absolute_margin_ms = config.absolute_safety_margin_ms;
+                let total_safety_margin_ms = percentage_margin_ms.max(absolute_margin_ms);
+                (self.max_depth, self.time_limit_ms.saturating_sub(total_safety_margin_ms))
             }
         };
         
@@ -7888,7 +7923,9 @@ impl IterativeDeepening {
         for depth in 1..=effective_max_depth {
             // Reset global node counter for this depth and start periodic reporter
             GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
-            if self.should_stop(&start_time, search_time_limit) { 
+            // Task 8.4: Force time check at depth boundaries (use should_stop_force)
+            search_engine.time_check_node_counter = 0; // Reset counter for new depth
+            if search_engine.should_stop_force(&start_time, search_time_limit) { 
                 crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Time limit reached, stopping search");
                 break; 
             }
@@ -8186,15 +8223,6 @@ impl IterativeDeepening {
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
         
         best_move.map(|m| (m, best_score))
-    }
-
-    fn should_stop(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
-        if let Some(flag) = &self.stop_flag {
-            if flag.load(Ordering::Relaxed) {
-                return true;
-            }
-        }
-        start_time.has_exceeded_limit(time_limit_ms)
     }
 }
 

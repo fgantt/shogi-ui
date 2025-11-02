@@ -4004,6 +4004,13 @@ pub struct TimeManagementConfig {
     pub check_time_limit_ms: u32,
     /// Enable time budget allocation (Task 4.5)
     pub enable_time_budget: bool,
+    /// Time check frequency: check every N nodes instead of every node (Task 8.4)
+    /// Set to 1 to check every node, higher values reduce overhead
+    pub time_check_frequency: u32,
+    /// Absolute safety margin in milliseconds (Task 8.2, 8.3)
+    /// Used in addition to percentage-based safety_margin
+    /// This represents the minimum overhead buffer needed for time checks and search completion
+    pub absolute_safety_margin_ms: u32,
 }
 
 impl Default for TimeManagementConfig {
@@ -4024,6 +4031,8 @@ impl Default for TimeManagementConfig {
             check_max_depth: 5,
             check_time_limit_ms: 5000,
             enable_time_budget: true,
+            time_check_frequency: 1024, // Task 8.4: Check every 1024 nodes (reduce overhead)
+            absolute_safety_margin_ms: 100, // Task 8.2, 8.3: 100ms absolute safety margin
         }
     }
 }
@@ -4055,6 +4064,19 @@ impl TimeManagementConfig {
         }
         if self.check_max_depth == 0 || self.check_max_depth > 10 {
             return Err("check_max_depth must be between 1 and 10".to_string());
+        }
+        
+        // Task 8.4: Validate time check frequency
+        if self.time_check_frequency == 0 {
+            return Err("time_check_frequency must be greater than 0".to_string());
+        }
+        if self.time_check_frequency > 100000 {
+            return Err("time_check_frequency should not exceed 100000 for performance reasons".to_string());
+        }
+        
+        // Task 8.3: Validate absolute safety margin
+        if self.absolute_safety_margin_ms > 10000 {
+            return Err("absolute_safety_margin_ms should not exceed 10000ms (10 seconds)".to_string());
         }
 
         Ok(())
