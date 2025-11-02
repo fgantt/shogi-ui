@@ -432,8 +432,9 @@ impl ShogiEngine {
         
         crate::debug_utils::debug_log("Trying to get search engine lock");
         
-        
         // Try to get the search engine lock, but don't panic if it fails
+        // Note: This engine runs as a separate process communicating via USI protocol.
+        // The search runs in this process, so periodic yielding helps keep the process responsive.
         crate::debug_utils::debug_log("About to lock search engine");
         let search_result = self.search_engine.lock().map(|mut search_engine_guard| {
             crate::debug_utils::debug_log("Got search engine lock, starting search");

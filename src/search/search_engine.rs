@@ -7944,6 +7944,65 @@ impl IterativeDeepening {
             
             // Calculate time budget for this depth (Task 4.5, 4.7)
             let depth_start_time = TimeSource::now();
+            
+            // Start periodic info message sender (similar to Stockfish/YaneuraOu)
+            // Send info messages every ~1 second during search to keep UI responsive
+            // Uses only global counters to avoid complex synchronization
+            let info_sender_cancel = Arc::new(AtomicBool::new(false));
+            let info_sender_cancel_clone = info_sender_cancel.clone();
+            let depth_clone = depth;
+            let depth_start_time_instant = std::time::Instant::now(); // Capture instant for elapsed time
+            let board_clone = board.clone();
+            let captured_clone = captured_pieces.clone();
+            let player_clone = player;
+            
+            // Store best move/score/PV for periodic updates (shared state)
+            let best_move_shared = Arc::new(std::sync::Mutex::new((None::<Move>, 0i32, String::new())));
+            let best_move_shared_clone = best_move_shared.clone();
+            
+            // Spawn info sender thread that periodically sends updates
+            let info_sender_handle = std::thread::spawn(move || {
+                let mut last_info_time = std::time::Instant::now();
+                let info_interval = std::time::Duration::from_millis(1000); // Send every 1 second
+                
+                while !info_sender_cancel_clone.load(Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_millis(100)); // Check every 100ms
+                    
+                    if last_info_time.elapsed() >= info_interval {
+                        let elapsed = depth_start_time_instant.elapsed().as_millis() as u32;
+                        let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
+                        
+                        if nodes == 0 {
+                            continue; // Skip if no nodes searched yet
+                        }
+                        
+                        let seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                        let seldepth = if seldepth == 0 { depth_clone } else { seldepth.max(depth_clone) };
+                        let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
+                        
+                        // Get current best move/score/PV from shared state
+                        let (_, current_score, current_pv) = best_move_shared_clone.lock()
+                            .map(|guard| guard.clone())
+                            .unwrap_or((None, 0, String::new()));
+                        
+                        // Send info message (skip during silent benches)
+                        if std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                            let info_string = if !current_pv.is_empty() {
+                                format!("info depth {} seldepth {} score cp {} time {} nodes {} nps {} pv {}", 
+                                    depth_clone, seldepth, current_score, elapsed, nodes, nps, current_pv)
+                            } else {
+                                format!("info depth {} seldepth {} score cp {} time {} nodes {} nps {}", 
+                                    depth_clone, seldepth, current_score, elapsed, nodes, nps)
+                            };
+                            println!("{}", info_string);
+                            let _ = std::io::Write::flush(&mut std::io::stdout());
+                        }
+                        
+                        last_info_time = std::time::Instant::now();
+                    }
+                }
+            });
+            
             let time_budget = if search_engine.time_management_config.enable_time_budget {
                 let budget = search_engine.calculate_time_budget(depth, search_time_limit, elapsed_ms, effective_max_depth);
                 // Record allocated budget for metrics (Task 4.10)
@@ -8096,9 +8155,22 @@ impl IterativeDeepening {
                     crate::debug_utils::log_decision("ASPIRATION_WINDOW", "Success", 
                         &format!("Score {} within window [{}, {}]", score, current_alpha, current_beta), 
                         Some(score));
-                    best_move = Some(move_);
+                    let move_clone = move_.clone(); // Clone before moving
+                    best_move = Some(move_clone.clone());
                     best_score = score;
                     previous_scores.push(score);
+                    
+                    // Update shared state for periodic info messages
+                    let pv_for_info = search_engine.get_pv(board, captured_pieces, player, depth_clone);
+                    let pv_string = if pv_for_info.is_empty() {
+                        move_clone.to_usi_string()
+                    } else {
+                        pv_for_info.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ")
+                    };
+                    if let Ok(mut guard) = best_move_shared.lock() {
+                        *guard = (Some(move_clone), score, pv_string);
+                    }
+                    
                     break;
                 } else {
                     // Search failed - widen window and retry instead of giving up
@@ -8172,6 +8244,10 @@ impl IterativeDeepening {
                     stats.estimation_accuracy = (stats.estimation_accuracy * (count - 1.0) + accuracy) / count;
                 }
             }
+            
+            // Stop periodic info sender before building final info
+            info_sender_cancel.store(true, Ordering::Relaxed);
+            let _ = info_sender_handle.join(); // Wait for thread to finish
             
             crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
