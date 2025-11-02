@@ -51,16 +51,16 @@
 
 ## Tasks
 
-- [ ] 1.0 Feature: Core Search Algorithms (PVS, Iterative Deepening, Aspiration Windows)
-  - [ ] 1.1 Review search_engine.rs for PVS implementation correctness
-  - [ ] 1.2 Verify alpha-beta pruning logic and bounds handling
-  - [ ] 1.3 Check iterative deepening implementation and time limits
-  - [ ] 1.4 Review aspiration window implementation and re-search logic
-  - [ ] 1.5 Assess time management accuracy and overhead
-  - [ ] 1.6 Document performance characteristics and bottlenecks
-  - [ ] 1.7 Identify strengths and weaknesses
-  - [ ] 1.8 Generate improvement recommendations for search core
-  - [ ] 1.9 Cross-reference with move ordering integration points
+- [x] 1.0 Feature: Core Search Algorithms (PVS, Iterative Deepening, Aspiration Windows)
+  - [x] 1.1 Review search_engine.rs for PVS implementation correctness
+  - [x] 1.2 Verify alpha-beta pruning logic and bounds handling
+  - [x] 1.3 Check iterative deepening implementation and time limits
+  - [x] 1.4 Review aspiration window implementation and re-search logic
+  - [x] 1.5 Assess time management accuracy and overhead
+  - [x] 1.6 Document performance characteristics and bottlenecks
+  - [x] 1.7 Identify strengths and weaknesses
+  - [x] 1.8 Generate improvement recommendations for search core
+  - [x] 1.9 Cross-reference with move ordering integration points
 
 - [ ] 2.0 Feature: Null Move Pruning
   - [ ] 2.1 Review null-move pruning implementation in search_engine.rs
