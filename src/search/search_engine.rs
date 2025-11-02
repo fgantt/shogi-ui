@@ -4763,6 +4763,8 @@ impl SearchEngine {
                 max_researches: 3,           // Allow more re-searches
                 enable_statistics: true,
                 use_static_eval_for_init: true,
+                enable_position_type_tracking: true,
+                disable_statistics_in_production: false,
             },
             AspirationWindowPlayingStyle::Conservative => AspirationWindowConfig {
                 enabled: true,
@@ -4774,6 +4776,8 @@ impl SearchEngine {
                 max_researches: 1,           // Fewer re-searches
                 enable_statistics: true,
                 use_static_eval_for_init: true,
+                enable_position_type_tracking: true,
+                disable_statistics_in_production: false,
             },
             AspirationWindowPlayingStyle::Balanced => AspirationWindowConfig {
                 enabled: true,
@@ -4785,6 +4789,8 @@ impl SearchEngine {
                 max_researches: 2,
                 enable_statistics: true,
                 use_static_eval_for_init: true,
+                enable_position_type_tracking: true,
+                disable_statistics_in_production: false,
             },
         }
     }
@@ -4892,17 +4898,33 @@ impl SearchEngine {
     }
 
     /// Calculate window size with debugging and statistics tracking
+    /// 
+    /// Task 7.2, 7.3, 7.4: Conditional statistics tracking with optimized updates
     pub fn calculate_window_size_with_stats(&mut self, depth: u8, previous_score: i32, recent_failures: u8) -> i32 {
         let window_size = self.calculate_window_size(depth, previous_score, recent_failures);
         
-        // Update statistics
-        if self.aspiration_config.enable_statistics {
-            self.aspiration_stats.average_window_size = 
-                (self.aspiration_stats.average_window_size * (self.aspiration_stats.total_searches as f64) + window_size as f64) 
-                / (self.aspiration_stats.total_searches + 1) as f64;
+        // Task 7.2, 7.3: Conditional statistics tracking
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production;
+        
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        // Task 7.4: Optimized statistics update (only calculate if tracking enabled)
+        if should_track_stats {
+            // Update average window size (optimized: use incremental update)
+            let total = self.aspiration_stats.total_searches;
+            if total > 0 {
+                // Incremental average update: new_avg = old_avg + (new_value - old_avg) / (total + 1)
+                let diff = (window_size as f64 - self.aspiration_stats.average_window_size) / (total + 1) as f64;
+                self.aspiration_stats.average_window_size += diff;
+            } else {
+                self.aspiration_stats.average_window_size = window_size as f64;
+            }
         }
         
-        // Debug logging
+        // Debug logging (only in debug builds or when verbose-debug feature enabled)
+        #[cfg(feature = "verbose-debug")]
         if window_size != i32::MAX {
             crate::debug_utils::debug_log(&format!(
                 "Aspiration: depth={}, previous_score={}, recent_failures={}, window_size={}",
@@ -5043,11 +5065,22 @@ impl SearchEngine {
 
         let final_size = self.validate_window_size(comprehensive_size);
         
-        // Update statistics
-        if self.aspiration_config.enable_statistics {
-            self.aspiration_stats.average_window_size = 
-                (self.aspiration_stats.average_window_size * (self.aspiration_stats.total_searches as f64) + final_size as f64) 
-                / (self.aspiration_stats.total_searches + 1) as f64;
+        // Task 7.2, 7.3, 7.4: Conditional statistics tracking with optimized updates
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production;
+        
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        if should_track_stats {
+            // Task 7.4: Optimized incremental average update
+            let total = self.aspiration_stats.total_searches;
+            if total > 0 {
+                let diff = (final_size as f64 - self.aspiration_stats.average_window_size) / (total + 1) as f64;
+                self.aspiration_stats.average_window_size += diff;
+            } else {
+                self.aspiration_stats.average_window_size = final_size as f64;
+            }
         }
 
         // Debug logging
@@ -5120,9 +5153,20 @@ impl SearchEngine {
     // ===== ASPIRATION WINDOW RE-SEARCH LOGIC =====
 
     /// Handle fail-low by widening window downward
+    /// 
+    /// Task 7.2, 7.3, 7.4: Conditional statistics tracking
     fn handle_fail_low(&mut self, alpha: &mut i32, beta: &mut i32, 
                        previous_score: i32, window_size: i32) {
-        self.aspiration_stats.fail_lows += 1;
+        // Task 7.2, 7.3: Conditional statistics tracking
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production;
+        
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        if should_track_stats {
+            self.aspiration_stats.fail_lows += 1;
+        }
         
         // Enhanced validation with recovery
         if !self.validate_and_recover_window(alpha, beta, previous_score, window_size, 0) {
@@ -5165,9 +5209,20 @@ impl SearchEngine {
     }
 
     /// Handle fail-high by widening window upward
+    /// 
+    /// Task 7.2, 7.3, 7.4: Conditional statistics tracking
     fn handle_fail_high(&mut self, alpha: &mut i32, beta: &mut i32,
                         previous_score: i32, window_size: i32) {
-        self.aspiration_stats.fail_highs += 1;
+        // Task 7.2, 7.3: Conditional statistics tracking
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production;
+        
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        if should_track_stats {
+            self.aspiration_stats.fail_highs += 1;
+        }
         
         // Enhanced validation with recovery
         if !self.validate_and_recover_window(alpha, beta, previous_score, window_size, 0) {
@@ -5210,17 +5265,56 @@ impl SearchEngine {
     }
 
     /// Update aspiration window statistics
+    /// 
+    /// Task 7.1, 7.2, 7.3, 7.4: Enhanced with position type tracking and conditional updates
     fn update_aspiration_stats(&mut self, had_research: bool, research_count: u8) {
-        self.aspiration_stats.total_searches += 1;
+        // Task 7.2, 7.3: Conditional statistics tracking
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production;
         
-        // Track aspiration window searches for core metrics (Task 5.7)
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        // Task 7.4: Optimized updates - only increment if tracking enabled
+        if should_track_stats {
+            self.aspiration_stats.total_searches += 1;
+        }
+        
+        // Track aspiration window searches for core metrics (Task 5.7) - always tracked
         self.core_search_metrics.total_aspiration_searches += 1;
+        
         if !had_research {
-            self.aspiration_stats.successful_searches += 1;
-            // Track successful aspiration searches (Task 5.7)
+            if should_track_stats {
+                self.aspiration_stats.successful_searches += 1;
+            }
+            // Track successful aspiration searches (Task 5.7) - always tracked
             self.core_search_metrics.successful_aspiration_searches += 1;
         }
-        self.aspiration_stats.total_researches += research_count as u64;
+        
+        if should_track_stats {
+            self.aspiration_stats.total_researches += research_count as u64;
+        }
+    }
+    
+    /// Update aspiration window statistics with position type (Task 7.1)
+    fn update_aspiration_stats_with_phase(&mut self, had_research: bool, research_count: u8, phase: GamePhase, window_size: i32) {
+        // Update basic statistics first
+        self.update_aspiration_stats(had_research, research_count);
+        
+        // Task 7.1: Update position type specific statistics
+        let should_track_stats = self.aspiration_config.enable_statistics 
+            && !self.aspiration_config.disable_statistics_in_production
+            && self.aspiration_config.enable_position_type_tracking;
+        
+        #[cfg(not(feature = "statistics"))]
+        let should_track_stats = false; // Task 7.3: Disable in production if feature flag not set
+        
+        if should_track_stats {
+            // Update window size statistics by position type
+            self.aspiration_stats.update_window_size_by_position_type(phase, window_size);
+            // Update success rate statistics by position type
+            self.aspiration_stats.update_success_rate_by_position_type(phase, !had_research);
+        }
     }
 
     /// Validate window parameters for error handling
@@ -7987,8 +8081,25 @@ impl IterativeDeepening {
                 }
             }
 
-            // Update statistics
-            search_engine.update_aspiration_stats(researches > 0, researches);
+            // Task 7.1: Update statistics with position type tracking
+            let game_phase = search_engine.get_game_phase(board);
+            let window_size = if depth == 1 || !search_engine.aspiration_config.enabled {
+                if depth == 1 && search_engine.aspiration_config.enabled {
+                    search_engine.calculate_window_size(depth, initial_static_eval, 0)
+                } else {
+                    0 // Full-width window
+                }
+            } else {
+                let previous_score = previous_scores.last().copied().unwrap_or(initial_static_eval);
+                search_engine.calculate_window_size(depth, previous_score, 0)
+            };
+            
+            search_engine.update_aspiration_stats_with_phase(
+                researches > 0, 
+                researches, 
+                game_phase, 
+                window_size
+            );
             let depth_completion_time = depth_start_time.elapsed_ms();
             
             // Record depth completion metrics (Task 4.10)

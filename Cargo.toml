@@ -8,6 +8,9 @@ default = []
 # Enable verbose debug logging with compile-time checks
 # When disabled, expensive string formatting is completely eliminated
 verbose-debug = []
+# Enable statistics tracking (Task 7.3)
+# When disabled, statistics tracking code is compiled out
+statistics = []
 
 [lib]
 crate-type = ["rlib"]
@@ -106,6 +109,10 @@ harness = false
 
 [[bench]]
 name = "move_ordering_performance_benchmarks"
+harness = false
+
+[[bench]]
+name = "aspiration_window_statistics_benchmarks"
 harness = false
 
 [[example]]

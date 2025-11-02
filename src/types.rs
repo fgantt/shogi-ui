@@ -2704,6 +2704,11 @@ pub struct AspirationWindowConfig {
     pub enable_statistics: bool,
     /// Use static evaluation for aspiration window initialization (Task 4.1)
     pub use_static_eval_for_init: bool,
+    /// Enable position type tracking for window optimization (Task 7.1)
+    pub enable_position_type_tracking: bool,
+    /// Disable statistics tracking in production builds (Task 7.2)
+    /// When true, statistics tracking is disabled regardless of enable_statistics
+    pub disable_statistics_in_production: bool,
 }
 
 impl Default for AspirationWindowConfig {
@@ -2718,6 +2723,8 @@ impl Default for AspirationWindowConfig {
             max_researches: 2,           // Allow up to 2 re-searches
             enable_statistics: true,
             use_static_eval_for_init: true, // Use static eval for first window (Task 4.1)
+            enable_position_type_tracking: true, // Task 7.1: Enable position type tracking by default
+            disable_statistics_in_production: false, // Task 7.2: Allow statistics in production by default
         }
     }
 }
@@ -2777,6 +2784,46 @@ impl AspirationWindowConfig {
     }
 }
 
+/// Window size statistics by position type (Task 7.1)
+#[derive(Debug, Clone, Default)]
+pub struct WindowSizeByPositionType {
+    /// Average window size in opening
+    pub opening_avg_window_size: f64,
+    /// Average window size in middlegame
+    pub middlegame_avg_window_size: f64,
+    /// Average window size in endgame
+    pub endgame_avg_window_size: f64,
+    /// Number of searches in opening
+    pub opening_searches: u64,
+    /// Number of searches in middlegame
+    pub middlegame_searches: u64,
+    /// Number of searches in endgame
+    pub endgame_searches: u64,
+}
+
+/// Success rate statistics by position type (Task 7.1)
+#[derive(Debug, Clone, Default)]
+pub struct SuccessRateByPositionType {
+    /// Success rate in opening
+    pub opening_success_rate: f64,
+    /// Success rate in middlegame
+    pub middlegame_success_rate: f64,
+    /// Success rate in endgame
+    pub endgame_success_rate: f64,
+    /// Successful searches in opening
+    pub opening_successful: u64,
+    /// Successful searches in middlegame
+    pub middlegame_successful: u64,
+    /// Successful searches in endgame
+    pub endgame_successful: u64,
+    /// Total searches in opening
+    pub opening_total: u64,
+    /// Total searches in middlegame
+    pub middlegame_total: u64,
+    /// Total searches in endgame
+    pub endgame_total: u64,
+}
+
 /// Performance statistics for Aspiration Windows
 #[derive(Debug, Clone, Default)]
 pub struct AspirationWindowStats {
@@ -2828,6 +2875,10 @@ pub struct AspirationWindowStats {
     pub cache_hit_rate: f64,
     /// Adaptive tuning success rate
     pub adaptive_tuning_success_rate: f64,
+    /// Window size statistics by position type (Task 7.1)
+    pub window_size_by_position_type: WindowSizeByPositionType,
+    /// Success rate by position type (Task 7.1)
+    pub success_rate_by_position_type: SuccessRateByPositionType,
 }
 
 /// Time allocation strategy for iterative deepening (Task 4.8)
@@ -2871,6 +2922,65 @@ impl AspirationWindowStats {
     /// Reset all statistics to zero
     pub fn reset(&mut self) {
         *self = AspirationWindowStats::default();
+    }
+    
+    /// Update window size statistics by position type (Task 7.1)
+    pub fn update_window_size_by_position_type(&mut self, phase: GamePhase, window_size: i32) {
+        let stats = &mut self.window_size_by_position_type;
+        match phase {
+            GamePhase::Opening => {
+                let old_avg = stats.opening_avg_window_size;
+                let count = stats.opening_searches;
+                stats.opening_searches += 1;
+                stats.opening_avg_window_size = 
+                    (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
+            },
+            GamePhase::Middlegame => {
+                let old_avg = stats.middlegame_avg_window_size;
+                let count = stats.middlegame_searches;
+                stats.middlegame_searches += 1;
+                stats.middlegame_avg_window_size = 
+                    (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
+            },
+            GamePhase::Endgame => {
+                let old_avg = stats.endgame_avg_window_size;
+                let count = stats.endgame_searches;
+                stats.endgame_searches += 1;
+                stats.endgame_avg_window_size = 
+                    (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
+            },
+        }
+    }
+    
+    /// Update success rate statistics by position type (Task 7.1)
+    pub fn update_success_rate_by_position_type(&mut self, phase: GamePhase, successful: bool) {
+        let stats = &mut self.success_rate_by_position_type;
+        match phase {
+            GamePhase::Opening => {
+                stats.opening_total += 1;
+                if successful {
+                    stats.opening_successful += 1;
+                }
+                stats.opening_success_rate = 
+                    stats.opening_successful as f64 / stats.opening_total as f64;
+            },
+            GamePhase::Middlegame => {
+                stats.middlegame_total += 1;
+                if successful {
+                    stats.middlegame_successful += 1;
+                }
+                stats.middlegame_success_rate = 
+                    stats.middlegame_successful as f64 / stats.middlegame_total as f64;
+            },
+            GamePhase::Endgame => {
+                stats.endgame_total += 1;
+                if successful {
+                    stats.endgame_successful += 1;
+                }
+                stats.endgame_success_rate = 
+                    stats.endgame_successful as f64 / stats.endgame_total as f64;
+            },
+        }
     }
 
     /// Initialize depth-based tracking vectors
@@ -3735,6 +3845,8 @@ impl EngineConfig {
                     max_researches: 2,
                     enable_statistics: true,
                     use_static_eval_for_init: true,
+                    enable_position_type_tracking: true,
+                    disable_statistics_in_production: false,
                 },
                 iid: IIDConfig {
                     enabled: true,
@@ -3792,6 +3904,8 @@ impl EngineConfig {
                     max_researches: 3,
                     enable_statistics: true,
                     use_static_eval_for_init: true,
+                    enable_position_type_tracking: true,
+                    disable_statistics_in_production: false,
                 },
                 iid: IIDConfig {
                     enabled: true,
