@@ -80,6 +80,8 @@ pub struct SearchEngine {
 
 /// Global aggregate of nodes searched across all threads for live reporting.
 pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
+/// Global maximum search depth reached (seldepth) across all threads for live reporting.
+pub static GLOBAL_SELDEPTH: AtomicU64 = AtomicU64::new(0);
 // Global contention metrics for shared TT
 pub static TT_TRY_READS: AtomicU64 = AtomicU64::new(0);
 pub static TT_TRY_READ_SUCCESSES: AtomicU64 = AtomicU64::new(0);
@@ -204,7 +206,7 @@ impl SearchEngine {
         self.ybwc_div_deep = deep_divisor.max(1);
     }
 
-    fn flush_tt_buffer(&mut self) {
+    pub fn flush_tt_buffer(&mut self) {
         if self.tt_write_buffer.is_empty() { return; }
         if let Some(ref shared_tt) = self.shared_transposition_table {
             TT_TRY_WRITES.fetch_add(1, Ordering::Relaxed);
@@ -231,11 +233,20 @@ impl SearchEngine {
     #[inline]
     fn maybe_buffer_tt_store(&mut self, entry: TranspositionEntry, depth: u8, flag: TranspositionFlag) {
         // Gate writes: at shallow depths, only store Exact entries
+        // BUT: Always store entries with best_move to enable PV construction
+        // This is critical - PV building needs best_move entries for all positions in the line
+        let has_best_move = entry.best_move.is_some();
+        
         if depth <= self.tt_exact_only_max_depth() && !matches!(flag, TranspositionFlag::Exact) {
-            return;
+            // Still store if we have a best_move - needed for PV construction
+            if !has_best_move {
+                return;
+            }
+            // For PV positions, allow storing even non-Exact entries at shallow depths
         }
         // Gate non-Exact writes: allow only deeper-than-threshold entries
-        if !(matches!(flag, TranspositionFlag::Exact) || depth >= self.tt_write_min_depth()) {
+        // BUT: Always allow if we have best_move (for PV construction)
+        if !(matches!(flag, TranspositionFlag::Exact) || depth >= self.tt_write_min_depth() || has_best_move) {
             return;
         }
         if self.shared_transposition_table.is_some() {
@@ -2500,6 +2511,7 @@ impl SearchEngine {
         }
         
         self.nodes_searched = 0;
+        self.current_depth = depth;
         let start_time = TimeSource::now();
         let mut alpha = alpha;
         
@@ -2774,6 +2786,21 @@ impl SearchEngine {
         }
         self.nodes_searched += 1;
         GLOBAL_NODES_SEARCHED.fetch_add(1, Ordering::Relaxed);
+        // Update seldepth (selective depth) - track maximum depth reached
+        // current_depth is the iteration depth (e.g., 5), depth is remaining depth (e.g., starts at 5, then 4, 3, 2...)
+        // Actual depth from root = current_depth - depth + 1 (when depth=5 at root, we're at ply 1)
+        // When depth=0, we've reached current_depth plies from root
+        // So depth_from_root = current_depth - depth + 1
+        // But actually, if we start with depth=5, that means we search 5 plies: depth goes 5->4->3->2->1->0
+        // When depth=0, we've searched 5 plies (current_depth)
+        // When depth=1, we've searched 4 plies
+        // So depth_from_root = current_depth - depth
+        let depth_from_root = self.current_depth.saturating_sub(depth);
+        let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
+        // Update if this is deeper than what we've seen
+        if depth_from_root as u64 > prev_seldepth {
+            GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
+        }
         let fen_key = board.to_fen(player, captured_pieces);
         if history.contains(&fen_key) {
             crate::debug_utils::trace_log("NEGAMAX", "Repetition detected, returning 0 (draw)");
@@ -3000,6 +3027,12 @@ impl SearchEngine {
                             crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
                         }
                     }
+                    // CRITICAL: Ensure the move that caused the cutoff is stored as best_move
+                    // This is essential for PV building - we need the refutation move stored
+                    if best_move_for_tt.is_none() {
+                        best_move_for_tt = Some(move_.clone());
+                        crate::debug_utils::trace_log("NEGAMAX", &format!("Storing cutoff move {} as best_move for PV", move_.to_usi_string()));
+                    }
                     // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
                     self.flush_tt_buffer();
                     break; 
@@ -3010,6 +3043,15 @@ impl SearchEngine {
         history.pop();
 
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
+        
+        // CRITICAL FOR PV: If we don't have a best_move yet but we have moves, use the first move
+        // This ensures PV building doesn't break early. Even if no move improved the score,
+        // we need to store some move to enable PV construction.
+        if best_move_for_tt.is_none() && !sorted_moves.is_empty() {
+            best_move_for_tt = Some(sorted_moves[0].clone());
+            crate::debug_utils::trace_log("NEGAMAX", &format!("No best move found, using first move {} for PV", sorted_moves[0].to_usi_string()));
+        }
+        
         // Use the position hash we calculated earlier for proper TT storage
         let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt, position_hash);
         self.maybe_buffer_tt_store(entry, depth, flag);
@@ -3028,6 +3070,15 @@ impl SearchEngine {
 
         // Update statistics
         self.quiescence_stats.nodes_searched += 1;
+        // Update seldepth (selective depth) - quiescence extends beyond normal depth
+        // When we enter quiescence, depth is 0, so we've reached current_depth plies
+        // Quiescence can extend deeper: current_depth + (max_quiescence_depth - depth)
+        // For now, just track that we've reached current_depth
+        let depth_from_root = self.current_depth;
+        let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
+        if depth_from_root as u64 > prev_seldepth {
+            GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
+        }
 
         // Check depth limit
         if depth == 0 || depth > self.quiescence_config.max_depth {
@@ -3145,6 +3196,15 @@ impl SearchEngine {
             } else {
                 depth - 1
             };
+            // Update seldepth for quiescence extensions - quiescence extends beyond normal depth
+            // When in quiescence, we've already reached current_depth plies from root
+            // Quiescence extends deeper: current_depth + (max_quiescence_depth - depth)
+            // For a more accurate seldepth, we track current_depth + extensions
+            let quiescence_depth_from_root = self.current_depth + (5 - depth); // 5 is max quiescence depth
+            let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
+            if quiescence_depth_from_root as u64 > prev_seldepth {
+                GLOBAL_SELDEPTH.store(quiescence_depth_from_root as u64, Ordering::Relaxed);
+            }
             
             crate::debug_utils::start_timing(&format!("quiescence_move_{}", move_index));
             let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, search_depth);
@@ -3517,7 +3577,11 @@ impl SearchEngine {
         let mut current_captured = captured_pieces.clone();
         let mut current_player = player;
     
-        for _ in 0..depth {
+        // Try to build PV as long as we have entries with best_move
+        // Use depth as a guide, but allow going deeper if entries exist
+        // Cap at 64 moves to avoid extremely long PVs
+        let max_pv_length = 64;
+        for _ in 0..max_pv_length {
             let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
             // Probe with depth=0 to accept entries from any search depth
             if let Some(entry) = self.transposition_table.probe(position_hash, 0) {
@@ -3528,9 +3592,11 @@ impl SearchEngine {
                     }
                     current_player = current_player.opposite();
                 } else {
+                    // No best_move in this entry - stop building PV here
                     break;
                 }
             } else {
+                // No entry in TT for this position - stop building PV here
                 break;
             }
         }
@@ -3548,7 +3614,10 @@ impl SearchEngine {
                 let mut current_board = board.clone();
                 let mut current_captured = captured_pieces.clone();
                 let mut current_player = player;
-                for _ in 0..depth {
+                // Try to build PV as long as we have entries with best_move
+                // Cap at 64 moves to avoid extremely long PVs
+                let max_pv_length = 64;
+                for _ in 0..max_pv_length {
                     let position_hash = self.hash_calculator.get_position_hash(&current_board, current_player, &current_captured);
                     if let Some(entry) = tt.probe(position_hash, 0) {
                         if let Some(move_) = &entry.best_move {
@@ -3557,8 +3626,14 @@ impl SearchEngine {
                                 current_captured.add_piece(captured.piece_type, current_player);
                             }
                             current_player = current_player.opposite();
-                        } else { break; }
-                    } else { break; }
+                        } else {
+                            // No best_move in this entry - stop building PV here
+                            break;
+                        }
+                    } else {
+                        // No entry in TT for this position - stop building PV here
+                        break;
+                    }
                 }
                 return pv;
             }
@@ -7355,8 +7430,9 @@ impl IterativeDeepening {
             crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Searching at depth {} (elapsed: {}ms, remaining: {}ms)", depth, elapsed_ms, remaining_time));
             crate::debug_utils::start_timing(&format!("depth_{}", depth));
 
-            // Reset global nodes aggregator at the start of each depth
+            // Reset global nodes aggregator and seldepth at the start of each depth
             GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
+            GLOBAL_SELDEPTH.store(0, Ordering::Relaxed);
 
             // Calculate aspiration window parameters
             let (alpha, beta) = if depth == 1 || !search_engine.aspiration_config.enabled {
@@ -7498,7 +7574,15 @@ impl IterativeDeepening {
             crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
             if let Some((mv_final, score)) = search_result {
-                let pv = search_engine.get_pv(board, captured_pieces, player, depth);
+                // Ensure TT is flushed before building PV so all entries are visible
+                search_engine.flush_tt_buffer();
+                // Get seldepth (selective depth) - the maximum depth reached
+                // Use seldepth for PV length to show the full PV line that was actually searched
+                let seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                let seldepth = if seldepth == 0 { depth } else { seldepth.max(depth) };
+                // Use seldepth for PV building to get the full PV line, not just the iteration depth
+                // This ensures we show all moves in the PV that were actually searched
+                let pv = search_engine.get_pv(board, captured_pieces, player, seldepth);
                 let pv_string = if pv.is_empty() {
                     // Fallback to at least show the best root move when PV unavailable (e.g., parallel path)
                     mv_final.to_usi_string()
@@ -7506,12 +7590,13 @@ impl IterativeDeepening {
                     pv.iter().map(|m| m.to_usi_string()).collect::<Vec<String>>().join(" ")
                 };
                 let time_searched = start_time.elapsed_ms();
-                let nodes_for_info = search_engine.nodes_searched;
-                let nps = if time_searched > 0 { nodes_for_info * 1000 / time_searched as u64 } else { 0 };
+                // Use GLOBAL_NODES_SEARCHED for accurate node count across threads
+                let nodes_for_info = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
+                let nps = if time_searched > 0 { nodes_for_info.saturating_mul(1000) / (time_searched as u64) } else { 0 };
 
                 crate::debug_utils::log_search_stats("ITERATIVE_DEEPENING", depth, nodes_for_info, score, &pv_string);
 
-                let info_string = format!("info depth {} score cp {} time {} nodes {} nps {} pv {}", depth, score, time_searched, nodes_for_info, nps, pv_string);
+                let info_string = format!("info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}", depth, seldepth, score, time_searched, nodes_for_info, nps, pv_string);
                 
                 // Print the info message to stdout for USI protocol (skip during silent benches)
                 if std::env::var("SHOGI_SILENT_BENCH").is_err() {

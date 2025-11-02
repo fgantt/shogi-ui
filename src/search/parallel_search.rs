@@ -689,8 +689,9 @@ impl ParallelSearchEngine {
         // Use thread pool to parallelize search across moves, while streaming results
         let hash_size_mb = 16; // Default hash size, will be configurable later
         let (tx, rx) = std::sync::mpsc::channel::<(Move, i32, String)>();
-        // Reset global nodes counter for this depth
+        // Reset global nodes counter and seldepth for this depth
         GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
+        crate::search::search_engine::GLOBAL_SELDEPTH.store(0, Ordering::Relaxed);
         let _start_time = TimeSource::now();
         let bench_start = std::time::Instant::now();
         let watchdog_cancel = Arc::new(AtomicBool::new(false));
@@ -735,12 +736,16 @@ impl ParallelSearchEngine {
                 let elapsed = bench_start.elapsed().as_millis() as u64;
                 let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
                 let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
+                // Get actual seldepth (selective depth) - the maximum depth reached
+                // If seldepth wasn't updated during search (shouldn't happen), use depth as fallback
+                let seldepth_raw = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                let seldepth = if seldepth_raw == 0 { depth } else { seldepth_raw.max(depth) };
                 // Emit real USI info line with score and PV (skip during silent benches)
                 if std::env::var("SHOGI_SILENT_BENCH").is_err() {
                     if !best_pv.is_empty() {
                         println!(
                             "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
-                            depth, depth, // seldepth approximated as depth for now
+                            depth, seldepth,
                             if let Ok(g) = best_for_consumer.lock() { g.1 } else { score },
                             elapsed, nodes, nps, best_pv
                         );
@@ -803,10 +808,20 @@ impl ParallelSearchEngine {
                     -beta,
                     -alpha,
                 ) {
+                    // Flush TT buffer before building PV so all entries are visible in shared TT
+                    context.search_engine_mut().flush_tt_buffer();
                     // Build PV from child and prefix root move
+                    // IMPORTANT: The PV building uses get_pv_for_reporting which will build as many moves
+                    // as are available in the TT (up to 64 moves). The depth parameter is just a hint,
+                    // but the actual PV length is determined by how many positions have best_move entries.
+                    // Use a large depth value to allow building the full PV line from the child position.
+                    let seldepth = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                    // Use seldepth if available, otherwise use a large value (64) to allow full PV building
+                    // The get_pv_for_reporting function will stop when it runs out of entries with best_move
+                    let pv_depth = if seldepth > 0 { seldepth } else { 64 };
                     let pv_moves = context
                         .search_engine_mut()
-                        .get_pv_for_reporting(&test_board, &test_captured, player.opposite(), search_depth);
+                        .get_pv_for_reporting(&test_board, &test_captured, player.opposite(), pv_depth);
                     let mv_root = mv.to_usi_string();
                     let mut pv_string = String::with_capacity(mv_root.len() + pv_moves.len() * 4);
                     pv_string.push_str(&mv_root);
@@ -839,6 +854,94 @@ impl ParallelSearchEngine {
         } else {
             None
         };
+
+        // Store root position in shared TT so PV can be built from root
+        // This ensures the PV chain is complete when building from the root position
+        if let Some((ref best_move, ref best_score)) = result {
+            use crate::search::shogi_hash::ShogiHashHandler;
+            use crate::{TranspositionEntry, TranspositionFlag};
+            
+            // Calculate root position hash
+            let hash_calculator = ShogiHashHandler::new_default();
+            let position_hash = hash_calculator.get_position_hash(board, player, captured_pieces);
+            
+            // Determine flag based on score vs alpha/beta
+            let flag = if *best_score <= alpha {
+                TranspositionFlag::UpperBound
+            } else if *best_score >= beta {
+                TranspositionFlag::LowerBound
+            } else {
+                TranspositionFlag::Exact
+            };
+            
+            // Create TT entry with best_move stored (critical for PV building)
+            let entry = TranspositionEntry::new_with_age(
+                *best_score,
+                depth,
+                flag,
+                Some(best_move.clone()),
+                position_hash
+            );
+            
+            // Store in shared TT
+            if let Ok(mut tt) = self.transposition_table.write() {
+                tt.store(entry);
+            }
+            
+            // IMPORTANT: Before building PV from root, we need to ensure all worker threads
+            // have flushed their TT buffers. However, worker threads are already done at this point.
+            // The issue might be that some positions along the PV simply weren't searched deeply enough,
+            // or their TT entries don't have best_move. We've already fixed storing best_move,
+            // so if PV is still short, it likely means the search depth itself is limited.
+            
+            // Now rebuild the full PV from the root position using the shared TT
+            // This ensures we get the complete PV chain, not just from child positions
+            let seldepth = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+            let pv_depth = if seldepth > 0 { seldepth } else { depth };
+            
+            // Create a temporary search engine context to build PV from root
+            let mut temp_context = ThreadLocalSearchContext::new(
+                board,
+                captured_pieces,
+                player,
+                self.stop_flag.clone(),
+                16
+            );
+            temp_context.search_engine_mut().set_shared_transposition_table(self.transposition_table.clone());
+            
+            // Build full PV from root position - try multiple times if first attempt is short
+            // This helps if there's a race condition with TT writes
+            let mut full_pv = temp_context.search_engine_mut()
+                .get_pv_for_reporting(board, captured_pieces, player, pv_depth);
+            
+            // If PV is shorter than expected, try building again after a brief delay
+            // to allow any remaining TT writes to flush
+            if full_pv.len() < (depth as usize).min(10) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                full_pv = temp_context.search_engine_mut()
+                    .get_pv_for_reporting(board, captured_pieces, player, pv_depth);
+            }
+            
+            // Emit final info line with the complete PV if we have at least 2 moves
+            if full_pv.len() >= 2 && std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                let elapsed = bench_start.elapsed().as_millis() as u64;
+                let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
+                let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
+                let seldepth_final = if seldepth == 0 { depth } else { seldepth.max(depth) };
+                let pv_string: String = full_pv.iter()
+                    .map(|m| m.to_usi_string())
+                    .collect::<Vec<String>>()
+                    .join(" ");
+                
+                if !pv_string.is_empty() {
+                    println!(
+                        "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
+                        depth, seldepth_final, *best_score, elapsed, nodes, nps, pv_string
+                    );
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
+            }
+        }
 
         // Aggregate queue stats to estimate contention and synchronization overhead
         let mut total_pushes: u64 = 0;
