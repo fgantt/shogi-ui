@@ -119,8 +119,21 @@ impl UsiHandler {
             "id name Shogi Engine".to_string(),
             "id author Gemini".to_string(),
             "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
-            "option name depth type spin default 5 min 1 max 8".to_string(),
+            // Fixed: MaxDepth now allows 0-100 (0 = unlimited/adaptive), default 0
+            "option name MaxDepth type spin default 0 min 0 max 100".to_string(),
             format!("option name USI_Threads type spin default {} min 1 max 32", thread_count),
+            // Time Management Options (Task 8.0, 4.0)
+            "option name TimeCheckFrequency type spin default 1024 min 1 max 100000".to_string(),
+            "option name TimeSafetyMargin type spin default 100 min 0 max 10000".to_string(),
+            "option name TimeAllocationStrategy type combo default Adaptive var Equal var Exponential var Adaptive".to_string(),
+            "option name EnableTimeBudget type check default true".to_string(),
+            "option name EnableCheckOptimization type check default true".to_string(),
+            // Aspiration Window Options (Task 7.0)
+            "option name EnableAspirationWindows type check default true".to_string(),
+            "option name AspirationWindowSize type spin default 25 min 10 max 500".to_string(),
+            "option name EnablePositionTypeTracking type check default true".to_string(),
+            // Legacy depth option (for backward compatibility, maps to MaxDepth)
+            "option name depth type spin default 0 min 0 max 100".to_string(),
             "usiok".to_string(),
         ]
     }

@@ -96,7 +96,7 @@ impl ShogiEngine {
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
             debug_mode: true,
             pondering: false,
-            depth: 5, // Default to medium depth
+            depth: 0, // Default to 0 (unlimited/adaptive), like YaneuraOu
             thread_count,
         };
         
@@ -301,9 +301,16 @@ impl ShogiEngine {
     }
 
     pub fn set_depth(&mut self, depth: u8) {
+        // Allow depth 0 (unlimited/adaptive) - engine will decide based on time
         self.depth = depth;
-        crate::debug_utils::debug_log(&format!("Set depth to: {}", depth));
-        eprintln!("DEBUG: Set depth to: {}", depth);
+        crate::debug_utils::debug_log(&format!("Set depth to: {} (0 = unlimited)", depth));
+        eprintln!("DEBUG: Set depth to: {} (0 = unlimited)", depth);
+    }
+    
+    /// Set max depth (allows 0 for unlimited)
+    pub fn set_max_depth(&mut self, depth: u8) {
+        self.depth = depth;
+        crate::debug_utils::debug_log(&format!("Set max depth to: {} (0 = unlimited)", depth));
     }
 
 
@@ -411,8 +418,11 @@ impl ShogiEngine {
         
         crate::debug_utils::debug_log(&format!("Found {} legal moves, proceeding with search", legal_moves.len()));
 
-        let actual_depth = if depth == 0 { 1 } else { depth };
-        crate::debug_utils::debug_log(&format!("Creating searcher with depth: {}, time_limit: {}ms", actual_depth, time_limit_ms));
+        // Handle depth 0 (unlimited/adaptive) - use high limit, engine will adapt based on time
+        // Using 100 as practical maximum (deep searches rarely exceed this)
+        let actual_depth = if depth == 0 { 100 } else { depth };
+        crate::debug_utils::debug_log(&format!("Creating searcher with depth: {} (requested: {}, 0 = unlimited), time_limit: {}ms", 
+            actual_depth, depth, time_limit_ms));
         let mut searcher = search::search_engine::IterativeDeepening::new_with_threads(
             actual_depth,
             time_limit_ms,
@@ -601,10 +611,19 @@ impl ShogiEngine {
                         }
                     }
                 }
-                "depth" => {
+                "MaxDepth" | "depth" => {
+                    // Support both MaxDepth (new) and depth (legacy) for backward compatibility
                     if let Ok(depth) = parts[3].parse::<u8>() {
-                        self.set_depth(depth);
-                        output.push(format!("info string Set depth to {}", depth));
+                        if depth <= 100 {
+                            self.set_max_depth(depth);
+                            if depth == 0 {
+                                output.push("info string Set MaxDepth to 0 (unlimited/adaptive)".to_string());
+                            } else {
+                                output.push(format!("info string Set MaxDepth to {}", depth));
+                            }
+                        } else {
+                            output.push("info string error MaxDepth must be between 0 and 100".to_string());
+                        }
                     }
                 }
                 // Quiescence search options
@@ -678,6 +697,104 @@ impl ShogiEngine {
                             config.aspiration_windows.enabled = enabled;
                             let _ = search_engine_guard.update_engine_config(config);
                             output.push(format!("info string {} aspiration windows", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                "AspirationWindowSize" => {
+                    if let Ok(size) = parts[3].parse::<u16>() {
+                        if size >= 10 && size <= 500 {
+                            if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                                let mut config = search_engine_guard.get_engine_config();
+                                config.aspiration_windows.base_window_size = size as i32;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push(format!("info string Set aspiration window size to {}", size));
+                            }
+                        } else {
+                            output.push("info string error AspirationWindowSize must be between 10 and 500".to_string());
+                        }
+                    }
+                }
+                "EnablePositionTypeTracking" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.aspiration_windows.enable_position_type_tracking = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} position type tracking", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                // Time Management Options (Task 8.0, 4.0)
+                "TimeCheckFrequency" => {
+                    if let Ok(frequency) = parts[3].parse::<u32>() {
+                        if frequency >= 1 && frequency <= 100000 {
+                            if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                                let mut config = search_engine_guard.get_engine_config();
+                                config.time_management.time_check_frequency = frequency;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push(format!("info string Set time check frequency to {} nodes", frequency));
+                            }
+                        } else {
+                            output.push("info string error TimeCheckFrequency must be between 1 and 100000".to_string());
+                        }
+                    }
+                }
+                "TimeSafetyMargin" => {
+                    if let Ok(margin) = parts[3].parse::<u32>() {
+                        if margin <= 10000 {
+                            if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                                let mut config = search_engine_guard.get_engine_config();
+                                config.time_management.absolute_safety_margin_ms = margin;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push(format!("info string Set time safety margin to {}ms", margin));
+                            }
+                        } else {
+                            output.push("info string error TimeSafetyMargin must be between 0 and 10000".to_string());
+                        }
+                    }
+                }
+                "TimeAllocationStrategy" => {
+                    if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                        let mut config = search_engine_guard.get_engine_config();
+                        match parts[3] {
+                            "Equal" => {
+                                config.time_management.allocation_strategy = crate::types::TimeAllocationStrategy::Equal;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push("info string Set time allocation strategy to Equal".to_string());
+                            }
+                            "Exponential" => {
+                                config.time_management.allocation_strategy = crate::types::TimeAllocationStrategy::Exponential;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push("info string Set time allocation strategy to Exponential".to_string());
+                            }
+                            "Adaptive" => {
+                                config.time_management.allocation_strategy = crate::types::TimeAllocationStrategy::Adaptive;
+                                let _ = search_engine_guard.update_engine_config(config);
+                                output.push("info string Set time allocation strategy to Adaptive".to_string());
+                            }
+                            _ => {
+                                output.push("info string error TimeAllocationStrategy must be Equal, Exponential, or Adaptive".to_string());
+                            }
+                        }
+                    }
+                }
+                "EnableTimeBudget" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.time_management.enable_time_budget = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} time budget allocation", if enabled { "Enabled" } else { "Disabled" }));
+                        }
+                    }
+                }
+                "EnableCheckOptimization" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.time_management.enable_check_optimization = enabled;
+                            let _ = search_engine_guard.update_engine_config(config);
+                            output.push(format!("info string {} check position optimization", if enabled { "Enabled" } else { "Disabled" }));
                         }
                     }
                 }

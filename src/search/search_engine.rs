@@ -3140,7 +3140,10 @@ impl SearchEngine {
                         self.update_killer_moves(move_.clone());
                     }
                     if let Some(from) = move_.from {
-                        self.history_table[from.row as usize][from.col as usize] += (depth * depth) as i32;
+                        // Use safe multiplication to prevent overflow (depth is u8, max value is 255)
+                        // depth * depth can overflow u8 if depth > 16, so cast to i32 first
+                        let depth_squared = (depth as i32) * (depth as i32);
+                        self.history_table[from.row as usize][from.col as usize] += depth_squared;
                     }
                 }
                     if alpha >= beta { 
@@ -3469,7 +3472,9 @@ impl SearchEngine {
         
         // Task 8.4: Optimize time check frequency
         let frequency = self.time_management_config.time_check_frequency;
-        self.time_check_node_counter += 1;
+        // Use wrapping_add to prevent panic on overflow (shouldn't happen in practice,
+        // but safe to handle in case frequency is very large or counter isn't reset)
+        self.time_check_node_counter = self.time_check_node_counter.wrapping_add(1);
         
         // Only check time every N nodes
         if self.time_check_node_counter >= frequency {
@@ -4875,7 +4880,9 @@ impl SearchEngine {
         // Scale based on score magnitude (more volatile scores = larger window)
         let score_factor = 1.0 + (previous_score.abs() as f64 / 1000.0) * 0.2;
         
-        let dynamic_size = (base_size as f64 * depth_factor * score_factor) as i32;
+        // Clamp to i32 range before casting to prevent overflow
+        let dynamic_size_f64 = base_size as f64 * depth_factor * score_factor;
+        let dynamic_size = dynamic_size_f64.min(i32::MAX as f64).max(i32::MIN as f64) as i32;
         
         // Apply limits
         dynamic_size.min(self.aspiration_config.max_window_size)
@@ -4891,7 +4898,9 @@ impl SearchEngine {
         
         // Increase window size if recent failures
         let failure_factor = 1.0 + (recent_failures as f64 * 0.3);
-        let adaptive_size = (base_size as f64 * failure_factor) as i32;
+        // Clamp to i32 range before casting to prevent overflow
+        let adaptive_size_f64 = base_size as f64 * failure_factor;
+        let adaptive_size = adaptive_size_f64.min(i32::MAX as f64).max(i32::MIN as f64) as i32;
         
         adaptive_size.min(self.aspiration_config.max_window_size)
     }
@@ -5092,8 +5101,10 @@ impl SearchEngine {
         let branching_factor = if move_count > 50 { 0.7 } else if move_count > 20 { 0.9 } else { 1.1 };
 
         // Combine all factors
-        let comprehensive_size = (base_size as f64 * depth_factor * score_factor * failure_factor * 
-                                 complexity_factor * time_factor * success_factor * branching_factor) as i32;
+        // Clamp to i32 range before casting to prevent overflow
+        let comprehensive_size_f64 = base_size as f64 * depth_factor * score_factor * failure_factor * 
+                                     complexity_factor * time_factor * success_factor * branching_factor;
+        let comprehensive_size = comprehensive_size_f64.min(i32::MAX as f64).max(i32::MIN as f64) as i32;
 
         let final_size = self.validate_window_size(comprehensive_size);
         
@@ -7968,8 +7979,9 @@ impl IterativeDeepening {
                 if depth == 1 && search_engine.aspiration_config.enabled {
                     // Use static evaluation for first window
                     let window_size = search_engine.calculate_window_size(depth, initial_static_eval, 0);
-                    let first_alpha = initial_static_eval - window_size;
-                    let first_beta = initial_static_eval + window_size;
+                    // Use saturating arithmetic to prevent overflow/underflow
+                    let first_alpha = initial_static_eval.saturating_sub(window_size);
+                    let first_beta = initial_static_eval.saturating_add(window_size);
                     crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window with static eval (static_eval: {}, window_size: {}, alpha: {}, beta: {})", 
                         depth, initial_static_eval, window_size, first_alpha, first_beta));
                     (first_alpha, first_beta)
@@ -7986,9 +7998,12 @@ impl IterativeDeepening {
                     initial_static_eval
                 });
                 let window_size = search_engine.calculate_window_size(depth, previous_score, 0);
+                // Use saturating arithmetic to prevent overflow/underflow
+                let calculated_alpha = previous_score.saturating_sub(window_size);
+                let calculated_beta = previous_score.saturating_add(window_size);
                 crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window (prev_score: {}, window_size: {}, alpha: {}, beta: {})", 
-                    depth, previous_score, window_size, previous_score - window_size, previous_score + window_size));
-                (previous_score - window_size, previous_score + window_size)
+                    depth, previous_score, window_size, calculated_alpha, calculated_beta));
+                (calculated_alpha, calculated_beta)
             };
 
             // Perform search with aspiration window

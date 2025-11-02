@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { EngineConfig, EngineOption, CommandResponse } from '../types/engine';
 import './EngineOptionsModal.css';
@@ -28,9 +28,61 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
   // Load saved options when modal opens
   useEffect(() => {
     if (isOpen && engine) {
-      loadSavedOptions();
+      // Reset updated metadata when modal opens to force fresh load
+      setUpdatedEngineMetadata(null);
+      
+      // Re-validate engine metadata to pick up new options (Task 8.0)
+      // This must complete before loadSavedOptions so we have the latest metadata
+      revalidateEngineMetadata().then(() => {
+        // Reload engine data to get updated metadata
+        reloadEngineData().then(() => {
+          loadSavedOptions();
+        });
+      });
     }
-  }, [isOpen, engine]);
+  }, [isOpen, engine?.id]); // Use engine.id instead of engine to avoid unnecessary re-renders
+  
+  // Re-validate engine metadata to get latest options
+  const revalidateEngineMetadata = async () => {
+    if (!engine) return;
+    
+    try {
+      // Re-validate the engine metadata to pick up new options
+      const response = await invoke<CommandResponse<EngineConfig>>('revalidate_engine_metadata', {
+        engineId: engine.id
+      });
+      
+      if (response.success && response.data) {
+        console.log('Engine metadata re-validated successfully, found', response.data.metadata?.options?.length || 0, 'options');
+        // Update engine reference if available (for this session only)
+        // The effectiveOptions will pick up the new metadata when it re-renders
+      } else {
+        console.warn('Failed to re-validate engine metadata:', response.message);
+      }
+    } catch (err) {
+      console.warn('Error re-validating engine metadata:', err);
+      // Continue anyway - we'll use cached metadata
+    }
+  };
+  
+  // After re-validation, reload the engine data from storage
+  const reloadEngineData = async () => {
+    if (!engine) return;
+    
+    try {
+      const response = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+      if (response.success && response.data) {
+        const updatedEngine = response.data.find(e => e.id === engine.id);
+        if (updatedEngine && updatedEngine.metadata) {
+          // Update local state with new metadata so effectiveOptions refreshes
+          console.log('Engine data reloaded, found', updatedEngine.metadata.options.length, 'options');
+          setUpdatedEngineMetadata(updatedEngine.metadata.options);
+        }
+      }
+    } catch (err) {
+      console.warn('Error reloading engine data:', err);
+    }
+  };
 
   // Check for changes whenever option values or display name change
   useEffect(() => {
@@ -64,6 +116,17 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
         return;
       }
       
+      // Get the latest engine data to ensure we have updated metadata
+      const enginesResponse = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+      let currentEngine = engine;
+      if (enginesResponse.success && enginesResponse.data) {
+        const updatedEngine = enginesResponse.data.find(e => e.id === engine.id);
+        if (updatedEngine) {
+          currentEngine = updatedEngine;
+          console.log('Loaded updated engine metadata with', updatedEngine.metadata?.options?.length || 0, 'options');
+        }
+      }
+      
       // Try to load saved options first
       const response = await invoke<CommandResponse<OptionValue>>('get_engine_options', {
         engineId: engine.id
@@ -74,8 +137,9 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
         setOptionValues({ ...response.data });
       } else {
         // No saved options, use defaults from engine metadata (with fallback injection)
+        // Use metadata from currentEngine (which may have been updated)
+        const opts = currentEngine?.metadata?.options ? [...currentEngine.metadata.options] : effectiveOptions;
         const defaults: OptionValue = {};
-        const opts = effectiveOptions;
         opts.forEach(option => {
           if (option.default) {
             defaults[option.name] = option.default;
@@ -84,11 +148,36 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
         setSavedOptions(defaults);
         setOptionValues({ ...defaults });
       }
+      
+      // Update effectiveOptions with latest metadata (force re-render)
+      // Note: We can't directly update the engine prop, but effectiveOptions will use the latest
+      // from the engine prop, which should be updated by the parent component after revalidation
     } catch (err) {
       console.error('Error loading saved options:', err);
       setError(`Failed to load saved options: ${err}`);
       
       // Fallback to defaults (with fallback injection)
+      // Try to get updated engine data for fallback
+      try {
+        const enginesResponse = await invoke<CommandResponse<EngineConfig[]>>('get_engines');
+        if (enginesResponse.success && enginesResponse.data) {
+          const updatedEngine = enginesResponse.data.find(e => e.id === engine.id);
+          if (updatedEngine?.metadata?.options) {
+            const defaults: OptionValue = {};
+            updatedEngine.metadata.options.forEach(option => {
+              if (option.default) {
+                defaults[option.name] = option.default;
+              }
+            });
+            setSavedOptions(defaults);
+            setOptionValues({ ...defaults });
+            return;
+          }
+        }
+      } catch (fallbackErr) {
+        console.warn('Fallback engine reload failed:', fallbackErr);
+      }
+      
       const defaults: OptionValue = {};
       const opts = effectiveOptions;
       opts.forEach(option => {
@@ -265,9 +354,15 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
     }
   };
 
+  // State to hold updated engine metadata after revalidation
+  const [updatedEngineMetadata, setUpdatedEngineMetadata] = useState<EngineOption[] | null>(null);
+  
   // Build effective options list, injecting USI_Threads if engine didn't expose it in metadata
+  // Use updated metadata if available, otherwise use engine prop's metadata
   const effectiveOptions = useMemo(() => {
-    const opts = engine?.metadata?.options ? [...engine.metadata.options] : [] as EngineOption[];
+    const opts: EngineOption[] = updatedEngineMetadata 
+      ? updatedEngineMetadata
+      : (engine?.metadata?.options ? [...engine.metadata.options] : []);
     const hasThreads = opts.some(o => o.name === 'USI_Threads');
     if (!hasThreads) {
       const cores = (typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency) ? String((navigator as any).hardwareConcurrency) : '2';
@@ -281,7 +376,7 @@ export function EngineOptionsModal({ isOpen, engine, onClose, onSave, tempOption
       });
     }
     return opts;
-  }, [engine]);
+  }, [engine, updatedEngineMetadata]); // Include updatedEngineMetadata in dependencies
 
   if (!isOpen || !engine) {
     return null;

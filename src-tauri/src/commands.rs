@@ -241,16 +241,30 @@ pub async fn get_builtin_engine_path(
 
     if cfg!(debug_assertions) {
         // Development mode - find the engine in the workspace
+        // Try debug binary first (for faster iteration), then release
         let workspace_root = find_workspace_root()
             .ok_or_else(|| "Could not find workspace root".to_string())?;
         
-        let engine_path = workspace_root.join("target/release/usi-engine");
+        // Try debug binary first (if it exists and is recent)
+        let debug_engine_path = workspace_root.join("target/debug/usi-engine");
+        let release_engine_path = workspace_root.join("target/release/usi-engine");
+        
+        // Prefer debug binary if it exists (for development), otherwise use release
+        let engine_path = if debug_engine_path.exists() {
+            debug_engine_path
+        } else if release_engine_path.exists() {
+            release_engine_path
+        } else {
+            log::warn!("Engine not found at debug or release path. Attempting to use release...");
+            release_engine_path
+        };
+        
         let engine_path_str = engine_path.display().to_string();
         
         if !engine_path.exists() {
             log::warn!("Engine not found at: {}. Attempting to build it...", engine_path_str);
             return Ok(CommandResponse::error(format!(
-                "Engine not found at: {}. Please run 'cargo build --bin usi-engine --release' first.",
+                "Engine not found at: {}. Please run 'cargo build --bin usi-engine --release' (or --debug) first.",
                 engine_path_str
             )));
         }
@@ -457,6 +471,54 @@ pub async fn validate_engine_path(
     }
 }
 
+/// Re-validate an engine's metadata (updates metadata with latest options from engine)
+#[tauri::command]
+pub async fn revalidate_engine_metadata(
+    engine_id: String,
+    state: State<'_, AppState>,
+) -> Result<CommandResponse, String> {
+    log::info!("Command: revalidate_engine_metadata - engine_id: {}", engine_id);
+
+    let mut storage = state.engine_storage.write().await;
+    
+    // Use a scoped block to limit the mutable borrow
+    let engine_clone = {
+        let engine = storage.get_engine_mut(&engine_id)
+            .ok_or_else(|| "Engine not found".to_string())?;
+        
+        let engine_path = engine.path.clone();
+        
+        // Re-validate the engine to get latest options
+        let metadata = match engine_validator::validate_engine(&engine_path).await {
+            Ok(meta) => {
+                log::info!("Re-validated engine metadata for {}, found {} options", engine_id, meta.options.len());
+                Some(meta)
+            },
+            Err(e) => {
+                log::warn!("Engine re-validation failed for {}: {}", engine_id, e);
+                // Keep existing metadata if validation fails
+                engine.metadata.clone()
+            }
+        };
+        
+        engine.metadata = metadata;
+        
+        // Clone engine data before ending mutable borrow
+        engine.clone()
+    }; // Mutable borrow ends here
+    
+    // Save to disk (now that mutable borrow is released)
+    if let Err(e) = storage.save().await {
+        log::error!("Failed to save engine storage: {}", e);
+        return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+    }
+    
+    log::info!("Engine metadata re-validated successfully for: {}", engine_id);
+    Ok(CommandResponse::success_with_data(
+        serde_json::to_value(engine_clone).unwrap_or(serde_json::json!({}))
+    ))
+}
+
 /// Register the built-in engine if not already present, or update the path if it's incorrect
 #[tauri::command]
 pub async fn register_builtin_engine(
@@ -478,44 +540,79 @@ pub async fn register_builtin_engine(
 
     let mut storage = state.engine_storage.write().await;
 
-    // Check if already registered - if so, update path if it's different
-    if let Some(builtin_engine) = storage.engines.iter_mut().find(|e| e.is_builtin) {
+    // Check if already registered - if so, update path if it's different and always re-validate metadata
+    let options_count = if let Some(builtin_engine) = storage.engines.iter_mut().find(|e| e.is_builtin) {
         let path_exists = std::path::Path::new(&builtin_engine.path).exists();
         let path_is_correct = builtin_engine.path == engine_path;
         
-        if path_is_correct && path_exists {
-            log::info!("Built-in engine already registered with correct path");
-            return Ok(CommandResponse::success_with_data(
-                serde_json::json!({ "already_registered": true })
-            ));
+        // Update path if incorrect or file doesn't exist
+        if !path_is_correct || !path_exists {
+            log::info!("Updating built-in engine path from '{}' to '{}'", builtin_engine.path, engine_path);
+            builtin_engine.path = engine_path.clone();
+        } else {
+            log::info!("Built-in engine path is correct, re-validating metadata to pick up new options");
         }
         
-        // Path is incorrect or file doesn't exist - update it
-        log::info!("Updating built-in engine path from '{}' to '{}'", builtin_engine.path, engine_path);
-        builtin_engine.path = engine_path.clone();
-        
-        // Validate the new path and update metadata
+        // Always re-validate metadata to get latest options (Task 8.0: new options added)
+        // This ensures the UI shows all available options after engine code updates
         let metadata = match engine_validator::validate_engine(&engine_path).await {
-            Ok(meta) => Some(meta),
+            Ok(meta) => {
+                log::info!("Re-validated built-in engine metadata, found {} options", meta.options.len());
+                Some(meta)
+            },
             Err(e) => {
-                log::warn!("Built-in engine validation failed: {}", e);
-                None
+                log::warn!("Built-in engine validation failed: {}, keeping existing metadata", e);
+                // Keep existing metadata if validation fails (might be running engine issue)
+                builtin_engine.metadata.clone()
             }
         };
         builtin_engine.metadata = metadata;
         
-        // Save to disk
-        if let Err(e) = storage.save().await {
-            log::error!("Failed to save engine storage: {}", e);
-            return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
+        // Update saved options if they don't exist (migrate to new defaults)
+        if builtin_engine.saved_options.is_none() {
+            use std::collections::HashMap;
+            let mut default_options = HashMap::new();
+            default_options.insert("MaxDepth".to_string(), "0".to_string()); // Unlimited/adaptive
+            default_options.insert("TimeCheckFrequency".to_string(), "1024".to_string());
+            default_options.insert("TimeSafetyMargin".to_string(), "100".to_string());
+            default_options.insert("TimeAllocationStrategy".to_string(), "Adaptive".to_string());
+            default_options.insert("EnableTimeBudget".to_string(), "true".to_string());
+            default_options.insert("EnableCheckOptimization".to_string(), "true".to_string());
+            default_options.insert("EnableAspirationWindows".to_string(), "true".to_string());
+            default_options.insert("AspirationWindowSize".to_string(), "25".to_string());
+            default_options.insert("EnablePositionTypeTracking".to_string(), "true".to_string());
+            builtin_engine.saved_options = Some(default_options);
+            log::info!("Set default options for built-in engine");
         }
         
-        log::info!("Built-in engine path updated successfully");
-        return Ok(CommandResponse::success_with_data(
-            serde_json::json!({ "updated": true, "path": engine_path })
-        ));
+        // Capture options count before ending mutable borrow
+        builtin_engine.metadata.as_ref().map(|m| m.options.len()).unwrap_or(0)
+    } else {
+        // Engine not found - will create new registration
+        return register_new_builtin_engine(storage, engine_path).await;
+    }; // Mutable borrow ends here - builtin_engine goes out of scope
+    
+    // Save to disk (now that mutable borrow is released)
+    if let Err(e) = storage.save().await {
+        log::error!("Failed to save engine storage: {}", e);
+        return Ok(CommandResponse::error(format!("Failed to save configuration: {}", e)));
     }
+    
+    log::info!("Built-in engine metadata updated successfully with {} options", options_count);
+    return Ok(CommandResponse::success_with_data(
+        serde_json::json!({ 
+            "updated": true, 
+            "path": engine_path,
+            "options_count": options_count
+        })
+    ));
+}
 
+/// Helper function to register a new built-in engine
+async fn register_new_builtin_engine(
+    mut storage: tokio::sync::RwLockWriteGuard<'_, crate::engine_storage::EngineStorage>,
+    engine_path: String,
+) -> Result<CommandResponse, String> {
     // Validate the built-in engine (for new registration)
     let metadata = match engine_validator::validate_engine(&engine_path).await {
         Ok(meta) => Some(meta),
@@ -525,13 +622,27 @@ pub async fn register_builtin_engine(
         }
     };
 
-    // Create config for built-in engine
-    let config = EngineConfig::new(
+    // Create config for built-in engine with default options
+    let mut config = EngineConfig::new(
         "Built-in Engine".to_string(),
-        engine_path,
+        engine_path.clone(),
         metadata,
         true,
     );
+    
+    // Set default saved options for built-in engine (Task 8.0, 4.0, 7.0)
+    use std::collections::HashMap;
+    let mut default_options = HashMap::new();
+    default_options.insert("MaxDepth".to_string(), "0".to_string()); // Unlimited/adaptive
+    default_options.insert("TimeCheckFrequency".to_string(), "1024".to_string());
+    default_options.insert("TimeSafetyMargin".to_string(), "100".to_string());
+    default_options.insert("TimeAllocationStrategy".to_string(), "Adaptive".to_string());
+    default_options.insert("EnableTimeBudget".to_string(), "true".to_string());
+    default_options.insert("EnableCheckOptimization".to_string(), "true".to_string());
+    default_options.insert("EnableAspirationWindows".to_string(), "true".to_string());
+    default_options.insert("AspirationWindowSize".to_string(), "25".to_string());
+    default_options.insert("EnablePositionTypeTracking".to_string(), "true".to_string());
+    config.saved_options = Some(default_options);
 
     // Add to storage
     match storage.add_engine(config.clone()) {

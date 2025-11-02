@@ -4406,7 +4406,9 @@ impl MoveOrdering {
     pub fn update_history_score(&mut self, move_: &Move, depth: u8) {
         if let Some(from) = move_.from {
             let key = (move_.piece_type, from, move_.to);
-            let bonus = (depth * depth) as u32; // Bonus proportional to depth
+            // Use safe multiplication to prevent overflow (depth is u8, max value is 255)
+            // depth * depth can overflow u8 if depth > 16, so cast to u32 first
+            let bonus = ((depth as u32) * (depth as u32)) as u32; // Bonus proportional to depth
             
             let current_score = self.history_table.get(&key).copied().unwrap_or(0);
             let new_score = current_score + bonus;
