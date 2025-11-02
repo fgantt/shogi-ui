@@ -62,16 +62,16 @@
   - [x] 1.8 Generate improvement recommendations for search core
   - [x] 1.9 Cross-reference with move ordering integration points
 
-- [ ] 2.0 Feature: Null Move Pruning
-  - [ ] 2.1 Review null-move pruning implementation in search_engine.rs
-  - [ ] 2.2 Verify R=2 reduction implementation
-  - [ ] 2.3 Check mate threat detection logic
-  - [ ] 2.4 Assess endgame termination conditions
-  - [ ] 2.5 Review verification search implementation
-  - [ ] 2.6 Measure pruning efficiency and effectiveness
-  - [ ] 2.7 Identify strengths and weaknesses
-  - [ ] 2.8 Generate improvement recommendations
-  - [ ] 2.9 Cross-reference with quiescence search dependencies
+- [x] 2.0 Feature: Null Move Pruning
+  - [x] 2.1 Review null-move pruning implementation in search_engine.rs
+  - [x] 2.2 Verify R=2 reduction implementation
+  - [x] 2.3 Check mate threat detection logic
+  - [x] 2.4 Assess endgame termination conditions
+  - [x] 2.5 Review verification search implementation
+  - [x] 2.6 Measure pruning efficiency and effectiveness
+  - [x] 2.7 Identify strengths and weaknesses
+  - [x] 2.8 Generate improvement recommendations
+  - [x] 2.9 Cross-reference with quiescence search dependencies
 
 - [ ] 3.0 Feature: Late Move Reduction (LMR)
   - [ ] 3.1 Review LMR implementation in search_engine.rs
