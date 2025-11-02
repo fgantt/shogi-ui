@@ -1149,22 +1149,17 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move on a copy of the board to avoid corruption
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(&move_);
             let mut new_captured = captured_pieces.clone();
             
-            let move_result = new_board.make_move(&move_);
-            if move_result.is_none() {
-                continue;
-            }
-            
-            if let Some(captured) = move_result {
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
             // Recursive search with reduced depth
             let score = -self.negamax_with_context(
-                &mut new_board,
+                board,
                 &new_captured,
                 player.opposite(),
                 iid_depth - 1,
@@ -1178,6 +1173,9 @@ impl SearchEngine {
                 false,
                 false
             );
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
 
             if score > best_score {
                 best_score = score;
@@ -1427,16 +1425,11 @@ impl SearchEngine {
                     break;
                 }
 
-                // Make move on a copy of the board to avoid corruption
-                let mut new_board = board.clone();
+                // Use move unmaking instead of board cloning
+                let move_info = board.make_move_with_info(move_);
                 let mut new_captured = captured_pieces.clone();
                 
-                let move_result = new_board.make_move(move_);
-                if move_result.is_none() {
-                    continue;
-                }
-                
-                if let Some(captured) = move_result {
+                if let Some(ref captured) = move_info.captured_piece {
                     new_captured.add_piece(captured.piece_type, player);
                 }
 
@@ -1447,7 +1440,7 @@ impl SearchEngine {
 
                 // Recursive search
                 let score = -self.negamax_with_context(
-                    &mut new_board,
+                    board,
                     &new_captured,
                     player.opposite(),
                     iid_depth - 1,
@@ -1461,6 +1454,9 @@ impl SearchEngine {
                     false,
                     false
                 );
+                
+                // Restore board state by unmaking the move
+                board.unmake_move(&move_info);
 
                 if score > best_score {
                     best_score = score;
@@ -1779,22 +1775,17 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move on a copy of the board to avoid corruption
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(move_);
             let mut new_captured = captured_pieces.clone();
             
-            let move_result = new_board.make_move(move_);
-            if move_result.is_none() {
-                continue;
-            }
-            
-            if let Some(captured) = move_result {
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
             // Shallow search to evaluate move potential
             let score = -self.negamax_with_context(
-                &mut new_board,
+                board,
                 &new_captured,
                 player.opposite(),
                 iid_depth - 1,
@@ -1808,6 +1799,9 @@ impl SearchEngine {
                 false,
                 false
             );
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
 
             // Check if move is promising enough for deeper probing
             if score > current_alpha + promising_threshold {
@@ -1849,22 +1843,17 @@ impl SearchEngine {
                 break;
             }
 
-            // Make move on a copy of the board to avoid corruption
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(&promising_move.move_);
             let mut new_captured = captured_pieces.clone();
             
-            let move_result = new_board.make_move(&promising_move.move_);
-            if move_result.is_none() {
-                continue;
-            }
-            
-            if let Some(captured) = move_result {
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
             // Deeper search for verification
             let deep_score = -self.negamax_with_context(
-                &mut new_board,
+                board,
                 &new_captured,
                 player.opposite(),
                 probe_depth - 1,
@@ -1878,6 +1867,9 @@ impl SearchEngine {
                 false,
                 false
             );
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
 
             // Calculate verification metrics
             let score_difference = (deep_score - promising_move.shallow_score).abs();
@@ -2475,7 +2467,7 @@ impl SearchEngine {
         
         println!("IID move ordering tests passed!");
     }
-    pub fn search_at_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
+    pub fn search_at_depth(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32, alpha: i32, beta: i32) -> Option<(Move, i32)> {
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Starting search at depth {} (alpha: {}, beta: {})", depth, alpha, beta));
         crate::debug_utils::start_timing(&format!("search_at_depth_{}", depth));
         
@@ -2579,15 +2571,19 @@ impl SearchEngine {
                 best_move.as_ref().map(|m| m.to_usi_string()).unwrap_or("None".to_string())));
             crate::debug_utils::start_timing(&format!("move_eval_{}", move_index));
             
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(&move_);
             let mut new_captured = captured_pieces.clone();
             
-            if let Some(captured) = new_board.make_move(&move_) {
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.negamax(&mut new_board, &new_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut history, true);
+            let score = -self.negamax(&mut *board, &new_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut history, true);
             crate::debug_utils::end_timing(&format!("move_eval_{}", move_index), "SEARCH_AT_DEPTH");
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
             
             // Enhanced move evaluation logging
             crate::debug_utils::log_move_eval("SEARCH_AT_DEPTH", &move_.to_usi_string(), score, 
@@ -2771,7 +2767,7 @@ impl SearchEngine {
     }
 
     /// Backward-compatible wrapper for search_at_depth without alpha/beta parameters
-    pub fn search_at_depth_legacy(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
+    pub fn search_at_depth_legacy(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
         self.search_at_depth(board, captured_pieces, player, depth, time_limit_ms, i32::MIN + 1, i32::MAX - 1)
     }
 
@@ -2861,7 +2857,7 @@ impl SearchEngine {
         if depth == 0 {
             // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search (alpha: {}, beta: {})", alpha, beta));
             crate::debug_utils::start_timing("quiescence_search");
-            let result = self.quiescence_search(&mut board.clone(), captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
+            let result = self.quiescence_search(board, captured_pieces, player, alpha, beta, &start_time, time_limit_ms, 5);
             crate::debug_utils::end_timing("quiescence_search", "QUIESCENCE");
             // crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence search completed: score={}", result));
             return result;
@@ -2973,16 +2969,17 @@ impl SearchEngine {
                 }
             }
             
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(move_);
             let mut new_captured = captured_pieces.clone();
 
-            if let Some(captured) = new_board.make_move(move_) {
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
 
             crate::debug_utils::start_timing(&format!("move_search_{}", move_index));
             let score = self.search_move_with_lmr(
-                &mut new_board, 
+                board, 
                 &new_captured, 
                 player, 
                 depth, 
@@ -2998,6 +2995,9 @@ impl SearchEngine {
                 has_check
             );
             crate::debug_utils::end_timing(&format!("move_search_{}", move_index), "NEGAMAX");
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
 
             crate::debug_utils::log_move_eval("NEGAMAX", &move_.to_usi_string(), score, 
                 &format!("move {} of {}", move_index, sorted_moves.len()));
@@ -3089,7 +3089,7 @@ impl SearchEngine {
         
         best_score
     }
-    fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
+    fn quiescence_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
@@ -3228,9 +3228,11 @@ impl SearchEngine {
                 continue;
             }
             
-            let mut new_board = board.clone();
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(&move_);
             let mut new_captured = captured_pieces.clone();
-            if let Some(captured) = new_board.make_move(&move_) {
+            
+            if let Some(ref captured) = move_info.captured_piece {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
@@ -3253,8 +3255,11 @@ impl SearchEngine {
             }
             
             crate::debug_utils::start_timing(&format!("quiescence_move_{}", move_index));
-            let score = -self.quiescence_search(&mut new_board, &new_captured, player.opposite(), beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, search_depth);
+            let score = -self.quiescence_search(board, &new_captured, player.opposite(), beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, search_depth);
             crate::debug_utils::end_timing(&format!("quiescence_move_{}", move_index), "QUIESCENCE");
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
             
             // crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
             //     &format!("move {} of {}", move_index + 1, sorted_noisy_moves.len()));
@@ -3358,7 +3363,7 @@ impl SearchEngine {
     pub fn sort_moves_with_pruning_awareness(
         &mut self, 
         moves: &[Move], 
-        board: &BitboardBoard, 
+        board: &mut BitboardBoard, 
         iid_move: Option<&Move>,
         depth: Option<u8>,
         alpha: Option<i32>,
@@ -3405,22 +3410,26 @@ impl SearchEngine {
         result
     }
     /// Check if a move is a tablebase move by probing the tablebase
-    fn is_tablebase_move(&mut self, move_: &Move, board: &BitboardBoard) -> bool {
-        // Create a temporary board state to check if this move leads to a tablebase position
-        let mut temp_board = board.clone();
+    fn is_tablebase_move(&mut self, move_: &Move, board: &mut BitboardBoard) -> bool {
+        // Use move unmaking instead of board cloning
+        let move_info = board.make_move_with_info(move_);
         let mut temp_captured = CapturedPieces::new();
         
-        // Make the move
-        if let Some(captured) = temp_board.make_move(move_) {
+        if let Some(ref captured) = move_info.captured_piece {
             temp_captured.add_piece(captured.piece_type, move_.player);
         }
         
         // Check if the resulting position is in the tablebase
-        if let Some(tablebase_result) = self.tablebase.probe(&temp_board, move_.player.opposite(), &temp_captured) {
+        let result = if let Some(tablebase_result) = self.tablebase.probe(board, move_.player.opposite(), &temp_captured) {
             tablebase_result.best_move.is_some()
         } else {
             false
-        }
+        };
+        
+        // Restore board state by unmaking the move
+        board.unmake_move(&move_info);
+        
+        result
     }
     pub fn score_move(&self, move_: &Move, _board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
         // Priority 1: IID move gets maximum score
@@ -3566,7 +3575,7 @@ impl SearchEngine {
     }
     
     /// Enhanced move ordering with adaptive pruning awareness
-    pub fn sort_moves_adaptive(&mut self, moves: &[Move], board: &BitboardBoard, iid_move: Option<&Move>, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+    pub fn sort_moves_adaptive(&mut self, moves: &[Move], board: &mut BitboardBoard, iid_move: Option<&Move>, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
         // First, check if any move is a tablebase move
         let mut tablebase_moves = Vec::new();
         let mut regular_moves = Vec::new();
@@ -5986,7 +5995,8 @@ impl SearchEngine {
             self.reset_lmr_stats();
             let start_time = std::time::Instant::now();
             
-            let _result = self.search_at_depth_legacy(board, captured_pieces, player, depth, 5000);
+            let mut test_board = board.clone();
+            let _result = self.search_at_depth_legacy(&mut test_board, captured_pieces, player, depth, 5000);
             
             let elapsed = start_time.elapsed();
             total_time += elapsed;
@@ -7550,9 +7560,10 @@ impl IterativeDeepening {
                     None
                 };
 
+                let mut test_board = board.clone();
                 if let Some((move_, score)) = parallel_result.or_else(|| {
                     search_engine.search_at_depth(
-                        board, captured_pieces, player, depth, remaining_time,
+                        &mut test_board, captured_pieces, player, depth, remaining_time,
                         current_alpha, current_beta,
                     )
                 }) {
@@ -7839,7 +7850,8 @@ mod tablebase_tests {
         let player = Player::Black;
 
         // Test tablebase probing in search_at_depth
-        let result = engine.search_at_depth(&board, &captured_pieces, player, 1, 1000, -10000, 10000);
+        let mut test_board = board.clone();
+        let result = engine.search_at_depth(&mut test_board, &captured_pieces, player, 1, 1000, -10000, 10000);
         
         // Should not panic and should return some result (even if not from tablebase)
         assert!(result.is_some() || result.is_none()); // Either some move or no legal moves

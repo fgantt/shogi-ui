@@ -76,6 +76,44 @@ pub use branch_opt::{
     }
 };
 
+/// Information needed to unmake a move
+#[derive(Debug, Clone)]
+pub struct MoveInfo {
+    /// The original piece type before promotion (if promotion occurred)
+    pub original_piece_type: PieceType,
+    /// The from position (None for drops)
+    pub from: Option<Position>,
+    /// The to position
+    pub to: Position,
+    /// The player who made the move
+    pub player: Player,
+    /// Whether this was a promotion move
+    pub was_promotion: bool,
+    /// The captured piece, if any
+    pub captured_piece: Option<Piece>,
+}
+
+impl MoveInfo {
+    /// Create MoveInfo from move details
+    pub fn new(
+        original_piece_type: PieceType,
+        from: Option<Position>,
+        to: Position,
+        player: Player,
+        was_promotion: bool,
+        captured_piece: Option<Piece>,
+    ) -> Self {
+        Self {
+            original_piece_type,
+            from,
+            to,
+            player,
+            was_promotion,
+            captured_piece,
+        }
+    }
+}
+
 /// Bitboard-based board representation for efficient Shogi operations
 pub struct BitboardBoard {
     pieces: [[Bitboard; 14]; 2],
@@ -260,6 +298,89 @@ impl BitboardBoard {
             self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
         }
         captured_piece
+    }
+
+    /// Make a move and return MoveInfo for unmaking
+    /// This is an extended version of make_move that returns the information needed to unmake
+    pub fn make_move_with_info(&mut self, move_: &Move) -> MoveInfo {
+        let mut captured_piece = None;
+        let mut original_piece_type = move_.piece_type;
+        
+        if let Some(from) = move_.from {
+            if let Some(piece_to_move) = self.get_piece(from).cloned() {
+                // Capture the original piece type before any modifications
+                original_piece_type = piece_to_move.piece_type;
+                
+                crate::debug_utils::debug_log(&format!(
+                    "[MAKE_MOVE_WITH_INFO] Moving {:?} from row={} col={} to row={} col={}",
+                    piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
+                ));
+                
+                self.remove_piece(from);
+                if move_.is_capture {
+                    if let Some(cp) = self.remove_piece(move_.to) {
+                        captured_piece = Some(cp.unpromoted());
+                    }
+                }
+                let final_piece_type = if move_.is_promotion {
+                    piece_to_move.piece_type.promoted_version().unwrap_or(piece_to_move.piece_type)
+                } else {
+                    piece_to_move.piece_type
+                };
+                
+                crate::debug_utils::debug_log(&format!(
+                    "[MAKE_MOVE_WITH_INFO] Placing {:?} at row={} col={}",
+                    final_piece_type, move_.to.row, move_.to.col
+                ));
+                
+                self.place_piece(Piece::new(final_piece_type, piece_to_move.player), move_.to);
+            }
+        } else {
+            // Drop move
+            crate::debug_utils::debug_log(&format!(
+                "[MAKE_MOVE_WITH_INFO] Dropping {:?} at row={} col={}",
+                move_.piece_type, move_.to.row, move_.to.col
+            ));
+            
+            self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
+        }
+        
+        MoveInfo::new(
+            original_piece_type,
+            move_.from,
+            move_.to,
+            move_.player,
+            move_.is_promotion,
+            captured_piece,
+        )
+    }
+
+    /// Unmake a move, restoring the board to its previous state
+    /// This reverses the operations performed by make_move()
+    pub fn unmake_move(&mut self, move_info: &MoveInfo) {
+        crate::debug_utils::debug_log(&format!(
+            "[UNMAKE_MOVE] Unmaking move from {:?} to {:?}",
+            move_info.from, move_info.to
+        ));
+
+        // Remove the piece that was placed at the destination
+        self.remove_piece(move_info.to);
+
+        // Restore the captured piece if there was one
+        if let Some(ref captured_piece) = move_info.captured_piece {
+            self.place_piece(captured_piece.clone(), move_info.to);
+        }
+
+        // Restore the moved piece to its original position
+        if let Some(from) = move_info.from {
+            // This was a normal move (not a drop)
+            // Place the original piece type (before promotion) back at the from position
+            self.place_piece(
+                Piece::new(move_info.original_piece_type, move_info.player),
+                from,
+            );
+        }
+        // If from is None, it was a drop, so we just remove the piece (already done above)
     }
 
     pub fn is_king_in_check(&self, player: Player, _captured_pieces: &CapturedPieces) -> bool {

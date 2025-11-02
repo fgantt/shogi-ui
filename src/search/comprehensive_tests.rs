@@ -585,7 +585,8 @@ impl ComprehensiveTestSuite {
         let captured = CapturedPieces::new();
         
         // Test that search engine can use the integrated move ordering
-        let result = engine.search_at_depth(&board, &captured, Player::Black, 2, 1000, -1000, 1000);
+        let mut test_board = board.clone();
+        let result = engine.search_at_depth(&mut test_board, &captured, Player::Black, 2, 1000, -1000, 1000);
         result.is_some()
     }
 
@@ -595,7 +596,8 @@ impl ComprehensiveTestSuite {
         let captured = CapturedPieces::new();
         
         // Test iterative deepening with transposition table
-        let result = engine.search_at_depth(&board, &captured, Player::Black, 3, 1000, -1000, 1000);
+        let mut test_board = board.clone();
+        let result = engine.search_at_depth(&mut test_board, &captured, Player::Black, 3, 1000, -1000, 1000);
         result.is_some()
     }
 
@@ -661,13 +663,15 @@ impl ComprehensiveTestSuite {
         // Test search without transposition table (simulated)
         let start = Instant::now();
         let mut engine_no_tt = SearchEngine::new(None, 1); // Very small TT
-        let _result1 = engine_no_tt.search_at_depth(&board, &captured, Player::Black, 3, 1000, -1000, 1000);
+        let mut test_board1 = board.clone();
+        let _result1 = engine_no_tt.search_at_depth(&mut test_board1, &captured, Player::Black, 3, 1000, -1000, 1000);
         let time_no_tt = start.elapsed();
         
         // Test search with transposition table
         let start = Instant::now();
         let mut engine_with_tt = SearchEngine::new(None, 64); // Larger TT
-        let _result2 = engine_with_tt.search_at_depth(&board, &captured, Player::Black, 3, 1000, -1000, 1000);
+        let mut test_board2 = board.clone();
+        let _result2 = engine_with_tt.search_at_depth(&mut test_board2, &captured, Player::Black, 3, 1000, -1000, 1000);
         let time_with_tt = start.elapsed();
         
         // Calculate improvement (negative means TT is slower, positive means faster)
@@ -813,7 +817,8 @@ impl ComprehensiveTestSuite {
         // Run the same search multiple times
         let mut results = Vec::new();
         for _ in 0..5 {
-            if let Some((_move, score)) = engine.search_at_depth(&board, &captured, Player::Black, 3, 1000, -1000, 1000) {
+            let mut test_board = board.clone();
+            if let Some((_move, score)) = engine.search_at_depth(&mut test_board, &captured, Player::Black, 3, 1000, -1000, 1000) {
                 results.push(score);
             }
         }
@@ -855,7 +860,8 @@ impl ComprehensiveTestSuite {
         let mut engine = SearchEngine::new(None, 64);
         let (board, _player, captured) = BitboardBoard::from_fen(&position.fen).unwrap_or_else(|_| (BitboardBoard::new(), Player::Black, CapturedPieces::new()));
         
-        if let Some((_best_move, score)) = engine.search_at_depth(&board, &captured, Player::Black, position.test_depth, 1000, -1000, 1000) {
+        let mut test_board = board.clone();
+        if let Some((_best_move, score)) = engine.search_at_depth(&mut test_board, &captured, Player::Black, position.test_depth, 1000, -1000, 1000) {
             // Check if score is within expected range
             score >= position.expected_eval_range.0 && score <= position.expected_eval_range.1
         } else {

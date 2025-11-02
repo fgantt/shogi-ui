@@ -800,7 +800,7 @@ impl ParallelSearchEngine {
                     panic!("Forced worker panic for testing");
                 }
                 if let Some((_, score_child)) = context.search_engine_mut().search_at_depth(
-                    &test_board,
+                    &mut test_board,
                     &test_captured,
                     player.opposite(),
                     search_depth,
@@ -1031,8 +1031,9 @@ impl ParallelSearchEngine {
         }
         
         // Perform search
+        let mut test_board = board.clone();
         if let Some((_, score)) = context.search_engine_mut().search_at_depth(
-            board,
+            &mut test_board,
             captured_pieces,
             player,
             depth,
@@ -1156,8 +1157,9 @@ impl ParallelSearchEngine {
                 }
                 
                 // Perform search
+                let mut test_board = work.board.clone();
                 if let Some((_, score)) = context.search_engine_mut().search_at_depth(
-                    &work.board,
+                    &mut test_board,
                     &work.captured_pieces,
                     work.player,
                     work.depth,
