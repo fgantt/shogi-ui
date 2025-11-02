@@ -2780,9 +2780,19 @@ impl SearchEngine {
     }
     
     fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool) -> i32 {
+        // Track best score from the beginning for timeout fallback
+        let mut best_score_tracked: Option<i32> = None;
+        
         if self.should_stop(&start_time, time_limit_ms) { 
-            crate::debug_utils::trace_log("NEGAMAX", "Time limit reached, returning 0");
-            return 0; 
+            // Try to return a meaningful score instead of 0
+            if let Some(best_score) = best_score_tracked {
+                crate::debug_utils::trace_log("NEGAMAX", &format!("Time limit reached, returning tracked best score: {}", best_score));
+                return best_score;
+            }
+            // Fallback to static evaluation if no best score tracked
+            let static_eval = self.evaluate_position(board, player, captured_pieces);
+            crate::debug_utils::trace_log("NEGAMAX", &format!("Time limit reached, returning static evaluation: {}", static_eval));
+            return static_eval;
         }
         self.nodes_searched += 1;
         GLOBAL_NODES_SEARCHED.fetch_add(1, Ordering::Relaxed);
@@ -2931,6 +2941,10 @@ impl SearchEngine {
         for move_ in &sorted_moves {
             if self.should_stop(&start_time, time_limit_ms) { 
                 crate::debug_utils::trace_log("NEGAMAX", "Time limit reached, stopping move evaluation");
+                // Update tracked best score before breaking (only if we've evaluated at least one move)
+                if best_score > -200000 {  // -200000 is the sentinel value, any real score will be better
+                    best_score_tracked = Some(best_score);
+                }
                 break; 
             }
             move_index += 1;
@@ -2993,6 +3007,7 @@ impl SearchEngine {
                     &format!("Move {} improved score from {} to {}", move_.to_usi_string(), best_score, score), 
                     Some(score));
                 best_score = score;
+                best_score_tracked = Some(score);
                 best_move_for_tt = Some(move_.clone());
                 if score > alpha {
                     crate::debug_utils::log_decision("NEGAMAX", "Alpha update", 
@@ -3058,12 +3073,36 @@ impl SearchEngine {
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
         
+        // If we have a tracked best score (from timeout handling), prefer it over sentinel value
+        if let Some(tracked_score) = best_score_tracked {
+            if best_score <= -200000 && tracked_score > -200000 {
+                return tracked_score;
+            }
+        }
+        
+        // If best_score is still the sentinel value and we have no tracked score, use static evaluation
+        if best_score <= -200000 {
+            let static_eval = self.evaluate_position(board, player, captured_pieces);
+            crate::debug_utils::trace_log("NEGAMAX", &format!("Best score is sentinel value, returning static evaluation: {}", static_eval));
+            return static_eval;
+        }
+        
         best_score
     }
     fn quiescence_search(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
+        // Track best score from the beginning for timeout fallback
+        let mut best_score_tracked: Option<i32> = None;
+        
         if self.should_stop(&start_time, time_limit_ms) { 
-            // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, returning 0");
-            return 0; 
+            // Try to return a meaningful score instead of 0
+            if let Some(best_score) = best_score_tracked {
+                // crate::debug_utils::trace_log("QUIESCENCE", &format!("Time limit reached, returning tracked best score: {}", best_score));
+                return best_score;
+            }
+            // Fallback to static evaluation if no best score tracked
+            let static_eval = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
+            // crate::debug_utils::trace_log("QUIESCENCE", &format!("Time limit reached, returning static evaluation: {}", static_eval));
+            return static_eval;
         }
         
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting quiescence search: depth={}, alpha={}, beta={}", depth, alpha, beta));
@@ -3124,6 +3163,9 @@ impl SearchEngine {
         let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {}", stand_pat));
         
+        // Track stand-pat as initial best score
+        best_score_tracked = Some(stand_pat);
+        
         if stand_pat >= beta { 
             crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat beta cutoff", 
                 &format!("Stand-pat {} >= beta {}, returning beta", stand_pat, beta), 
@@ -3163,6 +3205,10 @@ impl SearchEngine {
         for (move_index, move_) in sorted_noisy_moves.iter().enumerate() {
             if self.should_stop(&start_time, time_limit_ms) { 
                 // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, stopping move evaluation");
+                // Update tracked best score before breaking
+                if alpha > best_score_tracked.unwrap_or(i32::MIN) {
+                    best_score_tracked = Some(alpha);
+                }
                 break; 
             }
             
@@ -3234,7 +3280,11 @@ impl SearchEngine {
                 crate::debug_utils::log_decision("QUIESCENCE", "Alpha update", 
                     &format!("Score {} > alpha {}, updating alpha", score, alpha), 
                     Some(score));
-                alpha = score; 
+                alpha = score;
+                // Update tracked best score
+                if score > best_score_tracked.unwrap_or(i32::MIN) {
+                    best_score_tracked = Some(score);
+                }
             }
         }
         
@@ -3252,6 +3302,14 @@ impl SearchEngine {
                 flag,
                 best_move: None, // We don't store best move for quiescence search
             });
+        }
+        
+        // Return best score: prefer tracked score (from timeout) if available, otherwise use alpha
+        // Note: alpha should already reflect the best score found, but tracked_score provides
+        // a safety fallback if timeout occurred during move evaluation
+        if let Some(tracked_score) = best_score_tracked {
+            // Use max of tracked score and alpha to ensure we return the best we've found
+            return tracked_score.max(alpha);
         }
         
         alpha

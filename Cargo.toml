@@ -3,6 +3,12 @@ name = "shogi-engine"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+# Enable verbose debug logging with compile-time checks
+# When disabled, expensive string formatting is completely eliminated
+verbose-debug = []
+
 [lib]
 crate-type = ["rlib"]
 
@@ -84,6 +90,10 @@ harness = false
 
 [[bench]]
 name = "board_clone_benchmarks"
+harness = false
+
+[[bench]]
+name = "debug_logging_performance_benchmarks"
 harness = false
 
 [[example]]
