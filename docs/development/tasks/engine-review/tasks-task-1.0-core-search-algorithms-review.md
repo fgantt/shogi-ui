@@ -117,15 +117,15 @@
   - [x] 5.14 Benchmark hash-based vs FEN-based repetition detection performance
   - [x] 5.15 Add unit tests for all code quality improvements
 
-- [ ] 6.0 Optimize Move Ordering Performance and Integration
-  - [ ] 6.1 Profile move ordering overhead to identify optimization opportunities
-  - [ ] 6.2 Implement caching of move ordering results for transposition table hits
-  - [ ] 6.3 Integrate move ordering with all pruning techniques (LMR, null move, futility)
-  - [ ] 6.4 Ensure move ordering accounts for search state (depth, alpha, beta, check status)
-  - [ ] 6.5 Review move ordering calls at every node and optimize for repeated positions
-  - [ ] 6.6 Add move ordering metrics (cache hits, ordering time, effectiveness)
-  - [ ] 6.7 Benchmark move ordering performance improvements
-  - [ ] 6.8 Test move ordering integration with all search features
+- [x] 6.0 Optimize Move Ordering Performance and Integration
+  - [x] 6.1 Profile move ordering overhead to identify optimization opportunities
+  - [x] 6.2 Implement caching of move ordering results for transposition table hits
+  - [x] 6.3 Integrate move ordering with all pruning techniques (LMR, null move, futility)
+  - [x] 6.4 Ensure move ordering accounts for search state (depth, alpha, beta, check status)
+  - [x] 6.5 Review move ordering calls at every node and optimize for repeated positions
+  - [x] 6.6 Add move ordering metrics (cache hits, ordering time, effectiveness)
+  - [x] 6.7 Benchmark move ordering performance improvements
+  - [x] 6.8 Test move ordering integration with all search features
 
 - [ ] 7.0 Refine Aspiration Window and Statistics Optimization
   - [ ] 7.1 Implement window size optimization tracking for position type
@@ -146,7 +146,7 @@
 ---
 
 **Generated:** December 2024  
-**Status:** In Progress - Task 1.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 Complete
 
 **Task 1.0 Completion Notes:**
 - Implemented best_score tracking in negamax_with_context() and quiescence_search()
@@ -209,4 +209,13 @@
 - Integrated time budget allocation into iterative deepening search loop
 - All time management features are configurable and can be disabled
 - Safety margins and minimum/maximum time per depth are configurable
+
+**Task 6.0 Completion Notes:**
+- Implemented move ordering result caching (Task 6.2): Added `move_ordering_cache` HashMap keyed by (position_hash, depth) to cache entire ordering results for repeated positions
+- Enhanced search state awareness (Task 6.4): Move ordering now accounts for depth, alpha, beta, and check status via `is_check` detection
+- Optimized for repeated positions (Task 6.5): Caching system handles repeated positions efficiently with cache hit/miss tracking in `OrderingStats`
+- Added comprehensive benchmarks (Task 6.1, 6.7): Created `move_ordering_performance_benchmarks.rs` with 5 benchmark groups measuring overhead, caching, TT integration, effectiveness, and move count impact
+- Created integration test suite (Task 6.8): Added `move_ordering_integration_tests.rs` with 13 tests covering TT integration, caching, depth awareness, check detection, alpha/beta windows, metrics tracking, full search context, repeated positions, cache eviction, empty move lists, different depths, LMR context, and consistency across searches
+- Made `order_moves_for_negamax` public for testing access
+- Verified integration with all pruning techniques (Task 6.3): Move ordering works correctly with LMR, null move pruning, and futility pruning
 

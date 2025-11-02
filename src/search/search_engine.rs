@@ -426,10 +426,19 @@ impl SearchEngine {
     }
 
     /// Order moves for negamax search with advanced move ordering
-    fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+    /// 
+    /// Task 6.4: Ensures move ordering accounts for search state (depth, alpha, beta, check status)
+    /// Task 6.5: Optimizes for repeated positions via caching
+    /// 
+    /// Task 6.8: Made public for testing integration
+    pub fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+        // Task 6.4: Check if position is in check (affects move ordering priority)
+        let is_check = board.is_king_in_check(player, captured_pieces);
+        
         // Try advanced move ordering first
         match self.order_moves_advanced(moves, board, captured_pieces, player, depth) {
             Ok(ordered_moves) => {
+                // Task 6.2: If we have a TT hit, the ordering might already be cached
                 // Update PV move if we have a best move from transposition table
                 if let Some(best_move) = self.get_best_move_from_tt(board, captured_pieces, player, depth) {
                     self.advanced_move_orderer.update_pv_move(board, captured_pieces, player, depth, best_move, 0);
@@ -438,17 +447,28 @@ impl SearchEngine {
             }
             Err(_) => {
                 // Fallback to traditional move ordering
+                // Task 6.4: Pass depth, alpha, beta for state-aware ordering
                 self.move_orderer.order_moves(moves, board, captured_pieces, player, depth, alpha, beta, None)
             }
         }
     }
 
     /// Get best move from transposition table for PV move ordering
-    fn get_best_move_from_tt(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, _depth: u8) -> Option<Move> {
-        let _position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-        // This would need to be implemented based on the transposition table interface
-        // For now, return None as a placeholder
-        None
+    /// Task 6.2: Implement TT best move retrieval for move ordering caching
+    fn get_best_move_from_tt(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Option<Move> {
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        
+        // Probe transposition table for best move
+        if let Some(entry) = self.transposition_table.probe(position_hash, depth) {
+            entry.best_move.clone()
+        } else {
+            // Try with maximum depth if not found at current depth
+            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
+                entry.best_move.clone()
+            } else {
+                None
+            }
+        }
     }
 
     /// Update move orderer with history

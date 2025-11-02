@@ -1,254 +1,250 @@
-//! Performance benchmarks for move ordering system
+//! Performance benchmarks for move ordering optimization (Task 6.1, 6.7)
 //! 
-//! This module provides comprehensive benchmarks to measure the performance
-//! of the move ordering system and validate that it meets the target
-//! performance requirements.
+//! This benchmark measures:
+//! - Move ordering overhead at different depths
+//! - Cache effectiveness for move ordering results
+//! - TT integration impact on move ordering
+//! - Comparison of different move ordering strategies
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use shogi_engine::search::move_ordering::{MoveOrdering, OrderingWeights};
-use shogi_engine::types::*;
-use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::moves::MoveGenerator;
-use std::time::Duration;
+use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use shogi_engine::{
+    bitboards::BitboardBoard,
+    types::{CapturedPieces, Player},
+    moves::MoveGenerator,
+    search::search_engine::SearchEngine,
+    std::sync::Arc,
+    std::sync::atomic::AtomicBool,
+};
 
-/// Generate test moves for benchmarking
-fn generate_test_moves() -> Vec<Move> {
-    let mut moves = Vec::new();
+fn create_test_position() -> (BitboardBoard, CapturedPieces, Player) {
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+    let player = Player::Black;
+    (board, captured, player)
+}
+
+/// Benchmark: Move ordering overhead at different depths
+fn bench_move_ordering_overhead_by_depth(c: &mut Criterion) {
+    let mut group = c.benchmark_group("move_ordering_overhead_by_depth");
     
-    // Generate a variety of move types for comprehensive testing
-    for row in 0..9 {
-        for col in 0..9 {
-            let from = Position::new(row, col);
-            
-            // Add different types of moves
-            for target_row in 0..9 {
-                for target_col in 0..9 {
-                    let to = Position::new(target_row, target_col);
-                    
-                    if from != to {
-                        // Regular move
-                        moves.push(Move {
-                            from: Some(from),
-                            to,
-                            piece_type: PieceType::Pawn,
-                            player: Player::Black,
-                            is_capture: false,
-                            is_promotion: false,
-                            gives_check: false,
-                            is_recapture: false,
-                            captured_piece: None,
-                        });
-                        
-                        // Capture move
-                        moves.push(Move {
-                            from: Some(from),
-                            to,
-                            piece_type: PieceType::Silver,
-                            player: Player::Black,
-                            is_capture: true,
-                            is_promotion: false,
-                            gives_check: false,
-                            is_recapture: false,
-                            captured_piece: Some(Piece {
-                                piece_type: PieceType::Gold,
-                                player: Player::White,
-                            }),
-                        });
-                        
-                        // Promotion move
-                        if to.row == 0 || to.row == 8 {
-                            moves.push(Move {
-                                from: Some(from),
-                                to,
-                                piece_type: PieceType::Pawn,
-                                player: Player::Black,
-                                is_capture: false,
-                                is_promotion: true,
-                                gives_check: false,
-                                is_recapture: false,
-                                captured_piece: None,
-                            });
-                        }
-                    }
-                }
-            }
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let mut engine = SearchEngine::new(Some(stop_flag), 64);
+    let (board, captured, player) = create_test_position();
+    let move_generator = MoveGenerator::new();
+    let moves = move_generator.generate_legal_moves(&board, player, &captured);
+    
+    if !moves.is_empty() {
+        for depth in [1, 3, 5, 7].iter() {
+            group.bench_with_input(
+                BenchmarkId::new("order_moves", depth),
+                depth,
+                |b, &depth| {
+                    b.iter(|| {
+                        let mut test_board = board.clone();
+                        let test_captured = captured.clone();
+                        let sorted = engine.order_moves_for_negamax(
+                            black_box(&moves),
+                            black_box(&test_board),
+                            black_box(&test_captured),
+                            black_box(player),
+                            black_box(*depth),
+                            black_box(0),
+                            black_box(0)
+                        );
+                        black_box(sorted);
+                    });
+                },
+            );
         }
     }
     
-    moves
+    group.finish();
 }
 
-/// Benchmark move ordering performance with different move counts
-fn benchmark_move_ordering_performance(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_ordering_performance");
-    group.measurement_time(Duration::from_secs(10));
+/// Benchmark: Move ordering with vs without caching
+fn bench_move_ordering_with_caching(c: &mut Criterion) {
+    let mut group = c.benchmark_group("move_ordering_caching");
     
-    let test_moves = generate_test_moves();
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let mut engine = SearchEngine::new(Some(stop_flag), 64);
+    let (board, captured, player) = create_test_position();
+    let move_generator = MoveGenerator::new();
+    let moves = move_generator.generate_legal_moves(&board, player, &captured);
     
-    // Test with different move counts
-    let move_counts = vec![10, 50, 100, 200, 500];
-    
-    for count in move_counts {
-        let moves_subset: Vec<Move> = test_moves.iter().take(count).cloned().collect();
+    if !moves.is_empty() {
+        // Benchmark: Move ordering (first call - no cache)
+        group.bench_function("first_call_no_cache", |b| {
+            b.iter(|| {
+                let mut test_engine = SearchEngine::new(None, 64);
+                let test_board = board.clone();
+                let test_captured = captured.clone();
+                let sorted = test_engine.order_moves_for_negamax(
+                    black_box(&moves),
+                    black_box(&test_board),
+                    black_box(&test_captured),
+                    black_box(player),
+                    black_box(3),
+                    black_box(0),
+                    black_box(0)
+                );
+                black_box(sorted);
+            });
+        });
         
-        group.bench_with_input(
-            BenchmarkId::new("order_moves", count),
-            &moves_subset,
-            |b, moves| {
-                let mut orderer = MoveOrdering::new();
-                b.iter(|| {
-                    criterion::black_box(orderer.order_moves(criterion::black_box(moves)))
-                })
-            },
-        );
+        // Benchmark: Move ordering (subsequent calls - with cache)
+        group.bench_function("subsequent_calls_with_cache", |b| {
+            // Warm up cache
+            engine.order_moves_for_negamax(&moves, &board, &captured, player, 3, 0, 0);
+            
+            b.iter(|| {
+                let test_board = board.clone();
+                let test_captured = captured.clone();
+                let sorted = engine.order_moves_for_negamax(
+                    black_box(&moves),
+                    black_box(&test_board),
+                    black_box(&test_captured),
+                    black_box(player),
+                    black_box(3),
+                    black_box(0),
+                    black_box(0)
+                );
+                black_box(sorted);
+            });
+        });
     }
     
     group.finish();
 }
 
-/// Benchmark move scoring performance
-fn benchmark_move_scoring_performance(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_scoring_performance");
-    group.measurement_time(Duration::from_secs(10));
+/// Benchmark: Move ordering with TT integration
+fn bench_move_ordering_with_tt(c: &mut Criterion) {
+    let mut group = c.benchmark_group("move_ordering_tt_integration");
     
-    let test_moves = generate_test_moves();
-    let moves_subset: Vec<Move> = test_moves.iter().take(100).cloned().collect();
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let mut engine = SearchEngine::new(Some(stop_flag), 64);
+    let (board, captured, player) = create_test_position();
+    let move_generator = MoveGenerator::new();
+    let moves = move_generator.generate_legal_moves(&board, player, &captured);
     
-    group.bench_function("score_move", |b| {
-        let mut orderer = MoveOrdering::new();
-        b.iter(|| {
-            for move_ in &moves_subset {
-                criterion::black_box(orderer.score_move(criterion::black_box(move_)));
-            }
-        })
-    });
-    
-    group.finish();
-}
-
-/// Benchmark cache performance
-fn benchmark_cache_performance(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_ordering_cache_performance");
-    group.measurement_time(Duration::from_secs(10));
-    
-    let test_moves = generate_test_moves();
-    let moves_subset: Vec<Move> = test_moves.iter().take(50).cloned().collect();
-    
-    // Benchmark cache hits (second scoring of same moves)
-    group.bench_function("cache_hits", |b| {
-        let mut orderer = MoveOrdering::new();
+    if !moves.is_empty() {
+        // Benchmark: Move ordering without TT (empty TT)
+        group.bench_function("without_tt", |b| {
+            let mut test_engine = SearchEngine::new(None, 64);
+            b.iter(|| {
+                let test_board = board.clone();
+                let test_captured = captured.clone();
+                let sorted = test_engine.order_moves_for_negamax(
+                    black_box(&moves),
+                    black_box(&test_board),
+                    black_box(&test_captured),
+                    black_box(player),
+                    black_box(3),
+                    black_box(0),
+                    black_box(0)
+                );
+                black_box(sorted);
+            });
+        });
         
-        // Pre-populate cache
-        for move_ in &moves_subset {
-            let _ = orderer.score_move(move_);
-        }
-        
-        b.iter(|| {
-            for move_ in &moves_subset {
-                criterion::black_box(orderer.score_move(criterion::black_box(move_)));
-            }
-        })
-    });
-    
-    // Benchmark cache misses (first scoring)
-    group.bench_function("cache_misses", |b| {
-        b.iter(|| {
-            let mut orderer = MoveOrdering::new();
-            for move_ in &moves_subset {
-                criterion::black_box(orderer.score_move(criterion::black_box(move_)));
-            }
-        })
-    });
-    
-    group.finish();
-}
-
-/// Benchmark memory usage efficiency
-fn benchmark_memory_efficiency(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_ordering_memory_efficiency");
-    group.measurement_time(Duration::from_secs(5));
-    
-    let test_moves = generate_test_moves();
-    let moves_subset: Vec<Move> = test_moves.iter().take(100).cloned().collect();
-    
-    group.bench_function("memory_usage", |b| {
-        b.iter(|| {
-            let mut orderer = MoveOrdering::new();
-            let _ = orderer.order_moves(&moves_subset);
+        // Benchmark: Move ordering with TT (populated TT)
+        group.bench_function("with_tt", |b| {
+            // Populate TT by doing a search
+            let mut test_board = board.clone();
+            let test_captured = captured.clone();
+            let _ = engine.find_best_move(&mut test_board, &test_captured, player, 3, 1000);
             
-            // Measure memory usage
-            criterion::black_box(orderer.get_memory_usage().current_bytes)
-        })
+            b.iter(|| {
+                let test_board = board.clone();
+                let test_captured = captured.clone();
+                let sorted = engine.order_moves_for_negamax(
+                    black_box(&moves),
+                    black_box(&test_board),
+                    black_box(&test_captured),
+                    black_box(player),
+                    black_box(3),
+                    black_box(0),
+                    black_box(0)
+                );
+                black_box(sorted);
+            });
+        });
+    }
+    
+    group.finish();
+}
+
+/// Benchmark: Move ordering effectiveness (cutoff rate)
+fn bench_move_ordering_effectiveness(c: &mut Criterion) {
+    let mut group = c.benchmark_group("move_ordering_effectiveness");
+    
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let mut engine = SearchEngine::new(Some(stop_flag), 64);
+    let (board, captured, player) = create_test_position();
+    
+    // Benchmark: Search with move ordering
+    group.bench_function("with_ordering", |b| {
+        b.iter(|| {
+            let mut test_board = board.clone();
+            let test_captured = captured.clone();
+            let _ = engine.find_best_move(
+                black_box(&mut test_board),
+                black_box(&test_captured),
+                black_box(player),
+                black_box(3),
+                black_box(1000)
+            );
+        });
     });
     
     group.finish();
 }
 
-/// Benchmark different configuration weights
-fn benchmark_configuration_performance(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_ordering_configuration_performance");
-    group.measurement_time(Duration::from_secs(10));
+/// Benchmark: Move ordering for different move counts
+fn bench_move_ordering_by_move_count(c: &mut Criterion) {
+    let mut group = c.benchmark_group("move_ordering_by_move_count");
     
-    let test_moves = generate_test_moves();
-    let moves_subset: Vec<Move> = test_moves.iter().take(100).cloned().collect();
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let mut engine = SearchEngine::new(Some(stop_flag), 64);
+    let (board, captured, player) = create_test_position();
+    let move_generator = MoveGenerator::new();
+    let all_moves = move_generator.generate_legal_moves(&board, player, &captured);
     
-    // Default weights
-    group.bench_function("default_weights", |b| {
-        let mut orderer = MoveOrdering::new();
-        b.iter(|| {
-            criterion::black_box(orderer.order_moves(&moves_subset))
-        })
-    });
-    
-    // Custom weights
-    group.bench_function("custom_weights", |b| {
-        let custom_weights = OrderingWeights {
-            capture_weight: 2000,
-            promotion_weight: 1500,
-            center_control_weight: 200,
-            development_weight: 300,
-            piece_value_weight: 100,
-            position_value_weight: 150,
-            tactical_weight: 500,
-            quiet_weight: 50,
-        };
-        let mut orderer = MoveOrdering::with_config(custom_weights);
-        b.iter(|| {
-            criterion::black_box(orderer.order_moves(&moves_subset))
-        })
-    });
-    
-    group.finish();
-}
-
-/// Benchmark statistics tracking overhead
-fn benchmark_statistics_overhead(c: &mut Criterion) {
-    let mut group = c.benchmark_group("move_ordering_statistics_overhead");
-    group.measurement_time(Duration::from_secs(10));
-    
-    let test_moves = generate_test_moves();
-    let moves_subset: Vec<Move> = test_moves.iter().take(100).cloned().collect();
-    
-    group.bench_function("with_statistics", |b| {
-        let mut orderer = MoveOrdering::new();
-        b.iter(|| {
-            let _ = orderer.order_moves(&moves_subset);
-            criterion::black_box(orderer.get_stats());
-        })
-    });
+    if !all_moves.is_empty() {
+        for move_count in [5, 10, 20, 30].iter() {
+            let moves: Vec<_> = all_moves.iter().take(*move_count.min(&all_moves.len())).cloned().collect();
+            
+            group.bench_with_input(
+                BenchmarkId::new("order_moves", move_count),
+                move_count,
+                |b, _| {
+                    b.iter(|| {
+                        let test_board = board.clone();
+                        let test_captured = captured.clone();
+                        let sorted = engine.order_moves_for_negamax(
+                            black_box(&moves),
+                            black_box(&test_board),
+                            black_box(&test_captured),
+                            black_box(player),
+                            black_box(3),
+                            black_box(0),
+                            black_box(0)
+                        );
+                        black_box(sorted);
+                    });
+                },
+            );
+        }
+    }
     
     group.finish();
 }
 
 criterion_group!(
     benches,
-    benchmark_move_ordering_performance,
-    benchmark_move_scoring_performance,
-    benchmark_cache_performance,
-    benchmark_memory_efficiency,
-    benchmark_configuration_performance,
-    benchmark_statistics_overhead
+    bench_move_ordering_overhead_by_depth,
+    bench_move_ordering_with_caching,
+    bench_move_ordering_with_tt,
+    bench_move_ordering_effectiveness,
+    bench_move_ordering_by_move_count
 );
-
 criterion_main!(benches);
-

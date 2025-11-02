@@ -1546,6 +1546,10 @@ pub struct MoveOrdering {
     hash_calculator: crate::search::ShogiHashHandler,
     /// PV move cache for performance optimization
     pv_move_cache: HashMap<u64, Option<Move>>,
+    /// Move ordering result cache (Task 6.2)
+    /// Maps (position_hash, depth) -> ordered moves list
+    /// This caches entire move ordering results for repeated positions
+    move_ordering_cache: HashMap<(u64, u8), Vec<Move>>,
     /// Killer moves organized by depth
     /// Each depth can have multiple killer moves
     killer_moves: HashMap<u8, Vec<Move>>,
@@ -2614,6 +2618,7 @@ impl MoveOrdering {
             transposition_table: ptr::null(),
             hash_calculator: crate::search::ShogiHashHandler::new(config.cache_config.max_cache_size),
             pv_move_cache: HashMap::new(),
+            move_ordering_cache: HashMap::new(), // Task 6.2: Initialize move ordering cache
             killer_moves: HashMap::new(),
             current_depth: 0,
             history_table: HashMap::new(),
@@ -3822,6 +3827,7 @@ impl MoveOrdering {
     pub fn clear_cache(&mut self) {
         self.move_score_cache.clear();
         self.pv_move_cache.clear();
+        self.move_ordering_cache.clear(); // Task 6.2: Clear move ordering cache
         self.killer_moves.clear();
         self.history_table.clear();
         self.stats.cache_hits = 0;
@@ -5872,6 +5878,9 @@ impl MoveOrdering {
     /// 
     /// This method combines all three prioritization strategies
     /// for optimal move ordering.
+    /// 
+    /// Task 6.2: Caches ordering results for repeated positions with same move sets
+    /// Task 6.4: Accounts for search state (depth, alpha, beta, check status)
     pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
@@ -5879,17 +5888,34 @@ impl MoveOrdering {
 
         let start_time = TimeSource::now();
         
+        // Task 6.2: Check cache for move ordering results
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let cache_key = (position_hash, depth);
+        
+        // Check if we have a cached ordering result for this position and depth
+        if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
+            // Verify that cached moves match current moves (moves might differ for same position)
+            if cached_ordered.len() == moves.len() && 
+               cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
+                self.stats.cache_hits += 1;
+                self.stats.total_moves_ordered += moves.len() as u64;
+                return cached_ordered.clone();
+            }
+        }
+        
+        self.stats.cache_misses += 1;
+        
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
 
-        // Set current depth for killer move management
+        // Task 6.4: Set current depth for killer move management (depth affects ordering)
         self.set_current_depth(depth);
 
-        // Get PV move for this position
+        // Get PV move for this position (Task 6.4: uses position hash which accounts for position state)
         let pv_move = self.get_pv_move(board, captured_pieces, player, depth);
 
-        // Get killer moves for current depth
+        // Get killer moves for current depth (Task 6.4: depth-aware)
         let killer_moves = self.get_current_killer_moves().cloned().unwrap_or_default();
 
         // Create mutable copy for sorting
@@ -5901,6 +5927,17 @@ impl MoveOrdering {
             let score_b = self.score_move_with_all_heuristics(b, &pv_move, &killer_moves);
             score_b.cmp(&score_a)
         });
+
+        // Task 6.2: Cache the ordering result for this position and depth
+        if self.move_ordering_cache.len() < self.config.cache_config.max_cache_size {
+            self.move_ordering_cache.insert(cache_key, ordered_moves.clone());
+        } else {
+            // Cache is full - remove oldest entries (simple eviction: remove first entry)
+            if let Some(first_key) = self.move_ordering_cache.keys().next().copied() {
+                self.move_ordering_cache.remove(&first_key);
+                self.move_ordering_cache.insert(cache_key, ordered_moves.clone());
+            }
+        }
 
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
