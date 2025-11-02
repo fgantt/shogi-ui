@@ -4515,6 +4515,119 @@ pub struct SearchPerformanceMetrics {
     pub cache_hit_rate: f64,
 }
 
+/// Comprehensive search metrics for performance monitoring (Task 5.7-5.9)
+/// Tracks key performance indicators: cutoff rate, TT hit rate, aspiration window success
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct CoreSearchMetrics {
+    /// Total number of nodes searched
+    pub total_nodes: u64,
+    /// Total number of alpha-beta cutoffs
+    pub total_cutoffs: u64,
+    /// Total number of transposition table probes
+    pub total_tt_probes: u64,
+    /// Total number of transposition table hits
+    pub total_tt_hits: u64,
+    /// Total number of aspiration window searches
+    pub total_aspiration_searches: u64,
+    /// Number of successful aspiration window searches (no re-search needed)
+    pub successful_aspiration_searches: u64,
+    /// Number of beta cutoffs (move ordering effectiveness indicator)
+    pub beta_cutoffs: u64,
+    /// Number of exact score entries in TT
+    pub tt_exact_hits: u64,
+    /// Number of lower bound entries in TT
+    pub tt_lower_bound_hits: u64,
+    /// Number of upper bound entries in TT
+    pub tt_upper_bound_hits: u64,
+}
+
+impl CoreSearchMetrics {
+    /// Create a new empty metrics structure
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Reset all metrics to zero
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+    
+    /// Calculate cutoff rate as a percentage (Task 5.7)
+    pub fn cutoff_rate(&self) -> f64 {
+        if self.total_nodes == 0 {
+            return 0.0;
+        }
+        (self.total_cutoffs as f64 / self.total_nodes as f64) * 100.0
+    }
+    
+    /// Calculate transposition table hit rate as a percentage (Task 5.7)
+    pub fn tt_hit_rate(&self) -> f64 {
+        if self.total_tt_probes == 0 {
+            return 0.0;
+        }
+        (self.total_tt_hits as f64 / self.total_tt_probes as f64) * 100.0
+    }
+    
+    /// Calculate aspiration window success rate as a percentage (Task 5.7)
+    pub fn aspiration_success_rate(&self) -> f64 {
+        if self.total_aspiration_searches == 0 {
+            return 0.0;
+        }
+        (self.successful_aspiration_searches as f64 / self.total_aspiration_searches as f64) * 100.0
+    }
+    
+    /// Get breakdown of TT hit types
+    pub fn tt_hit_breakdown(&self) -> (f64, f64, f64) {
+        if self.total_tt_hits == 0 {
+            return (0.0, 0.0, 0.0);
+        }
+        let exact_pct = (self.tt_exact_hits as f64 / self.total_tt_hits as f64) * 100.0;
+        let lower_pct = (self.tt_lower_bound_hits as f64 / self.total_tt_hits as f64) * 100.0;
+        let upper_pct = (self.tt_upper_bound_hits as f64 / self.total_tt_hits as f64) * 100.0;
+        (exact_pct, lower_pct, upper_pct)
+    }
+    
+    /// Generate a comprehensive metrics report (Task 5.9)
+    pub fn generate_report(&self) -> String {
+        let cutoff_rate = self.cutoff_rate();
+        let tt_hit_rate = self.tt_hit_rate();
+        let aspiration_success = self.aspiration_success_rate();
+        let (exact_pct, lower_pct, upper_pct) = self.tt_hit_breakdown();
+        
+        format!(
+            "Core Search Metrics Report:\n\
+            =========================\n\
+            Total Nodes Searched: {}\n\
+            Total Cutoffs: {} ({:.2}% cutoff rate)\n\
+            Beta Cutoffs: {}\n\
+            \n\
+            Transposition Table:\n\
+            - Total Probes: {}\n\
+            - Total Hits: {} ({:.2}% hit rate)\n\
+            - Exact Entries: {} ({:.2}%)\n\
+            - Lower Bound: {} ({:.2}%)\n\
+            - Upper Bound: {} ({:.2}%)\n\
+            \n\
+            Aspiration Windows:\n\
+            - Total Searches: {}\n\
+            - Successful: {} ({:.2}% success rate)\n\
+            - Re-searches: {}\n\
+            ",
+            self.total_nodes,
+            self.total_cutoffs, cutoff_rate,
+            self.beta_cutoffs,
+            self.total_tt_probes,
+            self.total_tt_hits, tt_hit_rate,
+            self.tt_exact_hits, exact_pct,
+            self.tt_lower_bound_hits, lower_pct,
+            self.tt_upper_bound_hits, upper_pct,
+            self.total_aspiration_searches,
+            self.successful_aspiration_searches, aspiration_success,
+            self.total_aspiration_searches - self.successful_aspiration_searches
+        )
+    }
+}
+
 /// Comprehensive performance report
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerformanceReport {

@@ -100,22 +100,22 @@
   - [ ] 4.9 Test time budget allocation with various time limits and positions
   - [x] 4.10 Add metrics for time budget accuracy and depth completion rates
 
-- [ ] 5.0 Optimize Repetition Detection and Code Quality
-  - [ ] 5.1 Replace FEN string history tracking with hash-based repetition detection
-  - [ ] 5.2 Create position hash history structure (Vec<u64>) in search state
-  - [ ] 5.3 Update negamax_with_context() to use hash-based repetition checks
-  - [ ] 5.4 Remove FEN string generation from history tracking in search loops
-  - [ ] 5.5 Add named constants for magic numbers (MIN_SCORE = i32::MIN + 1, MAX_SCORE = i32::MAX - 1)
-  - [ ] 5.6 Replace all i32::MIN + 1 and i32::MAX - 1 usages with constants
-  - [ ] 5.7 Add performance metrics collection for cutoff rate, TT hit rate, aspiration window success
-  - [ ] 5.8 Create metrics tracking structure in SearchEngine
-  - [ ] 5.9 Add metrics reporting functions for observability
-  - [ ] 5.10 Refine fallback logic to use best-scoring move or static evaluation instead of first move
-  - [ ] 5.11 Update fallback at line 3050-3053 in negamax_with_context to use static evaluation
-  - [ ] 5.12 Fix best_score initialization at line 2522 to use alpha instead of i32::MIN + 1
-  - [ ] 5.13 Test repetition detection correctness and performance improvement
-  - [ ] 5.14 Benchmark hash-based vs FEN-based repetition detection performance
-  - [ ] 5.15 Add unit tests for all code quality improvements
+- [x] 5.0 Optimize Repetition Detection and Code Quality
+  - [x] 5.1 Replace FEN string history tracking with hash-based repetition detection
+  - [x] 5.2 Create position hash history structure (Vec<u64>) in search state
+  - [x] 5.3 Update negamax_with_context() to use hash-based repetition checks
+  - [x] 5.4 Remove FEN string generation from history tracking in search loops
+  - [x] 5.5 Add named constants for magic numbers (MIN_SCORE = i32::MIN + 1, MAX_SCORE = i32::MAX - 1)
+  - [x] 5.6 Replace all i32::MIN + 1 and i32::MAX - 1 usages with constants
+  - [x] 5.7 Add performance metrics collection for cutoff rate, TT hit rate, aspiration window success
+  - [x] 5.8 Create metrics tracking structure in SearchEngine
+  - [x] 5.9 Add metrics reporting functions for observability
+  - [x] 5.10 Refine fallback logic to use best-scoring move or static evaluation instead of first move
+  - [x] 5.11 Update fallback at line 3050-3053 in negamax_with_context to use static evaluation
+  - [x] 5.12 Fix best_score initialization at line 2522 to use alpha instead of i32::MIN + 1
+  - [x] 5.13 Test repetition detection correctness and performance improvement
+  - [x] 5.14 Benchmark hash-based vs FEN-based repetition detection performance
+  - [x] 5.15 Add unit tests for all code quality improvements
 
 - [ ] 6.0 Optimize Move Ordering Performance and Integration
   - [ ] 6.1 Profile move ordering overhead to identify optimization opportunities

@@ -12,6 +12,12 @@ use crate::search::move_ordering::MoveOrdering;
 use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 use crate::search::{ParallelSearchEngine, ParallelSearchConfig};
 
+// Score constants to replace magic numbers (Task 5.5)
+/// Minimum score value (one above i32::MIN to avoid sentinel value issues)
+pub const MIN_SCORE: i32 = i32::MIN + 1;
+/// Maximum score value (one below i32::MAX to avoid sentinel value issues)
+pub const MAX_SCORE: i32 = i32::MAX - 1;
+
 thread_local! {
     static YBWC_ENGINE_TLS: std::cell::RefCell<Option<SearchEngine>> = std::cell::RefCell::new(None);
 }
@@ -46,6 +52,8 @@ pub struct SearchEngine {
     time_management_config: TimeManagementConfig,
     /// Time budget statistics (Task 4.10)
     time_budget_stats: TimeBudgetStats,
+    /// Core search metrics for performance monitoring (Task 5.7-5.8)
+    core_search_metrics: crate::types::CoreSearchMetrics,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     // Tapered evaluation search integration
@@ -302,6 +310,7 @@ impl SearchEngine {
             previous_scores: Vec::new(),
             time_management_config: TimeManagementConfig::default(),
             time_budget_stats: TimeBudgetStats::default(),
+            core_search_metrics: crate::types::CoreSearchMetrics::default(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: PruningManager::new(PruningParameters::default()),
             // Tapered evaluation search integration
@@ -481,6 +490,7 @@ impl SearchEngine {
             aspiration_stats: AspirationWindowStats::default(),
             time_management_config: config.time_management.clone(),
             time_budget_stats: TimeBudgetStats::default(),
+            core_search_metrics: crate::types::CoreSearchMetrics::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
@@ -643,10 +653,14 @@ impl SearchEngine {
                          _beta: i32, 
                          start_time: &TimeSource, 
                          time_limit_ms: u32, 
-                         history: &mut Vec<String>) -> Option<Move> {
+                         hash_history: &mut Vec<u64>) -> Option<Move> {
         
         let iid_start_time = TimeSource::now();
         let initial_nodes = self.nodes_searched;
+        
+        // Create local hash_history for IID search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
         
         // Perform shallow search with null window for efficiency
         let iid_score = self.negamax_with_context(
@@ -658,7 +672,7 @@ impl SearchEngine {
             alpha, 
             start_time, 
             time_limit_ms, 
-            history, 
+            &mut local_hash_history, 
             true,  // can_null_move
             false, // is_root
             false, // has_capture
@@ -1120,7 +1134,7 @@ impl SearchEngine {
                                        beta: i32,
                                        start_time: &TimeSource,
                                        time_limit_ms: u32,
-                                       history: &mut Vec<String>) -> Option<Move> {
+                                       hash_history: &mut Vec<u64>) -> Option<Move> {
         if !self.iid_config.enabled || iid_depth == 0 {
             return None;
         }
@@ -1145,6 +1159,10 @@ impl SearchEngine {
             return None;
         }
 
+        // Create local hash_history for IID search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
+        
         // Perform null window search with memory optimization
         let mut best_move: Option<Move> = None;
         let mut best_score = alpha;
@@ -1176,7 +1194,7 @@ impl SearchEngine {
                 best_score.saturating_neg(),
                 start_time,
                 time_limit_ms,
-                history,
+                &mut local_hash_history,
                 false,
                 false,
                 false,
@@ -1395,7 +1413,7 @@ impl SearchEngine {
                                       _beta: i32,
                                       start_time: &TimeSource,
                                       time_limit_ms: u32,
-                                      history: &mut Vec<String>) -> Vec<IIDPVResult> {
+                                      hash_history: &mut Vec<u64>) -> Vec<IIDPVResult> {
         if !self.iid_config.enabled || iid_depth == 0 || pv_count == 0 {
             return Vec::new();
         }
@@ -1418,6 +1436,10 @@ impl SearchEngine {
         let mut current_alpha = alpha;
         let mut remaining_moves = moves_to_search.to_vec();
 
+        // Create local hash_history for multi-PV IID search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
+        
         // Find multiple PVs using aspiration windows
         for pv_index in 0..pv_count.min(remaining_moves.len()) {
             if start_time.elapsed_ms() >= time_limit_ms {
@@ -1457,7 +1479,7 @@ impl SearchEngine {
                     -aspiration_alpha,
                     start_time,
                     time_limit_ms,
-                    history,
+                    &mut local_hash_history,
                     false,
                     false,
                     false,
@@ -1718,7 +1740,7 @@ impl SearchEngine {
                                    beta: i32,
                                    start_time: &TimeSource,
                                    time_limit_ms: u32,
-                                   history: &mut Vec<String>) -> Option<IIDProbeResult> {
+                                   hash_history: &mut Vec<u64>) -> Option<IIDProbeResult> {
         if !self.iid_config.enabled || iid_depth == 0 {
             return None;
         }
@@ -1738,9 +1760,12 @@ impl SearchEngine {
         }
 
         // Phase 1: Initial shallow IID search to identify promising moves
+        // Create local hash_history for identify_promising_moves (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
         let promising_moves = self.identify_promising_moves(
             board, captured_pieces, player, moves_to_search, iid_depth, 
-            alpha, beta, start_time, time_limit_ms, history
+            alpha, beta, start_time, time_limit_ms, &mut local_hash_history
         );
 
         if promising_moves.is_empty() {
@@ -1750,7 +1775,7 @@ impl SearchEngine {
         // Phase 2: Deeper probing of promising moves
         let probe_results = self.probe_promising_moves(
             board, captured_pieces, player, &promising_moves, probe_depth,
-            alpha, beta, start_time, time_limit_ms, history
+            alpha, beta, start_time, time_limit_ms, &mut local_hash_history
         );
 
         // Phase 3: Select best move based on probing results
@@ -1774,10 +1799,14 @@ impl SearchEngine {
                                beta: i32,
                                start_time: &TimeSource,
                                time_limit_ms: u32,
-                               history: &mut Vec<String>) -> Vec<PromisingMove> {
+                               hash_history: &mut Vec<u64>) -> Vec<PromisingMove> {
         let mut promising_moves = Vec::new();
         let mut current_alpha = alpha;
         let promising_threshold = 50; // Minimum score improvement to be considered promising
+
+        // Create local hash_history for this search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
 
         for move_ in moves {
             if start_time.elapsed_ms() >= time_limit_ms {
@@ -1802,7 +1831,7 @@ impl SearchEngine {
                 current_alpha.saturating_neg(),
                 start_time,
                 time_limit_ms,
-                history,
+                &mut local_hash_history,
                 false,
                 false,
                 false,
@@ -1844,8 +1873,12 @@ impl SearchEngine {
                             beta: i32,
                             start_time: &TimeSource,
                             time_limit_ms: u32,
-                            history: &mut Vec<String>) -> Vec<IIDProbeResult> {
+                            hash_history: &mut Vec<u64>) -> Vec<IIDProbeResult> {
         let mut probe_results = Vec::new();
+
+        // Create local hash_history for probe search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
 
         for promising_move in promising_moves {
             if start_time.elapsed_ms() >= time_limit_ms {
@@ -1870,7 +1903,7 @@ impl SearchEngine {
                 alpha.saturating_neg(),
                 start_time,
                 time_limit_ms,
-                history,
+                &mut local_hash_history,
                 false,
                 false,
                 false,
@@ -2017,7 +2050,7 @@ impl SearchEngine {
 
         for iteration in 0..iterations {
             let _start_time = TimeSource::now();
-            let mut history = Vec::new();
+            let mut hash_history = Vec::new();
 
             // Benchmark with IID enabled
             let iid_config = self.iid_config.clone();
@@ -2027,7 +2060,7 @@ impl SearchEngine {
             let iid_result = self.negamax_with_context(
                 board, captured_pieces, player, depth,
                 -10000, 10000, &iid_start, time_limit_ms,
-                &mut history, false, false, false, false
+                &mut hash_history, false, false, false, false
             );
             let iid_time = iid_start.elapsed_ms();
             let iid_nodes = self.iid_stats.total_iid_nodes;
@@ -2038,7 +2071,7 @@ impl SearchEngine {
             let non_iid_result = self.negamax_with_context(
                 board, captured_pieces, player, depth,
                 -10000, 10000, &non_iid_start, time_limit_ms,
-                &mut history, false, false, false, false
+                &mut hash_history, false, false, false, false
             );
             let non_iid_time = non_iid_start.elapsed_ms();
 
@@ -2268,7 +2301,7 @@ impl SearchEngine {
         
         while move_count < max_moves {
             let _start_time = TimeSource::now();
-            let mut history = Vec::new();
+            let mut hash_history = Vec::new();
             
             // Find best move
             let best_move = self.find_best_move(
@@ -2277,7 +2310,7 @@ impl SearchEngine {
                 Player::Black, // Simplified - would need proper turn tracking
                 3, // depth
                 time_per_move_ms,
-                &mut history
+                &mut hash_history
             );
             
             if let Some(move_) = best_move {
@@ -2325,8 +2358,12 @@ impl SearchEngine {
                      player: Player,
                      depth: u8,
                      time_limit_ms: u32,
-                     history: &mut Vec<String>) -> Option<Move> {
+                     hash_history: &mut Vec<u64>) -> Option<Move> {
         let start_time = TimeSource::now();
+        
+        // Create local hash_history for search (Task 5.2)
+        let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut local_hash_history = vec![initial_hash];
         
         // Use the main search function
         let _score = self.negamax_with_context(
@@ -2338,7 +2375,7 @@ impl SearchEngine {
             10000,
             &start_time,
             time_limit_ms,
-            history,
+            &mut local_hash_history,
             false,
             false,
             false,
@@ -2517,10 +2554,9 @@ impl SearchEngine {
         let mut alpha = alpha;
         
         let mut best_move: Option<Move> = None;
-        // CRITICAL FIX: Initialize to i32::MIN + 1 instead of alpha to allow tracking
-        // of any move, even if it doesn't exceed alpha. This prevents the bug where
-        // best_move would be None even when legal moves exist.
-        let mut best_score = i32::MIN + 1;
+        // Initialize best_score to alpha (Task 5.12)
+        // This is correct since any move that improves alpha will set best_score
+        let mut best_score = alpha;
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Generating legal moves");
         crate::debug_utils::start_timing("move_generation");
@@ -2567,7 +2603,8 @@ impl SearchEngine {
             "Search parameters: depth={}, alpha={}, beta={}, time_limit={}ms, moves_count={}", 
             depth, alpha, beta, time_limit_ms, sorted_moves.len()));
         
-        let mut history: Vec<String> = vec![board.to_fen(player, captured_pieces)];
+        // Use hash-based history instead of FEN strings (Task 5.1-5.2)
+        let mut hash_history: Vec<u64> = vec![self.hash_calculator.get_position_hash(board, player, captured_pieces)];
 
         for (move_index, move_) in sorted_moves.iter().enumerate() {
             if self.should_stop(&start_time, time_limit_ms) { 
@@ -2588,7 +2625,7 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            let score = -self.negamax(&mut *board, &new_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut history, true);
+            let score = -self.negamax(&mut *board, &new_captured, player.opposite(), depth - 1, beta.saturating_neg(), alpha.saturating_neg(), &start_time, time_limit_ms, &mut hash_history, true);
             crate::debug_utils::end_timing(&format!("move_eval_{}", move_index), "SEARCH_AT_DEPTH");
             
             // Restore board state by unmaking the move
@@ -2777,14 +2814,14 @@ impl SearchEngine {
 
     /// Backward-compatible wrapper for search_at_depth without alpha/beta parameters
     pub fn search_at_depth_legacy(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, time_limit_ms: u32) -> Option<(Move, i32)> {
-        self.search_at_depth(board, captured_pieces, player, depth, time_limit_ms, i32::MIN + 1, i32::MAX - 1)
+        self.search_at_depth(board, captured_pieces, player, depth, time_limit_ms, MIN_SCORE, MAX_SCORE)
     }
 
-    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool) -> i32 {
-        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, history, can_null_move, false, false, false)
+    fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool) -> i32 {
+        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, hash_history, can_null_move, false, false, false)
     }
     
-    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, history: &mut Vec<String>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool) -> i32 {
+    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool) -> i32 {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
@@ -2801,6 +2838,9 @@ impl SearchEngine {
         }
         self.nodes_searched += 1;
         GLOBAL_NODES_SEARCHED.fetch_add(1, Ordering::Relaxed);
+        
+        // Track total nodes for metrics (Task 5.7)
+        self.core_search_metrics.total_nodes += 1;
         // Update seldepth (selective depth) - track maximum depth reached
         // current_depth is the iteration depth (e.g., 5), depth is remaining depth (e.g., starts at 5, then 4, 3, 2...)
         // Actual depth from root = current_depth - depth + 1 (when depth=5 at root, we're at ply 1)
@@ -2816,27 +2856,57 @@ impl SearchEngine {
         if depth_from_root as u64 > prev_seldepth {
             GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
         }
-        let fen_key = board.to_fen(player, captured_pieces);
-        if history.contains(&fen_key) {
-            crate::debug_utils::trace_log("NEGAMAX", "Repetition detected, returning 0 (draw)");
+        // Check transposition table and calculate position hash (Task 5.1-5.3)
+        // Calculate position hash for repetition detection and TT
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        
+        // Hash-based repetition detection (Task 5.1-5.3)
+        // Use hash_calculator's built-in repetition detection instead of FEN strings
+        // Note: hash_calculator maintains its own global history via add_position_to_history
+        // For search context, we track hashes locally in hash_history
+        let repetition_state = self.hash_calculator.get_repetition_state_for_hash(position_hash);
+        if repetition_state.is_draw() {
+            crate::debug_utils::trace_log("NEGAMAX", "Repetition detected (hash-based), returning 0 (draw)");
             return 0; // Repetition is a draw
         }
-
-        // Check transposition table
-        // Calculate position hash for the new TT system
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        
+        // Add current position hash to search history (Task 5.2)
+        // Also add to hash_calculator's global history for game-wide repetition tracking
+        self.hash_calculator.add_position_to_history(position_hash);
+        hash_history.push(position_hash);
+        
+        // Track TT probe (Task 5.7)
+        self.core_search_metrics.total_tt_probes += 1;
+        
         if let Some(entry) = self.transposition_table.probe(position_hash, depth) {
-            crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit: depth={}, score={}, flag={:?}", 
-                entry.depth, entry.score, entry.flag));
+            // Track TT hit (Task 5.7)
+            self.core_search_metrics.total_tt_hits += 1;
+            
+            // Track TT hit type (Task 5.7)
             match entry.flag {
-                TranspositionFlag::Exact => return entry.score,
-                TranspositionFlag::LowerBound => if entry.score >= beta { 
-                    crate::debug_utils::trace_log("NEGAMAX", "TT lower bound cutoff");
-                    return entry.score; 
+                TranspositionFlag::Exact => {
+                    self.core_search_metrics.tt_exact_hits += 1;
+                    crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit (Exact): depth={}, score={}", 
+                        entry.depth, entry.score));
+                    return entry.score;
                 },
-                TranspositionFlag::UpperBound => if entry.score <= alpha { 
-                    crate::debug_utils::trace_log("NEGAMAX", "TT upper bound cutoff");
-                    return entry.score; 
+                TranspositionFlag::LowerBound => {
+                    self.core_search_metrics.tt_lower_bound_hits += 1;
+                    crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit (LowerBound): depth={}, score={}", 
+                        entry.depth, entry.score));
+                    if entry.score >= beta { 
+                        crate::debug_utils::trace_log("NEGAMAX", "TT lower bound cutoff");
+                        return entry.score; 
+                    }
+                },
+                TranspositionFlag::UpperBound => {
+                    self.core_search_metrics.tt_upper_bound_hits += 1;
+                    crate::debug_utils::trace_log("NEGAMAX", &format!("Transposition table hit (UpperBound): depth={}, score={}", 
+                        entry.depth, entry.score));
+                    if entry.score <= alpha { 
+                        crate::debug_utils::trace_log("NEGAMAX", "TT upper bound cutoff");
+                        return entry.score; 
+                    }
                 },
             }
         }
@@ -2845,8 +2915,11 @@ impl SearchEngine {
         if self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
             crate::debug_utils::trace_log("NULL_MOVE", &format!("Attempting null move pruning at depth {}", depth));
             crate::debug_utils::start_timing("null_move_search");
+            // Create local hash_history for null move search (Task 5.2)
+            let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+            let mut local_null_hash_history = vec![initial_hash];
             let null_move_score = self.perform_null_move_search(
-                board, captured_pieces, player, depth, beta, start_time, time_limit_ms, history
+                board, captured_pieces, player, depth, beta, start_time, time_limit_ms, &mut local_null_hash_history
             );
             crate::debug_utils::end_timing("null_move_search", "NULL_MOVE");
             
@@ -2897,6 +2970,9 @@ impl SearchEngine {
             crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
             let iid_start_time = TimeSource::now();
+            // Create local hash_history for IID call (Task 5.2)
+            let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+            let mut local_hash_history = vec![initial_hash];
             iid_move = self.perform_iid_search(
                 &mut board.clone(), 
                 captured_pieces, 
@@ -2906,7 +2982,7 @@ impl SearchEngine {
                 beta, 
                 start_time, 
                 time_limit_ms, 
-                history
+                &mut local_hash_history
             );
             
             let iid_time = iid_start_time.elapsed_ms();
@@ -2933,10 +3009,12 @@ impl SearchEngine {
         
         // Use advanced move ordering for better performance
         let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta);
-        let mut best_score = -200000;
+        // Initialize best_score to alpha instead of sentinel value (Task 5.12)
+        let mut best_score = alpha;
         let mut best_move_for_tt = None;
         
-        history.push(fen_key.clone());
+        // Hash-based history tracking (Task 5.2, 5.4)
+        // Position hash already added to hash_history above - no FEN string needed
 
         let mut move_index = 0;
         let mut iid_move_improved_alpha = false;
@@ -2996,7 +3074,7 @@ impl SearchEngine {
                 beta, 
                 &start_time, 
                 time_limit_ms, 
-                history, 
+                hash_history, 
                 move_, 
                 move_index,
                 is_root,
@@ -3040,31 +3118,35 @@ impl SearchEngine {
                         self.history_table[from.row as usize][from.col as usize] += (depth * depth) as i32;
                     }
                 }
-                if alpha >= beta { 
-                    crate::debug_utils::log_decision("NEGAMAX", "Beta cutoff", 
-                        &format!("Alpha {} >= beta {}, cutting off search", alpha, beta), 
-                        Some(alpha));
-                    // Track if IID move caused cutoff
-                    if let Some(iid_mv) = &iid_move {
-                        if self.moves_equal(move_, iid_mv) {
-                            self.iid_stats.iid_move_caused_cutoff += 1;
-                            crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
+                    if alpha >= beta { 
+                        // Track beta cutoff (Task 5.7)
+                        self.core_search_metrics.total_cutoffs += 1;
+                        self.core_search_metrics.beta_cutoffs += 1;
+                        
+                        crate::debug_utils::log_decision("NEGAMAX", "Beta cutoff", 
+                            &format!("Alpha {} >= beta {}, cutting off search", alpha, beta), 
+                            Some(alpha));
+                        // Track if IID move caused cutoff
+                        if let Some(iid_mv) = &iid_move {
+                            if self.moves_equal(move_, iid_mv) {
+                                self.iid_stats.iid_move_caused_cutoff += 1;
+                                crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
+                            }
                         }
-                    }
-                    // CRITICAL: Ensure the move that caused the cutoff is stored as best_move
-                    // This is essential for PV building - we need the refutation move stored
-                    if best_move_for_tt.is_none() {
-                        best_move_for_tt = Some(move_.clone());
-                        crate::debug_utils::trace_log("NEGAMAX", &format!("Storing cutoff move {} as best_move for PV", move_.to_usi_string()));
-                    }
-                    // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
-                    self.flush_tt_buffer();
-                    break; 
+                        // CRITICAL: Ensure the move that caused the cutoff is stored as best_move
+                        // This is essential for PV building - we need the refutation move stored
+                        if best_move_for_tt.is_none() {
+                            best_move_for_tt = Some(move_.clone());
+                            crate::debug_utils::trace_log("NEGAMAX", &format!("Storing cutoff move {} as best_move for PV", move_.to_usi_string()));
+                        }
+                        // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
+                        self.flush_tt_buffer();
+                        break;
                 }
             }
         }
         
-        history.pop();
+        // hash_history cleanup is done at the end of negamax_with_context
 
         let flag = if best_score <= alpha { TranspositionFlag::UpperBound } else if best_score >= beta { TranspositionFlag::LowerBound } else { TranspositionFlag::Exact };
         
@@ -3077,7 +3159,8 @@ impl SearchEngine {
         }
         
         // Use the position hash we calculated earlier for proper TT storage
-        let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt, position_hash);
+        // Clone best_move_for_tt before passing to avoid move error (Task 5.12)
+        let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt.clone(), position_hash);
         self.maybe_buffer_tt_store(entry, depth, flag);
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
@@ -3089,11 +3172,29 @@ impl SearchEngine {
             }
         }
         
-        // If best_score is still the sentinel value and we have no tracked score, use static evaluation
+        // Refine fallback logic to use best-scoring move or static evaluation (Task 5.10-5.11)
+        // If best_score is still at initial alpha and we have no tracked score, use static evaluation
+        if best_score == alpha && best_score_tracked.is_none() && best_move_for_tt.is_none() {
+            // No moves were evaluated or all moves were pruned - use static evaluation
+            let static_eval = self.evaluate_position(board, player, captured_pieces);
+            crate::debug_utils::trace_log("NEGAMAX", &format!("No moves evaluated, returning static evaluation: {}", static_eval));
+            return static_eval;
+        }
+        
+        // If we still have a sentinel-like value, prefer tracked score or static eval
         if best_score <= -200000 {
+            if let Some(tracked_score) = best_score_tracked {
+                return tracked_score;
+            }
             let static_eval = self.evaluate_position(board, player, captured_pieces);
             crate::debug_utils::trace_log("NEGAMAX", &format!("Best score is sentinel value, returning static evaluation: {}", static_eval));
             return static_eval;
+        }
+        
+        // Remove position hash from history before returning (Task 5.2)
+        // This maintains correct history for the calling context
+        if !hash_history.is_empty() {
+            hash_history.pop();
         }
         
         best_score
@@ -4348,7 +4449,7 @@ impl SearchEngine {
     /// Perform a null move search with reduced depth
     fn perform_null_move_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces,
                                player: Player, depth: u8, beta: i32, start_time: &TimeSource,
-                               time_limit_ms: u32, history: &mut Vec<String>) -> i32 {
+                               time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
         self.null_move_stats.attempts += 1;
         
         // Calculate reduction factor
@@ -4365,7 +4466,7 @@ impl SearchEngine {
         let null_move_score = -self.negamax_with_context(
             board, captured_pieces, player.opposite(), 
             search_depth, beta.saturating_neg(), beta.saturating_neg().saturating_add(1), 
-            start_time, time_limit_ms, history, 
+            start_time, time_limit_ms, hash_history, 
             false, false, false, false  // Prevent recursive null moves
         );
         
@@ -4593,6 +4694,21 @@ impl SearchEngine {
     /// Reset aspiration window statistics
     pub fn reset_aspiration_window_stats(&mut self) {
         self.aspiration_stats = AspirationWindowStats::default();
+    }
+    
+    /// Get core search metrics (Task 5.9)
+    pub fn get_core_search_metrics(&self) -> &crate::types::CoreSearchMetrics {
+        &self.core_search_metrics
+    }
+    
+    /// Reset core search metrics (Task 5.9)
+    pub fn reset_core_search_metrics(&mut self) {
+        self.core_search_metrics.reset();
+    }
+    
+    /// Generate comprehensive core search metrics report (Task 5.9)
+    pub fn generate_core_search_metrics_report(&self) -> String {
+        self.core_search_metrics.generate_report()
     }
 
     /// Get aspiration window performance metrics for tuning
@@ -5000,20 +5116,20 @@ impl SearchEngine {
         let widened_window = window_size * adaptive_factor;
         
         // Widen window downward with adaptive sizing
-        let new_alpha = i32::MIN + 1;
+        let new_alpha = MIN_SCORE;
         let new_beta = previous_score + widened_window;
         
         // Ensure valid window bounds with additional safety checks
         if new_beta <= new_alpha {
             crate::debug_utils::trace_log("ASPIRATION_FAIL_LOW", 
                 "Invalid window bounds, using conservative approach");
-            *alpha = i32::MIN + 1;
+            *alpha = MIN_SCORE;
             *beta = previous_score + window_size;
             
             // Final safety check
             if *beta <= *alpha {
-                *alpha = i32::MIN + 1;
-                *beta = i32::MAX - 1;
+                *alpha = MIN_SCORE;
+                *beta = MAX_SCORE;
             }
         } else {
             *alpha = new_alpha;
@@ -5046,19 +5162,19 @@ impl SearchEngine {
         
         // Widen window upward with adaptive sizing
         let new_alpha = previous_score - widened_window;
-        let new_beta = i32::MAX - 1;
+        let new_beta = MAX_SCORE;
         
         // Ensure valid window bounds with additional safety checks
         if new_alpha >= new_beta {
             crate::debug_utils::trace_log("ASPIRATION_FAIL_HIGH", 
                 "Invalid window bounds, using conservative approach");
             *alpha = previous_score - window_size;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
             
             // Final safety check
             if *alpha >= *beta {
-                *alpha = i32::MIN + 1;
-                *beta = i32::MAX - 1;
+                *alpha = MIN_SCORE;
+                *beta = MAX_SCORE;
             }
         } else {
             *alpha = new_alpha;
@@ -5076,8 +5192,13 @@ impl SearchEngine {
     /// Update aspiration window statistics
     fn update_aspiration_stats(&mut self, had_research: bool, research_count: u8) {
         self.aspiration_stats.total_searches += 1;
+        
+        // Track aspiration window searches for core metrics (Task 5.7)
+        self.core_search_metrics.total_aspiration_searches += 1;
         if !had_research {
             self.aspiration_stats.successful_searches += 1;
+            // Track successful aspiration searches (Task 5.7)
+            self.core_search_metrics.successful_aspiration_searches += 1;
         }
         self.aspiration_stats.total_researches += research_count as u64;
     }
@@ -5129,7 +5250,7 @@ impl SearchEngine {
             
             // Recovery attempt 2: Fall back to full-width search
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
             crate::debug_utils::trace_log("WINDOW_VALIDATION", 
                 "Recovery failed, using full-width search");
             return true;
@@ -5150,8 +5271,8 @@ impl SearchEngine {
                 
                 // Final safety check
                 if *alpha >= *beta {
-                    *alpha = i32::MIN + 1;
-                    *beta = i32::MAX - 1;
+                    *alpha = MIN_SCORE;
+                    *beta = MAX_SCORE;
                 }
                 
                 crate::debug_utils::trace_log("WINDOW_VALIDATION", 
@@ -5531,7 +5652,7 @@ impl SearchEngine {
                            beta: i32, 
                            start_time: &TimeSource, 
                            time_limit_ms: u32, 
-                           history: &mut Vec<String>, 
+                           hash_history: &mut Vec<u64>, 
                            move_: &Move, 
                            move_index: usize,
                            _is_root: bool,
@@ -5569,7 +5690,7 @@ impl SearchEngine {
                 alpha.saturating_neg(), 
                 start_time, 
                 time_limit_ms, 
-                history, 
+                hash_history, 
                 true,
                 false, // not root
                 has_capture,
@@ -5591,7 +5712,7 @@ impl SearchEngine {
                     alpha.saturating_neg(), 
                     start_time, 
                     time_limit_ms, 
-                    history, 
+                    hash_history, 
                     true,
                     false, // not root
                     has_capture,
@@ -5620,7 +5741,7 @@ impl SearchEngine {
                 alpha.saturating_neg(), 
                 start_time, 
                 time_limit_ms, 
-                history, 
+                hash_history, 
                 true,
                 false, // not root
                 has_capture,
@@ -6538,7 +6659,7 @@ impl SearchEngine {
     /// Recovery strategy 3: Fall back to full-width search
     fn recover_with_full_width(&self, alpha: &mut i32, beta: &mut i32) -> bool {
         *alpha = i32::MIN + 1;
-        *beta = i32::MAX - 1;
+                *beta = MAX_SCORE;
         
         crate::debug_utils::trace_log("RECOVERY_FULL_WIDTH", 
             "Fallback to full-width search applied");
@@ -6564,7 +6685,7 @@ impl SearchEngine {
         // Final safety check
         if *alpha >= *beta {
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
         }
         
         crate::debug_utils::trace_log("EMERGENCY_RECOVERY", 
@@ -6607,8 +6728,8 @@ impl SearchEngine {
             "timeout_cascade" => {
                 crate::debug_utils::trace_log("ASPIRATION_ERROR", 
                     "Timeout cascade detected, disabling aspiration");
-                *alpha = i32::MIN + 1;
-                *beta = i32::MAX - 1;
+                *alpha = MIN_SCORE;
+                *beta = MAX_SCORE;
                 true
             },
             _ => {
@@ -6793,7 +6914,7 @@ impl SearchEngine {
     /// Level 4 degradation: Disable aspiration windows entirely
     fn degrade_disable_aspiration(&self, alpha: &mut i32, beta: &mut i32) -> bool {
         *alpha = i32::MIN + 1;
-        *beta = i32::MAX - 1;
+                *beta = MAX_SCORE;
         
         crate::debug_utils::trace_log("DEGRADATION_LEVEL_4", 
             "Disabled aspiration windows, using full-width search");
@@ -6882,7 +7003,7 @@ impl SearchEngine {
             crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                 "Invalid parameters, falling back to full-width search");
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
             return true;
         }
         
@@ -6891,7 +7012,7 @@ impl SearchEngine {
             crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                 "Max researches exceeded, falling back to full-width search");
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
             return true;
         }
         
@@ -6923,8 +7044,8 @@ impl SearchEngine {
                             alpha, beta, researches));
                 } else {
                     // Fallback to full-width search
-                    *alpha = i32::MIN + 1;
-                    *beta = i32::MAX - 1;
+                    *alpha = MIN_SCORE;
+                    *beta = MAX_SCORE;
                     crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                         "Search failure: invalid window, falling back to full-width");
                 }
@@ -6939,8 +7060,8 @@ impl SearchEngine {
                     *alpha = new_alpha;
                     *beta = new_beta;
                 } else {
-                    *alpha = i32::MIN + 1;
-                    *beta = i32::MAX - 1;
+                    *alpha = MIN_SCORE;
+                    *beta = MAX_SCORE;
                 }
                 crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                     &format!("Timeout retry: alpha={}, beta={}, researches={}", 
@@ -6949,8 +7070,8 @@ impl SearchEngine {
             _ => {
                 crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                     "Unknown failure type, falling back to full-width search");
-                *alpha = i32::MIN + 1;
-                *beta = i32::MAX - 1;
+                *alpha = MIN_SCORE;
+                *beta = MAX_SCORE;
             }
         }
         
@@ -6959,7 +7080,7 @@ impl SearchEngine {
             crate::debug_utils::trace_log("ASPIRATION_RETRY", 
                 "Invalid window after retry, falling back to full-width search");
             *alpha = i32::MIN + 1;
-            *beta = i32::MAX - 1;
+            *beta = MAX_SCORE;
         }
         
         true
@@ -7736,8 +7857,8 @@ impl IterativeDeepening {
                 if researches >= search_engine.aspiration_config.max_researches {
                     // Fall back to full-width search
                     crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Max researches ({}) reached, falling back to full-width search", researches));
-                    current_alpha = i32::MIN + 1;
-                    current_beta = i32::MAX - 1;
+                    current_alpha = MIN_SCORE;
+                    current_beta = MAX_SCORE;
                 }
 
                 crate::debug_utils::start_timing(&format!("aspiration_search_{}_{}", depth, researches));
