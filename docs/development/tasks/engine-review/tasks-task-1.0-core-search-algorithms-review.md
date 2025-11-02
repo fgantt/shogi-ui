@@ -2,7 +2,7 @@
 
 **PRD:** `task-1.0-core-search-algorithms-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0 Complete
 
 ---
 
@@ -88,17 +88,17 @@
   - [x] 3.11 Benchmark performance improvement: cloning vs unmaking (target: 10-30% speedup)
   - [x] 3.12 Update any remaining board cloning instances in search code
 
-- [ ] 4.0 Improve Time Management and Search Quality
-  - [ ] 4.1 Implement static evaluation fallback for aspiration window initialization
-  - [ ] 4.2 Modify iterative deepening to use static eval or previous score instead of 0 for first window
-  - [ ] 4.3 Add configuration option for check position optimization (make it tunable)
-  - [ ] 4.4 Refine check position depth/time limits based on position complexity analysis
-  - [ ] 4.5 Implement time budget allocation system for iterative deepening
-  - [ ] 4.6 Add time estimation logic based on previous depth completion times
-  - [ ] 4.7 Allocate time budgets per depth iteration with safety margins
-  - [ ] 4.8 Add configuration for time allocation strategy (equal, exponential, adaptive)
+- [x] 4.0 Improve Time Management and Search Quality
+  - [x] 4.1 Implement static evaluation fallback for aspiration window initialization
+  - [x] 4.2 Modify iterative deepening to use static eval or previous score instead of 0 for first window
+  - [x] 4.3 Add configuration option for check position optimization (make it tunable)
+  - [x] 4.4 Refine check position depth/time limits based on position complexity analysis
+  - [x] 4.5 Implement time budget allocation system for iterative deepening
+  - [x] 4.6 Add time estimation logic based on previous depth completion times
+  - [x] 4.7 Allocate time budgets per depth iteration with safety margins
+  - [x] 4.8 Add configuration for time allocation strategy (equal, exponential, adaptive)
   - [ ] 4.9 Test time budget allocation with various time limits and positions
-  - [ ] 4.10 Add metrics for time budget accuracy and depth completion rates
+  - [x] 4.10 Add metrics for time budget accuracy and depth completion rates
 
 - [ ] 5.0 Optimize Repetition Detection and Code Quality
   - [ ] 5.1 Replace FEN string history tracking with hash-based repetition detection
@@ -188,4 +188,25 @@
 - All tests pass, confirming correct board state restoration
 - Performance gains increase with search depth, as expected
 - Core search paths now use move unmaking instead of expensive board cloning
+
+**Task 4.0 Completion Notes:**
+- Implemented static evaluation fallback for aspiration window initialization
+- Modified iterative deepening to use static evaluation for first window instead of 0 or full-width
+- Added TimeManagementConfig with configurable check position optimization (enable_check_optimization, check_max_depth, check_time_limit_ms)
+- Refined check position depth/time limits to use configurable thresholds based on legal move count
+- Implemented time budget allocation system with three strategies:
+  * Equal: Divide remaining time equally among remaining depths
+  * Exponential: Later depths get exponentially more time (2^(depth-1) weighting)
+  * Adaptive: Use historical depth completion times to estimate time needs
+- Added time estimation logic using exponential moving average (EMA) of depth completion times
+- Implemented time budget allocation per depth iteration with configurable safety margins
+- Added time allocation strategy configuration (TimeAllocationStrategy enum)
+- Added comprehensive time budget statistics tracking:
+  * Depth completion times tracking
+  * Budget allocation tracking
+  * Budget exceedance tracking
+  * Time estimation accuracy metrics
+- Integrated time budget allocation into iterative deepening search loop
+- All time management features are configurable and can be disabled
+- Safety margins and minimum/maximum time per depth are configurable
 

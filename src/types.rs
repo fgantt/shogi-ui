@@ -2702,6 +2702,8 @@ pub struct AspirationWindowConfig {
     pub max_researches: u8,
     /// Enable fail-high/fail-low statistics
     pub enable_statistics: bool,
+    /// Use static evaluation for aspiration window initialization (Task 4.1)
+    pub use_static_eval_for_init: bool,
 }
 
 impl Default for AspirationWindowConfig {
@@ -2715,6 +2717,7 @@ impl Default for AspirationWindowConfig {
             enable_adaptive_sizing: true,
             max_researches: 2,           // Allow up to 2 re-searches
             enable_statistics: true,
+            use_static_eval_for_init: true, // Use static eval for first window (Task 4.1)
         }
     }
 }
@@ -2825,6 +2828,43 @@ pub struct AspirationWindowStats {
     pub cache_hit_rate: f64,
     /// Adaptive tuning success rate
     pub adaptive_tuning_success_rate: f64,
+}
+
+/// Time allocation strategy for iterative deepening (Task 4.8)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TimeAllocationStrategy {
+    /// Equal time allocation per depth
+    Equal,
+    /// Exponential time allocation (later depths get more time)
+    Exponential,
+    /// Adaptive allocation based on previous depth completion times
+    Adaptive,
+}
+
+impl Default for TimeAllocationStrategy {
+    fn default() -> Self {
+        TimeAllocationStrategy::Adaptive
+    }
+}
+
+
+/// Time budget allocation tracking (Task 4.10)
+#[derive(Debug, Clone, Default)]
+pub struct TimeBudgetStats {
+    /// Depth completion times in milliseconds
+    pub depth_completion_times_ms: Vec<u32>,
+    /// Estimated time per depth based on history
+    pub estimated_time_per_depth_ms: Vec<u32>,
+    /// Actual time used per depth
+    pub actual_time_per_depth_ms: Vec<u32>,
+    /// Time budget allocated per depth
+    pub budget_per_depth_ms: Vec<u32>,
+    /// Number of depths completed
+    pub depths_completed: u8,
+    /// Number of depths that exceeded budget
+    pub depths_exceeded_budget: u8,
+    /// Average time estimation accuracy (0.0 to 1.0)
+    pub estimation_accuracy: f64,
 }
 
 impl AspirationWindowStats {
@@ -3694,6 +3734,7 @@ impl EngineConfig {
                     enable_adaptive_sizing: true,
                     max_researches: 2,
                     enable_statistics: true,
+                    use_static_eval_for_init: true,
                 },
                 iid: IIDConfig {
                     enabled: true,
@@ -3750,6 +3791,7 @@ impl EngineConfig {
                     enable_adaptive_sizing: true,
                     max_researches: 3,
                     enable_statistics: true,
+                    use_static_eval_for_init: true,
                 },
                 iid: IIDConfig {
                     enabled: true,
@@ -3832,6 +3874,22 @@ pub struct TimeManagementConfig {
     pub enable_pressure_detection: bool,
     /// Time pressure threshold (0.0 to 1.0)
     pub pressure_threshold: f64,
+    /// Time allocation strategy for iterative deepening (Task 4.8)
+    pub allocation_strategy: TimeAllocationStrategy,
+    /// Safety margin as percentage of total time (0.0 to 1.0) (Task 4.7)
+    pub safety_margin: f64,
+    /// Minimum time per depth in milliseconds (Task 4.7)
+    pub min_time_per_depth_ms: u32,
+    /// Maximum time per depth in milliseconds (0 = no limit) (Task 4.7)
+    pub max_time_per_depth_ms: u32,
+    /// Enable check position optimization (Task 4.3)
+    pub enable_check_optimization: bool,
+    /// Check position max depth threshold (Task 4.4)
+    pub check_max_depth: u8,
+    /// Check position time limit in milliseconds (Task 4.4)
+    pub check_time_limit_ms: u32,
+    /// Enable time budget allocation (Task 4.5)
+    pub enable_time_budget: bool,
 }
 
 impl Default for TimeManagementConfig {
@@ -3844,6 +3902,14 @@ impl Default for TimeManagementConfig {
             increment_ms: 0,
             enable_pressure_detection: true,
             pressure_threshold: 0.2,
+            allocation_strategy: TimeAllocationStrategy::Adaptive,
+            safety_margin: 0.1, // 10% safety margin
+            min_time_per_depth_ms: 50,
+            max_time_per_depth_ms: 0, // No limit by default
+            enable_check_optimization: true,
+            check_max_depth: 5,
+            check_time_limit_ms: 5000,
+            enable_time_budget: true,
         }
     }
 }
@@ -3862,8 +3928,37 @@ impl TimeManagementConfig {
         if self.pressure_threshold < 0.0 || self.pressure_threshold > 1.0 {
             return Err("Pressure threshold must be between 0.0 and 1.0".to_string());
         }
+        
+        // Validate iterative deepening time allocation settings (Task 4.7)
+        if self.safety_margin < 0.0 || self.safety_margin > 0.5 {
+            return Err("safety_margin must be between 0.0 and 0.5".to_string());
+        }
+        if self.min_time_per_depth_ms == 0 {
+            return Err("min_time_per_depth_ms must be greater than 0".to_string());
+        }
+        if self.max_time_per_depth_ms > 0 && self.max_time_per_depth_ms < self.min_time_per_depth_ms {
+            return Err("max_time_per_depth_ms must be >= min_time_per_depth_ms".to_string());
+        }
+        if self.check_max_depth == 0 || self.check_max_depth > 10 {
+            return Err("check_max_depth must be between 1 and 10".to_string());
+        }
 
         Ok(())
+    }
+    
+    /// Get a summary of the time management configuration including iterative deepening settings
+    pub fn summary_full(&self) -> String {
+        format!(
+            "TimeManagement: enabled={}, buffer={:.1}%, strategy={:?}, safety_margin={:.1}%, min_time_depth={}ms, max_time_depth={}ms, check_opt={}, time_budget={}",
+            self.enabled,
+            self.buffer_percentage * 100.0,
+            self.allocation_strategy,
+            self.safety_margin * 100.0,
+            self.min_time_per_depth_ms,
+            self.max_time_per_depth_ms,
+            self.enable_check_optimization,
+            self.enable_time_budget
+        )
     }
 
     /// Calculate time allocation for a move

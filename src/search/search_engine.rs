@@ -42,6 +42,10 @@ pub struct SearchEngine {
     iid_config: IIDConfig,
     iid_stats: IIDStats,
     previous_scores: Vec<i32>,
+    /// Time management configuration (Task 4.5-4.8)
+    time_management_config: TimeManagementConfig,
+    /// Time budget statistics (Task 4.10)
+    time_budget_stats: TimeBudgetStats,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     // Tapered evaluation search integration
@@ -296,6 +300,8 @@ impl SearchEngine {
             iid_config: IIDConfig::default(),
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
+            time_management_config: TimeManagementConfig::default(),
+            time_budget_stats: TimeBudgetStats::default(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: PruningManager::new(PruningParameters::default()),
             // Tapered evaluation search integration
@@ -473,6 +479,8 @@ impl SearchEngine {
             lmr_stats: LMRStats::default(),
             aspiration_config: config.aspiration_windows,
             aspiration_stats: AspirationWindowStats::default(),
+            time_management_config: config.time_management.clone(),
+            time_budget_stats: TimeBudgetStats::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
@@ -524,6 +532,7 @@ impl SearchEngine {
         self.lmr_config = config.lmr;
         self.aspiration_config = config.aspiration_windows;
         self.iid_config = config.iid;
+        self.time_management_config = config.time_management.clone();
         
         // Reset statistics when configuration changes
         self.quiescence_stats.reset();
@@ -549,7 +558,7 @@ impl SearchEngine {
             tt_size_mb: self.transposition_table.size() * 100 / (1024 * 1024), // Approximate
             debug_logging: false, // This would need to be tracked separately
             max_depth: 20, // This would need to be tracked separately
-            time_management: TimeManagementConfig::default(),
+            time_management: self.time_management_config.clone(),
             thread_count: num_cpus::get(),
         }
     }
@@ -4421,6 +4430,143 @@ impl SearchEngine {
         self.lmr_stats = LMRStats::default();
     }
 
+    // ===== TIME MANAGEMENT AND BUDGET ALLOCATION (Task 4.5-4.7) =====
+
+    /// Calculate time budget for a specific depth based on allocation strategy (Task 4.5, 4.7)
+    pub fn calculate_time_budget(&mut self, depth: u8, total_time_ms: u32, elapsed_ms: u32, max_depth: u8) -> u32 {
+        let config = &self.time_management_config;
+        
+        if !config.enable_time_budget {
+            // If time budget is disabled, use remaining time
+            return total_time_ms.saturating_sub(elapsed_ms);
+        }
+        
+        let remaining_time = total_time_ms.saturating_sub(elapsed_ms);
+        let safety_margin_ms = (remaining_time as f64 * config.safety_margin) as u32;
+        let available_time = remaining_time.saturating_sub(safety_margin_ms);
+        
+        if depth == 1 {
+            // First depth: use minimum time
+            let budget = config.min_time_per_depth_ms.max(available_time / (max_depth as u32 * 2));
+            return budget.min(available_time);
+        }
+        
+        match config.allocation_strategy {
+            TimeAllocationStrategy::Equal => {
+                // Equal allocation: divide remaining time equally among remaining depths
+                let remaining_depths = (max_depth + 1).saturating_sub(depth);
+                if remaining_depths == 0 {
+                    return available_time;
+                }
+                available_time / remaining_depths as u32
+            }
+            TimeAllocationStrategy::Exponential => {
+                // Exponential allocation: later depths get more time
+                // Use 2^(depth-1) as weighting factor
+                let total_weight: u32 = (1..=max_depth).map(|d| 2_u32.pow(d.saturating_sub(1) as u32)).sum();
+                let depth_weight = 2_u32.pow(depth.saturating_sub(1) as u32);
+                ((available_time as f64 * depth_weight as f64 / total_weight as f64) as u32)
+                    .max(config.min_time_per_depth_ms)
+            }
+            TimeAllocationStrategy::Adaptive => {
+                // Adaptive allocation: use historical data if available (Task 4.6)
+                self.calculate_adaptive_time_budget(depth, available_time, max_depth)
+            }
+        }
+    }
+    
+    /// Calculate adaptive time budget based on depth completion history (Task 4.6)
+    fn calculate_adaptive_time_budget(&self, depth: u8, available_time: u32, max_depth: u8) -> u32 {
+        let config = &self.time_management_config;
+        let stats = &self.time_budget_stats;
+        
+        // If we have historical data, use exponential weighting based on past completion times
+        if !stats.depth_completion_times_ms.is_empty() && depth <= stats.depth_completion_times_ms.len() as u8 {
+            let depth_idx = (depth - 1) as usize;
+            if depth_idx < stats.depth_completion_times_ms.len() {
+                let avg_completion_time = stats.depth_completion_times_ms[depth_idx];
+                // Estimate based on average, with a factor for remaining depths
+                let remaining_depths = (max_depth + 1).saturating_sub(depth);
+                let estimated_total = avg_completion_time * remaining_depths as u32;
+                
+                // Use the average time for this depth, but cap at available time
+                let budget = avg_completion_time.min(available_time);
+                
+                // Ensure we have enough time for remaining depths
+                if estimated_total > available_time {
+                    // Scale down proportionally
+                    let scale_factor = available_time as f64 / estimated_total as f64;
+                    ((budget as f64 * scale_factor) as u32).max(config.min_time_per_depth_ms)
+                } else {
+                    budget.max(config.min_time_per_depth_ms)
+                }
+            } else {
+                // Fall back to exponential if no data for this depth
+                self.calculate_exponential_budget(depth, available_time, max_depth)
+            }
+        } else {
+            // No historical data: use exponential strategy
+            self.calculate_exponential_budget(depth, available_time, max_depth)
+        }
+    }
+    
+    /// Helper function for exponential budget calculation
+    fn calculate_exponential_budget(&self, depth: u8, available_time: u32, max_depth: u8) -> u32 {
+        let config = &self.time_management_config;
+        let total_weight: u32 = (1..=max_depth).map(|d| 2_u32.pow(d.saturating_sub(1) as u32)).sum();
+        let depth_weight = 2_u32.pow(depth.saturating_sub(1) as u32);
+        ((available_time as f64 * depth_weight as f64 / total_weight as f64) as u32)
+            .max(config.min_time_per_depth_ms)
+    }
+    
+    /// Record depth completion time for adaptive allocation (Task 4.6)
+    pub fn record_depth_completion(&mut self, depth: u8, completion_time_ms: u32) {
+        let stats = &mut self.time_budget_stats;
+        
+        // Ensure we have enough space in the vector
+        while stats.depth_completion_times_ms.len() < depth as usize {
+            stats.depth_completion_times_ms.push(0);
+        }
+        
+        if depth > 0 {
+            let depth_idx = (depth - 1) as usize;
+            if depth_idx < stats.depth_completion_times_ms.len() {
+                // Update with exponential moving average (weight recent data more)
+                let old_time = stats.depth_completion_times_ms[depth_idx];
+                if old_time == 0 {
+                    stats.depth_completion_times_ms[depth_idx] = completion_time_ms;
+                } else {
+                    // EMA with alpha = 0.3 (30% weight to new data)
+                    stats.depth_completion_times_ms[depth_idx] = 
+                        ((old_time as f64 * 0.7) + (completion_time_ms as f64 * 0.3)) as u32;
+                }
+            } else {
+                stats.depth_completion_times_ms.push(completion_time_ms);
+            }
+            
+            // Update statistics
+            stats.depths_completed = stats.depths_completed.max(depth);
+            if depth_idx < stats.actual_time_per_depth_ms.len() {
+                stats.actual_time_per_depth_ms[depth_idx] = completion_time_ms;
+            } else {
+                while stats.actual_time_per_depth_ms.len() < depth as usize {
+                    stats.actual_time_per_depth_ms.push(0);
+                }
+                stats.actual_time_per_depth_ms.push(completion_time_ms);
+            }
+        }
+    }
+    
+    /// Get time budget statistics for analysis (Task 4.10)
+    pub fn get_time_budget_stats(&self) -> &TimeBudgetStats {
+        &self.time_budget_stats
+    }
+    
+    /// Reset time budget statistics
+    pub fn reset_time_budget_stats(&mut self) {
+        self.time_budget_stats = TimeBudgetStats::default();
+    }
+
     // ===== ASPIRATION WINDOWS CONFIGURATION MANAGEMENT =====
 
     /// Create default aspiration window configuration
@@ -4480,6 +4626,7 @@ impl SearchEngine {
                 enable_adaptive_sizing: true,
                 max_researches: 3,           // Allow more re-searches
                 enable_statistics: true,
+                use_static_eval_for_init: true,
             },
             AspirationWindowPlayingStyle::Conservative => AspirationWindowConfig {
                 enabled: true,
@@ -4490,6 +4637,7 @@ impl SearchEngine {
                 enable_adaptive_sizing: true,
                 max_researches: 1,           // Fewer re-searches
                 enable_statistics: true,
+                use_static_eval_for_init: true,
             },
             AspirationWindowPlayingStyle::Balanced => AspirationWindowConfig {
                 enabled: true,
@@ -4500,6 +4648,7 @@ impl SearchEngine {
                 enable_adaptive_sizing: true,
                 max_researches: 2,
                 enable_statistics: true,
+                use_static_eval_for_init: true,
             },
         }
     }
@@ -7460,24 +7609,40 @@ impl IterativeDeepening {
         let mut best_score = 0;
         let mut previous_scores = Vec::new();
         
+        // Calculate initial static evaluation for aspiration window initialization
+        let initial_static_eval = search_engine.evaluate_position(board, player, captured_pieces);
+        crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Initial static evaluation: {}", initial_static_eval));
+        
         // Check if we're in check and have few legal moves - optimize search parameters
         let is_in_check = board.is_king_in_check(player, captured_pieces);
         let legal_moves = search_engine.move_generator.generate_legal_moves(board, player, captured_pieces);
         let legal_move_count = legal_moves.len();
         
-        // Adjust search parameters for check positions with few moves
-        let (effective_max_depth, effective_time_limit) = if is_in_check && legal_move_count <= 10 {
-            // For check positions with ≤10 moves, use much more aggressive limits
-            let max_depth = if legal_move_count <= 5 { 3 } else { 5 };
-            let time_limit = if legal_move_count <= 5 { 2000 } else { 5000 }; // 2-5 seconds max
-            crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!(
-                "Check position detected: {} legal moves, limiting to depth {} and {}ms", 
-                legal_move_count, max_depth, time_limit
-            ));
-            (max_depth, time_limit)
-        } else {
-            // Normal search parameters
-            (self.max_depth, self.time_limit_ms.saturating_sub(100))
+        // Adjust search parameters for check positions with few moves (Task 4.3, 4.4)
+        let (effective_max_depth, effective_time_limit) = {
+            let config = &search_engine.time_management_config;
+            if config.enable_check_optimization && is_in_check && legal_move_count <= 10 {
+                // For check positions with ≤10 moves, use configurable limits
+                let max_depth = if legal_move_count <= 5 { 
+                    config.check_max_depth.min(3)
+                } else { 
+                    config.check_max_depth.min(5)
+                };
+                let time_limit = if legal_move_count <= 5 { 
+                    config.check_time_limit_ms.min(2000)
+                } else { 
+                    config.check_time_limit_ms.min(5000)
+                };
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!(
+                    "Check position detected: {} legal moves, limiting to depth {} and {}ms", 
+                    legal_move_count, max_depth, time_limit
+                ));
+                (max_depth, time_limit)
+            } else {
+                // Normal search parameters
+                let safety_margin_ms = (self.time_limit_ms as f64 * config.safety_margin) as u32;
+                (self.max_depth, self.time_limit_ms.saturating_sub(safety_margin_ms.max(100)))
+            }
         };
         
         let search_time_limit = effective_time_limit;
@@ -7493,9 +7658,32 @@ impl IterativeDeepening {
                 break; 
             }
             let elapsed_ms = start_time.elapsed_ms();
-            let remaining_time = search_time_limit.saturating_sub(elapsed_ms);
+            
+            // Calculate time budget for this depth (Task 4.5, 4.7)
+            let depth_start_time = TimeSource::now();
+            let time_budget = if search_engine.time_management_config.enable_time_budget {
+                let budget = search_engine.calculate_time_budget(depth, search_time_limit, elapsed_ms, effective_max_depth);
+                // Record allocated budget for metrics (Task 4.10)
+                let stats = &mut search_engine.time_budget_stats;
+                while stats.budget_per_depth_ms.len() < depth as usize {
+                    stats.budget_per_depth_ms.push(0);
+                }
+                if depth > 0 && (depth - 1) < stats.budget_per_depth_ms.len() as u8 {
+                    stats.budget_per_depth_ms[(depth - 1) as usize] = budget;
+                }
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!(
+                    "Depth {}: Time budget allocated: {}ms (strategy: {:?})", 
+                    depth, budget, search_engine.time_management_config.allocation_strategy
+                ));
+                budget
+            } else {
+                // Fallback: use remaining time
+                search_time_limit.saturating_sub(elapsed_ms)
+            };
+            
+            let remaining_time = time_budget.min(search_time_limit.saturating_sub(elapsed_ms));
 
-            crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Searching at depth {} (elapsed: {}ms, remaining: {}ms)", depth, elapsed_ms, remaining_time));
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Searching at depth {} (elapsed: {}ms, remaining: {}ms, budget: {}ms)", depth, elapsed_ms, remaining_time, time_budget));
             crate::debug_utils::start_timing(&format!("depth_{}", depth));
 
             // Reset global nodes aggregator and seldepth at the start of each depth
@@ -7504,12 +7692,27 @@ impl IterativeDeepening {
 
             // Calculate aspiration window parameters
             let (alpha, beta) = if depth == 1 || !search_engine.aspiration_config.enabled {
-                // First depth or disabled: use full-width window
-                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using full-width window", depth));
-                (i32::MIN + 1, i32::MAX - 1)
+                // First depth: use static evaluation or full-width window
+                if depth == 1 && search_engine.aspiration_config.enabled {
+                    // Use static evaluation for first window
+                    let window_size = search_engine.calculate_window_size(depth, initial_static_eval, 0);
+                    let first_alpha = initial_static_eval - window_size;
+                    let first_beta = initial_static_eval + window_size;
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window with static eval (static_eval: {}, window_size: {}, alpha: {}, beta: {})", 
+                        depth, initial_static_eval, window_size, first_alpha, first_beta));
+                    (first_alpha, first_beta)
+                } else {
+                    // Disabled or full-width: use full-width window
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using full-width window", depth));
+                    (i32::MIN + 1, i32::MAX - 1)
+                }
             } else {
-                // Use aspiration window based on previous score
-                let previous_score = previous_scores.last().copied().unwrap_or(0);
+                // Use aspiration window based on previous score or static eval fallback
+                let previous_score = previous_scores.last().copied().unwrap_or_else(|| {
+                    // Fallback to static evaluation if no previous score
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: No previous score, using static eval fallback: {}", depth, initial_static_eval));
+                    initial_static_eval
+                });
                 let window_size = search_engine.calculate_window_size(depth, previous_score, 0);
                 crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window (prev_score: {}, window_size: {}, alpha: {}, beta: {})", 
                     depth, previous_score, window_size, previous_score - window_size, previous_score + window_size));
@@ -7568,6 +7771,11 @@ impl IterativeDeepening {
                     )
                 }) {
                     crate::debug_utils::end_timing(&format!("aspiration_search_{}_{}", depth, researches), "ASPIRATION_WINDOW");
+                    
+                    // Record depth completion time for adaptive allocation (Task 4.6, 4.10)
+                    let depth_completion_time = depth_start_time.elapsed_ms();
+                    search_engine.record_depth_completion(depth, depth_completion_time);
+                    
                     search_result = Some((move_.clone(), score));
                     
                     crate::debug_utils::trace_log("ASPIRATION_WINDOW", &format!("Search result: move={}, score={}, alpha={}, beta={}", 
@@ -7640,6 +7848,27 @@ impl IterativeDeepening {
 
             // Update statistics
             search_engine.update_aspiration_stats(researches > 0, researches);
+            let depth_completion_time = depth_start_time.elapsed_ms();
+            
+            // Record depth completion metrics (Task 4.10)
+            let stats = &mut search_engine.time_budget_stats;
+            if depth > 0 && (depth - 1) < stats.budget_per_depth_ms.len() as u8 {
+                let budget = stats.budget_per_depth_ms[(depth - 1) as usize];
+                if depth_completion_time > budget {
+                    stats.depths_exceeded_budget += 1;
+                }
+            }
+            
+            // Update estimation accuracy (Task 4.10)
+            if !stats.budget_per_depth_ms.is_empty() && depth > 0 && (depth - 1) < stats.budget_per_depth_ms.len() as u8 {
+                let budget = stats.budget_per_depth_ms[(depth - 1) as usize];
+                if budget > 0 {
+                    let accuracy = 1.0 - ((depth_completion_time as f64 - budget as f64).abs() / budget as f64);
+                    let count = stats.depths_completed.max(1) as f64;
+                    stats.estimation_accuracy = (stats.estimation_accuracy * (count - 1.0) + accuracy) / count;
+                }
+            }
+            
             crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
             if let Some((mv_final, score)) = search_result {
