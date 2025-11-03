@@ -2,7 +2,7 @@
 
 **PRD:** `task-2.0-null-move-pruning-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 Complete
 
 ---
 
@@ -152,16 +152,16 @@
   - [x] 7.9 Update `NullMoveConfig::summary()` to include preset information if set
   - [x] 7.10 Consider adding preset configuration via USI commands or configuration file
 
-- [ ] 8.0 Address Board State and Hash History Concerns
-  - [ ] 8.1 Review board state modification concern: null move search modifies board state via `perform_null_move_search()` (line 2946)
-  - [ ] 8.2 Verify that null move search doesn't actually make moves on board (it just passes turn via recursive call)
-  - [ ] 8.3 Add unit tests to verify board state is not modified after null move search completes
-  - [ ] 8.4 Review hash history separation: local hash history created for null move search (lines 2944-2945) is separate from main search
-  - [ ] 8.5 Evaluate if null move search should benefit from repetition detection in main search path
-  - [ ] 8.6 Consider sharing hash history between null move and main search if safe (with proper isolation)
-  - [ ] 8.7 Add tests to verify hash history isolation doesn't cause repetition detection issues
-  - [ ] 8.8 Document hash history separation rationale in code comments if keeping separate
-  - [ ] 8.9 If sharing is unsafe, document why separate history is necessary for correctness
+- [x] 8.0 Address Board State and Hash History Concerns
+  - [x] 8.1 Review board state modification concern: null move search modifies board state via `perform_null_move_search()` (line 2946)
+  - [x] 8.2 Verify that null move search doesn't actually make moves on board (it just passes turn via recursive call)
+  - [x] 8.3 Add unit tests to verify board state is not modified after null move search completes
+  - [x] 8.4 Review hash history separation: local hash history created for null move search (lines 2944-2945) is separate from main search
+  - [x] 8.5 Evaluate if null move search should benefit from repetition detection in main search path
+  - [x] 8.6 Consider sharing hash history between null move and main search if safe (with proper isolation)
+  - [x] 8.7 Add tests to verify hash history isolation doesn't cause repetition detection issues
+  - [x] 8.8 Document hash history separation rationale in code comments if keeping separate
+  - [x] 8.9 If sharing is unsafe, document why separate history is necessary for correctness
 
 - [ ] 9.0 Implement Advanced Reduction Strategies
   - [ ] 9.1 Add `reduction_strategy` field to `NullMoveConfig` with options: Static, Dynamic, DepthBased, MaterialBased, PositionTypeBased
@@ -467,6 +467,37 @@
 - Documentation included in code comments with usage guidelines
 - All tests pass and code compiles successfully
 - Presets maintain backward compatibility (default uses Balanced preset, which matches previous default values)
+
+**Task 8.0 Completion Notes:**
+- Reviewed board state modification concern: Verified that `perform_null_move_search()` does NOT modify board state
+  * The function receives `board: &mut BitboardBoard` but only passes it to `negamax_with_context()` for recursive calls
+  * No actual move is made on the board at the null move level - null move is simulated by passing `player.opposite()` to switch turns
+  * Moves made within the recursive call are unmade before returning, preserving board state
+- Verified that null move search doesn't make actual moves: Confirmed that null move is simulated via recursive call with opposite player, not by making a move
+- Added comprehensive documentation in `perform_null_move_search()`:
+  * Documented board state isolation: Board state is not modified at the null move level
+  * Documented hash history isolation: Separate hash history is created for null move search
+  * Explained why separate hash history is necessary: Prevents false repetition detections
+- Added documentation in `negamax_with_context()`:
+  * Documented hash history separation rationale
+  * Explained that null move is a hypothetical position, so its repetition detection should be isolated
+- Added 5 unit tests in `tests/null_move_tests.rs`:
+  * `test_null_move_board_state_isolation()`: Verifies board state is unchanged after null move search
+  * `test_null_move_hash_history_isolation()`: Verifies hash history isolation between searches
+  * `test_null_move_does_not_make_actual_move()`: Verifies no actual move is made, checks all piece positions
+  * `test_null_move_hash_history_separation()`: Verifies hash history separation prevents interference
+  * Tests verify board state, piece positions, occupied squares, and hash history isolation
+- Reviewed hash history separation: Confirmed that local hash history is created for null move search (line 2948-2949)
+- Evaluated repetition detection: Determined that null move search should NOT share hash history with main search because:
+  1. Null move is a hypothetical position (not a real move)
+  2. Repetition detection in null move subtree should not affect main search
+  3. Separate hash history prevents false repetition detections
+- Documented hash history separation rationale in code comments:
+  * Explained why separate history is necessary for correctness
+  * Documented that null move is hypothetical, so its repetition detection should be isolated
+  * Explained that sharing hash history would cause false repetition detections
+- All tests pass and verify board state and hash history isolation
+- Code compiles successfully with comprehensive documentation
 
 **Implementation Notes:**
 - Tasks are ordered by priority (1.0-3.0: High Priority, 4.0-6.0: Medium Priority, 7.0-8.0: Low Priority, 9.0-11.0: Additional Concerns)

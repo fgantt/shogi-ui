@@ -2940,12 +2940,24 @@ impl SearchEngine {
         if self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
             crate::debug_utils::trace_log("NULL_MOVE", &format!("Attempting null move pruning at depth {}", depth));
             crate::debug_utils::start_timing("null_move_search");
-            // Create local hash_history for null move search (Task 5.2)
+            // Create local hash_history for null move search (Task 8.4, Task 8.6)
+            // This separate hash history ensures that repetition detection within the null move
+            // search does not interfere with the main search's hash history. The null move is a
+            // hypothetical position (not a real move), so its repetition detection should be
+            // isolated from the main search to prevent false repetition detections.
             let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
             let mut local_null_hash_history = vec![initial_hash];
+            
+            // NOTE: Board state verification: The null move search does NOT modify the board state.
+            // No actual move is made on the board - the null move is simulated by passing
+            // player.opposite() to switch turns via recursive call. The board state remains
+            // unchanged because moves made within the recursive call are unmade before returning.
+            // Unit tests verify this behavior (see test_null_move_board_state_isolation).
+            
             let null_move_score = self.perform_null_move_search(
                 board, captured_pieces, player, depth, beta, start_time, time_limit_ms, &mut local_null_hash_history
             );
+            
             crate::debug_utils::end_timing("null_move_search", "NULL_MOVE");
             
             if null_move_score >= beta {
@@ -4693,6 +4705,23 @@ impl SearchEngine {
     }
     
     /// Perform a null move search with reduced depth
+    /// 
+    /// **Board State Isolation**: This function does NOT modify the board state.
+    /// The `board` parameter is mutable only because `negamax_with_context()` requires
+    /// it for making moves during the recursive search. However, no actual move is made
+    /// on the board at this level - the null move is simulated by simply passing the
+    /// turn to the opponent via `player.opposite()` in the recursive call.
+    /// 
+    /// **Hash History Isolation**: A local hash history is created before calling
+    /// this function (in `negamax_with_context()`). This separate hash history ensures
+    /// that repetition detection within the null move search does not interfere with
+    /// the main search's hash history. This is necessary because:
+    /// 1. The null move is a hypothetical position (not a real move)
+    /// 2. Repetition detection in the null move subtree should not affect the main search
+    /// 3. Hash history is maintained separately to prevent false repetition detections
+    /// 
+    /// The hash history passed to this function is isolated from the main search and
+    /// is discarded after the null move search completes.
     fn perform_null_move_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces,
                                player: Player, depth: u8, beta: i32, start_time: &TimeSource,
                                time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
@@ -4721,6 +4750,10 @@ impl SearchEngine {
         self.null_move_stats.depth_reductions += reduction as u64;
         
         // Perform null move search with zero-width window
+        // NOTE: No actual move is made on the board. The null move is simulated by
+        // passing player.opposite() to switch turns, while the board state remains unchanged.
+        // During the recursive call, moves may be made/unmade within that subtree, but
+        // the board state will be restored to its original state before this function returns.
         let null_move_score = -self.negamax_with_context(
             board, captured_pieces, player.opposite(), 
             search_depth, beta.saturating_neg(), beta.saturating_neg().saturating_add(1), 
