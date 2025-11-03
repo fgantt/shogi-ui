@@ -511,5 +511,9 @@
 - Task 8.0 addresses concerns from Task 2.1 review (board state modification and hash history separation)
 - Task 9.0 implements Recommendation #8 from Task 2.8 (Advanced Reduction Strategies)
 - Task 10.0 addresses parameter tuning concerns from Task 2.2 and Task 2.4 (static reduction per depth, threshold tuning)
+  - Added per-depth reduction configuration with `reduction_factor_by_depth` HashMap
+  - Added per-position-type endgame thresholds (opening_pieces_threshold, middlegame_pieces_threshold, endgame_pieces_threshold)
+  - Per-depth reduction overrides all reduction strategies when enabled
+  - Per-position-type thresholds allow different sensitivity for opening/middlegame/endgame positions
 - Task 11.0 validates expected performance metrics from Task 2.6 (20-40% reduction, 15-25% depth increase, 10-20% strength improvement)
 
