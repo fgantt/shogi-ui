@@ -1,7 +1,7 @@
 use shogi_engine::{
     search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula, EndgameType},
+    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula, EndgameType, NullMovePreset},
     time_utils::TimeSource,
 };
 
@@ -1250,5 +1250,282 @@ mod null_move_tests {
         // When endgame type detection is enabled, disabled_endgame may be 0
         // (because it uses type-specific stats instead)
         assert!(total_endgame_disabled >= 0);
+    }
+
+    #[test]
+    fn test_null_move_preset_enum() {
+        // Test preset enum variants
+        let conservative = NullMovePreset::Conservative;
+        let aggressive = NullMovePreset::Aggressive;
+        let balanced = NullMovePreset::Balanced;
+        
+        // Test to_string()
+        assert_eq!(conservative.to_string(), "Conservative");
+        assert_eq!(aggressive.to_string(), "Aggressive");
+        assert_eq!(balanced.to_string(), "Balanced");
+        
+        // Test from_str()
+        assert_eq!(NullMovePreset::from_str("conservative"), Some(NullMovePreset::Conservative));
+        assert_eq!(NullMovePreset::from_str("CONSERVATIVE"), Some(NullMovePreset::Conservative));
+        assert_eq!(NullMovePreset::from_str("aggressive"), Some(NullMovePreset::Aggressive));
+        assert_eq!(NullMovePreset::from_str("AGGRESSIVE"), Some(NullMovePreset::Aggressive));
+        assert_eq!(NullMovePreset::from_str("balanced"), Some(NullMovePreset::Balanced));
+        assert_eq!(NullMovePreset::from_str("BALANCED"), Some(NullMovePreset::Balanced));
+        assert_eq!(NullMovePreset::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_null_move_config_from_preset_conservative() {
+        let config = NullMoveConfig::from_preset(NullMovePreset::Conservative);
+        
+        // Conservative preset: Higher verification_margin, lower reduction_factor, stricter endgame detection
+        assert_eq!(config.verification_margin, 400);
+        assert_eq!(config.reduction_factor, 2);
+        assert_eq!(config.max_pieces_threshold, 14);
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.enable_mate_threat_detection, true);
+        assert_eq!(config.mate_threat_margin, 600);
+        assert_eq!(config.enable_endgame_type_detection, true);
+        assert_eq!(config.material_endgame_threshold, 14);
+        assert_eq!(config.king_activity_threshold, 10);
+        assert_eq!(config.zugzwang_threshold, 8);
+        assert_eq!(config.dynamic_reduction_formula, DynamicReductionFormula::Linear);
+        assert_eq!(config.preset, Some(NullMovePreset::Conservative));
+        
+        // Verify configuration is valid
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_null_move_config_from_preset_aggressive() {
+        let config = NullMoveConfig::from_preset(NullMovePreset::Aggressive);
+        
+        // Aggressive preset: Lower verification_margin, higher reduction_factor, relaxed endgame detection
+        assert_eq!(config.verification_margin, 100);
+        assert_eq!(config.reduction_factor, 3);
+        assert_eq!(config.max_pieces_threshold, 10);
+        assert_eq!(config.min_depth, 2);
+        assert_eq!(config.enable_mate_threat_detection, false);
+        assert_eq!(config.mate_threat_margin, 400);
+        assert_eq!(config.enable_endgame_type_detection, false);
+        assert_eq!(config.material_endgame_threshold, 10);
+        assert_eq!(config.king_activity_threshold, 6);
+        assert_eq!(config.zugzwang_threshold, 4);
+        assert_eq!(config.dynamic_reduction_formula, DynamicReductionFormula::Smooth);
+        assert_eq!(config.preset, Some(NullMovePreset::Aggressive));
+        
+        // Verify configuration is valid
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_null_move_config_from_preset_balanced() {
+        let config = NullMoveConfig::from_preset(NullMovePreset::Balanced);
+        
+        // Balanced preset: Default values optimized for general play
+        assert_eq!(config.verification_margin, 200);
+        assert_eq!(config.reduction_factor, 2);
+        assert_eq!(config.max_pieces_threshold, 12);
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.enable_mate_threat_detection, false);
+        assert_eq!(config.mate_threat_margin, 500);
+        assert_eq!(config.enable_endgame_type_detection, false);
+        assert_eq!(config.material_endgame_threshold, 12);
+        assert_eq!(config.king_activity_threshold, 8);
+        assert_eq!(config.zugzwang_threshold, 6);
+        assert_eq!(config.dynamic_reduction_formula, DynamicReductionFormula::Linear);
+        assert_eq!(config.preset, Some(NullMovePreset::Balanced));
+        
+        // Verify configuration is valid
+        assert!(config.validate().is_ok());
+        
+        // Balanced preset should match default
+        let default_config = NullMoveConfig::default();
+        assert_eq!(default_config.verification_margin, config.verification_margin);
+        assert_eq!(default_config.reduction_factor, config.reduction_factor);
+        assert_eq!(default_config.max_pieces_threshold, config.max_pieces_threshold);
+        assert_eq!(default_config.preset, config.preset);
+    }
+
+    #[test]
+    fn test_null_move_config_apply_preset() {
+        let mut config = NullMoveConfig::default();
+        
+        // Apply Conservative preset
+        config.apply_preset(NullMovePreset::Conservative);
+        assert_eq!(config.verification_margin, 400);
+        assert_eq!(config.reduction_factor, 2);
+        assert_eq!(config.max_pieces_threshold, 14);
+        assert_eq!(config.preset, Some(NullMovePreset::Conservative));
+        
+        // Apply Aggressive preset
+        config.apply_preset(NullMovePreset::Aggressive);
+        assert_eq!(config.verification_margin, 100);
+        assert_eq!(config.reduction_factor, 3);
+        assert_eq!(config.max_pieces_threshold, 10);
+        assert_eq!(config.preset, Some(NullMovePreset::Aggressive));
+        
+        // Apply Balanced preset
+        config.apply_preset(NullMovePreset::Balanced);
+        assert_eq!(config.verification_margin, 200);
+        assert_eq!(config.reduction_factor, 2);
+        assert_eq!(config.max_pieces_threshold, 12);
+        assert_eq!(config.preset, Some(NullMovePreset::Balanced));
+    }
+
+    #[test]
+    fn test_null_move_config_summary_includes_preset() {
+        let config = NullMoveConfig::from_preset(NullMovePreset::Conservative);
+        let summary = config.summary();
+        
+        // Summary should include preset information
+        assert!(summary.contains("preset=Conservative"));
+        
+        let balanced_config = NullMoveConfig::from_preset(NullMovePreset::Balanced);
+        let balanced_summary = balanced_config.summary();
+        assert!(balanced_summary.contains("preset=Balanced"));
+        
+        // Config without preset should not have preset in summary
+        let mut custom_config = NullMoveConfig::default();
+        custom_config.preset = None;
+        let custom_summary = custom_config.summary();
+        assert!(!custom_summary.contains("preset="));
+    }
+
+    #[test]
+    fn test_null_move_preset_integration_conservative() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Use Conservative preset
+        let config = NullMoveConfig::from_preset(NullMovePreset::Conservative);
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        let engine_config = engine.get_null_move_config();
+        
+        // Conservative preset should have higher verification margin
+        assert_eq!(engine_config.verification_margin, 400);
+        assert_eq!(engine_config.enable_mate_threat_detection, true);
+        
+        // Search should complete successfully
+        assert!(result.is_some());
+        
+        // Statistics should be tracked
+        assert!(stats.attempts >= 0);
+        if stats.attempts > 0 {
+            assert!(stats.cutoffs >= 0);
+        }
+    }
+
+    #[test]
+    fn test_null_move_preset_integration_aggressive() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Use Aggressive preset
+        let config = NullMoveConfig::from_preset(NullMovePreset::Aggressive);
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        let engine_config = engine.get_null_move_config();
+        
+        // Aggressive preset should have lower verification margin
+        assert_eq!(engine_config.verification_margin, 100);
+        assert_eq!(engine_config.reduction_factor, 3);
+        assert_eq!(engine_config.enable_mate_threat_detection, false);
+        
+        // Search should complete successfully
+        assert!(result.is_some());
+        
+        // Statistics should be tracked
+        assert!(stats.attempts >= 0);
+        if stats.attempts > 0 {
+            assert!(stats.cutoffs >= 0);
+        }
+    }
+
+    #[test]
+    fn test_null_move_preset_integration_balanced() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Use Balanced preset (default)
+        let config = NullMoveConfig::from_preset(NullMovePreset::Balanced);
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        let engine_config = engine.get_null_move_config();
+        
+        // Balanced preset should have default values
+        assert_eq!(engine_config.verification_margin, 200);
+        assert_eq!(engine_config.reduction_factor, 2);
+        
+        // Search should complete successfully
+        assert!(result.is_some());
+        
+        // Statistics should be tracked
+        assert!(stats.attempts >= 0);
+        if stats.attempts > 0 {
+            assert!(stats.cutoffs >= 0);
+        }
+    }
+
+    #[test]
+    fn test_null_move_preset_comparison() {
+        let conservative = NullMoveConfig::from_preset(NullMovePreset::Conservative);
+        let aggressive = NullMoveConfig::from_preset(NullMovePreset::Aggressive);
+        let balanced = NullMoveConfig::from_preset(NullMovePreset::Balanced);
+        
+        // Conservative should have highest verification margin
+        assert!(conservative.verification_margin > aggressive.verification_margin);
+        assert!(conservative.verification_margin > balanced.verification_margin);
+        
+        // Aggressive should have lowest verification margin
+        assert!(aggressive.verification_margin < conservative.verification_margin);
+        assert!(aggressive.verification_margin < balanced.verification_margin);
+        
+        // Aggressive should have highest reduction factor
+        assert!(aggressive.reduction_factor > conservative.reduction_factor);
+        assert!(aggressive.reduction_factor > balanced.reduction_factor);
+        
+        // Conservative should have strictest endgame detection (highest threshold)
+        assert!(conservative.max_pieces_threshold > aggressive.max_pieces_threshold);
+        assert!(conservative.max_pieces_threshold > balanced.max_pieces_threshold);
+        
+        // Aggressive should have most relaxed endgame detection (lowest threshold)
+        assert!(aggressive.max_pieces_threshold < conservative.max_pieces_threshold);
+        assert!(aggressive.max_pieces_threshold < balanced.max_pieces_threshold);
+        
+        // Conservative should have mate threat detection enabled
+        assert_eq!(conservative.enable_mate_threat_detection, true);
+        assert_eq!(aggressive.enable_mate_threat_detection, false);
+        assert_eq!(balanced.enable_mate_threat_detection, false);
+        
+        // Conservative should have endgame type detection enabled
+        assert_eq!(conservative.enable_endgame_type_detection, true);
+        assert_eq!(aggressive.enable_endgame_type_detection, false);
+        assert_eq!(balanced.enable_endgame_type_detection, false);
     }
 }

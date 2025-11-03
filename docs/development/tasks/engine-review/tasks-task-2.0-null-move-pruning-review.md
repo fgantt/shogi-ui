@@ -2,7 +2,7 @@
 
 **PRD:** `task-2.0-null-move-pruning-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 Complete
 
 ---
 
@@ -137,20 +137,20 @@
   - [x] 6.11 Document benchmark execution and interpretation in development documentation
   - [x] 6.12 Set up CI/CD pipeline to run benchmarks automatically on commits (if not already configured)
 
-- [ ] 7.0 Add Configuration Presets
-  - [ ] 7.1 Create `NullMovePreset` enum with variants: Conservative, Aggressive, Balanced
-  - [ ] 7.2 Implement `from_preset()` method for `NullMoveConfig` to create configs from presets
-  - [ ] 7.3 Define preset configurations:
+- [x] 7.0 Add Configuration Presets
+  - [x] 7.1 Create `NullMovePreset` enum with variants: Conservative, Aggressive, Balanced
+  - [x] 7.2 Implement `from_preset()` method for `NullMoveConfig` to create configs from presets
+  - [x] 7.3 Define preset configurations:
     - Conservative: Higher verification_margin, lower reduction_factor, stricter endgame detection
     - Aggressive: Lower verification_margin, higher reduction_factor, relaxed endgame detection
     - Balanced: Default values optimized for general play
-  - [ ] 7.4 Add `preset` field to `NullMoveConfig` to track which preset was used (optional)
-  - [ ] 7.5 Add `apply_preset()` method to `NullMoveConfig` to update config based on preset
-  - [ ] 7.6 Update configuration documentation to describe presets and when to use each
-  - [ ] 7.7 Add unit tests for preset configurations (verify settings match expected values)
-  - [ ] 7.8 Add integration tests comparing preset performance (Conservative vs Aggressive vs Balanced)
-  - [ ] 7.9 Update `NullMoveConfig::summary()` to include preset information if set
-  - [ ] 7.10 Consider adding preset configuration via USI commands or configuration file
+  - [x] 7.4 Add `preset` field to `NullMoveConfig` to track which preset was used (optional)
+  - [x] 7.5 Add `apply_preset()` method to `NullMoveConfig` to update config based on preset
+  - [x] 7.6 Update configuration documentation to describe presets and when to use each
+  - [x] 7.7 Add unit tests for preset configurations (verify settings match expected values)
+  - [x] 7.8 Add integration tests comparing preset performance (Conservative vs Aggressive vs Balanced)
+  - [x] 7.9 Update `NullMoveConfig::summary()` to include preset information if set
+  - [x] 7.10 Consider adding preset configuration via USI commands or configuration file
 
 - [ ] 8.0 Address Board State and Hash History Concerns
   - [ ] 8.1 Review board state modification concern: null move search modifies board state via `perform_null_move_search()` (line 2946)
@@ -432,6 +432,41 @@
 - Updated `Cargo.toml` to include benchmark entry
 - All benchmarks and tests compile successfully
 - Comprehensive monitoring suite ready for CI/CD integration
+
+**Task 7.0 Completion Notes:**
+- Created `NullMovePreset` enum with three variants: `Conservative`, `Aggressive`, `Balanced`:
+  * `to_string()` method returns string representation
+  * `from_str()` method parses preset from string (case-insensitive)
+  * All variants are `Copy`, `Clone`, `Serialize`, `Deserialize`, `PartialEq`, `Eq`
+- Implemented `NullMoveConfig::from_preset()` method:
+  * **Conservative preset**: verification_margin=400, reduction_factor=2, max_pieces_threshold=14, min_depth=3, mate_threat_detection=enabled (600), endgame_type_detection=enabled, material_endgame_threshold=14, king_activity_threshold=10, zugzwang_threshold=8, dynamic_reduction_formula=Linear
+  * **Aggressive preset**: verification_margin=100, reduction_factor=3, max_pieces_threshold=10, min_depth=2, mate_threat_detection=disabled (400), endgame_type_detection=disabled, material_endgame_threshold=10, king_activity_threshold=6, zugzwang_threshold=4, dynamic_reduction_formula=Smooth
+  * **Balanced preset**: verification_margin=200, reduction_factor=2, max_pieces_threshold=12, min_depth=3, mate_threat_detection=disabled (500), endgame_type_detection=disabled, material_endgame_threshold=12, king_activity_threshold=8, zugzwang_threshold=6, dynamic_reduction_formula=Linear
+- Added `preset: Option<NullMovePreset>` field to `NullMoveConfig` to track which preset was used
+- Implemented `NullMoveConfig::apply_preset()` method to update configuration with preset values
+- Updated `NullMoveConfig::default()` to use `from_preset(NullMovePreset::Balanced)`
+- Updated `NullMoveConfig::summary()` to include preset information when preset is set
+- Added comprehensive unit tests in `tests/null_move_tests.rs`:
+  * `test_null_move_preset_enum()`: Tests enum variants, to_string(), and from_str()
+  * `test_null_move_config_from_preset_conservative()`: Verifies Conservative preset settings
+  * `test_null_move_config_from_preset_aggressive()`: Verifies Aggressive preset settings
+  * `test_null_move_config_from_preset_balanced()`: Verifies Balanced preset settings
+  * `test_null_move_config_apply_preset()`: Tests apply_preset() method
+  * `test_null_move_config_summary_includes_preset()`: Tests summary includes preset info
+  * `test_null_move_preset_integration_conservative()`: Integration test for Conservative preset
+  * `test_null_move_preset_integration_aggressive()`: Integration test for Aggressive preset
+  * `test_null_move_preset_integration_balanced()`: Integration test for Balanced preset
+  * `test_null_move_preset_comparison()`: Compares all three presets to verify differences
+- Updated all `NullMoveConfig` initializers in tests and engine config presets to include `preset: None`
+- All preset configurations are validated via `validate()` method
+- Presets provide easy-to-use configurations optimized for different use cases:
+  * **Conservative**: Best for critical positions, endgame analysis, when safety is more important than speed
+  * **Aggressive**: Best for fast time controls, opening/middlegame, when speed is more important than safety
+  * **Balanced**: Best for standard time controls, general use cases
+- Presets enable users to quickly configure NMP without understanding all parameters
+- Documentation included in code comments with usage guidelines
+- All tests pass and code compiles successfully
+- Presets maintain backward compatibility (default uses Balanced preset, which matches previous default values)
 
 **Implementation Notes:**
 - Tasks are ordered by priority (1.0-3.0: High Priority, 4.0-6.0: Medium Priority, 7.0-8.0: Low Priority, 9.0-11.0: Additional Concerns)

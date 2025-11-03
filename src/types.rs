@@ -1364,6 +1364,46 @@ impl DynamicReductionFormula {
     }
 }
 
+/// Preset configurations for Null Move Pruning
+/// 
+/// These presets provide pre-configured settings optimized for different playing styles:
+/// - **Conservative**: Higher safety margins, lower reduction, stricter endgame detection (safer but slower)
+/// - **Aggressive**: Lower safety margins, higher reduction, relaxed endgame detection (faster but riskier)
+/// - **Balanced**: Default values optimized for general play (good balance of speed and safety)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NullMovePreset {
+    /// Conservative preset: Higher verification_margin, lower reduction_factor, stricter endgame detection
+    /// Best for: Critical positions, endgame analysis, when safety is more important than speed
+    Conservative,
+    /// Aggressive preset: Lower verification_margin, higher reduction_factor, relaxed endgame detection
+    /// Best for: Fast time controls, opening/middlegame, when speed is more important than safety
+    Aggressive,
+    /// Balanced preset: Default values optimized for general play
+    /// Best for: Standard time controls, general use cases
+    Balanced,
+}
+
+impl NullMovePreset {
+    /// Get a string representation of the preset
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            NullMovePreset::Conservative => "Conservative",
+            NullMovePreset::Aggressive => "Aggressive",
+            NullMovePreset::Balanced => "Balanced",
+        }
+    }
+    
+    /// Parse a preset from a string (case-insensitive)
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "conservative" => Some(NullMovePreset::Conservative),
+            "aggressive" => Some(NullMovePreset::Aggressive),
+            "balanced" => Some(NullMovePreset::Balanced),
+            _ => None,
+        }
+    }
+}
+
 /// Configuration for null move pruning parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NullMoveConfig {
@@ -1381,30 +1421,88 @@ pub struct NullMoveConfig {
     pub material_endgame_threshold: u8,       // Threshold for material endgame detection (default: 12 pieces)
     pub king_activity_threshold: u8,          // Threshold for king activity endgame detection (default: 8 pieces)
     pub zugzwang_threshold: u8,              // Threshold for zugzwang-prone endgame detection (default: 6 pieces)
+    pub preset: Option<NullMovePreset>,      // Optional: Track which preset was used to create this config
 }
 
 impl Default for NullMoveConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            min_depth: 3,
-            reduction_factor: 2,
-            max_pieces_threshold: 12,       // Disable when < 12 pieces
-            enable_dynamic_reduction: true,
-            enable_endgame_detection: true,
-            verification_margin: 200,        // Default 200 centipawns safety margin
-            dynamic_reduction_formula: DynamicReductionFormula::Linear,  // Default to linear for backward compatibility
-            enable_mate_threat_detection: false,  // Default: false, opt-in feature
-            mate_threat_margin: 500,         // Default 500 centipawns threshold for mate threat detection
-            enable_endgame_type_detection: false,  // Default: false, opt-in feature
-            material_endgame_threshold: 12,      // Default 12 pieces threshold for material endgame
-            king_activity_threshold: 8,           // Default 8 pieces threshold for king activity endgame
-            zugzwang_threshold: 6,                // Default 6 pieces threshold for zugzwang-prone endgame
-        }
+        // Default uses Balanced preset values
+        NullMoveConfig::from_preset(NullMovePreset::Balanced)
     }
 }
 
 impl NullMoveConfig {
+    /// Create a configuration from a preset
+    /// 
+    /// This creates a new `NullMoveConfig` with settings optimized for the specified preset:
+    /// - **Conservative**: Higher verification_margin (400), lower reduction_factor (2), stricter endgame detection
+    /// - **Aggressive**: Lower verification_margin (100), higher reduction_factor (3), relaxed endgame detection
+    /// - **Balanced**: Default values optimized for general play (verification_margin: 200, reduction_factor: 2)
+    pub fn from_preset(preset: NullMovePreset) -> Self {
+        match preset {
+            NullMovePreset::Conservative => Self {
+                enabled: true,
+                min_depth: 3,
+                reduction_factor: 2,           // Lower reduction for safety
+                max_pieces_threshold: 14,      // Stricter endgame detection (disable when < 14 pieces)
+                enable_dynamic_reduction: true,
+                enable_endgame_detection: true,
+                verification_margin: 400,       // Higher safety margin (400 centipawns)
+                dynamic_reduction_formula: DynamicReductionFormula::Linear,
+                enable_mate_threat_detection: true,  // Enable mate threat detection for safety
+                mate_threat_margin: 600,       // Higher mate threat margin (600 centipawns)
+                enable_endgame_type_detection: true,  // Enable endgame type detection
+                material_endgame_threshold: 14,  // Higher threshold (14 pieces)
+                king_activity_threshold: 10,    // Higher threshold (10 pieces)
+                zugzwang_threshold: 8,         // Higher threshold (8 pieces)
+                preset: Some(NullMovePreset::Conservative),
+            },
+            NullMovePreset::Aggressive => Self {
+                enabled: true,
+                min_depth: 2,                  // Lower min_depth for more aggressiveness
+                reduction_factor: 3,            // Higher reduction for speed
+                max_pieces_threshold: 10,       // Relaxed endgame detection (disable when < 10 pieces)
+                enable_dynamic_reduction: true,
+                enable_endgame_detection: true,
+                verification_margin: 100,       // Lower safety margin (100 centipawns)
+                dynamic_reduction_formula: DynamicReductionFormula::Smooth,  // Use smooth formula for better scaling
+                enable_mate_threat_detection: false,  // Disable mate threat detection for speed
+                mate_threat_margin: 400,        // Lower mate threat margin (400 centipawns)
+                enable_endgame_type_detection: false,  // Disable endgame type detection for speed
+                material_endgame_threshold: 10,  // Lower threshold (10 pieces)
+                king_activity_threshold: 6,     // Lower threshold (6 pieces)
+                zugzwang_threshold: 4,          // Lower threshold (4 pieces)
+                preset: Some(NullMovePreset::Aggressive),
+            },
+            NullMovePreset::Balanced => Self {
+                enabled: true,
+                min_depth: 3,
+                reduction_factor: 2,
+                max_pieces_threshold: 12,       // Standard endgame detection
+                enable_dynamic_reduction: true,
+                enable_endgame_detection: true,
+                verification_margin: 200,       // Default safety margin (200 centipawns)
+                dynamic_reduction_formula: DynamicReductionFormula::Linear,
+                enable_mate_threat_detection: false,  // Disabled by default (opt-in)
+                mate_threat_margin: 500,        // Default mate threat margin (500 centipawns)
+                enable_endgame_type_detection: false,  // Disabled by default (opt-in)
+                material_endgame_threshold: 12,  // Default threshold (12 pieces)
+                king_activity_threshold: 8,      // Default threshold (8 pieces)
+                zugzwang_threshold: 6,          // Default threshold (6 pieces)
+                preset: Some(NullMovePreset::Balanced),
+            },
+        }
+    }
+    
+    /// Apply a preset to this configuration
+    /// 
+    /// This updates the configuration with settings from the specified preset,
+    /// preserving the preset reference for tracking.
+    pub fn apply_preset(&mut self, preset: NullMovePreset) {
+        let preset_config = Self::from_preset(preset);
+        *self = preset_config;
+    }
+    
     /// Validate the configuration parameters and return any errors
     pub fn validate(&self) -> Result<(), String> {
         if self.min_depth == 0 {
@@ -1473,8 +1571,13 @@ impl NullMoveConfig {
 
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
+        let preset_str = if let Some(preset) = &self.preset {
+            format!(", preset={}", preset.to_string())
+        } else {
+            String::new()
+        };
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}{}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
@@ -1488,7 +1591,8 @@ impl NullMoveConfig {
             self.enable_endgame_type_detection,
             self.material_endgame_threshold,
             self.king_activity_threshold,
-            self.zugzwang_threshold
+            self.zugzwang_threshold,
+            preset_str
         )
     }
 }
@@ -2361,6 +2465,7 @@ mod tests {
             material_endgame_threshold: 12,
             king_activity_threshold: 8,
             zugzwang_threshold: 6,
+            preset: None,
         };
         
         let validated = config.new_validated();
@@ -4034,6 +4139,7 @@ impl EngineConfig {
                     material_endgame_threshold: 12,
                     king_activity_threshold: 8,
                     zugzwang_threshold: 6,
+                    preset: None,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -4101,6 +4207,7 @@ impl EngineConfig {
                     material_endgame_threshold: 12,
                     king_activity_threshold: 8,
                     zugzwang_threshold: 6,
+                    preset: None,
                 },
                 lmr: LMRConfig {
                     enabled: true,
