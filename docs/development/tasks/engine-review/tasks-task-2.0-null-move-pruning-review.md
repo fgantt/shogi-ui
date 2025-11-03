@@ -499,6 +499,59 @@
 - All tests pass and verify board state and hash history isolation
 - Code compiles successfully with comprehensive documentation
 
+**Task 10.0 Completion Notes:**
+- Reviewed current static reduction factor (default: 2): Determined that per-depth tuning can be beneficial for fine-tuning NMP effectiveness at different search depths
+- Added per-depth reduction configuration:
+  * `enable_per_depth_reduction`: Boolean flag to enable per-depth reduction (default: false)
+  * `reduction_factor_by_depth`: `HashMap<u8, u8>` mapping depth -> reduction_factor (optional, for fine-tuning)
+  * Allows users to specify custom reduction factors for specific depths (e.g., depth 3 -> reduction 1, depth 5 -> reduction 3)
+- Implemented per-depth reduction lookup in `calculate_null_move_reduction()`:
+  * When `enable_per_depth_reduction` is true and a mapping exists for the current depth, it overrides the reduction strategy
+  * Per-depth reduction has priority over all reduction strategies (Static, Dynamic, DepthBased, MaterialBased, PositionTypeBased)
+  * Allows fine-tuning reduction at specific depths without changing the overall strategy
+- Reviewed current endgame threshold (default: 12 pieces): Determined that per-position-type thresholds can improve NMP effectiveness
+- Added per-position-type endgame threshold configuration:
+  * `enable_per_position_type_threshold`: Boolean flag to enable per-position-type thresholds (default: false)
+  * `opening_pieces_threshold`: Threshold for opening positions (default: 12 pieces, used when piece_count >= 30)
+  * `middlegame_pieces_threshold`: Threshold for middlegame positions (default: 12 pieces, used when piece_count 15-29)
+  * `endgame_pieces_threshold`: Threshold for endgame positions (default: 12 pieces, used when piece_count < 15)
+- Implemented per-position-type threshold lookup in `should_attempt_null_move()`:
+  * When `enable_per_position_type_threshold` is true, uses different thresholds based on piece count
+  * Opening (>=30 pieces): uses `opening_pieces_threshold` (more conservative, higher threshold)
+  * Middlegame (15-29 pieces): uses `middlegame_pieces_threshold` (standard threshold)
+  * Endgame (<15 pieces): uses `endgame_pieces_threshold` (more relaxed, lower threshold)
+- Added comprehensive validation for per-depth reduction parameters:
+  * `reduction_factor_by_depth`: depth must be 1-50, factor must be 1-5
+  * Validates all entries in the HashMap when `enable_per_depth_reduction` is true
+- Added comprehensive validation for per-position-type threshold parameters:
+  * `opening_pieces_threshold`: 1-40 range
+  * `middlegame_pieces_threshold`: 1-40 range
+  * `endgame_pieces_threshold`: 1-40 range
+  * Validates all thresholds when `enable_per_position_type_threshold` is true
+- Updated `new_validated()` to clamp all per-depth and per-position-type parameters
+- Updated all `NullMoveConfig` initializers (presets, tests, engine configs) to include new fields
+- Added 6 comprehensive unit tests in `tests/null_move_tests.rs`:
+  * `test_per_depth_reduction_configuration()`: Tests per-depth reduction configuration and lookup
+  * `test_per_position_type_threshold_configuration()`: Tests per-position-type threshold configuration and lookup
+  * `test_per_depth_reduction_validation()`: Tests validation of per-depth reduction parameters
+  * `test_per_position_type_threshold_validation()`: Tests validation of per-position-type threshold parameters
+  * `test_per_depth_reduction_priority_over_strategy()`: Tests that per-depth reduction overrides strategy
+  * `test_per_position_type_threshold_classification()`: Tests position type classification and threshold selection
+- Added documentation in code comments explaining per-depth reduction and per-position-type threshold usage
+- Per-depth reduction tuning guidelines:
+  * Use when fine-tuning is needed at specific depths
+  * Smaller reduction factors at shallow depths (more conservative)
+  * Larger reduction factors at deep depths (more aggressive)
+  * Overrides all reduction strategies when enabled
+- Per-position-type threshold tuning guidelines:
+  * Use when different position types need different endgame detection sensitivity
+  * Opening positions: higher threshold (more conservative, disable NMP earlier)
+  * Middlegame positions: standard threshold (balanced)
+  * Endgame positions: lower threshold (more relaxed, allow NMP longer)
+- Default configuration: both features disabled (false) for backward compatibility
+- All tests pass and code compiles successfully
+- Per-depth reduction and per-position-type thresholds provide fine-tuning options for advanced users
+
 **Implementation Notes:**
 - Tasks are ordered by priority (1.0-3.0: High Priority, 4.0-6.0: Medium Priority, 7.0-8.0: Low Priority, 9.0-11.0: Additional Concerns)
 - High priority tasks focus on safety (verification search) and performance (endgame detection optimization, reduction formula)
