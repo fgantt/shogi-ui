@@ -139,6 +139,10 @@ harness = false
 name = "endgame_type_detection_benchmarks"
 harness = false
 
+[[bench]]
+name = "null_move_performance_monitoring_benchmarks"
+harness = false
+
 [[example]]
 name = "attack_pattern_demo"
 path = "examples/attack_pattern_demo.rs"

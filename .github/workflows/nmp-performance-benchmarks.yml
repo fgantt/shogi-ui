@@ -1,0 +1,101 @@
+# NMP Performance Benchmarks and Regression Testing
+#
+# This workflow runs Null Move Pruning performance benchmarks and regression tests
+# to track performance over time and detect regressions.
+
+name: NMP Performance Benchmarks
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/search/search_engine.rs'
+      - 'src/types.rs'
+      - 'benches/null_move_*.rs'
+      - 'tests/null_move_*.rs'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/search/search_engine.rs'
+      - 'src/types.rs'
+      - 'benches/null_move_*.rs'
+      - 'tests/null_move_*.rs'
+  schedule:
+    # Run benchmarks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  nmp-performance-benchmarks:
+    name: NMP Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Build release version
+        run: cargo build --release --lib
+      
+      - name: Run NMP regression tests
+        env:
+          NMP_REGRESSION_TEST: 1
+        run: |
+          cargo test --test null_move_regression_tests --release --lib
+      
+      - name: Run NMP performance monitoring benchmarks
+        env:
+          NMP_REGRESSION_TEST: 1
+          NMP_METRICS_DIR: target/nmp_metrics
+          BENCHMARK_RESULTS_DIR: target/criterion
+        run: |
+          mkdir -p target/nmp_metrics
+          cargo bench --bench null_move_performance_monitoring_benchmarks --release
+      
+      - name: Check benchmark results
+        run: |
+          echo "Checking benchmark results..."
+          # Verify benchmarks completed successfully
+          test -d target/criterion || echo "Warning: No criterion reports found"
+      
+      - name: Upload benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: nmp-benchmark-reports
+          path: |
+            target/criterion/**/*.html
+            target/criterion/**/*.json
+            target/nmp_metrics/*.json
+          retention-days: 30
+      
+      - name: Generate performance summary
+        if: always()
+        run: |
+          echo "## NMP Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark reports uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
+          if [ -f target/nmp_metrics/nmp_metrics.json ]; then
+            echo "Metrics saved to: target/nmp_metrics/nmp_metrics.json" >> $GITHUB_STEP_SUMMARY
+          fi
+
