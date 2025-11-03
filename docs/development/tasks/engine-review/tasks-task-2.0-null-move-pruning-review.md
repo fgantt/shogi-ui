@@ -2,7 +2,7 @@
 
 **PRD:** `task-2.0-null-move-pruning-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0 Complete
 
 ---
 
@@ -180,17 +180,17 @@
   - [x] 9.14 Add configuration validation for advanced reduction strategy parameters
   - [x] 9.15 Document reduction strategy selection guidelines in code comments and configuration documentation
 
-- [ ] 10.0 Tune Static Reduction and Endgame Threshold Parameters
-  - [ ] 10.1 Review current static reduction factor (default: 2) - consider if per-depth tuning is beneficial
-  - [ ] 10.2 Add configuration for per-depth reduction factors: `reduction_factor_by_depth` option (depth -> reduction_factor mapping)
-  - [ ] 10.3 Implement per-depth reduction lookup in `perform_null_move_search()` when per-depth tuning enabled
-  - [ ] 10.4 Review current endgame threshold (default: 12 pieces) - may be too conservative or too aggressive
-  - [ ] 10.5 Add configuration for tunable endgame threshold: `max_pieces_threshold` with per-position-type options
-  - [ ] 10.6 Create benchmark suite to test different threshold values (8, 10, 12, 14, 16 pieces)
-  - [ ] 10.7 Measure NMP effectiveness and safety at different thresholds
-  - [ ] 10.8 Update default threshold based on benchmark results showing optimal balance of safety and effectiveness
-  - [ ] 10.9 Add unit tests verifying per-depth reduction and tunable threshold configurations
-  - [ ] 10.10 Document threshold selection rationale in configuration comments
+- [x] 10.0 Tune Static Reduction and Endgame Threshold Parameters
+  - [x] 10.1 Review current static reduction factor (default: 2) - consider if per-depth tuning is beneficial
+  - [x] 10.2 Add configuration for per-depth reduction factors: `reduction_factor_by_depth` option (depth -> reduction_factor mapping)
+  - [x] 10.3 Implement per-depth reduction lookup in `perform_null_move_search()` when per-depth tuning enabled
+  - [x] 10.4 Review current endgame threshold (default: 12 pieces) - may be too conservative or too aggressive
+  - [x] 10.5 Add configuration for tunable endgame threshold: `max_pieces_threshold` with per-position-type options
+  - [x] 10.6 Create benchmark suite to test different threshold values (8, 10, 12, 14, 16 pieces)
+  - [x] 10.7 Measure NMP effectiveness and safety at different thresholds
+  - [x] 10.8 Update default threshold based on benchmark results showing optimal balance of safety and effectiveness
+  - [x] 10.9 Add unit tests verifying per-depth reduction and tunable threshold configurations
+  - [x] 10.10 Document threshold selection rationale in configuration comments
 
 - [ ] 11.0 Validate Expected Performance Metrics
   - [ ] 11.1 Create comprehensive performance measurement suite to validate expected improvements

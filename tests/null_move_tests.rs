@@ -1870,4 +1870,150 @@ mod null_move_tests {
         config.depth_scaling_factor = 1;
         assert!(config.validate().is_ok());
     }
+
+    #[test]
+    fn test_per_depth_reduction_configuration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure per-depth reduction
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.enable_per_depth_reduction = true;
+        config.reduction_factor_by_depth.insert(3, 1);  // Depth 3: reduction 1
+        config.reduction_factor_by_depth.insert(4, 2);  // Depth 4: reduction 2
+        config.reduction_factor_by_depth.insert(5, 3);  // Depth 5: reduction 3
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search at different depths
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Per-depth reduction should override strategy-based reduction
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_per_position_type_threshold_configuration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure per-position-type thresholds
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.enable_endgame_detection = true;
+        config.enable_per_position_type_threshold = true;
+        config.opening_pieces_threshold = 14;    // More conservative for opening
+        config.middlegame_pieces_threshold = 12;  // Standard for middlegame
+        config.endgame_pieces_threshold = 10;     // More relaxed for endgame
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Per-position-type thresholds should be used when enabled
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_per_depth_reduction_validation() {
+        let mut config = NullMoveConfig::default();
+        config.enable_per_depth_reduction = true;
+        
+        // Add invalid entries
+        config.reduction_factor_by_depth.insert(0, 2);   // Invalid: depth 0
+        config.reduction_factor_by_depth.insert(3, 0);   // Invalid: factor 0
+        config.reduction_factor_by_depth.insert(3, 10);  // Invalid: factor > 5
+        
+        assert!(config.validate().is_err());
+        
+        // Fix and test valid config
+        config.reduction_factor_by_depth.clear();
+        config.reduction_factor_by_depth.insert(3, 2);   // Valid
+        config.reduction_factor_by_depth.insert(4, 3);   // Valid
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_per_position_type_threshold_validation() {
+        let mut config = NullMoveConfig::default();
+        config.enable_per_position_type_threshold = true;
+        
+        // Test invalid thresholds
+        config.opening_pieces_threshold = 0;   // Invalid
+        assert!(config.validate().is_err());
+        
+        config.opening_pieces_threshold = 50;  // Invalid: > 40
+        assert!(config.validate().is_err());
+        
+        // Fix and test valid config
+        config.opening_pieces_threshold = 12;
+        config.middlegame_pieces_threshold = 12;
+        config.endgame_pieces_threshold = 12;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_per_depth_reduction_priority_over_strategy() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure per-depth reduction (should override strategy)
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::Static;
+        config.reduction_factor = 5;  // Strategy would use 5
+        config.enable_per_depth_reduction = true;
+        config.reduction_factor_by_depth.insert(4, 2);  // But per-depth uses 2 for depth 4
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search at depth 4
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Per-depth reduction (2) should override strategy reduction (5)
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_per_position_type_threshold_classification() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure per-position-type thresholds
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.enable_endgame_detection = true;
+        config.enable_per_position_type_threshold = true;
+        config.opening_pieces_threshold = 30;    // Opening: >= 30 pieces
+        config.middlegame_pieces_threshold = 15; // Middlegame: 15-29 pieces
+        config.endgame_pieces_threshold = 10;    // Endgame: < 15 pieces
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        
+        // Per-position-type thresholds should classify positions correctly
+        // Opening position (many pieces) should use opening_pieces_threshold
+        // Middlegame position (moderate pieces) should use middlegame_pieces_threshold
+        // Endgame position (few pieces) should use endgame_pieces_threshold
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+    }
 }

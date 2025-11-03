@@ -4588,8 +4588,26 @@ impl SearchEngine {
                     }
                 }
             } else {
-                // Basic endgame detection (original behavior)
-                if piece_count < self.null_move_config.max_pieces_threshold {
+                // Basic endgame detection with optional per-position-type thresholds
+                let threshold = if self.null_move_config.enable_per_position_type_threshold {
+                    // Use per-position-type thresholds based on piece count
+                    let piece_count = piece_count;  // Already computed above
+                    if piece_count >= 30 {
+                        // Opening position: many pieces
+                        self.null_move_config.opening_pieces_threshold
+                    } else if piece_count >= 15 {
+                        // Middlegame position: moderate piece count
+                        self.null_move_config.middlegame_pieces_threshold
+                    } else {
+                        // Endgame position: few pieces
+                        self.null_move_config.endgame_pieces_threshold
+                    }
+                } else {
+                    // Use standard threshold (original behavior)
+                    self.null_move_config.max_pieces_threshold
+                };
+                
+                if piece_count < threshold {
                     self.null_move_stats.disabled_endgame += 1;
                     return false;
                 }
@@ -4714,6 +4732,14 @@ impl SearchEngine {
     /// - **PositionTypeBased**: Different reduction for opening/middlegame/endgame
     fn calculate_null_move_reduction(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
                                      player: Player, depth: u8) -> u8 {
+        // Check if per-depth reduction is enabled and we have a mapping for this depth
+        if self.null_move_config.enable_per_depth_reduction {
+            if let Some(per_depth_factor) = self.null_move_config.reduction_factor_by_depth.get(&depth) {
+                // Use per-depth reduction factor if available
+                return *per_depth_factor;
+            }
+        }
+        
         match self.null_move_config.reduction_strategy {
             crate::types::NullMoveReductionStrategy::Static => {
                 // Static reduction: always use reduction_factor

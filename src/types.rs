@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Player {
@@ -1493,6 +1494,14 @@ pub struct NullMoveConfig {
     pub opening_reduction_factor: u8,        // Reduction factor for opening positions (default: 3, used with PositionTypeBased strategy)
     pub middlegame_reduction_factor: u8,      // Reduction factor for middlegame positions (default: 2, used with PositionTypeBased strategy)
     pub endgame_reduction_factor: u8,        // Reduction factor for endgame positions (default: 1, used with PositionTypeBased strategy)
+    // Per-depth reduction tuning
+    pub enable_per_depth_reduction: bool,     // Enable per-depth reduction factors (default: false)
+    pub reduction_factor_by_depth: HashMap<u8, u8>,  // Depth -> reduction_factor mapping (optional, for fine-tuning)
+    // Per-position-type endgame thresholds
+    pub enable_per_position_type_threshold: bool,  // Enable per-position-type thresholds (default: false)
+    pub opening_pieces_threshold: u8,        // Threshold for opening positions (default: 12, same as max_pieces_threshold)
+    pub middlegame_pieces_threshold: u8,      // Threshold for middlegame positions (default: 12, same as max_pieces_threshold)
+    pub endgame_pieces_threshold: u8,        // Threshold for endgame positions (default: 12, same as max_pieces_threshold)
 }
 
 impl Default for NullMoveConfig {
@@ -1538,6 +1547,12 @@ impl NullMoveConfig {
                 opening_reduction_factor: 2,
                 middlegame_reduction_factor: 2,
                 endgame_reduction_factor: 1,
+                enable_per_depth_reduction: false,
+                reduction_factor_by_depth: HashMap::new(),
+                enable_per_position_type_threshold: false,
+                opening_pieces_threshold: 14,
+                middlegame_pieces_threshold: 14,
+                endgame_pieces_threshold: 14,
             },
             NullMovePreset::Aggressive => Self {
                 enabled: true,
@@ -1564,6 +1579,12 @@ impl NullMoveConfig {
                 opening_reduction_factor: 4,
                 middlegame_reduction_factor: 3,
                 endgame_reduction_factor: 2,
+                enable_per_depth_reduction: false,
+                reduction_factor_by_depth: HashMap::new(),
+                enable_per_position_type_threshold: false,
+                opening_pieces_threshold: 10,
+                middlegame_pieces_threshold: 10,
+                endgame_pieces_threshold: 10,
             },
             NullMovePreset::Balanced => Self {
                 enabled: true,
@@ -1590,6 +1611,12 @@ impl NullMoveConfig {
                 opening_reduction_factor: 3,
                 middlegame_reduction_factor: 2,
                 endgame_reduction_factor: 1,
+                enable_per_depth_reduction: false,
+                reduction_factor_by_depth: HashMap::new(),
+                enable_per_position_type_threshold: false,
+                opening_pieces_threshold: 12,
+                middlegame_pieces_threshold: 12,
+                endgame_pieces_threshold: 12,
             },
         }
     }
@@ -1702,6 +1729,44 @@ impl NullMoveConfig {
         if self.endgame_reduction_factor > 5 {
             return Err("endgame_reduction_factor should not exceed 5".to_string());
         }
+        // Validate per-depth reduction parameters
+        if self.enable_per_depth_reduction {
+            for (depth, factor) in &self.reduction_factor_by_depth {
+                if *depth == 0 {
+                    return Err("reduction_factor_by_depth: depth must be greater than 0".to_string());
+                }
+                if *depth > 50 {
+                    return Err("reduction_factor_by_depth: depth should not exceed 50".to_string());
+                }
+                if *factor == 0 {
+                    return Err("reduction_factor_by_depth: reduction_factor must be greater than 0".to_string());
+                }
+                if *factor > 5 {
+                    return Err("reduction_factor_by_depth: reduction_factor should not exceed 5".to_string());
+                }
+            }
+        }
+        // Validate per-position-type threshold parameters
+        if self.enable_per_position_type_threshold {
+            if self.opening_pieces_threshold == 0 {
+                return Err("opening_pieces_threshold must be greater than 0".to_string());
+            }
+            if self.opening_pieces_threshold > 40 {
+                return Err("opening_pieces_threshold should not exceed 40".to_string());
+            }
+            if self.middlegame_pieces_threshold == 0 {
+                return Err("middlegame_pieces_threshold must be greater than 0".to_string());
+            }
+            if self.middlegame_pieces_threshold > 40 {
+                return Err("middlegame_pieces_threshold should not exceed 40".to_string());
+            }
+            if self.endgame_pieces_threshold == 0 {
+                return Err("endgame_pieces_threshold must be greater than 0".to_string());
+            }
+            if self.endgame_pieces_threshold > 40 {
+                return Err("endgame_pieces_threshold should not exceed 40".to_string());
+            }
+        }
         Ok(())
     }
 
@@ -1715,6 +1780,20 @@ impl NullMoveConfig {
         self.material_endgame_threshold = self.material_endgame_threshold.clamp(1, 40);
         self.king_activity_threshold = self.king_activity_threshold.clamp(1, 40);
         self.zugzwang_threshold = self.zugzwang_threshold.clamp(1, 40);
+        // Clamp per-position-type thresholds
+        self.opening_pieces_threshold = self.opening_pieces_threshold.clamp(1, 40);
+        self.middlegame_pieces_threshold = self.middlegame_pieces_threshold.clamp(1, 40);
+        self.endgame_pieces_threshold = self.endgame_pieces_threshold.clamp(1, 40);
+        // Validate and clamp per-depth reduction factors
+        if self.enable_per_depth_reduction {
+            let mut valid_map = HashMap::new();
+            for (&depth, &factor) in &self.reduction_factor_by_depth {
+                let valid_depth = depth.clamp(1, 50);
+                let valid_factor = factor.clamp(1, 5);
+                valid_map.insert(valid_depth, valid_factor);
+            }
+            self.reduction_factor_by_depth = valid_map;
+        }
         self
     }
 
@@ -2626,6 +2705,12 @@ mod tests {
             opening_reduction_factor: 3,
             middlegame_reduction_factor: 2,
             endgame_reduction_factor: 1,
+            enable_per_depth_reduction: false,
+            reduction_factor_by_depth: std::collections::HashMap::new(),
+            enable_per_position_type_threshold: false,
+            opening_pieces_threshold: 12,
+            middlegame_pieces_threshold: 12,
+            endgame_pieces_threshold: 12,
         };
         
         let validated = config.new_validated();
@@ -4309,6 +4394,12 @@ impl EngineConfig {
                     opening_reduction_factor: 3,
                     middlegame_reduction_factor: 2,
                     endgame_reduction_factor: 1,
+                    enable_per_depth_reduction: false,
+                    reduction_factor_by_depth: HashMap::new(),
+                    enable_per_position_type_threshold: false,
+                    opening_pieces_threshold: 8,
+                    middlegame_pieces_threshold: 8,
+                    endgame_pieces_threshold: 8,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -4386,6 +4477,12 @@ impl EngineConfig {
                     opening_reduction_factor: 3,
                     middlegame_reduction_factor: 2,
                     endgame_reduction_factor: 1,
+                    enable_per_depth_reduction: false,
+                    reduction_factor_by_depth: HashMap::new(),
+                    enable_per_position_type_threshold: false,
+                    opening_pieces_threshold: 8,
+                    middlegame_pieces_threshold: 8,
+                    endgame_pieces_threshold: 8,
                 },
                 lmr: LMRConfig {
                     enabled: true,
