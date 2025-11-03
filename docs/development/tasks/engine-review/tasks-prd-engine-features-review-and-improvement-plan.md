@@ -73,16 +73,16 @@
   - [x] 2.8 Generate improvement recommendations
   - [x] 2.9 Cross-reference with quiescence search dependencies
 
-- [ ] 3.0 Feature: Late Move Reduction (LMR)
-  - [ ] 3.1 Review LMR implementation in search_engine.rs
-  - [ ] 3.2 Verify depth reduction logic and calculations
-  - [ ] 3.3 Check move ordering integration
-  - [ ] 3.4 Assess exemption conditions (captures, checks, promotions)
-  - [ ] 3.5 Review adaptive reduction strategies
-  - [ ] 3.6 Measure effectiveness vs. risks of too-aggressive reduction
-  - [ ] 3.7 Identify strengths and weaknesses
-  - [ ] 3.8 Generate improvement recommendations
-  - [ ] 3.9 Cross-reference with move ordering effectiveness
+- [x] 3.0 Feature: Late Move Reduction (LMR)
+  - [x] 3.1 Review LMR implementation in search_engine.rs
+  - [x] 3.2 Verify depth reduction logic and calculations
+  - [x] 3.3 Check move ordering integration
+  - [x] 3.4 Assess exemption conditions (captures, checks, promotions)
+  - [x] 3.5 Review adaptive reduction strategies
+  - [x] 3.6 Measure effectiveness vs. risks of too-aggressive reduction
+  - [x] 3.7 Identify strengths and weaknesses
+  - [x] 3.8 Generate improvement recommendations
+  - [x] 3.9 Cross-reference with move ordering effectiveness
 
 - [ ] 4.0 Feature: Internal Iterative Deepening (IID)
   - [ ] 4.1 Review IID implementation in search_engine.rs
