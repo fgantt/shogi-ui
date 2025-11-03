@@ -4534,11 +4534,23 @@ impl SearchEngine {
                                time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
         self.null_move_stats.attempts += 1;
         
-        // Calculate reduction factor
+        // Calculate reduction factor using configured formula
+        // Formula selection guidelines:
+        // - Static: Use base reduction_factor always (most conservative, least pruning)
+        // - Linear: R = base + depth / 6 (integer division, creates steps at multiples of 6)
+        //   * Provides predictable steps: depths 3-5 -> R=base, 6-11 -> R=base+1, etc.
+        // - Smooth: R = base + (depth / 6.0).round() (floating-point with rounding)
+        //   * Provides smoother scaling with more gradual increases
+        //   * Increases reduction earlier than Linear at certain depths (e.g., depth 3-5)
         let reduction = if self.null_move_config.enable_dynamic_reduction {
-            2 + depth / 6  // Dynamic reduction
+            // Use the configured dynamic reduction formula
+            self.null_move_config.dynamic_reduction_formula.calculate_reduction(
+                depth,
+                self.null_move_config.reduction_factor
+            )
         } else {
-            self.null_move_config.reduction_factor as u8  // Static reduction
+            // Static reduction: always use reduction_factor
+            self.null_move_config.reduction_factor as u8
         };
         
         let search_depth = depth - 1 - reduction;

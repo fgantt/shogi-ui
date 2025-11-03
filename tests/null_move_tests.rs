@@ -1,7 +1,7 @@
 use shogi_engine::{
     search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig},
+    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula},
     time_utils::TimeSource,
 };
 
@@ -705,5 +705,186 @@ mod null_move_tests {
         
         println!("Integration test: {} NMP attempts, {} verification attempts, {} total cutoffs",
                 stats.attempts, stats.verification_attempts, stats.cutoffs);
+    }
+
+    // ===== DYNAMIC REDUCTION FORMULA TESTS =====
+
+    #[test]
+    fn test_dynamic_reduction_formula_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default formula (should be Linear)
+        let config = engine.get_null_move_config();
+        assert_eq!(config.dynamic_reduction_formula, DynamicReductionFormula::Linear);
+        
+        // Test Static formula
+        let mut config = config.clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Static;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.dynamic_reduction_formula, DynamicReductionFormula::Static);
+        
+        // Test Linear formula
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Linear;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.dynamic_reduction_formula, DynamicReductionFormula::Linear);
+        
+        // Test Smooth formula
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Smooth;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.dynamic_reduction_formula, DynamicReductionFormula::Smooth);
+    }
+
+    #[test]
+    fn test_reduction_formula_calculations() {
+        // Test Static formula: always returns base reduction
+        let formula = DynamicReductionFormula::Static;
+        assert_eq!(formula.calculate_reduction(3, 2), 2);
+        assert_eq!(formula.calculate_reduction(6, 2), 2);
+        assert_eq!(formula.calculate_reduction(12, 2), 2);
+        
+        // Test Linear formula: R = base + depth / 6
+        // depth 3: 2 + 3/6 = 2 + 0 = 2
+        // depth 4: 2 + 4/6 = 2 + 0 = 2
+        // depth 5: 2 + 5/6 = 2 + 0 = 2
+        // depth 6: 2 + 6/6 = 2 + 1 = 3
+        // depth 12: 2 + 12/6 = 2 + 2 = 4
+        // depth 18: 2 + 18/6 = 2 + 3 = 5
+        let formula = DynamicReductionFormula::Linear;
+        assert_eq!(formula.calculate_reduction(3, 2), 2);
+        assert_eq!(formula.calculate_reduction(4, 2), 2);
+        assert_eq!(formula.calculate_reduction(5, 2), 2);
+        assert_eq!(formula.calculate_reduction(6, 2), 3);
+        assert_eq!(formula.calculate_reduction(12, 2), 4);
+        assert_eq!(formula.calculate_reduction(18, 2), 5);
+        
+        // Test Smooth formula: R = base + (depth / 6.0).round()
+        // depth 3: 2 + (3/6.0).round() = 2 + 0.5.round() = 2 + 1 = 3
+        // depth 4: 2 + (4/6.0).round() = 2 + 0.67.round() = 2 + 1 = 3
+        // depth 5: 2 + (5/6.0).round() = 2 + 0.83.round() = 2 + 1 = 3
+        // depth 6: 2 + (6/6.0).round() = 2 + 1.0.round() = 2 + 1 = 3
+        // depth 7: 2 + (7/6.0).round() = 2 + 1.17.round() = 2 + 1 = 3
+        // depth 8: 2 + (8/6.0).round() = 2 + 1.33.round() = 2 + 1 = 3
+        // depth 9: 2 + (9/6.0).round() = 2 + 1.5.round() = 2 + 2 = 4
+        let formula = DynamicReductionFormula::Smooth;
+        assert_eq!(formula.calculate_reduction(3, 2), 3);
+        assert_eq!(formula.calculate_reduction(4, 2), 3);
+        assert_eq!(formula.calculate_reduction(5, 2), 3);
+        assert_eq!(formula.calculate_reduction(6, 2), 3);
+        assert_eq!(formula.calculate_reduction(9, 2), 4);
+        assert_eq!(formula.calculate_reduction(12, 2), 4);
+        assert_eq!(formula.calculate_reduction(18, 2), 5);
+    }
+
+    #[test]
+    fn test_reduction_formula_smoother_scaling() {
+        // Test that Smooth formula provides smoother scaling than Linear
+        let linear = DynamicReductionFormula::Linear;
+        let smooth = DynamicReductionFormula::Smooth;
+        let base = 2;
+        
+        // At depth 3-5, Linear keeps reduction at 2, while Smooth increases to 3 earlier
+        assert_eq!(linear.calculate_reduction(3, base), 2);
+        assert_eq!(smooth.calculate_reduction(3, base), 3);  // Smooth increases earlier
+        
+        assert_eq!(linear.calculate_reduction(5, base), 2);
+        assert_eq!(smooth.calculate_reduction(5, base), 3);  // Smooth increases earlier
+        
+        // At depth 6, both should be 3
+        assert_eq!(linear.calculate_reduction(6, base), 3);
+        assert_eq!(smooth.calculate_reduction(6, base), 3);
+        
+        // At depth 9, Linear is still 3, but Smooth increases to 4
+        assert_eq!(linear.calculate_reduction(9, base), 3);
+        assert_eq!(smooth.calculate_reduction(9, base), 4);  // Smooth increases at 9
+        
+        // At depth 12, Linear is 4, Smooth is also 4
+        assert_eq!(linear.calculate_reduction(12, base), 4);
+        assert_eq!(smooth.calculate_reduction(12, base), 4);
+    }
+
+    #[test]
+    fn test_reduction_formulas_integration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Test with Static formula
+        engine.reset_null_move_stats();
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Static;
+        config.enable_dynamic_reduction = false;  // Static doesn't use dynamic reduction
+        engine.update_null_move_config(config).unwrap();
+        
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Test with Linear formula
+        engine.reset_null_move_stats();
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Linear;
+        config.enable_dynamic_reduction = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Test with Smooth formula
+        engine.reset_null_move_stats();
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Smooth;
+        config.enable_dynamic_reduction = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_reduction_formula_different_depths() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Test Linear formula at different depths
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Linear;
+        config.enable_dynamic_reduction = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        for depth in [3, 4, 5, 6, 12] {
+            engine.reset_null_move_stats();
+            let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, depth, 1000);
+            assert!(result.is_some(), "Linear formula should work at depth {}", depth);
+            
+            let stats = engine.get_null_move_stats();
+            // Verify search completed successfully
+            assert!(stats.attempts >= 0);
+        }
+        
+        // Test Smooth formula at different depths
+        let mut config = engine.get_null_move_config().clone();
+        config.dynamic_reduction_formula = DynamicReductionFormula::Smooth;
+        config.enable_dynamic_reduction = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        for depth in [3, 4, 5, 6, 9, 12] {
+            engine.reset_null_move_stats();
+            let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, depth, 1000);
+            assert!(result.is_some(), "Smooth formula should work at depth {}", depth);
+            
+            let stats = engine.get_null_move_stats();
+            // Verify search completed successfully
+            assert!(stats.attempts >= 0);
+        }
     }
 }

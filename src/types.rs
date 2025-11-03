@@ -1268,6 +1268,77 @@ impl QuiescencePerformanceMetrics {
     }
 }
 
+/// Dynamic reduction formula options for null move pruning
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DynamicReductionFormula {
+    /// Static reduction: always use reduction_factor
+    Static,
+    /// Linear reduction: R = 2 + depth / 6 (integer division, creates steps)
+    Linear,
+    /// Smooth reduction: R = 2 + (depth / 6.0).round() (floating-point with rounding for smoother scaling)
+    Smooth,
+}
+
+impl Default for DynamicReductionFormula {
+    fn default() -> Self {
+        DynamicReductionFormula::Linear
+    }
+}
+
+impl DynamicReductionFormula {
+    /// Calculate reduction value for given depth and base reduction
+    /// 
+    /// # Formula Selection Guidelines
+    /// 
+    /// **Static**: Always returns base_reduction. Most conservative approach.
+    /// - Use when: You want consistent, predictable reduction regardless of depth
+    /// - Best for: Positions requiring maximum safety
+    /// 
+    /// **Linear**: R = base_reduction + depth / 6 (integer division)
+    /// - Use when: You want step-wise scaling that increases at multiples of 6
+    /// - Behavior: Creates steps - depth 3-5 -> R=base, 6-11 -> R=base+1, 12-17 -> R=base+2
+    /// - Best for: General play with predictable reduction scaling
+    /// 
+    /// **Smooth**: R = base_reduction + (depth / 6.0).round()
+    /// - Use when: You want smoother, more gradual scaling without large steps
+    /// - Behavior: Increases reduction earlier than Linear (e.g., depth 3-5 -> R=base+1)
+    /// - Best for: Positions where smoother scaling improves NMP effectiveness
+    /// 
+    /// # Examples (with base_reduction = 2)
+    /// ```
+    /// // At depth 3
+    /// Static: 2
+    /// Linear: 2 + 3/6 = 2
+    /// Smooth: 2 + (3/6.0).round() = 3
+    /// 
+    /// // At depth 9
+    /// Static: 2
+    /// Linear: 2 + 9/6 = 3
+    /// Smooth: 2 + (9/6.0).round() = 4
+    /// 
+    /// // At depth 12
+    /// Static: 2
+    /// Linear: 2 + 12/6 = 4
+    /// Smooth: 2 + (12/6.0).round() = 4
+    /// ```
+    pub fn calculate_reduction(&self, depth: u8, base_reduction: u8) -> u8 {
+        match self {
+            DynamicReductionFormula::Static => base_reduction,
+            DynamicReductionFormula::Linear => {
+                // Linear: R = base_reduction + depth / 6
+                // This creates steps: depth 3-5 -> R=base+0, depth 6-11 -> R=base+1, etc.
+                base_reduction + (depth / 6)
+            }
+            DynamicReductionFormula::Smooth => {
+                // Smooth: R = base_reduction + (depth / 6.0).round()
+                // Uses floating-point division with rounding for smoother scaling
+                let reduction_add = (depth as f32 / 6.0).round() as u8;
+                base_reduction + reduction_add
+            }
+        }
+    }
+}
+
 /// Configuration for null move pruning parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NullMoveConfig {
@@ -1275,9 +1346,10 @@ pub struct NullMoveConfig {
     pub min_depth: u8,                      // Minimum depth to use NMP
     pub reduction_factor: u8,               // Static reduction factor (R)
     pub max_pieces_threshold: u8,           // Disable NMP when pieces < threshold
-    pub enable_dynamic_reduction: bool,     // Use dynamic R = 2 + depth/6
+    pub enable_dynamic_reduction: bool,     // Use dynamic reduction (deprecated, use dynamic_reduction_formula instead)
     pub enable_endgame_detection: bool,     // Disable NMP in endgame
     pub verification_margin: i32,           // Safety margin for verification search (centipawns)
+    pub dynamic_reduction_formula: DynamicReductionFormula,  // Formula for dynamic reduction calculation
 }
 
 impl Default for NullMoveConfig {
@@ -1290,6 +1362,7 @@ impl Default for NullMoveConfig {
             enable_dynamic_reduction: true,
             enable_endgame_detection: true,
             verification_margin: 200,        // Default 200 centipawns safety margin
+            dynamic_reduction_formula: DynamicReductionFormula::Linear,  // Default to linear for backward compatibility
         }
     }
 }
@@ -1336,14 +1409,15 @@ impl NullMoveConfig {
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
             self.max_pieces_threshold,
             self.enable_dynamic_reduction,
             self.enable_endgame_detection,
-            self.verification_margin
+            self.verification_margin,
+            self.dynamic_reduction_formula
         )
     }
 }
@@ -2184,6 +2258,8 @@ mod tests {
             max_pieces_threshold: 50,  // Invalid
             enable_dynamic_reduction: true,
             enable_endgame_detection: true,
+            verification_margin: 200,
+            dynamic_reduction_formula: DynamicReductionFormula::Linear,
         };
         
         let validated = config.new_validated();
@@ -3850,6 +3926,7 @@ impl EngineConfig {
                     enable_dynamic_reduction: true,
                     enable_endgame_detection: true,
                     verification_margin: 200,
+                    dynamic_reduction_formula: DynamicReductionFormula::Linear,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -3910,6 +3987,7 @@ impl EngineConfig {
                     enable_dynamic_reduction: false,
                     enable_endgame_detection: true,
                     verification_margin: 200,
+                    dynamic_reduction_formula: DynamicReductionFormula::Static,
                 },
                 lmr: LMRConfig {
                     enabled: true,
