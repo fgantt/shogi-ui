@@ -4544,9 +4544,43 @@ impl SearchEngine {
         // Endgame detection
         if self.null_move_config.enable_endgame_detection {
             let piece_count = self.count_pieces_on_board(board);
-            if piece_count < self.null_move_config.max_pieces_threshold {
-                self.null_move_stats.disabled_endgame += 1;
-                return false;
+            
+            // Enhanced endgame type detection if enabled
+            if self.null_move_config.enable_endgame_type_detection {
+                let endgame_type = self.detect_endgame_type(board, captured_pieces, player, piece_count);
+                
+                match endgame_type {
+                    crate::types::EndgameType::NotEndgame => {
+                        // Not in endgame, allow null move
+                    }
+                    crate::types::EndgameType::ZugzwangEndgame => {
+                        // Zugzwang-prone positions - disable NMP (most conservative)
+                        if piece_count < self.null_move_config.zugzwang_threshold {
+                            self.null_move_stats.disabled_zugzwang += 1;
+                            return false;
+                        }
+                    }
+                    crate::types::EndgameType::KingActivityEndgame => {
+                        // King activity endgame - disable NMP when pieces < king_activity_threshold
+                        if piece_count < self.null_move_config.king_activity_threshold {
+                            self.null_move_stats.disabled_king_activity_endgame += 1;
+                            return false;
+                        }
+                    }
+                    crate::types::EndgameType::MaterialEndgame => {
+                        // Material endgame - disable NMP when pieces < material_endgame_threshold
+                        if piece_count < self.null_move_config.material_endgame_threshold {
+                            self.null_move_stats.disabled_material_endgame += 1;
+                            return false;
+                        }
+                    }
+                }
+            } else {
+                // Basic endgame detection (original behavior)
+                if piece_count < self.null_move_config.max_pieces_threshold {
+                    self.null_move_stats.disabled_endgame += 1;
+                    return false;
+                }
             }
         }
         
@@ -4559,6 +4593,103 @@ impl SearchEngine {
         // Use the occupied bitboard for O(1) piece counting via hardware popcount
         let occupied = board.get_occupied_bitboard();
         occupied.count_ones() as u8
+    }
+
+    /// Detect endgame type based on material, king positions, and piece count
+    /// This provides more intelligent endgame detection than simple piece counting
+    fn detect_endgame_type(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
+                          player: Player, piece_count: u8) -> crate::types::EndgameType {
+        // Not in endgame if too many pieces
+        if piece_count >= self.null_move_config.max_pieces_threshold {
+            return crate::types::EndgameType::NotEndgame;
+        }
+        
+        // Check for zugzwang-prone positions (very few pieces, kings active)
+        if piece_count <= self.null_move_config.zugzwang_threshold {
+            let is_zugzwang_prone = self.is_zugzwang_prone(board, captured_pieces, player);
+            if is_zugzwang_prone {
+                return crate::types::EndgameType::ZugzwangEndgame;
+            }
+        }
+        
+        // Check for king activity endgame (active kings, centralized)
+        if piece_count <= self.null_move_config.king_activity_threshold {
+            let is_king_activity_endgame = self.is_king_activity_endgame(board, player);
+            if is_king_activity_endgame {
+                return crate::types::EndgameType::KingActivityEndgame;
+            }
+        }
+        
+        // Material endgame: low piece count, mostly minor pieces
+        if piece_count < self.null_move_config.material_endgame_threshold {
+            return crate::types::EndgameType::MaterialEndgame;
+        }
+        
+        // Default to material endgame if piece count is low
+        crate::types::EndgameType::MaterialEndgame
+    }
+
+    /// Check if position is zugzwang-prone (any move worsens the position)
+    /// Characteristics: very few pieces, kings are active and centralized, no major pieces
+    fn is_zugzwang_prone(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
+                        player: Player) -> bool {
+        let piece_count = self.count_pieces_on_board(board);
+        
+        // Zugzwang-prone positions typically have very few pieces
+        if piece_count > self.null_move_config.zugzwang_threshold + 2 {
+            return false;
+        }
+        
+        // Check if kings are active (centralized)
+        let black_king_active = self.is_king_active(board, Player::Black);
+        let white_king_active = self.is_king_active(board, Player::White);
+        
+        // Both kings active suggests zugzwang-prone position
+        black_king_active && white_king_active
+    }
+
+    /// Check if position is a king activity endgame
+    /// Characteristics: kings are active and centralized, some minor pieces remain
+    fn is_king_activity_endgame(&self, board: &BitboardBoard, player: Player) -> bool {
+        // Check if at least one king is active
+        let black_king_active = self.is_king_active(board, Player::Black);
+        let white_king_active = self.is_king_active(board, Player::White);
+        
+        black_king_active || white_king_active
+    }
+
+    /// Check if a king is active (centralized and advanced)
+    /// Active kings are typically in or near the center of the board
+    fn is_king_active(&self, board: &BitboardBoard, player: Player) -> bool {
+        // Find king position
+        let king_pos = self.find_king_position(board, player);
+        if let Some(pos) = king_pos {
+            // Check if king is centralized (within distance 2 of center)
+            let center_row = 4;
+            let center_col = 4;
+            let row_dist = (pos.row as i32 - center_row).abs();
+            let col_dist = (pos.col as i32 - center_col).abs();
+            
+            // King is active if within distance 2 of center
+            row_dist <= 2 && col_dist <= 2
+        } else {
+            false
+        }
+    }
+
+    /// Find the position of a player's king
+    fn find_king_position(&self, board: &BitboardBoard, player: Player) -> Option<crate::types::Position> {
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = crate::types::Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.piece_type == crate::types::PieceType::King && piece.player == player {
+                        return Some(pos);
+                    }
+                }
+            }
+        }
+        None
     }
     
     /// Perform a null move search with reduced depth

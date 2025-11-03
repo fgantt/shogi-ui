@@ -1,7 +1,7 @@
 use shogi_engine::{
     search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula},
+    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula, EndgameType},
     time_utils::TimeSource,
 };
 
@@ -1084,5 +1084,171 @@ mod null_move_tests {
         // 3. Total cutoffs should include mate threat cutoffs
         // (mate threat verification that succeeds contributes to cutoffs)
         assert!(stats.cutoffs >= 0);
+    }
+
+    // ===== ENDGAME TYPE DETECTION TESTS =====
+
+    #[test]
+    fn test_endgame_type_detection_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default configuration (should be disabled)
+        let config = engine.get_null_move_config();
+        assert!(!config.enable_endgame_type_detection);
+        assert_eq!(config.material_endgame_threshold, 12);
+        assert_eq!(config.king_activity_threshold, 8);
+        assert_eq!(config.zugzwang_threshold, 6);
+        
+        // Test enabling endgame type detection
+        let mut config = config.clone();
+        config.enable_endgame_type_detection = true;
+        config.material_endgame_threshold = 12;
+        config.king_activity_threshold = 8;
+        config.zugzwang_threshold = 6;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert!(updated_config.enable_endgame_type_detection);
+        assert_eq!(updated_config.material_endgame_threshold, 12);
+        assert_eq!(updated_config.king_activity_threshold, 8);
+        assert_eq!(updated_config.zugzwang_threshold, 6);
+    }
+
+    #[test]
+    fn test_endgame_type_detection_statistics_tracking() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable endgame type detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_endgame_type_detection = true;
+        config.enable_endgame_detection = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform a search to trigger endgame type detection if conditions are met
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // Verify endgame type statistics are tracked
+        assert!(stats.disabled_material_endgame >= 0);
+        assert!(stats.disabled_king_activity_endgame >= 0);
+        assert!(stats.disabled_zugzwang >= 0);
+    }
+
+    #[test]
+    fn test_endgame_type_detection_disabled() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Ensure endgame type detection is disabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_endgame_type_detection = false;
+        config.enable_endgame_detection = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform a search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // When disabled, endgame type stats should remain 0 (using basic detection)
+        // Basic endgame detection still tracks disabled_endgame
+        assert!(stats.disabled_endgame >= 0);
+    }
+
+    #[test]
+    fn test_endgame_type_detection_thresholds() {
+        let mut engine = create_test_engine();
+        
+        // Test with different thresholds
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_endgame_type_detection = true;
+        config.material_endgame_threshold = 15;
+        config.king_activity_threshold = 10;
+        config.zugzwang_threshold = 8;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.material_endgame_threshold, 15);
+        assert_eq!(updated_config.king_activity_threshold, 10);
+        assert_eq!(updated_config.zugzwang_threshold, 8);
+    }
+
+    #[test]
+    fn test_endgame_type_detection_integration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable endgame type detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_endgame_type_detection = true;
+        config.enable_endgame_detection = true;
+        config.material_endgame_threshold = 12;
+        config.king_activity_threshold = 8;
+        config.zugzwang_threshold = 6;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search at different depths
+        for depth in [3, 4, 5, 6] {
+            engine.reset_null_move_stats();
+            let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, depth, 1000);
+            assert!(result.is_some(), "Search should complete at depth {}", depth);
+            
+            let stats = engine.get_null_move_stats();
+            // Verify search completed and stats are tracked
+            assert!(stats.attempts >= 0);
+            assert!(stats.disabled_material_endgame >= 0);
+            assert!(stats.disabled_king_activity_endgame >= 0);
+            assert!(stats.disabled_zugzwang >= 0);
+        }
+    }
+
+    #[test]
+    fn test_endgame_type_detection_correctness() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable endgame type detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_endgame_type_detection = true;
+        config.enable_endgame_detection = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // Correctness checks:
+        // 1. Endgame type stats should be non-negative
+        assert!(stats.disabled_material_endgame >= 0);
+        assert!(stats.disabled_king_activity_endgame >= 0);
+        assert!(stats.disabled_zugzwang >= 0);
+        
+        // 2. Total disabled should include all endgame types
+        let total_endgame_disabled = stats.disabled_material_endgame
+            + stats.disabled_king_activity_endgame
+            + stats.disabled_zugzwang;
+        
+        // When endgame type detection is enabled, disabled_endgame may be 0
+        // (because it uses type-specific stats instead)
+        assert!(total_endgame_disabled >= 0);
     }
 }

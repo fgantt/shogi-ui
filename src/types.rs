@@ -1268,6 +1268,31 @@ impl QuiescencePerformanceMetrics {
     }
 }
 
+/// Endgame type classification for intelligent endgame detection
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EndgameType {
+    /// Not in endgame (too many pieces)
+    NotEndgame,
+    /// Material endgame: low piece count, mostly pawns and minor pieces
+    MaterialEndgame,
+    /// King activity endgame: kings are active and centralized
+    KingActivityEndgame,
+    /// Zugzwang-prone endgame: positions where any move may worsen the position
+    ZugzwangEndgame,
+}
+
+impl EndgameType {
+    /// Get a string representation of the endgame type
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            EndgameType::NotEndgame => "NotEndgame",
+            EndgameType::MaterialEndgame => "MaterialEndgame",
+            EndgameType::KingActivityEndgame => "KingActivityEndgame",
+            EndgameType::ZugzwangEndgame => "ZugzwangEndgame",
+        }
+    }
+}
+
 /// Dynamic reduction formula options for null move pruning
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DynamicReductionFormula {
@@ -1352,6 +1377,10 @@ pub struct NullMoveConfig {
     pub dynamic_reduction_formula: DynamicReductionFormula,  // Formula for dynamic reduction calculation
     pub enable_mate_threat_detection: bool,  // Enable mate threat detection (default: false, opt-in feature)
     pub mate_threat_margin: i32,            // Threshold for mate threat detection (default: 500 centipawns)
+    pub enable_endgame_type_detection: bool,  // Enable endgame type detection (default: false, opt-in feature)
+    pub material_endgame_threshold: u8,       // Threshold for material endgame detection (default: 12 pieces)
+    pub king_activity_threshold: u8,          // Threshold for king activity endgame detection (default: 8 pieces)
+    pub zugzwang_threshold: u8,              // Threshold for zugzwang-prone endgame detection (default: 6 pieces)
 }
 
 impl Default for NullMoveConfig {
@@ -1367,6 +1396,10 @@ impl Default for NullMoveConfig {
             dynamic_reduction_formula: DynamicReductionFormula::Linear,  // Default to linear for backward compatibility
             enable_mate_threat_detection: false,  // Default: false, opt-in feature
             mate_threat_margin: 500,         // Default 500 centipawns threshold for mate threat detection
+            enable_endgame_type_detection: false,  // Default: false, opt-in feature
+            material_endgame_threshold: 12,      // Default 12 pieces threshold for material endgame
+            king_activity_threshold: 8,           // Default 8 pieces threshold for king activity endgame
+            zugzwang_threshold: 6,                // Default 6 pieces threshold for zugzwang-prone endgame
         }
     }
 }
@@ -1404,6 +1437,24 @@ impl NullMoveConfig {
         if self.mate_threat_margin > 2000 {
             return Err("mate_threat_margin should not exceed 2000 centipawns".to_string());
         }
+        if self.material_endgame_threshold == 0 {
+            return Err("material_endgame_threshold must be greater than 0".to_string());
+        }
+        if self.material_endgame_threshold > 40 {
+            return Err("material_endgame_threshold should not exceed 40".to_string());
+        }
+        if self.king_activity_threshold == 0 {
+            return Err("king_activity_threshold must be greater than 0".to_string());
+        }
+        if self.king_activity_threshold > 40 {
+            return Err("king_activity_threshold should not exceed 40".to_string());
+        }
+        if self.zugzwang_threshold == 0 {
+            return Err("zugzwang_threshold must be greater than 0".to_string());
+        }
+        if self.zugzwang_threshold > 40 {
+            return Err("zugzwang_threshold should not exceed 40".to_string());
+        }
         Ok(())
     }
 
@@ -1414,13 +1465,16 @@ impl NullMoveConfig {
         self.max_pieces_threshold = self.max_pieces_threshold.clamp(1, 40);
         self.verification_margin = self.verification_margin.clamp(0, 1000);
         self.mate_threat_margin = self.mate_threat_margin.clamp(0, 2000);
+        self.material_endgame_threshold = self.material_endgame_threshold.clamp(1, 40);
+        self.king_activity_threshold = self.king_activity_threshold.clamp(1, 40);
+        self.zugzwang_threshold = self.zugzwang_threshold.clamp(1, 40);
         self
     }
 
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
@@ -1430,7 +1484,11 @@ impl NullMoveConfig {
             self.verification_margin,
             self.dynamic_reduction_formula,
             self.enable_mate_threat_detection,
-            self.mate_threat_margin
+            self.mate_threat_margin,
+            self.enable_endgame_type_detection,
+            self.material_endgame_threshold,
+            self.king_activity_threshold,
+            self.zugzwang_threshold
         )
     }
 }
@@ -1447,6 +1505,9 @@ pub struct NullMoveStats {
     pub verification_cutoffs: u64,           // Number of verification searches that resulted in cutoffs
     pub mate_threat_attempts: u64,           // Number of mate threat detection attempts
     pub mate_threat_detected: u64,            // Number of mate threats detected and verified
+    pub disabled_material_endgame: u64,      // Times disabled due to material endgame detection
+    pub disabled_king_activity_endgame: u64,  // Times disabled due to king activity endgame detection
+    pub disabled_zugzwang: u64,              // Times disabled due to zugzwang-prone endgame detection
 }
 
 impl NullMoveStats {
@@ -1512,7 +1573,10 @@ impl NullMoveStats {
             - Verification attempts: {}\n\
             - Verification cutoffs: {} ({:.2}%)\n\
             - Mate threat attempts: {}\n\
-            - Mate threats detected: {} ({:.2}%)",
+            - Mate threats detected: {} ({:.2}%)\n\
+            - Disabled material endgame: {}\n\
+            - Disabled king activity endgame: {}\n\
+            - Disabled zugzwang: {}",
             self.attempts,
             self.cutoffs,
             self.cutoff_rate(),
@@ -1526,7 +1590,10 @@ impl NullMoveStats {
             self.verification_cutoff_rate(),
             self.mate_threat_attempts,
             self.mate_threat_detected,
-            self.mate_threat_detection_rate()
+            self.mate_threat_detection_rate(),
+            self.disabled_material_endgame,
+            self.disabled_king_activity_endgame,
+            self.disabled_zugzwang
         )
     }
 
@@ -2288,6 +2355,12 @@ mod tests {
             enable_endgame_detection: true,
             verification_margin: 200,
             dynamic_reduction_formula: DynamicReductionFormula::Linear,
+            enable_mate_threat_detection: false,
+            mate_threat_margin: 500,
+            enable_endgame_type_detection: false,
+            material_endgame_threshold: 12,
+            king_activity_threshold: 8,
+            zugzwang_threshold: 6,
         };
         
         let validated = config.new_validated();
@@ -3957,6 +4030,10 @@ impl EngineConfig {
                     dynamic_reduction_formula: DynamicReductionFormula::Linear,
                     enable_mate_threat_detection: false,
                     mate_threat_margin: 500,
+                    enable_endgame_type_detection: false,
+                    material_endgame_threshold: 12,
+                    king_activity_threshold: 8,
+                    zugzwang_threshold: 6,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -4020,6 +4097,10 @@ impl EngineConfig {
                     dynamic_reduction_formula: DynamicReductionFormula::Static,
                     enable_mate_threat_detection: false,
                     mate_threat_margin: 500,
+                    enable_endgame_type_detection: false,
+                    material_endgame_threshold: 12,
+                    king_activity_threshold: 8,
+                    zugzwang_threshold: 6,
                 },
                 lmr: LMRConfig {
                     enabled: true,
