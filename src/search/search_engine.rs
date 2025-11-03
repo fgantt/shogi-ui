@@ -4521,16 +4521,11 @@ impl SearchEngine {
     }
     
     /// Count the number of pieces on the board for endgame detection
+    /// Optimized to use bitboard popcount instead of iterating through all squares
     fn count_pieces_on_board(&self, board: &BitboardBoard) -> u8 {
-        let mut count = 0;
-        for row in 0..9 {
-            for col in 0..9 {
-                if board.is_square_occupied(Position::new(row, col)) {
-                    count += 1;
-                }
-            }
-        }
-        count
+        // Use the occupied bitboard for O(1) piece counting via hardware popcount
+        let occupied = board.get_occupied_bitboard();
+        occupied.count_ones() as u8
     }
     
     /// Perform a null move search with reduced depth
