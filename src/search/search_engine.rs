@@ -4704,6 +4704,79 @@ impl SearchEngine {
         None
     }
     
+    /// Calculate reduction factor for null move search using the configured strategy
+    /// 
+    /// This method supports multiple reduction strategies:
+    /// - **Static**: Always use base `reduction_factor`
+    /// - **Dynamic**: Use `dynamic_reduction_formula` (Linear/Smooth scaling)
+    /// - **DepthBased**: Reduction varies by depth (smaller at shallow, larger at deep)
+    /// - **MaterialBased**: Reduction adjusted by material count (fewer pieces = smaller reduction)
+    /// - **PositionTypeBased**: Different reduction for opening/middlegame/endgame
+    fn calculate_null_move_reduction(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
+                                     player: Player, depth: u8) -> u8 {
+        match self.null_move_config.reduction_strategy {
+            crate::types::NullMoveReductionStrategy::Static => {
+                // Static reduction: always use reduction_factor
+                self.null_move_config.reduction_factor
+            }
+            crate::types::NullMoveReductionStrategy::Dynamic => {
+                // Dynamic reduction: use dynamic_reduction_formula
+                if self.null_move_config.enable_dynamic_reduction {
+                    self.null_move_config.dynamic_reduction_formula.calculate_reduction(
+                        depth,
+                        self.null_move_config.reduction_factor
+                    )
+                } else {
+                    // Fallback to static if dynamic is disabled
+                    self.null_move_config.reduction_factor
+                }
+            }
+            crate::types::NullMoveReductionStrategy::DepthBased => {
+                // Depth-based reduction: R = base + depth_scaling_factor * max(0, depth - min_depth_for_scaling) / 6
+                // Smaller reduction at shallow depths, larger at deep depths
+                let base = self.null_move_config.reduction_factor;
+                let scaling_depth = if depth > self.null_move_config.min_depth_for_scaling {
+                    depth - self.null_move_config.min_depth_for_scaling
+                } else {
+                    0
+                };
+                let depth_adjustment = (scaling_depth as u16 * self.null_move_config.depth_scaling_factor as u16) / 6;
+                (base as u16 + depth_adjustment).min(5) as u8
+            }
+            crate::types::NullMoveReductionStrategy::MaterialBased => {
+                // Material-based reduction: R = base - material_adjustment_factor * max(0, (piece_count_threshold - piece_count) / threshold_step)
+                // Fewer pieces = smaller reduction (more conservative in endgame)
+                let piece_count = self.count_pieces_on_board(board);
+                let base = self.null_move_config.reduction_factor as i32;
+                
+                if piece_count < self.null_move_config.piece_count_threshold {
+                    let pieces_below_threshold = self.null_move_config.piece_count_threshold - piece_count;
+                    let adjustment_steps = (pieces_below_threshold + self.null_move_config.threshold_step - 1) / self.null_move_config.threshold_step;
+                    let material_adjustment = (adjustment_steps as i32) * (self.null_move_config.material_adjustment_factor as i32);
+                    (base - material_adjustment).max(1) as u8
+                } else {
+                    base as u8
+                }
+            }
+            crate::types::NullMoveReductionStrategy::PositionTypeBased => {
+                // Position-type-based reduction: Different reduction for opening/middlegame/endgame
+                let piece_count = self.count_pieces_on_board(board);
+                
+                // Classify position type (simplified: use piece count as proxy)
+                if piece_count >= 30 {
+                    // Opening position: many pieces on board
+                    self.null_move_config.opening_reduction_factor
+                } else if piece_count >= 15 {
+                    // Middlegame position: moderate piece count
+                    self.null_move_config.middlegame_reduction_factor
+                } else {
+                    // Endgame position: few pieces on board
+                    self.null_move_config.endgame_reduction_factor
+                }
+            }
+        }
+    }
+    
     /// Perform a null move search with reduced depth
     /// 
     /// **Board State Isolation**: This function does NOT modify the board state.
@@ -4727,24 +4800,8 @@ impl SearchEngine {
                                time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
         self.null_move_stats.attempts += 1;
         
-        // Calculate reduction factor using configured formula
-        // Formula selection guidelines:
-        // - Static: Use base reduction_factor always (most conservative, least pruning)
-        // - Linear: R = base + depth / 6 (integer division, creates steps at multiples of 6)
-        //   * Provides predictable steps: depths 3-5 -> R=base, 6-11 -> R=base+1, etc.
-        // - Smooth: R = base + (depth / 6.0).round() (floating-point with rounding)
-        //   * Provides smoother scaling with more gradual increases
-        //   * Increases reduction earlier than Linear at certain depths (e.g., depth 3-5)
-        let reduction = if self.null_move_config.enable_dynamic_reduction {
-            // Use the configured dynamic reduction formula
-            self.null_move_config.dynamic_reduction_formula.calculate_reduction(
-                depth,
-                self.null_move_config.reduction_factor
-            )
-        } else {
-            // Static reduction: always use reduction_factor
-            self.null_move_config.reduction_factor as u8
-        };
+        // Calculate reduction factor using configured reduction strategy
+        let reduction = self.calculate_null_move_reduction(board, captured_pieces, player, depth);
         
         let search_depth = depth - 1 - reduction;
         self.null_move_stats.depth_reductions += reduction as u64;

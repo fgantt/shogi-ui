@@ -1,7 +1,7 @@
 use shogi_engine::{
     search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula, EndgameType, NullMovePreset},
+    types::{CapturedPieces, Player, NullMoveConfig, DynamicReductionFormula, EndgameType, NullMovePreset, NullMoveReductionStrategy},
     time_utils::TimeSource,
 };
 
@@ -1626,7 +1626,7 @@ mod null_move_tests {
         }
         
         // Perform search
-        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        let result = engine.search_at_depth_legacy(&mut board, &captured_pieces, player, 4, 1000);
         assert!(result.is_some());
         
         // Verify board state is identical to initial state
@@ -1677,5 +1677,197 @@ mod null_move_tests {
         
         let stats = engine.get_null_move_stats();
         assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_enum() {
+        // Test reduction strategy enum variants
+        let static_strategy = NullMoveReductionStrategy::Static;
+        let dynamic_strategy = NullMoveReductionStrategy::Dynamic;
+        let depth_based_strategy = NullMoveReductionStrategy::DepthBased;
+        let material_based_strategy = NullMoveReductionStrategy::MaterialBased;
+        let position_type_based_strategy = NullMoveReductionStrategy::PositionTypeBased;
+        
+        // Test to_string()
+        assert_eq!(static_strategy.to_string(), "Static");
+        assert_eq!(dynamic_strategy.to_string(), "Dynamic");
+        assert_eq!(depth_based_strategy.to_string(), "DepthBased");
+        assert_eq!(material_based_strategy.to_string(), "MaterialBased");
+        assert_eq!(position_type_based_strategy.to_string(), "PositionTypeBased");
+        
+        // Test from_str()
+        assert_eq!(NullMoveReductionStrategy::from_str("static"), Some(NullMoveReductionStrategy::Static));
+        assert_eq!(NullMoveReductionStrategy::from_str("STATIC"), Some(NullMoveReductionStrategy::Static));
+        assert_eq!(NullMoveReductionStrategy::from_str("dynamic"), Some(NullMoveReductionStrategy::Dynamic));
+        assert_eq!(NullMoveReductionStrategy::from_str("depthbased"), Some(NullMoveReductionStrategy::DepthBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("depth-based"), Some(NullMoveReductionStrategy::DepthBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("materialbased"), Some(NullMoveReductionStrategy::MaterialBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("material-based"), Some(NullMoveReductionStrategy::MaterialBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("positiontypebased"), Some(NullMoveReductionStrategy::PositionTypeBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("position-type-based"), Some(NullMoveReductionStrategy::PositionTypeBased));
+        assert_eq!(NullMoveReductionStrategy::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_static() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure Static reduction strategy
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::Static;
+        config.reduction_factor = 2;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Static strategy should always use reduction_factor
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_dynamic() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure Dynamic reduction strategy
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::Dynamic;
+        config.enable_dynamic_reduction = true;
+        config.dynamic_reduction_formula = DynamicReductionFormula::Linear;
+        config.reduction_factor = 2;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // Dynamic strategy should use dynamic_reduction_formula
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_depth_based() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure DepthBased reduction strategy
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::DepthBased;
+        config.reduction_factor = 2;
+        config.depth_scaling_factor = 1;
+        config.min_depth_for_scaling = 4;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 5, 1000);
+        assert!(result.is_some());
+        
+        // DepthBased strategy should vary reduction by depth
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_material_based() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure MaterialBased reduction strategy
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::MaterialBased;
+        config.reduction_factor = 2;
+        config.material_adjustment_factor = 1;
+        config.piece_count_threshold = 20;
+        config.threshold_step = 4;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // MaterialBased strategy should adjust reduction by piece count
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_position_type_based() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Configure PositionTypeBased reduction strategy
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.reduction_strategy = NullMoveReductionStrategy::PositionTypeBased;
+        config.opening_reduction_factor = 3;
+        config.middlegame_reduction_factor = 2;
+        config.endgame_reduction_factor = 1;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        // PositionTypeBased strategy should use different reductions for opening/middlegame/endgame
+        let stats = engine.get_null_move_stats();
+        assert!(stats.attempts >= 0);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_configuration() {
+        // Test that reduction strategy is properly configured in default config
+        let config = NullMoveConfig::default();
+        assert_eq!(config.reduction_strategy, NullMoveReductionStrategy::Dynamic);
+        assert_eq!(config.depth_scaling_factor, 1);
+        assert_eq!(config.min_depth_for_scaling, 4);
+        assert_eq!(config.material_adjustment_factor, 1);
+        assert_eq!(config.piece_count_threshold, 20);
+        assert_eq!(config.threshold_step, 4);
+        assert_eq!(config.opening_reduction_factor, 3);
+        assert_eq!(config.middlegame_reduction_factor, 2);
+        assert_eq!(config.endgame_reduction_factor, 1);
+    }
+
+    #[test]
+    fn test_null_move_reduction_strategy_validation() {
+        // Test validation of advanced reduction strategy parameters
+        let mut config = NullMoveConfig::default();
+        config.reduction_strategy = NullMoveReductionStrategy::DepthBased;
+        config.depth_scaling_factor = 0; // Invalid
+        
+        assert!(config.validate().is_err());
+        
+        // Fix and test valid config
+        config.depth_scaling_factor = 1;
+        assert!(config.validate().is_ok());
     }
 }

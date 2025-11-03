@@ -1364,6 +1364,67 @@ impl DynamicReductionFormula {
     }
 }
 
+/// Advanced reduction strategies for Null Move Pruning
+/// 
+/// These strategies determine how the reduction factor is calculated:
+/// - **Static**: Always use base `reduction_factor` (simple, conservative)
+/// - **Dynamic**: Use `dynamic_reduction_formula` (Linear/Smooth scaling based on depth)
+/// - **DepthBased**: Reduction varies by depth (smaller at shallow depths, larger at deep depths)
+/// - **MaterialBased**: Reduction adjusted by material on board (fewer pieces = smaller reduction)
+/// - **PositionTypeBased**: Different reduction for opening/middlegame/endgame positions
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NullMoveReductionStrategy {
+    /// Static reduction: Always use base `reduction_factor` (R = reduction_factor)
+    /// Best for: Simple configurations, when consistent reduction is desired
+    Static,
+    /// Dynamic reduction: Use `dynamic_reduction_formula` (Linear/Smooth scaling)
+    /// Best for: Standard configurations, when depth-based scaling is desired
+    Dynamic,
+    /// Depth-based reduction: Reduction varies by depth (smaller at shallow, larger at deep)
+    /// Formula: R = base + depth_scaling_factor * max(0, depth - min_depth_for_scaling)
+    /// Best for: When more conservative reduction at shallow depths is desired
+    DepthBased,
+    /// Material-based reduction: Reduction adjusted by material count (fewer pieces = smaller reduction)
+    /// Formula: R = base + material_adjustment_factor * max(0, (piece_count_threshold - piece_count) / threshold_step)
+    /// Best for: When more conservative reduction in endgame positions is desired
+    MaterialBased,
+    /// Position-type-based reduction: Different reduction for opening/middlegame/endgame
+    /// Formula: Uses different base reductions based on detected position type
+    /// Best for: When position characteristics should influence reduction amount
+    PositionTypeBased,
+}
+
+impl Default for NullMoveReductionStrategy {
+    fn default() -> Self {
+        NullMoveReductionStrategy::Dynamic
+    }
+}
+
+impl NullMoveReductionStrategy {
+    /// Get a string representation of the strategy
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            NullMoveReductionStrategy::Static => "Static",
+            NullMoveReductionStrategy::Dynamic => "Dynamic",
+            NullMoveReductionStrategy::DepthBased => "DepthBased",
+            NullMoveReductionStrategy::MaterialBased => "MaterialBased",
+            NullMoveReductionStrategy::PositionTypeBased => "PositionTypeBased",
+        }
+    }
+    
+    /// Parse a strategy from a string (case-insensitive)
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "static" => Some(NullMoveReductionStrategy::Static),
+            "dynamic" => Some(NullMoveReductionStrategy::Dynamic),
+            "depthbased" | "depth_based" | "depth-based" => Some(NullMoveReductionStrategy::DepthBased),
+            "materialbased" | "material_based" | "material-based" => Some(NullMoveReductionStrategy::MaterialBased),
+            "positiontypebased" | "position_type_based" | "position-type-based" => Some(NullMoveReductionStrategy::PositionTypeBased),
+            _ => None,
+        }
+    }
+}
+
 /// Preset configurations for Null Move Pruning
 /// 
 /// These presets provide pre-configured settings optimized for different playing styles:
@@ -1422,12 +1483,24 @@ pub struct NullMoveConfig {
     pub king_activity_threshold: u8,          // Threshold for king activity endgame detection (default: 8 pieces)
     pub zugzwang_threshold: u8,              // Threshold for zugzwang-prone endgame detection (default: 6 pieces)
     pub preset: Option<NullMovePreset>,      // Optional: Track which preset was used to create this config
+    pub reduction_strategy: NullMoveReductionStrategy,  // Advanced reduction strategy (default: Dynamic)
+    // Advanced reduction strategy parameters
+    pub depth_scaling_factor: u8,            // Depth-based scaling factor (default: 1, used with DepthBased strategy)
+    pub min_depth_for_scaling: u8,          // Minimum depth for depth-based scaling (default: 4, used with DepthBased strategy)
+    pub material_adjustment_factor: u8,       // Material-based adjustment factor (default: 1, used with MaterialBased strategy)
+    pub piece_count_threshold: u8,          // Piece count threshold for material-based adjustment (default: 20, used with MaterialBased strategy)
+    pub threshold_step: u8,                  // Threshold step for material-based adjustment (default: 4, used with MaterialBased strategy)
+    pub opening_reduction_factor: u8,        // Reduction factor for opening positions (default: 3, used with PositionTypeBased strategy)
+    pub middlegame_reduction_factor: u8,      // Reduction factor for middlegame positions (default: 2, used with PositionTypeBased strategy)
+    pub endgame_reduction_factor: u8,        // Reduction factor for endgame positions (default: 1, used with PositionTypeBased strategy)
 }
 
 impl Default for NullMoveConfig {
     fn default() -> Self {
-        // Default uses Balanced preset values
-        NullMoveConfig::from_preset(NullMovePreset::Balanced)
+        let mut config = NullMoveConfig::from_preset(NullMovePreset::Balanced);
+        // Override reduction strategy to use default (Dynamic)
+        config.reduction_strategy = NullMoveReductionStrategy::default();
+        config
     }
 }
 
@@ -1456,6 +1529,15 @@ impl NullMoveConfig {
                 king_activity_threshold: 10,    // Higher threshold (10 pieces)
                 zugzwang_threshold: 8,         // Higher threshold (8 pieces)
                 preset: Some(NullMovePreset::Conservative),
+                reduction_strategy: NullMoveReductionStrategy::Dynamic,
+                depth_scaling_factor: 1,
+                min_depth_for_scaling: 4,
+                material_adjustment_factor: 1,
+                piece_count_threshold: 20,
+                threshold_step: 4,
+                opening_reduction_factor: 2,
+                middlegame_reduction_factor: 2,
+                endgame_reduction_factor: 1,
             },
             NullMovePreset::Aggressive => Self {
                 enabled: true,
@@ -1473,6 +1555,15 @@ impl NullMoveConfig {
                 king_activity_threshold: 6,     // Lower threshold (6 pieces)
                 zugzwang_threshold: 4,          // Lower threshold (4 pieces)
                 preset: Some(NullMovePreset::Aggressive),
+                reduction_strategy: NullMoveReductionStrategy::Dynamic,
+                depth_scaling_factor: 1,
+                min_depth_for_scaling: 3,
+                material_adjustment_factor: 1,
+                piece_count_threshold: 20,
+                threshold_step: 4,
+                opening_reduction_factor: 4,
+                middlegame_reduction_factor: 3,
+                endgame_reduction_factor: 2,
             },
             NullMovePreset::Balanced => Self {
                 enabled: true,
@@ -1490,6 +1581,15 @@ impl NullMoveConfig {
                 king_activity_threshold: 8,      // Default threshold (8 pieces)
                 zugzwang_threshold: 6,          // Default threshold (6 pieces)
                 preset: Some(NullMovePreset::Balanced),
+                reduction_strategy: NullMoveReductionStrategy::Dynamic,
+                depth_scaling_factor: 1,
+                min_depth_for_scaling: 4,
+                material_adjustment_factor: 1,
+                piece_count_threshold: 20,
+                threshold_step: 4,
+                opening_reduction_factor: 3,
+                middlegame_reduction_factor: 2,
+                endgame_reduction_factor: 1,
             },
         }
     }
@@ -1553,6 +1653,55 @@ impl NullMoveConfig {
         if self.zugzwang_threshold > 40 {
             return Err("zugzwang_threshold should not exceed 40".to_string());
         }
+        // Validate advanced reduction strategy parameters
+        if self.depth_scaling_factor == 0 {
+            return Err("depth_scaling_factor must be greater than 0".to_string());
+        }
+        if self.depth_scaling_factor > 5 {
+            return Err("depth_scaling_factor should not exceed 5".to_string());
+        }
+        if self.min_depth_for_scaling == 0 {
+            return Err("min_depth_for_scaling must be greater than 0".to_string());
+        }
+        if self.min_depth_for_scaling > 10 {
+            return Err("min_depth_for_scaling should not exceed 10".to_string());
+        }
+        if self.material_adjustment_factor == 0 {
+            return Err("material_adjustment_factor must be greater than 0".to_string());
+        }
+        if self.material_adjustment_factor > 5 {
+            return Err("material_adjustment_factor should not exceed 5".to_string());
+        }
+        if self.piece_count_threshold == 0 {
+            return Err("piece_count_threshold must be greater than 0".to_string());
+        }
+        if self.piece_count_threshold > 40 {
+            return Err("piece_count_threshold should not exceed 40".to_string());
+        }
+        if self.threshold_step == 0 {
+            return Err("threshold_step must be greater than 0".to_string());
+        }
+        if self.threshold_step > 10 {
+            return Err("threshold_step should not exceed 10".to_string());
+        }
+        if self.opening_reduction_factor == 0 {
+            return Err("opening_reduction_factor must be greater than 0".to_string());
+        }
+        if self.opening_reduction_factor > 5 {
+            return Err("opening_reduction_factor should not exceed 5".to_string());
+        }
+        if self.middlegame_reduction_factor == 0 {
+            return Err("middlegame_reduction_factor must be greater than 0".to_string());
+        }
+        if self.middlegame_reduction_factor > 5 {
+            return Err("middlegame_reduction_factor should not exceed 5".to_string());
+        }
+        if self.endgame_reduction_factor == 0 {
+            return Err("endgame_reduction_factor must be greater than 0".to_string());
+        }
+        if self.endgame_reduction_factor > 5 {
+            return Err("endgame_reduction_factor should not exceed 5".to_string());
+        }
         Ok(())
     }
 
@@ -1576,8 +1725,9 @@ impl NullMoveConfig {
         } else {
             String::new()
         };
+        let strategy_str = format!(", reduction_strategy={}", self.reduction_strategy.to_string());
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}{}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}{}{}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
@@ -1592,7 +1742,8 @@ impl NullMoveConfig {
             self.material_endgame_threshold,
             self.king_activity_threshold,
             self.zugzwang_threshold,
-            preset_str
+            preset_str,
+            strategy_str
         )
     }
 }
@@ -2466,6 +2617,15 @@ mod tests {
             king_activity_threshold: 8,
             zugzwang_threshold: 6,
             preset: None,
+            reduction_strategy: NullMoveReductionStrategy::Dynamic,
+            depth_scaling_factor: 1,
+            min_depth_for_scaling: 4,
+            material_adjustment_factor: 1,
+            piece_count_threshold: 20,
+            threshold_step: 4,
+            opening_reduction_factor: 3,
+            middlegame_reduction_factor: 2,
+            endgame_reduction_factor: 1,
         };
         
         let validated = config.new_validated();
@@ -4140,6 +4300,15 @@ impl EngineConfig {
                     king_activity_threshold: 8,
                     zugzwang_threshold: 6,
                     preset: None,
+                    reduction_strategy: NullMoveReductionStrategy::Dynamic,
+                    depth_scaling_factor: 1,
+                    min_depth_for_scaling: 4,
+                    material_adjustment_factor: 1,
+                    piece_count_threshold: 20,
+                    threshold_step: 4,
+                    opening_reduction_factor: 3,
+                    middlegame_reduction_factor: 2,
+                    endgame_reduction_factor: 1,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -4208,6 +4377,15 @@ impl EngineConfig {
                     king_activity_threshold: 8,
                     zugzwang_threshold: 6,
                     preset: None,
+                    reduction_strategy: NullMoveReductionStrategy::Dynamic,
+                    depth_scaling_factor: 1,
+                    min_depth_for_scaling: 4,
+                    material_adjustment_factor: 1,
+                    piece_count_threshold: 20,
+                    threshold_step: 4,
+                    opening_reduction_factor: 3,
+                    middlegame_reduction_factor: 2,
+                    endgame_reduction_factor: 1,
                 },
                 lmr: LMRConfig {
                     enabled: true,

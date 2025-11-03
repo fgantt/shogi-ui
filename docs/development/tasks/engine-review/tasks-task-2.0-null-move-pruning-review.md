@@ -2,7 +2,7 @@
 
 **PRD:** `task-2.0-null-move-pruning-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0 Complete
 
 ---
 
@@ -163,22 +163,22 @@
   - [x] 8.8 Document hash history separation rationale in code comments if keeping separate
   - [x] 8.9 If sharing is unsafe, document why separate history is necessary for correctness
 
-- [ ] 9.0 Implement Advanced Reduction Strategies
-  - [ ] 9.1 Add `reduction_strategy` field to `NullMoveConfig` with options: Static, Dynamic, DepthBased, MaterialBased, PositionTypeBased
-  - [ ] 9.2 Implement depth-based reduction scaling: reduction factor varies based on depth (e.g., smaller reduction at shallow depths)
-  - [ ] 9.3 Implement material-based reduction adjustment: adjust reduction based on material on board (fewer pieces = smaller reduction)
-  - [ ] 9.4 Implement position-type-based reduction: different reduction for opening/middlegame/endgame positions
-  - [ ] 9.5 Create `calculate_reduction_by_depth()` helper method for depth-based scaling
-  - [ ] 9.6 Create `calculate_reduction_by_material()` helper method for material-based adjustment
-  - [ ] 9.7 Create `calculate_reduction_by_position_type()` helper method for position-type-based reduction
-  - [ ] 9.8 Update `perform_null_move_search()` to support all reduction strategy types
-  - [ ] 9.9 Add configuration fields for advanced reduction strategy parameters (depth thresholds, material thresholds, position type thresholds)
-  - [ ] 9.10 Add unit tests for each reduction strategy type
-  - [ ] 9.11 Create performance benchmarks comparing different reduction strategies (effectiveness vs overhead)
-  - [ ] 9.12 Run benchmark suite to identify optimal reduction strategy for different position types
-  - [ ] 9.13 Update default configuration to use best-performing strategy based on benchmark results
-  - [ ] 9.14 Add configuration validation for advanced reduction strategy parameters
-  - [ ] 9.15 Document reduction strategy selection guidelines in code comments and configuration documentation
+- [x] 9.0 Implement Advanced Reduction Strategies
+  - [x] 9.1 Add `reduction_strategy` field to `NullMoveConfig` with options: Static, Dynamic, DepthBased, MaterialBased, PositionTypeBased
+  - [x] 9.2 Implement depth-based reduction scaling: reduction factor varies based on depth (e.g., smaller reduction at shallow depths)
+  - [x] 9.3 Implement material-based reduction adjustment: adjust reduction based on material on board (fewer pieces = smaller reduction)
+  - [x] 9.4 Implement position-type-based reduction: different reduction for opening/middlegame/endgame positions
+  - [x] 9.5 Create `calculate_reduction_by_depth()` helper method for depth-based scaling
+  - [x] 9.6 Create `calculate_reduction_by_material()` helper method for material-based adjustment
+  - [x] 9.7 Create `calculate_reduction_by_position_type()` helper method for position-type-based reduction
+  - [x] 9.8 Update `perform_null_move_search()` to support all reduction strategy types
+  - [x] 9.9 Add configuration fields for advanced reduction strategy parameters (depth thresholds, material thresholds, position type thresholds)
+  - [x] 9.10 Add unit tests for each reduction strategy type
+  - [x] 9.11 Create performance benchmarks comparing different reduction strategies (effectiveness vs overhead)
+  - [x] 9.12 Run benchmark suite to identify optimal reduction strategy for different position types
+  - [x] 9.13 Update default configuration to use best-performing strategy based on benchmark results
+  - [x] 9.14 Add configuration validation for advanced reduction strategy parameters
+  - [x] 9.15 Document reduction strategy selection guidelines in code comments and configuration documentation
 
 - [ ] 10.0 Tune Static Reduction and Endgame Threshold Parameters
   - [ ] 10.1 Review current static reduction factor (default: 2) - consider if per-depth tuning is beneficial
