@@ -2955,7 +2955,40 @@ impl SearchEngine {
                     Some(null_move_score));
                 self.null_move_stats.cutoffs += 1;
                 return beta;
-            } else if self.should_perform_verification(null_move_score, beta) {
+            } else if self.is_mate_threat_score(null_move_score, beta) {
+                // Null move failed but score suggests mate threat - perform mate threat verification
+                crate::debug_utils::trace_log("MATE_THREAT", &format!(
+                    "Null move score {} >= {} (beta - margin), possible mate threat, performing verification",
+                    null_move_score, beta - self.null_move_config.mate_threat_margin
+                ));
+                crate::debug_utils::start_timing("mate_threat_verification");
+                
+                // Use same hash history for mate threat verification
+                let mate_threat_score = self.perform_mate_threat_verification(
+                    board, captured_pieces, player, depth, beta, start_time, time_limit_ms, &mut local_null_hash_history
+                );
+                
+                crate::debug_utils::end_timing("mate_threat_verification", "MATE_THREAT");
+                
+                if mate_threat_score >= beta {
+                    // Mate threat verification confirms beta cutoff
+                    crate::debug_utils::log_decision("MATE_THREAT", "Mate threat confirmed, beta cutoff",
+                        &format!("Mate threat verification score {} >= beta {}, pruning branch", mate_threat_score, beta),
+                        Some(mate_threat_score));
+                    self.null_move_stats.cutoffs += 1;
+                    return beta;
+                } else {
+                    // Mate threat verification failed - continue with verification search or full search
+                    crate::debug_utils::trace_log("MATE_THREAT", &format!(
+                        "Mate threat verification score {} < beta {}, no mate threat confirmed",
+                        mate_threat_score, beta
+                    ));
+                    // Fall through to check verification search if enabled
+                }
+            }
+            
+            // Check for regular verification search (if mate threat check didn't succeed or wasn't enabled)
+            if self.should_perform_verification(null_move_score, beta) {
                 // Null move failed but is within verification margin - perform verification search
                 crate::debug_utils::trace_log("VERIFICATION", &format!(
                     "Null move score {} < beta {} but within margin {}, performing verification search",
@@ -4602,6 +4635,59 @@ impl SearchEngine {
         );
         
         verification_score
+    }
+
+    /// Check if a score indicates a potential mate threat
+    /// A mate threat is detected when the null move score is very high (close to beta)
+    /// suggesting the position might be winning (mate threat present)
+    /// Threshold: score >= beta - mate_threat_margin
+    fn is_mate_threat_score(&self, null_move_score: i32, beta: i32) -> bool {
+        if !self.null_move_config.enable_mate_threat_detection {
+            return false;
+        }
+        if self.null_move_config.mate_threat_margin == 0 {
+            return false;
+        }
+        
+        // Mate threat detected if score is very close to beta (within mate_threat_margin)
+        // This suggests the position is winning and might contain a mate threat
+        null_move_score >= (beta - self.null_move_config.mate_threat_margin)
+    }
+
+    /// Perform mate threat verification search
+    /// This searches at full depth to confirm if a mate threat exists
+    fn perform_mate_threat_verification(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces,
+                                        player: Player, depth: u8, beta: i32, start_time: &TimeSource,
+                                        time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
+        self.null_move_stats.mate_threat_attempts += 1;
+        
+        crate::debug_utils::trace_log("MATE_THREAT", &format!(
+            "Performing mate threat verification search at depth {} (score suggests mate threat, beta={})",
+            depth - 1, beta
+        ));
+        
+        // Perform verification search at depth - 1 (full depth, no reduction)
+        // Use zero-width window like null move search
+        let mate_threat_score = -self.negamax_with_context(
+            board, captured_pieces, player.opposite(),
+            depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
+            start_time, time_limit_ms, hash_history,
+            false, false, false, false  // Prevent recursive null moves
+        );
+        
+        if mate_threat_score >= beta {
+            self.null_move_stats.mate_threat_detected += 1;
+            crate::debug_utils::log_decision("MATE_THREAT", "Mate threat confirmed",
+                &format!("Mate threat verification score {} >= beta {}, mate threat detected", mate_threat_score, beta),
+                Some(mate_threat_score));
+        } else {
+            crate::debug_utils::trace_log("MATE_THREAT", &format!(
+                "Mate threat verification score {} < beta {}, no mate threat",
+                mate_threat_score, beta
+            ));
+        }
+        
+        mate_threat_score
     }
 
     // ===== NULL MOVE CONFIGURATION MANAGEMENT =====

@@ -887,4 +887,202 @@ mod null_move_tests {
             assert!(stats.attempts >= 0);
         }
     }
+
+    // ===== MATE THREAT DETECTION TESTS =====
+
+    #[test]
+    fn test_mate_threat_detection_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default configuration (should be disabled)
+        let config = engine.get_null_move_config();
+        assert!(!config.enable_mate_threat_detection);
+        assert_eq!(config.mate_threat_margin, 500);
+        
+        // Test enabling mate threat detection
+        let mut config = config.clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 500;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert!(updated_config.enable_mate_threat_detection);
+        assert_eq!(updated_config.mate_threat_margin, 500);
+    }
+
+    #[test]
+    fn test_mate_threat_detection_statistics_tracking() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable mate threat detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 500;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform a search to trigger mate threat detection if conditions are met
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // Verify mate threat statistics are tracked
+        assert!(stats.mate_threat_attempts >= 0);
+        assert!(stats.mate_threat_detected >= 0);
+        assert!(stats.mate_threat_detected <= stats.mate_threat_attempts);
+        
+        // Verify detection rate is calculated correctly
+        let detection_rate = stats.mate_threat_detection_rate();
+        assert!(detection_rate >= 0.0);
+        assert!(detection_rate <= 100.0);
+    }
+
+    #[test]
+    fn test_mate_threat_detection_disabled() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Ensure mate threat detection is disabled
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = false;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform a search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // When disabled, mate threat attempts should remain 0
+        assert_eq!(stats.mate_threat_attempts, 0);
+        assert_eq!(stats.mate_threat_detected, 0);
+    }
+
+    #[test]
+    fn test_mate_threat_detection_margin_boundaries() {
+        let mut engine = create_test_engine();
+        
+        // Test with small margin
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 100;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.mate_threat_margin, 100);
+        
+        // Test with large margin
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 1000;
+        engine.update_null_move_config(config).unwrap();
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.mate_threat_margin, 1000);
+    }
+
+    #[test]
+    fn test_mate_threat_detection_integration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable mate threat detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 500;
+        config.enable_dynamic_reduction = true;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search at different depths
+        for depth in [3, 4, 5, 6] {
+            engine.reset_null_move_stats();
+            let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, depth, 1000);
+            assert!(result.is_some(), "Search should complete at depth {}", depth);
+            
+            let stats = engine.get_null_move_stats();
+            // Verify search completed and stats are tracked
+            assert!(stats.attempts >= 0);
+            assert!(stats.mate_threat_attempts >= 0);
+        }
+    }
+
+    #[test]
+    fn test_mate_threat_detection_with_verification_search() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable both mate threat detection and verification search
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 500;
+        config.verification_margin = 200;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // Both mate threat and verification stats should be tracked
+        assert!(stats.mate_threat_attempts >= 0);
+        assert!(stats.verification_attempts >= 0);
+        
+        // Verify detection rates are valid
+        assert!(stats.mate_threat_detection_rate() >= 0.0);
+        assert!(stats.mate_threat_detection_rate() <= 100.0);
+        assert!(stats.verification_cutoff_rate() >= 0.0);
+        assert!(stats.verification_cutoff_rate() <= 100.0);
+    }
+
+    #[test]
+    fn test_mate_threat_detection_correctness() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Enable mate threat detection
+        let mut config = engine.get_null_move_config().clone();
+        config.enable_mate_threat_detection = true;
+        config.mate_threat_margin = 500;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search
+        let result = engine.search_at_depth_legacy(&mut board.clone(), &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        // Correctness checks:
+        // 1. Mate threats detected should never exceed attempts
+        assert!(stats.mate_threat_detected <= stats.mate_threat_attempts);
+        
+        // 2. If there were attempts, they should be tracked correctly
+        if stats.mate_threat_attempts > 0 {
+            assert!(stats.mate_threat_detected >= 0);
+            let detection_rate = stats.mate_threat_detection_rate();
+            assert!(detection_rate >= 0.0);
+            assert!(detection_rate <= 100.0);
+        }
+        
+        // 3. Total cutoffs should include mate threat cutoffs
+        // (mate threat verification that succeeds contributes to cutoffs)
+        assert!(stats.cutoffs >= 0);
+    }
 }

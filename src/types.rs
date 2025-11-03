@@ -1350,6 +1350,8 @@ pub struct NullMoveConfig {
     pub enable_endgame_detection: bool,     // Disable NMP in endgame
     pub verification_margin: i32,           // Safety margin for verification search (centipawns)
     pub dynamic_reduction_formula: DynamicReductionFormula,  // Formula for dynamic reduction calculation
+    pub enable_mate_threat_detection: bool,  // Enable mate threat detection (default: false, opt-in feature)
+    pub mate_threat_margin: i32,            // Threshold for mate threat detection (default: 500 centipawns)
 }
 
 impl Default for NullMoveConfig {
@@ -1363,6 +1365,8 @@ impl Default for NullMoveConfig {
             enable_endgame_detection: true,
             verification_margin: 200,        // Default 200 centipawns safety margin
             dynamic_reduction_formula: DynamicReductionFormula::Linear,  // Default to linear for backward compatibility
+            enable_mate_threat_detection: false,  // Default: false, opt-in feature
+            mate_threat_margin: 500,         // Default 500 centipawns threshold for mate threat detection
         }
     }
 }
@@ -1394,6 +1398,12 @@ impl NullMoveConfig {
         if self.verification_margin > 1000 {
             return Err("verification_margin should not exceed 1000 centipawns".to_string());
         }
+        if self.mate_threat_margin < 0 {
+            return Err("mate_threat_margin must be non-negative".to_string());
+        }
+        if self.mate_threat_margin > 2000 {
+            return Err("mate_threat_margin should not exceed 2000 centipawns".to_string());
+        }
         Ok(())
     }
 
@@ -1403,13 +1413,14 @@ impl NullMoveConfig {
         self.reduction_factor = self.reduction_factor.clamp(1, 5);
         self.max_pieces_threshold = self.max_pieces_threshold.clamp(1, 40);
         self.verification_margin = self.verification_margin.clamp(0, 1000);
+        self.mate_threat_margin = self.mate_threat_margin.clamp(0, 2000);
         self
     }
 
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
@@ -1417,7 +1428,9 @@ impl NullMoveConfig {
             self.enable_dynamic_reduction,
             self.enable_endgame_detection,
             self.verification_margin,
-            self.dynamic_reduction_formula
+            self.dynamic_reduction_formula,
+            self.enable_mate_threat_detection,
+            self.mate_threat_margin
         )
     }
 }
@@ -1432,6 +1445,8 @@ pub struct NullMoveStats {
     pub disabled_endgame: u64,              // Times disabled due to endgame
     pub verification_attempts: u64,         // Number of verification searches attempted
     pub verification_cutoffs: u64,           // Number of verification searches that resulted in cutoffs
+    pub mate_threat_attempts: u64,           // Number of mate threat detection attempts
+    pub mate_threat_detected: u64,            // Number of mate threats detected and verified
 }
 
 impl NullMoveStats {
@@ -1477,6 +1492,14 @@ impl NullMoveStats {
         (self.verification_cutoffs as f64 / self.verification_attempts as f64) * 100.0
     }
 
+    /// Get the mate threat detection rate as a percentage
+    pub fn mate_threat_detection_rate(&self) -> f64 {
+        if self.mate_threat_attempts == 0 {
+            return 0.0;
+        }
+        (self.mate_threat_detected as f64 / self.mate_threat_attempts as f64) * 100.0
+    }
+
     /// Get a comprehensive performance report
     pub fn performance_report(&self) -> String {
         format!(
@@ -1487,7 +1510,9 @@ impl NullMoveStats {
             - Average reduction: {:.2}\n\
             - Efficiency: {:.2}%\n\
             - Verification attempts: {}\n\
-            - Verification cutoffs: {} ({:.2}%)",
+            - Verification cutoffs: {} ({:.2}%)\n\
+            - Mate threat attempts: {}\n\
+            - Mate threats detected: {} ({:.2}%)",
             self.attempts,
             self.cutoffs,
             self.cutoff_rate(),
@@ -1498,7 +1523,10 @@ impl NullMoveStats {
             self.efficiency(),
             self.verification_attempts,
             self.verification_cutoffs,
-            self.verification_cutoff_rate()
+            self.verification_cutoff_rate(),
+            self.mate_threat_attempts,
+            self.mate_threat_detected,
+            self.mate_threat_detection_rate()
         )
     }
 
@@ -3927,6 +3955,8 @@ impl EngineConfig {
                     enable_endgame_detection: true,
                     verification_margin: 200,
                     dynamic_reduction_formula: DynamicReductionFormula::Linear,
+                    enable_mate_threat_detection: false,
+                    mate_threat_margin: 500,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -3988,6 +4018,8 @@ impl EngineConfig {
                     enable_endgame_detection: true,
                     verification_margin: 200,
                     dynamic_reduction_formula: DynamicReductionFormula::Static,
+                    enable_mate_threat_detection: false,
+                    mate_threat_margin: 500,
                 },
                 lmr: LMRConfig {
                     enabled: true,

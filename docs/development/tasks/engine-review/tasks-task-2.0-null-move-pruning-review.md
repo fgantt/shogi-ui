@@ -2,7 +2,7 @@
 
 **PRD:** `task-2.0-null-move-pruning-review.md`  
 **Date:** December 2024  
-**Status:** In Progress - Tasks 1.0, 2.0, 3.0 Complete
+**Status:** In Progress - Tasks 1.0, 2.0, 3.0, 4.0 Complete
 
 ---
 
@@ -92,21 +92,21 @@
   - [x] 3.11 Add configuration validation for new reduction formula options
   - [x] 3.12 Document reduction formula selection guidelines in code comments
 
-- [ ] 4.0 Add Mate Threat Detection
-  - [ ] 4.1 Add `enable_mate_threat_detection` field to `NullMoveConfig` (default: false, opt-in feature)
-  - [ ] 4.2 Add `mate_threat_margin` field to `NullMoveConfig` (default: 500 centipawns, threshold for mate threat detection)
-  - [ ] 4.3 Add `mate_threat_attempts` and `mate_threat_detected` fields to `NullMoveStats` for tracking
-  - [ ] 4.4 Create `is_mate_threat_score()` helper method to detect high scores that might indicate mate threats (> beta - mate_threat_margin)
-  - [ ] 4.5 Create `perform_mate_threat_verification()` method to perform verification search for mate threats
-  - [ ] 4.6 Modify `negamax_with_context()` null move integration to check for mate threats when null move fails but scores highly
-  - [ ] 4.7 Integrate mate threat verification with existing verification search (combine checks if both enabled)
-  - [ ] 4.8 Add statistics tracking for mate threat detection attempts and detections
-  - [ ] 4.9 Add debug logging for mate threat detection (conditional on debug flags)
-  - [ ] 4.10 Add unit tests for mate threat detection (mate threat present, absent, false positives)
-  - [ ] 4.11 Add unit tests for mate threat verification correctness
-  - [ ] 4.12 Create performance benchmarks measuring mate threat detection overhead
-  - [ ] 4.13 Verify mate threat detection doesn't significantly impact NMP performance when enabled
-  - [ ] 4.14 Update `NullMoveConfig::validate()` to validate mate_threat_margin range
+- [x] 4.0 Add Mate Threat Detection
+  - [x] 4.1 Add `enable_mate_threat_detection` field to `NullMoveConfig` (default: false, opt-in feature)
+  - [x] 4.2 Add `mate_threat_margin` field to `NullMoveConfig` (default: 500 centipawns, threshold for mate threat detection)
+  - [x] 4.3 Add `mate_threat_attempts` and `mate_threat_detected` fields to `NullMoveStats` for tracking
+  - [x] 4.4 Create `is_mate_threat_score()` helper method to detect high scores that might indicate mate threats (> beta - mate_threat_margin)
+  - [x] 4.5 Create `perform_mate_threat_verification()` method to perform verification search for mate threats
+  - [x] 4.6 Modify `negamax_with_context()` null move integration to check for mate threats when null move fails but scores highly
+  - [x] 4.7 Integrate mate threat verification with existing verification search (combine checks if both enabled)
+  - [x] 4.8 Add statistics tracking for mate threat detection attempts and detections
+  - [x] 4.9 Add debug logging for mate threat detection (conditional on debug flags)
+  - [x] 4.10 Add unit tests for mate threat detection (mate threat present, absent, false positives)
+  - [x] 4.11 Add unit tests for mate threat verification correctness
+  - [x] 4.12 Create performance benchmarks measuring mate threat detection overhead
+  - [x] 4.13 Verify mate threat detection doesn't significantly impact NMP performance when enabled
+  - [x] 4.14 Update `NullMoveConfig::validate()` to validate mate_threat_margin range
 
 - [ ] 5.0 Enhance Endgame Detection Intelligence
   - [ ] 5.1 Review current endgame detection (piece count only, lines 4482-4488)
@@ -288,6 +288,40 @@
 - Default configuration uses Linear formula for backward compatibility with existing behavior
 - All changes maintain backward compatibility - existing code using enable_dynamic_reduction flag continues to work
 - Smooth formula provides smoother scaling by increasing reduction earlier than Linear (e.g., at depth 3-5)
+
+**Task 4.0 Completion Notes:**
+- Added `enable_mate_threat_detection` and `mate_threat_margin` fields to `NullMoveConfig`
+- Default configuration: `enable_mate_threat_detection: false` (opt-in feature), `mate_threat_margin: 500` centipawns
+- Added `mate_threat_attempts` and `mate_threat_detected` fields to `NullMoveStats` for tracking
+- Implemented `is_mate_threat_score()` helper method: detects when null move score >= beta - mate_threat_margin
+- Implemented `perform_mate_threat_verification()` method: performs full-depth verification search for mate threats
+- Modified `negamax_with_context()` to check for mate threats when null move fails but scores highly
+- Integrated mate threat verification with existing verification search:
+  * Mate threat check is performed first (higher priority)
+  * If mate threat verification fails, falls through to regular verification search
+  * Both can be enabled simultaneously for maximum safety
+- Added statistics tracking in `perform_mate_threat_verification()`:
+  * `mate_threat_attempts` incremented on each verification attempt
+  * `mate_threat_detected` incremented when verification confirms mate threat (score >= beta)
+- Added debug logging for mate threat detection:
+  * Trace logs for mate threat detection and verification
+  * Decision logs when mate threats are confirmed
+  * Timing measurements for mate threat verification
+- Created comprehensive unit tests in `tests/null_move_tests.rs`:
+  * 7 new test cases covering configuration, statistics tracking, disabled state, margin boundaries, integration, verification search integration, and correctness
+  * All tests verify mate threat detection behavior and correctness
+- Created performance benchmark suite: `benches/mate_threat_detection_benchmarks.rs`:
+  * 5 benchmark groups measuring overhead comparison, effectiveness, margin comparison, integration with verification, and comprehensive analysis
+  * Benchmarks compare NMP with and without mate threat detection
+  * Measures search time, nodes searched, cutoff rates, and mate threat detection rates
+- Updated `Cargo.toml` to include benchmark entry
+- Updated `NullMoveConfig::validate()` to validate mate_threat_margin (0-2000 centipawns)
+- Updated `NullMoveConfig::new_validated()` to clamp mate_threat_margin
+- Updated `NullMoveStats::performance_report()` to include mate threat statistics
+- Added `mate_threat_detection_rate()` helper method to `NullMoveStats`
+- Updated all `NullMoveConfig` initializers to include new fields
+- Mate threat detection is opt-in (disabled by default) for backward compatibility
+- All changes maintain backward compatibility - existing code continues to work without changes
 
 **Implementation Notes:**
 - Tasks are ordered by priority (1.0-3.0: High Priority, 4.0-6.0: Medium Priority, 7.0-8.0: Low Priority, 9.0-11.0: Additional Concerns)
