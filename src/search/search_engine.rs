@@ -2955,6 +2955,36 @@ impl SearchEngine {
                     Some(null_move_score));
                 self.null_move_stats.cutoffs += 1;
                 return beta;
+            } else if self.should_perform_verification(null_move_score, beta) {
+                // Null move failed but is within verification margin - perform verification search
+                crate::debug_utils::trace_log("VERIFICATION", &format!(
+                    "Null move score {} < beta {} but within margin {}, performing verification search",
+                    null_move_score, beta, self.null_move_config.verification_margin
+                ));
+                crate::debug_utils::start_timing("verification_search");
+                
+                // Use same hash history for verification search
+                let verification_score = self.perform_verification_search(
+                    board, captured_pieces, player, depth, beta, start_time, time_limit_ms, &mut local_null_hash_history
+                );
+                
+                crate::debug_utils::end_timing("verification_search", "VERIFICATION");
+                
+                if verification_score >= beta {
+                    // Verification search confirms beta cutoff
+                    crate::debug_utils::log_decision("VERIFICATION", "Beta cutoff confirmed", 
+                        &format!("Verification score {} >= beta {}, pruning branch", verification_score, beta), 
+                        Some(verification_score));
+                    self.null_move_stats.verification_cutoffs += 1;
+                    self.null_move_stats.cutoffs += 1;
+                    return beta;
+                } else {
+                    // Both null move and verification failed - continue with full search
+                    crate::debug_utils::trace_log("VERIFICATION", &format!(
+                        "Verification search score {} < beta {}, continuing with full search",
+                        verification_score, beta
+                    ));
+                }
             } else {
                 crate::debug_utils::trace_log("NULL_MOVE", &format!("Null move score {} < beta {}, continuing search", null_move_score, beta));
             }
@@ -4528,6 +4558,43 @@ impl SearchEngine {
         );
         
         null_move_score
+    }
+
+    /// Check if verification search should be performed based on null move score
+    /// Verification is triggered when null move fails (score < beta) but is within the safety margin
+    fn should_perform_verification(&self, null_move_score: i32, beta: i32) -> bool {
+        if self.null_move_config.verification_margin == 0 {
+            // Verification disabled
+            return false;
+        }
+        
+        // Verification is needed if null move failed (score < beta) but is close to beta
+        // i.e., beta - null_move_score <= verification_margin
+        null_move_score < beta && (beta - null_move_score) <= self.null_move_config.verification_margin
+    }
+
+    /// Perform a full-depth verification search to confirm null move pruning safety
+    /// This searches at depth - 1 (without the reduction applied in null move search)
+    fn perform_verification_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces,
+                                   player: Player, depth: u8, beta: i32, start_time: &TimeSource,
+                                   time_limit_ms: u32, hash_history: &mut Vec<u64>) -> i32 {
+        self.null_move_stats.verification_attempts += 1;
+        
+        crate::debug_utils::trace_log("VERIFICATION", &format!(
+            "Performing verification search at depth {} (null move depth was {})",
+            depth - 1, depth - 1 - self.null_move_config.reduction_factor
+        ));
+        
+        // Perform verification search at depth - 1 (full depth, no reduction)
+        // Use zero-width window like null move search
+        let verification_score = -self.negamax_with_context(
+            board, captured_pieces, player.opposite(),
+            depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
+            start_time, time_limit_ms, hash_history,
+            false, false, false, false  // Prevent recursive null moves
+        );
+        
+        verification_score
     }
 
     // ===== NULL MOVE CONFIGURATION MANAGEMENT =====

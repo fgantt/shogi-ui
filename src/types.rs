@@ -1277,6 +1277,7 @@ pub struct NullMoveConfig {
     pub max_pieces_threshold: u8,           // Disable NMP when pieces < threshold
     pub enable_dynamic_reduction: bool,     // Use dynamic R = 2 + depth/6
     pub enable_endgame_detection: bool,     // Disable NMP in endgame
+    pub verification_margin: i32,           // Safety margin for verification search (centipawns)
 }
 
 impl Default for NullMoveConfig {
@@ -1288,6 +1289,7 @@ impl Default for NullMoveConfig {
             max_pieces_threshold: 12,       // Disable when < 12 pieces
             enable_dynamic_reduction: true,
             enable_endgame_detection: true,
+            verification_margin: 200,        // Default 200 centipawns safety margin
         }
     }
 }
@@ -1313,6 +1315,12 @@ impl NullMoveConfig {
         if self.max_pieces_threshold > 40 {
             return Err("max_pieces_threshold should not exceed 40".to_string());
         }
+        if self.verification_margin < 0 {
+            return Err("verification_margin must be non-negative".to_string());
+        }
+        if self.verification_margin > 1000 {
+            return Err("verification_margin should not exceed 1000 centipawns".to_string());
+        }
         Ok(())
     }
 
@@ -1321,19 +1329,21 @@ impl NullMoveConfig {
         self.min_depth = self.min_depth.clamp(1, 10);
         self.reduction_factor = self.reduction_factor.clamp(1, 5);
         self.max_pieces_threshold = self.max_pieces_threshold.clamp(1, 40);
+        self.verification_margin = self.verification_margin.clamp(0, 1000);
         self
     }
 
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}",
+            "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}",
             self.enabled,
             self.min_depth,
             self.reduction_factor,
             self.max_pieces_threshold,
             self.enable_dynamic_reduction,
-            self.enable_endgame_detection
+            self.enable_endgame_detection,
+            self.verification_margin
         )
     }
 }
@@ -1346,6 +1356,8 @@ pub struct NullMoveStats {
     pub depth_reductions: u64,              // Total depth reductions applied
     pub disabled_in_check: u64,             // Times disabled due to check
     pub disabled_endgame: u64,              // Times disabled due to endgame
+    pub verification_attempts: u64,         // Number of verification searches attempted
+    pub verification_cutoffs: u64,           // Number of verification searches that resulted in cutoffs
 }
 
 impl NullMoveStats {
@@ -1383,6 +1395,14 @@ impl NullMoveStats {
         (self.cutoffs as f64 / (self.attempts + self.total_disabled()) as f64) * 100.0
     }
 
+    /// Get the verification search cutoff rate as a percentage
+    pub fn verification_cutoff_rate(&self) -> f64 {
+        if self.verification_attempts == 0 {
+            return 0.0;
+        }
+        (self.verification_cutoffs as f64 / self.verification_attempts as f64) * 100.0
+    }
+
     /// Get a comprehensive performance report
     pub fn performance_report(&self) -> String {
         format!(
@@ -1391,7 +1411,9 @@ impl NullMoveStats {
             - Cutoffs: {} ({:.2}%)\n\
             - Total disabled: {} ({} in check, {} endgame)\n\
             - Average reduction: {:.2}\n\
-            - Efficiency: {:.2}%",
+            - Efficiency: {:.2}%\n\
+            - Verification attempts: {}\n\
+            - Verification cutoffs: {} ({:.2}%)",
             self.attempts,
             self.cutoffs,
             self.cutoff_rate(),
@@ -1399,7 +1421,10 @@ impl NullMoveStats {
             self.disabled_in_check,
             self.disabled_endgame,
             self.average_reduction_factor(),
-            self.efficiency()
+            self.efficiency(),
+            self.verification_attempts,
+            self.verification_cutoffs,
+            self.verification_cutoff_rate()
         )
     }
 
@@ -3824,6 +3849,7 @@ impl EngineConfig {
                     max_pieces_threshold: 8,
                     enable_dynamic_reduction: true,
                     enable_endgame_detection: true,
+                    verification_margin: 200,
                 },
                 lmr: LMRConfig {
                     enabled: true,
@@ -3883,6 +3909,7 @@ impl EngineConfig {
                     max_pieces_threshold: 6,
                     enable_dynamic_reduction: false,
                     enable_endgame_detection: true,
+                    verification_margin: 200,
                 },
                 lmr: LMRConfig {
                     enabled: true,

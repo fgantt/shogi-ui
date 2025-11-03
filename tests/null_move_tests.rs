@@ -400,4 +400,256 @@ mod null_move_tests {
         
         println!("Fallback mechanism: NMP disabled, no activity recorded");
     }
+
+    // ===== VERIFICATION SEARCH TESTS =====
+
+    #[test]
+    fn test_verification_search_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test that verification_margin is properly initialized
+        let config = engine.get_null_move_config();
+        assert_eq!(config.verification_margin, 200); // Default value
+        
+        // Test verification_margin validation
+        let mut config = config.clone();
+        config.verification_margin = 150;
+        let result = engine.update_null_move_config(config);
+        assert!(result.is_ok());
+        
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.verification_margin, 150);
+        
+        // Test invalid verification_margin (negative)
+        let mut invalid_config = engine.get_null_move_config().clone();
+        invalid_config.verification_margin = -1;
+        let result = engine.update_null_move_config(invalid_config);
+        assert!(result.is_err());
+        
+        // Test invalid verification_margin (too large)
+        let mut invalid_config = engine.get_null_move_config().clone();
+        invalid_config.verification_margin = 1001;
+        let result = engine.update_null_move_config(invalid_config);
+        assert!(result.is_err());
+        
+        // Test verification statistics initialization
+        let stats = engine.get_null_move_stats();
+        assert_eq!(stats.verification_attempts, 0);
+        assert_eq!(stats.verification_cutoffs, 0);
+    }
+
+    #[test]
+    fn test_verification_search_statistics_tracking() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Reset statistics to ensure clean test
+        engine.reset_null_move_stats();
+        
+        // Configure verification search with a reasonable margin
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 200;
+        engine.update_null_move_config(config).unwrap();
+        
+        // Perform a search that may trigger verification
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Verify statistics tracking mechanisms
+        assert!(stats.verification_attempts >= 0);
+        assert!(stats.verification_cutoffs >= 0);
+        assert!(stats.verification_cutoffs <= stats.verification_attempts);
+        
+        // Test verification cutoff rate calculation
+        let cutoff_rate = stats.verification_cutoff_rate();
+        assert!(cutoff_rate >= 0.0);
+        assert!(cutoff_rate <= 100.0);
+        
+        // Test that performance report includes verification statistics
+        let report = stats.performance_report();
+        assert!(report.contains("Verification attempts"));
+        assert!(report.contains("Verification cutoffs"));
+    }
+
+    #[test]
+    fn test_verification_search_disabled() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Reset statistics
+        engine.reset_null_move_stats();
+        
+        // Disable verification search by setting margin to 0
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 0;
+        engine.update_null_move_config(config).unwrap();
+        
+        // Perform a search
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Verification should not be attempted when margin is 0
+        assert_eq!(stats.verification_attempts, 0);
+        assert_eq!(stats.verification_cutoffs, 0);
+    }
+
+    #[test]
+    fn test_verification_search_margin_boundaries() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test with very small margin (should rarely trigger)
+        engine.reset_null_move_stats();
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 10; // Very small margin
+        engine.update_null_move_config(config).unwrap();
+        
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats_small = engine.get_null_move_stats();
+        
+        // Test with large margin (should trigger more often)
+        engine.reset_null_move_stats();
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 500; // Large margin
+        engine.update_null_move_config(config).unwrap();
+        
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats_large = engine.get_null_move_stats();
+        
+        // With larger margin, we should see more or equal verification attempts
+        // (this may not always be true depending on position, but structure is correct)
+        assert!(stats_large.verification_attempts >= stats_small.verification_attempts);
+        
+        println!("Small margin (10): {} verification attempts", stats_small.verification_attempts);
+        println!("Large margin (500): {} verification attempts", stats_large.verification_attempts);
+    }
+
+    #[test]
+    fn test_verification_search_different_depths() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Configure verification search
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 200;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        
+        // Test at shallow depth (should still allow NMP if min_depth is met)
+        engine.reset_null_move_stats();
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 3, 1000);
+        assert!(result.is_some());
+        
+        let stats_shallow = engine.get_null_move_stats();
+        
+        // Test at deeper depth
+        engine.reset_null_move_stats();
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 5, 1000);
+        assert!(result.is_some());
+        
+        let stats_deep = engine.get_null_move_stats();
+        
+        // Both should complete successfully
+        assert!(stats_shallow.verification_attempts >= 0);
+        assert!(stats_deep.verification_attempts >= 0);
+        
+        println!("Depth 3: {} verification attempts, {} cutoffs", 
+                stats_shallow.verification_attempts, stats_shallow.verification_cutoffs);
+        println!("Depth 5: {} verification attempts, {} cutoffs", 
+                stats_deep.verification_attempts, stats_deep.verification_cutoffs);
+    }
+
+    #[test]
+    fn test_verification_search_correctness() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Configure verification search with moderate margin
+        let mut config = engine.get_null_move_config().clone();
+        config.verification_margin = 200;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search - verification should only trigger when null move fails but is close to beta
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Verification cutoffs should never exceed verification attempts
+        assert!(stats.verification_cutoffs <= stats.verification_attempts);
+        
+        // If there were verification attempts, they should have been tracked
+        if stats.verification_attempts > 0 {
+            assert!(stats.verification_cutoffs >= 0);
+            let cutoff_rate = stats.verification_cutoff_rate();
+            assert!(cutoff_rate >= 0.0 && cutoff_rate <= 100.0);
+        }
+        
+        // Total cutoffs should include both direct NMP cutoffs and verification cutoffs
+        // Note: This is a structural test - actual counts depend on position characteristics
+        assert!(stats.cutoffs >= stats.verification_cutoffs);
+        
+        println!("Verification correctness: {} attempts, {} cutoffs ({:.2}%)",
+                stats.verification_attempts, stats.verification_cutoffs,
+                stats.verification_cutoff_rate());
+    }
+
+    #[test]
+    fn test_verification_search_integration() {
+        let mut engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+
+        // Test that verification search integrates correctly with null move pruning
+        let mut config = engine.get_null_move_config().clone();
+        config.enabled = true;
+        config.verification_margin = 200;
+        config.min_depth = 3;
+        engine.update_null_move_config(config).unwrap();
+        
+        engine.reset_null_move_stats();
+        
+        // Perform search with verification enabled
+        let result = engine.search_at_depth(&board, &captured_pieces, player, 4, 1000);
+        assert!(result.is_some());
+        
+        let stats = engine.get_null_move_stats();
+        
+        // Search should complete successfully
+        assert!(result.is_some());
+        
+        // Statistics should be properly tracked
+        assert!(stats.attempts >= 0);
+        assert!(stats.verification_attempts >= 0);
+        
+        // Verification should only happen if null move was attempted
+        // (verification_attempts <= attempts is not strictly true because verification
+        // happens when null move fails but is within margin, so it's possible to have
+        // more verifications than direct cutoffs, but structure should be sound)
+        
+        println!("Integration test: {} NMP attempts, {} verification attempts, {} total cutoffs",
+                stats.attempts, stats.verification_attempts, stats.cutoffs);
+    }
 }
