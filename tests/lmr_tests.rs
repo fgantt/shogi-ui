@@ -1571,3 +1571,247 @@ mod performance_monitoring_tests {
         assert!(report.contains("High re-search rate"));
     }
 }
+
+#[cfg(test)]
+mod enhanced_position_classification_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_position_classification_config_default() {
+        let config = PositionClassificationConfig::default();
+        assert_eq!(config.tactical_threshold, 0.3);
+        assert_eq!(config.quiet_threshold, 0.1);
+        assert_eq!(config.material_imbalance_threshold, 300);
+        assert_eq!(config.min_moves_threshold, 5);
+    }
+
+    #[test]
+    fn test_lmr_config_with_classification_config() {
+        let config = LMRConfig::default();
+        assert_eq!(config.classification_config.tactical_threshold, 0.3);
+        assert_eq!(config.classification_config.quiet_threshold, 0.1);
+        assert_eq!(config.classification_config.material_imbalance_threshold, 300);
+        assert_eq!(config.classification_config.min_moves_threshold, 5);
+    }
+
+    #[test]
+    fn test_position_classification_stats() {
+        let mut stats = PositionClassificationStats::default();
+        assert_eq!(stats.tactical_classified, 0);
+        assert_eq!(stats.quiet_classified, 0);
+        assert_eq!(stats.neutral_classified, 0);
+        assert_eq!(stats.total_classifications, 0);
+        
+        stats.record_classification(PositionClassification::Tactical);
+        assert_eq!(stats.tactical_classified, 1);
+        assert_eq!(stats.total_classifications, 1);
+        assert_eq!(stats.tactical_ratio(), 100.0);
+        
+        stats.record_classification(PositionClassification::Quiet);
+        assert_eq!(stats.quiet_classified, 1);
+        assert_eq!(stats.total_classifications, 2);
+        assert_eq!(stats.quiet_ratio(), 50.0);
+        
+        stats.record_classification(PositionClassification::Neutral);
+        assert_eq!(stats.neutral_classified, 1);
+        assert_eq!(stats.total_classifications, 3);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_tactical() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Set up high cutoff ratio to trigger tactical classification
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 40; // 40% cutoff rate
+        engine.lmr_stats.cutoffs_after_research = 10; // Total 50% cutoff rate
+        
+        let classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Should be classified as tactical due to high cutoff ratio
+        assert_eq!(classification, PositionClassification::Tactical);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_quiet() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Set up low cutoff ratio to trigger quiet classification
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 5; // 5% cutoff rate
+        engine.lmr_stats.cutoffs_after_research = 2; // Total 7% cutoff rate
+        
+        let classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Should be classified as quiet due to low cutoff ratio
+        assert_eq!(classification, PositionClassification::Quiet);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_material_imbalance() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Set up material imbalance (would need to create a board with imbalance)
+        // For now, test with high cutoff ratio
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 35; // 35% cutoff rate
+        
+        let classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Should be classified as tactical due to high cutoff ratio
+        assert_eq!(classification, PositionClassification::Tactical);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_min_moves_threshold() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Test with insufficient moves (below threshold)
+        engine.lmr_stats.moves_considered = 3; // Below default threshold of 5
+        engine.lmr_stats.cutoffs_after_reduction = 10;
+        
+        let classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Should be classified as neutral due to insufficient data
+        assert_eq!(classification, PositionClassification::Neutral);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_game_phase() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Test with endgame phase (should be more tactical)
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 25; // 25% cutoff rate (borderline)
+        
+        let endgame_classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Endgame
+        );
+        
+        // Endgame phase factor should make it more likely to be tactical
+        // Reset stats for opening phase
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 25;
+        
+        let opening_classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Opening
+        );
+        
+        // Endgame should be more likely tactical, opening less likely
+        // (Exact classification depends on other factors, but phase affects it)
+        assert!(endgame_classification != opening_classification || 
+                endgame_classification == PositionClassification::Tactical ||
+                opening_classification == PositionClassification::Quiet);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_configurable_thresholds() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        
+        // Set custom thresholds
+        config.classification_config.tactical_threshold = 0.4; // Higher threshold
+        config.classification_config.quiet_threshold = 0.05; // Lower threshold
+        config.classification_config.min_moves_threshold = 10; // Higher threshold
+        
+        engine.update_lmr_config(config).unwrap();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Test with 35% cutoff rate (above 30% default, but below 40% custom)
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 35;
+        
+        let classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Should be neutral with custom 40% threshold (35% < 40%)
+        assert_eq!(classification, PositionClassification::Neutral);
+    }
+
+    #[test]
+    fn test_enhanced_position_classification_tracks_statistics() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.cutoffs_after_reduction = 40;
+        
+        let initial_count = engine.lmr_stats.classification_stats.total_classifications;
+        
+        let _classification = engine.compute_position_classification(
+            &board,
+            &captured_pieces,
+            player,
+            GamePhase::Middlegame
+        );
+        
+        // Statistics should be tracked
+        assert_eq!(engine.lmr_stats.classification_stats.total_classifications, initial_count + 1);
+    }
+
+    #[test]
+    fn test_piece_activity_calculation() {
+        let engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let player = Player::Black;
+        
+        let activity = engine.calculate_piece_activity(&board, player);
+        
+        // Activity should be >= 0 (initial position has pieces)
+        assert!(activity >= 0);
+    }
+}

@@ -6275,9 +6275,14 @@ impl SearchEngine {
         // Store TT move in SearchState (Task 3.3)
         search_state.set_tt_move(tt_move.clone());
         
-        // Compute position classification for adaptive reduction if enabled
+        // Compute position classification for adaptive reduction if enabled (Task 5.9)
         if self.lmr_config.enable_adaptive_reduction {
-            let classification = self.compute_position_classification();
+            let classification = self.compute_position_classification(
+                board,
+                captured_pieces,
+                player,
+                search_state.game_phase
+            );
             search_state.set_position_classification(classification);
         }
         
@@ -6505,21 +6510,91 @@ impl SearchEngine {
         true // Default to quiet if no data
     }
     
-    /// Compute position classification for adaptive reduction
-    fn compute_position_classification(&self) -> crate::types::PositionClassification {
-        // Use existing position classification methods
-        // Only classify if we have enough data (at least 5 moves considered)
-        if self.lmr_stats.moves_considered < 5 {
+    /// Compute position classification for adaptive reduction (Task 5.1-5.9)
+    /// Enhanced classification uses material balance, piece activity, game phase, and threat analysis
+    pub(crate) fn compute_position_classification(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
+                                      player: Player, game_phase: crate::types::GamePhase) -> crate::types::PositionClassification {
+        let config = &self.lmr_config.classification_config;
+        
+        // Only classify if we have enough data (Task 5.6)
+        if self.lmr_stats.moves_considered < config.min_moves_threshold {
             return crate::types::PositionClassification::Neutral;
         }
         
-        if self.is_tactical_position() {
+        // Calculate material balance (Task 5.2)
+        let material_balance = self.calculate_material_balance(board, captured_pieces);
+        let material_imbalance = material_balance.abs();
+        
+        // Calculate cutoff ratio from statistics (Task 5.1)
+        let cutoff_ratio = if self.lmr_stats.moves_considered > 0 {
+            self.lmr_stats.total_cutoffs() as f64 / self.lmr_stats.moves_considered as f64
+        } else {
+            0.0
+        };
+        
+        // Count tactical threats (Task 5.5)
+        let tactical_threats = self.count_tactical_threats(board);
+        
+        // Calculate piece activity (Task 5.3) - approximate from piece count and position
+        let piece_activity = self.calculate_piece_activity(board, player);
+        
+        // Game phase factor (Task 5.4)
+        let phase_factor = match game_phase {
+            crate::types::GamePhase::Endgame => 1.2, // Endgames are more tactical
+            crate::types::GamePhase::Opening => 0.9, // Openings are less tactical
+            crate::types::GamePhase::Middlegame => 1.0,
+        };
+        
+        // Enhanced tactical detection (Task 5.5)
+        let is_tactical = cutoff_ratio > config.tactical_threshold ||
+                         material_imbalance > config.material_imbalance_threshold as i32 ||
+                         tactical_threats > 3 ||
+                         piece_activity > 150 ||
+                         (cutoff_ratio > 0.2 && phase_factor > 1.0);
+        
+        // Enhanced quiet detection (Task 5.5)
+        let is_quiet = cutoff_ratio < config.quiet_threshold &&
+                      material_imbalance < config.material_imbalance_threshold as i32 / 2 &&
+                      tactical_threats < 2 &&
+                      piece_activity < 100 &&
+                      phase_factor < 1.1;
+        
+        let classification = if is_tactical {
             crate::types::PositionClassification::Tactical
-        } else if self.is_quiet_position() {
+        } else if is_quiet {
             crate::types::PositionClassification::Quiet
         } else {
             crate::types::PositionClassification::Neutral
+        };
+        
+        // Track classification statistics (Task 5.10)
+        self.lmr_stats.classification_stats.record_classification(classification);
+        
+        classification
+    }
+    
+    /// Calculate piece activity score (Task 5.3)
+    pub(crate) fn calculate_piece_activity(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let mut activity = 0;
+        
+        // Count pieces in center and advanced positions
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(piece) = board.get_piece(Position::new(row, col)) {
+                    if piece.player == player {
+                        // Center squares are more active
+                        if self.is_center_square(Position::new(row, col)) {
+                            activity += 10;
+                        }
+                        // Advanced pieces (closer to opponent's side) are more active
+                        let advancement = if player == Player::Black { row } else { 8 - row };
+                        activity += advancement as i32 * 2;
+                    }
+                }
+            }
         }
+        
+        activity
     }
 
     /// Check if a move targets center squares
@@ -6715,6 +6790,7 @@ impl SearchEngine {
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
                 re_search_margin: 25,  // Lower margin for more aggressive play
+                classification_config: PositionClassificationConfig::default(),
             },
             LMRPlayingStyle::Conservative => LMRConfig {
                 enabled: true,
@@ -6726,6 +6802,7 @@ impl SearchEngine {
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
                 re_search_margin: 100,  // Higher margin for safer play
+                classification_config: PositionClassificationConfig::default(),
             },
             LMRPlayingStyle::Balanced => LMRConfig {
                 enabled: true,
@@ -6737,6 +6814,7 @@ impl SearchEngine {
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
                 re_search_margin: 50,  // Default margin
+                classification_config: PositionClassificationConfig::default(),
             },
         }
     }
@@ -6857,6 +6935,7 @@ impl SearchEngine {
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
             re_search_margin: 50,  // Default margin
+            classification_config: PositionClassificationConfig::default(),
         }
     }
 

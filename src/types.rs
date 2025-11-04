@@ -1955,6 +1955,32 @@ pub struct LMRConfig {
     pub enable_adaptive_reduction: bool,      // Use position-based adaptation
     pub enable_extended_exemptions: bool,     // Extended move exemption rules
     pub re_search_margin: i32,               // Margin for re-search decision (centipawns, default: 50, range: 0-500)
+    /// Position classification configuration (Task 5.8)
+    pub classification_config: PositionClassificationConfig,
+}
+
+/// Configuration for position classification (Task 5.8)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PositionClassificationConfig {
+    /// Tactical threshold: cutoff ratio above which position is classified as tactical (default: 0.3)
+    pub tactical_threshold: f64,
+    /// Quiet threshold: cutoff ratio below which position is classified as quiet (default: 0.1)
+    pub quiet_threshold: f64,
+    /// Material imbalance threshold: material difference above which position is more tactical (default: 300 centipawns)
+    pub material_imbalance_threshold: i32,
+    /// Minimum moves threshold: minimum moves considered before classification (default: 5)
+    pub min_moves_threshold: u64,
+}
+
+impl Default for PositionClassificationConfig {
+    fn default() -> Self {
+        Self {
+            tactical_threshold: 0.3,
+            quiet_threshold: 0.1,
+            material_imbalance_threshold: 300,
+            min_moves_threshold: 5,
+        }
+    }
 }
 
 impl Default for LMRConfig {
@@ -1969,6 +1995,7 @@ impl Default for LMRConfig {
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
             re_search_margin: 50,             // Default: 50 centipawns
+            classification_config: PositionClassificationConfig::default(),
         }
     }
 }
@@ -2022,7 +2049,7 @@ impl LMRConfig {
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}, re_search_margin={}",
+            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}, re_search_margin={}, classification(tactical_threshold={:.2}, quiet_threshold={:.2}, material_imbalance_threshold={}, min_moves_threshold={})",
             self.enabled,
             self.min_depth,
             self.min_move_index,
@@ -2031,8 +2058,46 @@ impl LMRConfig {
             self.enable_dynamic_reduction,
             self.enable_adaptive_reduction,
             self.enable_extended_exemptions,
-            self.re_search_margin
+            self.re_search_margin,
+            self.classification_config.tactical_threshold,
+            self.classification_config.quiet_threshold,
+            self.classification_config.material_imbalance_threshold,
+            self.classification_config.min_moves_threshold
         )
+    }
+}
+
+/// Position classification statistics (Task 5.10)
+#[derive(Debug, Clone, Default)]
+pub struct PositionClassificationStats {
+    pub tactical_classified: u64,
+    pub quiet_classified: u64,
+    pub neutral_classified: u64,
+    pub total_classifications: u64,
+}
+
+impl PositionClassificationStats {
+    pub fn record_classification(&mut self, classification: PositionClassification) {
+        self.total_classifications += 1;
+        match classification {
+            PositionClassification::Tactical => self.tactical_classified += 1,
+            PositionClassification::Quiet => self.quiet_classified += 1,
+            PositionClassification::Neutral => self.neutral_classified += 1,
+        }
+    }
+
+    pub fn tactical_ratio(&self) -> f64 {
+        if self.total_classifications == 0 {
+            return 0.0;
+        }
+        (self.tactical_classified as f64 / self.total_classifications as f64) * 100.0
+    }
+
+    pub fn quiet_ratio(&self) -> f64 {
+        if self.total_classifications == 0 {
+            return 0.0;
+        }
+        (self.quiet_classified as f64 / self.total_classifications as f64) * 100.0
     }
 }
 
@@ -2087,6 +2152,8 @@ pub struct LMRStats {
     pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
     /// Statistics by game phase (Task 4.6)
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
+    /// Position classification statistics (Task 5.10)
+    pub classification_stats: PositionClassificationStats,
 }
 
 impl LMRStats {
