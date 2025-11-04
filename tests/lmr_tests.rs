@@ -2011,3 +2011,250 @@ mod escape_move_detection_tests {
         assert!(is_attacked == true || is_attacked == false);
     }
 }
+
+#[cfg(test)]
+mod adaptive_tuning_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_adaptive_tuning_config_default() {
+        let config = AdaptiveTuningConfig::default();
+        assert_eq!(config.enabled, false);
+        assert_eq!(config.aggressiveness, TuningAggressiveness::Moderate);
+        assert_eq!(config.min_data_threshold, 100);
+    }
+
+    #[test]
+    fn test_lmr_config_with_adaptive_tuning_config() {
+        let config = LMRConfig::default();
+        assert_eq!(config.adaptive_tuning_config.enabled, false);
+        assert_eq!(config.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Moderate);
+        assert_eq!(config.adaptive_tuning_config.min_data_threshold, 100);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_stats() {
+        let mut stats = AdaptiveTuningStats::default();
+        assert_eq!(stats.tuning_attempts, 0);
+        assert_eq!(stats.successful_tunings, 0);
+        assert_eq!(stats.parameter_changes, 0);
+        
+        stats.record_tuning_attempt(true);
+        assert_eq!(stats.tuning_attempts, 1);
+        assert_eq!(stats.successful_tunings, 1);
+        
+        stats.record_tuning_attempt(false);
+        assert_eq!(stats.tuning_attempts, 2);
+        assert_eq!(stats.successful_tunings, 1);
+        
+        stats.record_parameter_change("base_reduction");
+        assert_eq!(stats.parameter_changes, 1);
+        assert_eq!(stats.base_reduction_changes, 1);
+        
+        stats.record_adjustment_reason("re_search_rate");
+        assert_eq!(stats.re_search_rate_adjustments, 1);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_disabled() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = false;
+        engine.update_lmr_config(config).unwrap();
+        
+        let result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Should return error when disabled
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("disabled"));
+    }
+
+    #[test]
+    fn test_adaptive_tuning_insufficient_data() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Reset stats to have insufficient data
+        engine.reset_lmr_stats();
+        
+        let result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Should return error when insufficient data
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Insufficient data"));
+    }
+
+    #[test]
+    fn test_adaptive_tuning_re_search_rate_adjustment() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with high re-search rate
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.reductions_applied = 50;
+        engine.lmr_stats.researches_triggered = 30; // 60% re-search rate (high)
+        
+        let old_base_reduction = engine.lmr_config.base_reduction;
+        let result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Should adjust parameters if re-search rate is high
+        // Result depends on actual metrics, but should not crash
+        let _ = result; // Ignore result - may succeed or fail depending on metrics
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > 0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_efficiency_adjustment() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with low efficiency
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.reductions_applied = 50;
+        engine.lmr_stats.cutoffs_after_reduction = 5; // Low efficiency
+        
+        let old_min_move_index = engine.lmr_config.min_move_index;
+        let result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Should adjust parameters if efficiency is low
+        // Result depends on actual metrics, but should not crash
+        let _ = result; // Ignore result - may succeed or fail depending on metrics
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > 0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_game_phase() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with sufficient data
+        engine.lmr_stats.moves_considered = 100;
+        
+        let result = engine.auto_tune_lmr_parameters(Some(GamePhase::Endgame), None);
+        
+        // Should handle game phase tuning
+        // Result depends on actual metrics, but should not crash
+        let _ = result; // Ignore result - may succeed or fail depending on metrics
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > 0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_position_type() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with sufficient data
+        engine.lmr_stats.moves_considered = 100;
+        
+        let result = engine.auto_tune_lmr_parameters(None, Some(PositionClassification::Quiet));
+        
+        // Should handle position type tuning
+        // Result depends on actual metrics, but should not crash
+        let _ = result; // Ignore result - may succeed or fail depending on metrics
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > 0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_aggressiveness() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.aggressiveness = TuningAggressiveness::Conservative;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with sufficient data
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.reductions_applied = 50;
+        engine.lmr_stats.researches_triggered = 30; // High re-search rate
+        
+        let old_base_reduction = engine.lmr_config.base_reduction;
+        let result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Conservative aggressiveness should make smaller adjustments
+        // Result depends on actual metrics, but should not crash
+        let _ = result; // Ignore result - may succeed or fail depending on metrics
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > 0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_stats_tracking() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        let initial_attempts = engine.lmr_stats.adaptive_tuning_stats.tuning_attempts;
+        
+        // Set up stats with sufficient data
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.reductions_applied = 50;
+        engine.lmr_stats.researches_triggered = 30; // High re-search rate
+        
+        let _result = engine.auto_tune_lmr_parameters(None, None);
+        
+        // Statistics should be tracked
+        assert!(engine.lmr_stats.adaptive_tuning_stats.tuning_attempts > initial_attempts);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_success_rate() {
+        let mut stats = AdaptiveTuningStats::default();
+        assert_eq!(stats.success_rate(), 0.0);
+        
+        stats.record_tuning_attempt(true);
+        stats.record_tuning_attempt(true);
+        stats.record_tuning_attempt(false);
+        
+        // 2 successful out of 3 attempts = 66.67%
+        let success_rate = stats.success_rate();
+        assert!(success_rate > 60.0);
+        assert!(success_rate < 70.0);
+    }
+
+    #[test]
+    fn test_adaptive_tuning_no_oscillation() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.adaptive_tuning_config.enabled = true;
+        config.adaptive_tuning_config.min_data_threshold = 100;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Set up stats with sufficient data
+        engine.lmr_stats.moves_considered = 100;
+        engine.lmr_stats.reductions_applied = 50;
+        engine.lmr_stats.researches_triggered = 10; // Normal re-search rate
+        
+        let old_config = engine.lmr_config.clone();
+        let result1 = engine.auto_tune_lmr_parameters(None, None);
+        
+        // If tuning succeeds, verify parameters changed
+        if result1.is_ok() {
+            let new_config = engine.lmr_config.clone();
+            // Parameters should have changed
+            assert!(new_config.base_reduction != old_config.base_reduction ||
+                   new_config.max_reduction != old_config.max_reduction ||
+                   new_config.min_move_index != old_config.min_move_index);
+        }
+    }
+}

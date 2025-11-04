@@ -1959,6 +1959,8 @@ pub struct LMRConfig {
     pub classification_config: PositionClassificationConfig,
     /// Escape move detection configuration (Task 6.7)
     pub escape_move_config: EscapeMoveConfig,
+    /// Adaptive tuning configuration (Task 7.8)
+    pub adaptive_tuning_config: AdaptiveTuningConfig,
 }
 
 /// Configuration for position classification (Task 5.8)
@@ -1983,6 +1985,41 @@ pub struct EscapeMoveConfig {
     pub use_threat_based_detection: bool,
     /// Fallback to heuristic if threat detection unavailable (default: false)
     pub fallback_to_heuristic: bool,
+}
+
+/// Tuning aggressiveness level (Task 7.8)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub enum TuningAggressiveness {
+    Conservative,  // Small, gradual adjustments
+    Moderate,      // Balanced adjustments
+    Aggressive,    // Larger, more frequent adjustments
+}
+
+impl Default for TuningAggressiveness {
+    fn default() -> Self {
+        Self::Moderate
+    }
+}
+
+/// Configuration for adaptive tuning (Task 7.8)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AdaptiveTuningConfig {
+    /// Enable adaptive tuning (default: false)
+    pub enabled: bool,
+    /// Tuning aggressiveness (default: Moderate)
+    pub aggressiveness: TuningAggressiveness,
+    /// Minimum data threshold before tuning activates (default: 100 moves)
+    pub min_data_threshold: u64,
+}
+
+impl Default for AdaptiveTuningConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            aggressiveness: TuningAggressiveness::Moderate,
+            min_data_threshold: 100,
+        }
+    }
 }
 
 impl Default for EscapeMoveConfig {
@@ -2020,6 +2057,7 @@ impl Default for LMRConfig {
             re_search_margin: 50,             // Default: 50 centipawns
             classification_config: PositionClassificationConfig::default(),
             escape_move_config: EscapeMoveConfig::default(),
+            adaptive_tuning_config: AdaptiveTuningConfig::default(),
         }
     }
 }
@@ -2088,8 +2126,61 @@ impl LMRConfig {
             self.classification_config.material_imbalance_threshold,
             self.classification_config.min_moves_threshold,
             self.escape_move_config.enable_escape_move_exemption,
-            self.escape_move_config.use_threat_based_detection
+            self.escape_move_config.use_threat_based_detection,
+            self.adaptive_tuning_config.enabled,
+            format!("{:?}", self.adaptive_tuning_config.aggressiveness)
         )
+    }
+}
+
+/// Adaptive tuning statistics (Task 7.9)
+#[derive(Debug, Clone, Default)]
+pub struct AdaptiveTuningStats {
+    pub tuning_attempts: u64,                 // Number of tuning attempts
+    pub successful_tunings: u64,              // Number of successful parameter adjustments
+    pub parameter_changes: u64,               // Total number of parameter changes
+    pub base_reduction_changes: u64,          // Number of base_reduction adjustments
+    pub max_reduction_changes: u64,           // Number of max_reduction adjustments
+    pub min_move_index_changes: u64,          // Number of min_move_index adjustments
+    pub re_search_rate_adjustments: u64,      // Number of adjustments based on re-search rate
+    pub efficiency_adjustments: u64,          // Number of adjustments based on efficiency
+    pub game_phase_adjustments: u64,          // Number of adjustments based on game phase
+    pub position_type_adjustments: u64,        // Number of adjustments based on position type
+}
+
+impl AdaptiveTuningStats {
+    pub fn record_tuning_attempt(&mut self, successful: bool) {
+        self.tuning_attempts += 1;
+        if successful {
+            self.successful_tunings += 1;
+        }
+    }
+
+    pub fn record_parameter_change(&mut self, parameter: &str) {
+        self.parameter_changes += 1;
+        match parameter {
+            "base_reduction" => self.base_reduction_changes += 1,
+            "max_reduction" => self.max_reduction_changes += 1,
+            "min_move_index" => self.min_move_index_changes += 1,
+            _ => {}
+        }
+    }
+
+    pub fn record_adjustment_reason(&mut self, reason: &str) {
+        match reason {
+            "re_search_rate" => self.re_search_rate_adjustments += 1,
+            "efficiency" => self.efficiency_adjustments += 1,
+            "game_phase" => self.game_phase_adjustments += 1,
+            "position_type" => self.position_type_adjustments += 1,
+            _ => {}
+        }
+    }
+
+    pub fn success_rate(&self) -> f64 {
+        if self.tuning_attempts == 0 {
+            return 0.0;
+        }
+        (self.successful_tunings as f64 / self.tuning_attempts as f64) * 100.0
     }
 }
 
@@ -2222,6 +2313,8 @@ pub struct LMRStats {
     pub classification_stats: PositionClassificationStats,
     /// Escape move detection statistics (Task 6.8)
     pub escape_move_stats: EscapeMoveStats,
+    /// Adaptive tuning statistics (Task 7.9)
+    pub adaptive_tuning_stats: AdaptiveTuningStats,
 }
 
 impl LMRStats {

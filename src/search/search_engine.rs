@@ -6825,39 +6825,150 @@ impl SearchEngine {
             },
         }
     }
-    /// Auto-tune LMR parameters based on performance
-    pub fn auto_tune_lmr_parameters(&mut self) -> Result<(), String> {
+    /// Auto-tune LMR parameters based on performance (Task 7.1-7.7)
+    /// Enhanced with game phase and position type tuning
+    pub fn auto_tune_lmr_parameters(&mut self, game_phase: Option<crate::types::GamePhase>, 
+                                    position_type: Option<crate::types::PositionClassification>) -> Result<(), String> {
+        let tuning_config = &self.lmr_config.adaptive_tuning_config;
+        
+        // Check if adaptive tuning is enabled (Task 7.8)
+        if !tuning_config.enabled {
+            return Err("Adaptive tuning is disabled".to_string());
+        }
+        
         let metrics = self.get_lmr_performance_metrics();
         
-        // Only auto-tune if we have enough data
-        if metrics.moves_considered < 100 {
-            return Err("Insufficient data for auto-tuning".to_string());
+        // Only auto-tune if we have enough data (Task 7.8)
+        if metrics.moves_considered < tuning_config.min_data_threshold {
+            return Err(format!("Insufficient data for auto-tuning: need {} moves, have {}", 
+                             tuning_config.min_data_threshold, metrics.moves_considered));
         }
         
+        // Track tuning attempt (Task 7.9)
+        let mut tuning_successful = false;
         let mut new_config = self.lmr_config.clone();
+        let old_config = new_config.clone();
         
-        // Adjust parameters based on performance
-        if metrics.research_rate > 40.0 {
-            // Too many researches - reduce aggressiveness
-            new_config.base_reduction = new_config.base_reduction.saturating_sub(1);
-            new_config.max_reduction = new_config.max_reduction.saturating_sub(1);
-        } else if metrics.research_rate < 10.0 && metrics.efficiency > 30.0 {
-            // Too few researches - increase aggressiveness
-            new_config.base_reduction = (new_config.base_reduction + 1).min(5);
-            new_config.max_reduction = (new_config.max_reduction + 1).min(8);
+        // Get aggressiveness factor (Task 7.8)
+        let aggressiveness_factor = match tuning_config.aggressiveness {
+            crate::types::TuningAggressiveness::Conservative => 0.5,
+            crate::types::TuningAggressiveness::Moderate => 1.0,
+            crate::types::TuningAggressiveness::Aggressive => 2.0,
+        };
+        
+        // Parameter adjustment logic based on re-search rate (Task 7.2, 7.7)
+        if metrics.research_rate > 25.0 {
+            // Too many researches - reduce aggressiveness (Task 7.7)
+            let adjustment = (1.0 * aggressiveness_factor) as u8;
+            if new_config.base_reduction > adjustment {
+                new_config.base_reduction = new_config.base_reduction.saturating_sub(adjustment);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("base_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("re_search_rate");
+                tuning_successful = true;
+            }
+            // Alternatively, increase min_move_index
+            if new_config.min_move_index < 20 {
+                new_config.min_move_index = (new_config.min_move_index + adjustment).min(20);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("min_move_index");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("re_search_rate");
+                tuning_successful = true;
+            }
+        } else if metrics.research_rate < 5.0 && metrics.efficiency > 25.0 {
+            // Too few researches - increase aggressiveness (Task 7.7)
+            let adjustment = (1.0 * aggressiveness_factor) as u8;
+            if new_config.base_reduction < 5 {
+                new_config.base_reduction = (new_config.base_reduction + adjustment).min(5);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("base_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("re_search_rate");
+                tuning_successful = true;
+            }
+            // Alternatively, decrease min_move_index
+            if new_config.min_move_index > adjustment {
+                new_config.min_move_index = new_config.min_move_index.saturating_sub(adjustment);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("min_move_index");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("re_search_rate");
+                tuning_successful = true;
+            }
         }
         
-        // Adjust move index threshold based on efficiency
-        if metrics.efficiency > 50.0 {
-            // High efficiency - can be more aggressive
-            new_config.min_move_index = new_config.min_move_index.saturating_sub(1);
-        } else if metrics.efficiency < 20.0 {
-            // Low efficiency - be more conservative
-            new_config.min_move_index = (new_config.min_move_index + 1).min(10);
+        // Adjust based on efficiency (Task 7.7)
+        if metrics.efficiency < 25.0 {
+            // Low efficiency - decrease min_move_index (Task 7.7)
+            let adjustment = (1.0 * aggressiveness_factor) as u8;
+            if new_config.min_move_index > adjustment {
+                new_config.min_move_index = new_config.min_move_index.saturating_sub(adjustment);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("min_move_index");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("efficiency");
+                tuning_successful = true;
+            }
         }
         
-        // Apply the new configuration
-        self.update_lmr_config(new_config)
+        // Game phase-based tuning (Task 7.3)
+        if let Some(phase) = game_phase {
+            let phase_factor = match phase {
+                crate::types::GamePhase::Endgame => 1.2,  // Endgames can be more aggressive
+                crate::types::GamePhase::Opening => 0.9,  // Openings should be conservative
+                crate::types::GamePhase::Middlegame => 1.0,
+            };
+            
+            // Adjust base_reduction based on game phase
+            let phase_adjustment = ((new_config.base_reduction as f64 * (phase_factor - 1.0)) * aggressiveness_factor) as u8;
+            if phase_factor > 1.0 && new_config.base_reduction < 5 {
+                new_config.base_reduction = (new_config.base_reduction + phase_adjustment).min(5);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("base_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("game_phase");
+                tuning_successful = true;
+            } else if phase_factor < 1.0 && new_config.base_reduction > 1 {
+                new_config.base_reduction = new_config.base_reduction.saturating_sub(phase_adjustment);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("base_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("game_phase");
+                tuning_successful = true;
+            }
+        }
+        
+        // Position type-based tuning (Task 7.4)
+        if let Some(position_class) = position_type {
+            let position_factor = match position_class {
+                crate::types::PositionClassification::Tactical => 0.9,  // Tactical positions should be conservative
+                crate::types::PositionClassification::Quiet => 1.1,    // Quiet positions can be more aggressive
+                crate::types::PositionClassification::Neutral => 1.0,
+            };
+            
+            // Adjust max_reduction based on position type
+            let position_adjustment = ((new_config.max_reduction as f64 * (position_factor - 1.0)) * aggressiveness_factor) as u8;
+            if position_factor > 1.0 && new_config.max_reduction < 8 {
+                new_config.max_reduction = (new_config.max_reduction + position_adjustment).min(8);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("max_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("position_type");
+                tuning_successful = true;
+            } else if position_factor < 1.0 && new_config.max_reduction > 1 {
+                new_config.max_reduction = new_config.max_reduction.saturating_sub(position_adjustment);
+                self.lmr_stats.adaptive_tuning_stats.record_parameter_change("max_reduction");
+                self.lmr_stats.adaptive_tuning_stats.record_adjustment_reason("position_type");
+                tuning_successful = true;
+            }
+        }
+        
+        // Verify no oscillation (Task 7.13) - check if parameters changed significantly
+        let config_changed = new_config.base_reduction != old_config.base_reduction ||
+                            new_config.max_reduction != old_config.max_reduction ||
+                            new_config.min_move_index != old_config.min_move_index;
+        
+        if !config_changed {
+            // No changes made, not a successful tuning
+            tuning_successful = false;
+        }
+        
+        // Track tuning attempt (Task 7.9)
+        self.lmr_stats.adaptive_tuning_stats.record_tuning_attempt(tuning_successful);
+        
+        // Apply the new configuration if changed
+        if config_changed {
+            self.update_lmr_config(new_config)?;
+            Ok(())
+        } else {
+            Err("No parameter adjustments needed".to_string())
+        }
     }
 
     /// Get LMR configuration presets for different playing styles
@@ -6875,6 +6986,7 @@ impl SearchEngine {
                 re_search_margin: 25,  // Lower margin for more aggressive play
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig::default(),
             },
             LMRPlayingStyle::Conservative => LMRConfig {
                 enabled: true,
@@ -6888,6 +7000,7 @@ impl SearchEngine {
                 re_search_margin: 100,  // Higher margin for safer play
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig::default(),
             },
             LMRPlayingStyle::Balanced => LMRConfig {
                 enabled: true,
@@ -6901,6 +7014,7 @@ impl SearchEngine {
                 re_search_margin: 50,  // Default margin
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig::default(),
             },
         }
     }
@@ -7023,6 +7137,7 @@ impl SearchEngine {
             re_search_margin: 50,  // Default margin
             classification_config: PositionClassificationConfig::default(),
             escape_move_config: EscapeMoveConfig::default(),
+            adaptive_tuning_config: AdaptiveTuningConfig::default(),
         }
     }
 
