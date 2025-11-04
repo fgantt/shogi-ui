@@ -3638,7 +3638,7 @@ mod tests {
         let score = TaperedScore::new_tapered(100, 200);
         
         // Test with negative phase (should still work)
-        // 100 * (-1) + 200 * (256 - (-1)) / 256 = -100 + 200 * 257 / 256 = -100 + 51400 / 256 = 51300 / 256 = 200
+        // 100 * (-1) + 200 * (256 - (-1)) / 256 = -100 + 200 * 257 / 256 = 51300 / 256 = 200
         assert_eq!(score.interpolate(-1), 200);
         
         // Test with phase > GAME_PHASE_MAX
@@ -3775,6 +3775,8 @@ pub struct IIDStats {
     pub total_iid_nodes: u64,
     /// Total time spent in IID searches (milliseconds)
     pub iid_time_ms: u64,
+    /// Total time spent in all searches (milliseconds) - used for overhead calculation
+    pub total_search_time_ms: u64,
     /// Positions skipped due to transposition table move
     pub positions_skipped_tt_move: u64,
     /// Positions skipped due to insufficient depth
@@ -8541,10 +8543,10 @@ mod transposition_entry_tests {
     #[test]
     fn test_debug_string_with_move() {
         let move_ = Move::new_move(
+            Position::new(0, 0), 
             Position::new(1, 1), 
-            Position::new(2, 1), 
-            PieceType::Pawn, 
-            Player::Black, 
+            PieceType::King, 
+            Player::White, 
             false
         );
         

@@ -2511,8 +2511,8 @@ impl SearchEngine {
 
     /// Get IID performance metrics
     pub fn get_iid_performance_metrics(&self) -> IIDPerformanceMetrics {
-        // For now, use a placeholder for total search time - this would need to be tracked
-        let total_search_time_ms = 1000; // Placeholder
+        // Use actual total search time tracked in IIDStats
+        let total_search_time_ms = self.iid_stats.total_search_time_ms;
         IIDPerformanceMetrics::from_stats(&self.iid_stats, total_search_time_ms)
     }
 
@@ -2813,6 +2813,10 @@ impl SearchEngine {
             self.maybe_buffer_tt_store(entry, depth, flag);
         }
 
+        // Note: Total search time is tracked at the IterativeDeepening::search() level
+        // search_at_depth() is called from iterative deepening, so we don't track here
+        // to avoid double-counting
+        
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Search completed: best_move={:?}, best_score={}", 
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
@@ -8768,7 +8772,10 @@ impl IterativeDeepening {
         crate::debug_utils::trace_log("ITERATIVE_DEEPENING", "Starting iterative deepening search");
         crate::debug_utils::start_timing("iterative_deepening_total");
         
+        // Task 1.0: Record start time for total search time tracking
         let start_time = TimeSource::now();
+        // Reset total search time at the start of a new search
+        search_engine.iid_stats.total_search_time_ms = 0;
         
         let mut best_move: Option<Move> = None;
         let mut best_score = 0;
@@ -9183,6 +9190,11 @@ impl IterativeDeepening {
         }
         
         crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+        
+        // Task 1.0: Calculate and store total search time for IID overhead calculation
+        let total_search_time_ms = start_time.elapsed_ms() as u64;
+        search_engine.iid_stats.total_search_time_ms = total_search_time_ms;
+        
         // Print aggregated metrics (benches or manual on demand)
         maybe_print_search_metrics("iterative_deepening");
         
@@ -9194,6 +9206,11 @@ impl IterativeDeepening {
                 fallback_move.to_usi_string(), legal_moves.len()
             ));
             crate::debug_utils::end_timing("iterative_deepening_total", "ITERATIVE_DEEPENING");
+            
+            // Task 1.0: Track total search time even for fallback
+            let total_search_time_ms = start_time.elapsed_ms() as u64;
+            search_engine.iid_stats.total_search_time_ms = total_search_time_ms;
+            
             return Some((fallback_move, 0)); // Neutral score for fallback move
         }
         

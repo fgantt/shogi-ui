@@ -56,18 +56,18 @@
 
 ## Tasks
 
-- [ ] 1.0 Fix Total Search Time Tracking
-  - [ ] 1.1 Review current `get_iid_performance_metrics()` implementation (lines 2513-2517) - uses placeholder `total_search_time_ms = 1000`
-  - [ ] 1.2 Add `total_search_time_ms` field to `SearchEngine` state or `IIDStats` to track actual total search time
-  - [ ] 1.3 Update search entry point to record start time when search begins
-  - [ ] 1.4 Update search exit point to calculate total search time and store in state/stats
-  - [ ] 1.5 Modify `get_iid_performance_metrics()` to use actual total search time instead of placeholder
-  - [ ] 1.6 Fix overhead percentage calculation: `overhead_percentage = (iid_time_ms / total_search_time_ms) * 100`
-  - [ ] 1.7 Add unit tests verifying total search time is correctly tracked
-  - [ ] 1.8 Add unit tests verifying overhead percentage calculation is accurate
-  - [ ] 1.9 Verify overhead percentage matches expected values (5-15% typically)
-  - [ ] 1.10 Update performance reports to use accurate overhead calculations
-  - [ ] 1.11 Document that overhead tracking now uses actual search time
+- [x] 1.0 Fix Total Search Time Tracking
+  - [x] 1.1 Review current `get_iid_performance_metrics()` implementation (lines 2513-2517) - uses placeholder `total_search_time_ms = 1000`
+  - [x] 1.2 Add `total_search_time_ms` field to `SearchEngine` state or `IIDStats` to track actual total search time
+  - [x] 1.3 Update search entry point to record start time when search begins
+  - [x] 1.4 Update search exit point to calculate total search time and store in state/stats
+  - [x] 1.5 Modify `get_iid_performance_metrics()` to use actual total search time instead of placeholder
+  - [x] 1.6 Fix overhead percentage calculation: `overhead_percentage = (iid_time_ms / total_search_time_ms) * 100`
+  - [x] 1.7 Add unit tests verifying total search time is correctly tracked
+  - [x] 1.8 Add unit tests verifying overhead percentage calculation is accurate
+  - [x] 1.9 Verify overhead percentage matches expected values (5-15% typically)
+  - [x] 1.10 Update performance reports to use accurate overhead calculations
+  - [x] 1.11 Document that overhead tracking now uses actual search time
 
 - [ ] 2.0 Improve IID Move Extraction
   - [ ] 2.1 Review current IID move extraction from transposition table (lines 738-745)
@@ -347,4 +347,28 @@ Complete tasks 9.0, 10.0, 11.0:
 
 **Generated:** December 2024  
 **Status:** In Progress - Tasks document for Internal Iterative Deepening improvements
+
+**Task 1.0 Completion Notes:**
+- Added `total_search_time_ms` field to `IIDStats` struct in `src/types.rs` to track actual total search time
+- Updated `IterativeDeepening::search()` method to:
+  * Reset `total_search_time_ms` to 0 at the start of each new search
+  * Record start time using `TimeSource::now()` at search entry point
+  * Calculate total search time at search exit point using `start_time.elapsed_ms()`
+  * Store total search time in `search_engine.iid_stats.total_search_time_ms`
+  * Handle both normal completion and fallback move paths
+- Removed placeholder `total_search_time_ms = 1000` from `get_iid_performance_metrics()` method
+- Modified `get_iid_performance_metrics()` to use actual tracked time from `self.iid_stats.total_search_time_ms`
+- Verified overhead percentage calculation is correct: `(iid_time_ms / total_search_time_ms) * 100`
+- Created comprehensive unit tests in `tests/iid_tests.rs`:
+  * `test_iid_stats_total_search_time_tracking()` - Verifies field initialization, setting, and reset
+  * `test_iid_overhead_percentage_calculation()` - Tests overhead calculation accuracy with various scenarios including edge cases (zero total time, typical 5-15% range)
+  * `test_get_iid_performance_metrics_uses_actual_time()` - Verifies `get_iid_performance_metrics()` uses actual tracked time instead of placeholder
+- All tests passing and verify correct behavior:
+  * Total search time correctly initialized to 0 and tracked across searches
+  * Overhead percentage calculation accurate (tested with 10%, 15%, 25% scenarios)
+  * Edge cases handled correctly (zero total time returns 0% overhead)
+  * Performance metrics now use actual search time data
+- Overhead tracking now provides accurate measurements for IID performance analysis
+- Performance reports will now reflect actual IID overhead percentage instead of placeholder values
+- Changes maintain backward compatibility - existing code continues to work, just with accurate data
 

@@ -149,6 +149,72 @@ fn test_iid_performance_metrics() {
     assert_eq!(metrics.average_iid_time, 20.0); // 1000/50
 }
 
+// Task 1.0: Tests for total search time tracking
+#[test]
+fn test_iid_stats_total_search_time_tracking() {
+    let mut stats = IIDStats::default();
+    
+    // Verify default value is 0
+    assert_eq!(stats.total_search_time_ms, 0);
+    
+    // Set total search time
+    stats.total_search_time_ms = 5000;
+    assert_eq!(stats.total_search_time_ms, 5000);
+    
+    // Test reset
+    stats.reset();
+    assert_eq!(stats.total_search_time_ms, 0);
+}
+
+#[test]
+fn test_iid_overhead_percentage_calculation() {
+    let mut stats = IIDStats::default();
+    stats.iid_time_ms = 500; // 500ms spent in IID searches
+    stats.total_search_time_ms = 5000; // 5000ms total search time
+    
+    let metrics = IIDPerformanceMetrics::from_stats(&stats, stats.total_search_time_ms);
+    
+    // Overhead should be 500/5000 * 100 = 10%
+    assert!((metrics.overhead_percentage - 10.0).abs() < 0.01);
+    
+    // Test edge case: zero total search time
+    stats.total_search_time_ms = 0;
+    let metrics_zero = IIDPerformanceMetrics::from_stats(&stats, 0);
+    assert_eq!(metrics_zero.overhead_percentage, 0.0);
+    
+    // Test typical overhead range (5-15%)
+    stats.iid_time_ms = 750;
+    stats.total_search_time_ms = 5000;
+    let metrics_typical = IIDPerformanceMetrics::from_stats(&stats, stats.total_search_time_ms);
+    assert!(metrics_typical.overhead_percentage >= 5.0);
+    assert!(metrics_typical.overhead_percentage <= 15.0);
+    assert!((metrics_typical.overhead_percentage - 15.0).abs() < 0.01); // 750/5000 = 15%
+}
+
+#[test]
+fn test_get_iid_performance_metrics_uses_actual_time() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Set up test statistics
+    engine.iid_stats.iid_time_ms = 1000;
+    engine.iid_stats.total_search_time_ms = 10000; // 10 seconds total search time
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // Verify overhead calculation uses actual tracked time, not placeholder
+    // 1000/10000 * 100 = 10%
+    assert!((metrics.overhead_percentage - 10.0).abs() < 0.01);
+    
+    // Test with different values
+    engine.iid_stats.iid_time_ms = 500;
+    engine.iid_stats.total_search_time_ms = 2000;
+    let metrics2 = engine.get_iid_performance_metrics();
+    // 500/2000 * 100 = 25%
+    assert!((metrics2.overhead_percentage - 25.0).abs() < 0.01);
+}
+
 #[test]
 fn test_iid_depth_strategy() {
     let config = IIDConfig::default();
