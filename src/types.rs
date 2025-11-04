@@ -1957,6 +1957,8 @@ pub struct LMRConfig {
     pub re_search_margin: i32,               // Margin for re-search decision (centipawns, default: 50, range: 0-500)
     /// Position classification configuration (Task 5.8)
     pub classification_config: PositionClassificationConfig,
+    /// Escape move detection configuration (Task 6.7)
+    pub escape_move_config: EscapeMoveConfig,
 }
 
 /// Configuration for position classification (Task 5.8)
@@ -1970,6 +1972,27 @@ pub struct PositionClassificationConfig {
     pub material_imbalance_threshold: i32,
     /// Minimum moves threshold: minimum moves considered before classification (default: 5)
     pub min_moves_threshold: u64,
+}
+
+/// Configuration for escape move detection (Task 6.7)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EscapeMoveConfig {
+    /// Enable escape move exemption from LMR (default: true)
+    pub enable_escape_move_exemption: bool,
+    /// Use threat-based detection instead of heuristic (default: true)
+    pub use_threat_based_detection: bool,
+    /// Fallback to heuristic if threat detection unavailable (default: false)
+    pub fallback_to_heuristic: bool,
+}
+
+impl Default for EscapeMoveConfig {
+    fn default() -> Self {
+        Self {
+            enable_escape_move_exemption: true,
+            use_threat_based_detection: true,
+            fallback_to_heuristic: false,
+        }
+    }
 }
 
 impl Default for PositionClassificationConfig {
@@ -1996,6 +2019,7 @@ impl Default for LMRConfig {
             enable_extended_exemptions: true,
             re_search_margin: 50,             // Default: 50 centipawns
             classification_config: PositionClassificationConfig::default(),
+            escape_move_config: EscapeMoveConfig::default(),
         }
     }
 }
@@ -2062,8 +2086,50 @@ impl LMRConfig {
             self.classification_config.tactical_threshold,
             self.classification_config.quiet_threshold,
             self.classification_config.material_imbalance_threshold,
-            self.classification_config.min_moves_threshold
+            self.classification_config.min_moves_threshold,
+            self.escape_move_config.enable_escape_move_exemption,
+            self.escape_move_config.use_threat_based_detection
         )
+    }
+}
+
+/// Escape move detection statistics (Task 6.8)
+#[derive(Debug, Clone, Default)]
+pub struct EscapeMoveStats {
+    pub escape_moves_exempted: u64,          // Number of escape moves exempted from LMR
+    pub threat_based_detections: u64,         // Number of threat-based detections
+    pub heuristic_detections: u64,            // Number of heuristic detections (fallback)
+    pub false_positives: u64,                 // Number of false positives (heuristic said escape but no threat)
+    pub false_negatives: u64,                 // Number of false negatives (threat exists but not detected)
+}
+
+impl EscapeMoveStats {
+    pub fn record_escape_move(&mut self, is_escape: bool, threat_based: bool) {
+        if is_escape {
+            self.escape_moves_exempted += 1;
+            if threat_based {
+                self.threat_based_detections += 1;
+            } else {
+                self.heuristic_detections += 1;
+            }
+        }
+    }
+
+    pub fn record_false_positive(&mut self) {
+        self.false_positives += 1;
+    }
+
+    pub fn record_false_negative(&mut self) {
+        self.false_negatives += 1;
+    }
+
+    pub fn accuracy(&self) -> f64 {
+        let total = self.threat_based_detections + self.heuristic_detections;
+        if total == 0 {
+            return 0.0;
+        }
+        let errors = self.false_positives + self.false_negatives;
+        (1.0 - (errors as f64 / total as f64)) * 100.0
     }
 }
 
@@ -2154,6 +2220,8 @@ pub struct LMRStats {
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
     /// Position classification statistics (Task 5.10)
     pub classification_stats: PositionClassificationStats,
+    /// Escape move detection statistics (Task 6.8)
+    pub escape_move_stats: EscapeMoveStats,
 }
 
 impl LMRStats {

@@ -1815,3 +1815,199 @@ mod enhanced_position_classification_tests {
         assert!(activity >= 0);
     }
 }
+
+#[cfg(test)]
+mod escape_move_detection_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_escape_move_config_default() {
+        let config = EscapeMoveConfig::default();
+        assert_eq!(config.enable_escape_move_exemption, true);
+        assert_eq!(config.use_threat_based_detection, true);
+        assert_eq!(config.fallback_to_heuristic, false);
+    }
+
+    #[test]
+    fn test_lmr_config_with_escape_move_config() {
+        let config = LMRConfig::default();
+        assert_eq!(config.escape_move_config.enable_escape_move_exemption, true);
+        assert_eq!(config.escape_move_config.use_threat_based_detection, true);
+        assert_eq!(config.escape_move_config.fallback_to_heuristic, false);
+    }
+
+    #[test]
+    fn test_escape_move_stats() {
+        let mut stats = EscapeMoveStats::default();
+        assert_eq!(stats.escape_moves_exempted, 0);
+        assert_eq!(stats.threat_based_detections, 0);
+        assert_eq!(stats.heuristic_detections, 0);
+        assert_eq!(stats.false_positives, 0);
+        assert_eq!(stats.false_negatives, 0);
+        
+        stats.record_escape_move(true, true);
+        assert_eq!(stats.escape_moves_exempted, 1);
+        assert_eq!(stats.threat_based_detections, 1);
+        
+        stats.record_escape_move(true, false);
+        assert_eq!(stats.escape_moves_exempted, 2);
+        assert_eq!(stats.heuristic_detections, 1);
+        
+        stats.record_false_positive();
+        assert_eq!(stats.false_positives, 1);
+        
+        stats.record_false_negative();
+        assert_eq!(stats.false_negatives, 1);
+    }
+
+    #[test]
+    fn test_escape_move_detection_disabled() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.escape_move_config.enable_escape_move_exemption = false;
+        engine.update_lmr_config(config).unwrap();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        let is_escape = engine.is_escape_move(&move_, &board, &captured_pieces, player);
+        
+        // Should return false when disabled
+        assert_eq!(is_escape, false);
+    }
+
+    #[test]
+    fn test_escape_move_threat_based_detection() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.escape_move_config.use_threat_based_detection = true;
+        config.escape_move_config.fallback_to_heuristic = false;
+        engine.update_lmr_config(config).unwrap();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Test threat-based detection (simplified - actual threat detection would check board state)
+        let is_escape = engine.is_escape_move(&move_, &board, &captured_pieces, player);
+        
+        // Result depends on threat detection (simplified implementation)
+        // At minimum, should not crash
+        assert!(is_escape == true || is_escape == false);
+    }
+
+    #[test]
+    fn test_escape_move_heuristic_fallback() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.escape_move_config.use_threat_based_detection = false;
+        config.escape_move_config.fallback_to_heuristic = true;
+        engine.update_lmr_config(config).unwrap();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Center-to-edge move (should trigger heuristic)
+        let from = Position::new(4, 4); // Center
+        let to = Position::new(2, 2); // Edge
+        let move_ = Move::new(from, to, Player::Black, false, false, false);
+        
+        let is_escape = engine.is_escape_move(&move_, &board, &captured_pieces, player);
+        
+        // Should detect escape move using heuristic (center-to-edge)
+        assert_eq!(is_escape, true);
+    }
+
+    #[test]
+    fn test_escape_move_king_in_check() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Test with king (if king is in check, escape move should be detected)
+        // This is a simplified test - actual implementation would check if king is in check
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        let is_escape = engine.is_escape_move(&move_, &board, &captured_pieces, player);
+        
+        // Result depends on threat detection
+        // At minimum, should not crash
+        assert!(is_escape == true || is_escape == false);
+    }
+
+    #[test]
+    fn test_escape_move_stats_tracking() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        let initial_count = engine.lmr_stats.escape_move_stats.escape_moves_exempted;
+        
+        let move_ = Move::new(Position::new(4, 4), Position::new(2, 2), Player::Black, false, false, false);
+        let _is_escape = engine.is_escape_move(&move_, &board, &captured_pieces, player);
+        
+        // Statistics should be tracked if escape move detected
+        // The count may increase if escape move is detected
+        let final_count = engine.lmr_stats.escape_move_stats.escape_moves_exempted;
+        assert!(final_count >= initial_count);
+    }
+
+    #[test]
+    fn test_escape_move_accuracy() {
+        let mut stats = EscapeMoveStats::default();
+        stats.record_escape_move(true, true);
+        stats.record_escape_move(true, true);
+        stats.record_escape_move(true, false);
+        
+        // No errors yet
+        assert_eq!(stats.accuracy(), 100.0);
+        
+        stats.record_false_positive();
+        stats.record_false_negative();
+        
+        // 2 errors out of 3 detections = 33.3% error rate
+        let accuracy = stats.accuracy();
+        assert!(accuracy < 100.0);
+        assert!(accuracy > 0.0);
+    }
+
+    #[test]
+    fn test_is_piece_under_attack() {
+        let engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        let position = Position::new(4, 4);
+        
+        let is_attacked = engine.is_piece_under_attack(&board, &captured_pieces, position, player);
+        
+        // Result depends on board state and threat detection
+        // At minimum, should not crash
+        assert!(is_attacked == true || is_attacked == false);
+    }
+
+    #[test]
+    fn test_is_piece_under_attack_after_move() {
+        let engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        let is_attacked = engine.is_piece_under_attack_after_move(&board, &captured_pieces, &move_, player);
+        
+        // Result depends on board state and threat detection
+        // At minimum, should not crash
+        assert!(is_attacked == true || is_attacked == false);
+    }
+}

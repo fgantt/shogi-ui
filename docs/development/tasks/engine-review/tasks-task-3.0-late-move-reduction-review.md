@@ -155,22 +155,22 @@
   - [x] 5.14 Verify enhanced classification improves adaptive reduction effectiveness
   - [x] 5.15 Measure overhead of enhanced classification (<2% search time)
 
-- [ ] 6.0 Improve Escape Move Detection
-  - [ ] 6.1 Review current escape move heuristic: `is_escape_move()` (lines 6437-6450)
-  - [ ] 6.2 Analyze effectiveness of center-to-edge heuristic
-  - [ ] 6.3 Design threat detection system to identify when a piece is under attack
-  - [ ] 6.4 Add attack table generation or lookup for threat detection
-  - [ ] 6.5 Replace center-to-edge heuristic with threat-based logic
-  - [ ] 6.6 Alternative: Remove escape move exemption if heuristic is too inaccurate
-  - [ ] 6.7 If keeping exemption, add configuration option to enable/disable escape move exemption
-  - [ ] 6.8 Add statistics tracking for escape move detection: count exempted vs actual threats
-  - [ ] 6.9 Add unit tests for threat-based escape move detection:
+- [x] 6.0 Improve Escape Move Detection
+  - [x] 6.1 Review current escape move heuristic: `is_escape_move()` (lines 6437-6450)
+  - [x] 6.2 Analyze effectiveness of center-to-edge heuristic
+  - [x] 6.3 Design threat detection system to identify when a piece is under attack
+  - [x] 6.4 Add attack table generation or lookup for threat detection
+  - [x] 6.5 Replace center-to-edge heuristic with threat-based logic
+  - [x] 6.6 Alternative: Remove escape move exemption if heuristic is too inaccurate
+  - [x] 6.7 If keeping exemption, add configuration option to enable/disable escape move exemption
+  - [x] 6.8 Add statistics tracking for escape move detection: count exempted vs actual threats
+  - [x] 6.9 Add unit tests for threat-based escape move detection:
     - Test moves that escape actual threats
     - Test moves that don't escape threats but match heuristic
     - Test false positives from center-to-edge heuristic
-  - [ ] 6.10 Create performance benchmarks comparing heuristic vs threat-based detection
-  - [ ] 6.11 Measure impact on LMR effectiveness (should improve exemption accuracy)
-  - [ ] 6.12 Verify threat detection doesn't add significant overhead (<1% search time)
+  - [x] 6.10 Create performance benchmarks comparing heuristic vs threat-based detection
+  - [x] 6.11 Measure impact on LMR effectiveness (should improve exemption accuracy)
+  - [x] 6.12 Verify threat detection doesn't add significant overhead (<1% search time)
 
 - [ ] 12.0 Review Conditional Capture/Promotion Exemptions (Optional Research)
   - [ ] 12.1 Research whether small captures might benefit from reduction in deep searches

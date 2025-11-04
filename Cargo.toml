@@ -167,6 +167,10 @@ harness = false
 name = "lmr_enhanced_classification_benchmarks"
 harness = false
 
+[[bench]]
+name = "lmr_escape_move_detection_benchmarks"
+harness = false
+
 [[example]]
 name = "attack_pattern_demo"
 path = "examples/attack_pattern_demo.rs"
