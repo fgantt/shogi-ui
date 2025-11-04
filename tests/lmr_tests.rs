@@ -114,6 +114,8 @@ mod lmr_stats_tests {
         assert_eq!(stats.cutoffs_after_research, 0);
         assert_eq!(stats.total_depth_saved, 0);
         assert_eq!(stats.average_reduction, 0.0);
+        assert_eq!(stats.re_search_margin_prevented, 0);
+        assert_eq!(stats.re_search_margin_allowed, 0);
     }
 
     #[test]
@@ -126,6 +128,8 @@ mod lmr_stats_tests {
             cutoffs_after_research: 5,
             total_depth_saved: 100,
             average_reduction: 2.0,
+            re_search_margin_prevented: 10,
+            re_search_margin_allowed: 5,
         };
         
         stats.reset();
@@ -136,6 +140,8 @@ mod lmr_stats_tests {
         assert_eq!(stats.cutoffs_after_research, 0);
         assert_eq!(stats.total_depth_saved, 0);
         assert_eq!(stats.average_reduction, 0.0);
+        assert_eq!(stats.re_search_margin_prevented, 0);
+        assert_eq!(stats.re_search_margin_allowed, 0);
     }
 
     #[test]
@@ -1001,5 +1007,184 @@ mod pruning_manager_lmr_tests {
         // Should not exceed max_reduction or depth - 1
         assert!(reduction <= pruning_manager.parameters.lmr_max_reduction);
         assert!(reduction < state.depth);
+    }
+}
+
+#[cfg(test)]
+mod re_search_margin_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16)
+    }
+
+    #[test]
+    fn test_lmr_config_re_search_margin_default() {
+        let config = LMRConfig::default();
+        assert_eq!(config.re_search_margin, 50);
+    }
+
+    #[test]
+    fn test_lmr_config_re_search_margin_validation() {
+        let mut config = LMRConfig::default();
+        
+        // Test valid margin
+        config.re_search_margin = 50;
+        assert!(config.validate().is_ok());
+        
+        // Test margin = 0 (disabled)
+        config.re_search_margin = 0;
+        assert!(config.validate().is_ok());
+        
+        // Test margin = 500 (max)
+        config.re_search_margin = 500;
+        assert!(config.validate().is_ok());
+        
+        // Test invalid margin < 0
+        config.re_search_margin = -1;
+        assert!(config.validate().is_err());
+        
+        // Test invalid margin > 500
+        config.re_search_margin = 501;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_lmr_config_re_search_margin_new_validated() {
+        let mut config = LMRConfig {
+            enabled: true,
+            min_depth: 3,
+            min_move_index: 4,
+            base_reduction: 1,
+            max_reduction: 3,
+            enable_dynamic_reduction: true,
+            enable_adaptive_reduction: true,
+            enable_extended_exemptions: true,
+            re_search_margin: 600,  // Invalid, should be clamped to 500
+        };
+        
+        let validated = config.new_validated();
+        assert_eq!(validated.re_search_margin, 500);
+        
+        config.re_search_margin = -10;
+        let validated = config.new_validated();
+        assert_eq!(validated.re_search_margin, 0);
+    }
+
+    #[test]
+    fn test_lmr_config_re_search_margin_summary() {
+        let mut config = LMRConfig::default();
+        config.re_search_margin = 75;
+        let summary = config.summary();
+        assert!(summary.contains("re_search_margin=75"));
+    }
+
+    #[test]
+    fn test_lmr_stats_re_search_margin_effectiveness() {
+        let stats = LMRStats {
+            moves_considered: 100,
+            reductions_applied: 50,
+            researches_triggered: 10,
+            cutoffs_after_reduction: 20,
+            cutoffs_after_research: 5,
+            total_depth_saved: 100,
+            average_reduction: 2.0,
+            re_search_margin_prevented: 30,
+            re_search_margin_allowed: 10,
+        };
+        
+        let effectiveness = stats.re_search_margin_effectiveness();
+        // 30 prevented out of 40 total = 75%
+        assert!((effectiveness - 75.0).abs() < 0.01);
+        
+        // Test with zero prevented
+        let stats_no_prevented = LMRStats {
+            re_search_margin_prevented: 0,
+            re_search_margin_allowed: 10,
+            ..Default::default()
+        };
+        assert_eq!(stats_no_prevented.re_search_margin_effectiveness(), 0.0);
+        
+        // Test with zero total
+        let stats_zero = LMRStats::default();
+        assert_eq!(stats_zero.re_search_margin_effectiveness(), 0.0);
+    }
+
+    #[test]
+    fn test_re_search_margin_disabled() {
+        let engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.re_search_margin = 0;  // Disabled
+        
+        let mut engine2 = create_test_engine();
+        engine2.update_lmr_config(config).unwrap();
+        
+        // With margin = 0, re-search should trigger when score > alpha (current behavior)
+        assert_eq!(engine2.get_lmr_config().re_search_margin, 0);
+    }
+
+    #[test]
+    fn test_re_search_margin_edge_cases() {
+        // Test margin boundaries
+        let mut config = LMRConfig::default();
+        
+        // Test minimum valid margin
+        config.re_search_margin = 0;
+        assert!(config.validate().is_ok());
+        
+        // Test maximum valid margin
+        config.re_search_margin = 500;
+        assert!(config.validate().is_ok());
+        
+        // Test typical margins
+        config.re_search_margin = 25;
+        assert!(config.validate().is_ok());
+        
+        config.re_search_margin = 50;
+        assert!(config.validate().is_ok());
+        
+        config.re_search_margin = 75;
+        assert!(config.validate().is_ok());
+        
+        config.re_search_margin = 100;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_re_search_margin_preset_values() {
+        let engine = create_test_engine();
+        
+        // Test aggressive preset (lower margin)
+        let aggressive = engine.get_lmr_preset(LMRPlayingStyle::Aggressive);
+        assert_eq!(aggressive.re_search_margin, 25);
+        
+        // Test conservative preset (higher margin)
+        let conservative = engine.get_lmr_preset(LMRPlayingStyle::Conservative);
+        assert_eq!(conservative.re_search_margin, 100);
+        
+        // Test balanced preset (default margin)
+        let balanced = engine.get_lmr_preset(LMRPlayingStyle::Balanced);
+        assert_eq!(balanced.re_search_margin, 50);
+    }
+
+    #[test]
+    fn test_re_search_margin_performance_report() {
+        let stats = LMRStats {
+            moves_considered: 100,
+            reductions_applied: 50,
+            researches_triggered: 10,
+            cutoffs_after_reduction: 20,
+            cutoffs_after_research: 5,
+            total_depth_saved: 100,
+            average_reduction: 2.0,
+            re_search_margin_prevented: 30,
+            re_search_margin_allowed: 10,
+        };
+        
+        let report = stats.performance_report();
+        assert!(report.contains("Re-search margin prevented"));
+        assert!(report.contains("Re-search margin allowed"));
+        assert!(report.contains("30"));
+        assert!(report.contains("10"));
     }
 }

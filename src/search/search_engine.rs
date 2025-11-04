@@ -6291,10 +6291,18 @@ impl SearchEngine {
                 has_check
             );
             
-            // Check if re-search is needed
-            if score > alpha {
+            // Check if re-search is needed (with margin)
+            let re_search_threshold = alpha + self.lmr_config.re_search_margin;
+            if score > re_search_threshold {
                 self.lmr_stats.researches_triggered += 1;
+                self.lmr_stats.re_search_margin_allowed += 1;
                 self.pruning_manager.statistics.re_searches += 1;
+                
+                // Debug logging for re-search margin decisions
+                crate::debug_utils::trace_log("LMR", &format!(
+                    "Re-search triggered: score={} > threshold={} (alpha={} + margin={})",
+                    score, re_search_threshold, alpha, self.lmr_config.re_search_margin
+                ));
                 
                 // Re-search at full depth
                 let full_score = -self.negamax_with_context(
@@ -6319,6 +6327,16 @@ impl SearchEngine {
                 
                 return full_score;
             } else {
+                // Re-search prevented by margin (score > alpha but <= alpha + margin)
+                if score > alpha && score <= re_search_threshold {
+                    self.lmr_stats.re_search_margin_prevented += 1;
+                    
+                    // Debug logging for re-search margin prevention
+                    crate::debug_utils::trace_log("LMR", &format!(
+                        "Re-search prevented by margin: score={} <= threshold={} (alpha={} + margin={})",
+                        score, re_search_threshold, alpha, self.lmr_config.re_search_margin
+                    ));
+                }
                 if score >= beta {
                     self.lmr_stats.cutoffs_after_reduction += 1;
                 }
@@ -6619,6 +6637,7 @@ impl SearchEngine {
                 enable_dynamic_reduction: true,
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
+                re_search_margin: 25,  // Lower margin for more aggressive play
             },
             LMRPlayingStyle::Conservative => LMRConfig {
                 enabled: true,
@@ -6629,6 +6648,7 @@ impl SearchEngine {
                 enable_dynamic_reduction: true,
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
+                re_search_margin: 100,  // Higher margin for safer play
             },
             LMRPlayingStyle::Balanced => LMRConfig {
                 enabled: true,
@@ -6639,6 +6659,7 @@ impl SearchEngine {
                 enable_dynamic_reduction: true,
                 enable_adaptive_reduction: true,
                 enable_extended_exemptions: true,
+                re_search_margin: 50,  // Default margin
             },
         }
     }
@@ -6758,6 +6779,7 @@ impl SearchEngine {
             enable_dynamic_reduction: true,
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
+            re_search_margin: 50,  // Default margin
         }
     }
 

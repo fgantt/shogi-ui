@@ -1954,6 +1954,7 @@ pub struct LMRConfig {
     pub enable_dynamic_reduction: bool,       // Use dynamic vs static reduction
     pub enable_adaptive_reduction: bool,      // Use position-based adaptation
     pub enable_extended_exemptions: bool,     // Extended move exemption rules
+    pub re_search_margin: i32,               // Margin for re-search decision (centipawns, default: 50, range: 0-500)
 }
 
 impl Default for LMRConfig {
@@ -1967,6 +1968,7 @@ impl Default for LMRConfig {
             enable_dynamic_reduction: true,
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
+            re_search_margin: 50,             // Default: 50 centipawns
         }
     }
 }
@@ -1998,6 +2000,12 @@ impl LMRConfig {
         if self.max_reduction > 8 {
             return Err("max_reduction should not exceed 8".to_string());
         }
+        if self.re_search_margin < 0 {
+            return Err("re_search_margin must be >= 0".to_string());
+        }
+        if self.re_search_margin > 500 {
+            return Err("re_search_margin should not exceed 500 centipawns".to_string());
+        }
         Ok(())
     }
 
@@ -2007,13 +2015,14 @@ impl LMRConfig {
         self.min_move_index = self.min_move_index.clamp(1, 20);
         self.base_reduction = self.base_reduction.clamp(1, 5);
         self.max_reduction = self.max_reduction.clamp(self.base_reduction, 8);
+        self.re_search_margin = self.re_search_margin.clamp(0, 500);
         self
     }
 
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}",
+            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}, re_search_margin={}",
             self.enabled,
             self.min_depth,
             self.min_move_index,
@@ -2021,7 +2030,8 @@ impl LMRConfig {
             self.max_reduction,
             self.enable_dynamic_reduction,
             self.enable_adaptive_reduction,
-            self.enable_extended_exemptions
+            self.enable_extended_exemptions,
+            self.re_search_margin
         )
     }
 }
@@ -2036,6 +2046,8 @@ pub struct LMRStats {
     pub cutoffs_after_research: u64,          // Cutoffs after full re-search
     pub total_depth_saved: u64,               // Total depth reduction applied
     pub average_reduction: f64,               // Average reduction applied
+    pub re_search_margin_prevented: u64,      // Number of re-searches prevented by margin
+    pub re_search_margin_allowed: u64,        // Number of re-searches allowed despite margin
 }
 
 impl LMRStats {
@@ -2081,6 +2093,15 @@ impl LMRStats {
         self.total_depth_saved as f64 / self.reductions_applied as f64
     }
 
+    /// Get re-search margin effectiveness rate
+    pub fn re_search_margin_effectiveness(&self) -> f64 {
+        let total = self.re_search_margin_prevented + self.re_search_margin_allowed;
+        if total == 0 {
+            return 0.0;
+        }
+        (self.re_search_margin_prevented as f64 / total as f64) * 100.0
+    }
+
     /// Get a comprehensive performance report
     pub fn performance_report(&self) -> String {
         format!(
@@ -2090,7 +2111,9 @@ impl LMRStats {
             - Re-searches triggered: {} ({:.2}%)\n\
             - Total cutoffs: {} ({:.2}%)\n\
             - Average depth saved: {:.2}\n\
-            - Total depth saved: {}",
+            - Total depth saved: {}\n\
+            - Re-search margin prevented: {} ({:.2}%)\n\
+            - Re-search margin allowed: {}",
             self.moves_considered,
             self.reductions_applied,
             self.efficiency(),
@@ -2099,7 +2122,10 @@ impl LMRStats {
             self.total_cutoffs(),
             self.cutoff_rate(),
             self.average_depth_saved(),
-            self.total_depth_saved
+            self.total_depth_saved,
+            self.re_search_margin_prevented,
+            self.re_search_margin_effectiveness(),
+            self.re_search_margin_allowed
         )
     }
 
@@ -4410,6 +4436,7 @@ impl EngineConfig {
                     enable_dynamic_reduction: true,
                     enable_adaptive_reduction: true,
                     enable_extended_exemptions: true,
+                    re_search_margin: 50,
                 },
                 aspiration_windows: AspirationWindowConfig {
                     enabled: true,
@@ -4493,6 +4520,7 @@ impl EngineConfig {
                     enable_dynamic_reduction: false,
                     enable_adaptive_reduction: false,
                     enable_extended_exemptions: true,
+                    re_search_margin: 50,
                 },
                 aspiration_windows: AspirationWindowConfig {
                     enabled: true,
