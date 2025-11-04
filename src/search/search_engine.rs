@@ -434,12 +434,13 @@ impl SearchEngine {
     }
 
     /// Order moves using advanced move ordering system
-    fn order_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Result<Vec<Move>, String> {
+    /// Task 3.0: Added iid_move parameter to integrate IID move into advanced ordering
+    fn order_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>) -> Result<Vec<Move>, String> {
         // Initialize advanced move orderer for this position
         self.initialize_advanced_move_orderer(board, captured_pieces, player, depth);
         
-        // Use advanced move ordering with all heuristics
-        Ok(self.advanced_move_orderer.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth))
+        // Task 3.0: Use advanced move ordering with all heuristics and IID move
+        Ok(self.advanced_move_orderer.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, iid_move))
     }
 
     /// Order moves for negamax search with advanced move ordering
@@ -448,12 +449,13 @@ impl SearchEngine {
     /// Task 6.5: Optimizes for repeated positions via caching
     /// 
     /// Task 6.8: Made public for testing integration
-    pub fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32) -> Vec<Move> {
+    /// Task 3.0: Added iid_move parameter to integrate IID move into all ordering paths
+    pub fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, iid_move: Option<&Move>) -> Vec<Move> {
         // Task 6.4: Check if position is in check (affects move ordering priority)
         let is_check = board.is_king_in_check(player, captured_pieces);
         
-        // Try advanced move ordering first
-        match self.order_moves_advanced(moves, board, captured_pieces, player, depth) {
+        // Task 3.0: Try advanced move ordering first with IID move
+        match self.order_moves_advanced(moves, board, captured_pieces, player, depth, iid_move) {
             Ok(ordered_moves) => {
                 // Task 6.2: If we have a TT hit, the ordering might already be cached
                 // Update PV move if we have a best move from transposition table
@@ -463,9 +465,9 @@ impl SearchEngine {
                 ordered_moves
             }
             Err(_) => {
-                // Fallback to traditional move ordering
+                // Task 3.0: Fallback to traditional move ordering with IID move
                 // Task 6.4: Pass depth, alpha, beta for state-aware ordering
-                self.move_orderer.order_moves(moves, board, captured_pieces, player, depth, alpha, beta, None)
+                self.move_orderer.order_moves(moves, board, captured_pieces, player, depth, alpha, beta, iid_move)
             }
         }
     }
@@ -2717,8 +2719,8 @@ impl SearchEngine {
         // Initialize move orderer if not already done
         self.initialize_move_orderer();
         
-        // Use advanced move ordering for better performance
-        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta);
+        // Task 3.0: Use advanced move ordering for better performance (no IID at this level)
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, None);
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
@@ -3212,8 +3214,8 @@ impl SearchEngine {
         // Initialize move orderer if not already done
         self.initialize_move_orderer();
         
-        // Use advanced move ordering for better performance
-        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta);
+        // Task 3.0: Use advanced move ordering for better performance with IID move integration
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref());
         // Initialize best_score to alpha instead of sentinel value (Task 5.12)
         let mut best_score = alpha;
         let mut best_move_for_tt = None;

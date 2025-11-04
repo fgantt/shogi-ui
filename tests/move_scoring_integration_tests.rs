@@ -300,10 +300,11 @@ mod move_scoring_integration_tests {
         orderer.update_pv_move(&board, &captured_pieces, player, depth, pv_move.clone(), 100);
         
         // Test scoring with all heuristics
-        let pv_score = orderer.score_move_with_all_heuristics(&pv_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let killer_score = orderer.score_move_with_all_heuristics(&killer_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let history_score = orderer.score_move_with_all_heuristics(&history_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let regular_score = orderer.score_move_with_all_heuristics(&regular_move, &Some(pv_move.clone()), &[killer_move.clone()]);
+        // Task 3.0: Updated calls to include IID move parameter (None for tests)
+        let pv_score = orderer.score_move_with_all_heuristics(&pv_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let killer_score = orderer.score_move_with_all_heuristics(&killer_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let history_score = orderer.score_move_with_all_heuristics(&history_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let regular_score = orderer.score_move_with_all_heuristics(&regular_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
         
         // Verify scoring hierarchy
         assert!(pv_score > killer_score);

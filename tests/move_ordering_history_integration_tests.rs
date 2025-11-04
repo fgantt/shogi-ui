@@ -291,7 +291,8 @@ mod history_heuristic_integration_tests {
         
         // Order moves with all heuristics
         let moves = vec![regular_move.clone(), history_move.clone(), killer_move.clone(), pv_move.clone()];
-        let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth);
+        // Task 3.0: No IID move context for this test
+        let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
         
         // Verify correct ordering: PV > Killer > History > Regular
         assert_eq!(ordered.len(), 4);

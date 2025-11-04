@@ -5883,7 +5883,8 @@ impl MoveOrdering {
     /// 
     /// Task 6.2: Caches ordering results for repeated positions with same move sets
     /// Task 6.4: Accounts for search state (depth, alpha, beta, check status)
-    pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    /// Task 3.0: Added iid_move parameter to integrate IID move into advanced ordering
+    pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
@@ -5891,17 +5892,23 @@ impl MoveOrdering {
         let start_time = TimeSource::now();
         
         // Task 6.2: Check cache for move ordering results
+        // Task 3.0: Note: Cache doesn't account for IID move, so we skip cache if IID move is present
+        // This ensures IID move is properly prioritized even if ordering was cached before
+        let skip_cache = iid_move.is_some();
+        
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         let cache_key = (position_hash, depth);
         
         // Check if we have a cached ordering result for this position and depth
-        if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
-            // Verify that cached moves match current moves (moves might differ for same position)
-            if cached_ordered.len() == moves.len() && 
-               cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
-                self.stats.cache_hits += 1;
-                self.stats.total_moves_ordered += moves.len() as u64;
-                return cached_ordered.clone();
+        if !skip_cache {
+            if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
+                // Verify that cached moves match current moves (moves might differ for same position)
+                if cached_ordered.len() == moves.len() && 
+                   cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
+                    self.stats.cache_hits += 1;
+                    self.stats.total_moves_ordered += moves.len() as u64;
+                    return cached_ordered.clone();
+                }
             }
         }
         
@@ -5920,13 +5927,13 @@ impl MoveOrdering {
         // Get killer moves for current depth (Task 6.4: depth-aware)
         let killer_moves = self.get_current_killer_moves().cloned().unwrap_or_default();
 
-        // Create mutable copy for sorting
+        // Task 3.0: Create mutable copy for sorting
         let mut ordered_moves = moves.to_vec();
 
-        // Sort moves by score with all heuristics prioritization
+        // Task 3.0: Sort moves by score with all heuristics prioritization, including IID move
         ordered_moves.sort_by(|a, b| {
-            let score_a = self.score_move_with_all_heuristics(a, &pv_move, &killer_moves);
-            let score_b = self.score_move_with_all_heuristics(b, &pv_move, &killer_moves);
+            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves);
+            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves);
             score_b.cmp(&score_a)
         });
 
@@ -5955,26 +5962,36 @@ impl MoveOrdering {
 
     /// Score a move with all heuristics consideration
     /// 
+    /// Task 3.0: Updated priority order to include IID move (highest priority)
     /// This method scores a move with the following priority:
-    /// 1. PV moves (highest priority)
-    /// 2. Killer moves (high priority)
-    /// 3. History moves (medium-high priority)
-    /// 4. Regular moves (normal priority)
-    fn score_move_with_all_heuristics(&mut self, move_: &Move, pv_move: &Option<Move>, killer_moves: &[Move]) -> i32 {
-        // Check if this is the PV move (highest priority)
+    /// 1. IID moves (highest priority - Task 3.0)
+    /// 2. PV moves (high priority)
+    /// 3. Killer moves (medium-high priority)
+    /// 4. History moves (medium priority)
+    /// 5. Regular moves (normal priority)
+    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move]) -> i32 {
+        // Task 3.0: Check if this is the IID move (highest priority)
+        if let Some(iid_mv) = iid_move {
+            if self.moves_equal(move_, iid_mv) {
+                // IID move gets maximum score to ensure it's searched first
+                return i32::MAX;
+            }
+        }
+        
+        // Check if this is the PV move (high priority)
         if let Some(ref pv) = pv_move {
             if self.moves_equal(move_, pv) {
                 return self.score_pv_move(move_);
             }
         }
 
-        // Check if this is a killer move (high priority)
+        // Check if this is a killer move (medium-high priority)
         if killer_moves.iter().any(|killer| self.moves_equal(move_, killer)) {
             self.stats.killer_move_hits += 1;
             return self.score_killer_move(move_);
         }
 
-        // Check if this move has history score (medium-high priority)
+        // Check if this move has history score (medium priority)
         let history_score = self.score_history_move(move_);
         if history_score > 0 {
             return history_score;
@@ -6547,7 +6564,8 @@ impl MoveOrdering {
         }
         
         // Use all heuristics but with more balanced weights for exploration
-        let mut analysis_ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth);
+        // Task 3.0: No IID move context for analysis ordering
+        let mut analysis_ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None);
         
         // In analysis mode, also consider quiet moves more
         analysis_ordered.sort_by(|a, b| {
@@ -6588,8 +6606,8 @@ impl MoveOrdering {
             // Medium time - use PV and killer only
             self.order_moves_with_pv_and_killer(moves, board, captured_pieces, player, depth)
         } else {
-            // Plenty of time - use all heuristics
-            self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth)
+            // Task 3.0: Plenty of time - use all heuristics (no IID move context)
+            self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None)
         }
     }
 
@@ -6637,8 +6655,8 @@ impl MoveOrdering {
             },
         }
         
-        // Order with adjusted weights
-        let ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth);
+        // Task 3.0: Order with adjusted weights (no IID move context)
+        let ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None);
         
         // Restore original weights
         self.config.weights = original_weights;
@@ -7826,7 +7844,8 @@ mod tests {
         
         // Order moves with all heuristics
         let moves = vec![regular_move.clone(), history_move.clone(), killer_move.clone(), pv_move.clone()];
-        let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth);
+        // Task 3.0: No IID move context for this test
+        let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
         
         // PV move should be first, killer move second, history move third, regular move last
         assert_eq!(ordered.len(), 4);
@@ -8251,10 +8270,11 @@ mod tests {
         orderer.update_pv_move(&board, &captured_pieces, player, depth, pv_move.clone(), 100);
         
         // Test scoring with all heuristics
-        let pv_score = orderer.score_move_with_all_heuristics(&pv_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let killer_score = orderer.score_move_with_all_heuristics(&killer_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let history_score = orderer.score_move_with_all_heuristics(&history_move, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let regular_score = orderer.score_move_with_all_heuristics(&regular_move, &Some(pv_move.clone()), &[killer_move.clone()]);
+        // Task 3.0: Updated calls to include IID move parameter (None for tests)
+        let pv_score = orderer.score_move_with_all_heuristics(&pv_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let killer_score = orderer.score_move_with_all_heuristics(&killer_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let history_score = orderer.score_move_with_all_heuristics(&history_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
+        let regular_score = orderer.score_move_with_all_heuristics(&regular_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
         
         // PV should score highest
         assert!(pv_score > killer_score);
@@ -10232,7 +10252,8 @@ mod tests {
 
         // Test 3: Update history and order with all heuristics
         orderer.update_history(&moves[0], true, depth);
-        let ordered_all = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth);
+        // Task 3.0: No IID move context for this test
+        let ordered_all = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
         assert_eq!(ordered_all.len(), moves.len());
 
         // Verify all statistics are updated
@@ -10382,8 +10403,8 @@ mod tests {
                 Move::new_move(Position::new(7, 1), Position::new(6, 3), PieceType::Knight, player, false),
             ];
 
-            // Order moves
-            let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, search_depth);
+            // Task 3.0: Order moves (no IID move context for this test)
+            let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, search_depth, None);
             assert!(!ordered.is_empty());
 
             // Simulate finding a good move (update history and killer)
@@ -10465,10 +10486,10 @@ mod tests {
                 Move::new_move(Position::new(0, (iteration % 9) as u8), Position::new(1, (iteration % 9) as u8), PieceType::Lance, player, false),
             ];
 
-            // Order with different methods
+            // Task 3.0: Order with different methods (no IID move context for this test)
             let _ = orderer.order_moves(&moves);
             let _ = orderer.order_moves_with_pv(&moves, &board, &captured_pieces, player, depth);
-            let _ = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth);
+            let _ = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
 
             // Update heuristics
             orderer.add_killer_move(moves[0].clone());
