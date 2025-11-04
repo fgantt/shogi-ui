@@ -3676,6 +3676,8 @@ pub enum IIDDepthStrategy {
     Relative,
     /// Adapt depth based on position complexity and time remaining
     Adaptive,
+    /// Task 4.0: Dynamic depth calculation based on position complexity
+    Dynamic,
 }
 
 impl Default for IIDDepthStrategy {
@@ -3704,6 +3706,12 @@ pub struct IIDConfig {
     pub enable_time_pressure_detection: bool,
     /// Enable adaptive tuning based on performance metrics
     pub enable_adaptive_tuning: bool,
+    /// Task 4.11: Base depth for dynamic depth calculation (default: 2)
+    pub dynamic_base_depth: u8,
+    /// Task 4.11: Maximum depth cap for dynamic depth calculation (default: 4)
+    pub dynamic_max_depth: u8,
+    /// Task 4.11: Adaptive minimum depth threshold (if enabled, adjusts min_depth based on position)
+    pub adaptive_min_depth: bool,
 }
 
 impl Default for IIDConfig {
@@ -3717,6 +3725,10 @@ impl Default for IIDConfig {
             depth_strategy: IIDDepthStrategy::Fixed,
             enable_time_pressure_detection: true,
             enable_adaptive_tuning: false,   // Disabled by default
+            // Task 4.11: Dynamic depth calculation configuration
+            dynamic_base_depth: 2,          // Base depth for dynamic strategy
+            dynamic_max_depth: 4,           // Maximum depth cap for dynamic strategy
+            adaptive_min_depth: false,      // Disable adaptive min depth by default
         }
     }
 }
@@ -3793,6 +3805,15 @@ pub struct IIDStats {
     pub iid_move_extracted_from_tt: u64,
     /// Task 2.11: Number of times IID move was extracted from tracked best move during search
     pub iid_move_extracted_from_tracked: u64,
+    /// Task 4.12: Statistics for dynamic depth selection
+    /// Map from depth (u8) to count of times that depth was chosen
+    pub dynamic_depth_selections: std::collections::HashMap<u8, u64>,
+    /// Task 4.12: Number of times dynamic depth was selected due to low complexity
+    pub dynamic_depth_low_complexity: u64,
+    /// Task 4.12: Number of times dynamic depth was selected due to medium complexity
+    pub dynamic_depth_medium_complexity: u64,
+    /// Task 4.12: Number of times dynamic depth was selected due to high complexity
+    pub dynamic_depth_high_complexity: u64,
 }
 
 impl IIDStats {
@@ -5159,6 +5180,10 @@ impl EngineConfig {
                     depth_strategy: IIDDepthStrategy::Fixed,
                     enable_time_pressure_detection: true,
                     enable_adaptive_tuning: false,
+                    // Task 4.11: Dynamic depth calculation configuration
+                    dynamic_base_depth: 2,
+                    dynamic_max_depth: 4,
+                    adaptive_min_depth: false,
                 },
                 tt_size_mb: 128,
                 debug_logging: false,
@@ -5243,6 +5268,10 @@ impl EngineConfig {
                     depth_strategy: IIDDepthStrategy::Fixed,
                     enable_time_pressure_detection: true,
                     enable_adaptive_tuning: false,
+                    // Task 4.11: Dynamic depth calculation configuration
+                    dynamic_base_depth: 2,
+                    dynamic_max_depth: 4,
+                    adaptive_min_depth: false,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,

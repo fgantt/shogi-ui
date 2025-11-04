@@ -634,15 +634,36 @@ impl SearchEngine {
     // ===== INTERNAL ITERATIVE DEEPENING (IID) METHODS =====
 
     /// Determine if IID should be applied at this position
-    pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32) -> bool {
+    /// Task 4.9: Added board and captured_pieces for adaptive minimum depth
+    pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> bool {
         // 1. IID must be enabled
         if !self.iid_config.enabled { 
             self.iid_stats.positions_skipped_depth += 1;
             return false; 
         }
         
+        // Task 4.9: Review minimum depth threshold - make adaptive if enabled
+        let min_depth_threshold = if self.iid_config.adaptive_min_depth {
+            // Task 4.9: Adaptive minimum depth based on position characteristics
+            // Lower threshold for complex positions where IID is more valuable
+            if let (Some(board), Some(captured)) = (board, captured_pieces) {
+                let complexity = self.assess_position_complexity(board, captured);
+                match complexity {
+                    PositionComplexity::High => {
+                        let reduced = (self.iid_config.min_depth as i32).saturating_sub(1).max(2);
+                        reduced as u8
+                    },
+                    _ => self.iid_config.min_depth,
+                }
+            } else {
+                self.iid_config.min_depth
+            }
+        } else {
+            self.iid_config.min_depth
+        };
+        
         // 2. Sufficient depth for IID to be meaningful
-        if depth < self.iid_config.min_depth { 
+        if depth < min_depth_threshold { 
             self.iid_stats.positions_skipped_depth += 1;
             return false; 
         }
@@ -672,20 +693,62 @@ impl SearchEngine {
     }
 
     /// Calculate the depth for IID search based on strategy
-    pub fn calculate_iid_depth(&self, main_depth: u8) -> u8 {
-        match self.iid_config.depth_strategy {
+    /// Task 4.0: Integrated dynamic depth calculation and enhanced strategies
+    pub fn calculate_iid_depth(&mut self, main_depth: u8, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> u8 {
+        let depth = match self.iid_config.depth_strategy {
             IIDDepthStrategy::Fixed => self.iid_config.iid_depth_ply,
             IIDDepthStrategy::Relative => {
-                // Use depth - 2, but ensure minimum of 2
-                std::cmp::max(2, main_depth.saturating_sub(2))
+                // Task 4.7: Add maximum depth cap to Relative strategy
+                let relative_depth = std::cmp::max(2, main_depth.saturating_sub(2));
+                relative_depth.min(4) // Cap at 4 for performance
             },
             IIDDepthStrategy::Adaptive => {
-                // Adjust based on position complexity and time remaining
+                // Task 4.8: Enhance Adaptive strategy with position-based adjustments
                 let base_depth = if main_depth > 6 { 3 } else { 2 };
-                // For now, use fixed base depth - can be enhanced later with position analysis
-                base_depth
+                // Enhanced: If we have position info, use it for better depth selection
+                if let (Some(board), Some(captured)) = (board, captured_pieces) {
+                    let complexity = self.assess_position_complexity(board, captured);
+                    match complexity {
+                        PositionComplexity::High => base_depth.saturating_add(1).min(4),
+                        PositionComplexity::Low => base_depth.saturating_sub(1).max(1),
+                        _ => base_depth,
+                    }
+                } else {
+                    base_depth
+                }
+            },
+            IIDDepthStrategy::Dynamic => {
+                // Task 4.5: Use calculate_dynamic_iid_depth() for Dynamic strategy
+                // Task 4.6: Ensure assess_position_complexity() is called when using Dynamic strategy
+                if let (Some(board), Some(captured)) = (board, captured_pieces) {
+                    let base_depth = self.iid_config.dynamic_base_depth;
+                    let complexity = self.assess_position_complexity(board, captured);
+                    let calculated_depth = self.calculate_dynamic_iid_depth(board, captured, base_depth);
+                    
+                    // Task 4.12: Track statistics for dynamic depth selection
+                    *self.iid_stats.dynamic_depth_selections.entry(calculated_depth).or_insert(0) += 1;
+                    match complexity {
+                        PositionComplexity::Low => self.iid_stats.dynamic_depth_low_complexity += 1,
+                        PositionComplexity::Medium => self.iid_stats.dynamic_depth_medium_complexity += 1,
+                        PositionComplexity::High => self.iid_stats.dynamic_depth_high_complexity += 1,
+                        PositionComplexity::Unknown => {},
+                    }
+                    
+                    // Task 4.13: Add debug logging for dynamic depth calculation
+                    crate::debug_utils::trace_log("IID_DEPTH", &format!(
+                        "Dynamic depth: main_depth={}, base={}, complexity={:?}, calculated={}", 
+                        main_depth, base_depth, complexity, calculated_depth
+                    ));
+                    
+                    calculated_depth
+                } else {
+                    // Fallback to base depth if position info not available
+                    self.iid_config.dynamic_base_depth
+                }
             }
-        }
+        };
+        
+        depth
     }
 
     /// Check if we're in time pressure
@@ -1127,14 +1190,12 @@ impl SearchEngine {
         threats
     }
     /// Calculate dynamic IID depth based on position complexity
+    /// Task 4.0: Enhanced to work independently for Dynamic strategy and use configuration options
     pub fn calculate_dynamic_iid_depth(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, base_depth: u8) -> u8 {
-        if !self.iid_config.enable_adaptive_tuning {
-            return base_depth;
-        }
-
+        // Task 4.6: Always assess position complexity for Dynamic strategy
         let complexity = self.assess_position_complexity(board, captured_pieces);
         
-        match complexity {
+        let depth = match complexity {
             PositionComplexity::Low => {
                 // Simple positions: reduce IID depth to save time
                 base_depth.saturating_sub(1).max(1)
@@ -1145,13 +1206,16 @@ impl SearchEngine {
             },
             PositionComplexity::High => {
                 // Complex positions: increase IID depth for better move ordering
-                base_depth.saturating_add(1).min(4)
+                base_depth.saturating_add(1)
             },
             PositionComplexity::Unknown => {
                 // Unknown complexity: use base depth as fallback
                 base_depth
             }
-        }
+        };
+        
+        // Task 4.11: Apply maximum depth cap from configuration
+        depth.min(self.iid_config.dynamic_max_depth)
     }
 
     /// Efficient board state management for IID search
@@ -3165,12 +3229,14 @@ impl SearchEngine {
         // === INTERNAL ITERATIVE DEEPENING (IID) ===
         let mut iid_move = None;
         let tt_move = self.transposition_table.probe(position_hash, 255).and_then(|entry| entry.best_move.clone());
-        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms);
+        // Task 4.9: Pass board and captured_pieces for adaptive minimum depth
+        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms, Some(board), Some(captured_pieces));
         
         if should_apply_iid {
             crate::debug_utils::trace_log("IID", &format!("Applying Internal Iterative Deepening at depth {}", depth));
             crate::debug_utils::start_timing("iid_search");
-            let iid_depth = self.calculate_iid_depth(depth);
+            // Task 4.0: Pass board and captured_pieces for Dynamic strategy depth calculation
+            let iid_depth = self.calculate_iid_depth(depth, Some(board), Some(captured_pieces));
             crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
             let iid_start_time = TimeSource::now();

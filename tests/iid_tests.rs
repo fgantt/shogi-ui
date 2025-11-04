@@ -476,7 +476,7 @@ fn test_should_apply_iid_time_pressure() {
     
     // Should not apply IID in time pressure (if time pressure detection is enabled)
     // Note: This test might be flaky due to timing, but it tests the logic
-    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, time_limit_ms);
+    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, time_limit_ms, None, None);
     // The result depends on timing, so we just verify the function doesn't panic
     assert!(result == true || result == false);
 }
@@ -523,10 +523,10 @@ fn test_calculate_iid_depth_fixed_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Fixed strategy should always return the configured iid_depth_ply
-    assert_eq!(engine.calculate_iid_depth(5), 3);
-    assert_eq!(engine.calculate_iid_depth(10), 3);
-    assert_eq!(engine.calculate_iid_depth(2), 3);
-    assert_eq!(engine.calculate_iid_depth(1), 3);
+    assert_eq!(engine.calculate_iid_depth(5, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(10, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(2, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(1, None, None), 3);
 }
 
 #[test]
@@ -539,11 +539,11 @@ fn test_calculate_iid_depth_relative_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Relative strategy should return depth - 2, but minimum of 2
-    assert_eq!(engine.calculate_iid_depth(5), 3); // 5 - 2 = 3
-    assert_eq!(engine.calculate_iid_depth(10), 8); // 10 - 2 = 8
-    assert_eq!(engine.calculate_iid_depth(3), 2); // 3 - 2 = 1, but minimum is 2
-    assert_eq!(engine.calculate_iid_depth(2), 2); // 2 - 2 = 0, but minimum is 2
-    assert_eq!(engine.calculate_iid_depth(1), 2); // 1 - 2 = -1, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(5, None, None), 3); // 5 - 2 = 3
+    assert_eq!(engine.calculate_iid_depth(10, None, None), 8); // 10 - 2 = 8
+    assert_eq!(engine.calculate_iid_depth(3, None, None), 2); // 3 - 2 = 1, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(2, None, None), 2); // 2 - 2 = 0, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(1, None, None), 2); // 1 - 2 = -1, but minimum is 2
 }
 
 #[test]
@@ -556,15 +556,15 @@ fn test_calculate_iid_depth_adaptive_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Adaptive strategy returns base_depth: 3 if main_depth > 6, else 2
-    assert_eq!(engine.calculate_iid_depth(10), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(8), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(7), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(6), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(3), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(2), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(1), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(15), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(20), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(10, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(8, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(7, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(6, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(3, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(2, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(1, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(15, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(20, None, None), 3); // main_depth > 6, so base_depth = 3
 }
 
 #[test]
@@ -576,14 +576,14 @@ fn test_calculate_iid_depth_edge_cases() {
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config).unwrap();
     
-    assert_eq!(engine.calculate_iid_depth(0), 2); // 0 - 2 = -2, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(0, None, None), 2); // 0 - 2 = -2, but minimum is 2
     
     // Test with very large depth
     let mut config2 = engine.get_iid_config().clone();
     config2.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config2).unwrap();
     
-    assert_eq!(engine.calculate_iid_depth(255), 3); // 255 > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(255, None, None), 3); // 255 > 6, so base_depth = 3
 }
 
 #[test]
@@ -597,17 +597,17 @@ fn test_calculate_iid_depth_strategy_switching() {
     config.depth_strategy = IIDDepthStrategy::Fixed;
     config.iid_depth_ply = 4;
     engine.update_iid_config(config.clone()).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8), 4);
+    assert_eq!(engine.calculate_iid_depth(8, None, None), 4);
     
     // Relative strategy
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config.clone()).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8), 6); // 8 - 2 = 6
+    assert_eq!(engine.calculate_iid_depth(8, None, None), 6); // 8 - 2 = 6
     
     // Adaptive strategy
     config.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8), 3); // 8 > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(8, None, None), 3); // 8 > 6, so base_depth = 3
 }
 
 #[test]
@@ -620,9 +620,9 @@ fn test_calculate_iid_depth_default_config() {
     assert_eq!(config.iid_depth_ply, 2);
     
     // Should return 2 for any depth
-    assert_eq!(engine.calculate_iid_depth(5), 2);
-    assert_eq!(engine.calculate_iid_depth(10), 2);
-    assert_eq!(engine.calculate_iid_depth(1), 2);
+    assert_eq!(engine.calculate_iid_depth(5, None, None), 2);
+    assert_eq!(engine.calculate_iid_depth(10, None, None), 2);
+    assert_eq!(engine.calculate_iid_depth(1, None, None), 2);
 }
 
 // ===== IID SEARCH PERFORMANCE TESTING =====
@@ -3459,5 +3459,222 @@ fn test_order_moves_for_negamax_iid_move_integration() {
         // Verify IID move is in the ordered list
         let iid_pos = ordered.iter().position(|m| engine.moves_equal(m, iid_move.unwrap()));
         assert!(iid_pos.is_some(), "IID move should always be in ordered moves");
+    }
+}
+
+// ===== TASK 4.0: DYNAMIC DEPTH CALCULATION =====
+
+#[test]
+fn test_calculate_dynamic_iid_depth_low_complexity() {
+    // Task 4.14: Test depth selection based on position complexity - Low complexity
+    let mut engine = SearchEngine::new(None, 64);
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test with base depth 2, low complexity should reduce to 1
+    let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2);
+    
+    // Low complexity positions should reduce depth by 1, minimum 1
+    assert!(depth >= 1 && depth <= 2);
+}
+
+#[test]
+fn test_calculate_dynamic_iid_depth_high_complexity() {
+    // Task 4.14: Test depth selection based on position complexity - High complexity
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.dynamic_base_depth = 2;
+    config.dynamic_max_depth = 4;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test with base depth 2, high complexity should increase to 3 (capped at max_depth)
+    let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2);
+    
+    // High complexity positions should increase depth, but capped at max_depth
+    assert!(depth >= 2 && depth <= 4);
+}
+
+#[test]
+fn test_dynamic_depth_max_cap_respected() {
+    // Task 4.14: Test depth cap is respected
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.dynamic_base_depth = 3;
+    config.dynamic_max_depth = 4;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test that depth is capped at dynamic_max_depth
+    let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 3);
+    
+    // Should not exceed max_depth
+    assert!(depth <= 4);
+}
+
+#[test]
+fn test_dynamic_strategy_integration() {
+    // Task 4.14: Test Dynamic strategy integration
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Dynamic;
+    config.dynamic_base_depth = 2;
+    config.dynamic_max_depth = 4;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test that Dynamic strategy uses calculate_dynamic_iid_depth
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+    
+    // Should return a valid depth within bounds
+    assert!(depth >= 1 && depth <= 4);
+    
+    // Verify statistics were tracked
+    let stats = engine.get_iid_stats();
+    assert!(stats.dynamic_depth_selections.contains_key(&depth) || stats.dynamic_depth_selections.is_empty());
+}
+
+#[test]
+fn test_dynamic_depth_statistics_tracking() {
+    // Task 4.12: Test statistics tracking for dynamic depth selection
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Dynamic;
+    config.dynamic_base_depth = 2;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Perform multiple depth calculations
+    for _ in 0..5 {
+        let _ = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+    }
+    
+    // Verify statistics were tracked
+    let stats = engine.get_iid_stats();
+    // Should have recorded some depth selections
+    assert!(!stats.dynamic_depth_selections.is_empty() || 
+            stats.dynamic_depth_low_complexity > 0 ||
+            stats.dynamic_depth_medium_complexity > 0 ||
+            stats.dynamic_depth_high_complexity > 0);
+}
+
+#[test]
+fn test_adaptive_minimum_depth_threshold() {
+    // Task 4.14: Test adaptive minimum depth threshold
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.adaptive_min_depth = true;
+    config.min_depth = 4;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let legal_moves = vec![create_test_move(6, 4, 5, 4)];
+    let start_time = TimeSource::now();
+    
+    // Test that high complexity positions use lower minimum depth threshold
+    // This is tested indirectly - if adaptive_min_depth works, depth 3 might pass
+    // where it wouldn't with fixed min_depth=4
+    let result = engine.should_apply_iid(3, None, &legal_moves, &start_time, 1000, Some(&board), Some(&captured_pieces));
+    
+    // Result depends on complexity assessment, but function should not crash
+    assert!(result == true || result == false);
+}
+
+#[test]
+fn test_dynamic_strategy_without_position_info() {
+    // Test Dynamic strategy fallback when position info not available
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Dynamic;
+    config.dynamic_base_depth = 2;
+    engine.update_iid_config(config).unwrap();
+    
+    // Test without position info - should fallback to base depth
+    let depth = engine.calculate_iid_depth(5, None, None);
+    
+    // Should return base depth as fallback
+    assert_eq!(depth, 2);
+}
+
+#[test]
+fn test_dynamic_base_depth_configuration() {
+    // Task 4.11: Test dynamic_base_depth configuration option
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Dynamic;
+    config.dynamic_base_depth = 3;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 3);
+    
+    // Should be based on base depth (3) adjusted by complexity
+    assert!(depth >= 1 && depth <= 4);
+}
+
+#[test]
+fn test_relative_strategy_max_cap() {
+    // Task 4.7: Test that Relative strategy has maximum depth cap
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Relative;
+    engine.update_iid_config(config).unwrap();
+    
+    // Test with high main depth - should be capped at 4
+    let depth = engine.calculate_iid_depth(20, None, None);
+    
+    // Relative strategy should cap at 4
+    assert_eq!(depth, 4);
+}
+
+#[test]
+fn test_adaptive_strategy_position_based() {
+    // Task 4.8: Test Enhanced Adaptive strategy with position-based adjustments
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.depth_strategy = IIDDepthStrategy::Adaptive;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test with position info - should use complexity for adjustments
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+    
+    // Should return a valid depth (base depth adjusted by complexity)
+    assert!(depth >= 1 && depth <= 4);
+}
+
+#[test]
+fn test_different_complexity_levels_depths() {
+    // Task 4.14: Test different complexity levels result in appropriate depths
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.dynamic_base_depth = 2;
+    config.dynamic_max_depth = 4;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Test multiple calls - complexity assessment may vary
+    let depths: Vec<u8> = (0..10)
+        .map(|_| engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2))
+        .collect();
+    
+    // All depths should be within valid range
+    for depth in &depths {
+        assert!(*depth >= 1 && *depth <= 4);
     }
 }

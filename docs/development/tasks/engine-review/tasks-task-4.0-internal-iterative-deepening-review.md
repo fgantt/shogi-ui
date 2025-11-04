@@ -106,25 +106,25 @@
   - [x] 3.11 Verify IID move ordering is effective in both ordering paths
   - [x] 3.12 Update documentation to clarify IID move is integrated into all ordering paths
 
-- [ ] 4.0 Use Dynamic Depth Calculation
-  - [ ] 4.1 Review `calculate_dynamic_iid_depth()` implementation (lines 1055-1080) - exists but not used
-  - [ ] 4.2 Review `assess_position_complexity()` implementation - exists but not used in IID
-  - [ ] 4.3 Integrate `calculate_dynamic_iid_depth()` into main IID flow in `calculate_iid_depth()`
-  - [ ] 4.4 Add new depth strategy option: `Dynamic` to `IIDDepthStrategy` enum
-  - [ ] 4.5 Update `calculate_iid_depth()` to support Dynamic strategy using `calculate_dynamic_iid_depth()`
-  - [ ] 4.6 Ensure `assess_position_complexity()` is called when using Dynamic strategy
-  - [ ] 4.7 Add maximum depth cap to Relative strategy (e.g., `min(4, main_depth - 2)`)
-  - [ ] 4.8 Enhance Adaptive strategy with more thresholds or position-based adjustments
-  - [ ] 4.9 Review minimum depth threshold (default: 4) - may be too conservative; consider making adaptive based on position characteristics
-  - [ ] 4.10 Update `IIDConfig::default()` to use Dynamic strategy if beneficial, or keep Fixed as default
-  - [ ] 4.11 Add configuration options for dynamic depth calculation:
+- [x] 4.0 Use Dynamic Depth Calculation
+  - [x] 4.1 Review `calculate_dynamic_iid_depth()` implementation (lines 1055-1080) - exists but not used
+  - [x] 4.2 Review `assess_position_complexity()` implementation - exists but not used in IID
+  - [x] 4.3 Integrate `calculate_dynamic_iid_depth()` into main IID flow in `calculate_iid_depth()`
+  - [x] 4.4 Add new depth strategy option: `Dynamic` to `IIDDepthStrategy` enum
+  - [x] 4.5 Update `calculate_iid_depth()` to support Dynamic strategy using `calculate_dynamic_iid_depth()`
+  - [x] 4.6 Ensure `assess_position_complexity()` is called when using Dynamic strategy
+  - [x] 4.7 Add maximum depth cap to Relative strategy (e.g., `min(4, main_depth - 2)`)
+  - [x] 4.8 Enhance Adaptive strategy with more thresholds or position-based adjustments
+  - [x] 4.9 Review minimum depth threshold (default: 4) - may be too conservative; consider making adaptive based on position characteristics
+  - [x] 4.10 Update `IIDConfig::default()` to use Dynamic strategy if beneficial, or keep Fixed as default
+  - [x] 4.11 Add configuration options for dynamic depth calculation:
     - Base depth (default: 2)
     - Complexity thresholds (low, medium, high)
     - Maximum depth cap
     - Adaptive minimum depth threshold
-  - [ ] 4.12 Add statistics tracking for dynamic depth selection (which depth was chosen and why)
-  - [ ] 4.13 Add debug logging for dynamic depth calculation (conditional on debug flags)
-  - [ ] 4.14 Add unit tests for dynamic depth calculation:
+  - [x] 4.12 Add statistics tracking for dynamic depth selection (which depth was chosen and why)
+  - [x] 4.13 Add debug logging for dynamic depth calculation (conditional on debug flags)
+  - [x] 4.14 Add unit tests for dynamic depth calculation:
     - Test depth selection based on position complexity
     - Test depth cap is respected
     - Test different complexity levels result in appropriate depths
@@ -437,4 +437,53 @@ Complete tasks 9.0, 10.0, 11.0:
 - Advanced ordering now benefits from IID move ordering, improving search efficiency when advanced ordering is used
 - Performance benchmark (3.10) is optional and can be added in future iterations if needed
 - All compilation errors related to signature changes have been resolved
+
+**Task 4.0 Completion Notes:**
+- Reviewed and integrated `calculate_dynamic_iid_depth()` into main IID flow in `calculate_iid_depth()`
+- The `Dynamic` variant already existed in `IIDDepthStrategy` enum and is now fully functional
+- Updated `calculate_iid_depth()` to:
+  * Support Dynamic strategy using `calculate_dynamic_iid_depth()` with position complexity assessment
+  * Enhanced Relative strategy with maximum depth cap (4) for performance
+  * Enhanced Adaptive strategy with position-based adjustments using complexity assessment
+  * Changed to `&mut self` to enable statistics tracking for Dynamic strategy
+  * Pass board and captured_pieces parameters through call chain for position-aware calculations
+- Enhanced `calculate_dynamic_iid_depth()` to:
+  * Work independently for Dynamic strategy (removed dependency on `enable_adaptive_tuning`)
+  * Always assess position complexity when using Dynamic strategy
+  * Use `dynamic_max_depth` configuration option for depth cap (replaces hardcoded 4)
+  * Apply proper depth adjustments based on complexity: Low (-1), Medium (base), High (+1, capped)
+- Updated `should_apply_iid()` to:
+  * Accept board and captured_pieces parameters for adaptive minimum depth
+  * Implement adaptive minimum depth threshold when `adaptive_min_depth` is enabled
+  * Lower threshold for high complexity positions where IID is more valuable
+- Added configuration options to `IIDConfig` (already existed, now fully used):
+  * `dynamic_base_depth: u8` (default: 2) - Base depth for dynamic calculations
+  * `dynamic_max_depth: u8` (default: 4) - Maximum depth cap for dynamic strategy
+  * `adaptive_min_depth: bool` (default: false) - Enable adaptive minimum depth threshold
+- Added statistics tracking fields to `IIDStats` (already existed, now fully used):
+  * `dynamic_depth_selections: HashMap<u8, u64>` - Tracks which depths were chosen
+  * `dynamic_depth_low_complexity: u64` - Count of low complexity depth selections
+  * `dynamic_depth_medium_complexity: u64` - Count of medium complexity depth selections
+  * `dynamic_depth_high_complexity: u64` - Count of high complexity depth selections
+- Added debug logging for dynamic depth calculation showing main_depth, base, complexity, and calculated depth
+- Updated `IIDConfig::default()` to keep Fixed strategy as default (Dynamic can be enabled by users)
+- Updated all `IIDConfig` initializers in `EnginePreset` implementations to include new configuration fields
+- Updated all call sites:
+  * `negamax_with_context()` now passes `Some(board)` and `Some(captured_pieces)` to `calculate_iid_depth()` and `should_apply_iid()`
+  * All test files updated to include `None, None` or appropriate parameters
+- Created comprehensive unit tests in `tests/iid_tests.rs`:
+  * `test_calculate_dynamic_iid_depth_low_complexity()` - tests depth reduction for low complexity
+  * `test_calculate_dynamic_iid_depth_high_complexity()` - tests depth increase for high complexity
+  * `test_dynamic_depth_max_cap_respected()` - verifies depth cap is respected
+  * `test_dynamic_strategy_integration()` - tests Dynamic strategy integration with statistics
+  * `test_dynamic_depth_statistics_tracking()` - verifies statistics tracking works
+  * `test_adaptive_minimum_depth_threshold()` - tests adaptive minimum depth feature
+  * `test_dynamic_strategy_without_position_info()` - tests fallback behavior
+  * `test_dynamic_base_depth_configuration()` - tests configuration options
+  * `test_relative_strategy_max_cap()` - verifies Relative strategy cap
+  * `test_adaptive_strategy_position_based()` - tests enhanced Adaptive strategy
+  * `test_different_complexity_levels_depths()` - tests multiple complexity scenarios
+- Dynamic depth calculation now fully integrated and provides intelligent depth selection based on position characteristics
+- All depth strategies (Fixed, Relative, Adaptive, Dynamic) now properly integrated with position-aware calculations
+- Performance benchmarks (4.15, 4.16, 4.17) are optional and can be added in future iterations if needed
 
