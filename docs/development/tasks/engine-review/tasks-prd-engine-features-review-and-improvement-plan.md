@@ -84,16 +84,16 @@
   - [x] 3.8 Generate improvement recommendations
   - [x] 3.9 Cross-reference with move ordering effectiveness
 
-- [ ] 4.0 Feature: Internal Iterative Deepening (IID)
-  - [ ] 4.1 Review IID implementation in search_engine.rs
-  - [ ] 4.2 Verify trigger conditions and thresholds
-  - [ ] 4.3 Check depth reduction calculations
-  - [ ] 4.4 Assess move ordering improvement quality
-  - [ ] 4.5 Review time overhead management
-  - [ ] 4.6 Measure performance impact (speedup vs. overhead)
-  - [ ] 4.7 Identify strengths and weaknesses
-  - [ ] 4.8 Generate improvement recommendations
-  - [ ] 4.9 Coordinate analysis with move ordering effectiveness metrics
+- [x] 4.0 Feature: Internal Iterative Deepening (IID)
+  - [x] 4.1 Review IID implementation in search_engine.rs
+  - [x] 4.2 Verify trigger conditions and thresholds
+  - [x] 4.3 Check depth reduction calculations
+  - [x] 4.4 Assess move ordering improvement quality
+  - [x] 4.5 Review time overhead management
+  - [x] 4.6 Measure performance impact (speedup vs. overhead)
+  - [x] 4.7 Identify strengths and weaknesses
+  - [x] 4.8 Generate improvement recommendations
+  - [x] 4.9 Coordinate analysis with move ordering effectiveness metrics
 
 - [ ] 5.0 Feature: Quiescence Search
   - [ ] 5.1 Review quiescence search implementation
