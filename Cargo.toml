@@ -100,6 +100,10 @@ name = "debug_logging_performance_benchmarks"
 harness = false
 
 [[bench]]
+name = "iid_move_extraction_benchmarks"
+harness = false
+
+[[bench]]
 name = "move_unmaking_performance_benchmarks"
 harness = false
 

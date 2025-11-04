@@ -3789,6 +3789,10 @@ pub struct IIDStats {
     pub iid_searches_failed: u64,
     /// IID searches that found a move but it didn't improve alpha
     pub iid_moves_ineffective: u64,
+    /// Task 2.11: Number of times IID move was extracted from transposition table
+    pub iid_move_extracted_from_tt: u64,
+    /// Task 2.11: Number of times IID move was extracted from tracked best move during search
+    pub iid_move_extracted_from_tracked: u64,
 }
 
 impl IIDStats {

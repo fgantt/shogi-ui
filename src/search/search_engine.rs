@@ -694,16 +694,17 @@ impl SearchEngine {
     }
 
     /// Perform IID search and extract the best move
+    /// Task 2.0: Returns (score, best_move) tuple to enable better move extraction
     pub fn perform_iid_search(&mut self, 
                          board: &mut BitboardBoard, 
                          captured_pieces: &CapturedPieces, 
                          player: Player, 
                          iid_depth: u8, 
                          alpha: i32, 
-                         _beta: i32, 
+                         beta: i32, 
                          start_time: &TimeSource, 
                          time_limit_ms: u32, 
-                         hash_history: &mut Vec<u64>) -> Option<Move> {
+                         hash_history: &mut Vec<u64>) -> (i32, Option<Move>) {
         
         let iid_start_time = TimeSource::now();
         let initial_nodes = self.nodes_searched;
@@ -712,41 +713,113 @@ impl SearchEngine {
         let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         let mut local_hash_history = vec![initial_hash];
         
-        // Perform shallow search with null window for efficiency
-        let iid_score = self.negamax_with_context(
-            board, 
-            captured_pieces, 
-            player, 
-            iid_depth, 
-            alpha - 1,  // Null window
-            alpha, 
-            start_time, 
-            time_limit_ms, 
-            &mut local_hash_history, 
-            true,  // can_null_move
-            false, // is_root
-            false, // has_capture
-            false  // has_check
-        );
+        // Generate legal moves for tracking best move during search
+        let generator = MoveGenerator::new();
+        let legal_moves = generator.generate_legal_moves(board, player, captured_pieces);
+        
+        // Limit moves for IID efficiency
+        let moves_to_search = if legal_moves.len() > self.iid_config.max_legal_moves {
+            &legal_moves[..self.iid_config.max_legal_moves]
+        } else {
+            &legal_moves
+        };
+        
+        if moves_to_search.is_empty() {
+            self.iid_stats.iid_searches_failed += 1;
+            return (alpha, None);
+        }
+        
+        // Track best move during search - we'll search moves individually to track the best
+        let mut best_move_tracked: Option<Move> = None;
+        let mut best_score_tracked = alpha;
+        
+        // Task 2.0: Search moves individually to track best move during search
+        // This replaces the single null window search approach to enable proper move tracking
+        for move_ in moves_to_search {
+            if start_time.elapsed_ms() >= time_limit_ms {
+                break;
+            }
+            
+            // Use move unmaking instead of board cloning
+            let move_info = board.make_move_with_info(move_);
+            let mut new_captured = captured_pieces.clone();
+            
+            if let Some(ref captured) = move_info.captured_piece {
+                new_captured.add_piece(captured.piece_type, player);
+            }
+            
+            // Shallow search for this move with null window for efficiency
+            let score = -self.negamax_with_context(
+                board,
+                &new_captured,
+                player.opposite(),
+                iid_depth - 1,
+                beta.saturating_neg(),
+                best_score_tracked.saturating_neg(),
+                start_time,
+                time_limit_ms,
+                &mut local_hash_history,
+                true,
+                false,
+                false,
+                false
+            );
+            
+            // Restore board state by unmaking the move
+            board.unmake_move(&move_info);
+            
+            if score > best_score_tracked {
+                best_score_tracked = score;
+                best_move_tracked = Some(move_.clone());
+                
+                // Early termination if we have a good enough move
+                if score >= beta {
+                    break;
+                }
+            }
+        }
+        
+        // The IID score is the best score we found
+        let iid_score = best_score_tracked;
+        
+        // Task 2.0: Try to extract best move from transposition table as fallback
+        // The TT might have a better move if the position was searched before
+        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+        let mut best_move_from_tt: Option<Move> = None;
+        if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
+            if let Some(ref tt_move) = entry.best_move {
+                // Task 2.8: Verify IID move is in legal moves list before using
+                if legal_moves.iter().any(|m| self.moves_equal(m, tt_move)) {
+                    // Only use TT move if it's different from our tracked move or we didn't find one
+                    if best_move_tracked.is_none() || !best_move_tracked.as_ref().map_or(false, |m| self.moves_equal(m, tt_move)) {
+                        best_move_from_tt = Some(tt_move.clone());
+                    }
+                }
+            }
+        }
         
         // Record IID statistics
         let iid_time = iid_start_time.elapsed_ms() as u64;
         self.iid_stats.iid_time_ms += iid_time;
         self.iid_stats.total_iid_nodes += self.nodes_searched - initial_nodes;
         
-        // Only return move if IID found something promising
-        if iid_score > alpha {
-            // Extract the best move from transposition table
-            let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
-                if let Some(best_move) = &entry.best_move {
-                    return Some(best_move.clone());
-                }
-            }
-        }
+        // Task 2.7: Fallback logic - use TT move if available, otherwise tracked move
+        let final_best_move = if let Some(tt_move) = best_move_from_tt {
+            // Task 2.11: Track statistics for IID move extraction success rate
+            self.iid_stats.iid_move_extracted_from_tt += 1;
+            Some(tt_move)
+        } else if let Some(tracked_move) = best_move_tracked {
+            // Task 2.11: Track that we used tracked move instead of TT
+            self.iid_stats.iid_move_extracted_from_tracked += 1;
+            Some(tracked_move)
+        } else {
+            self.iid_stats.iid_searches_failed += 1;
+            None
+        };
         
-        self.iid_stats.iid_searches_failed += 1;
-        None
+        // Task 2.5: Remove dependency on iid_score > alpha - IID should provide ordering even if score doesn't beat alpha
+        // Return the best move found regardless of whether it beats alpha
+        (iid_score, final_best_move)
     }
 
     /// Extract the best move from transposition table for a given position
@@ -3102,7 +3175,8 @@ impl SearchEngine {
             // Create local hash_history for IID call (Task 5.2)
             let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
             let mut local_hash_history = vec![initial_hash];
-            iid_move = self.perform_iid_search(
+            // Task 2.0: Receive (score, best_move) tuple from perform_iid_search
+            let (iid_score_result, iid_move_result) = self.perform_iid_search(
                 &mut board.clone(), 
                 captured_pieces, 
                 player, 
@@ -3113,15 +3187,17 @@ impl SearchEngine {
                 time_limit_ms, 
                 &mut local_hash_history
             );
+            iid_move = iid_move_result;
             
             let iid_time = iid_start_time.elapsed_ms();
             self.iid_stats.iid_searches_performed += 1;
             crate::debug_utils::end_timing("iid_search", "IID");
             
+            // Task 2.12: Add debug logging for IID move extraction (conditional on debug flags)
             if let Some(ref mv) = iid_move {
-                crate::debug_utils::trace_log("IID", &format!("Found move {} in {}ms", mv.to_usi_string(), iid_time));
+                crate::debug_utils::trace_log("IID", &format!("Found move {} in {}ms (score: {})", mv.to_usi_string(), iid_time, iid_score_result));
             } else {
-                crate::debug_utils::trace_log("IID", &format!("No move found after {}ms", iid_time));
+                crate::debug_utils::trace_log("IID", &format!("No move found after {}ms (score: {})", iid_time, iid_score_result));
             }
         } else {
             crate::debug_utils::trace_log("IID", &format!("Skipped at depth {} (enabled={}, tt_move={}, moves={})", 
