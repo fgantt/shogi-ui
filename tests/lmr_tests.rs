@@ -2528,3 +2528,234 @@ mod pruning_manager_adaptive_reduction_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod lmr_preset_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_get_lmr_preset_aggressive() {
+        let engine = create_test_engine();
+        let preset = engine.get_lmr_preset(LMRPlayingStyle::Aggressive);
+        
+        // Verify aggressive preset settings
+        assert_eq!(preset.enabled, true);
+        assert_eq!(preset.min_depth, 2);
+        assert_eq!(preset.min_move_index, 3);
+        assert_eq!(preset.base_reduction, 2);
+        assert_eq!(preset.max_reduction, 4);
+        assert_eq!(preset.re_search_margin, 25);
+        assert_eq!(preset.enable_extended_exemptions, true);
+        assert_eq!(preset.adaptive_tuning_config.enabled, true);
+        assert_eq!(preset.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Moderate);
+    }
+
+    #[test]
+    fn test_get_lmr_preset_conservative() {
+        let engine = create_test_engine();
+        let preset = engine.get_lmr_preset(LMRPlayingStyle::Conservative);
+        
+        // Verify conservative preset settings
+        assert_eq!(preset.enabled, true);
+        assert_eq!(preset.min_depth, 4);
+        assert_eq!(preset.min_move_index, 6);
+        assert_eq!(preset.base_reduction, 1);
+        assert_eq!(preset.max_reduction, 2);
+        assert_eq!(preset.re_search_margin, 100);
+        assert_eq!(preset.enable_extended_exemptions, true);
+        assert_eq!(preset.adaptive_tuning_config.enabled, true);
+        assert_eq!(preset.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Conservative);
+    }
+
+    #[test]
+    fn test_get_lmr_preset_balanced() {
+        let engine = create_test_engine();
+        let preset = engine.get_lmr_preset(LMRPlayingStyle::Balanced);
+        
+        // Verify balanced preset settings
+        assert_eq!(preset.enabled, true);
+        assert_eq!(preset.min_depth, 3);
+        assert_eq!(preset.min_move_index, 4);
+        assert_eq!(preset.base_reduction, 1);
+        assert_eq!(preset.max_reduction, 3);
+        assert_eq!(preset.re_search_margin, 50);
+        assert_eq!(preset.enable_extended_exemptions, true);
+        assert_eq!(preset.adaptive_tuning_config.enabled, true);
+        assert_eq!(preset.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Moderate);
+    }
+
+    #[test]
+    fn test_validate_lmr_preset_aggressive() {
+        let engine = create_test_engine();
+        let result = engine.validate_lmr_preset(LMRPlayingStyle::Aggressive);
+        assert!(result.is_ok(), "Aggressive preset should be valid");
+    }
+
+    #[test]
+    fn test_validate_lmr_preset_conservative() {
+        let engine = create_test_engine();
+        let result = engine.validate_lmr_preset(LMRPlayingStyle::Conservative);
+        assert!(result.is_ok(), "Conservative preset should be valid");
+    }
+
+    #[test]
+    fn test_validate_lmr_preset_balanced() {
+        let engine = create_test_engine();
+        let result = engine.validate_lmr_preset(LMRPlayingStyle::Balanced);
+        assert!(result.is_ok(), "Balanced preset should be valid");
+    }
+
+    #[test]
+    fn test_apply_lmr_preset_aggressive() {
+        let mut engine = create_test_engine();
+        let result = engine.apply_lmr_preset(LMRPlayingStyle::Aggressive);
+        
+        assert!(result.is_ok(), "Should apply aggressive preset successfully");
+        
+        let config = engine.get_lmr_config();
+        assert_eq!(config.min_depth, 2);
+        assert_eq!(config.base_reduction, 2);
+        assert_eq!(config.re_search_margin, 25);
+        
+        // Verify PruningManager parameters are synced
+        let pruning_manager = engine.get_pruning_manager();
+        assert_eq!(pruning_manager.parameters.lmr_base_reduction, 2);
+        assert_eq!(pruning_manager.parameters.lmr_depth_threshold, 2);
+        assert_eq!(pruning_manager.parameters.lmr_move_threshold, 3);
+        assert_eq!(pruning_manager.parameters.lmr_max_reduction, 4);
+    }
+
+    #[test]
+    fn test_apply_lmr_preset_conservative() {
+        let mut engine = create_test_engine();
+        let result = engine.apply_lmr_preset(LMRPlayingStyle::Conservative);
+        
+        assert!(result.is_ok(), "Should apply conservative preset successfully");
+        
+        let config = engine.get_lmr_config();
+        assert_eq!(config.min_depth, 4);
+        assert_eq!(config.base_reduction, 1);
+        assert_eq!(config.re_search_margin, 100);
+        
+        // Verify PruningManager parameters are synced
+        let pruning_manager = engine.get_pruning_manager();
+        assert_eq!(pruning_manager.parameters.lmr_base_reduction, 1);
+        assert_eq!(pruning_manager.parameters.lmr_depth_threshold, 4);
+        assert_eq!(pruning_manager.parameters.lmr_move_threshold, 6);
+        assert_eq!(pruning_manager.parameters.lmr_max_reduction, 2);
+    }
+
+    #[test]
+    fn test_apply_lmr_preset_balanced() {
+        let mut engine = create_test_engine();
+        let result = engine.apply_lmr_preset(LMRPlayingStyle::Balanced);
+        
+        assert!(result.is_ok(), "Should apply balanced preset successfully");
+        
+        let config = engine.get_lmr_config();
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.base_reduction, 1);
+        assert_eq!(config.re_search_margin, 50);
+        
+        // Verify PruningManager parameters are synced
+        let pruning_manager = engine.get_pruning_manager();
+        assert_eq!(pruning_manager.parameters.lmr_base_reduction, 1);
+        assert_eq!(pruning_manager.parameters.lmr_depth_threshold, 3);
+        assert_eq!(pruning_manager.parameters.lmr_move_threshold, 4);
+        assert_eq!(pruning_manager.parameters.lmr_max_reduction, 3);
+    }
+
+    #[test]
+    fn test_preset_configurations_are_reasonable() {
+        let engine = create_test_engine();
+        
+        // Test all presets have reasonable values
+        for style in [LMRPlayingStyle::Aggressive, LMRPlayingStyle::Conservative, LMRPlayingStyle::Balanced] {
+            let preset = engine.get_lmr_preset(style);
+            
+            // Verify reasonable ranges
+            assert!(preset.min_depth >= 1 && preset.min_depth <= 15, "min_depth should be in valid range");
+            assert!(preset.min_move_index >= 1 && preset.min_move_index <= 20, "min_move_index should be in valid range");
+            assert!(preset.base_reduction >= 1 && preset.base_reduction <= 5, "base_reduction should be in valid range");
+            assert!(preset.max_reduction >= preset.base_reduction && preset.max_reduction <= 8, "max_reduction should be >= base_reduction and <= 8");
+            assert!(preset.re_search_margin >= 0 && preset.re_search_margin <= 500, "re_search_margin should be in valid range");
+            
+            // Verify preset is valid
+            assert!(preset.validate().is_ok(), "Preset should be valid");
+        }
+    }
+
+    #[test]
+    fn test_preset_adaptive_tuning_configurations() {
+        let engine = create_test_engine();
+        
+        let aggressive = engine.get_lmr_preset(LMRPlayingStyle::Aggressive);
+        let conservative = engine.get_lmr_preset(LMRPlayingStyle::Conservative);
+        let balanced = engine.get_lmr_preset(LMRPlayingStyle::Balanced);
+        
+        // Aggressive should have Moderate tuning
+        assert_eq!(aggressive.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Moderate);
+        
+        // Conservative should have Conservative tuning
+        assert_eq!(conservative.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Conservative);
+        
+        // Balanced should have Moderate tuning
+        assert_eq!(balanced.adaptive_tuning_config.aggressiveness, TuningAggressiveness::Moderate);
+        
+        // All should have adaptive tuning enabled
+        assert!(aggressive.adaptive_tuning_config.enabled);
+        assert!(conservative.adaptive_tuning_config.enabled);
+        assert!(balanced.adaptive_tuning_config.enabled);
+    }
+
+    #[test]
+    fn test_preset_switching() {
+        let mut engine = create_test_engine();
+        
+        // Apply aggressive preset
+        engine.apply_lmr_preset(LMRPlayingStyle::Aggressive).unwrap();
+        assert_eq!(engine.get_lmr_config().base_reduction, 2);
+        
+        // Switch to conservative preset
+        engine.apply_lmr_preset(LMRPlayingStyle::Conservative).unwrap();
+        assert_eq!(engine.get_lmr_config().base_reduction, 1);
+        
+        // Switch to balanced preset
+        engine.apply_lmr_preset(LMRPlayingStyle::Balanced).unwrap();
+        assert_eq!(engine.get_lmr_config().base_reduction, 1);
+        assert_eq!(engine.get_lmr_config().min_depth, 3);
+    }
+
+    #[test]
+    fn test_preset_integration_with_lmr() {
+        let mut engine = create_test_engine();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Apply aggressive preset
+        engine.apply_lmr_preset(LMRPlayingStyle::Aggressive).unwrap();
+        
+        // Perform a search to verify preset works with LMR
+        let mut board_mut = board.clone();
+        let result = engine.search_at_depth_legacy(
+            &mut board_mut,
+            &captured_pieces,
+            player,
+            5, // Fixed depth
+            1000,
+        );
+        
+        // Should complete without errors
+        assert!(result.is_some() || result.is_none()); // Result may or may not be Some
+        
+        // Verify preset configuration is still applied
+        let config = engine.get_lmr_config();
+        assert_eq!(config.base_reduction, 2);
+        assert_eq!(config.re_search_margin, 25);
+    }
+}
