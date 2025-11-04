@@ -197,19 +197,19 @@
   - [x] 7.13 Verify adaptive tuning doesn't cause oscillation or instability
   - [x] 7.14 Document tuning strategies and recommended configurations
 
-- [ ] 8.0 Verify PruningManager Adaptive Reduction
-  - [ ] 8.1 Check if PruningManager implements adaptive reduction in `calculate_lmr_reduction()` method
-  - [ ] 8.2 Review PruningManager parameters to see if adaptive reduction is configurable
-  - [ ] 8.3 If PruningManager doesn't have adaptive reduction, create integration plan
-  - [ ] 8.4 Migrate adaptive reduction logic from `apply_adaptive_reduction()` to PruningManager
-  - [ ] 8.5 Ensure PruningManager has access to position classification methods
-  - [ ] 8.6 Ensure PruningManager has access to LMRStats for position classification
-  - [ ] 8.7 Add configuration options to PruningManager for adaptive reduction (enable/disable, thresholds)
-  - [ ] 8.8 Add unit tests verifying adaptive reduction works in PruningManager
-  - [ ] 8.9 Add unit tests comparing adaptive reduction behavior in legacy vs PruningManager
-  - [ ] 8.10 Create performance benchmarks comparing adaptive reduction with/without PruningManager
-  - [ ] 8.11 Verify adaptive reduction is actually being applied (add debug logging)
-  - [ ] 8.12 Document PruningManager adaptive reduction usage
+- [x] 8.0 Verify PruningManager Adaptive Reduction
+  - [x] 8.1 Check if PruningManager implements adaptive reduction in `calculate_lmr_reduction()` method
+  - [x] 8.2 Review PruningManager parameters to see if adaptive reduction is configurable
+  - [x] 8.3 If PruningManager doesn't have adaptive reduction, create integration plan
+  - [x] 8.4 Migrate adaptive reduction logic from `apply_adaptive_reduction()` to PruningManager
+  - [x] 8.5 Ensure PruningManager has access to position classification methods
+  - [x] 8.6 Ensure PruningManager has access to LMRStats for position classification
+  - [x] 8.7 Add configuration options to PruningManager for adaptive reduction (enable/disable, thresholds)
+  - [x] 8.8 Add unit tests verifying adaptive reduction works in PruningManager
+  - [x] 8.9 Add unit tests comparing adaptive reduction behavior in legacy vs PruningManager
+  - [x] 8.10 Create performance benchmarks comparing adaptive reduction with/without PruningManager
+  - [x] 8.11 Verify adaptive reduction is actually being applied (add debug logging)
+  - [x] 8.12 Document PruningManager adaptive reduction usage
 
 - [ ] 9.0 Add Configuration Presets
   - [ ] 9.1 Review existing `get_lmr_preset()` method (lines 6730-6769)

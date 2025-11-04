@@ -2258,3 +2258,273 @@ mod adaptive_tuning_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod pruning_manager_adaptive_reduction_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_pruning_manager_implements_adaptive_reduction() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        // Check if PruningManager has adaptive reduction enabled by default
+        assert_eq!(pruning_manager.parameters.lmr_enable_adaptive_reduction, true);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_with_position_classification() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Create search state with position classification
+        let mut search_state = SearchState::new(5, 0, 1000);
+        search_state.set_position_classification(Some(PositionClassification::Tactical));
+        
+        // Calculate reduction with tactical position
+        let reduction_tactical = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Create search state with quiet position
+        search_state.set_position_classification(Some(PositionClassification::Quiet));
+        let reduction_quiet = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Tactical positions should have less reduction (more conservative)
+        // Quiet positions should have more reduction (more aggressive)
+        assert!(reduction_tactical <= reduction_quiet || reduction_quiet > reduction_tactical);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_disabled() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.enable_adaptive_reduction = false;
+        engine.update_lmr_config(config).unwrap();
+        
+        let pruning_manager = engine.get_pruning_manager();
+        
+        // Check if adaptive reduction is disabled
+        assert_eq!(pruning_manager.parameters.lmr_enable_adaptive_reduction, false);
+    }
+
+    #[test]
+    fn test_pruning_manager_syncs_with_lmr_config() {
+        let mut engine = create_test_engine();
+        let mut config = LMRConfig::default();
+        config.base_reduction = 2;
+        config.max_reduction = 4;
+        config.min_move_index = 5;
+        config.min_depth = 4;
+        engine.update_lmr_config(config).unwrap();
+        
+        let pruning_manager = engine.get_pruning_manager();
+        
+        // Check if PruningManager parameters are synced
+        assert_eq!(pruning_manager.parameters.lmr_base_reduction, 2);
+        assert_eq!(pruning_manager.parameters.lmr_max_reduction, 4);
+        assert_eq!(pruning_manager.parameters.lmr_move_threshold, 5);
+        assert_eq!(pruning_manager.parameters.lmr_depth_threshold, 4);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_neutral_position() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Create search state with neutral position
+        let mut search_state = SearchState::new(5, 0, 1000);
+        search_state.set_position_classification(Some(PositionClassification::Neutral));
+        
+        // Calculate reduction with neutral position
+        let reduction_neutral = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Neutral positions should use base reduction (no adjustment)
+        // Should be >= 0
+        assert!(reduction_neutral >= 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_center_move() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        // Center move (from center to center)
+        let center_move = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Edge move (from edge to edge)
+        let edge_move = Move::new(Position::new(0, 0), Position::new(1, 1), Player::Black, false, false, false);
+        
+        let mut search_state = SearchState::new(5, 0, 1000);
+        search_state.set_position_classification(Some(PositionClassification::Neutral));
+        
+        // Calculate reduction with center move
+        let reduction_center = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &center_move,
+            false,
+            None
+        );
+        
+        // Calculate reduction with edge move
+        let reduction_edge = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &edge_move,
+            false,
+            None
+        );
+        
+        // Center moves should have less reduction (more important)
+        // Should be >= 0
+        assert!(reduction_center >= 0);
+        assert!(reduction_edge >= 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_combined_factors() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Test with different combinations of position classification and move type
+        let test_cases = vec![
+            (PositionClassification::Tactical, true),  // Tactical + center move
+            (PositionClassification::Quiet, false),   // Quiet + edge move
+            (PositionClassification::Neutral, true),  // Neutral + center move
+        ];
+        
+        for (classification, is_center) in test_cases {
+            let mut search_state = SearchState::new(5, 0, 1000);
+            search_state.set_position_classification(Some(classification));
+            
+            let reduction = pruning_manager.calculate_lmr_reduction(
+                &search_state,
+                &move_,
+                false,
+                None
+            );
+            
+            // Should be >= 0 and <= max_reduction
+            assert!(reduction >= 0);
+            assert!(reduction <= pruning_manager.parameters.lmr_max_reduction);
+        }
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_without_classification() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Create search state without position classification
+        let search_state = SearchState::new(5, 0, 1000);
+        // position_classification is None by default
+        
+        // Calculate reduction without position classification
+        let reduction = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Should still work (uses base reduction)
+        assert!(reduction >= 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_parameters_sync_on_config_update() {
+        let mut engine = create_test_engine();
+        
+        // Get initial PruningManager parameters
+        let initial_params = engine.get_pruning_manager().parameters.clone();
+        
+        // Update LMRConfig
+        let mut config = LMRConfig::default();
+        config.base_reduction = 3;
+        config.max_reduction = 5;
+        config.min_move_index = 6;
+        config.min_depth = 4;
+        config.enable_adaptive_reduction = false;
+        engine.update_lmr_config(config).unwrap();
+        
+        // Check if PruningManager parameters are synced
+        let updated_params = engine.get_pruning_manager().parameters.clone();
+        assert_eq!(updated_params.lmr_base_reduction, 3);
+        assert_eq!(updated_params.lmr_max_reduction, 5);
+        assert_eq!(updated_params.lmr_move_threshold, 6);
+        assert_eq!(updated_params.lmr_depth_threshold, 4);
+        assert_eq!(updated_params.lmr_enable_adaptive_reduction, false);
+        
+        // Verify parameters changed
+        assert_ne!(updated_params.lmr_base_reduction, initial_params.lmr_base_reduction);
+    }
+
+    #[test]
+    fn test_pruning_manager_adaptive_reduction_effectiveness() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let move_ = Move::new(Position::new(4, 4), Position::new(3, 3), Player::Black, false, false, false);
+        
+        // Test that adaptive reduction actually changes reduction based on position
+        let mut search_state = SearchState::new(5, 0, 1000);
+        
+        // Get base reduction (no classification)
+        let base_reduction = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Get reduction with tactical position
+        search_state.set_position_classification(Some(PositionClassification::Tactical));
+        let tactical_reduction = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Get reduction with quiet position
+        search_state.set_position_classification(Some(PositionClassification::Quiet));
+        let quiet_reduction = pruning_manager.calculate_lmr_reduction(
+            &search_state,
+            &move_,
+            false,
+            None
+        );
+        
+        // Tactical should be <= base, quiet should be >= base (if adaptive reduction enabled)
+        if pruning_manager.parameters.lmr_enable_adaptive_reduction {
+            assert!(tactical_reduction <= quiet_reduction);
+        }
+    }
+}

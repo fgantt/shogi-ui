@@ -316,7 +316,20 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
             // Advanced Alpha-Beta Pruning
-            pruning_manager: PruningManager::new(PruningParameters::default()),
+            pruning_manager: {
+                let mut pm = PruningManager::new(PruningParameters::default());
+                // Sync PruningManager parameters with LMRConfig (Task 8.4, 8.7)
+                let default_lmr = LMRConfig::default();
+                let mut params = pm.parameters.clone();
+                params.lmr_base_reduction = default_lmr.base_reduction;
+                params.lmr_move_threshold = default_lmr.min_move_index;
+                params.lmr_depth_threshold = default_lmr.min_depth;
+                params.lmr_max_reduction = default_lmr.max_reduction;
+                params.lmr_enable_extended_exemptions = default_lmr.enable_extended_exemptions;
+                params.lmr_enable_adaptive_reduction = default_lmr.enable_adaptive_reduction;
+                pm.parameters = params;
+                pm
+            },
             // Tapered evaluation search integration
             tapered_search_enhancer: TaperedSearchEnhancer::new(),
             // Initialize diagnostic fields
@@ -509,7 +522,7 @@ impl SearchEngine {
             quiescence_stats: QuiescenceStats::default(),
             null_move_config: config.null_move,
             null_move_stats: NullMoveStats::default(),
-            lmr_config: config.lmr,
+            lmr_config: config.lmr.clone(),
             lmr_stats: LMRStats::default(),
             aspiration_config: config.aspiration_windows,
             aspiration_stats: AspirationWindowStats::default(),
@@ -520,7 +533,19 @@ impl SearchEngine {
             iid_stats: IIDStats::default(),
             previous_scores: Vec::new(),
             // Advanced Alpha-Beta Pruning
-            pruning_manager: PruningManager::new(PruningParameters::default()),
+            pruning_manager: {
+                let mut pm = PruningManager::new(PruningParameters::default());
+                // Sync PruningManager parameters with LMRConfig (Task 8.4, 8.7)
+                let mut params = pm.parameters.clone();
+                params.lmr_base_reduction = config.lmr.base_reduction;
+                params.lmr_move_threshold = config.lmr.min_move_index;
+                params.lmr_depth_threshold = config.lmr.min_depth;
+                params.lmr_max_reduction = config.lmr.max_reduction;
+                params.lmr_enable_extended_exemptions = config.lmr.enable_extended_exemptions;
+                params.lmr_enable_adaptive_reduction = config.lmr.enable_adaptive_reduction;
+                pm.parameters = params;
+                pm
+            },
             // Tapered evaluation search integration
             tapered_search_enhancer: TaperedSearchEnhancer::new(),
             // Initialize diagnostic fields
@@ -4973,11 +4998,32 @@ impl SearchEngine {
         LMRConfig::default()
     }
     
-    /// Update LMR configuration with validation
+    /// Update LMR configuration with validation (Task 8.4, 8.7)
+    /// Also syncs PruningManager parameters to match LMRConfig
     pub fn update_lmr_config(&mut self, config: LMRConfig) -> Result<(), String> {
         config.validate()?;
-        self.lmr_config = config;
+        self.lmr_config = config.clone();
+        
+        // Sync PruningManager parameters with LMRConfig (Task 8.4, 8.7)
+        self.sync_pruning_manager_from_lmr_config(&config);
+        
         Ok(())
+    }
+    
+    /// Sync PruningManager parameters from LMRConfig (Task 8.4, 8.7)
+    fn sync_pruning_manager_from_lmr_config(&mut self, config: &LMRConfig) {
+        let mut params = self.pruning_manager.parameters.clone();
+        
+        // Sync LMR parameters from LMRConfig
+        params.lmr_base_reduction = config.base_reduction;
+        params.lmr_move_threshold = config.min_move_index;
+        params.lmr_depth_threshold = config.min_depth;
+        params.lmr_max_reduction = config.max_reduction;
+        params.lmr_enable_extended_exemptions = config.enable_extended_exemptions;
+        params.lmr_enable_adaptive_reduction = config.enable_adaptive_reduction;
+        
+        // Update PruningManager parameters
+        self.pruning_manager.parameters = params;
     }
     
     /// Get current LMR configuration

@@ -6009,23 +6009,41 @@ impl PruningManager {
         reduction.min(self.parameters.lmr_max_reduction).min(state.depth - 1)
     }
     
-    /// Apply adaptive reduction based on position characteristics
+    /// Apply adaptive reduction based on position characteristics (Task 8.4, 8.5, 8.11)
     fn apply_adaptive_reduction(&self, base_reduction: u8, state: &SearchState, mv: &Move) -> u8 {
         let mut reduction = base_reduction;
         
-        // Use position classification if available
+        // Use position classification if available (Task 8.5)
         if let Some(classification) = state.position_classification {
             match classification {
                 PositionClassification::Tactical => {
                     // More conservative reduction in tactical positions
                     reduction = reduction.saturating_sub(1);
+                    // Debug logging (Task 8.11)
+                    #[cfg(feature = "debug")]
+                    crate::debug_utils::trace_log("LMR", &format!(
+                        "Adaptive reduction: Tactical position, reduced by 1 ({} -> {})",
+                        base_reduction, reduction
+                    ));
                 },
                 PositionClassification::Quiet => {
                     // More aggressive reduction in quiet positions
                     reduction = reduction.saturating_add(1);
+                    // Debug logging (Task 8.11)
+                    #[cfg(feature = "debug")]
+                    crate::debug_utils::trace_log("LMR", &format!(
+                        "Adaptive reduction: Quiet position, increased by 1 ({} -> {})",
+                        base_reduction, reduction
+                    ));
                 },
                 PositionClassification::Neutral => {
                     // Keep base reduction for neutral positions
+                    // Debug logging (Task 8.11)
+                    #[cfg(feature = "debug")]
+                    crate::debug_utils::trace_log("LMR", &format!(
+                        "Adaptive reduction: Neutral position, no adjustment ({})",
+                        base_reduction
+                    ));
                 }
             }
         }
@@ -6033,6 +6051,12 @@ impl PruningManager {
         // Adjust based on move characteristics (center moves are important)
         if self.is_center_move(mv) {
             reduction = reduction.saturating_sub(1);
+            // Debug logging (Task 8.11)
+            #[cfg(feature = "debug")]
+            crate::debug_utils::trace_log("LMR", &format!(
+                "Adaptive reduction: Center move, reduced by 1 ({} -> {})",
+                base_reduction, reduction
+            ));
         }
         
         reduction
