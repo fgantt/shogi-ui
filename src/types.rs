@@ -2133,6 +2133,111 @@ impl LMRConfig {
     }
 }
 
+/// Move ordering effectiveness metrics (Task 10.4, 10.5)
+#[derive(Debug, Clone)]
+pub struct MoveOrderingMetrics {
+    pub total_cutoffs: u64,
+    pub cutoffs_after_threshold_percentage: f64,
+    pub average_cutoff_index: f64,
+    pub late_ordered_cutoffs: u64,
+    pub early_ordered_no_cutoffs: u64,
+    pub ordering_effectiveness: f64,
+}
+
+/// Move ordering effectiveness statistics (Task 10.1-10.3)
+#[derive(Debug, Clone, Default)]
+pub struct MoveOrderingEffectivenessStats {
+    /// Total number of cutoffs tracked
+    pub total_cutoffs: u64,
+    /// Cutoffs by move index (index -> count)
+    pub cutoffs_by_index: std::collections::HashMap<u8, u64>,
+    /// Cutoffs from moves after LMR threshold (Task 10.4)
+    pub cutoffs_after_lmr_threshold: u64,
+    /// Cutoffs from moves before LMR threshold
+    pub cutoffs_before_lmr_threshold: u64,
+    /// Late-ordered moves that caused cutoffs (indicates ordering could be better) (Task 10.2)
+    pub late_ordered_cutoffs: u64,
+    /// Early-ordered moves that didn't cause cutoffs (indicates ordering is good) (Task 10.3)
+    pub early_ordered_no_cutoffs: u64,
+    /// Total move index sum for cutoff-causing moves (for average calculation)
+    pub total_cutoff_index_sum: u64,
+    /// Number of moves considered that didn't cause cutoffs
+    pub moves_no_cutoff: u64,
+    /// Move index sum for non-cutoff moves
+    pub total_no_cutoff_index_sum: u64,
+}
+
+impl MoveOrderingEffectivenessStats {
+    /// Record a cutoff at a specific move index (Task 10.1)
+    pub fn record_cutoff(&mut self, move_index: u8, lmr_threshold: u8) {
+        self.total_cutoffs += 1;
+        *self.cutoffs_by_index.entry(move_index).or_insert(0) += 1;
+        self.total_cutoff_index_sum += move_index as u64;
+        
+        // Track cutoffs after LMR threshold (Task 10.4)
+        if move_index >= lmr_threshold {
+            self.cutoffs_after_lmr_threshold += 1;
+            self.late_ordered_cutoffs += 1;  // Late-ordered move caused cutoff (Task 10.2)
+        } else {
+            self.cutoffs_before_lmr_threshold += 1;
+        }
+    }
+    
+    /// Record a move that didn't cause a cutoff (Task 10.3)
+    pub fn record_no_cutoff(&mut self, move_index: u8, lmr_threshold: u8) {
+        self.moves_no_cutoff += 1;
+        self.total_no_cutoff_index_sum += move_index as u64;
+        
+        // Track early-ordered moves that didn't cause cutoffs (indicates ordering is good) (Task 10.3)
+        if move_index < lmr_threshold {
+            self.early_ordered_no_cutoffs += 1;
+        }
+    }
+    
+    /// Get percentage of cutoffs from moves after LMR threshold (Task 10.4)
+    pub fn cutoffs_after_threshold_percentage(&self) -> f64 {
+        if self.total_cutoffs == 0 {
+            return 0.0;
+        }
+        (self.cutoffs_after_lmr_threshold as f64 / self.total_cutoffs as f64) * 100.0
+    }
+    
+    /// Get average move index of cutoff-causing moves (Task 10.5)
+    pub fn average_cutoff_index(&self) -> f64 {
+        if self.total_cutoffs == 0 {
+            return 0.0;
+        }
+        self.total_cutoff_index_sum as f64 / self.total_cutoffs as f64
+    }
+    
+    /// Get average move index of non-cutoff moves
+    pub fn average_no_cutoff_index(&self) -> f64 {
+        if self.moves_no_cutoff == 0 {
+            return 0.0;
+        }
+        self.total_no_cutoff_index_sum as f64 / self.moves_no_cutoff as f64
+    }
+    
+    /// Get ordering effectiveness score (lower is better - indicates good ordering)
+    pub fn ordering_effectiveness(&self) -> f64 {
+        if self.total_cutoffs == 0 {
+            return 100.0;  // No cutoffs means perfect ordering (all moves pruned)
+        }
+        
+        let avg_cutoff_index = self.average_cutoff_index();
+        let late_cutoff_rate = self.cutoffs_after_threshold_percentage();
+        
+        // Effectiveness = 100 - (average index * 10 + late cutoff rate)
+        // Lower average index and lower late cutoff rate = better ordering
+        100.0 - (avg_cutoff_index * 10.0 + late_cutoff_rate).min(100.0)
+    }
+    
+    /// Reset all statistics
+    pub fn reset(&mut self) {
+        *self = MoveOrderingEffectivenessStats::default();
+    }
+}
+
 /// Adaptive tuning statistics (Task 7.9)
 #[derive(Debug, Clone, Default)]
 pub struct AdaptiveTuningStats {
@@ -2315,6 +2420,8 @@ pub struct LMRStats {
     pub escape_move_stats: EscapeMoveStats,
     /// Adaptive tuning statistics (Task 7.9)
     pub adaptive_tuning_stats: AdaptiveTuningStats,
+    /// Move ordering effectiveness statistics (Task 10.1-10.3)
+    pub move_ordering_stats: MoveOrderingEffectivenessStats,
 }
 
 impl LMRStats {
@@ -2380,8 +2487,99 @@ impl LMRStats {
                 cutoff_rate
             ));
         }
+        
+        // Check move ordering effectiveness (Task 10.7)
+        let ordering_effectiveness = self.move_ordering_stats.ordering_effectiveness();
+        let late_cutoff_rate = self.move_ordering_stats.cutoffs_after_threshold_percentage();
+        if late_cutoff_rate > 25.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "Poor move ordering: {:.1}% of cutoffs from late-ordered moves (threshold: 25%). Ordering needs improvement.",
+                late_cutoff_rate
+            ));
+        }
+        
+        // Check if ordering effectiveness is degrading (Task 10.7)
+        let avg_cutoff_index = self.move_ordering_stats.average_cutoff_index();
+        if avg_cutoff_index > 5.0 {
+            alerts.push(format!(
+                "High average cutoff index: {:.1} (threshold: 5.0). Move ordering may need improvement.",
+                avg_cutoff_index
+            ));
+        }
 
         (is_healthy, alerts)
+    }
+    
+    /// Get move ordering effectiveness metrics (Task 10.4, 10.5)
+    pub fn get_move_ordering_metrics(&self) -> MoveOrderingMetrics {
+        MoveOrderingMetrics {
+            total_cutoffs: self.move_ordering_stats.total_cutoffs,
+            cutoffs_after_threshold_percentage: self.move_ordering_stats.cutoffs_after_threshold_percentage(),
+            average_cutoff_index: self.move_ordering_stats.average_cutoff_index(),
+            late_ordered_cutoffs: self.move_ordering_stats.late_ordered_cutoffs,
+            early_ordered_no_cutoffs: self.move_ordering_stats.early_ordered_no_cutoffs,
+            ordering_effectiveness: self.move_ordering_stats.ordering_effectiveness(),
+        }
+    }
+    
+    /// Check if move ordering effectiveness is degrading (Task 10.7)
+    pub fn check_ordering_degradation(&self) -> (bool, Vec<String>) {
+        let mut alerts = Vec::new();
+        let mut is_healthy = true;
+        
+        let late_cutoff_rate = self.move_ordering_stats.cutoffs_after_threshold_percentage();
+        if late_cutoff_rate > 30.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "Move ordering degradation detected: {:.1}% of cutoffs from late-ordered moves (threshold: 30%)",
+                late_cutoff_rate
+            ));
+        }
+        
+        let avg_cutoff_index = self.move_ordering_stats.average_cutoff_index();
+        if avg_cutoff_index > 6.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "Move ordering degradation detected: Average cutoff index {:.1} is too high (threshold: 6.0)",
+                avg_cutoff_index
+            ));
+        }
+        
+        (is_healthy, alerts)
+    }
+    
+    /// Create performance report comparing ordering effectiveness vs LMR effectiveness (Task 10.8)
+    pub fn get_ordering_vs_lmr_report(&self) -> String {
+        let ordering_metrics = self.get_move_ordering_metrics();
+        let efficiency = self.efficiency();
+        let research_rate = self.research_rate();
+        let cutoff_rate = self.cutoff_rate();
+        
+        format!(
+            "Move Ordering vs LMR Effectiveness Report:\n\
+            - Move Ordering Effectiveness: {:.1}%\n\
+            - Late-Ordered Cutoffs: {:.1}% ({} / {})\n\
+            - Average Cutoff Index: {:.2}\n\
+            - LMR Efficiency: {:.1}%\n\
+            - LMR Re-search Rate: {:.1}%\n\
+            - LMR Cutoff Rate: {:.1}%\n\
+            - Correlation: {:.1}% cutoffs from moves after LMR threshold\n\
+            \n\
+            Analysis:\n\
+            - Good ordering (low late cutoff rate) enables better LMR effectiveness\n\
+            - High late cutoff rate indicates ordering needs improvement\n\
+            - Average cutoff index should be < 5.0 for optimal LMR performance",
+            ordering_metrics.ordering_effectiveness,
+            ordering_metrics.cutoffs_after_threshold_percentage,
+            ordering_metrics.late_ordered_cutoffs,
+            ordering_metrics.total_cutoffs,
+            ordering_metrics.average_cutoff_index,
+            efficiency,
+            research_rate,
+            cutoff_rate,
+            ordering_metrics.cutoffs_after_threshold_percentage
+        )
     }
 
     /// Get performance alerts (Task 4.10, 4.11)

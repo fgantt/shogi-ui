@@ -2759,3 +2759,226 @@ mod lmr_preset_tests {
         assert_eq!(config.re_search_margin, 25);
     }
 }
+
+#[cfg(test)]
+mod move_ordering_effectiveness_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    #[test]
+    fn test_move_ordering_stats_default() {
+        let stats = MoveOrderingEffectivenessStats::default();
+        assert_eq!(stats.total_cutoffs, 0);
+        assert_eq!(stats.cutoffs_after_lmr_threshold, 0);
+        assert_eq!(stats.late_ordered_cutoffs, 0);
+        assert_eq!(stats.early_ordered_no_cutoffs, 0);
+    }
+
+    #[test]
+    fn test_record_cutoff() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // Record cutoff at index 2 (before threshold)
+        stats.record_cutoff(2, lmr_threshold);
+        assert_eq!(stats.total_cutoffs, 1);
+        assert_eq!(stats.cutoffs_before_lmr_threshold, 1);
+        assert_eq!(stats.cutoffs_after_lmr_threshold, 0);
+        assert_eq!(stats.late_ordered_cutoffs, 0);
+        
+        // Record cutoff at index 5 (after threshold)
+        stats.record_cutoff(5, lmr_threshold);
+        assert_eq!(stats.total_cutoffs, 2);
+        assert_eq!(stats.cutoffs_before_lmr_threshold, 1);
+        assert_eq!(stats.cutoffs_after_lmr_threshold, 1);
+        assert_eq!(stats.late_ordered_cutoffs, 1);
+    }
+
+    #[test]
+    fn test_record_no_cutoff() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // Record no cutoff at index 2 (before threshold)
+        stats.record_no_cutoff(2, lmr_threshold);
+        assert_eq!(stats.moves_no_cutoff, 1);
+        assert_eq!(stats.early_ordered_no_cutoffs, 1);
+        
+        // Record no cutoff at index 5 (after threshold)
+        stats.record_no_cutoff(5, lmr_threshold);
+        assert_eq!(stats.moves_no_cutoff, 2);
+        assert_eq!(stats.early_ordered_no_cutoffs, 1); // Only early moves count
+    }
+
+    #[test]
+    fn test_cutoffs_after_threshold_percentage() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // No cutoffs
+        assert_eq!(stats.cutoffs_after_threshold_percentage(), 0.0);
+        
+        // Add cutoffs
+        stats.record_cutoff(2, lmr_threshold); // Before threshold
+        stats.record_cutoff(5, lmr_threshold); // After threshold
+        stats.record_cutoff(6, lmr_threshold); // After threshold
+        
+        // 2 out of 3 cutoffs after threshold = 66.67%
+        let percentage = stats.cutoffs_after_threshold_percentage();
+        assert!(percentage > 66.0 && percentage < 67.0);
+    }
+
+    #[test]
+    fn test_average_cutoff_index() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // No cutoffs
+        assert_eq!(stats.average_cutoff_index(), 0.0);
+        
+        // Add cutoffs at indices 1, 3, 5
+        stats.record_cutoff(1, lmr_threshold);
+        stats.record_cutoff(3, lmr_threshold);
+        stats.record_cutoff(5, lmr_threshold);
+        
+        // Average = (1 + 3 + 5) / 3 = 3.0
+        assert_eq!(stats.average_cutoff_index(), 3.0);
+    }
+
+    #[test]
+    fn test_ordering_effectiveness() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // No cutoffs - perfect ordering
+        assert_eq!(stats.ordering_effectiveness(), 100.0);
+        
+        // Add cutoffs at early indices (good ordering)
+        stats.record_cutoff(0, lmr_threshold);
+        stats.record_cutoff(1, lmr_threshold);
+        stats.record_cutoff(2, lmr_threshold);
+        
+        let effectiveness = stats.ordering_effectiveness();
+        assert!(effectiveness > 0.0);
+        
+        // Add cutoffs at late indices (poor ordering)
+        let mut stats2 = MoveOrderingEffectivenessStats::default();
+        stats2.record_cutoff(8, lmr_threshold);
+        stats2.record_cutoff(10, lmr_threshold);
+        stats2.record_cutoff(12, lmr_threshold);
+        
+        let effectiveness2 = stats2.ordering_effectiveness();
+        // Late cutoffs should have lower effectiveness
+        assert!(effectiveness2 < effectiveness);
+    }
+
+    #[test]
+    fn test_lmr_stats_has_move_ordering_stats() {
+        let stats = LMRStats::default();
+        assert_eq!(stats.move_ordering_stats.total_cutoffs, 0);
+    }
+
+    #[test]
+    fn test_get_move_ordering_metrics() {
+        let mut engine = create_test_engine();
+        let mut stats = engine.lmr_stats.move_ordering_stats.clone();
+        
+        // Add some cutoffs
+        stats.record_cutoff(2, 4);
+        stats.record_cutoff(5, 4);
+        
+        engine.lmr_stats.move_ordering_stats = stats;
+        
+        let metrics = engine.get_move_ordering_effectiveness_metrics();
+        assert_eq!(metrics.total_cutoffs, 2);
+        assert!(metrics.average_cutoff_index > 0.0);
+    }
+
+    #[test]
+    fn test_check_move_ordering_degradation() {
+        let mut engine = create_test_engine();
+        let mut stats = engine.lmr_stats.move_ordering_stats.clone();
+        
+        // Add many late cutoffs (poor ordering)
+        for i in 5..15 {
+            stats.record_cutoff(i, 4);
+        }
+        
+        engine.lmr_stats.move_ordering_stats = stats;
+        
+        let (is_healthy, alerts) = engine.check_move_ordering_degradation();
+        
+        // Should detect degradation
+        assert!(!is_healthy || !alerts.is_empty());
+    }
+
+    #[test]
+    fn test_get_ordering_vs_lmr_report() {
+        let engine = create_test_engine();
+        let report = engine.get_ordering_vs_lmr_report();
+        
+        // Should generate a report
+        assert!(!report.is_empty());
+        assert!(report.contains("Move Ordering vs LMR Effectiveness"));
+    }
+
+    #[test]
+    fn test_get_ordering_effectiveness_with_integration() {
+        let engine = create_test_engine();
+        let report = engine.get_ordering_effectiveness_with_integration();
+        
+        // Should generate a report with integration
+        assert!(!report.is_empty());
+        assert!(report.contains("Move Ordering Effectiveness with Integration"));
+    }
+
+    #[test]
+    fn test_identify_ordering_improvements() {
+        let mut engine = create_test_engine();
+        let mut stats = engine.lmr_stats.move_ordering_stats.clone();
+        
+        // Add many late cutoffs
+        for i in 6..10 {
+            stats.record_cutoff(i, 4);
+        }
+        
+        engine.lmr_stats.move_ordering_stats = stats;
+        
+        let improvements = engine.identify_ordering_improvements();
+        
+        // Should identify improvements
+        assert!(!improvements.is_empty());
+    }
+
+    #[test]
+    fn test_move_ordering_stats_reset() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        stats.record_cutoff(5, 4);
+        stats.record_no_cutoff(2, 4);
+        
+        assert!(stats.total_cutoffs > 0);
+        
+        stats.reset();
+        
+        assert_eq!(stats.total_cutoffs, 0);
+        assert_eq!(stats.moves_no_cutoff, 0);
+        assert_eq!(stats.cutoffs_by_index.len(), 0);
+    }
+
+    #[test]
+    fn test_cutoffs_by_index_tracking() {
+        let mut stats = MoveOrderingEffectivenessStats::default();
+        let lmr_threshold = 4;
+        
+        // Record multiple cutoffs at same index
+        stats.record_cutoff(5, lmr_threshold);
+        stats.record_cutoff(5, lmr_threshold);
+        stats.record_cutoff(5, lmr_threshold);
+        
+        assert_eq!(stats.cutoffs_by_index.get(&5), Some(&3));
+        assert_eq!(stats.total_cutoffs, 3);
+    }
+}

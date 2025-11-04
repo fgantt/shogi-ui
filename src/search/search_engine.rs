@@ -3251,6 +3251,10 @@ impl SearchEngine {
                         self.core_search_metrics.total_cutoffs += 1;
                         self.core_search_metrics.beta_cutoffs += 1;
                         
+                        // Track move ordering effectiveness (Task 10.1-10.3)
+                        let lmr_threshold = self.lmr_config.min_move_index;
+                        self.lmr_stats.move_ordering_stats.record_cutoff(move_index as u8, lmr_threshold);
+                        
                         crate::debug_utils::log_decision("NEGAMAX", "Beta cutoff", 
                             &format!("Alpha {} >= beta {}, cutting off search", alpha, beta), 
                             Some(alpha));
@@ -3270,6 +3274,10 @@ impl SearchEngine {
                         // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
                         self.flush_tt_buffer();
                         break;
+                } else {
+                    // Track move that didn't cause cutoff (Task 10.3)
+                    let lmr_threshold = self.lmr_config.min_move_index;
+                    self.lmr_stats.move_ordering_stats.record_no_cutoff(move_index as u8, lmr_threshold);
                 }
             }
         }
@@ -6454,6 +6462,9 @@ impl SearchEngine {
                 let cutoff_after_reduction = score >= beta;
                 if cutoff_after_reduction {
                     self.lmr_stats.cutoffs_after_reduction += 1;
+                    
+                    // Track move ordering effectiveness for LMR moves (Task 10.1-10.3)
+                    // Note: move_index is not available here, so we track at the caller level
                 }
                 
                 // Track phase statistics (Task 4.6)
@@ -7129,6 +7140,113 @@ impl SearchEngine {
         }
     }
 
+    /// Get move ordering effectiveness metrics (Task 10.4, 10.5)
+    pub fn get_move_ordering_effectiveness_metrics(&self) -> crate::types::MoveOrderingMetrics {
+        self.lmr_stats.get_move_ordering_metrics()
+    }
+    
+    /// Check if move ordering effectiveness is degrading (Task 10.7)
+    pub fn check_move_ordering_degradation(&self) -> (bool, Vec<String>) {
+        self.lmr_stats.check_ordering_degradation()
+    }
+    
+    /// Get move ordering effectiveness alerts (Task 10.7)
+    pub fn get_move_ordering_alerts(&self) -> Vec<String> {
+        let (_, alerts) = self.lmr_stats.check_ordering_degradation();
+        alerts
+    }
+    
+    /// Get performance report comparing ordering effectiveness vs LMR effectiveness (Task 10.8)
+    pub fn get_ordering_vs_lmr_report(&self) -> String {
+        self.lmr_stats.get_ordering_vs_lmr_report()
+    }
+    
+    /// Integrate with move ordering statistics to cross-reference effectiveness (Task 10.6)
+    pub fn get_ordering_effectiveness_with_integration(&self) -> String {
+        let ordering_metrics = self.get_move_ordering_effectiveness_metrics();
+        let lmr_metrics = self.get_lmr_performance_metrics();
+        let ordering_stats = &self.advanced_move_orderer.get_stats();
+        
+        format!(
+            "Move Ordering Effectiveness with Integration:\n\
+            - Ordering Effectiveness: {:.1}%\n\
+            - Late-Ordered Cutoffs: {:.1}% ({} / {})\n\
+            - Average Cutoff Index: {:.2}\n\
+            - LMR Efficiency: {:.1}%\n\
+            - LMR Re-search Rate: {:.1}%\n\
+            - Move Ordering Stats:\n\
+              - Total Moves Ordered: {}\n\
+              - Cache Hit Rate: {:.1}%\n\
+              - PV Move Hit Rate: {:.1}%\n\
+              - Killer Move Hit Rate: {:.1}%\n\
+            \n\
+            Correlation Analysis:\n\
+            - Good move ordering (high PV/killer hit rates) should correlate with low late cutoff rate\n\
+            - Poor move ordering (low cache/PV hit rates) may indicate why late moves cause cutoffs\n\
+            - LMR effectiveness depends on good move ordering: early moves should be best",
+            ordering_metrics.ordering_effectiveness,
+            ordering_metrics.cutoffs_after_threshold_percentage,
+            ordering_metrics.late_ordered_cutoffs,
+            ordering_metrics.total_cutoffs,
+            ordering_metrics.average_cutoff_index,
+            lmr_metrics.efficiency,
+            lmr_metrics.research_rate,
+            ordering_stats.total_moves_ordered,
+            ordering_stats.cache_hit_rate,
+            ordering_stats.pv_move_hit_rate,
+            ordering_stats.killer_move_hit_rate
+        )
+    }
+    
+    /// Identify opportunities for move ordering improvements (Task 10.11)
+    pub fn identify_ordering_improvements(&self) -> Vec<String> {
+        let mut improvements = Vec::new();
+        let ordering_metrics = self.get_move_ordering_effectiveness_metrics();
+        let ordering_stats = &self.advanced_move_orderer.get_stats();
+        
+        // Check if late moves are causing too many cutoffs
+        if ordering_metrics.cutoffs_after_threshold_percentage > 25.0 {
+            improvements.push(format!(
+                "High late cutoff rate ({:.1}%): Consider improving move ordering heuristics to prioritize better moves earlier",
+                ordering_metrics.cutoffs_after_threshold_percentage
+            ));
+        }
+        
+        // Check if average cutoff index is too high
+        if ordering_metrics.average_cutoff_index > 5.0 {
+            improvements.push(format!(
+                "High average cutoff index ({:.2}): Move ordering may need enhancement - best moves should come earlier",
+                ordering_metrics.average_cutoff_index
+            ));
+        }
+        
+        // Check PV move hit rate
+        if ordering_stats.pv_move_hit_rate < 50.0 {
+            improvements.push(format!(
+                "Low PV move hit rate ({:.1}%): PV move tracking may need improvement",
+                ordering_stats.pv_move_hit_rate
+            ));
+        }
+        
+        // Check killer move hit rate
+        if ordering_stats.killer_move_hit_rate < 30.0 {
+            improvements.push(format!(
+                "Low killer move hit rate ({:.1}%): Killer move heuristics may need enhancement",
+                ordering_stats.killer_move_hit_rate
+            ));
+        }
+        
+        // Check cache hit rate
+        if ordering_stats.cache_hit_rate < 70.0 {
+            improvements.push(format!(
+                "Low cache hit rate ({:.1}%): Move scoring cache may need optimization",
+                ordering_stats.cache_hit_rate
+            ));
+        }
+        
+        improvements
+    }
+    
     /// Get LMR performance report with optimization suggestions
     pub fn get_lmr_performance_report(&self) -> String {
         let metrics = self.get_lmr_performance_metrics();

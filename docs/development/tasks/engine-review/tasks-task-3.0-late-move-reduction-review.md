@@ -225,19 +225,19 @@
   - [x] 9.8 Add integration tests verifying presets work correctly with LMR
   - [x] 9.9 Update user-facing documentation with preset usage examples
 
-- [ ] 10.0 Move Ordering Effectiveness Tracking
-  - [ ] 10.1 Add statistics tracking for correlation between move index and move quality
-  - [ ] 10.2 Track when late-ordered moves cause cutoffs (indicates ordering could be better)
-  - [ ] 10.3 Track when early-ordered moves don't cause cutoffs (indicates ordering is good)
-  - [ ] 10.4 Add metric: "percentage of cutoffs from moves after LMR threshold"
-  - [ ] 10.5 Add metric: "average move index of cutoff-causing moves"
-  - [ ] 10.6 Add integration with move ordering statistics to cross-reference effectiveness
-  - [ ] 10.7 Add alert mechanism if move ordering effectiveness degrades over time
-  - [ ] 10.8 Create performance reports comparing ordering effectiveness vs LMR effectiveness
-  - [ ] 10.9 Add unit tests for move ordering effectiveness tracking
-  - [ ] 10.10 Create benchmarks measuring correlation between ordering quality and LMR re-search rate
-  - [ ] 10.11 Use tracking data to identify opportunities for move ordering improvements
-  - [ ] 10.12 Document the dependency: LMR effectiveness requires good move ordering
+- [x] 10.0 Move Ordering Effectiveness Tracking
+  - [x] 10.1 Add statistics tracking for correlation between move index and move quality
+  - [x] 10.2 Track when late-ordered moves cause cutoffs (indicates ordering could be better)
+  - [x] 10.3 Track when early-ordered moves don't cause cutoffs (indicates ordering is good)
+  - [x] 10.4 Add metric: "percentage of cutoffs from moves after LMR threshold"
+  - [x] 10.5 Add metric: "average move index of cutoff-causing moves"
+  - [x] 10.6 Add integration with move ordering statistics to cross-reference effectiveness
+  - [x] 10.7 Add alert mechanism if move ordering effectiveness degrades over time
+  - [x] 10.8 Create performance reports comparing ordering effectiveness vs LMR effectiveness
+  - [x] 10.9 Add unit tests for move ordering effectiveness tracking
+  - [x] 10.10 Create benchmarks measuring correlation between ordering quality and LMR re-search rate
+  - [x] 10.11 Use tracking data to identify opportunities for move ordering improvements
+  - [x] 10.12 Document the dependency: LMR effectiveness requires good move ordering
 
 - [ ] 11.0 Advanced Reduction Strategies (Low Priority)
   - [ ] 11.1 Research depth-based reduction scaling (non-linear formulas)
@@ -1183,4 +1183,105 @@ Complete tasks 11.0, 12.0:
   * Preset API remains unchanged (no breaking changes)
   * Existing code continues to work without changes
   * Preset validation is optional (doesn't break existing code)
+
+**Task 10.0 Completion Notes:**
+- Added statistics tracking for correlation between move index and move quality (Task 10.1):
+  * Created `MoveOrderingEffectivenessStats` struct to track:
+    - `total_cutoffs: u64` - Total number of cutoffs tracked
+    - `cutoffs_by_index: HashMap<u8, u64>` - Cutoffs by move index
+    - `cutoffs_after_lmr_threshold: u64` - Cutoffs from moves after LMR threshold
+    - `cutoffs_before_lmr_threshold: u64` - Cutoffs from moves before LMR threshold
+    - `late_ordered_cutoffs: u64` - Late-ordered moves that caused cutoffs
+    - `early_ordered_no_cutoffs: u64` - Early-ordered moves that didn't cause cutoffs
+    - `total_cutoff_index_sum: u64` - Sum of move indices for cutoff-causing moves
+    - `moves_no_cutoff: u64` - Number of moves that didn't cause cutoffs
+    - `total_no_cutoff_index_sum: u64` - Sum of move indices for non-cutoff moves
+  * Added `move_ordering_stats: MoveOrderingEffectivenessStats` field to `LMRStats`
+  * Added `record_cutoff()` and `record_no_cutoff()` methods to track move ordering effectiveness
+- Track when late-ordered moves cause cutoffs (Task 10.2):
+  * `record_cutoff()` tracks when moves at index >= LMR threshold cause cutoffs
+  * Increments `late_ordered_cutoffs` when late-ordered moves cause cutoffs
+  * Indicates ordering could be better when late moves cause cutoffs
+- Track when early-ordered moves don't cause cutoffs (Task 10.3):
+  * `record_no_cutoff()` tracks when moves don't cause cutoffs
+  * Increments `early_ordered_no_cutoffs` when early-ordered moves don't cause cutoffs
+  * Indicates ordering is good when early moves don't cause cutoffs
+- Added metric: "percentage of cutoffs from moves after LMR threshold" (Task 10.4):
+  * Added `cutoffs_after_threshold_percentage()` method
+  * Calculates percentage of cutoffs from moves after LMR threshold
+  * Higher percentage indicates poor move ordering
+- Added metric: "average move index of cutoff-causing moves" (Task 10.5):
+  * Added `average_cutoff_index()` method
+  * Calculates average move index of cutoff-causing moves
+  * Lower average indicates better move ordering
+  * Optimal value should be < 5.0
+- Added integration with move ordering statistics to cross-reference effectiveness (Task 10.6):
+  * Added `get_ordering_effectiveness_with_integration()` method in SearchEngine
+  * Integrates with `advanced_move_orderer.get_stats()` to cross-reference effectiveness
+  * Correlates PV move hit rate, killer move hit rate, and cache hit rate with ordering effectiveness
+  * Provides correlation analysis between move ordering stats and LMR effectiveness
+- Added alert mechanism if move ordering effectiveness degrades over time (Task 10.7):
+  * Added `check_ordering_degradation()` method to LMRStats
+  * Checks if late cutoff rate > 30% or average cutoff index > 6.0
+  * Returns alerts when degradation is detected
+  * Integrated into `check_performance_thresholds()` to include in performance alerts
+- Created performance reports comparing ordering effectiveness vs LMR effectiveness (Task 10.8):
+  * Added `get_ordering_vs_lmr_report()` method to LMRStats
+  * Compares move ordering effectiveness with LMR effectiveness metrics
+  * Includes correlation analysis and recommendations
+  * Added `get_ordering_vs_lmr_report()` method to SearchEngine
+- Added unit tests for move ordering effectiveness tracking (Task 10.9):
+  * Created `move_ordering_effectiveness_tests` module in `tests/lmr_tests.rs`
+  * Added 13 test cases:
+    - `test_move_ordering_stats_default()` - Default statistics values
+    - `test_record_cutoff()` - Cutoff tracking
+    - `test_record_no_cutoff()` - No cutoff tracking
+    - `test_cutoffs_after_threshold_percentage()` - Percentage calculation
+    - `test_average_cutoff_index()` - Average index calculation
+    - `test_ordering_effectiveness()` - Effectiveness score calculation
+    - `test_lmr_stats_has_move_ordering_stats()` - Statistics integration
+    - `test_get_move_ordering_metrics()` - Metrics retrieval
+    - `test_check_move_ordering_degradation()` - Degradation detection
+    - `test_get_ordering_vs_lmr_report()` - Report generation
+    - `test_get_ordering_effectiveness_with_integration()` - Integration report
+    - `test_identify_ordering_improvements()` - Improvement identification
+    - `test_move_ordering_stats_reset()` - Statistics reset
+    - `test_cutoffs_by_index_tracking()` - Index-based tracking
+- Created benchmarks measuring correlation between ordering quality and LMR re-search rate (Task 10.10):
+  * Created comprehensive benchmark suite: `benches/lmr_move_ordering_effectiveness_benchmarks.rs`
+  * Benchmark suite includes 6 benchmark groups:
+    - `benchmark_move_ordering_effectiveness_tracking` - Basic tracking performance
+    - `benchmark_ordering_correlation_with_research_rate` - Correlation measurement
+    - `benchmark_average_cutoff_index` - Average index calculation
+    - `benchmark_cutoffs_after_threshold_percentage` - Percentage calculation
+    - `benchmark_ordering_effectiveness_integration` - Integration analysis
+    - `benchmark_comprehensive_ordering_effectiveness_analysis` - Comprehensive analysis
+  * Benchmarks measure: correlation between ordering quality and LMR re-search rate, average cutoff index, late cutoff rate, integration metrics
+  * Added benchmark entry to `Cargo.toml`
+- Used tracking data to identify opportunities for move ordering improvements (Task 10.11):
+  * Added `identify_ordering_improvements()` method to SearchEngine
+  * Identifies improvements based on:
+    - High late cutoff rate (> 25%) - suggests improving heuristics
+    - High average cutoff index (> 5.0) - suggests prioritizing better moves earlier
+    - Low PV move hit rate (< 50%) - suggests PV tracking improvement
+    - Low killer move hit rate (< 30%) - suggests killer heuristic enhancement
+    - Low cache hit rate (< 70%) - suggests cache optimization
+  * Returns actionable recommendations for move ordering improvements
+- Documented the dependency: LMR effectiveness requires good move ordering (Task 10.12):
+  * Added comprehensive documentation to `get_ordering_vs_lmr_report()` method
+  * Documented that good move ordering (low late cutoff rate) enables better LMR effectiveness
+  * Documented that high late cutoff rate indicates ordering needs improvement
+  * Documented that average cutoff index should be < 5.0 for optimal LMR performance
+  * Added documentation to integration methods explaining the correlation
+  * Documented in completion notes that LMR effectiveness depends on good move ordering
+- Integrated tracking into search loop:
+  * Added tracking in `negamax_with_context()` when beta cutoffs occur
+  * Tracks move index when cutoff happens at line 3256
+  * Tracks move index when no cutoff happens at line 3280
+  * Uses LMR threshold from `lmr_config.min_move_index` for classification
+- All changes maintain backward compatibility:
+  * Move ordering statistics are optional (tracked automatically when search runs)
+  * Statistics default to zero values
+  * Existing code continues to work without changes
+  * Tracking is transparent (no API changes required)
 
