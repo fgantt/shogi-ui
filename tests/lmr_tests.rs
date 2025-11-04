@@ -728,3 +728,278 @@ mod lmr_move_classification_tests {
         assert_eq!(quiet_value, 0);
     }
 }
+
+#[cfg(test)]
+mod pruning_manager_lmr_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16)
+    }
+
+    fn create_test_search_state(depth: u8, move_number: u8) -> SearchState {
+        let mut state = SearchState::new(depth, -10000, 10000);
+        state.move_number = move_number;
+        state.update_fields(false, 0, 0, GamePhase::Middlegame);
+        state
+    }
+
+    fn create_test_move() -> Move {
+        Move {
+            from: Some(Position::new(1, 1)),
+            to: Position::new(2, 1),
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_capture: false,
+            is_promotion: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        }
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_reduction_basic() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        // Test basic reduction calculation
+        let mut state = create_test_search_state(5, 5);
+        let mv = create_test_move();
+        
+        // Should apply reduction for move beyond threshold
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        assert!(reduction > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_extended_exemptions() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_search_state(5, 5);
+        let mv = create_test_move();
+        
+        // Test killer move exemption
+        let reduction_with_killer = pruning_manager.calculate_lmr_reduction(&state, &mv, true, None);
+        assert_eq!(reduction_with_killer, 0);
+        
+        // Test without killer move
+        let reduction_without_killer = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        assert!(reduction_without_killer > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_adaptive_reduction() {
+        let engine = create_test_engine();
+        let mut pruning_manager = engine.get_pruning_manager().clone();
+        
+        // Enable adaptive reduction
+        pruning_manager.parameters.lmr_enable_adaptive_reduction = true;
+        
+        let mut state = create_test_search_state(5, 5);
+        let mv = create_test_move();
+        
+        // Test with tactical position
+        state.set_position_classification(PositionClassification::Tactical);
+        let reduction_tactical = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Test with quiet position
+        state.set_position_classification(PositionClassification::Quiet);
+        let reduction_quiet = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Quiet positions should have more reduction than tactical positions
+        assert!(reduction_quiet >= reduction_tactical);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_position_classification() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_search_state(5, 5);
+        let mv = create_test_move();
+        
+        // Test with no classification (should use base reduction)
+        let reduction_neutral = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Test with tactical classification
+        state.set_position_classification(PositionClassification::Tactical);
+        let reduction_tactical = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Test with quiet classification
+        state.set_position_classification(PositionClassification::Quiet);
+        let reduction_quiet = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Verify all reductions are valid
+        assert!(reduction_neutral > 0 || reduction_tactical > 0 || reduction_quiet > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_depth_threshold() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mv = create_test_move();
+        
+        // Test at depth below threshold (should not apply LMR)
+        let mut state_shallow = create_test_search_state(1, 5);
+        let reduction_shallow = pruning_manager.calculate_lmr_reduction(&state_shallow, &mv, false, None);
+        assert_eq!(reduction_shallow, 0);
+        
+        // Test at depth above threshold (should apply LMR)
+        let mut state_deep = create_test_search_state(5, 5);
+        let reduction_deep = pruning_manager.calculate_lmr_reduction(&state_deep, &mv, false, None);
+        assert!(reduction_deep > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_move_index_threshold() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mv = create_test_move();
+        
+        // Test at move index below threshold (should not apply LMR)
+        let mut state_early = create_test_search_state(5, 1);
+        let reduction_early = pruning_manager.calculate_lmr_reduction(&state_early, &mv, false, None);
+        assert_eq!(reduction_early, 0);
+        
+        // Test at move index above threshold (should apply LMR)
+        let mut state_late = create_test_search_state(5, 10);
+        let reduction_late = pruning_manager.calculate_lmr_reduction(&state_late, &mv, false, None);
+        assert!(reduction_late > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_basic_exemptions() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_search_state(5, 5);
+        
+        // Test capture exemption
+        let mut capture_move = create_test_move();
+        capture_move.is_capture = true;
+        let reduction_capture = pruning_manager.calculate_lmr_reduction(&state, &capture_move, false, None);
+        assert_eq!(reduction_capture, 0);
+        
+        // Test promotion exemption
+        let mut promotion_move = create_test_move();
+        promotion_move.is_promotion = true;
+        let reduction_promotion = pruning_manager.calculate_lmr_reduction(&state, &promotion_move, false, None);
+        assert_eq!(reduction_promotion, 0);
+        
+        // Test check exemption
+        state.is_in_check = true;
+        let reduction_check = pruning_manager.calculate_lmr_reduction(&state, &create_test_move(), false, None);
+        assert_eq!(reduction_check, 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_tt_move_exemption() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_search_state(5, 5);
+        let mv = create_test_move();
+        let tt_move = Some(&mv);
+        
+        // Test with TT move matching current move (should be exempt)
+        let reduction_with_tt = pruning_manager.calculate_lmr_reduction(&state, &mv, false, tt_move);
+        assert_eq!(reduction_with_tt, 0);
+        
+        // Test with different TT move (should not be exempt)
+        let different_move = Move {
+            from: Some(Position::new(2, 2)),
+            to: Position::new(3, 2),
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_capture: false,
+            is_promotion: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        };
+        let reduction_with_different_tt = pruning_manager.calculate_lmr_reduction(&state, &mv, false, Some(&different_move));
+        assert!(reduction_with_different_tt > 0);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_reduction_scaling() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mv = create_test_move();
+        
+        // Test reduction increases with depth
+        let reduction_depth_5 = pruning_manager.calculate_lmr_reduction(&create_test_search_state(5, 10), &mv, false, None);
+        let reduction_depth_10 = pruning_manager.calculate_lmr_reduction(&create_test_search_state(10, 10), &mv, false, None);
+        assert!(reduction_depth_10 >= reduction_depth_5);
+        
+        // Test reduction increases with move index
+        let reduction_move_5 = pruning_manager.calculate_lmr_reduction(&create_test_search_state(5, 5), &mv, false, None);
+        let reduction_move_15 = pruning_manager.calculate_lmr_reduction(&create_test_search_state(5, 15), &mv, false, None);
+        assert!(reduction_move_15 >= reduction_move_5);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_center_move_adjustment() {
+        let engine = create_test_engine();
+        let mut pruning_manager = engine.get_pruning_manager().clone();
+        
+        // Enable adaptive reduction
+        pruning_manager.parameters.lmr_enable_adaptive_reduction = true;
+        
+        let mut state = create_test_search_state(5, 5);
+        
+        // Test center move (should reduce reduction)
+        let center_move = Move {
+            from: Some(Position::new(3, 3)),
+            to: Position::new(4, 4), // Center square
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_capture: false,
+            is_promotion: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        };
+        
+        let reduction_center = pruning_manager.calculate_lmr_reduction(&state, &center_move, false, None);
+        
+        // Test edge move (should allow more reduction)
+        let edge_move = Move {
+            from: Some(Position::new(0, 0)),
+            to: Position::new(0, 1), // Edge square
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_capture: false,
+            is_promotion: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        };
+        
+        let reduction_edge = pruning_manager.calculate_lmr_reduction(&state, &edge_move, false, None);
+        
+        // Center moves should have less or equal reduction than edge moves
+        assert!(reduction_center <= reduction_edge);
+    }
+
+    #[test]
+    fn test_pruning_manager_lmr_max_reduction_limit() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mv = create_test_move();
+        
+        // Test at very high depth and move index (should be capped)
+        let mut state = create_test_search_state(20, 30);
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &mv, false, None);
+        
+        // Should not exceed max_reduction or depth - 1
+        assert!(reduction <= pruning_manager.parameters.lmr_max_reduction);
+        assert!(reduction < state.depth);
+    }
+}

@@ -5058,6 +5058,14 @@ impl GamePhase {
     }
 }
 
+/// Position classification for adaptive reduction
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PositionClassification {
+    Tactical,  // Position with high tactical activity (many cutoffs)
+    Quiet,     // Position with low tactical activity (few cutoffs)
+    Neutral,   // Position with moderate tactical activity or insufficient data
+}
+
 /// Search state for advanced alpha-beta pruning
 #[derive(Debug, Clone)]
 pub struct SearchState {
@@ -5070,6 +5078,8 @@ pub struct SearchState {
     pub best_move: Option<Move>,
     pub position_hash: u64,
     pub game_phase: GamePhase,
+    /// Position classification for adaptive reduction (optional, computed by SearchEngine)
+    pub position_classification: Option<PositionClassification>,
 }
 
 impl SearchState {
@@ -5084,6 +5094,7 @@ impl SearchState {
             best_move: None,
             position_hash: 0,
             game_phase: GamePhase::Middlegame,
+            position_classification: None,
         }
     }
     
@@ -5094,6 +5105,11 @@ impl SearchState {
         self.static_eval = static_eval;
         self.position_hash = position_hash;
         self.game_phase = game_phase;
+    }
+    
+    /// Set position classification for adaptive reduction
+    pub fn set_position_classification(&mut self, classification: PositionClassification) {
+        self.position_classification = Some(classification);
     }
 }
 
@@ -5130,6 +5146,8 @@ pub struct PruningParameters {
     pub lmr_move_threshold: u8,
     pub lmr_depth_threshold: u8,
     pub lmr_max_reduction: u8,
+    pub lmr_enable_extended_exemptions: bool,  // Enable killer moves, TT moves, escape moves
+    pub lmr_enable_adaptive_reduction: bool,   // Enable position-based adaptive reduction
     
     // Delta pruning parameters
     pub delta_margin: i32,
@@ -5159,6 +5177,8 @@ impl Default for PruningParameters {
             lmr_move_threshold: 3,
             lmr_depth_threshold: 2,
             lmr_max_reduction: 3,
+            lmr_enable_extended_exemptions: true,
+            lmr_enable_adaptive_reduction: true,
             delta_margin: 200,
             delta_depth_limit: 4,
             razoring_depth_limit: 3,
@@ -5530,16 +5550,73 @@ impl PruningManager {
     }
     
     /// Calculate late move reduction for a move
-    pub fn calculate_lmr_reduction(&self, state: &SearchState, mv: &Move) -> u8 {
-        if !self.should_apply_lmr(state, mv) {
+    /// 
+    /// Extended exemptions can be provided via optional parameters:
+    /// - `is_killer_move`: Whether the move is a killer move
+    /// - `tt_move`: Optional TT best move to check against
+    pub fn calculate_lmr_reduction(
+        &self, 
+        state: &SearchState, 
+        mv: &Move,
+        is_killer_move: bool,
+        tt_move: Option<&Move>
+    ) -> u8 {
+        if !self.should_apply_lmr(state, mv, is_killer_move, tt_move) {
             return 0;
         }
         
-        let reduction = self.parameters.lmr_base_reduction +
+        let mut reduction = self.parameters.lmr_base_reduction +
                       (state.move_number / 8) as u8 +
                       (state.depth / 4) as u8;
         
+        // Apply adaptive reduction if enabled
+        if self.parameters.lmr_enable_adaptive_reduction {
+            reduction = self.apply_adaptive_reduction(reduction, state, mv);
+        }
+        
         reduction.min(self.parameters.lmr_max_reduction).min(state.depth - 1)
+    }
+    
+    /// Apply adaptive reduction based on position characteristics
+    fn apply_adaptive_reduction(&self, base_reduction: u8, state: &SearchState, mv: &Move) -> u8 {
+        let mut reduction = base_reduction;
+        
+        // Use position classification if available
+        if let Some(classification) = state.position_classification {
+            match classification {
+                PositionClassification::Tactical => {
+                    // More conservative reduction in tactical positions
+                    reduction = reduction.saturating_sub(1);
+                },
+                PositionClassification::Quiet => {
+                    // More aggressive reduction in quiet positions
+                    reduction = reduction.saturating_add(1);
+                },
+                PositionClassification::Neutral => {
+                    // Keep base reduction for neutral positions
+                }
+            }
+        }
+        
+        // Adjust based on move characteristics (center moves are important)
+        if self.is_center_move(mv) {
+            reduction = reduction.saturating_sub(1);
+        }
+        
+        reduction
+    }
+    
+    /// Check if a move targets center squares
+    fn is_center_move(&self, mv: &Move) -> bool {
+        // Center squares are roughly squares 3-5 in both row and column (0-indexed)
+        // For shogi, this is approximate - adjust based on actual board layout
+        let center_row_min = 2;
+        let center_row_max = 6;
+        let center_col_min = 2;
+        let center_col_max = 6;
+        
+        mv.to.row >= center_row_min && mv.to.row <= center_row_max &&
+        mv.to.col >= center_col_min && mv.to.col <= center_col_max
     }
     
     /// Check if futility pruning should be applied
@@ -5625,12 +5702,84 @@ impl PruningManager {
     }
     
     /// Check if late move reduction should be applied
-    fn should_apply_lmr(&self, state: &SearchState, mv: &Move) -> bool {
-        state.move_number > self.parameters.lmr_move_threshold &&
-        state.depth > self.parameters.lmr_depth_threshold &&
-        !self.is_capture_move(mv) &&
-        !self.is_promotion_move(mv) &&
-        !state.is_in_check
+    /// 
+    /// Extended exemptions can be provided via optional parameters:
+    /// - `is_killer_move`: Whether the move is a killer move
+    /// - `tt_move`: Optional TT best move to check against
+    fn should_apply_lmr(
+        &self, 
+        state: &SearchState, 
+        mv: &Move,
+        is_killer_move: bool,
+        tt_move: Option<&Move>
+    ) -> bool {
+        // Basic conditions: must meet depth and move index thresholds
+        if state.move_number <= self.parameters.lmr_move_threshold {
+            return false;
+        }
+        if state.depth <= self.parameters.lmr_depth_threshold {
+            return false;
+        }
+        
+        // Basic exemptions: captures, promotions, checks
+        if self.is_capture_move(mv) || self.is_promotion_move(mv) || state.is_in_check {
+            return false;
+        }
+        
+        // Extended exemptions if enabled
+        if self.parameters.lmr_enable_extended_exemptions {
+            // Check killer move exemption
+            if is_killer_move {
+                return false;
+            }
+            
+            // Check TT move exemption
+            if let Some(tt_mv) = tt_move {
+                if self.moves_equal(mv, tt_mv) {
+                    return false;
+                }
+            }
+            
+            // Check escape move exemption (move from center to edge)
+            if self.is_escape_move(mv) {
+                return false;
+            }
+        }
+        
+        true
+    }
+    
+    /// Check if a move is an escape move (moves from center to edge)
+    fn is_escape_move(&self, mv: &Move) -> bool {
+        // Check if moving away from center (potential escape)
+        if let Some(from) = mv.from {
+            let from_center = self.is_center_square(from);
+            let to_center = self.is_center_move(mv);
+            if from_center && !to_center {
+                return true;
+            }
+        }
+        false
+    }
+    
+    /// Check if a square is in the center
+    fn is_center_square(&self, square: Position) -> bool {
+        let center_row_min = 2;
+        let center_row_max = 6;
+        let center_col_min = 2;
+        let center_col_max = 6;
+        
+        square.row >= center_row_min && square.row <= center_row_max &&
+        square.col >= center_col_min && square.col <= center_col_max
+    }
+    
+    /// Check if two moves are equal
+    fn moves_equal(&self, mv1: &Move, mv2: &Move) -> bool {
+        mv1.from == mv2.from &&
+        mv1.to == mv2.to &&
+        mv1.piece_type == mv2.piece_type &&
+        mv1.is_capture == mv2.is_capture &&
+        mv1.is_promotion == mv2.is_promotion
     }
     
     /// Get futility margin based on position characteristics

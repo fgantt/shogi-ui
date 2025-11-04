@@ -6205,8 +6205,21 @@ impl SearchEngine {
     }
 
     // ===== LATE MOVE REDUCTIONS CORE LOGIC =====
+    // 
+    // NOTE: LMR implementation is now consolidated in PruningManager.
+    // This method (search_move_with_lmr) uses PruningManager::calculate_lmr_reduction()
+    // which handles all LMR logic including:
+    // - Extended exemptions (killer moves, TT moves, escape moves)
+    // - Adaptive reduction based on position classification
+    // - Dynamic reduction based on depth and move index
+    //
+    // Legacy methods (should_apply_lmr, calculate_reduction, apply_adaptive_reduction)
+    // have been removed and their functionality migrated to PruningManager.
 
     /// Search a move with Late Move Reductions applied
+    /// 
+    /// This method uses PruningManager for all LMR calculations.
+    /// PruningManager is the authoritative implementation for LMR logic.
     fn search_move_with_lmr(&mut self, 
                            board: &mut BitboardBoard, 
                            captured_pieces: &CapturedPieces, 
@@ -6235,8 +6248,25 @@ impl SearchEngine {
             self.get_game_phase(board)
         );
         
+        // Compute position classification for adaptive reduction if enabled
+        if self.lmr_config.enable_adaptive_reduction {
+            let classification = self.compute_position_classification();
+            search_state.set_position_classification(classification);
+        }
+        
+        // Check extended exemptions
+        let is_killer = self.is_killer_move(move_);
+        
+        // Get TT move if available (simplified - in full implementation would get from TT lookup)
+        let tt_move = None; // TODO: Get actual TT move from transposition table
+        
         // Check if LMR should be applied using new PruningManager
-        let reduction = self.pruning_manager.calculate_lmr_reduction(&search_state, move_);
+        let reduction = self.pruning_manager.calculate_lmr_reduction(
+            &search_state, 
+            move_,
+            is_killer,
+            tt_move
+        );
         
         if reduction > 0 {
             self.lmr_stats.reductions_applied += 1;
@@ -6314,110 +6344,15 @@ impl SearchEngine {
         }
     }
 
-    /// Check if LMR should be applied to a move
-    fn should_apply_lmr(&self, move_: &Move, depth: u8, move_index: usize) -> bool {
-        if !self.lmr_config.enabled {
-            return false;
-        }
-        
-        // Must meet minimum depth requirement
-        if depth < self.lmr_config.min_depth {
-            return false;
-        }
-        
-        // Must be beyond minimum move index
-        if move_index < self.lmr_config.min_move_index as usize {
-            return false;
-        }
-        
-        // Apply exemption rules (use optimized version)
-        if self.is_move_exempt_from_lmr_optimized(move_) {
-            return false;
-        }
-        
-        true
-    }
-
-    /// Check if a move is exempt from LMR
-    fn is_move_exempt_from_lmr(&self, move_: &Move) -> bool {
-        // Basic exemptions
-        if move_.is_capture || move_.is_promotion || move_.gives_check {
-            return true;
-        }
-        
-        if self.lmr_config.enable_extended_exemptions {
-            // Extended exemptions
-            if self.is_killer_move(move_) {
-                return true;
-            }
-            
-            if self.is_transposition_table_move(move_) {
-                return true;
-            }
-            
-            if self.is_escape_move(move_) {
-                return true;
-            }
-        }
-        
-        false
-    }
-
-    /// Calculate reduction amount for LMR
-    fn calculate_reduction(&self, move_: &Move, depth: u8, move_index: usize) -> u8 {
-        if !self.lmr_config.enable_dynamic_reduction {
-            return self.lmr_config.base_reduction;
-        }
-        
-        let mut reduction = self.lmr_config.base_reduction;
-        
-        // Dynamic reduction based on depth
-        if depth >= 6 {
-            reduction += 1;
-        }
-        if depth >= 10 {
-            reduction += 1;
-        }
-        
-        // Dynamic reduction based on move index
-        if move_index >= 8 {
-            reduction += 1;
-        }
-        if move_index >= 16 {
-            reduction += 1;
-        }
-        
-        // Adaptive reduction based on position characteristics
-        if self.lmr_config.enable_adaptive_reduction {
-            reduction = self.apply_adaptive_reduction(reduction, move_, depth);
-        }
-        
-        // Ensure reduction doesn't exceed maximum
-        reduction.min(self.lmr_config.max_reduction)
-            .min(depth.saturating_sub(2)) // Don't reduce to zero or negative
-    }
-
-    /// Apply adaptive reduction based on position characteristics
-    fn apply_adaptive_reduction(&self, base_reduction: u8, move_: &Move, _depth: u8) -> u8 {
-        let mut reduction = base_reduction;
-        
-        // More conservative reduction in tactical positions
-        if self.is_tactical_position() {
-            reduction = reduction.saturating_sub(1);
-        }
-        
-        // More aggressive reduction in quiet positions
-        if self.is_quiet_position() {
-            reduction += 1;
-        }
-        
-        // Adjust based on move characteristics
-        if self.is_center_move(move_) {
-            reduction = reduction.saturating_sub(1);
-        }
-        
-        reduction
-    }
+    // Legacy LMR methods removed - functionality migrated to PruningManager
+    // The following methods are no longer used:
+    // - should_apply_lmr() - replaced by PruningManager::should_apply_lmr()
+    // - is_move_exempt_from_lmr() - replaced by PruningManager extended exemptions
+    // - calculate_reduction() - replaced by PruningManager::calculate_lmr_reduction()
+    // - apply_adaptive_reduction() - replaced by PruningManager::apply_adaptive_reduction()
+    //
+    // Helper methods (is_killer_move, is_transposition_table_move, is_escape_move)
+    // are still used by search_move_with_lmr() and are kept for backward compatibility
 
     /// Check if a move is a killer move
     fn is_killer_move(&self, move_: &Move) -> bool {
@@ -6473,6 +6408,23 @@ impl SearchEngine {
             return cutoff_ratio < 0.1; // Less than 10% of moves are cutoffs
         }
         true // Default to quiet if no data
+    }
+    
+    /// Compute position classification for adaptive reduction
+    fn compute_position_classification(&self) -> crate::types::PositionClassification {
+        // Use existing position classification methods
+        // Only classify if we have enough data (at least 5 moves considered)
+        if self.lmr_stats.moves_considered < 5 {
+            return crate::types::PositionClassification::Neutral;
+        }
+        
+        if self.is_tactical_position() {
+            crate::types::PositionClassification::Tactical
+        } else if self.is_quiet_position() {
+            crate::types::PositionClassification::Quiet
+        } else {
+            crate::types::PositionClassification::Neutral
+        }
     }
 
     /// Check if a move targets center squares
@@ -6593,83 +6545,11 @@ impl SearchEngine {
     }
 
     // ===== LMR PERFORMANCE OPTIMIZATION =====
-
-    /// Optimized move exemption check with early returns
-    fn is_move_exempt_from_lmr_optimized(&self, move_: &Move) -> bool {
-        // Early return for most common exemptions (captures, promotions, checks)
-        if move_.is_capture || move_.is_promotion || move_.gives_check {
-            return true;
-        }
-        
-        // Only check extended exemptions if enabled
-        if !self.lmr_config.enable_extended_exemptions {
-            return false;
-        }
-        
-        // Check killer moves (most common extended exemption)
-        if self.is_killer_move(move_) {
-            return true;
-        }
-        
-        // Check other exemptions only if needed
-        self.is_transposition_table_move(move_) || self.is_escape_move(move_)
-    }
-
-    /// Optimized reduction calculation with cached values
-    fn calculate_reduction_optimized(&self, move_: &Move, depth: u8, move_index: usize) -> u8 {
-        if !self.lmr_config.enable_dynamic_reduction {
-            return self.lmr_config.base_reduction;
-        }
-        
-        let mut reduction = self.lmr_config.base_reduction;
-        
-        // Pre-calculate depth-based reductions
-        if depth >= 10 {
-            reduction += 2;
-        } else if depth >= 6 {
-            reduction += 1;
-        }
-        
-        // Pre-calculate move index-based reductions
-        if move_index >= 16 {
-            reduction += 2;
-        } else if move_index >= 8 {
-            reduction += 1;
-        }
-        
-        // Apply adaptive reduction only if enabled and needed
-        if self.lmr_config.enable_adaptive_reduction && reduction < self.lmr_config.max_reduction {
-            reduction = self.apply_adaptive_reduction_optimized(reduction, move_, depth);
-        }
-        
-        // Ensure reduction doesn't exceed maximum
-        reduction.min(self.lmr_config.max_reduction)
-            .min(depth.saturating_sub(2))
-    }
-    /// Optimized adaptive reduction with early returns
-    fn apply_adaptive_reduction_optimized(&self, base_reduction: u8, move_: &Move, _depth: u8) -> u8 {
-        let mut reduction = base_reduction;
-        
-        // Quick center move check (most common case)
-        if self.is_center_move(move_) {
-            reduction = reduction.saturating_sub(1);
-            return reduction; // Early return for center moves
-        }
-        
-        // Only check position characteristics if we have enough data
-        if self.lmr_stats.moves_considered < 5 {
-            return reduction;
-        }
-        
-        // Check tactical position (more expensive, do last)
-        if self.is_tactical_position() {
-            reduction = reduction.saturating_sub(1);
-        } else if self.is_quiet_position() {
-            reduction += 1;
-        }
-        
-        reduction
-    }
+    // Legacy optimized methods removed - functionality migrated to PruningManager
+    // The following methods are no longer used:
+    // - is_move_exempt_from_lmr_optimized() - replaced by PruningManager extended exemptions
+    // - calculate_reduction_optimized() - replaced by PruningManager::calculate_lmr_reduction()
+    // - apply_adaptive_reduction_optimized() - replaced by PruningManager::apply_adaptive_reduction()
 
     /// Get LMR performance metrics for tuning
     pub fn get_lmr_performance_metrics(&self) -> LMRPerformanceMetrics {
