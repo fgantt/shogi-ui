@@ -6345,6 +6345,12 @@ impl SearchEngine {
             search_state.set_advanced_reduction_config(self.lmr_config.advanced_reduction_config.clone());
         }
         
+        // Set conditional exemption configuration if enabled (Task 12.2, 12.3)
+        if self.lmr_config.conditional_exemption_config.enable_conditional_capture_exemption ||
+           self.lmr_config.conditional_exemption_config.enable_conditional_promotion_exemption {
+            search_state.set_conditional_exemption_config(self.lmr_config.conditional_exemption_config.clone());
+        }
+        
         // Check extended exemptions
         let is_killer = self.is_killer_move(move_);
         

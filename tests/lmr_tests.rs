@@ -3283,3 +3283,249 @@ mod advanced_reduction_strategies_tests {
         assert!(reduction_quiet >= reduction_capture);
     }
 }
+
+#[cfg(test)]
+mod conditional_exemption_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    fn create_test_state() -> SearchState {
+        SearchState::new(5, -10000, 10000)
+    }
+
+    fn create_test_move() -> Move {
+        Move::new(
+            Some(Position { row: 2, col: 2 }),
+            Position { row: 3, col: 3 },
+            PieceType::Pawn,
+            Player::Black,
+            false
+        )
+    }
+
+    #[test]
+    fn test_conditional_exemption_config_default() {
+        let config = ConditionalExemptionConfig::default();
+        assert_eq!(config.enable_conditional_capture_exemption, false);
+        assert_eq!(config.enable_conditional_promotion_exemption, false);
+        assert_eq!(config.min_capture_value_threshold, 100);
+        assert_eq!(config.min_depth_for_conditional_capture, 5);
+        assert_eq!(config.exempt_tactical_promotions_only, true);
+        assert_eq!(config.min_depth_for_conditional_promotion, 5);
+    }
+
+    #[test]
+    fn test_conditional_capture_exemption_disabled() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_state();
+        state.move_number = 10; // Above threshold
+        state.depth = 10; // Above threshold
+        
+        // Test capture move - should be exempted (default behavior)
+        let mut capture_move = create_test_move();
+        capture_move.is_capture = true;
+        capture_move.captured_piece = Some(Piece {
+            piece_type: PieceType::Pawn,
+            player: Player::White,
+        });
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &capture_move, false, None);
+        assert_eq!(reduction, 0); // Should be exempted
+    }
+
+    #[test]
+    fn test_conditional_capture_exemption_enabled_high_value() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_capture_exemption = true;
+        config.min_capture_value_threshold = 100;
+        config.min_depth_for_conditional_capture = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 10; // Deep depth
+        state.set_conditional_exemption_config(config);
+        
+        // Test high-value capture (should be exempted)
+        let mut high_value_capture = create_test_move();
+        high_value_capture.is_capture = true;
+        high_value_capture.captured_piece = Some(Piece {
+            piece_type: PieceType::Rook, // High value
+            player: Player::White,
+        });
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &high_value_capture, false, None);
+        assert_eq!(reduction, 0); // Should be exempted (high value)
+    }
+
+    #[test]
+    fn test_conditional_capture_exemption_enabled_low_value() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_capture_exemption = true;
+        config.min_capture_value_threshold = 100;
+        config.min_depth_for_conditional_capture = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 10; // Deep depth
+        state.set_conditional_exemption_config(config);
+        
+        // Test low-value capture (should allow LMR at deep depth)
+        let mut low_value_capture = create_test_move();
+        low_value_capture.is_capture = true;
+        low_value_capture.captured_piece = Some(Piece {
+            piece_type: PieceType::Pawn, // Low value (< 100)
+            player: Player::White,
+        });
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &low_value_capture, false, None);
+        assert!(reduction > 0); // Should allow LMR (low value at deep depth)
+    }
+
+    #[test]
+    fn test_conditional_capture_exemption_shallow_depth() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_capture_exemption = true;
+        config.min_capture_value_threshold = 100;
+        config.min_depth_for_conditional_capture = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 3; // Shallow depth (< threshold)
+        state.set_conditional_exemption_config(config);
+        
+        // Test low-value capture at shallow depth (should be exempted)
+        let mut low_value_capture = create_test_move();
+        low_value_capture.is_capture = true;
+        low_value_capture.captured_piece = Some(Piece {
+            piece_type: PieceType::Pawn, // Low value
+            player: Player::White,
+        });
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &low_value_capture, false, None);
+        assert_eq!(reduction, 0); // Should be exempted (shallow depth)
+    }
+
+    #[test]
+    fn test_conditional_promotion_exemption_disabled() {
+        let engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 10;
+        
+        // Test promotion move - should be exempted (default behavior)
+        let mut promotion_move = create_test_move();
+        promotion_move.is_promotion = true;
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &promotion_move, false, None);
+        assert_eq!(reduction, 0); // Should be exempted
+    }
+
+    #[test]
+    fn test_conditional_promotion_exemption_tactical() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_promotion_exemption = true;
+        config.exempt_tactical_promotions_only = true;
+        config.min_depth_for_conditional_promotion = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 10; // Deep depth
+        state.set_conditional_exemption_config(config);
+        
+        // Test tactical promotion (capture + promotion) - should be exempted
+        let mut tactical_promotion = create_test_move();
+        tactical_promotion.is_promotion = true;
+        tactical_promotion.is_capture = true; // Tactical
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &tactical_promotion, false, None);
+        assert_eq!(reduction, 0); // Should be exempted (tactical)
+    }
+
+    #[test]
+    fn test_conditional_promotion_exemption_quiet() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_promotion_exemption = true;
+        config.exempt_tactical_promotions_only = true;
+        config.min_depth_for_conditional_promotion = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 10; // Deep depth
+        state.set_conditional_exemption_config(config);
+        
+        // Test quiet promotion (no capture, no check) - should allow LMR at deep depth
+        let mut quiet_promotion = create_test_move();
+        quiet_promotion.is_promotion = true;
+        quiet_promotion.is_capture = false;
+        quiet_promotion.gives_check = false; // Quiet
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &quiet_promotion, false, None);
+        assert!(reduction > 0); // Should allow LMR (quiet promotion at deep depth)
+    }
+
+    #[test]
+    fn test_conditional_promotion_exemption_shallow_depth() {
+        let mut engine = create_test_engine();
+        let pruning_manager = engine.get_pruning_manager();
+        
+        let mut config = ConditionalExemptionConfig::default();
+        config.enable_conditional_promotion_exemption = true;
+        config.exempt_tactical_promotions_only = true;
+        config.min_depth_for_conditional_promotion = 5;
+        
+        let mut state = create_test_state();
+        state.move_number = 10;
+        state.depth = 3; // Shallow depth (< threshold)
+        state.set_conditional_exemption_config(config);
+        
+        // Test quiet promotion at shallow depth - should be exempted
+        let mut quiet_promotion = create_test_move();
+        quiet_promotion.is_promotion = true;
+        quiet_promotion.is_capture = false;
+        quiet_promotion.gives_check = false;
+        
+        let reduction = pruning_manager.calculate_lmr_reduction(&state, &quiet_promotion, false, None);
+        assert_eq!(reduction, 0); // Should be exempted (shallow depth)
+    }
+
+    #[test]
+    fn test_search_state_conditional_exemption_config() {
+        let mut state = create_test_state();
+        let config = ConditionalExemptionConfig::default();
+        
+        assert_eq!(state.conditional_exemption_config, None);
+        
+        state.set_conditional_exemption_config(config.clone());
+        
+        assert_eq!(state.conditional_exemption_config, Some(config));
+    }
+
+    #[test]
+    fn test_lmr_config_has_conditional_exemption_config() {
+        let config = LMRConfig::default();
+        assert_eq!(config.conditional_exemption_config.enable_conditional_capture_exemption, false);
+        assert_eq!(config.conditional_exemption_config.enable_conditional_promotion_exemption, false);
+    }
+}

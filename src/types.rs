@@ -1963,6 +1963,8 @@ pub struct LMRConfig {
     pub adaptive_tuning_config: AdaptiveTuningConfig,
     /// Advanced reduction strategies configuration (Task 11.4)
     pub advanced_reduction_config: AdvancedReductionConfig,
+    /// Conditional exemption configuration (Task 12.2, 12.3)
+    pub conditional_exemption_config: ConditionalExemptionConfig,
 }
 
 /// Configuration for position classification (Task 5.8)
@@ -2021,6 +2023,40 @@ pub enum AdvancedReductionStrategy {
 impl Default for AdvancedReductionStrategy {
     fn default() -> Self {
         Self::Basic
+    }
+}
+
+/// Configuration for conditional capture/promotion exemptions (Task 12.2, 12.3)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConditionalExemptionConfig {
+    /// Enable conditional capture exemption (default: false - all captures exempted)
+    pub enable_conditional_capture_exemption: bool,
+    /// Minimum captured piece value to exempt from LMR (default: 100 centipawns)
+    /// Small captures (below this value) may benefit from reduction in deep searches
+    pub min_capture_value_threshold: i32,
+    /// Minimum depth for conditional capture exemption (default: 5)
+    /// Only apply conditional exemption at deeper depths where small captures are less critical
+    pub min_depth_for_conditional_capture: u8,
+    /// Enable conditional promotion exemption (default: false - all promotions exempted)
+    pub enable_conditional_promotion_exemption: bool,
+    /// Only exempt tactical promotions (default: true)
+    /// Quiet promotions (non-captures, non-checks) may benefit from reduction
+    pub exempt_tactical_promotions_only: bool,
+    /// Minimum depth for conditional promotion exemption (default: 5)
+    /// Only apply conditional exemption at deeper depths where quiet promotions are less critical
+    pub min_depth_for_conditional_promotion: u8,
+}
+
+impl Default for ConditionalExemptionConfig {
+    fn default() -> Self {
+        Self {
+            enable_conditional_capture_exemption: false,
+            min_capture_value_threshold: 100,
+            min_depth_for_conditional_capture: 5,
+            enable_conditional_promotion_exemption: false,
+            exempt_tactical_promotions_only: true,
+            min_depth_for_conditional_promotion: 5,
+        }
     }
 }
 
@@ -2118,6 +2154,7 @@ impl Default for LMRConfig {
             escape_move_config: EscapeMoveConfig::default(),
             adaptive_tuning_config: AdaptiveTuningConfig::default(),
             advanced_reduction_config: AdvancedReductionConfig::default(),
+            conditional_exemption_config: ConditionalExemptionConfig::default(),
         }
     }
 }
@@ -5785,6 +5822,7 @@ impl SearchState {
             position_classification: None,
             tt_move: None,
             advanced_reduction_config: None,
+            conditional_exemption_config: None,
         }
     }
     
@@ -5810,6 +5848,11 @@ impl SearchState {
     /// Set advanced reduction strategies configuration (Task 11.4)
     pub fn set_advanced_reduction_config(&mut self, config: AdvancedReductionConfig) {
         self.advanced_reduction_config = Some(config);
+    }
+    
+    /// Set conditional exemption configuration (Task 12.2, 12.3)
+    pub fn set_conditional_exemption_config(&mut self, config: ConditionalExemptionConfig) {
+        self.conditional_exemption_config = Some(config);
     }
 }
 
@@ -6548,9 +6591,66 @@ impl PruningManager {
             return false;
         }
         
-        // Basic exemptions: captures, promotions, checks
-        if self.is_capture_move(mv) || self.is_promotion_move(mv) || state.is_in_check {
+        // Basic exemptions: checks (always exempt)
+        if state.is_in_check {
             return false;
+        }
+        
+        // Conditional capture exemption (Task 12.2)
+        // Research shows small captures might benefit from reduction in deep searches
+        if self.is_capture_move(mv) {
+            // Check if conditional exemption is enabled and applies
+            if let Some(conditional_config) = &state.conditional_exemption_config {
+                if conditional_config.enable_conditional_capture_exemption {
+                    // Only exempt high-value captures or at shallow depths
+                    let captured_value = mv.captured_piece_value();
+                    let depth_threshold = conditional_config.min_depth_for_conditional_capture;
+                    let value_threshold = conditional_config.min_capture_value_threshold;
+                    
+                    // Exempt if: (1) captured value >= threshold OR (2) depth < threshold
+                    if captured_value >= value_threshold || state.depth < depth_threshold {
+                        return false; // Exempt high-value captures or shallow depth
+                    }
+                    // Small captures at deep depth: allow LMR (return true, continue)
+                } else {
+                    // Default: exempt all captures (safer)
+                    return false;
+                }
+            } else {
+                // Default: exempt all captures (safer)
+                return false;
+            }
+        }
+        
+        // Conditional promotion exemption (Task 12.3)
+        // Research shows quiet promotions might benefit from reduction in deep searches
+        if self.is_promotion_move(mv) {
+            // Check if conditional exemption is enabled and applies
+            if let Some(conditional_config) = &state.conditional_exemption_config {
+                if conditional_config.enable_conditional_promotion_exemption {
+                    let depth_threshold = conditional_config.min_depth_for_conditional_promotion;
+                    
+                    // Only exempt tactical promotions (captures or checks) at deep depths
+                    if conditional_config.exempt_tactical_promotions_only {
+                        let is_tactical = mv.is_capture || mv.gives_check;
+                        
+                        // Exempt if: (1) tactical promotion OR (2) depth < threshold
+                        if is_tactical || state.depth < depth_threshold {
+                            return false; // Exempt tactical promotions or shallow depth
+                        }
+                        // Quiet promotions at deep depth: allow LMR (return true, continue)
+                    } else {
+                        // Default: exempt all promotions (safer)
+                        return false;
+                    }
+                } else {
+                    // Default: exempt all promotions (safer)
+                    return false;
+                }
+            } else {
+                // Default: exempt all promotions (safer)
+                return false;
+            }
         }
         
         // Extended exemptions if enabled
