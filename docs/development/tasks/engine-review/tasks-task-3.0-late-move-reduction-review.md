@@ -250,6 +250,14 @@
   - [ ] 11.8 Document advanced strategies and when to use them
   - [ ] 11.9 Decide whether to keep advanced strategies based on benchmark results
 
+- [ ] 12.0 Review Conditional Capture/Promotion Exemptions (Optional Research)
+  - [ ] 12.1 Research whether small captures might benefit from reduction in deep searches
+  - [ ] 12.2 Consider adding configuration option for conditional capture exemption (based on captured piece value)
+  - [ ] 12.3 Consider adding configuration option for conditional promotion exemption (quiet promotions only)
+  - [ ] 12.4 Add unit tests for conditional exemptions if implemented
+  - [ ] 12.5 Benchmark impact on LMR effectiveness if conditional exemptions are added
+  - [ ] 12.6 Document decision: keep all captures/promotions exempted (safer) vs conditional exemption (more aggressive)
+
 ---
 
 ## Execution Order and Dependencies
