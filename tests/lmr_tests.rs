@@ -1398,3 +1398,176 @@ mod tt_move_detection_tests {
         assert_eq!(reduction, 0, "Should exempt capture move regardless of TT status");
     }
 }
+
+#[cfg(test)]
+mod performance_monitoring_tests {
+    use super::*;
+
+    #[test]
+    fn test_lmr_stats_performance_thresholds() {
+        let mut stats = LMRStats::default();
+        
+        // Test healthy performance
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 300; // 30% efficiency
+        stats.researches_triggered = 50; // ~16.7% re-search rate
+        stats.cutoffs_after_reduction = 100;
+        stats.cutoffs_after_research = 50; // 15% cutoff rate
+        
+        let (is_healthy, alerts) = stats.check_performance_thresholds();
+        assert!(is_healthy, "Should pass all thresholds");
+        assert!(alerts.is_empty(), "Should have no alerts");
+        
+        // Test low efficiency
+        stats.reductions_applied = 100; // 10% efficiency
+        let (is_healthy, alerts) = stats.check_performance_thresholds();
+        assert!(!is_healthy, "Should fail efficiency threshold");
+        assert!(alerts.iter().any(|a| a.contains("Low efficiency")), "Should alert on low efficiency");
+        
+        // Test high re-search rate
+        stats.reductions_applied = 300;
+        stats.researches_triggered = 150; // 50% re-search rate
+        let (is_healthy, alerts) = stats.check_performance_thresholds();
+        assert!(!is_healthy, "Should fail re-search rate threshold");
+        assert!(alerts.iter().any(|a| a.contains("High re-search rate")), "Should alert on high re-search rate");
+        
+        // Test low cutoff rate
+        stats.researches_triggered = 50;
+        stats.cutoffs_after_reduction = 20;
+        stats.cutoffs_after_research = 10; // 3% cutoff rate
+        let (is_healthy, alerts) = stats.check_performance_thresholds();
+        assert!(!is_healthy, "Should fail cutoff rate threshold");
+        assert!(alerts.iter().any(|a| a.contains("Low cutoff rate")), "Should alert on low cutoff rate");
+    }
+
+    #[test]
+    fn test_lmr_stats_performance_alerts() {
+        let mut stats = LMRStats::default();
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 100; // 10% efficiency
+        stats.researches_triggered = 150; // 150% re-search rate (invalid, but test)
+        stats.cutoffs_after_reduction = 5;
+        stats.cutoffs_after_research = 5; // 1% cutoff rate
+        
+        let alerts = stats.get_performance_alerts();
+        assert!(!alerts.is_empty(), "Should have alerts");
+        assert!(alerts.iter().any(|a| a.contains("Low efficiency")), "Should alert on low efficiency");
+        assert!(alerts.iter().any(|a| a.contains("High re-search rate")), "Should alert on high re-search rate");
+        assert!(alerts.iter().any(|a| a.contains("Low cutoff rate")), "Should alert on low cutoff rate");
+    }
+
+    #[test]
+    fn test_lmr_stats_is_performing_well() {
+        let mut stats = LMRStats::default();
+        
+        // Test healthy performance
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 300; // 30% efficiency
+        stats.researches_triggered = 50; // ~16.7% re-search rate
+        stats.cutoffs_after_reduction = 100;
+        stats.cutoffs_after_research = 50; // 15% cutoff rate
+        
+        assert!(stats.is_performing_well(), "Should be performing well");
+        
+        // Test poor performance
+        stats.reductions_applied = 100; // 10% efficiency
+        assert!(!stats.is_performing_well(), "Should not be performing well");
+    }
+
+    #[test]
+    fn test_lmr_stats_phase_stats() {
+        let mut stats = LMRStats::default();
+        
+        // Record phase statistics
+        stats.record_phase_stats(
+            GamePhase::Opening,
+            100, // moves_considered
+            30,  // reductions_applied
+            5,   // researches_triggered
+            10,  // cutoffs_after_reduction
+            5,   // cutoffs_after_research
+            15,  // depth_saved
+        );
+        
+        stats.record_phase_stats(
+            GamePhase::Middlegame,
+            200,
+            60,
+            10,
+            20,
+            10,
+            30,
+        );
+        
+        // Get phase statistics
+        let opening_stats = stats.get_phase_stats(GamePhase::Opening);
+        assert_eq!(opening_stats.moves_considered, 100);
+        assert_eq!(opening_stats.reductions_applied, 30);
+        assert_eq!(opening_stats.researches_triggered, 5);
+        assert_eq!(opening_stats.efficiency(), 30.0);
+        assert_eq!(opening_stats.research_rate(), 5.0 / 30.0 * 100.0);
+        
+        let middlegame_stats = stats.get_phase_stats(GamePhase::Middlegame);
+        assert_eq!(middlegame_stats.moves_considered, 200);
+        assert_eq!(middlegame_stats.efficiency(), 30.0);
+        
+        // Test non-existent phase
+        let endgame_stats = stats.get_phase_stats(GamePhase::Endgame);
+        assert_eq!(endgame_stats.moves_considered, 0);
+    }
+
+    #[test]
+    fn test_lmr_stats_export_metrics() {
+        let mut stats = LMRStats::default();
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 300;
+        stats.researches_triggered = 50;
+        stats.cutoffs_after_reduction = 100;
+        stats.cutoffs_after_research = 50;
+        stats.total_depth_saved = 500;
+        
+        let metrics = stats.export_metrics();
+        assert_eq!(metrics.get("moves_considered"), Some(&1000.0));
+        assert_eq!(metrics.get("reductions_applied"), Some(&300.0));
+        assert_eq!(metrics.get("researches_triggered"), Some(&50.0));
+        assert_eq!(metrics.get("efficiency"), Some(&30.0));
+        assert!(metrics.get("research_rate").is_some());
+        assert!(metrics.get("cutoff_rate").is_some());
+        assert!(metrics.get("is_performing_well").is_some());
+    }
+
+    #[test]
+    fn test_lmr_stats_performance_report_with_phase() {
+        let mut stats = LMRStats::default();
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 300;
+        
+        // Add phase statistics
+        stats.record_phase_stats(
+            GamePhase::Opening,
+            300,
+            100,
+            10,
+            20,
+            10,
+            50,
+        );
+        
+        let report = stats.performance_report();
+        assert!(report.contains("Performance by Game Phase"));
+        assert!(report.contains("Opening"));
+    }
+
+    #[test]
+    fn test_lmr_stats_performance_report_with_alerts() {
+        let mut stats = LMRStats::default();
+        stats.moves_considered = 1000;
+        stats.reductions_applied = 100; // 10% efficiency - should trigger alert
+        stats.researches_triggered = 150; // High re-search rate - should trigger alert
+        
+        let report = stats.performance_report();
+        assert!(report.contains("Performance Alerts"));
+        assert!(report.contains("Low efficiency"));
+        assert!(report.contains("High re-search rate"));
+    }
+}

@@ -4995,6 +4995,26 @@ impl SearchEngine {
         self.lmr_stats = LMRStats::default();
     }
 
+    /// Check LMR performance thresholds and return alerts (Task 4.4, 4.10, 4.11)
+    pub fn check_lmr_performance(&self) -> (bool, Vec<String>) {
+        self.lmr_stats.check_performance_thresholds()
+    }
+
+    /// Get LMR performance alerts (Task 4.10, 4.11)
+    pub fn get_lmr_performance_alerts(&self) -> Vec<String> {
+        self.lmr_stats.get_performance_alerts()
+    }
+
+    /// Export LMR metrics for analysis (Task 4.9)
+    pub fn export_lmr_metrics(&self) -> std::collections::HashMap<String, f64> {
+        self.lmr_stats.export_metrics()
+    }
+
+    /// Get LMR performance report with phase statistics (Task 4.8)
+    pub fn get_lmr_performance_report(&self) -> String {
+        self.lmr_stats.performance_report()
+    }
+
     // ===== TIME MANAGEMENT AND BUDGET ALLOCATION (Task 4.5-4.7) =====
 
     /// Calculate time budget for a specific depth based on allocation strategy (Task 4.5, 4.7)
@@ -6336,9 +6356,21 @@ impl SearchEngine {
                     has_check
                 );
                 
-                if full_score >= beta {
+                let cutoff_after_research = full_score >= beta;
+                if cutoff_after_research {
                     self.lmr_stats.cutoffs_after_research += 1;
                 }
+                
+                // Track phase statistics (Task 4.6)
+                self.lmr_stats.record_phase_stats(
+                    search_state.game_phase,
+                    1, // moves_considered
+                    1, // reductions_applied
+                    1, // researches_triggered
+                    if cutoff_after_research { 1 } else { 0 }, // cutoffs_after_research
+                    0, // cutoffs_after_reduction
+                    reduction as u64, // depth_saved
+                );
                 
                 return full_score;
             } else {
@@ -6352,14 +6384,27 @@ impl SearchEngine {
                         score, re_search_threshold, alpha, self.lmr_config.re_search_margin
                     ));
                 }
-                if score >= beta {
+                let cutoff_after_reduction = score >= beta;
+                if cutoff_after_reduction {
                     self.lmr_stats.cutoffs_after_reduction += 1;
                 }
+                
+                // Track phase statistics (Task 4.6)
+                self.lmr_stats.record_phase_stats(
+                    search_state.game_phase,
+                    1, // moves_considered
+                    1, // reductions_applied
+                    0, // researches_triggered
+                    0, // cutoffs_after_research
+                    if cutoff_after_reduction { 1 } else { 0 }, // cutoffs_after_reduction
+                    reduction as u64, // depth_saved
+                );
+                
                 return score;
             }
         } else {
             // No reduction - perform full-depth search
-            -self.negamax_with_context(
+            let score = -self.negamax_with_context(
                 board, 
                 captured_pieces, 
                 player.opposite(), 
@@ -6373,7 +6418,20 @@ impl SearchEngine {
                 false, // not root
                 has_capture,
                 has_check
-            )
+            );
+            
+            // Track phase statistics for non-reduced moves (Task 4.6)
+            self.lmr_stats.record_phase_stats(
+                search_state.game_phase,
+                1, // moves_considered
+                0, // reductions_applied
+                0, // researches_triggered
+                0, // cutoffs_after_research
+                0, // cutoffs_after_reduction
+                0, // depth_saved
+            );
+            
+            score
         }
     }
 

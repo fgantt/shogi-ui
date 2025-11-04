@@ -2036,6 +2036,41 @@ impl LMRConfig {
     }
 }
 
+/// Performance statistics for Late Move Reductions by game phase
+#[derive(Debug, Clone, Default)]
+pub struct LMRPhaseStats {
+    pub moves_considered: u64,
+    pub reductions_applied: u64,
+    pub researches_triggered: u64,
+    pub cutoffs_after_reduction: u64,
+    pub cutoffs_after_research: u64,
+    pub total_depth_saved: u64,
+}
+
+impl LMRPhaseStats {
+    pub fn efficiency(&self) -> f64 {
+        if self.moves_considered == 0 {
+            return 0.0;
+        }
+        (self.reductions_applied as f64 / self.moves_considered as f64) * 100.0
+    }
+
+    pub fn research_rate(&self) -> f64 {
+        if self.reductions_applied == 0 {
+            return 0.0;
+        }
+        (self.researches_triggered as f64 / self.reductions_applied as f64) * 100.0
+    }
+
+    pub fn cutoff_rate(&self) -> f64 {
+        if self.moves_considered == 0 {
+            return 0.0;
+        }
+        let total_cutoffs = self.cutoffs_after_reduction + self.cutoffs_after_research;
+        (total_cutoffs as f64 / self.moves_considered as f64) * 100.0
+    }
+}
+
 /// Performance statistics for Late Move Reductions
 #[derive(Debug, Clone, Default)]
 pub struct LMRStats {
@@ -2050,12 +2085,87 @@ pub struct LMRStats {
     pub re_search_margin_allowed: u64,        // Number of re-searches allowed despite margin
     pub tt_move_exempted: u64,                // Number of TT moves exempted from LMR
     pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
+    /// Statistics by game phase (Task 4.6)
+    pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
 }
 
 impl LMRStats {
     /// Reset all statistics to zero
     pub fn reset(&mut self) {
         *self = LMRStats::default();
+    }
+
+    /// Record LMR statistics for a specific game phase (Task 4.6)
+    pub fn record_phase_stats(&mut self, phase: GamePhase, moves_considered: u64, reductions_applied: u64, 
+                             researches_triggered: u64, cutoffs_after_reduction: u64, 
+                             cutoffs_after_research: u64, depth_saved: u64) {
+        let stats = self.phase_stats.entry(phase).or_insert_with(LMRPhaseStats::default);
+        stats.moves_considered += moves_considered;
+        stats.reductions_applied += reductions_applied;
+        stats.researches_triggered += researches_triggered;
+        stats.cutoffs_after_reduction += cutoffs_after_reduction;
+        stats.cutoffs_after_research += cutoffs_after_research;
+        stats.total_depth_saved += depth_saved;
+    }
+
+    /// Get statistics for a specific game phase (Task 4.6)
+    pub fn get_phase_stats(&self, phase: GamePhase) -> &LMRPhaseStats {
+        self.phase_stats.get(&phase).unwrap_or(&LMRPhaseStats::default())
+    }
+
+    /// Check if performance meets minimum thresholds (Task 4.4)
+    pub fn check_performance_thresholds(&self) -> (bool, Vec<String>) {
+        let mut alerts = Vec::new();
+        let mut is_healthy = true;
+
+        // Check efficiency threshold (Task 4.11)
+        let efficiency = self.efficiency();
+        if efficiency < 25.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "Low efficiency: {:.1}% (threshold: 25%). LMR not being applied enough.",
+                efficiency
+            ));
+        }
+
+        // Check re-search rate threshold (Task 4.10)
+        let research_rate = self.research_rate();
+        if research_rate > 30.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "High re-search rate: {:.1}% (threshold: 30%). LMR too aggressive.",
+                research_rate
+            ));
+        } else if research_rate < 5.0 {
+            alerts.push(format!(
+                "Low re-search rate: {:.1}% (threshold: 5%). LMR may be too conservative.",
+                research_rate
+            ));
+        }
+
+        // Check cutoff rate threshold (Task 4.4)
+        let cutoff_rate = self.cutoff_rate();
+        if cutoff_rate < 10.0 {
+            is_healthy = false;
+            alerts.push(format!(
+                "Low cutoff rate: {:.1}% (threshold: 10%). Poor move ordering correlation.",
+                cutoff_rate
+            ));
+        }
+
+        (is_healthy, alerts)
+    }
+
+    /// Get performance alerts (Task 4.10, 4.11)
+    pub fn get_performance_alerts(&self) -> Vec<String> {
+        let (_, alerts) = self.check_performance_thresholds();
+        alerts
+    }
+
+    /// Check if LMR is performing well (Task 4.4)
+    pub fn is_performing_well(&self) -> bool {
+        let (is_healthy, _) = self.check_performance_thresholds();
+        is_healthy
     }
 
     /// Get the research rate as a percentage
@@ -2104,9 +2214,9 @@ impl LMRStats {
         (self.re_search_margin_prevented as f64 / total as f64) * 100.0
     }
 
-    /// Get a comprehensive performance report
+    /// Get a comprehensive performance report (Task 4.8)
     pub fn performance_report(&self) -> String {
-        format!(
+        let mut report = format!(
             "Late Move Reductions Performance Report:\n\
             - Moves considered: {}\n\
             - Reductions applied: {} ({:.2}%)\n\
@@ -2117,7 +2227,7 @@ impl LMRStats {
             - Re-search margin prevented: {} ({:.2}%)\n\
             - Re-search margin allowed: {}\n\
             - TT moves exempted: {}\n\
-            - TT moves missed: {}",
+            - TT moves missed: {}\n",
             self.moves_considered,
             self.reductions_applied,
             self.efficiency(),
@@ -2132,7 +2242,59 @@ impl LMRStats {
             self.re_search_margin_allowed,
             self.tt_move_exempted,
             self.tt_move_missed
-        )
+        );
+
+        // Add phase statistics (Task 4.6)
+        if !self.phase_stats.is_empty() {
+            report.push_str("\nPerformance by Game Phase:\n");
+            for (phase, phase_stats) in &self.phase_stats {
+                let phase_name = match phase {
+                    GamePhase::Opening => "Opening",
+                    GamePhase::Middlegame => "Middlegame",
+                    GamePhase::Endgame => "Endgame",
+                };
+                report.push_str(&format!(
+                    "  {}: {} moves, {:.1}% efficiency, {:.1}% re-search rate, {:.1}% cutoff rate\n",
+                    phase_name,
+                    phase_stats.moves_considered,
+                    phase_stats.efficiency(),
+                    phase_stats.research_rate(),
+                    phase_stats.cutoff_rate()
+                ));
+            }
+        }
+
+        // Add performance alerts (Task 4.10, 4.11)
+        let alerts = self.get_performance_alerts();
+        if !alerts.is_empty() {
+            report.push_str("\nPerformance Alerts:\n");
+            for alert in alerts {
+                report.push_str(&format!("  - {}\n", alert));
+            }
+        }
+
+        report
+    }
+
+    /// Export metrics for analysis (Task 4.9)
+    pub fn export_metrics(&self) -> HashMap<String, f64> {
+        let mut metrics = HashMap::new();
+        metrics.insert("moves_considered".to_string(), self.moves_considered as f64);
+        metrics.insert("reductions_applied".to_string(), self.reductions_applied as f64);
+        metrics.insert("researches_triggered".to_string(), self.researches_triggered as f64);
+        metrics.insert("cutoffs_after_reduction".to_string(), self.cutoffs_after_reduction as f64);
+        metrics.insert("cutoffs_after_research".to_string(), self.cutoffs_after_research as f64);
+        metrics.insert("total_depth_saved".to_string(), self.total_depth_saved as f64);
+        metrics.insert("average_reduction".to_string(), self.average_reduction);
+        metrics.insert("efficiency".to_string(), self.efficiency());
+        metrics.insert("research_rate".to_string(), self.research_rate());
+        metrics.insert("cutoff_rate".to_string(), self.cutoff_rate());
+        metrics.insert("average_depth_saved".to_string(), self.average_depth_saved());
+        metrics.insert("re_search_margin_effectiveness".to_string(), self.re_search_margin_effectiveness());
+        metrics.insert("tt_move_exempted".to_string(), self.tt_move_exempted as f64);
+        metrics.insert("tt_move_missed".to_string(), self.tt_move_missed as f64);
+        metrics.insert("is_performing_well".to_string(), if self.is_performing_well() { 1.0 } else { 0.0 });
+        metrics
     }
 
     /// Get a summary of key metrics
