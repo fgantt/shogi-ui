@@ -7017,7 +7017,26 @@ impl SearchEngine {
         }
     }
 
-    /// Get LMR configuration presets for different playing styles
+    /// Get LMR configuration presets for different playing styles (Task 9.1-9.3)
+    /// 
+    /// # Presets
+    /// 
+    /// - **Aggressive**: Optimized for speed and aggressive play
+    ///   - Lower re-search margin (25 cp) for more aggressive pruning
+    ///   - Higher base reduction (2) for more depth savings
+    ///   - Lower min_depth (2) and min_move_index (3) for earlier LMR
+    ///   - Adaptive tuning enabled with Moderate aggressiveness
+    /// 
+    /// - **Conservative**: Optimized for safety and accuracy
+    ///   - Higher re-search margin (100 cp) for safer play
+    ///   - Lower base reduction (1) for more conservative pruning
+    ///   - Higher min_depth (4) and min_move_index (6) for later LMR
+    ///   - Adaptive tuning enabled with Conservative aggressiveness
+    /// 
+    /// - **Balanced**: Optimized for general play (default)
+    ///   - Default re-search margin (50 cp)
+    ///   - Balanced reduction settings
+    ///   - Adaptive tuning enabled with Moderate aggressiveness
     pub fn get_lmr_preset(&self, style: LMRPlayingStyle) -> LMRConfig {
         match style {
             LMRPlayingStyle::Aggressive => LMRConfig {
@@ -7032,7 +7051,11 @@ impl SearchEngine {
                 re_search_margin: 25,  // Lower margin for more aggressive play
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig {
+                    enabled: true,
+                    aggressiveness: TuningAggressiveness::Moderate,
+                    min_data_threshold: 100,
+                },
             },
             LMRPlayingStyle::Conservative => LMRConfig {
                 enabled: true,
@@ -7046,7 +7069,11 @@ impl SearchEngine {
                 re_search_margin: 100,  // Higher margin for safer play
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig {
+                    enabled: true,
+                    aggressiveness: TuningAggressiveness::Conservative,
+                    min_data_threshold: 100,
+                },
             },
             LMRPlayingStyle::Balanced => LMRConfig {
                 enabled: true,
@@ -7060,14 +7087,32 @@ impl SearchEngine {
                 re_search_margin: 50,  // Default margin
                 classification_config: PositionClassificationConfig::default(),
                 escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig::default(),
+                adaptive_tuning_config: AdaptiveTuningConfig {
+                    enabled: true,
+                    aggressiveness: TuningAggressiveness::Moderate,
+                    min_data_threshold: 100,
+                },
             },
         }
     }
+    
+    /// Validate preset configuration to ensure settings are reasonable (Task 9.4)
+    pub fn validate_lmr_preset(&self, style: LMRPlayingStyle) -> Result<(), String> {
+        let preset = self.get_lmr_preset(style);
+        preset.validate()
+    }
 
-    /// Apply LMR configuration preset
+    /// Apply LMR configuration preset (Task 9.5)
+    /// 
+    /// This method validates the preset configuration before applying it.
+    /// It also syncs PruningManager parameters with the preset configuration.
     pub fn apply_lmr_preset(&mut self, style: LMRPlayingStyle) -> Result<(), String> {
         let preset = self.get_lmr_preset(style);
+        
+        // Validate preset before applying (Task 9.4)
+        preset.validate()?;
+        
+        // Apply the preset
         self.update_lmr_config(preset)
     }
 

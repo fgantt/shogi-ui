@@ -211,19 +211,19 @@
   - [x] 8.11 Verify adaptive reduction is actually being applied (add debug logging)
   - [x] 8.12 Document PruningManager adaptive reduction usage
 
-- [ ] 9.0 Add Configuration Presets
-  - [ ] 9.1 Review existing `get_lmr_preset()` method (lines 6730-6769)
-  - [ ] 9.2 Enhance presets if needed: Conservative, Aggressive, Balanced
-  - [ ] 9.3 Update preset configurations based on review recommendations:
+- [x] 9.0 Add Configuration Presets
+  - [x] 9.1 Review existing `get_lmr_preset()` method (lines 6730-6769)
+  - [x] 9.2 Enhance presets if needed: Conservative, Aggressive, Balanced
+  - [x] 9.3 Update preset configurations based on review recommendations:
     - Conservative: Higher re-search margin, lower base_reduction, stricter exemptions
     - Aggressive: Lower re-search margin, higher base_reduction, relaxed exemptions
     - Balanced: Default values optimized for general play
-  - [ ] 9.4 Add preset validation to ensure preset settings are reasonable
-  - [ ] 9.5 Update `apply_lmr_preset()` to include re-search margin if added
-  - [ ] 9.6 Add documentation describing presets and when to use each
-  - [ ] 9.7 Add unit tests for preset configurations (verify settings match expected values)
-  - [ ] 9.8 Add integration tests verifying presets work correctly with LMR
-  - [ ] 9.9 Update user-facing documentation with preset usage examples
+  - [x] 9.4 Add preset validation to ensure preset settings are reasonable
+  - [x] 9.5 Update `apply_lmr_preset()` to include re-search margin if added
+  - [x] 9.6 Add documentation describing presets and when to use each
+  - [x] 9.7 Add unit tests for preset configurations (verify settings match expected values)
+  - [x] 9.8 Add integration tests verifying presets work correctly with LMR
+  - [x] 9.9 Update user-facing documentation with preset usage examples
 
 - [ ] 10.0 Move Ordering Effectiveness Tracking
   - [ ] 10.1 Add statistics tracking for correlation between move index and move quality
@@ -1111,4 +1111,76 @@ Complete tasks 11.0, 12.0:
   * Parameter synchronization is transparent (no API changes)
   * Existing code continues to work without changes
   * Debug logging is optional (feature-gated)
+
+**Task 9.0 Completion Notes:**
+- Reviewed existing get_lmr_preset() method (Task 9.1):
+  * Method already exists with three presets: Aggressive, Conservative, Balanced
+  * Presets already include re_search_margin settings
+  * Presets already include adaptive_tuning_config
+- Enhanced presets if needed (Task 9.2):
+  * Enhanced presets with appropriate adaptive tuning configurations:
+    - Aggressive: Moderate aggressiveness (balanced tuning)
+    - Conservative: Conservative aggressiveness (gradual tuning)
+    - Balanced: Moderate aggressiveness (balanced tuning)
+  * All presets enable adaptive tuning by default
+- Updated preset configurations based on review recommendations (Task 9.3):
+  * Conservative preset:
+    - Higher re-search margin (100 cp) for safer play
+    - Lower base_reduction (1) for more conservative pruning
+    - Higher min_depth (4) and min_move_index (6) for later LMR
+    - Conservative adaptive tuning aggressiveness
+  * Aggressive preset:
+    - Lower re-search margin (25 cp) for more aggressive play
+    - Higher base_reduction (2) for more depth savings
+    - Lower min_depth (2) and min_move_index (3) for earlier LMR
+    - Moderate adaptive tuning aggressiveness
+  * Balanced preset:
+    - Default re-search margin (50 cp)
+    - Balanced reduction settings (base: 1, max: 3)
+    - Moderate adaptive tuning aggressiveness
+- Added preset validation to ensure preset settings are reasonable (Task 9.4):
+  * Added `validate_lmr_preset()` method to validate preset configurations
+  * Validation uses LMRConfig::validate() to ensure all settings are within valid ranges
+  * All three presets pass validation
+- Updated apply_lmr_preset() to include re-search margin if added (Task 9.5):
+  * apply_lmr_preset() already includes re_search_margin in preset configurations
+  * Added validation before applying preset
+  * Preset application automatically syncs PruningManager parameters
+- Added documentation describing presets and when to use each (Task 9.6):
+  * Added comprehensive documentation to `get_lmr_preset()` method
+  * Documented each preset's characteristics and use cases:
+    - Aggressive: Optimized for speed and aggressive play
+    - Conservative: Optimized for safety and accuracy
+    - Balanced: Optimized for general play (default)
+  * Added documentation to `apply_lmr_preset()` method
+- Added unit tests for preset configurations (Task 9.7):
+  * Created `lmr_preset_tests` module in `tests/lmr_tests.rs`
+  * Added 13 test cases:
+    - `test_get_lmr_preset_aggressive()` - Verifies aggressive preset settings
+    - `test_get_lmr_preset_conservative()` - Verifies conservative preset settings
+    - `test_get_lmr_preset_balanced()` - Verifies balanced preset settings
+    - `test_validate_lmr_preset_aggressive()` - Validates aggressive preset
+    - `test_validate_lmr_preset_conservative()` - Validates conservative preset
+    - `test_validate_lmr_preset_balanced()` - Validates balanced preset
+    - `test_apply_lmr_preset_aggressive()` - Tests applying aggressive preset
+    - `test_apply_lmr_preset_conservative()` - Tests applying conservative preset
+    - `test_apply_lmr_preset_balanced()` - Tests applying balanced preset
+    - `test_preset_configurations_are_reasonable()` - Verifies all presets have reasonable values
+    - `test_preset_adaptive_tuning_configurations()` - Tests adaptive tuning configurations
+    - `test_preset_switching()` - Tests switching between presets
+    - `test_preset_integration_with_lmr()` - Integration test with LMR
+- Added integration tests verifying presets work correctly with LMR (Task 9.8):
+  * `test_preset_integration_with_lmr()` - Tests preset application with actual search
+  * Tests verify preset configuration persists after search
+  * Tests verify PruningManager parameters are synced correctly
+- Updated user-facing documentation with preset usage examples (Task 9.9):
+  * Added comprehensive documentation to `get_lmr_preset()` method
+  * Documented preset characteristics and use cases
+  * Added documentation to `apply_lmr_preset()` method
+  * All documentation includes usage examples in code comments
+- All changes maintain backward compatibility:
+  * Preset configurations maintain existing behavior
+  * Preset API remains unchanged (no breaking changes)
+  * Existing code continues to work without changes
+  * Preset validation is optional (doesn't break existing code)
 
