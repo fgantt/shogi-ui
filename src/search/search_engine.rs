@@ -6238,15 +6238,22 @@ impl SearchEngine {
         
         self.lmr_stats.moves_considered += 1;
         
+        // Probe transposition table for best move (Task 3.2, 3.3)
+        let position_hash = self.get_position_hash(board);
+        let tt_move = self.get_best_move_from_tt(board, captured_pieces, player, depth);
+        
         // Create search state for advanced pruning
         let mut search_state = crate::types::SearchState::new(depth, alpha, beta);
         search_state.move_number = move_index as u8;
         search_state.update_fields(
             has_check,
             self.evaluate_position(board, player, captured_pieces),
-            self.get_position_hash(board),
+            position_hash,
             self.get_game_phase(board)
         );
+        
+        // Store TT move in SearchState (Task 3.3)
+        search_state.set_tt_move(tt_move.clone());
         
         // Compute position classification for adaptive reduction if enabled
         if self.lmr_config.enable_adaptive_reduction {
@@ -6257,15 +6264,23 @@ impl SearchEngine {
         // Check extended exemptions
         let is_killer = self.is_killer_move(move_);
         
-        // Get TT move if available (simplified - in full implementation would get from TT lookup)
-        let tt_move = None; // TODO: Get actual TT move from transposition table
+        // Track TT move exemption statistics (Task 3.7)
+        if let Some(ref tt_mv) = tt_move {
+            if self.moves_equal(move_, tt_mv) {
+                self.lmr_stats.tt_move_exempted += 1;
+                crate::debug_utils::trace_log("LMR", &format!(
+                    "TT move exempted from LMR: {}",
+                    move_.to_usi_string()
+                ));
+            }
+        }
         
-        // Check if LMR should be applied using new PruningManager
+        // Check if LMR should be applied using new PruningManager (Task 3.4, 3.6)
         let reduction = self.pruning_manager.calculate_lmr_reduction(
             &search_state, 
             move_,
             is_killer,
-            tt_move
+            tt_move.as_ref()
         );
         
         if reduction > 0 {
@@ -6379,11 +6394,15 @@ impl SearchEngine {
         })
     }
 
-    /// Check if a move is from transposition table
+    /// Check if a move is from transposition table (Task 3.5, 3.9)
+    /// 
+    /// NOTE: This heuristic method is deprecated. Use actual TT move comparison
+    /// via SearchState.tt_move instead. This method is kept for backward compatibility
+    /// but should not be used for LMR decisions.
+    #[deprecated(note = "Use actual TT move from SearchState.tt_move instead of heuristic")]
     fn is_transposition_table_move(&self, move_: &Move) -> bool {
-        // This is a simplified implementation
-        // In a full implementation, we would track the best move from TT lookup
-        // For now, we'll use a heuristic based on move characteristics
+        // Legacy heuristic - deprecated in favor of actual TT move tracking
+        // This method is kept for backward compatibility only
         move_.is_capture && move_.captured_piece_value() > 500
     }
 

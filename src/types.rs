@@ -2048,6 +2048,8 @@ pub struct LMRStats {
     pub average_reduction: f64,               // Average reduction applied
     pub re_search_margin_prevented: u64,      // Number of re-searches prevented by margin
     pub re_search_margin_allowed: u64,        // Number of re-searches allowed despite margin
+    pub tt_move_exempted: u64,                // Number of TT moves exempted from LMR
+    pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
 }
 
 impl LMRStats {
@@ -2113,7 +2115,9 @@ impl LMRStats {
             - Average depth saved: {:.2}\n\
             - Total depth saved: {}\n\
             - Re-search margin prevented: {} ({:.2}%)\n\
-            - Re-search margin allowed: {}",
+            - Re-search margin allowed: {}\n\
+            - TT moves exempted: {}\n\
+            - TT moves missed: {}",
             self.moves_considered,
             self.reductions_applied,
             self.efficiency(),
@@ -2125,7 +2129,9 @@ impl LMRStats {
             self.total_depth_saved,
             self.re_search_margin_prevented,
             self.re_search_margin_effectiveness(),
-            self.re_search_margin_allowed
+            self.re_search_margin_allowed,
+            self.tt_move_exempted,
+            self.tt_move_missed
         )
     }
 
@@ -5108,6 +5114,8 @@ pub struct SearchState {
     pub game_phase: GamePhase,
     /// Position classification for adaptive reduction (optional, computed by SearchEngine)
     pub position_classification: Option<PositionClassification>,
+    /// Transposition table best move (optional, retrieved from TT probe)
+    pub tt_move: Option<Move>,
 }
 
 impl SearchState {
@@ -5123,6 +5131,7 @@ impl SearchState {
             position_hash: 0,
             game_phase: GamePhase::Middlegame,
             position_classification: None,
+            tt_move: None,
         }
     }
     
@@ -5138,6 +5147,11 @@ impl SearchState {
     /// Set position classification for adaptive reduction
     pub fn set_position_classification(&mut self, classification: PositionClassification) {
         self.position_classification = Some(classification);
+    }
+    
+    /// Set the transposition table best move
+    pub fn set_tt_move(&mut self, tt_move: Option<Move>) {
+        self.tt_move = tt_move;
     }
 }
 
@@ -5761,8 +5775,10 @@ impl PruningManager {
                 return false;
             }
             
-            // Check TT move exemption
-            if let Some(tt_mv) = tt_move {
+            // Check TT move exemption (Task 3.4, 3.5, 3.6)
+            // Prefer TT move from SearchState if available, otherwise use parameter
+            let tt_move_to_check = state.tt_move.as_ref().or(tt_move);
+            if let Some(tt_mv) = tt_move_to_check {
                 if self.moves_equal(mv, tt_mv) {
                     return false;
                 }

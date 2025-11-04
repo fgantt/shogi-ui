@@ -1188,3 +1188,213 @@ mod re_search_margin_tests {
         assert!(report.contains("10"));
     }
 }
+
+#[cfg(test)]
+mod tt_move_detection_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    fn create_test_move() -> Move {
+        Move {
+            from: Some(Position::from_usi("7g").unwrap()),
+            to: Position::from_usi("7f").unwrap(),
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_promotion: false,
+            is_capture: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        }
+    }
+
+    fn create_tt_move() -> Move {
+        Move {
+            from: Some(Position::from_usi("8g").unwrap()),
+            to: Position::from_usi("8f").unwrap(),
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_promotion: false,
+            is_capture: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        }
+    }
+
+    #[test]
+    fn test_search_state_tt_move_storage() {
+        let mut state = SearchState::new(5, -10000, 10000);
+        assert_eq!(state.tt_move, None);
+        
+        let tt_move = create_tt_move();
+        state.set_tt_move(Some(tt_move.clone()));
+        assert!(state.tt_move.is_some());
+        assert_eq!(state.tt_move.as_ref().unwrap().to, tt_move.to);
+        
+        state.set_tt_move(None);
+        assert_eq!(state.tt_move, None);
+    }
+
+    #[test]
+    fn test_pruning_manager_tt_move_exemption() {
+        let manager = PruningManager::new(PruningParameters::default());
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5; // Above threshold
+        state.depth = 5; // Above threshold
+        state.is_in_check = false;
+        
+        let current_move = create_test_move();
+        let tt_move = create_tt_move();
+        
+        // Test without TT move - should apply LMR (reduction > 0)
+        state.set_tt_move(None);
+        let reduction = manager.calculate_lmr_reduction(&state, &current_move, false, None);
+        assert!(reduction > 0, "Should apply LMR when no TT move");
+        
+        // Test with matching TT move - should exempt from LMR (reduction = 0)
+        state.set_tt_move(Some(tt_move.clone()));
+        let reduction = manager.calculate_lmr_reduction(&state, &tt_move, false, None);
+        assert_eq!(reduction, 0, "Should NOT apply LMR to TT move");
+        
+        // Test with non-matching TT move - should apply LMR (reduction > 0)
+        state.set_tt_move(Some(tt_move));
+        let reduction = manager.calculate_lmr_reduction(&state, &current_move, false, None);
+        assert!(reduction > 0, "Should apply LMR when move doesn't match TT move");
+    }
+
+    #[test]
+    fn test_pruning_manager_tt_move_parameter_override() {
+        let manager = PruningManager::new(PruningParameters::default());
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5;
+        state.depth = 5;
+        state.is_in_check = false;
+        
+        let current_move = create_test_move();
+        let tt_move_from_state = create_tt_move();
+        let tt_move_from_param = create_test_move(); // Same as current_move
+        
+        // Test parameter override when state has no TT move
+        state.set_tt_move(None);
+        let reduction = manager.calculate_lmr_reduction(
+            &state, 
+            &current_move, 
+            false, 
+            Some(&tt_move_from_param)
+        );
+        assert_eq!(reduction, 0, "Should exempt when parameter TT move matches");
+        
+        // Test state TT move takes precedence
+        state.set_tt_move(Some(tt_move_from_state));
+        let reduction = manager.calculate_lmr_reduction(
+            &state, 
+            &current_move, 
+            false, 
+            Some(&tt_move_from_param)
+        );
+        assert!(reduction > 0, "State TT move should take precedence over parameter");
+    }
+
+    #[test]
+    fn test_lmr_stats_tt_move_tracking() {
+        let mut stats = LMRStats::default();
+        assert_eq!(stats.tt_move_exempted, 0);
+        assert_eq!(stats.tt_move_missed, 0);
+        
+        stats.tt_move_exempted = 10;
+        stats.tt_move_missed = 2;
+        
+        let report = stats.performance_report();
+        assert!(report.contains("TT moves exempted"));
+        assert!(report.contains("TT moves missed"));
+        assert!(report.contains("10"));
+        assert!(report.contains("2"));
+        
+        stats.reset();
+        assert_eq!(stats.tt_move_exempted, 0);
+        assert_eq!(stats.tt_move_missed, 0);
+    }
+
+    #[test]
+    fn test_tt_move_exemption_with_extended_exemptions_disabled() {
+        let mut params = PruningParameters::default();
+        params.lmr_enable_extended_exemptions = false;
+        let manager = PruningManager::new(params);
+        
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5;
+        state.depth = 5;
+        state.is_in_check = false;
+        
+        let current_move = create_test_move();
+        let tt_move = create_tt_move();
+        
+        // Even with TT move, should apply LMR if extended exemptions disabled
+        state.set_tt_move(Some(tt_move.clone()));
+        let reduction = manager.calculate_lmr_reduction(&state, &tt_move, false, None);
+        assert!(reduction > 0, "Should apply LMR when extended exemptions disabled");
+    }
+
+    #[test]
+    fn test_tt_move_exemption_improves_lmr_accuracy() {
+        // This test verifies that TT move exemption improves LMR accuracy
+        // by ensuring TT moves are not incorrectly reduced
+        let manager = PruningManager::new(PruningParameters::default());
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5;
+        state.depth = 5;
+        state.is_in_check = false;
+        
+        let tt_move = create_tt_move();
+        let non_tt_move = create_test_move();
+        
+        state.set_tt_move(Some(tt_move.clone()));
+        
+        // TT move should be exempted (no reduction)
+        let reduction_tt = manager.calculate_lmr_reduction(&state, &tt_move, false, None);
+        assert_eq!(reduction_tt, 0, "TT move should have zero reduction");
+        
+        // Non-TT move should have reduction
+        let reduction_non_tt = manager.calculate_lmr_reduction(&state, &non_tt_move, false, None);
+        assert!(reduction_non_tt > 0, "Non-TT move should have reduction");
+    }
+
+    #[test]
+    fn test_tt_move_detection_when_no_tt_entry() {
+        let manager = PruningManager::new(PruningParameters::default());
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5;
+        state.depth = 5;
+        state.is_in_check = false;
+        state.set_tt_move(None); // No TT entry
+        
+        let current_move = create_test_move();
+        
+        // Should apply LMR when no TT move available
+        let reduction = manager.calculate_lmr_reduction(&state, &current_move, false, None);
+        assert!(reduction > 0, "Should apply LMR when no TT move available");
+    }
+
+    #[test]
+    fn test_tt_move_exemption_with_basic_exemptions() {
+        // Test that TT move exemption works alongside basic exemptions
+        let manager = PruningManager::new(PruningParameters::default());
+        let mut state = SearchState::new(5, -10000, 10000);
+        state.move_number = 5;
+        state.depth = 5;
+        state.is_in_check = false;
+        
+        let mut tt_move = create_tt_move();
+        tt_move.is_capture = true; // Also a capture
+        
+        state.set_tt_move(Some(tt_move.clone()));
+        
+        // Should be exempted due to capture (basic exemption) even if TT
+        let reduction = manager.calculate_lmr_reduction(&state, &tt_move, false, None);
+        assert_eq!(reduction, 0, "Should exempt capture move regardless of TT status");
+    }
+}
