@@ -6340,6 +6340,11 @@ impl SearchEngine {
             search_state.set_position_classification(classification);
         }
         
+        // Set advanced reduction strategies configuration if enabled (Task 11.4)
+        if self.lmr_config.advanced_reduction_config.enabled {
+            search_state.set_advanced_reduction_config(self.lmr_config.advanced_reduction_config.clone());
+        }
+        
         // Check extended exemptions
         let is_killer = self.is_killer_move(move_);
         

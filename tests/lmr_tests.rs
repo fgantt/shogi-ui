@@ -2982,3 +2982,304 @@ mod move_ordering_effectiveness_tests {
         assert_eq!(stats.total_cutoffs, 3);
     }
 }
+
+#[cfg(test)]
+mod advanced_reduction_strategies_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16) // 16MB hash table
+    }
+
+    fn create_test_state() -> SearchState {
+        SearchState::new(5, -10000, 10000)
+    }
+
+    fn create_test_move() -> Move {
+        Move::new(
+            Some(Position { row: 2, col: 2 }),
+            Position { row: 3, col: 3 },
+            PieceType::Pawn,
+            Player::Black,
+            false
+        )
+    }
+
+    #[test]
+    fn test_advanced_reduction_config_default() {
+        let config = AdvancedReductionConfig::default();
+        assert_eq!(config.enabled, false);
+        assert_eq!(config.strategy, AdvancedReductionStrategy::Basic);
+        assert_eq!(config.enable_depth_based, false);
+        assert_eq!(config.enable_material_based, false);
+        assert_eq!(config.enable_history_based, false);
+    }
+
+    #[test]
+    fn test_advanced_reduction_strategy_enum() {
+        assert_eq!(AdvancedReductionStrategy::Basic, AdvancedReductionStrategy::Basic);
+        assert_eq!(AdvancedReductionStrategy::DepthBased, AdvancedReductionStrategy::DepthBased);
+        assert_eq!(AdvancedReductionStrategy::MaterialBased, AdvancedReductionStrategy::MaterialBased);
+        assert_eq!(AdvancedReductionStrategy::HistoryBased, AdvancedReductionStrategy::HistoryBased);
+        assert_eq!(AdvancedReductionStrategy::Combined, AdvancedReductionStrategy::Combined);
+    }
+
+    #[test]
+    fn test_apply_depth_based_reduction() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_depth_based = true;
+        config.depth_scaling_factor = 0.15;
+        
+        let mut state = create_test_state();
+        state.depth = 10;
+        state.set_advanced_reduction_config(config.clone());
+        
+        let mv = create_test_move();
+        let base_reduction = 2;
+        
+        let reduction = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Depth-based reduction should increase reduction for deeper positions
+        assert!(reduction >= base_reduction);
+        assert!(reduction <= 5); // Max reduction
+    }
+
+    #[test]
+    fn test_apply_material_based_reduction() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_material_based = true;
+        
+        let mut state = create_test_state();
+        state.set_position_classification(PositionClassification::Tactical);
+        state.set_advanced_reduction_config(config.clone());
+        
+        let mv = create_test_move();
+        let base_reduction = 2;
+        
+        let reduction = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Material-based reduction should increase reduction for tactical positions
+        assert!(reduction >= base_reduction);
+    }
+
+    #[test]
+    fn test_apply_history_based_reduction() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_history_based = true;
+        
+        let mut state = create_test_state();
+        state.set_advanced_reduction_config(config.clone());
+        
+        // Test with quiet move (poor history)
+        let mut mv = create_test_move();
+        mv.is_capture = false;
+        mv.is_promotion = false;
+        
+        let base_reduction = 2;
+        
+        let reduction = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // History-based reduction should increase reduction for quiet moves
+        assert!(reduction >= base_reduction);
+    }
+
+    #[test]
+    fn test_apply_combined_reduction() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.strategy = AdvancedReductionStrategy::Combined;
+        config.enable_depth_based = true;
+        config.enable_material_based = true;
+        config.enable_history_based = true;
+        
+        let mut state = create_test_state();
+        state.depth = 10;
+        state.set_position_classification(PositionClassification::Tactical);
+        state.set_advanced_reduction_config(config.clone());
+        
+        let mut mv = create_test_move();
+        mv.is_capture = false;
+        mv.is_promotion = false;
+        
+        let base_reduction = 2;
+        
+        let reduction = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Combined reduction should apply all strategies
+        assert!(reduction >= base_reduction);
+    }
+
+    #[test]
+    fn test_advanced_reduction_disabled() {
+        let mut engine = create_test_engine();
+        let config = AdvancedReductionConfig::default(); // Disabled by default
+        
+        let state = create_test_state();
+        let mv = create_test_move();
+        let base_reduction = 2;
+        
+        let reduction = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // When disabled, should return base reduction
+        assert_eq!(reduction, base_reduction);
+    }
+
+    #[test]
+    fn test_search_state_advanced_reduction_config() {
+        let mut state = create_test_state();
+        let config = AdvancedReductionConfig::default();
+        
+        assert_eq!(state.advanced_reduction_config, None);
+        
+        state.set_advanced_reduction_config(config.clone());
+        
+        assert_eq!(state.advanced_reduction_config, Some(config));
+    }
+
+    #[test]
+    fn test_lmr_config_has_advanced_reduction_config() {
+        let config = LMRConfig::default();
+        assert_eq!(config.advanced_reduction_config.enabled, false);
+    }
+
+    #[test]
+    fn test_depth_based_reduction_scaling() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_depth_based = true;
+        config.depth_scaling_factor = 0.15;
+        
+        let mut state = create_test_state();
+        let mv = create_test_move();
+        
+        // Test at different depths
+        let base_reduction = 2;
+        
+        state.depth = 5;
+        state.set_advanced_reduction_config(config.clone());
+        let reduction_shallow = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        state.depth = 15;
+        state.set_advanced_reduction_config(config.clone());
+        let reduction_deep = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Deeper positions should have more reduction
+        assert!(reduction_deep >= reduction_shallow);
+    }
+
+    #[test]
+    fn test_material_based_reduction_by_classification() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_material_based = true;
+        
+        let mut state = create_test_state();
+        let mv = create_test_move();
+        let base_reduction = 2;
+        
+        // Test tactical position
+        state.set_position_classification(PositionClassification::Tactical);
+        state.set_advanced_reduction_config(config.clone());
+        let reduction_tactical = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Test quiet position
+        state.set_position_classification(PositionClassification::Quiet);
+        state.set_advanced_reduction_config(config.clone());
+        let reduction_quiet = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &mv,
+            &config
+        );
+        
+        // Tactical positions should have more reduction than quiet positions
+        assert!(reduction_tactical >= reduction_quiet);
+    }
+
+    #[test]
+    fn test_history_based_reduction_by_move_type() {
+        let mut engine = create_test_engine();
+        let mut config = AdvancedReductionConfig::default();
+        config.enabled = true;
+        config.enable_history_based = true;
+        
+        let mut state = create_test_state();
+        state.set_advanced_reduction_config(config.clone());
+        let base_reduction = 2;
+        
+        // Test quiet move (poor history)
+        let mut quiet_move = create_test_move();
+        quiet_move.is_capture = false;
+        quiet_move.is_promotion = false;
+        
+        let reduction_quiet = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &quiet_move,
+            &config
+        );
+        
+        // Test capture move (good history)
+        let mut capture_move = create_test_move();
+        capture_move.is_capture = true;
+        
+        let reduction_capture = engine.pruning_manager.apply_advanced_reduction(
+            base_reduction,
+            &state,
+            &capture_move,
+            &config
+        );
+        
+        // Quiet moves should have more reduction than capture moves
+        assert!(reduction_quiet >= reduction_capture);
+    }
+}
