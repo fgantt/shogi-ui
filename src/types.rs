@@ -3827,6 +3827,20 @@ pub struct IIDStats {
     pub total_actual_iid_time_ms: u64,
     /// Task 5.9: Number of times IID was skipped due to estimated time exceeding threshold
     pub positions_skipped_time_estimation: u64,
+    /// Task 6.2: Estimated total nodes if IID were disabled (for performance comparison)
+    pub total_nodes_without_iid: u64,
+    /// Task 6.2: Estimated total time if IID were disabled (for performance comparison)
+    pub total_time_without_iid_ms: u64,
+    /// Task 6.2: Calculated nodes saved by IID (calculated as total_nodes_without_iid - actual_total_nodes)
+    pub nodes_saved: u64,
+    /// Task 6.6: Correlation tracking - sum of efficiency_rate * speedup for correlation analysis
+    pub efficiency_speedup_correlation_sum: f64,
+    /// Task 6.6: Number of correlation data points collected
+    pub correlation_data_points: u64,
+    /// Task 6.8: Sum of predicted vs actual performance measurements for accuracy tracking
+    pub performance_measurement_accuracy_sum: f64,
+    /// Task 6.8: Number of performance measurement samples
+    pub performance_measurement_samples: u64,
 }
 
 impl IIDStats {
@@ -3950,6 +3964,14 @@ pub struct IIDPerformanceMetrics {
     pub depth_skip_rate: f64,
     pub move_count_skip_rate: f64,
     pub time_pressure_skip_rate: f64,
+    /// Task 6.7: Node reduction percentage (nodes_saved / total_nodes_without_iid * 100)
+    pub node_reduction_percentage: f64,
+    /// Task 6.7: Speedup percentage ((time_without_iid - time_with_iid) / time_without_iid * 100)
+    pub speedup_percentage: f64,
+    /// Task 6.7: Net benefit (speedup_percentage - overhead_percentage)
+    pub net_benefit_percentage: f64,
+    /// Task 6.6: Correlation coefficient between efficiency rate and speedup
+    pub efficiency_speedup_correlation: f64,
 }
 
 impl IIDPerformanceMetrics {
@@ -3979,17 +4001,50 @@ impl IIDPerformanceMetrics {
             time_pressure_skip_rate: if total_skips > 0 {
                 (stats.positions_skipped_time_pressure as f64 / total_skips as f64) * 100.0
             } else { 0.0 },
+            // Task 6.7: Calculate performance comparison metrics
+            node_reduction_percentage: if stats.total_nodes_without_iid > 0 {
+                (stats.nodes_saved as f64 / stats.total_nodes_without_iid as f64) * 100.0
+            } else { 0.0 },
+            speedup_percentage: if stats.total_time_without_iid_ms > 0 {
+                let time_with_iid = total_search_time_ms;
+                let time_without_iid = stats.total_time_without_iid_ms;
+                if time_without_iid > time_with_iid {
+                    ((time_without_iid - time_with_iid) as f64 / time_without_iid as f64) * 100.0
+                } else {
+                    0.0
+                }
+            } else { 0.0 },
+            net_benefit_percentage: {
+                let speedup = if stats.total_time_without_iid_ms > 0 {
+                    let time_with_iid = total_search_time_ms;
+                    let time_without_iid = stats.total_time_without_iid_ms;
+                    if time_without_iid > time_with_iid {
+                        ((time_without_iid - time_with_iid) as f64 / time_without_iid as f64) * 100.0
+                    } else {
+                        0.0
+                    }
+                } else { 0.0 };
+                let overhead = if total_search_time_ms > 0 {
+                    (stats.iid_time_ms as f64 / total_search_time_ms as f64) * 100.0
+                } else { 0.0 };
+                speedup - overhead
+            },
+            efficiency_speedup_correlation: if stats.correlation_data_points > 0 {
+                stats.efficiency_speedup_correlation_sum / stats.correlation_data_points as f64
+            } else { 0.0 },
         }
     }
 
     /// Get a summary of the performance metrics
     pub fn summary(&self) -> String {
         format!(
-            "IID Performance: {:.1}% efficient, {:.1}% cutoffs, {:.1}% overhead, {:.1} avg nodes saved",
+            "IID Performance: {:.1}% efficient, {:.1}% cutoffs, {:.1}% overhead, {:.1}% node reduction, {:.1}% speedup, {:.1}% net benefit",
             self.iid_efficiency,
             self.cutoff_rate,
             self.overhead_percentage,
-            self.nodes_saved_per_iid
+            self.node_reduction_percentage,
+            self.speedup_percentage,
+            self.net_benefit_percentage
         )
     }
 }

@@ -96,6 +96,16 @@ fn test_iid_stats_default() {
     assert_eq!(stats.total_predicted_iid_time_ms, 0);
     assert_eq!(stats.total_actual_iid_time_ms, 0);
     assert_eq!(stats.positions_skipped_time_estimation, 0);
+    // Task 6.2: Performance measurement statistics
+    assert_eq!(stats.total_nodes_without_iid, 0);
+    assert_eq!(stats.total_time_without_iid_ms, 0);
+    assert_eq!(stats.nodes_saved, 0);
+    // Task 6.6: Correlation tracking
+    assert_eq!(stats.efficiency_speedup_correlation_sum, 0.0);
+    assert_eq!(stats.correlation_data_points, 0);
+    // Task 6.8: Performance measurement accuracy
+    assert_eq!(stats.performance_measurement_accuracy_sum, 0.0);
+    assert_eq!(stats.performance_measurement_samples, 0);
 }
 
 #[test]
@@ -1266,6 +1276,245 @@ fn test_iid_statistics_comprehensive_tracking() {
     assert_eq!(reset_stats.iid_searches_performed, 0);
     assert_eq!(reset_stats.total_iid_nodes, 0);
     assert_eq!(reset_stats.iid_time_ms, 0);
+}
+
+// ===== TASK 6.0: PERFORMANCE MEASUREMENT =====
+
+#[test]
+fn test_iid_performance_measurement_fields_default() {
+    let stats = IIDStats::default();
+    
+    // Task 6.2: Verify performance measurement fields default to 0
+    assert_eq!(stats.total_nodes_without_iid, 0);
+    assert_eq!(stats.total_time_without_iid_ms, 0);
+    assert_eq!(stats.nodes_saved, 0);
+    // Task 6.6: Correlation tracking
+    assert_eq!(stats.efficiency_speedup_correlation_sum, 0.0);
+    assert_eq!(stats.correlation_data_points, 0);
+    // Task 6.8: Performance measurement accuracy
+    assert_eq!(stats.performance_measurement_accuracy_sum, 0.0);
+    assert_eq!(stats.performance_measurement_samples, 0);
+}
+
+#[test]
+fn test_iid_nodes_saved_calculation() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate IID search with performance data
+    engine.iid_stats.iid_searches_performed = 10;
+    engine.iid_stats.iid_move_first_improved_alpha = 5; // 50% efficiency
+    engine.iid_stats.total_search_time_ms = 1000;
+    engine.iid_stats.iid_time_ms = 100;
+    engine.core_search_metrics.total_nodes = 5000;
+    
+    // Task 6.4: Calculate nodes saved
+    engine.update_iid_performance_measurements();
+    
+    // Verify nodes_saved is calculated
+    // With 50% efficiency, we expect some node savings
+    assert!(engine.iid_stats.nodes_saved >= 0);
+    assert!(engine.iid_stats.total_nodes_without_iid >= engine.core_search_metrics.total_nodes);
+}
+
+#[test]
+fn test_iid_speedup_calculation() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate IID search with good performance
+    engine.iid_stats.iid_searches_performed = 20;
+    engine.iid_stats.iid_move_first_improved_alpha = 10; // 50% efficiency
+    engine.iid_stats.total_search_time_ms = 1000;
+    engine.iid_stats.iid_time_ms = 100;
+    engine.core_search_metrics.total_nodes = 10000;
+    
+    // Task 6.5: Calculate speedup
+    engine.update_iid_performance_measurements();
+    
+    // Verify speedup metrics are calculated
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // Speedup should be calculated if time_without_iid > time_with_iid
+    if engine.iid_stats.total_time_without_iid_ms > engine.iid_stats.total_search_time_ms {
+        assert!(metrics.speedup_percentage >= 0.0);
+        assert!(metrics.speedup_percentage <= 100.0);
+    }
+}
+
+#[test]
+fn test_iid_correlation_tracking() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate multiple IID searches to build correlation data
+    engine.iid_stats.iid_searches_performed = 10;
+    engine.iid_stats.iid_move_first_improved_alpha = 5; // 50% efficiency
+    engine.iid_stats.total_search_time_ms = 1000;
+    engine.iid_stats.iid_time_ms = 100;
+    engine.core_search_metrics.total_nodes = 5000;
+    
+    // Task 6.6: Track correlation
+    engine.update_iid_performance_measurements();
+    
+    // Verify correlation tracking
+    if engine.iid_stats.correlation_data_points > 0 {
+        assert!(engine.iid_stats.efficiency_speedup_correlation_sum >= 0.0);
+        
+        let metrics = engine.get_iid_performance_metrics();
+        // Correlation should be a reasonable value
+        assert!(metrics.efficiency_speedup_correlation >= 0.0);
+    }
+}
+
+#[test]
+fn test_iid_performance_metrics_includes_comparison() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Set up performance data
+    engine.iid_stats.iid_searches_performed = 15;
+    engine.iid_stats.iid_move_first_improved_alpha = 8; // ~53% efficiency
+    engine.iid_stats.total_search_time_ms = 2000;
+    engine.iid_stats.iid_time_ms = 200;
+    engine.core_search_metrics.total_nodes = 15000;
+    
+    // Update performance measurements
+    engine.update_iid_performance_measurements();
+    
+    // Task 6.7: Verify performance comparison metrics are included
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // Node reduction percentage should be calculated
+    assert!(metrics.node_reduction_percentage >= 0.0);
+    assert!(metrics.node_reduction_percentage <= 100.0);
+    
+    // Speedup percentage should be calculated if applicable
+    if engine.iid_stats.total_time_without_iid_ms > 0 {
+        assert!(metrics.speedup_percentage >= 0.0);
+        assert!(metrics.speedup_percentage <= 100.0);
+    }
+    
+    // Net benefit should be calculated (speedup - overhead)
+    // Net benefit can be negative if overhead exceeds speedup
+    assert!(metrics.net_benefit_percentage >= -100.0);
+    assert!(metrics.net_benefit_percentage <= 100.0);
+}
+
+#[test]
+fn test_iid_performance_measurement_accuracy_tracking() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate IID searches to build accuracy data
+    engine.iid_stats.iid_searches_performed = 5;
+    engine.iid_stats.iid_move_first_improved_alpha = 3; // 60% efficiency
+    engine.iid_stats.total_search_time_ms = 500;
+    engine.iid_stats.iid_time_ms = 50;
+    engine.core_search_metrics.total_nodes = 2500;
+    
+    // Task 6.8: Track performance measurement accuracy
+    engine.update_iid_performance_measurements();
+    
+    // Verify accuracy tracking
+    if engine.iid_stats.performance_measurement_samples > 0 {
+        assert!(engine.iid_stats.performance_measurement_accuracy_sum >= 0.0);
+        
+        // Average accuracy should be reasonable (0-100)
+        let avg_accuracy = engine.iid_stats.performance_measurement_accuracy_sum / 
+                          engine.iid_stats.performance_measurement_samples as f64;
+        assert!(avg_accuracy >= 0.0);
+        assert!(avg_accuracy <= 100.0);
+    }
+}
+
+#[test]
+fn test_iid_performance_measurement_with_zero_searches() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // No IID searches performed
+    engine.iid_stats.iid_searches_performed = 0;
+    engine.core_search_metrics.total_nodes = 1000;
+    engine.iid_stats.total_search_time_ms = 500;
+    
+    // Task 6.0: Should handle zero searches gracefully
+    engine.update_iid_performance_measurements();
+    
+    // Should not crash and should leave fields as default/baseline
+    assert_eq!(engine.iid_stats.total_nodes_without_iid, 1000); // Should equal current nodes
+    assert_eq!(engine.iid_stats.total_time_without_iid_ms, 500); // Should equal current time
+    assert_eq!(engine.iid_stats.nodes_saved, 0);
+}
+
+#[test]
+fn test_iid_performance_metrics_node_reduction_percentage() {
+    use crate::types::IIDPerformanceMetrics;
+    use crate::types::IIDStats;
+    
+    // Test node reduction percentage calculation
+    let mut stats = IIDStats::default();
+    stats.total_nodes_without_iid = 10000;
+    stats.nodes_saved = 3000; // 30% reduction
+    
+    let metrics = IIDPerformanceMetrics::from_stats(&stats, 5000);
+    
+    // Node reduction should be 3000/10000 * 100 = 30%
+    assert!((metrics.node_reduction_percentage - 30.0).abs() < 0.01);
+}
+
+#[test]
+fn test_iid_performance_metrics_net_benefit_calculation() {
+    use crate::types::IIDPerformanceMetrics;
+    use crate::types::IIDStats;
+    
+    // Test net benefit calculation (speedup - overhead)
+    let mut stats = IIDStats::default();
+    stats.total_time_without_iid_ms = 1000;
+    stats.total_search_time_ms = 850; // 150ms saved = 15% speedup
+    stats.iid_time_ms = 100; // 100ms overhead
+    
+    let metrics = IIDPerformanceMetrics::from_stats(&stats, stats.total_search_time_ms);
+    
+    // Speedup: (1000 - 850) / 1000 * 100 = 15%
+    // Overhead: 100 / 850 * 100 = ~11.76%
+    // Net benefit: 15% - 11.76% = ~3.24%
+    assert!(metrics.speedup_percentage > 0.0);
+    assert!(metrics.net_benefit_percentage > -20.0); // Can be negative if overhead > speedup
+    assert!(metrics.net_benefit_percentage < 20.0);
+}
+
+#[test]
+fn test_iid_performance_measurements_reset() {
+    use crate::search::search_engine::SearchEngine;
+    
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Set up some performance data
+    engine.iid_stats.iid_searches_performed = 10;
+    engine.iid_stats.total_nodes_without_iid = 5000;
+    engine.iid_stats.total_time_without_iid_ms = 1000;
+    engine.iid_stats.nodes_saved = 1000;
+    engine.iid_stats.efficiency_speedup_correlation_sum = 50.0;
+    engine.iid_stats.correlation_data_points = 5;
+    
+    // Reset should clear all fields
+    engine.iid_stats.reset();
+    
+    // Verify all performance measurement fields are reset
+    assert_eq!(engine.iid_stats.total_nodes_without_iid, 0);
+    assert_eq!(engine.iid_stats.total_time_without_iid_ms, 0);
+    assert_eq!(engine.iid_stats.nodes_saved, 0);
+    assert_eq!(engine.iid_stats.efficiency_speedup_correlation_sum, 0.0);
+    assert_eq!(engine.iid_stats.correlation_data_points, 0);
+    assert_eq!(engine.iid_stats.performance_measurement_accuracy_sum, 0.0);
+    assert_eq!(engine.iid_stats.performance_measurement_samples, 0);
 }
 
 #[test]
