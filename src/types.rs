@@ -976,6 +976,7 @@ pub struct QuiescenceConfig {
     pub enable_adaptive_pruning: bool,   // Enable adaptive pruning (adjusts margins based on depth/move count)
     pub futility_margin: i32,            // Futility pruning margin
     pub delta_margin: i32,               // Delta pruning margin
+    pub high_value_capture_threshold: i32, // Threshold for high-value captures (excluded from futility pruning)
     pub tt_size_mb: usize,               // Quiescence TT size in MB
     pub tt_cleanup_threshold: usize,     // Threshold for TT cleanup
 }
@@ -991,6 +992,7 @@ impl Default for QuiescenceConfig {
             enable_adaptive_pruning: true, // Adaptive pruning enabled by default
             futility_margin: 200,
             delta_margin: 100,
+            high_value_capture_threshold: 200, // High-value captures (200+ centipawns) excluded from futility pruning
             tt_size_mb: 4,                // 4MB for quiescence TT
             tt_cleanup_threshold: 10000,  // Clean up when TT has 10k entries
         }
@@ -1030,6 +1032,12 @@ impl QuiescenceConfig {
         if self.tt_cleanup_threshold > 1000000 {
             return Err("tt_cleanup_threshold should not exceed 1,000,000".to_string());
         }
+        if self.high_value_capture_threshold < 0 {
+            return Err("high_value_capture_threshold must be non-negative".to_string());
+        }
+        if self.high_value_capture_threshold > 1000 {
+            return Err("high_value_capture_threshold should not exceed 1000".to_string());
+        }
         Ok(())
     }
 
@@ -1038,6 +1046,7 @@ impl QuiescenceConfig {
         self.max_depth = self.max_depth.clamp(1, 20);
         self.futility_margin = self.futility_margin.clamp(0, 1000);
         self.delta_margin = self.delta_margin.clamp(0, 1000);
+        self.high_value_capture_threshold = self.high_value_capture_threshold.clamp(0, 1000);
         self.tt_size_mb = self.tt_size_mb.clamp(1, 1024);
         self.tt_cleanup_threshold = self.tt_cleanup_threshold.clamp(1, 1000000);
         self
@@ -1071,6 +1080,8 @@ pub struct QuiescenceStats {
     pub check_moves_found: u64,
     pub capture_moves_found: u64,
     pub promotion_moves_found: u64,
+    pub checks_excluded_from_futility: u64, // Checks excluded from futility pruning
+    pub high_value_captures_excluded_from_futility: u64, // High-value captures excluded from futility pruning
 }
 
 impl QuiescenceStats {

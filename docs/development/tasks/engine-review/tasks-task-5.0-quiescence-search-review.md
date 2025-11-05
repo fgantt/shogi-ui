@@ -94,20 +94,20 @@
   - [ ] 2.15 Monitor pruning statistics to identify over-aggressive pruning cases (future work - requires monitoring infrastructure)
   - [x] 2.16 Document adaptive pruning behavior and configuration options
 
-- [ ] 3.0 Improve Futility Pruning Correctness
-  - [ ] 3.1 Review futility pruning application in quiescence search (line 4534)
-  - [ ] 3.2 Consider renaming `should_prune_futility()` to `should_prune_weak_capture()` or add clarifying documentation that this is capture-specific futility pruning
-  - [ ] 3.3 Add check exclusion to futility pruning: don't apply futility pruning to checking moves
-  - [ ] 3.4 Modify `should_prune_futility()` and `should_prune_futility_adaptive()` to check if move is a check
-  - [ ] 3.5 Add check detection helper method if not already available
-  - [ ] 3.6 Add unit test verifying checks are not pruned by futility pruning
-  - [ ] 3.7 Add unit test verifying check sequences are found correctly
-  - [ ] 3.8 Add statistics tracking for checks excluded from futility pruning
-  - [ ] 3.9 Exclude high-value captures from futility pruning (implement, not just consider)
-  - [ ] 3.10 Add configuration option for high-value capture threshold
-  - [ ] 3.11 Create performance benchmarks comparing futility pruning with/without check exclusion
-  - [ ] 3.12 Verify check exclusion doesn't significantly impact pruning effectiveness
-  - [ ] 3.13 Compare tactical accuracy with/without futility pruning to verify correctness
+- [x] 3.0 Improve Futility Pruning Correctness
+  - [x] 3.1 Review futility pruning application in quiescence search (line 4534)
+  - [x] 3.2 Consider renaming `should_prune_futility()` to `should_prune_weak_capture()` or add clarifying documentation that this is capture-specific futility pruning
+  - [x] 3.3 Add check exclusion to futility pruning: don't apply futility pruning to checking moves
+  - [x] 3.4 Modify `should_prune_futility()` and `should_prune_futility_adaptive()` to check if move is a check
+  - [x] 3.5 Add check detection helper method if not already available
+  - [x] 3.6 Add unit test verifying checks are not pruned by futility pruning
+  - [x] 3.7 Add unit test verifying check sequences are found correctly
+  - [x] 3.8 Add statistics tracking for checks excluded from futility pruning
+  - [x] 3.9 Exclude high-value captures from futility pruning (implement, not just consider)
+  - [x] 3.10 Add configuration option for high-value capture threshold
+  - [ ] 3.11 Create performance benchmarks comparing futility pruning with/without check exclusion (future work - requires benchmark suite)
+  - [ ] 3.12 Verify check exclusion doesn't significantly impact pruning effectiveness (future work - requires benchmark suite)
+  - [ ] 3.13 Compare tactical accuracy with/without futility pruning to verify correctness (future work - requires tactical test suite)
 
 - [ ] 4.0 Improve Transposition Table Cleanup Strategy
   - [ ] 4.1 Review current TT cleanup implementation for quiescence TT

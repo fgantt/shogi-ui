@@ -5116,8 +5116,30 @@ impl SearchEngine {
     }
 
     /// Check if a move should be pruned using futility pruning
+    /// 
+    /// Note: This is capture-specific futility pruning. Standard futility pruning
+    /// typically excludes captures and checks, but this implementation applies
+    /// futility pruning to weak captures while excluding:
+    /// - Checking moves (critical for tactical sequences)
+    /// - High-value captures (important tactical moves)
+    /// 
+    /// This helps maintain tactical accuracy while still pruning weak captures.
     fn should_prune_futility(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8) -> bool {
         if !self.quiescence_config.enable_futility_pruning {
+            return false;
+        }
+
+        // Don't prune checking moves - they're critical for tactical sequences
+        if move_.gives_check {
+            self.quiescence_stats.checks_excluded_from_futility += 1;
+            return false;
+        }
+
+        let material_gain = move_.captured_piece_value();
+        
+        // Don't prune high-value captures - they're important tactical moves
+        if material_gain >= self.quiescence_config.high_value_capture_threshold {
+            self.quiescence_stats.high_value_captures_excluded_from_futility += 1;
             return false;
         }
 
@@ -5127,7 +5149,6 @@ impl SearchEngine {
             _ => self.quiescence_config.futility_margin * 2,
         };
         
-        let material_gain = move_.captured_piece_value();
         stand_pat + material_gain + futility_margin <= alpha
     }
 
@@ -5137,9 +5158,24 @@ impl SearchEngine {
     /// - Depth: More aggressive pruning at deeper depths (already depth-dependent)
     /// - Move count: More selective pruning when there are many moves available
     /// 
+    /// Excludes checking moves and high-value captures to maintain tactical accuracy.
     /// This provides better pruning effectiveness while maintaining tactical accuracy.
     fn should_prune_futility_adaptive(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8, move_count: usize) -> bool {
         if !self.quiescence_config.enable_futility_pruning {
+            return false;
+        }
+
+        // Don't prune checking moves - they're critical for tactical sequences
+        if move_.gives_check {
+            self.quiescence_stats.checks_excluded_from_futility += 1;
+            return false;
+        }
+
+        let material_gain = move_.captured_piece_value();
+        
+        // Don't prune high-value captures - they're important tactical moves
+        if material_gain >= self.quiescence_config.high_value_capture_threshold {
+            self.quiescence_stats.high_value_captures_excluded_from_futility += 1;
             return false;
         }
 
@@ -5158,7 +5194,6 @@ impl SearchEngine {
             futility_margin += (depth as i32 - 4) * 25; // More aggressive at deeper depths
         }
         
-        let material_gain = move_.captured_piece_value();
         stand_pat + material_gain + futility_margin <= alpha
     }
     /// Check if a move should be extended in quiescence search

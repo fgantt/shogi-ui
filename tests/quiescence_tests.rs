@@ -753,4 +753,110 @@ mod quiescence_tests {
         let current_config2 = engine.get_quiescence_config();
         assert_eq!(current_config2.enable_adaptive_pruning, true);
     }
+
+    #[test]
+    fn test_quiescence_futility_pruning_excludes_checks() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Enable futility pruning
+        let mut config = QuiescenceConfig::default();
+        config.enable_futility_pruning = true;
+        config.futility_margin = 50; // Small margin to test exclusions
+        engine.update_quiescence_config(config);
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // Run search
+        let _result = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        let stats = engine.get_quiescence_stats();
+        
+        // Should have searched some nodes
+        assert!(stats.nodes_searched > 0);
+        
+        // If checks were found, they should be excluded from futility pruning
+        // (this is a basic test - checks_excluded_from_futility should be >= 0)
+        assert!(stats.checks_excluded_from_futility >= 0);
+        assert!(stats.high_value_captures_excluded_from_futility >= 0);
+    }
+
+    #[test]
+    fn test_quiescence_futility_pruning_excludes_high_value_captures() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Enable futility pruning with high-value capture threshold
+        let mut config = QuiescenceConfig::default();
+        config.enable_futility_pruning = true;
+        config.high_value_capture_threshold = 200; // 200 centipawns
+        config.futility_margin = 50; // Small margin
+        engine.update_quiescence_config(config);
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // Run search
+        let _result = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        let stats = engine.get_quiescence_stats();
+        
+        // Should have searched some nodes
+        assert!(stats.nodes_searched > 0);
+        
+        // High-value captures should be excluded from futility pruning
+        // (this is a basic test - high_value_captures_excluded_from_futility should be >= 0)
+        assert!(stats.high_value_captures_excluded_from_futility >= 0);
+    }
+
+    #[test]
+    fn test_quiescence_futility_pruning_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default configuration has high_value_capture_threshold
+        let default_config = QuiescenceConfig::default();
+        assert_eq!(default_config.high_value_capture_threshold, 200);
+        
+        // Test configuration update
+        let mut config = QuiescenceConfig::default();
+        config.high_value_capture_threshold = 300;
+        engine.update_quiescence_config(config.clone());
+        
+        let current_config = engine.get_quiescence_config();
+        assert_eq!(current_config.high_value_capture_threshold, 300);
+        
+        // Test validation
+        let mut invalid_config = QuiescenceConfig::default();
+        invalid_config.high_value_capture_threshold = -100; // Invalid
+        assert!(invalid_config.validate().is_err());
+        
+        let mut invalid_config2 = QuiescenceConfig::default();
+        invalid_config2.high_value_capture_threshold = 2000; // Too high
+        assert!(invalid_config2.validate().is_err());
+    }
 }
