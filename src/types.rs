@@ -3746,6 +3746,26 @@ pub struct IIDConfig {
     pub tt_move_max_age_for_skip: u32,
     /// Task 10.4: Track which preset was used (optional, None if manually configured)
     pub preset: Option<IIDPreset>,
+    /// Task 11.8: Enable game phase-based depth adjustment (default: false)
+    pub enable_game_phase_based_adjustment: bool,
+    /// Task 11.8: Enable material-based depth adjustment (default: false)
+    pub enable_material_based_adjustment: bool,
+    /// Task 11.8: Enable time-based depth adjustment (default: false)
+    pub enable_time_based_adjustment: bool,
+    /// Task 11.8: Depth multiplier for opening phase (default: 1.0)
+    pub game_phase_opening_multiplier: f64,
+    /// Task 11.8: Depth multiplier for middlegame phase (default: 1.0)
+    pub game_phase_middlegame_multiplier: f64,
+    /// Task 11.8: Depth multiplier for endgame phase (default: 1.0)
+    pub game_phase_endgame_multiplier: f64,
+    /// Task 11.8: Material-based depth multiplier (default: 1.0, applied when material > threshold)
+    pub material_depth_multiplier: f64,
+    /// Task 11.8: Material threshold for material-based adjustment (default: 20 pieces)
+    pub material_threshold_for_adjustment: u8,
+    /// Task 11.8: Time-based depth multiplier (default: 1.0, applied when time is low)
+    pub time_depth_multiplier: f64,
+    /// Task 11.8: Time threshold for time-based adjustment (default: 0.15 = 15% remaining)
+    pub time_threshold_for_adjustment: f64,
 }
 
 /// Task 10.1: IID configuration presets
@@ -3829,6 +3849,17 @@ impl Default for IIDConfig {
             tt_move_max_age_for_skip: 100, // Only skip IID if TT entry age <= 100
             // Task 10.4: No preset by default (manually configured)
             preset: None,
+            // Task 11.8: Advanced depth strategies configuration (disabled by default)
+            enable_game_phase_based_adjustment: false,
+            enable_material_based_adjustment: false,
+            enable_time_based_adjustment: false,
+            game_phase_opening_multiplier: 1.0,
+            game_phase_middlegame_multiplier: 1.0,
+            game_phase_endgame_multiplier: 1.0,
+            material_depth_multiplier: 1.0,
+            material_threshold_for_adjustment: 20,
+            time_depth_multiplier: 1.0,
+            time_threshold_for_adjustment: 0.15,
         }
     }
 }
@@ -3867,6 +3898,17 @@ impl IIDConfig {
                 tt_move_min_depth_for_skip: 4,     // Higher threshold (more conservative)
                 tt_move_max_age_for_skip: 80,      // Lower age threshold (more conservative)
                 preset: Some(IIDPreset::Conservative),
+                // Task 11.8: Advanced depth strategies (disabled for conservative preset)
+                enable_game_phase_based_adjustment: false,
+                enable_material_based_adjustment: false,
+                enable_time_based_adjustment: false,
+                game_phase_opening_multiplier: 1.0,
+                game_phase_middlegame_multiplier: 1.0,
+                game_phase_endgame_multiplier: 1.0,
+                material_depth_multiplier: 1.0,
+                material_threshold_for_adjustment: 20,
+                time_depth_multiplier: 1.0,
+                time_threshold_for_adjustment: 0.15,
             },
             IIDPreset::Aggressive => Self {
                 enabled: true,
@@ -3898,6 +3940,17 @@ impl IIDConfig {
                 tt_move_min_depth_for_skip: 2,      // Lower threshold (more aggressive)
                 tt_move_max_age_for_skip: 120,      // Higher age threshold (more aggressive)
                 preset: Some(IIDPreset::Aggressive),
+                // Task 11.8: Advanced depth strategies (enabled for aggressive preset)
+                enable_game_phase_based_adjustment: true,
+                enable_material_based_adjustment: true,
+                enable_time_based_adjustment: true,
+                game_phase_opening_multiplier: 1.2,  // Deeper IID in opening
+                game_phase_middlegame_multiplier: 1.0,
+                game_phase_endgame_multiplier: 0.8,  // Shallower IID in endgame
+                material_depth_multiplier: 1.1,      // Deeper IID in material-rich positions
+                material_threshold_for_adjustment: 20,
+                time_depth_multiplier: 0.9,          // Shallower IID when time is low
+                time_threshold_for_adjustment: 0.15,
             },
             IIDPreset::Balanced => Self {
                 enabled: true,
@@ -3929,6 +3982,17 @@ impl IIDConfig {
                 tt_move_min_depth_for_skip: 3,
                 tt_move_max_age_for_skip: 100,
                 preset: Some(IIDPreset::Balanced),
+                // Task 11.8: Advanced depth strategies (disabled for balanced preset)
+                enable_game_phase_based_adjustment: false,
+                enable_material_based_adjustment: false,
+                enable_time_based_adjustment: false,
+                game_phase_opening_multiplier: 1.0,
+                game_phase_middlegame_multiplier: 1.0,
+                game_phase_endgame_multiplier: 1.0,
+                material_depth_multiplier: 1.0,
+                material_threshold_for_adjustment: 20,
+                time_depth_multiplier: 1.0,
+                time_threshold_for_adjustment: 0.15,
             },
         };
         
@@ -4068,6 +4132,20 @@ pub struct IIDStats {
     /// Task 7.11: IID effectiveness by complexity level
     /// Maps complexity level to (successful_searches, total_searches, nodes_saved, time_saved)
     pub complexity_effectiveness: std::collections::HashMap<PositionComplexity, (u64, u64, u64, u64)>,
+    /// Task 11.9: Advanced depth strategy effectiveness tracking
+    /// Game phase-based adjustment usage (times applied, times effective)
+    pub game_phase_adjustment_applied: u64,
+    pub game_phase_adjustment_effective: u64,
+    /// Task 11.9: Material-based adjustment usage
+    pub material_adjustment_applied: u64,
+    pub material_adjustment_effective: u64,
+    /// Task 11.9: Time-based adjustment usage
+    pub time_adjustment_applied: u64,
+    pub time_adjustment_effective: u64,
+    /// Task 11.9: Track which game phase adjustments were applied
+    pub game_phase_opening_adjustments: u64,
+    pub game_phase_middlegame_adjustments: u64,
+    pub game_phase_endgame_adjustments: u64,
 }
 
 impl IIDStats {
@@ -5502,6 +5580,17 @@ impl EngineConfig {
                     tt_move_max_age_for_skip: 100,
                     // Task 10.4: No preset by default
                     preset: None,
+                    // Task 11.8: Advanced depth strategies (disabled for aggressive preset)
+                    enable_game_phase_based_adjustment: false,
+                    enable_material_based_adjustment: false,
+                    enable_time_based_adjustment: false,
+                    game_phase_opening_multiplier: 1.0,
+                    game_phase_middlegame_multiplier: 1.0,
+                    game_phase_endgame_multiplier: 1.0,
+                    material_depth_multiplier: 1.0,
+                    material_threshold_for_adjustment: 20,
+                    time_depth_multiplier: 1.0,
+                    time_threshold_for_adjustment: 0.15,
                 },
                 tt_size_mb: 128,
                 debug_logging: false,
@@ -5613,6 +5702,17 @@ impl EngineConfig {
                     tt_move_max_age_for_skip: 100,
                     // Task 10.4: No preset by default
                     preset: None,
+                    // Task 11.8: Advanced depth strategies (disabled for conservative preset)
+                    enable_game_phase_based_adjustment: false,
+                    enable_material_based_adjustment: false,
+                    enable_time_based_adjustment: false,
+                    game_phase_opening_multiplier: 1.0,
+                    game_phase_middlegame_multiplier: 1.0,
+                    game_phase_endgame_multiplier: 1.0,
+                    material_depth_multiplier: 1.0,
+                    material_threshold_for_adjustment: 20,
+                    time_depth_multiplier: 1.0,
+                    time_threshold_for_adjustment: 0.15,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,

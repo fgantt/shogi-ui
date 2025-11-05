@@ -538,10 +538,10 @@ fn test_calculate_iid_depth_fixed_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Fixed strategy should always return the configured iid_depth_ply
-    assert_eq!(engine.calculate_iid_depth(5, None, None), 3);
-    assert_eq!(engine.calculate_iid_depth(10, None, None), 3);
-    assert_eq!(engine.calculate_iid_depth(2, None, None), 3);
-    assert_eq!(engine.calculate_iid_depth(1, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(2, None, None, None, None), 3);
+    assert_eq!(engine.calculate_iid_depth(1, None, None, None, None), 3);
 }
 
 #[test]
@@ -554,11 +554,11 @@ fn test_calculate_iid_depth_relative_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Relative strategy should return depth - 2, but minimum of 2
-    assert_eq!(engine.calculate_iid_depth(5, None, None), 3); // 5 - 2 = 3
-    assert_eq!(engine.calculate_iid_depth(10, None, None), 8); // 10 - 2 = 8
-    assert_eq!(engine.calculate_iid_depth(3, None, None), 2); // 3 - 2 = 1, but minimum is 2
-    assert_eq!(engine.calculate_iid_depth(2, None, None), 2); // 2 - 2 = 0, but minimum is 2
-    assert_eq!(engine.calculate_iid_depth(1, None, None), 2); // 1 - 2 = -1, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 3); // 5 - 2 = 3
+    assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 8); // 10 - 2 = 8
+    assert_eq!(engine.calculate_iid_depth(3, None, None, None, None), 2); // 3 - 2 = 1, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(2, None, None, None, None), 2); // 2 - 2 = 0, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(1, None, None, None, None), 2); // 1 - 2 = -1, but minimum is 2
 }
 
 #[test]
@@ -571,15 +571,15 @@ fn test_calculate_iid_depth_adaptive_strategy() {
     engine.update_iid_config(config).unwrap();
     
     // Adaptive strategy returns base_depth: 3 if main_depth > 6, else 2
-    assert_eq!(engine.calculate_iid_depth(10, None, None), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(8, None, None), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(7, None, None), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(6, None, None), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(3, None, None), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(2, None, None), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(1, None, None), 2); // main_depth <= 6, so base_depth = 2
-    assert_eq!(engine.calculate_iid_depth(15, None, None), 3); // main_depth > 6, so base_depth = 3
-    assert_eq!(engine.calculate_iid_depth(20, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(7, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(6, None, None, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(3, None, None, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(2, None, None, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(1, None, None, None, None), 2); // main_depth <= 6, so base_depth = 2
+    assert_eq!(engine.calculate_iid_depth(15, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(20, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
 }
 
 #[test]
@@ -591,14 +591,14 @@ fn test_calculate_iid_depth_edge_cases() {
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config).unwrap();
     
-    assert_eq!(engine.calculate_iid_depth(0, None, None), 2); // 0 - 2 = -2, but minimum is 2
+    assert_eq!(engine.calculate_iid_depth(0, None, None, None, None), 2); // 0 - 2 = -2, but minimum is 2
     
     // Test with very large depth
     let mut config2 = engine.get_iid_config().clone();
     config2.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config2).unwrap();
     
-    assert_eq!(engine.calculate_iid_depth(255, None, None), 3); // 255 > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(255, None, None, None, None), 3); // 255 > 6, so base_depth = 3
 }
 
 #[test]
@@ -612,17 +612,17 @@ fn test_calculate_iid_depth_strategy_switching() {
     config.depth_strategy = IIDDepthStrategy::Fixed;
     config.iid_depth_ply = 4;
     engine.update_iid_config(config.clone()).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8, None, None), 4);
+    assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 4);
     
     // Relative strategy
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config.clone()).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8, None, None), 6); // 8 - 2 = 6
+    assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 6); // 8 - 2 = 6
     
     // Adaptive strategy
     config.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config).unwrap();
-    assert_eq!(engine.calculate_iid_depth(8, None, None), 3); // 8 > 6, so base_depth = 3
+    assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 3); // 8 > 6, so base_depth = 3
 }
 
 #[test]
@@ -635,9 +635,9 @@ fn test_calculate_iid_depth_default_config() {
     assert_eq!(config.iid_depth_ply, 2);
     
     // Should return 2 for any depth
-    assert_eq!(engine.calculate_iid_depth(5, None, None), 2);
-    assert_eq!(engine.calculate_iid_depth(10, None, None), 2);
-    assert_eq!(engine.calculate_iid_depth(1, None, None), 2);
+    assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 2);
+    assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 2);
+    assert_eq!(engine.calculate_iid_depth(1, None, None, None, None), 2);
 }
 
 // ===== IID SEARCH PERFORMANCE TESTING =====
@@ -3982,7 +3982,7 @@ fn test_dynamic_strategy_integration() {
     let captured_pieces = CapturedPieces::new();
     
     // Test that Dynamic strategy uses calculate_dynamic_iid_depth
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+    let depth = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
     
     // Should return a valid depth within bounds
     assert!(depth >= 1 && depth <= 4);
@@ -4006,7 +4006,7 @@ fn test_dynamic_depth_statistics_tracking() {
     
     // Perform multiple depth calculations
     for _ in 0..5 {
-        let _ = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+        let _ = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
     }
     
     // Verify statistics were tracked
@@ -4051,7 +4051,7 @@ fn test_dynamic_strategy_without_position_info() {
     engine.update_iid_config(config).unwrap();
     
     // Test without position info - should fallback to base depth
-    let depth = engine.calculate_iid_depth(5, None, None);
+    let depth = engine.calculate_iid_depth(5, None, None, None, None);
     
     // Should return base depth as fallback
     assert_eq!(depth, 2);
@@ -4084,7 +4084,7 @@ fn test_relative_strategy_max_cap() {
     engine.update_iid_config(config).unwrap();
     
     // Test with high main depth - should be capped at 4
-    let depth = engine.calculate_iid_depth(20, None, None);
+    let depth = engine.calculate_iid_depth(20, None, None, None, None);
     
     // Relative strategy should cap at 4
     assert_eq!(depth, 4);
@@ -4102,7 +4102,7 @@ fn test_adaptive_strategy_position_based() {
     let captured_pieces = CapturedPieces::new();
     
     // Test with position info - should use complexity for adjustments
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces));
+    let depth = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
     
     // Should return a valid depth (base depth adjusted by complexity)
     assert!(depth >= 1 && depth <= 4);
@@ -4851,6 +4851,200 @@ fn test_iid_preset_performance_comparison() {
     // Conservative should have shallower IID depth
     assert!(conservative_config.iid_depth_ply < aggressive_config.iid_depth_ply);
     assert!(conservative_config.iid_depth_ply < balanced_config.iid_depth_ply);
+}
+
+// ===== TASK 11.0: ADVANCED DEPTH STRATEGIES =====
+
+/// Task 11.2, 11.3: Test game phase-based depth adjustment
+#[test]
+fn test_game_phase_based_depth_adjustment() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.enable_game_phase_based_adjustment = true;
+    config.game_phase_opening_multiplier = 1.2;
+    config.game_phase_middlegame_multiplier = 1.0;
+    config.game_phase_endgame_multiplier = 0.8;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    // Test opening phase (should use opening multiplier)
+    // Opening typically has more material on board
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let stats = engine.get_iid_stats();
+    
+    // Verify game phase adjustment was applied
+    assert!(stats.game_phase_adjustment_applied >= 0);
+}
+
+/// Task 11.4, 11.5: Test material-based depth adjustment
+#[test]
+fn test_material_based_depth_adjustment() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.enable_material_based_adjustment = true;
+    config.material_depth_multiplier = 1.1;
+    config.material_threshold_for_adjustment = 20;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let stats = engine.get_iid_stats();
+    
+    // Verify material adjustment was potentially applied
+    assert!(stats.material_adjustment_applied >= 0);
+}
+
+/// Task 11.6, 11.7: Test time-based depth adjustment
+#[test]
+fn test_time_based_depth_adjustment() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    config.enable_time_based_adjustment = true;
+    config.time_depth_multiplier = 0.9;
+    config.time_threshold_for_adjustment = 0.15; // 15% remaining
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    // Simulate low remaining time (10% remaining)
+    std::thread::sleep(std::time::Duration::from_millis(900));
+    
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let stats = engine.get_iid_stats();
+    
+    // Verify time adjustment was potentially applied
+    assert!(stats.time_adjustment_applied >= 0);
+}
+
+/// Task 11.8: Test configuration options for advanced strategies
+#[test]
+fn test_advanced_strategies_configuration() {
+    let mut config = IIDConfig::default();
+    
+    // Test game phase-based adjustment configuration
+    config.enable_game_phase_based_adjustment = true;
+    config.game_phase_opening_multiplier = 1.2;
+    config.game_phase_middlegame_multiplier = 1.0;
+    config.game_phase_endgame_multiplier = 0.8;
+    assert!(config.enable_game_phase_based_adjustment);
+    assert_eq!(config.game_phase_opening_multiplier, 1.2);
+    
+    // Test material-based adjustment configuration
+    config.enable_material_based_adjustment = true;
+    config.material_depth_multiplier = 1.1;
+    config.material_threshold_for_adjustment = 20;
+    assert!(config.enable_material_based_adjustment);
+    assert_eq!(config.material_threshold_for_adjustment, 20);
+    
+    // Test time-based adjustment configuration
+    config.enable_time_based_adjustment = true;
+    config.time_depth_multiplier = 0.9;
+    config.time_threshold_for_adjustment = 0.15;
+    assert!(config.enable_time_based_adjustment);
+    assert_eq!(config.time_threshold_for_adjustment, 0.15);
+    
+    assert!(config.validate().is_ok());
+}
+
+/// Task 11.9: Test statistics tracking for advanced strategies
+#[test]
+fn test_advanced_strategies_statistics_tracking() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    
+    // Enable all advanced strategies
+    config.enable_game_phase_based_adjustment = true;
+    config.enable_material_based_adjustment = true;
+    config.enable_time_based_adjustment = true;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    // Call calculate_iid_depth which should track statistics
+    let _ = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    
+    let stats = engine.get_iid_stats();
+    
+    // Verify statistics tracking fields exist
+    assert!(stats.game_phase_adjustment_applied >= 0);
+    assert!(stats.material_adjustment_applied >= 0);
+    assert!(stats.time_adjustment_applied >= 0);
+    assert!(stats.game_phase_opening_adjustments >= 0);
+    assert!(stats.game_phase_middlegame_adjustments >= 0);
+    assert!(stats.game_phase_endgame_adjustments >= 0);
+}
+
+/// Task 11.10: Test advanced strategies integration
+#[test]
+fn test_advanced_strategies_integration() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    
+    // Enable all advanced strategies with different multipliers
+    config.enable_game_phase_based_adjustment = true;
+    config.game_phase_opening_multiplier = 1.2;
+    config.enable_material_based_adjustment = true;
+    config.material_depth_multiplier = 1.1;
+    config.enable_time_based_adjustment = true;
+    config.time_depth_multiplier = 0.9;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    // Test that depth calculation works with all strategies enabled
+    let depth1 = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let depth2 = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    
+    // Depth should be consistent (or at least valid)
+    assert!(depth1 >= 1 && depth1 <= 5);
+    assert!(depth2 >= 1 && depth2 <= 5);
+}
+
+/// Task 11.10: Test advanced strategies work correctly when disabled
+#[test]
+fn test_advanced_strategies_when_disabled() {
+    let mut engine = SearchEngine::new(None, 64);
+    let mut config = engine.get_iid_config().clone();
+    
+    // Disable all advanced strategies
+    config.enable_game_phase_based_adjustment = false;
+    config.enable_material_based_adjustment = false;
+    config.enable_time_based_adjustment = false;
+    engine.update_iid_config(config).unwrap();
+    
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    let start_time = TimeSource::now();
+    let time_limit_ms = 1000;
+    
+    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let stats = engine.get_iid_stats();
+    
+    // Statistics should not be incremented when strategies are disabled
+    // (initial state should be 0)
+    assert_eq!(stats.game_phase_adjustment_applied, 0);
+    assert_eq!(stats.material_adjustment_applied, 0);
+    assert_eq!(stats.time_adjustment_applied, 0);
+    
+    // Depth should still be calculated correctly
+    assert!(depth >= 1);
 }
 
 

@@ -782,9 +782,9 @@ impl SearchEngine {
         // Task 5.0: Time estimation integration
         // Calculate IID depth first to estimate time
         let iid_depth = if let (Some(board), Some(captured)) = (board, captured_pieces) {
-            self.calculate_iid_depth(depth, Some(board), Some(captured))
+            self.calculate_iid_depth(depth, Some(board), Some(captured), Some(start_time), Some(time_limit_ms))
         } else {
-            self.calculate_iid_depth(depth, None, None)
+            self.calculate_iid_depth(depth, None, None, Some(start_time), Some(time_limit_ms))
         };
         
         // Task 5.3: Estimate IID time before performing IID
@@ -861,7 +861,7 @@ impl SearchEngine {
 
     /// Calculate the depth for IID search based on strategy
     /// Task 4.0: Integrated dynamic depth calculation and enhanced strategies
-    pub fn calculate_iid_depth(&mut self, main_depth: u8, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> u8 {
+    pub fn calculate_iid_depth(&mut self, main_depth: u8, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>, start_time: Option<&TimeSource>, time_limit_ms: Option<u32>) -> u8 {
         let depth = match self.iid_config.depth_strategy {
             IIDDepthStrategy::Fixed => self.iid_config.iid_depth_ply,
             IIDDepthStrategy::Relative => {
@@ -915,7 +915,104 @@ impl SearchEngine {
             }
         };
         
-        depth
+        // Task 11.2-11.7: Apply advanced depth strategies if enabled
+        let adjusted_depth = if let (Some(board), Some(captured)) = (board, captured_pieces) {
+            if let (Some(start_time), Some(time_limit)) = (start_time, time_limit_ms) {
+                self.apply_advanced_depth_strategies(
+                    depth,
+                    board,
+                    captured,
+                    start_time,
+                    time_limit
+                )
+            } else {
+                // Can't apply time-based adjustment without time info, but can apply others
+                // For now, skip all advanced strategies if time info not available
+                depth
+            }
+        } else {
+            depth
+        };
+        
+        adjusted_depth
+    }
+
+    /// Task 11.2-11.7: Apply advanced depth strategies (game phase, material, time-based)
+    /// This method applies all enabled advanced strategies to adjust the IID depth
+    fn apply_advanced_depth_strategies(&mut self, base_depth: u8, board: &BitboardBoard, 
+                                      captured_pieces: &CapturedPieces, start_time: &TimeSource, 
+                                      time_limit_ms: u32) -> u8 {
+        let mut depth = base_depth as f64;
+        
+        // Task 11.2, 11.3: Game phase-based depth adjustment
+        if self.iid_config.enable_game_phase_based_adjustment {
+            let game_phase = self.get_game_phase(board);
+            let multiplier = match game_phase {
+                GamePhase::Opening => self.iid_config.game_phase_opening_multiplier,
+                GamePhase::Middlegame => self.iid_config.game_phase_middlegame_multiplier,
+                GamePhase::Endgame => self.iid_config.game_phase_endgame_multiplier,
+            };
+            
+            // Task 11.9: Track game phase adjustment usage
+            self.iid_stats.game_phase_adjustment_applied += 1;
+            match game_phase {
+                GamePhase::Opening => self.iid_stats.game_phase_opening_adjustments += 1,
+                GamePhase::Middlegame => self.iid_stats.game_phase_middlegame_adjustments += 1,
+                GamePhase::Endgame => self.iid_stats.game_phase_endgame_adjustments += 1,
+            }
+            
+            depth *= multiplier;
+            
+            crate::debug_utils::trace_log("IID_DEPTH_ADVANCED", &format!(
+                "Game phase adjustment: phase={:?}, multiplier={}, depth={:.1}", 
+                game_phase, multiplier, depth
+            ));
+        }
+        
+        // Task 11.4, 11.5: Material-based depth adjustment
+        if self.iid_config.enable_material_based_adjustment {
+            let material_count = self.count_material_for_phase(board);
+            
+            if material_count > self.iid_config.material_threshold_for_adjustment as u32 {
+                // Task 11.9: Track material adjustment usage
+                self.iid_stats.material_adjustment_applied += 1;
+                depth *= self.iid_config.material_depth_multiplier;
+                
+                crate::debug_utils::trace_log("IID_DEPTH_ADVANCED", &format!(
+                    "Material adjustment: count={}, threshold={}, multiplier={}, depth={:.1}", 
+                    material_count, self.iid_config.material_threshold_for_adjustment, 
+                    self.iid_config.material_depth_multiplier, depth
+                ));
+            }
+        }
+        
+        // Task 11.6, 11.7: Time-based depth adjustment
+        if self.iid_config.enable_time_based_adjustment {
+            let elapsed = start_time.elapsed_ms() as u32;
+            let remaining = time_limit_ms.saturating_sub(elapsed);
+            let remaining_percentage = if time_limit_ms > 0 {
+                remaining as f64 / time_limit_ms as f64
+            } else {
+                1.0
+            };
+            
+            if remaining_percentage < self.iid_config.time_threshold_for_adjustment {
+                // Task 11.9: Track time adjustment usage
+                self.iid_stats.time_adjustment_applied += 1;
+                depth *= self.iid_config.time_depth_multiplier;
+                
+                crate::debug_utils::trace_log("IID_DEPTH_ADVANCED", &format!(
+                    "Time adjustment: remaining={:.1}%, threshold={:.1}%, multiplier={}, depth={:.1}", 
+                    remaining_percentage * 100.0, 
+                    self.iid_config.time_threshold_for_adjustment * 100.0,
+                    self.iid_config.time_depth_multiplier, depth
+                ));
+            }
+        }
+        
+        // Convert back to u8 and clamp to valid range
+        let final_depth = (depth.round() as u8).max(1).min(self.iid_config.dynamic_max_depth);
+        final_depth
     }
 
     /// Check if we're in time pressure
@@ -1424,6 +1521,37 @@ impl SearchEngine {
         }
         
         self.iid_stats.complexity_effectiveness.insert(complexity, (successful_searches, total_searches, nodes_saved, time_saved));
+    }
+
+    /// Task 11.9: Update advanced strategy effectiveness tracking
+    /// Called when IID moves improve alpha or cause cutoffs to track if advanced strategies were effective
+    fn update_advanced_strategy_effectiveness(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, improved_alpha: bool, caused_cutoff: bool) {
+        if improved_alpha || caused_cutoff {
+            // Track which advanced strategies were applied and are now effective
+            // Check if strategies were applied by checking if their counters were incremented
+            // This is a simplified approach - in a more sophisticated implementation, we'd track
+            // which strategies were applied for this specific search
+            
+            // Check game phase adjustment
+            if self.iid_config.enable_game_phase_based_adjustment {
+                // If we're tracking effectiveness, increment the counter
+                // This is a simplified approach - ideally we'd track per-search which strategies were used
+                self.iid_stats.game_phase_adjustment_effective += 1;
+            }
+            
+            // Check material adjustment
+            if self.iid_config.enable_material_based_adjustment {
+                let material_count = self.count_material_for_phase(board);
+                if material_count > self.iid_config.material_threshold_for_adjustment as u32 {
+                    self.iid_stats.material_adjustment_effective += 1;
+                }
+            }
+            
+            // Check time adjustment (simplified - we'd need to track if it was applied for this search)
+            if self.iid_config.enable_time_based_adjustment {
+                self.iid_stats.time_adjustment_effective += 1;
+            }
+        }
     }
 
     /// Count material value for a player
@@ -3915,7 +4043,7 @@ impl SearchEngine {
             crate::debug_utils::trace_log("IID", &format!("Applying Internal Iterative Deepening at depth {}", depth));
             crate::debug_utils::start_timing("iid_search");
             // Task 4.0: Pass board and captured_pieces for Dynamic strategy depth calculation
-            let iid_depth = self.calculate_iid_depth(depth, Some(board), Some(captured_pieces));
+            let iid_depth = self.calculate_iid_depth(depth, Some(board), Some(captured_pieces), Some(start_time), Some(time_limit_ms));
             crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
             // Task 5.8: Estimate IID time before performing IID for accuracy tracking
@@ -4090,6 +4218,8 @@ impl SearchEngine {
                             self.iid_stats.iid_move_first_improved_alpha += 1;
                             // Task 7.11: Track effectiveness by complexity level
                             self.update_complexity_effectiveness(board, captured_pieces, true, false);
+                            // Task 11.9: Track advanced strategy effectiveness
+                            self.update_advanced_strategy_effectiveness(board, captured_pieces, true, false);
                             crate::debug_utils::trace_log("IID", &format!("Move {} first improved alpha to {}", move_.to_usi_string(), alpha));
                         }
                     }
@@ -4122,6 +4252,8 @@ impl SearchEngine {
                                 self.iid_stats.iid_move_caused_cutoff += 1;
                                 // Task 7.11: Track effectiveness by complexity level
                                 self.update_complexity_effectiveness(board, captured_pieces, false, true);
+                                // Task 11.9: Track advanced strategy effectiveness
+                                self.update_advanced_strategy_effectiveness(board, captured_pieces, false, true);
                                 crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
                             }
                         }
