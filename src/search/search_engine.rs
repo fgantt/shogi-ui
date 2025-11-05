@@ -636,6 +636,7 @@ impl SearchEngine {
     /// Determine if IID should be applied at this position
     /// Task 4.9: Added board and captured_pieces for adaptive minimum depth
     /// Task 5.0: Integrated time estimation into decision logic
+    /// Task 7.7, 7.8: Use complexity assessment for skip conditions and adaptive move count threshold
     pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> bool {
         // 1. IID must be enabled
         if !self.iid_config.enabled { 
@@ -643,12 +644,19 @@ impl SearchEngine {
             return false; 
         }
         
+        // Task 7.7, 7.8: Assess complexity once and reuse throughout the method
+        // (for adaptive min depth, skip conditions, and adaptive move count threshold)
+        let complexity_opt = if let (Some(board), Some(captured)) = (board, captured_pieces) {
+            Some(self.assess_position_complexity(board, captured))
+        } else {
+            None
+        };
+        
         // Task 4.9: Review minimum depth threshold - make adaptive if enabled
         let min_depth_threshold = if self.iid_config.adaptive_min_depth {
             // Task 4.9: Adaptive minimum depth based on position characteristics
             // Lower threshold for complex positions where IID is more valuable
-            if let (Some(board), Some(captured)) = (board, captured_pieces) {
-                let complexity = self.assess_position_complexity(board, captured);
+            if let Some(complexity) = complexity_opt {
                 match complexity {
                     PositionComplexity::High => {
                         let reduced = (self.iid_config.min_depth as i32).saturating_sub(1).max(2);
@@ -675,10 +683,49 @@ impl SearchEngine {
             return false; 
         }
         
+        // Task 7.7: Use complexity assessment in IID skip conditions (skip IID in very simple positions)
+        // Task 7.8: Adaptive move count threshold based on position type (tactical vs quiet)
+        
+        // Task 7.8: Calculate adaptive move count threshold
+        let move_count_threshold = if self.iid_config.enable_adaptive_move_count_threshold {
+            if let Some(complexity) = complexity_opt {
+                match complexity {
+                    PositionComplexity::High => {
+                        // Tactical positions: allow more moves (IID is still valuable)
+                        ((self.iid_config.max_legal_moves as f64) * self.iid_config.tactical_move_count_multiplier) as usize
+                    },
+                    PositionComplexity::Low => {
+                        // Quiet positions: reduce threshold (fewer moves, but IID still useful)
+                        ((self.iid_config.max_legal_moves as f64) * self.iid_config.quiet_move_count_multiplier) as usize
+                    },
+                    _ => {
+                        // Medium complexity: use default threshold
+                        self.iid_config.max_legal_moves
+                    },
+                }
+            } else {
+                self.iid_config.max_legal_moves
+            }
+        } else {
+            self.iid_config.max_legal_moves
+        };
+        
         // 4. Reasonable number of legal moves (avoid IID in tactical positions)
-        if legal_moves.len() > self.iid_config.max_legal_moves { 
+        // Task 7.8: Now uses adaptive threshold
+        if legal_moves.len() > move_count_threshold { 
             self.iid_stats.positions_skipped_move_count += 1;
             return false; 
+        }
+        
+        // Task 7.7: Skip IID in very simple positions (complexity might be Low with very few pieces)
+        if let Some(complexity) = complexity_opt {
+            // Very simple positions: skip IID to save time (no tactical complexity)
+            if complexity == PositionComplexity::Low && legal_moves.len() < 5 {
+                // Only skip if position is both Low complexity AND has very few moves
+                // (indicates very simple/quiet position where IID overhead isn't worth it)
+                self.iid_stats.positions_skipped_depth += 1;
+                return false;
+            }
         }
         
         // 5. Not in quiescence search
@@ -1095,14 +1142,35 @@ impl SearchEngine {
         self.adapt_iid_configuration();
     }
     /// Assess position complexity for dynamic IID depth adjustment
-    fn assess_position_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> PositionComplexity {
+    /// Task 7.0: Enhanced with material balance, piece activity, threat detection, and game phase
+    fn assess_position_complexity(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> PositionComplexity {
         let mut complexity_score = 0;
 
-        // Count material imbalance
+        // Task 7.2: Enhanced material balance analysis
         let black_material = self.count_material(board, Player::Black, captured_pieces);
         let white_material = self.count_material(board, Player::White, captured_pieces);
         let material_imbalance = (black_material - white_material).abs();
-        complexity_score += (material_imbalance / 100) as usize; // Scale down
+        
+        // Enhanced: More nuanced material imbalance assessment
+        // Large imbalances indicate endgame or tactical positions
+        if material_imbalance > 1000 {
+            complexity_score += (material_imbalance / 100) as usize; // Significant imbalance
+        } else if material_imbalance > 500 {
+            complexity_score += (material_imbalance / 150) as usize; // Moderate imbalance
+        } else {
+            complexity_score += (material_imbalance / 200) as usize; // Small imbalance
+        }
+
+        // Task 7.3: Enhanced piece activity metrics
+        let black_activity = self.calculate_piece_activity(board, Player::Black);
+        let white_activity = self.calculate_piece_activity(board, Player::White);
+        let activity_difference = (black_activity - white_activity).abs();
+        // Activity difference indicates position complexity (pieces actively fighting)
+        complexity_score += (activity_difference / 20) as usize;
+        
+        // Task 7.3: Count pieces in center (more central pieces = more complex)
+        let center_pieces = self.count_center_pieces(board);
+        complexity_score += center_pieces / 2;
 
         // Count tactical pieces (Rooks, Bishops, Knights)
         let tactical_pieces = self.count_tactical_pieces(board);
@@ -1116,22 +1184,146 @@ impl SearchEngine {
         let king_safety_issues = self.assess_king_safety_complexity(board);
         complexity_score += king_safety_issues;
 
-        // Check for tactical threats (checks, captures, promotions)
+        // Task 7.4: Enhanced threat detection
         let tactical_threats = self.count_tactical_threats(board);
         complexity_score += tactical_threats;
-
+        
+        // Task 7.4: Check for checks (positions in check are more complex)
+        let check_count = self.count_checks(board, captured_pieces);
+        complexity_score += check_count * 3; // Checks are very significant
+        
+        // Task 7.4: Count pieces under attack
+        let pieces_under_attack = self.count_pieces_under_attack(board, captured_pieces);
+        complexity_score += pieces_under_attack / 2;
+        
+        // Task 7.5: Game phase detection integration
+        let game_phase = self.get_game_phase(board);
+        match game_phase {
+            GamePhase::Opening => {
+                // Openings are generally less complex (quiet development)
+                complexity_score = (complexity_score as f64 * 0.9) as usize;
+            },
+            GamePhase::Middlegame => {
+                // Middlegames are most complex (full tactical battles)
+                // No adjustment
+            },
+            GamePhase::Endgame => {
+                // Endgames can be complex tactically but simpler positionally
+                complexity_score = (complexity_score as f64 * 1.1) as usize; // Slightly increase
+            },
+        }
+        
+        // Task 7.9: Use configurable thresholds
+        let threshold_low = self.iid_config.complexity_threshold_low;
+        let threshold_medium = self.iid_config.complexity_threshold_medium;
+        
         // Categorize complexity
-        if complexity_score < 10 {
+        let complexity = if complexity_score < threshold_low {
             PositionComplexity::Low
-        } else if complexity_score < 25 {
+        } else if complexity_score < threshold_medium {
             PositionComplexity::Medium
         } else {
             PositionComplexity::High
+        };
+        
+        // Task 7.10: Track complexity distribution
+        match complexity {
+            PositionComplexity::Low => self.iid_stats.complexity_distribution_low += 1,
+            PositionComplexity::Medium => self.iid_stats.complexity_distribution_medium += 1,
+            PositionComplexity::High => self.iid_stats.complexity_distribution_high += 1,
+            PositionComplexity::Unknown => self.iid_stats.complexity_distribution_unknown += 1,
         }
+        
+        // Task 7.12: Debug logging
+        #[cfg(feature = "verbose-debug")]
+        crate::debug_utils::trace_log("IID_COMPLEXITY", &format!(
+            "Position complexity: {:?}, score={}, material_imbalance={}, activity_diff={}, threats={}, checks={}, game_phase={:?}",
+            complexity, complexity_score, material_imbalance, activity_difference, tactical_threats, check_count, game_phase
+        ));
+        
+        complexity
+    }
+    
+    /// Task 7.3: Count pieces in center squares (rows 3-5, cols 3-5)
+    fn count_center_pieces(&self, board: &BitboardBoard) -> usize {
+        let mut count = 0;
+        for row in 3..=5 {
+            for col in 3..=5 {
+                if board.get_piece(Position::new(row, col)).is_some() {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+    
+    /// Task 7.4: Count number of checks in position
+    fn count_checks(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> usize {
+        let mut check_count = 0;
+        
+        // Check if either player is in check
+        if board.is_king_in_check(Player::Black, captured_pieces) {
+            check_count += 1;
+        }
+        if board.is_king_in_check(Player::White, captured_pieces) {
+            check_count += 1;
+        }
+        
+        check_count
+    }
+    
+    /// Task 7.4: Count pieces that are under attack
+    fn count_pieces_under_attack(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> usize {
+        let generator = MoveGenerator::new();
+        let mut attacked_count = 0;
+        
+        // Get all moves for both players
+        let black_moves = generator.generate_legal_moves(board, Player::Black, captured_pieces);
+        let white_moves = generator.generate_legal_moves(board, Player::White, captured_pieces);
+        
+        // Check which pieces are attacked
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    // Check if this piece is attacked by opponent
+                    let attacker_moves = if piece.player == Player::Black {
+                        &white_moves
+                    } else {
+                        &black_moves
+                    };
+                    
+                    // Check if any attacker move captures this piece
+                    if attacker_moves.iter().any(|mv| mv.is_capture && mv.to == pos) {
+                        attacked_count += 1;
+                    }
+                }
+            }
+        }
+        
+        attacked_count
+    }
+    
+    /// Task 7.11: Update IID effectiveness by complexity level
+    fn update_complexity_effectiveness(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, improved_alpha: bool, caused_cutoff: bool) {
+        let complexity = self.assess_position_complexity(board, captured_pieces);
+        let (mut successful_searches, mut total_searches, mut nodes_saved, mut time_saved) = 
+            *self.iid_stats.complexity_effectiveness.get(&complexity).unwrap_or(&(0, 0, 0, 0));
+        
+        total_searches += 1;
+        if improved_alpha || caused_cutoff {
+            successful_searches += 1;
+            // Use overall nodes saved and IID time for now (these would ideally come from actual IID search metrics)
+            nodes_saved += self.iid_stats.nodes_saved; // Use overall nodes saved for now
+            time_saved += self.iid_stats.iid_time_ms; // Use overall IID time for now
+        }
+        
+        self.iid_stats.complexity_effectiveness.insert(complexity, (successful_searches, total_searches, nodes_saved, time_saved));
     }
 
     /// Count material value for a player
-    fn count_material(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> i32 {
+    /// Task 7.2: Enhanced to properly count captured pieces
+    fn count_material(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         let mut material = 0;
         
         // Count pieces on board
@@ -1145,12 +1337,21 @@ impl SearchEngine {
             }
         }
 
-        // Add captured pieces (simplified for now)
-        // TODO: Implement proper captured pieces counting
-        // let captured = captured_pieces.get_captured_pieces(player);
-        // for piece_type in captured.keys() {
-        //     material += self.get_piece_value(*piece_type) * captured[piece_type] as i32;
-        // }
+        // Task 7.2: Add captured pieces (pieces in hand)
+        let captured_pieces_list = match player {
+            Player::Black => &captured_pieces.black,
+            Player::White => &captured_pieces.white,
+        };
+        
+        for piece_type in [
+            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
+            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook,
+        ] {
+            let count = captured_pieces_list.iter().filter(|&&p| p == piece_type).count();
+            if count > 0 {
+                material += self.get_piece_value(piece_type) * count as i32;
+            }
+        }
 
         material
     }
@@ -1245,26 +1446,40 @@ impl SearchEngine {
     }
     /// Calculate dynamic IID depth based on position complexity
     /// Task 4.0: Enhanced to work independently for Dynamic strategy and use configuration options
-    pub fn calculate_dynamic_iid_depth(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, base_depth: u8) -> u8 {
+    /// Task 7.6: Integrate enhanced complexity assessment into depth calculation
+    pub fn calculate_dynamic_iid_depth(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, base_depth: u8) -> u8 {
         // Task 4.6: Always assess position complexity for Dynamic strategy
+        // Task 7.6: Now uses enhanced complexity assessment
         let complexity = self.assess_position_complexity(board, captured_pieces);
         
-        let depth = match complexity {
-            PositionComplexity::Low => {
-                // Simple positions: reduce IID depth to save time
-                base_depth.saturating_sub(1).max(1)
-            },
-            PositionComplexity::Medium => {
-                // Medium positions: use base depth
-                base_depth
-            },
-            PositionComplexity::High => {
-                // Complex positions: increase IID depth for better move ordering
-                base_depth.saturating_add(1)
-            },
-            PositionComplexity::Unknown => {
-                // Unknown complexity: use base depth as fallback
-                base_depth
+        // Task 7.9: Use configurable depth adjustments if enabled
+        let depth = if self.iid_config.enable_complexity_based_adjustments {
+            let adjustment = match complexity {
+                PositionComplexity::Low => self.iid_config.complexity_depth_adjustment_low,
+                PositionComplexity::Medium => self.iid_config.complexity_depth_adjustment_medium,
+                PositionComplexity::High => self.iid_config.complexity_depth_adjustment_high,
+                PositionComplexity::Unknown => 0,
+            };
+            ((base_depth as i32) + (adjustment as i32)).max(1) as u8
+        } else {
+            // Fallback to original logic if complexity-based adjustments disabled
+            match complexity {
+                PositionComplexity::Low => {
+                    // Simple positions: reduce IID depth to save time
+                    base_depth.saturating_sub(1).max(1)
+                },
+                PositionComplexity::Medium => {
+                    // Medium positions: use base depth
+                    base_depth
+                },
+                PositionComplexity::High => {
+                    // Complex positions: increase IID depth for better move ordering
+                    base_depth.saturating_add(1)
+                },
+                PositionComplexity::Unknown => {
+                    // Unknown complexity: use base depth as fallback
+                    base_depth
+                }
             }
         };
         
@@ -1602,7 +1817,8 @@ impl SearchEngine {
     }
 
     /// Estimate IID time based on position complexity and depth
-    pub fn estimate_iid_time(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, depth: u8) -> u32 {
+    /// Task 7.6: Now uses enhanced complexity assessment
+    pub fn estimate_iid_time(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, depth: u8) -> u32 {
         let complexity = self.assess_position_complexity(board, captured_pieces);
         let base_time = match complexity {
             PositionComplexity::Low => 5,    // 5ms for simple positions
@@ -3561,6 +3777,8 @@ impl SearchEngine {
                         if self.moves_equal(move_, iid_mv) && !iid_move_improved_alpha {
                             iid_move_improved_alpha = true;
                             self.iid_stats.iid_move_first_improved_alpha += 1;
+                            // Task 7.11: Track effectiveness by complexity level
+                            self.update_complexity_effectiveness(board, captured_pieces, true, false);
                             crate::debug_utils::trace_log("IID", &format!("Move {} first improved alpha to {}", move_.to_usi_string(), alpha));
                         }
                     }
@@ -3591,6 +3809,8 @@ impl SearchEngine {
                         if let Some(iid_mv) = &iid_move {
                             if self.moves_equal(move_, iid_mv) {
                                 self.iid_stats.iid_move_caused_cutoff += 1;
+                                // Task 7.11: Track effectiveness by complexity level
+                                self.update_complexity_effectiveness(board, captured_pieces, false, true);
                                 crate::debug_utils::trace_log("IID", &format!("Move {} caused beta cutoff", move_.to_usi_string()));
                             }
                         }

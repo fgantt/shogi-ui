@@ -2849,7 +2849,7 @@ pub enum MoveType {
 }
 
 /// Position complexity levels for adaptive LMR
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PositionComplexity {
     Low,
     Medium,
@@ -3716,6 +3716,24 @@ pub struct IIDConfig {
     pub max_estimated_iid_time_ms: u32,
     /// Task 5.4: Use percentage of remaining time for max_estimated_iid_time_ms (if enabled, max_estimated_iid_time_ms is percentage)
     pub max_estimated_iid_time_percentage: bool,
+    /// Task 7.9: Enable complexity-based IID adjustments
+    pub enable_complexity_based_adjustments: bool,
+    /// Task 7.9: Complexity threshold for Low complexity (default: 10)
+    pub complexity_threshold_low: usize,
+    /// Task 7.9: Complexity threshold for Medium complexity (default: 25)
+    pub complexity_threshold_medium: usize,
+    /// Task 7.9: Depth adjustment for Low complexity positions (default: -1)
+    pub complexity_depth_adjustment_low: i8,
+    /// Task 7.9: Depth adjustment for Medium complexity positions (default: 0)
+    pub complexity_depth_adjustment_medium: i8,
+    /// Task 7.9: Depth adjustment for High complexity positions (default: +1)
+    pub complexity_depth_adjustment_high: i8,
+    /// Task 7.8: Enable adaptive move count threshold based on position type
+    pub enable_adaptive_move_count_threshold: bool,
+    /// Task 7.8: Move count threshold multiplier for tactical positions (default: 1.5)
+    pub tactical_move_count_multiplier: f64,
+    /// Task 7.8: Move count threshold multiplier for quiet positions (default: 0.8)
+    pub quiet_move_count_multiplier: f64,
 }
 
 impl Default for IIDConfig {
@@ -3736,6 +3754,17 @@ impl Default for IIDConfig {
             // Task 5.4: Time estimation configuration
             max_estimated_iid_time_ms: 50,  // Default: 50ms maximum estimated IID time
             max_estimated_iid_time_percentage: false, // Use absolute time, not percentage
+            // Task 7.9: Complexity-based adjustments configuration
+            enable_complexity_based_adjustments: true, // Enable by default
+            complexity_threshold_low: 10,  // Threshold for Low complexity
+            complexity_threshold_medium: 25, // Threshold for Medium complexity
+            complexity_depth_adjustment_low: -1, // Reduce depth for Low complexity
+            complexity_depth_adjustment_medium: 0, // No change for Medium complexity
+            complexity_depth_adjustment_high: 1, // Increase depth for High complexity
+            // Task 7.8: Adaptive move count threshold configuration
+            enable_adaptive_move_count_threshold: true, // Enable by default
+            tactical_move_count_multiplier: 1.5, // Allow more moves in tactical positions
+            quiet_move_count_multiplier: 0.8, // Reduce threshold for quiet positions
         }
     }
 }
@@ -3841,6 +3870,14 @@ pub struct IIDStats {
     pub performance_measurement_accuracy_sum: f64,
     /// Task 6.8: Number of performance measurement samples
     pub performance_measurement_samples: u64,
+    /// Task 7.10: Position complexity distribution tracking
+    pub complexity_distribution_low: u64,
+    pub complexity_distribution_medium: u64,
+    pub complexity_distribution_high: u64,
+    pub complexity_distribution_unknown: u64,
+    /// Task 7.11: IID effectiveness by complexity level
+    /// Maps complexity level to (successful_searches, total_searches, nodes_saved, time_saved)
+    pub complexity_effectiveness: std::collections::HashMap<PositionComplexity, (u64, u64, u64, u64)>,
 }
 
 impl IIDStats {
@@ -5346,6 +5383,17 @@ impl EngineConfig {
                     // Task 5.4: Time estimation configuration
                     max_estimated_iid_time_ms: 50,
                     max_estimated_iid_time_percentage: false,
+                    // Task 7.9: Complexity-based adjustments configuration
+                    enable_complexity_based_adjustments: true,
+                    complexity_threshold_low: 10,
+                    complexity_threshold_medium: 25,
+                    complexity_depth_adjustment_low: -1,
+                    complexity_depth_adjustment_medium: 0,
+                    complexity_depth_adjustment_high: 1,
+                    // Task 7.8: Adaptive move count threshold configuration
+                    enable_adaptive_move_count_threshold: true,
+                    tactical_move_count_multiplier: 1.5,
+                    quiet_move_count_multiplier: 0.8,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,
