@@ -2766,6 +2766,7 @@ impl MoveOrdering {
 
         // OPTIMIZATION: Inline critical scoring functions to reduce call overhead
         // 1. Capture scoring (highest priority for tactical moves)
+        // Use MVV/LVA for capture scoring (SEE is used separately when board is available)
         let score_capture = if move_.is_capture {
             let capture_score = self.score_capture_move_inline(move_);
             score += capture_score;
@@ -3029,10 +3030,13 @@ impl MoveOrdering {
     /// Internal SEE calculation implementation
     /// 
     /// This method performs the actual SEE calculation by simulating
-    /// the exchange sequence.
+    /// the exchange sequence. SEE (Static Exchange Evaluation) calculates
+    /// the net material gain/loss from a capture exchange.
     fn calculate_see_internal(&self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> i32 {
-        let _from = move_.from.unwrap_or(Position::new(0, 0));
+        let from = move_.from.unwrap_or(Position::new(0, 0));
         let to = move_.to;
+        let moving_player = move_.player;
+        let opponent = moving_player.opposite();
         
         // Get the piece being captured
         let captured_piece = match &move_.captured_piece {
@@ -3040,11 +3044,32 @@ impl MoveOrdering {
             None => return 0, // No capture, no SEE value
         };
         
-        // Start with the value of the captured piece
-        let mut gain = captured_piece.piece_type.base_value();
+        // Get the attacking piece (the piece making the capture)
+        let attacking_piece = match board.get_piece(from) {
+            Some(piece) => piece.clone(),
+            None => {
+                // Drop move - use the piece type from the move
+                crate::types::Piece::new(move_.piece_type, moving_player)
+            }
+        };
         
-        // Find all attackers and defenders of the target square
-        let (attackers, defenders) = self.find_attackers_defenders(to, board);
+        // Start with the value of the captured piece, subtract the attacker's value
+        let mut gain = captured_piece.piece_type.base_value() - attacking_piece.piece_type.base_value();
+        
+        // Find all pieces that can attack the target square
+        let (all_attackers, _) = self.find_attackers_defenders(to, board);
+        
+        // Separate attackers and defenders by player
+        // Attackers: pieces from the moving player that can continue the exchange
+        // Defenders: pieces from the opponent that can recapture
+        let attackers: Vec<crate::types::Piece> = all_attackers.iter()
+            .filter(|(pos, p)| p.player == moving_player && *pos != from)
+            .map(|(_, p)| p.clone())
+            .collect();
+        let defenders: Vec<crate::types::Piece> = all_attackers.iter()
+            .filter(|(_, p)| p.player == opponent)
+            .map(|(_, p)| p.clone())
+            .collect();
         
         // If no defenders, it's a winning capture
         if defenders.is_empty() {
@@ -3052,38 +3077,52 @@ impl MoveOrdering {
         }
         
         // Simulate the exchange sequence
-        let mut attackers_list = attackers;
-        let mut defenders_list = defenders;
-        let mut to_move = Player::Black; // Start with attacker
+        // The exchange continues with the least valuable piece at each step
+        // We alternate between attackers and defenders
+        // After the initial capture, the opponent recaptures, then we can recapture, etc.
         
-        // Continue until no more pieces can capture
-        while !attackers_list.is_empty() {
-            // Find the least valuable attacker
-            let attacker_index = self.find_least_valuable_attacker(&attackers_list, to_move);
-            if attacker_index.is_none() {
+        // Start with defenders (opponent recaptures after the initial capture)
+        let mut current_side = defenders; // Current side's pieces (opponent recaptures first)
+        let mut other_side = attackers; // Other side's pieces (we can recapture)
+        
+        // Continue the exchange until one side runs out of pieces
+        loop {
+            // Find the least valuable piece on the current side
+            if current_side.is_empty() {
+                break; // Current side can't continue, exchange ends (we win)
+            }
+            
+            // Find least valuable piece
+            let mut min_value = i32::MAX;
+            let mut min_index = None;
+            for (index, piece) in current_side.iter().enumerate() {
+                let value = piece.piece_type.base_value();
+                if value < min_value {
+                    min_value = value;
+                    min_index = Some(index);
+                }
+            }
+            
+            if min_index.is_none() {
                 break;
             }
             
-            let attacker = attackers_list.remove(attacker_index.unwrap());
+            let capturing_piece = current_side.remove(min_index.unwrap());
             
-            // If this is the first move, we already accounted for the captured piece
-            if attackers_list.len() == defenders_list.len() {
-                // This is the original move, already accounted for
-                to_move = to_move.opposite();
-                continue;
+            // Subtract the value of the capturing piece (we lose this piece)
+            gain -= capturing_piece.piece_type.base_value();
+            
+            // If the other side can't recapture, we win the exchange
+            if other_side.is_empty() {
+                break;
             }
             
-            // Add the value of the captured piece (the previous attacker)
-            gain += attacker.piece_type.base_value();
+            // Switch sides - the other side now captures
+            std::mem::swap(&mut current_side, &mut other_side);
             
-            // Remove the captured piece from defenders
-            if let Some(defender_index) = self.find_piece_in_list(&defenders_list, &attacker) {
-                defenders_list.remove(defender_index);
-            }
-            
-            // Switch sides
-            to_move = to_move.opposite();
-            std::mem::swap(&mut attackers_list, &mut defenders_list);
+            // Add the value of the captured piece (the piece that was just captured)
+            // This is the piece we just captured from the opponent
+            gain += capturing_piece.piece_type.base_value();
         }
         
         gain
@@ -3091,22 +3130,179 @@ impl MoveOrdering {
 
     /// Find all attackers and defenders of a given square
     /// 
-    /// This method identifies all pieces that can attack or defend
-    /// the target square, organized by player.
-    fn find_attackers_defenders(&self, _square: Position, _board: &crate::bitboards::BitboardBoard) -> (Vec<crate::types::Piece>, Vec<crate::types::Piece>) {
-        let attackers = Vec::new();
-        let defenders = Vec::new();
+    /// This method identifies all pieces that can attack the target square.
+    /// For SEE calculation, we need to know which pieces can capture on this square.
+    /// 
+    /// Returns (all_attackers, empty) where all_attackers contains all pieces
+    /// that can attack the square. The caller will separate them by player.
+    /// 
+    /// Note: We return pieces with their positions implicitly tracked by the iteration order.
+    /// For SEE, we need to track which specific piece (by position) attacks the square.
+    fn find_attackers_defenders(&self, square: Position, board: &crate::bitboards::BitboardBoard) -> (Vec<(Position, crate::types::Piece)>, Vec<(Position, crate::types::Piece)>) {
+        let mut all_attackers = Vec::new();
         
-        // This is a simplified implementation that would need to be
-        // integrated with the actual board representation and attack generation
-        // For now, we'll return empty vectors as placeholders
+        // Iterate through all squares on the board to find pieces
+        for row in 0..9 {
+            for col in 0..9 {
+                let position = Position::new(row, col);
+                
+                // Skip the target square itself (we're evaluating captures on it)
+                if position == square {
+                    continue;
+                }
+                
+                // Check if there's a piece at this position
+                if let Some(piece) = board.get_piece(position) {
+                    // Check if this specific piece attacks the target square
+                    if self.piece_attacks_square_internal(piece, position, square, board) {
+                        all_attackers.push((position, piece.clone()));
+                    }
+                }
+            }
+        }
         
-        // TODO: Implement actual attacker/defender finding using:
-        // 1. Board piece lookup
-        // 2. Attack pattern generation
-        // 3. Ray casting for sliding pieces
+        // Sort by piece value (ascending) - least valuable first for SEE
+        all_attackers.sort_by_key(|(_, p)| p.piece_type.base_value());
         
-        (attackers, defenders)
+        // Return all attackers with their positions; the caller will separate by player
+        (all_attackers, Vec::new())
+    }
+    
+    /// Internal helper to check if a specific piece attacks a square
+    /// 
+    /// This duplicates the logic from BitboardBoard::piece_attacks_square
+    /// since that method is private.
+    fn piece_attacks_square_internal(
+        &self,
+        piece: &crate::types::Piece,
+        from_pos: Position,
+        target_pos: Position,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> bool {
+        let player = piece.player;
+        
+        // Early bounds check
+        if from_pos.row >= 9 || from_pos.col >= 9 || target_pos.row >= 9 || target_pos.col >= 9 {
+            return false;
+        }
+
+        match piece.piece_type {
+            crate::types::PieceType::Pawn => {
+                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                let new_row = from_pos.row as i8 + dir;
+                if new_row >= 0 && new_row < 9 {
+                    let attack_pos = Position::new(new_row as u8, from_pos.col);
+                    return attack_pos == target_pos;
+                }
+                false
+            },
+            crate::types::PieceType::Knight => {
+                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
+                for (dr, dc) in move_offsets.iter() {
+                    let new_row = from_pos.row as i8 + dr;
+                    let new_col = from_pos.col as i8 + dc;
+                    if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
+                        let attack_pos = Position::new(new_row as u8, new_col as u8);
+                        if attack_pos == target_pos {
+                            return true;
+                        }
+                    }
+                }
+                false
+            },
+            crate::types::PieceType::Lance => {
+                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                self.check_ray_attack_internal(from_pos, target_pos, (dir, 0), board)
+            },
+            crate::types::PieceType::Rook => {
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
+            },
+            crate::types::PieceType::Bishop => {
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
+            },
+            crate::types::PieceType::PromotedBishop => {
+                // Bishop + King moves
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board) ||
+                self.check_king_attack_internal(from_pos, target_pos, player)
+            },
+            crate::types::PieceType::PromotedRook => {
+                // Rook + King moves
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board) ||
+                self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board) ||
+                self.check_king_attack_internal(from_pos, target_pos, player)
+            },
+            crate::types::PieceType::Silver | 
+            crate::types::PieceType::Gold | 
+            crate::types::PieceType::King | 
+            crate::types::PieceType::PromotedPawn | 
+            crate::types::PieceType::PromotedLance | 
+            crate::types::PieceType::PromotedKnight | 
+            crate::types::PieceType::PromotedSilver => {
+                self.check_king_attack_internal(from_pos, target_pos, player)
+            }
+        }
+    }
+    
+    /// Check if a ray from from_pos in direction (dr, dc) hits target_pos
+    fn check_ray_attack_internal(
+        &self,
+        from_pos: Position,
+        target_pos: Position,
+        direction: (i8, i8),
+        board: &crate::bitboards::BitboardBoard,
+    ) -> bool {
+        let (dr, dc) = direction;
+        let mut current_pos = from_pos;
+        
+        loop {
+            let new_row = current_pos.row as i8 + dr;
+            let new_col = current_pos.col as i8 + dc;
+            
+            // Out of bounds
+            if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
+                break;
+            }
+            
+            current_pos = Position::new(new_row as u8, new_col as u8);
+            
+            // Found target
+            if current_pos == target_pos {
+                return true;
+            }
+            
+            // Blocked by a piece
+            if board.is_square_occupied(current_pos) {
+                break;
+            }
+        }
+        
+        false
+    }
+    
+    /// Check if a king-like piece attacks target_pos
+    fn check_king_attack_internal(
+        &self,
+        from_pos: Position,
+        target_pos: Position,
+        _player: crate::types::Player,
+    ) -> bool {
+        let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
+        let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
+        
+        // King attacks adjacent squares (including diagonals)
+        row_diff <= 1 && col_diff <= 1 && (row_diff != 0 || col_diff != 0)
     }
 
     /// Find the least valuable attacker in a list
@@ -5932,8 +6128,8 @@ impl MoveOrdering {
 
         // Task 3.0: Sort moves by score with all heuristics prioritization, including IID move
         ordered_moves.sort_by(|a, b| {
-            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves);
-            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves);
+            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves, board);
+            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves, board);
             score_b.cmp(&score_a)
         });
 
@@ -5969,7 +6165,7 @@ impl MoveOrdering {
     /// 3. Killer moves (medium-high priority)
     /// 4. History moves (medium priority)
     /// 5. Regular moves (normal priority)
-    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move]) -> i32 {
+    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move], board: &crate::bitboards::BitboardBoard) -> i32 {
         // Task 3.0: Check if this is the IID move (highest priority)
         if let Some(iid_mv) = iid_move {
             if self.moves_equal(move_, iid_mv) {
@@ -5997,7 +6193,19 @@ impl MoveOrdering {
             return history_score;
         }
 
-        // Use regular move scoring
+        // Task 1.7: Use SEE for capture moves if enabled and board is available
+        if move_.is_capture && self.config.cache_config.enable_see_cache {
+            // Try to use SEE for capture ordering
+            if let Ok(see_score) = self.score_see_move(move_, board) {
+                if see_score != 0 {
+                    // SEE score is already scaled by see_weight, use it directly
+                    return see_score;
+                }
+            }
+            // Fall through to regular scoring if SEE fails or returns 0
+        }
+
+        // Use regular move scoring (MVV/LVA for captures)
         self.stats.killer_move_misses += 1;
         self.score_move(move_).unwrap_or(0)
     }
