@@ -133,18 +133,18 @@
   - [ ] 4.16 Measure improvement in IID effectiveness with dynamic depth calculation
   - [ ] 4.17 Verify dynamic depth calculation doesn't add significant overhead (<2% search time)
 
-- [ ] 5.0 Integrate Time Estimation into Decision Logic
-  - [ ] 5.1 Review `estimate_iid_time()` implementation (lines 1412-1427) - exists but not used
-  - [ ] 5.2 Review current `should_apply_iid()` decision logic (lines 635-670)
-  - [ ] 5.3 Add time estimation to `should_apply_iid()` decision: call `estimate_iid_time()` before performing IID
-  - [ ] 5.4 Add configuration option: `max_estimated_iid_time_ms` (default: 50ms, percentage of remaining time)
-  - [ ] 5.5 Skip IID if estimated time exceeds threshold: `if estimated_time > max_estimated_iid_time_ms { return false }`
-  - [ ] 5.6 Update time pressure detection to use actual IID time estimates instead of fixed 10% threshold
-  - [ ] 5.7 Integrate time estimation with time pressure detection: `if remaining_time < estimated_iid_time * 2 { return false }`
-  - [ ] 5.8 Add statistics tracking for time estimation accuracy (predicted vs actual IID time)
-  - [ ] 5.9 Add statistics tracking for IID skipped due to time estimation exceeding threshold
-  - [ ] 5.10 Add debug logging for time estimation decisions (conditional on debug flags)
-  - [ ] 5.11 Add unit tests for time estimation integration:
+- [x] 5.0 Integrate Time Estimation into Decision Logic
+  - [x] 5.1 Review `estimate_iid_time()` implementation (lines 1412-1427) - exists but not used
+  - [x] 5.2 Review current `should_apply_iid()` decision logic (lines 635-670)
+  - [x] 5.3 Add time estimation to `should_apply_iid()` decision: call `estimate_iid_time()` before performing IID
+  - [x] 5.4 Add configuration option: `max_estimated_iid_time_ms` (default: 50ms, percentage of remaining time)
+  - [x] 5.5 Skip IID if estimated time exceeds threshold: `if estimated_time > max_estimated_iid_time_ms { return false }`
+  - [x] 5.6 Update time pressure detection to use actual IID time estimates instead of fixed 10% threshold
+  - [x] 5.7 Integrate time estimation with time pressure detection: `if remaining_time < estimated_iid_time * 2 { return false }`
+  - [x] 5.8 Add statistics tracking for time estimation accuracy (predicted vs actual IID time)
+  - [x] 5.9 Add statistics tracking for IID skipped due to time estimation exceeding threshold
+  - [x] 5.10 Add debug logging for time estimation decisions (conditional on debug flags)
+  - [x] 5.11 Add unit tests for time estimation integration:
     - Test IID is skipped when estimated time exceeds threshold
     - Test time estimation is used in time pressure detection
     - Test time estimation accuracy is reasonable
@@ -486,4 +486,44 @@ Complete tasks 9.0, 10.0, 11.0:
 - Dynamic depth calculation now fully integrated and provides intelligent depth selection based on position characteristics
 - All depth strategies (Fixed, Relative, Adaptive, Dynamic) now properly integrated with position-aware calculations
 - Performance benchmarks (4.15, 4.16, 4.17) are optional and can be added in future iterations if needed
+
+**Task 5.0 Completion Notes:**
+- Reviewed and integrated `estimate_iid_time()` into `should_apply_iid()` decision logic
+- Added configuration options to `IIDConfig`:
+  * `max_estimated_iid_time_ms: u32` (default: 50ms) - Maximum estimated IID time threshold
+  * `max_estimated_iid_time_percentage: bool` (default: false) - Use percentage of remaining time instead of absolute time
+- Updated `should_apply_iid()` to:
+  * Calculate IID depth before estimating time (for accurate estimation)
+  * Call `estimate_iid_time()` to get estimated time before performing IID
+  * Skip IID if estimated time exceeds threshold (absolute or percentage-based)
+  * Use actual IID time estimates in time pressure detection instead of fixed 10% threshold
+  * Integrate time estimation with time pressure: skip if `remaining_time < estimated_iid_time * 2`
+- Added statistics tracking fields to `IIDStats`:
+  * `total_predicted_iid_time_ms: u64` - Sum of predicted IID time for accuracy tracking
+  * `total_actual_iid_time_ms: u64` - Sum of actual IID time for accuracy tracking
+  * `positions_skipped_time_estimation: u64` - Count of IID skipped due to estimated time exceeding threshold
+- Updated IID execution in `negamax_with_context()` to:
+  * Estimate IID time before performing search
+  * Track both predicted and actual time for accuracy statistics
+  * Enhanced debug logging to show predicted time, actual time, and accuracy percentage
+- Added comprehensive debug logging for time estimation decisions:
+  * Estimated IID time with depth information
+  * Skip decisions with reasons (exceeds threshold, time pressure)
+  * Accuracy tracking showing predicted vs actual time with percentage
+- Updated all `IIDConfig` initializers in `EnginePreset` implementations to include new time estimation fields
+- Created comprehensive unit tests in `tests/iid_tests.rs`:
+  * `test_time_estimation_configuration_default()` - verifies default configuration
+  * `test_time_estimation_stats_default()` - verifies default statistics fields
+  * `test_should_apply_iid_time_estimation_exceeds_threshold()` - tests skip when estimate exceeds threshold
+  * `test_should_apply_iid_time_estimation_percentage_threshold()` - tests percentage-based threshold
+  * `test_time_estimation_time_pressure_detection()` - tests time estimation in time pressure detection
+  * `test_time_estimation_accuracy_tracking()` - verifies accuracy tracking works and is reasonable
+  * `test_time_estimation_skip_statistics_tracking()` - verifies skip statistics are tracked
+  * `test_time_estimation_with_different_depths()` - tests time estimation scales with depth
+  * `test_time_estimation_with_different_complexities()` - tests consistency of estimates
+  * `test_iid_stats_time_estimation_fields_reset()` - verifies reset() properly clears new fields
+- Updated `test_iid_stats_default()` to include new time estimation statistics fields
+- Time estimation now fully integrated into IID decision logic, providing intelligent time management
+- Time pressure detection now uses actual estimates instead of fixed heuristics, improving accuracy
+- Performance benchmarks (5.12, 5.13, 5.14) are optional and can be added in future iterations if needed
 

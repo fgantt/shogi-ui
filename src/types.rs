@@ -3712,6 +3712,10 @@ pub struct IIDConfig {
     pub dynamic_max_depth: u8,
     /// Task 4.11: Adaptive minimum depth threshold (if enabled, adjusts min_depth based on position)
     pub adaptive_min_depth: bool,
+    /// Task 5.4: Maximum estimated IID time in milliseconds (default: 50ms, or percentage of remaining time)
+    pub max_estimated_iid_time_ms: u32,
+    /// Task 5.4: Use percentage of remaining time for max_estimated_iid_time_ms (if enabled, max_estimated_iid_time_ms is percentage)
+    pub max_estimated_iid_time_percentage: bool,
 }
 
 impl Default for IIDConfig {
@@ -3729,6 +3733,9 @@ impl Default for IIDConfig {
             dynamic_base_depth: 2,          // Base depth for dynamic strategy
             dynamic_max_depth: 4,           // Maximum depth cap for dynamic strategy
             adaptive_min_depth: false,      // Disable adaptive min depth by default
+            // Task 5.4: Time estimation configuration
+            max_estimated_iid_time_ms: 50,  // Default: 50ms maximum estimated IID time
+            max_estimated_iid_time_percentage: false, // Use absolute time, not percentage
         }
     }
 }
@@ -3814,6 +3821,12 @@ pub struct IIDStats {
     pub dynamic_depth_medium_complexity: u64,
     /// Task 4.12: Number of times dynamic depth was selected due to high complexity
     pub dynamic_depth_high_complexity: u64,
+    /// Task 5.8: Sum of predicted IID time (for accuracy tracking)
+    pub total_predicted_iid_time_ms: u64,
+    /// Task 5.8: Sum of actual IID time (for accuracy tracking)
+    pub total_actual_iid_time_ms: u64,
+    /// Task 5.9: Number of times IID was skipped due to estimated time exceeding threshold
+    pub positions_skipped_time_estimation: u64,
 }
 
 impl IIDStats {
@@ -5184,6 +5197,9 @@ impl EngineConfig {
                     dynamic_base_depth: 2,
                     dynamic_max_depth: 4,
                     adaptive_min_depth: false,
+                    // Task 5.4: Time estimation configuration
+                    max_estimated_iid_time_ms: 50,
+                    max_estimated_iid_time_percentage: false,
                 },
                 tt_size_mb: 128,
                 debug_logging: false,
@@ -5272,6 +5288,9 @@ impl EngineConfig {
                     dynamic_base_depth: 2,
                     dynamic_max_depth: 4,
                     adaptive_min_depth: false,
+                    // Task 5.4: Time estimation configuration
+                    max_estimated_iid_time_ms: 50,
+                    max_estimated_iid_time_percentage: false,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,

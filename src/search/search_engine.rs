@@ -635,6 +635,7 @@ impl SearchEngine {
 
     /// Determine if IID should be applied at this position
     /// Task 4.9: Added board and captured_pieces for adaptive minimum depth
+    /// Task 5.0: Integrated time estimation into decision logic
     pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> bool {
         // 1. IID must be enabled
         if !self.iid_config.enabled { 
@@ -683,10 +684,63 @@ impl SearchEngine {
         // 5. Not in quiescence search
         if depth == 0 { return false; }
         
-        // 6. Not in time pressure (if enabled)
-        if self.iid_config.enable_time_pressure_detection && self.is_time_pressure(start_time, time_limit_ms) { 
-            self.iid_stats.positions_skipped_time_pressure += 1;
-            return false; 
+        // Task 5.0: Time estimation integration
+        // Calculate IID depth first to estimate time
+        let iid_depth = if let (Some(board), Some(captured)) = (board, captured_pieces) {
+            self.calculate_iid_depth(depth, Some(board), Some(captured))
+        } else {
+            self.calculate_iid_depth(depth, None, None)
+        };
+        
+        // Task 5.3: Estimate IID time before performing IID
+        let estimated_iid_time_ms = if let (Some(board), Some(captured)) = (board, captured_pieces) {
+            self.estimate_iid_time(board, captured, iid_depth)
+        } else {
+            // Fallback estimate if position info not available
+            20 // Default estimate
+        };
+        
+        // Task 5.10: Debug logging for time estimation
+        crate::debug_utils::trace_log("IID_TIME_EST", &format!(
+            "Estimated IID time: {}ms (depth: {}, iid_depth: {})", 
+            estimated_iid_time_ms, depth, iid_depth
+        ));
+        
+        // Calculate remaining time
+        let elapsed = start_time.elapsed_ms() as u32;
+        let remaining_time = time_limit_ms.saturating_sub(elapsed);
+        
+        // Task 5.5: Skip IID if estimated time exceeds threshold
+        let max_estimated_time = if self.iid_config.max_estimated_iid_time_percentage {
+            // Use percentage of remaining time
+            (remaining_time as f64 * (self.iid_config.max_estimated_iid_time_ms as f64 / 100.0)) as u32
+        } else {
+            // Use absolute time
+            self.iid_config.max_estimated_iid_time_ms
+        };
+        
+        if estimated_iid_time_ms > max_estimated_time {
+            // Task 5.9: Track IID skipped due to time estimation
+            self.iid_stats.positions_skipped_time_estimation += 1;
+            crate::debug_utils::trace_log("IID_TIME_EST", &format!(
+                "IID skipped: estimated {}ms > threshold {}ms", 
+                estimated_iid_time_ms, max_estimated_time
+            ));
+            return false;
+        }
+        
+        // Task 5.6, 5.7: Update time pressure detection to use actual IID time estimates
+        if self.iid_config.enable_time_pressure_detection {
+            // Task 5.7: Integrate time estimation with time pressure detection
+            // Skip IID if remaining time < estimated_iid_time * 2 (safety margin)
+            if remaining_time < estimated_iid_time_ms * 2 {
+                self.iid_stats.positions_skipped_time_pressure += 1;
+                crate::debug_utils::trace_log("IID_TIME_EST", &format!(
+                    "IID skipped: time pressure (remaining {}ms < estimated {}ms * 2)", 
+                    remaining_time, estimated_iid_time_ms
+                ));
+                return false;
+            }
         }
         
         true
@@ -3239,6 +3293,9 @@ impl SearchEngine {
             let iid_depth = self.calculate_iid_depth(depth, Some(board), Some(captured_pieces));
             crate::debug_utils::trace_log("IID", &format!("Applying IID at depth {} with IID depth {}", depth, iid_depth));
             
+            // Task 5.8: Estimate IID time before performing IID for accuracy tracking
+            let estimated_iid_time_ms = self.estimate_iid_time(board, captured_pieces, iid_depth);
+            
             let iid_start_time = TimeSource::now();
             // Create local hash_history for IID call (Task 5.2)
             let initial_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
@@ -3257,15 +3314,41 @@ impl SearchEngine {
             );
             iid_move = iid_move_result;
             
-            let iid_time = iid_start_time.elapsed_ms();
+            let actual_iid_time = iid_start_time.elapsed_ms();
             self.iid_stats.iid_searches_performed += 1;
+            
+            // Task 5.8: Track predicted vs actual IID time for accuracy statistics
+            self.iid_stats.total_predicted_iid_time_ms += estimated_iid_time_ms as u64;
+            self.iid_stats.total_actual_iid_time_ms += actual_iid_time as u64;
+            self.iid_stats.iid_time_ms += actual_iid_time as u64; // Track total IID time
+            
             crate::debug_utils::end_timing("iid_search", "IID");
             
-            // Task 2.12: Add debug logging for IID move extraction (conditional on debug flags)
+            // Task 2.12, 5.8: Add debug logging for IID move extraction and time accuracy
             if let Some(ref mv) = iid_move {
-                crate::debug_utils::trace_log("IID", &format!("Found move {} in {}ms (score: {})", mv.to_usi_string(), iid_time, iid_score_result));
+                crate::debug_utils::trace_log("IID", &format!(
+                    "Found move {} in {}ms (predicted: {}ms, accuracy: {:.1}%, score: {})", 
+                    mv.to_usi_string(), 
+                    actual_iid_time,
+                    estimated_iid_time_ms,
+                    if estimated_iid_time_ms > 0 {
+                        (1.0 - ((actual_iid_time as f64 - estimated_iid_time_ms as f64).abs() / estimated_iid_time_ms as f64)) * 100.0
+                    } else {
+                        100.0
+                    },
+                    iid_score_result
+                ));
             } else {
-                crate::debug_utils::trace_log("IID", &format!("No move found after {}ms (score: {})", iid_time, iid_score_result));
+                crate::debug_utils::trace_log("IID", &format!(
+                    "No move found after {}ms (predicted: {}ms, accuracy: {:.1}%)", 
+                    actual_iid_time,
+                    estimated_iid_time_ms,
+                    if estimated_iid_time_ms > 0 {
+                        (1.0 - ((actual_iid_time as f64 - estimated_iid_time_ms as f64).abs() / estimated_iid_time_ms as f64)) * 100.0
+                    } else {
+                        100.0
+                    }
+                ));
             }
         } else {
             crate::debug_utils::trace_log("IID", &format!("Skipped at depth {} (enabled={}, tt_move={}, moves={})", 
