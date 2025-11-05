@@ -136,22 +136,20 @@
   - [ ] 5.10 Verify move ordering improvements maintain or improve tactical accuracy (future work - requires tactical test suite)
   - [x] 5.11 Consider using main search move ordering hints in quiescence search (coordination task)
 
-- [ ] 6.0 Cache Stand-Pat in Transposition Table
-  - [ ] 6.1 Review stand-pat evaluation in quiescence search (line 4470)
-  - [ ] 6.2 Analyze TT structure to determine if stand-pat can be stored separately
-  - [ ] 6.3 Design TT entry structure to store stand-pat evaluation
-  - [ ] 6.4 Modify TT lookup to check for stand-pat evaluation before generating moves
-  - [ ] 6.5 Store stand-pat evaluation in TT entry after evaluation
-  - [ ] 6.6 Add bounds checking for stand-pat in TT (can stand-pat be used for alpha/beta bounds?)
-  - [ ] 6.7 Consider using stand-pat in TT lookup bounds (currently only uses TT for exact scores)
-  - [ ] 6.8 Implement stand-pat bounds checking in TT lookup if feasible
-  - [ ] 6.9 Add statistics tracking for stand-pat TT hits
-  - [ ] 6.10 Add unit tests verifying stand-pat caching works correctly
-  - [ ] 6.11 Create performance benchmarks comparing with/without stand-pat caching:
-    - Measure TT hit rate improvement
-    - Measure search performance improvement
-  - [ ] 6.12 Verify stand-pat caching provides measurable performance improvement
-  - [ ] 6.13 Document stand-pat caching behavior
+- [x] 6.0 Cache Stand-Pat in Transposition Table
+  - [x] 6.1 Review stand-pat evaluation in quiescence search (line 4470)
+  - [x] 6.2 Analyze TT structure to determine if stand-pat can be stored separately
+  - [x] 6.3 Design TT entry structure to store stand-pat evaluation
+  - [x] 6.4 Modify TT lookup to check for stand-pat evaluation before generating moves
+  - [x] 6.5 Store stand-pat evaluation in TT entry after evaluation
+  - [x] 6.6 Add bounds checking for stand-pat in TT (can stand-pat be used for alpha/beta bounds?)
+  - [x] 6.7 Consider using stand-pat in TT lookup bounds (currently only uses TT for exact scores)
+  - [x] 6.8 Implement stand-pat bounds checking in TT lookup if feasible
+  - [x] 6.9 Add statistics tracking for stand-pat TT hits
+  - [x] 6.10 Add unit tests verifying stand-pat caching works correctly
+  - [ ] 6.11 Create performance benchmarks comparing with/without stand-pat caching (future work - requires benchmark suite)
+  - [ ] 6.12 Verify stand-pat caching provides measurable performance improvement (future work - requires benchmark suite)
+  - [x] 6.13 Document stand-pat caching behavior
 
 - [ ] 7.0 Improve Code Clarity
   - [ ] 7.1 Review empty move list handling in quiescence search
@@ -482,4 +480,49 @@ Complete task 10.0:
 - Future work (marked in task list):
   * Performance benchmarks (Task 5.9) - requires benchmark suite (Task 9.0)
   * Tactical accuracy verification (Task 5.10) - requires tactical test suite (Task 8.0)
+
+**Task 6.0 Completion Notes:**
+- Added stand_pat_score field to QuiescenceEntry (Task 6.3):
+  * Added `stand_pat_score: Option<i32>` field to store cached stand-pat evaluation
+  * Optional field (not all entries have stand-pat, e.g., beta cutoffs)
+  * Stand-pat is cached when position is fully evaluated
+- Modified TT lookup to check for stand-pat (Task 6.4):
+  * Extract cached stand-pat from TT entry if available before generating moves
+  * Use cached stand-pat instead of evaluating if found in TT
+  * Track stand-pat TT hits and misses separately from regular TT hits
+- Store stand-pat evaluation in TT entry (Task 6.5):
+  * Cache stand-pat when position is fully evaluated (normal completion)
+  * Update existing entries with stand-pat if not already cached
+  * Don't cache stand-pat at beta cutoffs (position not fully evaluated, will be cached later)
+- Added bounds checking for stand-pat (Tasks 6.6, 6.7, 6.8):
+  * Stand-pat can be used for beta cutoff (if `stand_pat >= beta`, return beta)
+  * Stand-pat can be used for alpha update (if `alpha < stand_pat`, update alpha)
+  * Cached stand-pat works the same as evaluated stand-pat for bounds checking
+  * Stand-pat bounds checking happens before move generation
+- Added statistics tracking (Task 6.9):
+  * `stand_pat_tt_hits: u64` - number of times stand-pat was retrieved from TT
+  * `stand_pat_tt_misses: u64` - number of times stand-pat was not found in TT
+  * Statistics provide insight into stand-pat caching effectiveness
+- Added comprehensive unit tests (Task 6.10):
+  * `test_quiescence_stand_pat_caching`: verifies stand-pat is cached and retrieved from TT
+  * `test_quiescence_stand_pat_caching_statistics`: verifies statistics tracking works correctly
+  * `test_quiescence_stand_pat_caching_tt_entry`: verifies TT entry structure and caching
+- Added comprehensive documentation (Task 6.13):
+  * Documented stand-pat caching strategy and rationale
+  * Explained when stand-pat is cached (fully evaluated positions)
+  * Explained when stand-pat is not cached (beta cutoffs)
+  * Documented bounds checking behavior with cached stand-pat
+- Implementation details:
+  * Stand-pat caching avoids redundant evaluations (expensive position evaluation)
+  * Cached stand-pat is used for bounds checking (beta cutoff, alpha update)
+  * TT entry updates preserve existing stand-pat when updating score/depth/flag
+  * Stand-pat caching improves search efficiency by avoiding repeated evaluations
+- All tests passing and verify correct behavior:
+  * Stand-pat is cached when position is fully evaluated
+  * Cached stand-pat is retrieved from TT in subsequent searches
+  * Statistics tracking works correctly (hits and misses)
+  * TT entry structure includes stand_pat_score field
+- Future work (marked in task list):
+  * Performance benchmarks (Task 6.11) - requires benchmark suite (Task 9.0)
+  * Performance improvement verification (Task 6.12) - requires benchmark suite (Task 9.0)
 
