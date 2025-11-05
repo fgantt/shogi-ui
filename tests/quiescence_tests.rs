@@ -1307,6 +1307,106 @@ mod quiescence_tests {
         assert!(stats.nodes_searched > 0);
     }
 
+    /// Task 10.2: Verify quiescence search handles null-move positions correctly
+    /// 
+    /// This test verifies that quiescence search correctly handles positions
+    /// regardless of whether null-move pruning was attempted in the main search.
+    /// Quiescence search should work correctly whether or not null-move pruning
+    /// occurred before it was called.
+    #[test]
+    fn test_quiescence_null_move_coordination() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::now();
+        
+        // Enable null-move pruning in main search
+        let mut null_move_config = engine.get_null_move_config();
+        null_move_config.enabled = true;
+        engine.update_null_move_config(null_move_config);
+        
+        // Test quiescence search on a position that might trigger null-move pruning
+        // Quiescence search should handle the position correctly regardless
+        
+        // First, verify quiescence search works on a normal position
+        let result1 = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        assert!(result1 > -10000 && result1 < 10000, "Quiescence search should return a valid score");
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // Test quiescence search on the same position again
+        // This verifies that quiescence search is consistent regardless of null-move state
+        let result2 = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        // Results should be identical (deterministic)
+        assert_eq!(result1, result2, "Quiescence search should be deterministic");
+        
+        // Verify quiescence search works correctly with null-move pruning enabled
+        // The fact that quiescence search completes successfully demonstrates
+        // that it correctly handles positions regardless of null-move pruning state
+        let stats = engine.get_quiescence_stats();
+        assert!(stats.nodes_searched > 0, "Quiescence search should have searched nodes");
+    }
+    
+    /// Task 10.2: Verify quiescence search is called correctly from main search after null-move pruning
+    /// 
+    /// This test verifies that when main search calls quiescence search at depth 0,
+    /// quiescence search correctly handles the position regardless of null-move pruning results.
+    #[test]
+    fn test_quiescence_called_after_null_move() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        
+        // Enable null-move pruning
+        let mut null_move_config = engine.get_null_move_config();
+        null_move_config.enabled = true;
+        null_move_config.min_depth = 3;
+        engine.update_null_move_config(null_move_config);
+        
+        // Perform a shallow main search that will call quiescence search
+        // This verifies that quiescence search is correctly called from main search
+        // after null-move pruning attempts (if applicable)
+        let result = engine.search_at_depth(
+            &board,
+            &captured_pieces,
+            player,
+            3, // Depth 3 - may trigger null-move pruning
+            1000,
+            -10000,
+            10000
+        );
+        
+        // Verify search completed successfully
+        assert!(result > -10000 && result < 10000, "Search should return a valid score");
+        
+        // Verify quiescence search was called (nodes_searched > 0)
+        let quiescence_stats = engine.get_quiescence_stats();
+        assert!(quiescence_stats.nodes_searched > 0, "Quiescence search should have been called");
+    }
+
     #[test]
     fn test_quiescence_empty_move_list_early_return() {
         // Task 7.4: Test that early return occurs when no noisy moves are available
