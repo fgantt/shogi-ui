@@ -123,20 +123,17 @@
   - [ ] 4.11 Verify new cleanup strategy improves TT hit rate (target: 10-20% hit rate) (future work - requires benchmark suite)
   - [x] 4.12 Document new cleanup strategy and configuration options
 
-- [ ] 5.0 Enhance Move Ordering
-  - [ ] 5.1 Review advanced move ordering implementation `sort_quiescence_moves_advanced()` (lines 4673-4686)
-  - [ ] 5.2 Review fallback move ordering `sort_quiescence_moves()` (line 5506)
-  - [ ] 5.3 Analyze fallback logic robustness and identify improvement opportunities
-  - [ ] 5.4 Add more ordering heuristics: consider piece-square tables, king safety, piece activity
-  - [ ] 5.5 Improve MVV-LVA ordering with additional factors (checks, promotions, threats)
-  - [ ] 5.6 Enhance fallback logic to handle edge cases more gracefully
-  - [ ] 5.7 Add statistics tracking for move ordering effectiveness (cutoff rate, ordering quality)
-  - [ ] 5.8 Add unit tests verifying improved move ordering correctness
-  - [ ] 5.9 Create performance benchmarks comparing move ordering improvements:
-    - Measure cutoff rate improvement
-    - Measure tactical accuracy improvement
-    - Measure search efficiency (nodes searched)
-  - [ ] 5.10 Verify move ordering improvements maintain or improve tactical accuracy
+- [x] 5.0 Enhance Move Ordering
+  - [x] 5.1 Review advanced move ordering implementation `sort_quiescence_moves_advanced()` (lines 4673-4686)
+  - [x] 5.2 Review fallback move ordering `sort_quiescence_moves()` (line 5506)
+  - [x] 5.3 Analyze fallback logic robustness and identify improvement opportunities
+  - [x] 5.4 Add more ordering heuristics: consider piece-square tables, king safety, piece activity
+  - [x] 5.5 Improve MVV-LVA ordering with additional factors (checks, promotions, threats)
+  - [x] 5.6 Enhance fallback logic to handle edge cases more gracefully
+  - [x] 5.7 Add statistics tracking for move ordering effectiveness (cutoff rate, ordering quality)
+  - [x] 5.8 Add unit tests verifying improved move ordering correctness
+  - [ ] 5.9 Create performance benchmarks comparing move ordering improvements (future work - requires benchmark suite)
+  - [ ] 5.10 Verify move ordering improvements maintain or improve tactical accuracy (future work - requires tactical test suite)
   - [ ] 5.11 Consider using main search move ordering hints in quiescence search (coordination task)
 
 - [ ] 6.0 Cache Stand-Pat in Transposition Table

@@ -4400,6 +4400,14 @@ impl SearchEngine {
         best_score
     }
     fn quiescence_search(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8) -> i32 {
+        self.quiescence_search_with_hint(board, captured_pieces, player, alpha, beta, start_time, time_limit_ms, depth, None)
+    }
+
+    /// Quiescence search with optional move ordering hint from main search
+    /// 
+    /// Task 5.11: Uses main search move ordering hints to improve quiescence move ordering
+    /// The hint move (e.g., from transposition table or IID) is prioritized in move ordering
+    fn quiescence_search_with_hint(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, depth: u8, move_hint: Option<&Move>) -> i32 {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
@@ -4440,6 +4448,9 @@ impl SearchEngine {
             return score;
         }
 
+        // Task 5.11: Extract TT best move as hint (if available)
+        let mut tt_move_hint: Option<Move> = None;
+        
         // Transposition table lookup
         if self.quiescence_config.enable_tt {
             // Clean up TT if it's getting too large
@@ -4456,6 +4467,11 @@ impl SearchEngine {
                     entry.access_count += 1;
                     entry.last_access_age = self.quiescence_tt_age;
                     self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
+                    
+                    // Task 5.11: Use TT best move as hint if available
+                    if let Some(ref best_move) = entry.best_move {
+                        tt_move_hint = Some(best_move.clone());
+                    }
                     
                     let score_to_return = entry.score; // Store score before dropping mutable reference
                     let flag_to_return = entry.flag; // Store flag before dropping mutable reference
@@ -4479,6 +4495,9 @@ impl SearchEngine {
                 // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT miss");
             }
         }
+        
+        // Task 5.11: Use TT best move as hint if available, otherwise use provided hint
+        let effective_hint = tt_move_hint.as_ref().or(move_hint);
         
         // crate::debug_utils::trace_log("QUIESCENCE", "Evaluating stand-pat position");
         let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
@@ -4518,7 +4537,8 @@ impl SearchEngine {
         }
         
         // crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
-        let sorted_noisy_moves = self.sort_quiescence_moves_advanced(&noisy_moves, board, captured_pieces, player);
+        // Task 5.11: Pass effective_hint (TT best move or provided hint) to quiescence move ordering
+        let sorted_noisy_moves = self.sort_quiescence_moves_advanced(&noisy_moves, board, captured_pieces, player, effective_hint);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
         self.quiescence_stats.move_ordering_total_moves += noisy_moves.len() as u64;
         let total_move_count = sorted_noisy_moves.len();
@@ -4717,25 +4737,58 @@ impl SearchEngine {
     /// - Better error handling for edge cases
     /// - Fallback to improved traditional ordering
     /// - Statistics tracking for ordering effectiveness
-    fn sort_quiescence_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Vec<Move> {
+    fn sort_quiescence_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, move_hint: Option<&Move>) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
 
+        // If move hint is provided, prioritize it in move ordering (Task 5.11)
+        let mut ordered_moves = if let Some(hint_move) = move_hint {
+            // Check if hint move is in the moves list
+            if let Some(pos) = moves.iter().position(|m| self.moves_equal_for_ordering(m, hint_move)) {
+                let mut sorted = moves.to_vec();
+                // Move hint to front if it exists in the list
+                if pos > 0 {
+                    sorted.swap(0, pos);
+                }
+                sorted
+            } else {
+                // Hint move not in list, use normal ordering
+                moves.to_vec()
+            }
+        } else {
+            moves.to_vec()
+        };
+
         // Try advanced move ordering for quiescence search
-        match self.advanced_move_orderer.order_moves(moves) {
-            Ok(ordered_moves) => {
+        match self.advanced_move_orderer.order_moves(&ordered_moves) {
+            Ok(advanced_ordered) => {
                 // Verify ordering is valid (same length, no duplicates)
-                if ordered_moves.len() == moves.len() {
-                    ordered_moves
+                if advanced_ordered.len() == moves.len() {
+                    // If we have a hint move, ensure it stays at front (Task 5.11)
+                    if let Some(hint_move) = move_hint {
+                        if let Some(pos) = advanced_ordered.iter().position(|m| self.moves_equal_for_ordering(m, hint_move)) {
+                            if pos > 0 {
+                                let mut final_ordered = advanced_ordered;
+                                final_ordered.swap(0, pos);
+                                final_ordered
+                            } else {
+                                advanced_ordered
+                            }
+                        } else {
+                            advanced_ordered
+                        }
+                    } else {
+                        advanced_ordered
+                    }
                 } else {
-                    // Invalid ordering - fallback to traditional
-                    self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player)
+                    // Invalid ordering - fallback to enhanced traditional
+                    self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player, move_hint)
                 }
             },
             Err(_) => {
                 // Fallback to enhanced traditional quiescence move ordering
-                self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player)
+                self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player, move_hint)
             }
         }
     }
@@ -5662,8 +5715,9 @@ impl SearchEngine {
     /// - Position-aware ordering (piece-square tables, king safety, piece activity)
     /// - Better handling of edge cases (empty moves, single move)
     /// - Statistics tracking
+    /// - Main search move ordering hints (Task 5.11)
     #[cfg(test)]
-    pub fn sort_quiescence_moves_enhanced(&self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Vec<Move> {
+    pub fn sort_quiescence_moves_enhanced(&self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, move_hint: Option<&Move>) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
@@ -5675,8 +5729,27 @@ impl SearchEngine {
 
         let mut sorted_moves = moves.to_vec();
         
+        // If move hint is provided, prioritize it (Task 5.11)
+        if let Some(hint_move) = move_hint {
+            if let Some(pos) = sorted_moves.iter().position(|m| self.moves_equal_for_ordering(m, hint_move)) {
+                // Move hint to front if it exists in the list
+                if pos > 0 {
+                    sorted_moves.swap(0, pos);
+                }
+            }
+        }
+        
         // Use enhanced comparison with position context
         sorted_moves.sort_by(|a, b| {
+            // If either move is the hint, prioritize it
+            if let Some(hint_move) = move_hint {
+                if self.moves_equal_for_ordering(a, hint_move) {
+                    return std::cmp::Ordering::Less;
+                }
+                if self.moves_equal_for_ordering(b, hint_move) {
+                    return std::cmp::Ordering::Greater;
+                }
+            }
             self.compare_quiescence_moves_enhanced(a, b, board, captured_pieces, player)
         });
         
@@ -5802,6 +5875,14 @@ impl SearchEngine {
         }
         
         value
+    }
+
+    /// Check if two moves are equal for ordering purposes (Task 5.11)
+    /// 
+    /// Compares moves based on from/to positions and piece type
+    /// This is used to identify hint moves in the move list
+    fn moves_equal_for_ordering(&self, a: &Move, b: &Move) -> bool {
+        a.from == b.from && a.to == b.to && a.piece_type == b.piece_type && a.player == b.player
     }
 
     /// Clear the quiescence transposition table

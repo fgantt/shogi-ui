@@ -1114,7 +1114,7 @@ mod quiescence_tests {
         
         if !moves.is_empty() {
             // Test enhanced fallback ordering
-            let sorted = engine.sort_quiescence_moves_enhanced(&moves, &board, &captured_pieces, player);
+            let sorted = engine.sort_quiescence_moves_enhanced(&moves, &board, &captured_pieces, player, None);
             assert_eq!(sorted.len(), moves.len());
             
             // Verify ordering (checks should be first, then captures)
@@ -1144,14 +1144,14 @@ mod quiescence_tests {
         
         // Test empty moves
         let empty_moves: Vec<Move> = Vec::new();
-        let sorted = engine.sort_quiescence_moves_enhanced(&empty_moves, &board, &captured_pieces, player);
+        let sorted = engine.sort_quiescence_moves_enhanced(&empty_moves, &board, &captured_pieces, player, None);
         assert_eq!(sorted.len(), 0);
         
         // Test single move
         let mut single_move = Move::new(Position::new(0, 0), Position::new(1, 1));
         single_move.is_capture = true;
         let single_moves = vec![single_move];
-        let sorted = engine.sort_quiescence_moves_enhanced(&single_moves, &board, &captured_pieces, player);
+        let sorted = engine.sort_quiescence_moves_enhanced(&single_moves, &board, &captured_pieces, player, None);
         assert_eq!(sorted.len(), 1);
     }
 }
