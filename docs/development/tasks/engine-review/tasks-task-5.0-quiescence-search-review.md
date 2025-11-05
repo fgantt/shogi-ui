@@ -134,7 +134,7 @@
   - [x] 5.8 Add unit tests verifying improved move ordering correctness
   - [ ] 5.9 Create performance benchmarks comparing move ordering improvements (future work - requires benchmark suite)
   - [ ] 5.10 Verify move ordering improvements maintain or improve tactical accuracy (future work - requires tactical test suite)
-  - [ ] 5.11 Consider using main search move ordering hints in quiescence search (coordination task)
+  - [x] 5.11 Consider using main search move ordering hints in quiescence search (coordination task)
 
 - [ ] 6.0 Cache Stand-Pat in Transposition Table
   - [ ] 6.1 Review stand-pat evaluation in quiescence search (line 4470)
@@ -433,4 +433,53 @@ Complete task 10.0:
 - Future work (marked in task list):
   * Performance benchmarks (Task 4.10) - requires benchmark suite (Task 9.0)
   * TT hit rate verification (Task 4.11) - requires benchmark suite (Task 9.0)
+
+**Task 5.0 Completion Notes:**
+- Enhanced MVV-LVA ordering with additional factors (Task 5.5):
+  * Enhanced MVV-LVA calculation with check bonus (+1000), promotion bonus, and recapture bonus (+500)
+  * Compares promotions by promotion value when both are promotions
+  * Tactical threat assessment for non-capturing, non-promoting moves
+- Added more ordering heuristics (Task 5.4):
+  * Position-based heuristics: piece-square tables, center control, edge penalties
+  * King safety considerations: checks (+200), threats to king area (+100)
+  * Piece activity assessment: mobility gain, center activity (+30), attack bonus (+50)
+- Enhanced fallback logic (Task 5.6):
+  * Better error handling for edge cases (empty moves, single move)
+  * Verify ordering is valid (same length, no duplicates)
+  * Created `sort_quiescence_moves_enhanced()` with position-aware ordering
+- Added statistics tracking (Task 5.7):
+  * `move_ordering_cutoffs`: number of beta cutoffs from move ordering
+  * `move_ordering_total_moves`: total moves ordered
+  * `move_ordering_first_move_cutoffs`: cutoffs from first move
+  * `move_ordering_second_move_cutoffs`: cutoffs from second move
+  * Track cutoffs by move position to measure ordering effectiveness
+- Added comprehensive unit tests (Task 5.8):
+  * `test_quiescence_move_ordering_enhanced_mvv_lva`: verifies enhanced MVV-LVA
+  * `test_quiescence_move_ordering_checks_first`: verifies checks are ordered first
+  * `test_quiescence_move_ordering_statistics`: verifies statistics tracking
+  * `test_quiescence_move_ordering_enhanced_fallback`: verifies enhanced fallback
+  * `test_quiescence_move_ordering_edge_cases`: verifies edge case handling
+- Implemented main search move ordering hints (Task 5.11):
+  * Added `quiescence_search_with_hint()` method accepting optional `move_hint` parameter
+  * Extracts TT best move as hint when available (prioritizes TT hint over provided hint)
+  * Enhanced `sort_quiescence_moves_advanced()` to accept and use `move_hint` parameter
+  * Enhanced `sort_quiescence_moves_enhanced()` to accept and use `move_hint` parameter
+  * Added `moves_equal_for_ordering()` helper to identify hint moves in move list
+  * Hint moves are prioritized in move ordering (moved to front)
+  * Added unit test: `test_quiescence_move_ordering_with_hint` verifies hint prioritization
+- Implementation details:
+  * Enhanced MVV-LVA: `value = mvv_lva + check_bonus + promotion_bonus + recapture_bonus`
+  * Position value: center control (+50), forward development (+20), edge penalty (-10)
+  * King safety: checks (+200), threats to king area (+100)
+  * Piece activity: mobility gain, center activity (+30), captures (+50)
+  * Hint prioritization: hint moves are moved to front and kept at front after ordering
+- All tests passing and verify correct behavior:
+  * Enhanced MVV-LVA correctly orders captures with bonuses
+  * Checks are ordered first in all ordering methods
+  * Statistics tracking works correctly
+  * Enhanced fallback handles edge cases gracefully
+  * Hint moves are prioritized when provided
+- Future work (marked in task list):
+  * Performance benchmarks (Task 5.9) - requires benchmark suite (Task 9.0)
+  * Tactical accuracy verification (Task 5.10) - requires tactical test suite (Task 8.0)
 
