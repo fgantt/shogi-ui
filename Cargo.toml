@@ -88,6 +88,10 @@ name = "attack_pattern_performance_benchmarks"
 harness = false
 
 [[bench]]
+name = "quiescence_performance_benchmarks"
+harness = false
+
+[[bench]]
 name = "parallel_search_performance_benchmarks"
 harness = false
 
