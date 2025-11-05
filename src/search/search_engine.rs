@@ -2142,7 +2142,7 @@ impl SearchEngine {
         report.push_str(&format!("Success Rate: {:.2}%\n", metrics.success_rate));
         report.push_str(&format!("Speedup: {:.2}%\n", metrics.speedup_percentage));
         report.push_str(&format!("Node Reduction: {:.2}%\n", metrics.node_reduction_percentage));
-        report.push_str(&format!("Net Benefit: {:.2}%\n", metrics.net_benefit));
+            report.push_str(&format!("Net Benefit: {:.2}%\n", metrics.net_benefit_percentage));
         report.push_str("\n");
         
         // Overhead statistics
@@ -4118,6 +4118,33 @@ impl SearchEngine {
         
         // Task 3.0: Use advanced move ordering for better performance with IID move integration
         let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref());
+        
+        // Task 12.3: Track IID move position in ordered list to verify it's prioritized
+        if let Some(iid_mv) = &iid_move {
+            if let Some(position) = sorted_moves.iter().position(|m| self.moves_equal(m, iid_mv)) {
+                let position_u64 = position as u64;
+                self.iid_stats.iid_move_position_sum += position_u64;
+                self.iid_stats.iid_move_position_tracked += 1;
+                
+                if position == 0 {
+                    self.iid_stats.iid_move_ordered_first += 1;
+                    crate::debug_utils::trace_log("IID_ORDERING", &format!("IID move {} ordered first (position 0)", iid_mv.to_usi_string()));
+                } else {
+                    self.iid_stats.iid_move_not_ordered_first += 1;
+                    crate::debug_utils::trace_log("IID_ORDERING", &format!("IID move {} NOT ordered first (position {})", iid_mv.to_usi_string(), position));
+                }
+            }
+        }
+        
+        // Task 12.4: Track ordering effectiveness with/without IID (for comparison)
+        // Track total positions searched with/without IID
+        let has_iid_move = iid_move.is_some();
+        if has_iid_move {
+            self.iid_stats.ordering_effectiveness_with_iid_total += 1;
+        } else {
+            self.iid_stats.ordering_effectiveness_without_iid_total += 1;
+        }
+        
         // Initialize best_score to alpha instead of sentinel value (Task 5.12)
         let mut best_score = alpha;
         let mut best_move_for_tt = None;
@@ -4239,6 +4266,27 @@ impl SearchEngine {
                         self.core_search_metrics.total_cutoffs += 1;
                         self.core_search_metrics.beta_cutoffs += 1;
                         
+                        // Task 12.2: Track cutoffs from IID moves vs non-IID moves
+                        self.iid_stats.total_cutoffs += 1;
+                        let is_iid_move = if let Some(iid_mv) = &iid_move {
+                            self.moves_equal(move_, iid_mv)
+                        } else {
+                            false
+                        };
+                        
+                        if is_iid_move {
+                            self.iid_stats.cutoffs_from_iid_moves += 1;
+                        } else {
+                            self.iid_stats.cutoffs_from_non_iid_moves += 1;
+                        }
+                        
+                        // Task 12.4: Track ordering effectiveness with/without IID (cutoff occurred)
+                        if has_iid_move {
+                            self.iid_stats.ordering_effectiveness_with_iid_cutoffs += 1;
+                        } else {
+                            self.iid_stats.ordering_effectiveness_without_iid_cutoffs += 1;
+                        }
+                        
                         // Track move ordering effectiveness (Task 10.1-10.3)
                         let lmr_threshold = self.lmr_config.min_move_index;
                         self.lmr_stats.move_ordering_stats.record_cutoff(move_index as u8, lmr_threshold);
@@ -4317,6 +4365,27 @@ impl SearchEngine {
             let static_eval = self.evaluate_position(board, player, captured_pieces);
             crate::debug_utils::trace_log("NEGAMAX", &format!("Best score is sentinel value, returning static evaluation: {}", static_eval));
             return static_eval;
+        }
+        
+        // Task 12.5: Update correlation tracking between IID efficiency and ordering effectiveness
+        // This is done at the end of each search to track correlation over time
+        if has_iid_move && self.iid_stats.iid_searches_performed > 0 {
+            let iid_efficiency = self.iid_stats.efficiency_rate();
+            let ordering_effectiveness = if self.iid_stats.ordering_effectiveness_with_iid_total > 0 {
+                (self.iid_stats.ordering_effectiveness_with_iid_cutoffs as f64 / 
+                 self.iid_stats.ordering_effectiveness_with_iid_total as f64) * 100.0
+            } else {
+                0.0
+            };
+            
+            // Track correlation: sum of (IID efficiency * ordering effectiveness)
+            self.iid_stats.iid_efficiency_ordering_correlation_sum += iid_efficiency * ordering_effectiveness;
+            self.iid_stats.iid_efficiency_ordering_correlation_points += 1;
+            
+            crate::debug_utils::trace_log("IID_CORRELATION", &format!(
+                "IID efficiency: {:.2}%, Ordering effectiveness: {:.2}%, Correlation points: {}",
+                iid_efficiency, ordering_effectiveness, self.iid_stats.iid_efficiency_ordering_correlation_points
+            ));
         }
         
         // Remove position hash from history before returning (Task 5.2)

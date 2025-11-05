@@ -4146,6 +4146,32 @@ pub struct IIDStats {
     pub game_phase_opening_adjustments: u64,
     pub game_phase_middlegame_adjustments: u64,
     pub game_phase_endgame_adjustments: u64,
+    /// Task 12.2: Cross-feature statistics - IID move ordering and effectiveness
+    /// Number of times IID move was ordered first (should be 100% when IID move exists)
+    pub iid_move_ordered_first: u64,
+    /// Number of times IID move was not ordered first (should be 0% when IID move exists)
+    pub iid_move_not_ordered_first: u64,
+    /// Number of cutoffs from IID moves
+    pub cutoffs_from_iid_moves: u64,
+    /// Number of cutoffs from non-IID moves
+    pub cutoffs_from_non_iid_moves: u64,
+    /// Total cutoffs (for percentage calculation)
+    pub total_cutoffs: u64,
+    /// Task 12.3: IID move position in ordered list (0 = first, 1 = second, etc.)
+    /// Tracked as sum of positions for average calculation
+    pub iid_move_position_sum: u64,
+    /// Number of times IID move position was tracked
+    pub iid_move_position_tracked: u64,
+    /// Task 12.4: Ordering effectiveness with IID (cutoff rate when IID move exists)
+    pub ordering_effectiveness_with_iid_cutoffs: u64,
+    pub ordering_effectiveness_with_iid_total: u64,
+    /// Task 12.4: Ordering effectiveness without IID (cutoff rate when IID move doesn't exist)
+    pub ordering_effectiveness_without_iid_cutoffs: u64,
+    pub ordering_effectiveness_without_iid_total: u64,
+    /// Task 12.5: Correlation tracking - sum of (IID efficiency * ordering effectiveness)
+    pub iid_efficiency_ordering_correlation_sum: f64,
+    /// Task 12.5: Correlation tracking - number of correlation data points
+    pub iid_efficiency_ordering_correlation_points: u64,
 }
 
 impl IIDStats {
@@ -4247,6 +4273,67 @@ impl IIDStats {
             self.average_time_per_iid()
         )
     }
+    
+    /// Task 12.2: Get percentage of cutoffs from IID moves vs non-IID moves
+    pub fn cutoff_percentage_from_iid_moves(&self) -> f64 {
+        if self.total_cutoffs == 0 {
+            return 0.0;
+        }
+        (self.cutoffs_from_iid_moves as f64 / self.total_cutoffs as f64) * 100.0
+    }
+    
+    /// Task 12.2: Get percentage of cutoffs from non-IID moves
+    pub fn cutoff_percentage_from_non_iid_moves(&self) -> f64 {
+        if self.total_cutoffs == 0 {
+            return 0.0;
+        }
+        (self.cutoffs_from_non_iid_moves as f64 / self.total_cutoffs as f64) * 100.0
+    }
+    
+    /// Task 12.3: Get average IID move position in ordered list (0 = first, 1 = second, etc.)
+    pub fn average_iid_move_position(&self) -> f64 {
+        if self.iid_move_position_tracked == 0 {
+            return 0.0;
+        }
+        self.iid_move_position_sum as f64 / self.iid_move_position_tracked as f64
+    }
+    
+    /// Task 12.3: Get percentage of times IID move was ordered first
+    pub fn iid_move_ordered_first_percentage(&self) -> f64 {
+        let total = self.iid_move_ordered_first + self.iid_move_not_ordered_first;
+        if total == 0 {
+            return 0.0;
+        }
+        (self.iid_move_ordered_first as f64 / total as f64) * 100.0
+    }
+    
+    /// Task 12.4: Get ordering effectiveness with IID (cutoff rate when IID move exists)
+    pub fn ordering_effectiveness_with_iid(&self) -> f64 {
+        if self.ordering_effectiveness_with_iid_total == 0 {
+            return 0.0;
+        }
+        (self.ordering_effectiveness_with_iid_cutoffs as f64 / 
+         self.ordering_effectiveness_with_iid_total as f64) * 100.0
+    }
+    
+    /// Task 12.4: Get ordering effectiveness without IID (cutoff rate when IID move doesn't exist)
+    pub fn ordering_effectiveness_without_iid(&self) -> f64 {
+        if self.ordering_effectiveness_without_iid_total == 0 {
+            return 0.0;
+        }
+        (self.ordering_effectiveness_without_iid_cutoffs as f64 / 
+         self.ordering_effectiveness_without_iid_total as f64) * 100.0
+    }
+    
+    /// Task 12.5: Get correlation coefficient between IID efficiency and ordering effectiveness
+    pub fn iid_efficiency_ordering_correlation(&self) -> f64 {
+        if self.iid_efficiency_ordering_correlation_points == 0 {
+            return 0.0;
+        }
+        // Simplified correlation: average of (IID efficiency * ordering effectiveness)
+        // A more sophisticated correlation would use Pearson correlation coefficient
+        self.iid_efficiency_ordering_correlation_sum / self.iid_efficiency_ordering_correlation_points as f64
+    }
 }
 
 /// Performance metrics for Internal Iterative Deepening
@@ -4277,6 +4364,19 @@ pub struct IIDPerformanceMetrics {
     pub net_benefit_percentage: f64,
     /// Task 6.6: Correlation coefficient between efficiency rate and speedup
     pub efficiency_speedup_correlation: f64,
+    /// Task 12.2: Percentage of cutoffs from IID moves vs non-IID moves
+    pub cutoff_percentage_from_iid_moves: f64,
+    pub cutoff_percentage_from_non_iid_moves: f64,
+    /// Task 12.3: Average IID move position in ordered list (0 = first, 1 = second, etc.)
+    pub average_iid_move_position: f64,
+    /// Task 12.3: Percentage of times IID move was ordered first
+    pub iid_move_ordered_first_percentage: f64,
+    /// Task 12.4: Ordering effectiveness with IID (cutoff rate when IID move exists)
+    pub ordering_effectiveness_with_iid: f64,
+    /// Task 12.4: Ordering effectiveness without IID (cutoff rate when IID move doesn't exist)
+    pub ordering_effectiveness_without_iid: f64,
+    /// Task 12.5: Correlation between IID efficiency and ordering effectiveness
+    pub iid_efficiency_ordering_correlation: f64,
 }
 
 impl IIDPerformanceMetrics {
@@ -4337,6 +4437,14 @@ impl IIDPerformanceMetrics {
             efficiency_speedup_correlation: if stats.correlation_data_points > 0 {
                 stats.efficiency_speedup_correlation_sum / stats.correlation_data_points as f64
             } else { 0.0 },
+            // Task 12.2-12.5: Cross-feature statistics
+            cutoff_percentage_from_iid_moves: stats.cutoff_percentage_from_iid_moves(),
+            cutoff_percentage_from_non_iid_moves: stats.cutoff_percentage_from_non_iid_moves(),
+            average_iid_move_position: stats.average_iid_move_position(),
+            iid_move_ordered_first_percentage: stats.iid_move_ordered_first_percentage(),
+            ordering_effectiveness_with_iid: stats.ordering_effectiveness_with_iid(),
+            ordering_effectiveness_without_iid: stats.ordering_effectiveness_without_iid(),
+            iid_efficiency_ordering_correlation: stats.iid_efficiency_ordering_correlation(),
         }
     }
 
