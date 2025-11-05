@@ -1,0 +1,651 @@
+# Task List: Move Ordering Improvements
+
+**PRD:** `task-6.0-move-ordering-review.md`  
+**Date:** December 2024  
+**Status:** In Progress
+
+---
+
+## Relevant Files
+
+### Primary Implementation Files
+- `src/search/move_ordering.rs` - Core move ordering implementation (10,000+ lines)
+  - `MoveOrdering` struct - Main move orderer implementation (lines 1532-1587)
+  - `order_moves_with_all_heuristics()` - Advanced ordering with all heuristics (lines 5886-5961)
+  - `score_move()` - Core move scoring function (lines 2722-2832)
+  - `score_capture_move_inline()` - MVV/LVA capture ordering (lines 3517-3529)
+  - Killer move management (lines 4101-4377)
+  - History heuristic implementation (lines 4379-4559)
+  - PV move ordering (lines 3875-4022)
+  - SEE calculation (lines 2966-3090) - **INCOMPLETE (placeholder)**
+  - `find_attackers_defenders()` - Returns empty vectors (lines 3096-3110)
+  - Move ordering cache eviction (line 5945) - **FIFO eviction**
+
+- `src/search/move_ordering_integration.rs` - Alternative move ordering integration
+  - `order_moves()` - Transposition table integrated ordering (lines 135-187)
+
+- `src/search/search_engine.rs` - Search engine integration
+  - `order_moves_for_negamax()` - Main ordering entry point (lines 458-475)
+  - Integration with IID (lines 4123-4140)
+  - Integration with LMR (implicit through move ordering)
+
+### Supporting Files
+- `src/search/transposition_table.rs` - Transposition table for PV moves
+- `src/types.rs` - Configuration and statistics types
+  - `MoveOrderingEffectivenessStats` - Effectiveness tracking (lines 2285-2377)
+  - `OrderingStats` - Performance statistics (lines 1594-1695)
+  - `MoveOrderingConfig` - Configuration structure
+- `src/bitboards/` - Bitboard attack generation (for SEE implementation)
+- `src/moves.rs` - Move generation (for SEE integration)
+
+### Test Files
+- `tests/move_ordering_*.rs` - Multiple test files for different aspects
+  - Should add tests for SEE implementation
+  - Should add tests for counter-move heuristic
+  - Should add tests for improved cache eviction
+- `benches/move_ordering_performance_benchmarks.rs` - Performance benchmarks
+  - Should add benchmarks for SEE impact
+  - Should add benchmarks for counter-move effectiveness
+  - Should add benchmarks comparing different cache eviction policies
+
+### Documentation Files
+- `docs/design/implementation/search-algorithm-optimizations/move-ordering-improvements/` - Design documents
+- `docs/ENGINE_UTILITIES_GUIDE.md` - Feature overview
+
+### Notes
+- These improvements address missing features and optimization opportunities identified in Task 6.0 review
+- High priority items focus on completing SEE implementation, adding counter-move heuristic, and improving cache eviction
+- Medium priority items focus on enhancing history heuristic, adding learning capabilities, and code modularization
+- Low priority items focus on code quality, benchmarks, and statistics enhancements
+- All changes should maintain backward compatibility with existing move ordering functionality
+- Tests should verify both correctness and performance improvements
+- SEE implementation requires integration with bitboard attack generation
+
+---
+
+## Tasks
+
+- [ ] 1.0 Complete SEE Implementation
+  - [ ] 1.1 Review SEE calculation placeholder in `move_ordering.rs` (lines 2966-3090)
+  - [ ] 1.2 Review `find_attackers_defenders()` implementation (lines 3096-3110) - currently returns empty vectors
+  - [ ] 1.3 Analyze bitboard attack generation capabilities in `src/bitboards/` to identify available attack calculation functions
+  - [ ] 1.4 Design SEE calculation algorithm:
+    - Calculate attackers and defenders for a square
+    - Simulate exchange sequence (most valuable attacker first)
+    - Return net material gain/loss
+  - [ ] 1.5 Implement `find_attackers_defenders()` using actual board attack generation:
+    - Generate all attackers to target square
+    - Generate all defenders of target square
+    - Return sorted lists (by piece value, attacker first)
+  - [ ] 1.6 Implement SEE calculation logic:
+    - Simulate exchange sequence
+    - Track material balance
+    - Handle piece promotions in SEE calculation
+    - Handle king captures (return large negative value)
+  - [ ] 1.7 Integrate SEE calculation with `score_capture_move_inline()`:
+    - Use SEE value when available (instead of just MVV/LVA)
+    - Combine SEE with MVV/LVA for better accuracy
+    - Add configuration option to enable/disable SEE (default: enabled)
+  - [ ] 1.8 Verify SEE cache integration:
+    - Ensure SEE cache is properly populated
+    - Verify cache hit/miss statistics are tracked
+    - Optimize SEE cache eviction policy
+  - [ ] 1.9 Add unit tests for SEE calculation:
+    - Test simple capture exchanges
+    - Test complex multi-piece exchanges
+    - Test edge cases (king captures, promotions, defended squares)
+    - Test SEE accuracy vs MVV/LVA accuracy
+  - [ ] 1.10 Add integration tests verifying SEE improves capture ordering:
+    - Compare ordering with/without SEE
+    - Verify SEE values are used correctly
+    - Measure ordering effectiveness improvement
+  - [ ] 1.11 Create performance benchmarks comparing SEE vs MVV/LVA:
+    - Measure ordering time overhead
+    - Measure ordering effectiveness improvement
+    - Verify SEE doesn't significantly slow down search
+  - [ ] 1.12 Optimize SEE calculation performance:
+    - Cache attackers/defenders if possible
+    - Optimize exchange simulation
+    - Consider early termination for obviously bad exchanges
+  - [ ] 1.13 Add debug logging for SEE calculations (conditional on debug flags)
+  - [ ] 1.14 Update documentation to describe SEE implementation and usage
+  - [ ] 1.15 Verify SEE integration with move ordering cache:
+    - Ensure SEE values are cached correctly
+    - Verify cache invalidation works properly
+    - Test cache effectiveness
+  - [ ] 1.16 Consider different scaling factors for different game phases:
+    - Use different MVV/LVA scaling for opening, middlegame, endgame
+    - Test phase-specific scaling effectiveness
+    - Add configuration options for phase-specific scaling
+
+- [ ] 2.0 Implement Counter-Move Heuristic
+  - [ ] 2.1 Design counter-move table structure:
+    - Similar to killer moves but indexed by opponent's last move
+    - Store moves that refuted opponent's moves
+    - Consider depth-aware storage (similar to killer moves)
+  - [ ] 2.2 Add counter-move table to `MoveOrdering` struct:
+    - `HashMap<Move, Vec<Move>>` or similar structure
+    - Configurable maximum moves per counter-move (default: 2)
+    - Memory-efficient storage
+  - [ ] 2.3 Implement `add_counter_move()` method:
+    - Store move that refuted opponent's move
+    - Check for duplicates before adding
+    - Maintain FIFO order (remove oldest if limit exceeded)
+    - Update statistics
+  - [ ] 2.4 Implement `score_counter_move()` method:
+    - Return configurable counter-move weight
+    - Check if move is a counter-move for opponent's last move
+    - Return 0 if not a counter-move
+  - [ ] 2.5 Integrate counter-move heuristic into move ordering:
+    - Add to `order_moves_with_all_heuristics()` after killer moves
+    - Use for quiet moves only (not captures)
+    - Prioritize counter-moves appropriately
+  - [ ] 2.6 Add counter-move tracking in search engine:
+    - Track opponent's last move in search context
+    - Update counter-move table when move causes cutoff
+    - Pass opponent's last move to move ordering
+  - [ ] 2.7 Add configuration options:
+    - `counter_move_weight` - Weight for counter-move heuristic
+    - `max_counter_moves` - Maximum moves per counter-move
+    - Enable/disable counter-move heuristic (default: enabled)
+  - [ ] 2.8 Add statistics tracking:
+    - `counter_move_hits` - Number of successful counter-move lookups
+    - `counter_move_misses` - Number of failed counter-move lookups
+    - `counter_move_hit_rate` - Percentage of successful lookups
+    - `counter_moves_stored` - Total number of counter-moves stored
+  - [ ] 2.9 Add unit tests for counter-move heuristic:
+    - Test counter-move storage and retrieval
+    - Test counter-move scoring
+    - Test counter-move integration with move ordering
+    - Test edge cases (empty table, duplicate moves)
+  - [ ] 2.10 Add integration tests verifying counter-move improves quiet move ordering:
+    - Compare ordering with/without counter-move heuristic
+    - Measure ordering effectiveness improvement
+    - Verify counter-moves are used correctly
+  - [ ] 2.11 Create performance benchmarks comparing counter-move vs no counter-move:
+    - Measure ordering time overhead
+    - Measure ordering effectiveness improvement
+    - Measure memory usage
+  - [ ] 2.12 Add debug logging for counter-move decisions (conditional on debug flags)
+  - [ ] 2.13 Update documentation to describe counter-move heuristic
+  - [ ] 2.14 Consider counter-move aging (reduce weight over time) - future enhancement
+  - [ ] 2.15 Consider aging killer moves (reducing weight over time):
+    - Implement aging mechanism for killer moves
+    - Reduce weight of older killer moves
+    - Test aging effectiveness
+  - [ ] 2.16 Consider different killer move counts for different depths:
+    - Use more killer moves at deeper depths
+    - Use fewer killer moves at shallow depths
+    - Test depth-specific killer move counts
+
+- [ ] 3.0 Improve Move Ordering Cache Eviction
+  - [ ] 3.1 Review current cache eviction implementation (line 5945) - FIFO eviction
+  - [ ] 3.2 Design improved eviction policy:
+    - LRU (Least Recently Used) eviction
+    - Depth-preferred eviction (keep deeper entries)
+    - Combination of LRU and depth-preferred
+    - Cache entry aging based on access frequency
+  - [ ] 3.3 Implement LRU tracking for cache entries:
+    - Add access timestamp or counter to cache entries
+    - Track most recently used entries
+    - Update LRU tracking on cache access
+  - [ ] 3.4 Implement depth-preferred eviction:
+    - Prefer keeping entries with higher depth
+    - Consider depth when evicting entries
+    - Balance between LRU and depth preference
+  - [ ] 3.5 Replace FIFO eviction with new eviction policy:
+    - Update cache eviction logic in `order_moves_with_all_heuristics()`
+    - Ensure eviction is efficient (O(1) or O(log n))
+    - Maintain cache size limits
+  - [ ] 3.6 Add configuration options:
+    - `cache_eviction_policy` - Choice of eviction policy (FIFO, LRU, depth-preferred, hybrid)
+    - `cache_max_size` - Maximum cache size (already exists, verify)
+    - Tuning parameters for eviction policy
+  - [ ] 3.7 Add statistics tracking for eviction:
+    - `cache_evictions` - Number of entries evicted
+    - `cache_eviction_reasons` - Why entries were evicted (size limit, policy, etc.)
+    - Cache hit rate by entry age
+    - Cache hit rate by entry depth
+  - [ ] 3.8 Add unit tests for cache eviction:
+    - Test LRU eviction behavior
+    - Test depth-preferred eviction behavior
+    - Test hybrid eviction behavior
+    - Test cache size limits
+  - [ ] 3.9 Create performance benchmarks comparing eviction policies:
+    - Measure cache hit rates with different policies
+    - Measure ordering time with different policies
+    - Measure memory usage with different policies
+    - Find optimal eviction policy
+  - [ ] 3.10 Consider cache entry aging:
+    - Reduce priority of entries over time
+    - Age entries based on access frequency
+    - Remove stale entries automatically
+  - [ ] 3.11 Handle IID move cache skipping:
+    - Ensure IID move doesn't break cache eviction
+    - Verify cache is properly skipped when IID move present
+    - Test cache behavior with IID moves
+  - [ ] 3.12 Update documentation to describe cache eviction policies
+  - [ ] 3.13 Verify backward compatibility:
+    - Ensure old FIFO eviction still works if configured
+    - Test migration from FIFO to new eviction policy
+    - Verify no performance regressions
+
+- [ ] 4.0 Enhance History Heuristic
+  - [ ] 4.1 Review current history heuristic implementation (lines 4379-4559)
+  - [ ] 4.2 Design enhancements:
+    - Separate history tables for different game phases (opening, middlegame, endgame)
+    - Relative history (history[from][to] instead of history[piece][from][to])
+    - Time-based aging (exponential decay)
+    - Separate history for quiet moves only (not captures)
+  - [ ] 4.3 Implement phase-aware history tables:
+    - Detect game phase (opening, middlegame, endgame)
+    - Maintain separate history tables per phase
+    - Use appropriate table based on current phase
+    - Merge tables when transitioning between phases
+  - [ ] 4.4 Implement relative history:
+    - Change key from `(piece_type, from_square, to_square)` to `(from_square, to_square)`
+    - Update history table structure
+    - Update all history lookup/update methods
+    - Verify performance impact (should be faster)
+  - [ ] 4.5 Implement time-based aging:
+    - Add timestamp to history entries
+    - Apply exponential decay based on entry age
+    - Remove entries below threshold
+    - Balance between aging frequency and performance
+  - [ ] 4.6 Implement quiet-move-only history:
+    - Separate history table for quiet moves
+    - Don't update history for captures (or use separate table)
+    - Use quiet history for quiet moves, regular history for captures
+    - Verify effectiveness improvement
+  - [ ] 4.7 Add configuration options:
+    - `history_phase_aware` - Enable phase-aware history (default: enabled)
+    - `history_relative` - Use relative history (default: enabled)
+    - `history_time_based_aging` - Enable time-based aging (default: enabled)
+    - `history_quiet_only` - Use history for quiet moves only (default: enabled)
+    - Aging parameters (decay factor, update frequency)
+  - [ ] 4.8 Add statistics tracking:
+    - History hit rate by phase
+    - History hit rate for relative vs absolute
+    - History aging statistics
+    - History effectiveness comparison
+  - [ ] 4.9 Add unit tests for enhanced history:
+    - Test phase-aware history tables
+    - Test relative history lookup/update
+    - Test time-based aging
+    - Test quiet-move-only history
+  - [ ] 4.10 Create performance benchmarks comparing enhancements:
+    - Measure history hit rates with different configurations
+    - Measure ordering effectiveness improvements
+    - Measure memory usage impact
+    - Find optimal configuration
+  - [ ] 4.11 Update existing history methods to support enhancements:
+    - `update_history_score()` - Support phase-aware, time-based aging
+    - `score_history_move()` - Support relative history, quiet-only
+    - `age_history_table()` - Support time-based aging
+  - [ ] 4.12 Add debug logging for history enhancements (conditional on debug flags)
+  - [ ] 4.13 Update documentation to describe history enhancements
+  - [ ] 4.14 Consider counter-move history (separate table for opponent moves) - future enhancement
+  - [ ] 4.15 Consider different aging factors for different game phases:
+    - Use different aging factors for opening, middlegame, endgame
+    - Test phase-specific aging effectiveness
+    - Add configuration options for phase-specific aging
+
+- [ ] 5.0 Add Move Ordering Learning
+  - [ ] 5.1 Design learning framework:
+    - Self-play tuning for move ordering weights
+    - Adaptive weight adjustment based on effectiveness statistics
+    - Machine learning framework for weight optimization (optional, advanced)
+  - [ ] 5.2 Implement effectiveness-based weight adjustment:
+    - Track heuristic effectiveness (hit rates, cutoff contributions)
+    - Adjust weights based on effectiveness statistics
+    - Use reinforcement learning principles (reward effective heuristics)
+  - [ ] 5.3 Implement self-play tuning:
+    - Run games with different weight configurations
+    - Measure win rates and performance
+    - Optimize weights using search algorithms (genetic algorithm, simulated annealing, etc.)
+  - [ ] 5.4 Add learning configuration:
+    - `enable_learning` - Enable adaptive weight adjustment (default: disabled)
+    - `learning_rate` - How quickly weights adjust
+    - `learning_frequency` - How often weights are updated
+    - `min_games_for_learning` - Minimum games before adjusting weights
+  - [ ] 5.5 Add weight adjustment methods:
+    - `adjust_weights_based_on_effectiveness()` - Adjust weights from statistics
+    - `save_learned_weights()` - Save learned weights to configuration
+    - `load_learned_weights()` - Load learned weights from configuration
+  - [ ] 5.6 Integrate learning with statistics tracking:
+    - Use `MoveOrderingEffectivenessStats` for weight adjustment
+    - Use `OrderingStats` for weight adjustment
+    - Track weight changes over time
+  - [ ] 5.7 Add statistics tracking for learning:
+    - `weight_adjustments` - Number of weight adjustments made
+    - `weight_changes` - History of weight changes
+    - `learning_effectiveness` - Effectiveness improvement from learning
+  - [ ] 5.8 Add unit tests for learning:
+    - Test weight adjustment based on effectiveness
+    - Test weight bounds (prevent extreme values)
+    - Test learning configuration options
+  - [ ] 5.9 Create performance benchmarks for learning:
+    - Measure effectiveness improvement from learning
+    - Measure time overhead of learning
+    - Verify learning doesn't degrade performance
+  - [ ] 5.10 Add machine learning framework (optional, advanced):
+    - Use neural network or other ML model for weight optimization
+    - Train on game positions and outcomes
+    - Integrate with self-play tuning
+  - [ ] 5.11 Add debug logging for learning (conditional on debug flags)
+  - [ ] 5.12 Update documentation to describe learning framework
+  - [ ] 5.13 Consider online learning vs offline learning - future enhancement
+
+- [ ] 6.0 Modularize move_ordering.rs
+  - [ ] 6.1 Review current file structure (10,000+ lines)
+  - [ ] 6.2 Design module structure:
+    - `move_ordering/` directory
+    - `mod.rs` - Public API and main `MoveOrdering` struct
+    - `capture_ordering.rs` - MVV/LVA and SEE capture ordering
+    - `killer_moves.rs` - Killer move management
+    - `history_heuristic.rs` - History heuristic implementation
+    - `pv_ordering.rs` - PV move ordering
+    - `see_calculation.rs` - SEE calculation (once implemented)
+    - `counter_moves.rs` - Counter-move heuristic (once implemented)
+    - `cache.rs` - Move ordering cache management
+    - `statistics.rs` - Statistics tracking
+  - [ ] 6.3 Extract capture ordering module:
+    - Move `score_capture_move_inline()` and related functions
+    - Move SEE calculation (once implemented)
+    - Maintain public API compatibility
+  - [ ] 6.4 Extract killer moves module:
+    - Move killer move management methods
+    - Move killer move storage and lookup
+    - Maintain public API compatibility
+  - [ ] 6.5 Extract history heuristic module:
+    - Move history table management
+    - Move history scoring and updating
+    - Maintain public API compatibility
+  - [ ] 6.6 Extract PV ordering module:
+    - Move PV move retrieval and caching
+    - Move PV move scoring
+    - Maintain public API compatibility
+  - [ ] 6.7 Extract cache management module:
+    - Move cache structures and methods
+    - Move cache eviction logic
+    - Maintain public API compatibility
+  - [ ] 6.8 Extract statistics module:
+    - Move statistics tracking structures
+    - Move statistics update methods
+    - Maintain public API compatibility
+  - [ ] 6.9 Update main `MoveOrdering` struct:
+    - Use modules for internal implementation
+    - Maintain public API compatibility
+    - Update method implementations to use modules
+  - [ ] 6.10 Update all imports throughout codebase:
+    - Update `use` statements to new module structure
+    - Verify all code compiles
+    - Run full test suite
+  - [ ] 6.11 Add module-level documentation:
+    - Document each module's purpose
+    - Document public APIs
+    - Document module dependencies
+  - [ ] 6.12 Verify backward compatibility:
+    - Ensure all existing code still works
+    - Verify no breaking changes to public API
+    - Run integration tests
+  - [ ] 6.13 Update documentation to reflect new module structure
+  - [ ] 6.14 Consider further modularization if needed (future enhancement)
+
+- [ ] 7.0 Improve SEE Cache
+  - [ ] 7.1 Review SEE cache implementation (after SEE is implemented in task 1.0)
+  - [ ] 7.2 Analyze SEE cache performance:
+    - Measure cache hit rates
+    - Identify cache bottlenecks
+    - Measure memory usage
+  - [ ] 7.3 Optimize SEE cache eviction policy:
+    - Apply improved eviction policy from task 3.0
+    - Consider SEE-specific eviction (e.g., prefer keeping high-value SEE calculations)
+    - Balance between cache size and hit rate
+  - [ ] 7.4 Increase SEE cache size if beneficial:
+    - Test larger cache sizes
+    - Measure hit rate improvement
+    - Balance memory usage vs performance
+  - [ ] 7.5 Optimize SEE cache key structure:
+    - Ensure cache keys are efficient (fast hash)
+    - Consider cache key compression
+    - Verify cache key uniqueness
+  - [ ] 7.6 Add SEE cache statistics:
+    - `see_cache_hits` - Number of SEE cache hits
+    - `see_cache_misses` - Number of SEE cache misses
+    - `see_cache_hit_rate` - SEE cache hit rate
+    - `see_cache_size` - Current SEE cache size
+  - [ ] 7.7 Add unit tests for SEE cache:
+    - Test cache hit/miss behavior
+    - Test cache eviction
+    - Test cache size limits
+  - [ ] 7.8 Create performance benchmarks for SEE cache:
+    - Measure cache hit rates with different configurations
+    - Measure ordering time with different cache sizes
+    - Find optimal cache configuration
+  - [ ] 7.9 Update documentation to describe SEE cache optimization
+  - [ ] 7.10 Note: This task depends on task 1.0 (SEE Implementation) being completed first
+
+- [ ] 8.0 Remove Dead Code
+  - [ ] 8.1 Review dead code marked with `#[allow(dead_code)]` (lines 2862, 2909, 2934)
+  - [ ] 8.2 Identify all dead code in `move_ordering.rs`:
+    - Search for `#[allow(dead_code)]` attributes
+    - Use compiler warnings to find unused code
+    - Review unused functions and methods
+  - [ ] 8.3 Determine if dead code should be removed or implemented:
+    - Review code purpose and usefulness
+    - Check if it's planned for future use
+    - Decide on removal vs implementation
+  - [ ] 8.4 Remove dead code that's not needed:
+    - Remove unused functions
+    - Remove unused structs/enums
+    - Remove unused imports
+  - [ ] 8.5 Implement dead code that's useful:
+    - Complete placeholder implementations
+    - Add missing functionality
+    - Remove `#[allow(dead_code)]` attributes
+  - [ ] 8.6 Clean up unused code paths:
+    - Remove commented-out code
+    - Remove debug-only code that's no longer needed
+    - Simplify complex code paths
+  - [ ] 8.7 Verify code still compiles after cleanup:
+    - Run full build
+    - Fix any compilation errors
+    - Verify no functionality was accidentally removed
+  - [ ] 8.8 Run full test suite to verify no regressions:
+    - Run all unit tests
+    - Run all integration tests
+    - Verify tests still pass
+  - [ ] 8.9 Update documentation if needed:
+    - Remove references to removed code
+    - Update API documentation
+    - Update design documents
+
+- [ ] 9.0 Add Move Ordering Benchmarks
+  - [ ] 9.1 Review existing benchmarks in `benches/move_ordering_performance_benchmarks.rs`
+  - [ ] 9.2 Design comprehensive benchmark suite:
+    - Compare different ordering strategies
+    - Measure effectiveness vs performance trade-offs
+    - Test different configurations
+    - Test different game phases
+  - [ ] 9.3 Add benchmarks for SEE implementation:
+    - Compare SEE vs MVV/LVA ordering
+    - Measure SEE calculation overhead
+    - Measure ordering effectiveness improvement
+  - [ ] 9.4 Add benchmarks for counter-move heuristic:
+    - Compare counter-move vs no counter-move
+    - Measure counter-move effectiveness
+    - Measure memory overhead
+  - [ ] 9.5 Add benchmarks for cache eviction policies:
+    - Compare FIFO vs LRU vs depth-preferred
+    - Measure cache hit rates
+    - Measure ordering time
+  - [ ] 9.6 Add benchmarks for history heuristic enhancements:
+    - Compare phase-aware vs single table
+    - Compare relative vs absolute history
+    - Compare time-based vs multiplicative aging
+  - [ ] 9.7 Add benchmarks for move ordering learning:
+    - Compare learned vs static weights
+    - Measure learning effectiveness
+    - Measure learning overhead
+  - [ ] 9.8 Add effectiveness benchmarks:
+    - Measure cutoff rates
+    - Measure average cutoff index
+    - Measure search efficiency
+  - [ ] 9.9 Add performance benchmarks:
+    - Measure ordering time per move list
+    - Measure cache hit rates
+    - Measure memory usage
+  - [ ] 9.10 Create benchmark reporting:
+    - Generate benchmark reports
+    - Compare benchmark results over time
+    - Identify performance regressions
+  - [ ] 9.11 Integrate benchmarks into CI/CD:
+    - Run benchmarks on commits
+    - Track benchmark results
+    - Alert on performance regressions
+  - [ ] 9.12 Update documentation to describe benchmark suite
+
+- [ ] 10.0 Enhance Statistics
+  - [ ] 10.1 Review current statistics tracking (`MoveOrderingEffectivenessStats`, `OrderingStats`)
+  - [ ] 10.2 Design enhanced statistics:
+    - Per-heuristic effectiveness (which heuristics contribute most to best moves)
+    - Move type distribution (captures, promotions, quiet moves, etc.)
+    - Depth-specific statistics (ordering effectiveness at different depths)
+    - Game phase-specific statistics (opening, middlegame, endgame)
+  - [ ] 10.3 Add per-heuristic effectiveness tracking:
+    - Track which heuristics contributed to best moves
+    - Track heuristic hit rates per move type
+    - Track heuristic score contributions
+  - [ ] 10.4 Add move type distribution tracking:
+    - Track distribution of captures, promotions, quiet moves
+    - Track ordering effectiveness by move type
+    - Track heuristic usage by move type
+  - [ ] 10.5 Add depth-specific statistics:
+    - Track ordering effectiveness at different depths
+    - Track heuristic hit rates at different depths
+    - Track cache hit rates at different depths
+  - [ ] 10.6 Add game phase-specific statistics:
+    - Track ordering effectiveness by game phase
+    - Track heuristic usage by game phase
+    - Track cache hit rates by game phase
+  - [ ] 10.7 Add statistics aggregation methods:
+    - Aggregate statistics over multiple searches
+    - Calculate statistics summaries
+    - Export statistics to files
+  - [ ] 10.8 Add statistics visualization (optional):
+    - Generate statistics charts
+    - Create statistics reports
+    - Export statistics in various formats
+  - [ ] 10.9 Add unit tests for enhanced statistics:
+    - Test statistics collection
+    - Test statistics aggregation
+    - Test statistics accuracy
+  - [ ] 10.10 Add configuration options:
+    - Enable/disable enhanced statistics (default: enabled)
+    - Statistics collection frequency
+    - Statistics aggregation settings
+  - [ ] 10.11 Update existing statistics structures:
+    - Add new fields to `MoveOrderingEffectivenessStats`
+    - Add new fields to `OrderingStats`
+    - Maintain backward compatibility
+  - [ ] 10.12 Update documentation to describe enhanced statistics
+  - [ ] 10.13 Consider real-time statistics monitoring - future enhancement
+
+- [ ] 11.0 Enhance PV Move Ordering
+  - [ ] 11.1 Review current PV move ordering implementation (lines 3875-4022)
+  - [ ] 11.2 Consider using multiple PV moves:
+    - Store multiple best moves from transposition table
+    - Use multiple PV moves in ordering (not just the best move)
+    - Test effectiveness of multiple PV moves
+  - [ ] 11.3 Consider using PV move from previous iteration:
+    - Track PV move from previous search iteration
+    - Use previous PV move if current PV move not available
+    - Test effectiveness of previous iteration PV moves
+  - [ ] 11.4 Consider using PV move from sibling nodes:
+    - Track PV moves from sibling search nodes
+    - Use sibling PV moves when available
+    - Test effectiveness of sibling PV moves
+  - [ ] 11.5 Add configuration options:
+    - `use_multiple_pv_moves` - Enable multiple PV moves (default: disabled)
+    - `use_previous_iteration_pv` - Enable previous iteration PV (default: disabled)
+    - `use_sibling_pv_moves` - Enable sibling PV moves (default: disabled)
+  - [ ] 11.6 Add statistics tracking:
+    - Multiple PV move hit rates
+    - Previous iteration PV hit rates
+    - Sibling PV move hit rates
+  - [ ] 11.7 Add unit tests for PV move enhancements
+  - [ ] 11.8 Create performance benchmarks comparing PV move strategies
+  - [ ] 11.9 Update documentation to describe PV move enhancements
+
+- [ ] 12.0 Coordinate Move Ordering with LMR, IID, and Search Core
+  - [ ] 12.1 Review move ordering integration with LMR (Task 3.0):
+    - Current integration is implicit (better ordering = better LMR)
+    - Consider explicit coordination
+  - [ ] 12.2 Implement move ordering quality-based LMR adjustment:
+    - Track move ordering effectiveness (early cutoff rate)
+    - Adjust LMR reduction amounts based on ordering quality
+    - If move ordering is very effective (high early cutoff rate), LMR can be more aggressive
+    - If move ordering is less effective, LMR should be more conservative
+  - [ ] 12.3 Review move ordering integration with IID (Task 4.0):
+    - Current integration is excellent (IID move gets highest priority)
+    - Consider additional coordination
+  - [ ] 12.4 Implement IID move effectiveness tracking:
+    - Track IID move effectiveness (how often IID move is actually the best move)
+    - Use this to tune IID trigger conditions
+    - Consider skipping IID if move ordering is already very good
+  - [ ] 12.5 Review move ordering integration with search core (Task 1.0):
+    - Current integration is efficient (caching reduces overhead)
+    - Consider additional coordination
+  - [ ] 12.6 Implement move ordering effectiveness-based search depth adjustment:
+    - Track move ordering effectiveness metrics
+    - Adjust search depth based on ordering effectiveness
+    - If move ordering is very effective, can search deeper with same time budget
+    - If move ordering is less effective, may need more time for same depth
+  - [ ] 12.7 Add configuration options:
+    - `enable_ordering_quality_lmr_adjustment` - Enable LMR adjustment based on ordering quality (default: disabled)
+    - `enable_iid_effectiveness_tracking` - Enable IID move effectiveness tracking (default: disabled)
+    - `enable_ordering_effectiveness_depth_adjustment` - Enable depth adjustment based on ordering effectiveness (default: disabled)
+  - [ ] 12.8 Add statistics tracking:
+    - Ordering quality metrics used for LMR adjustment
+    - IID move effectiveness statistics
+    - Depth adjustment statistics
+  - [ ] 12.9 Add unit tests for coordination features
+  - [ ] 12.10 Create performance benchmarks comparing coordinated vs non-coordinated approaches
+  - [ ] 12.11 Update documentation to describe coordination features
+
+---
+
+## Task Dependencies
+
+- **Task 7.0** (Improve SEE Cache) depends on **Task 1.0** (Complete SEE Implementation)
+- **Task 6.0** (Modularize move_ordering.rs) can be done independently but benefits from completed tasks
+- **Task 9.0** (Add Move Ordering Benchmarks) benefits from all other tasks being completed
+- **Task 10.0** (Enhance Statistics) can be done independently
+- **Task 11.0** (Enhance PV Move Ordering) can be done independently
+- **Task 12.0** (Coordinate Move Ordering with LMR, IID, and Search Core) depends on understanding of LMR (Task 3.0), IID (Task 4.0), and Search Core (Task 1.0) implementations
+
+## Priority Summary
+
+**High Priority:**
+- Task 1.0: Complete SEE Implementation (2-3 days, High impact)
+- Task 2.0: Implement Counter-Move Heuristic (1-2 days, Medium impact)
+- Task 3.0: Improve Move Ordering Cache Eviction (4-8 hours, Medium impact)
+
+**Medium Priority:**
+- Task 4.0: Enhance History Heuristic (1-2 days, Medium impact)
+- Task 5.0: Add Move Ordering Learning (3-5 days, High impact)
+- Task 6.0: Modularize move_ordering.rs (2-3 days, Low impact)
+
+**Low Priority:**
+- Task 7.0: Improve SEE Cache (4-8 hours, Low impact) - Depends on Task 1.0
+- Task 8.0: Remove Dead Code (2-4 hours, Low impact)
+- Task 9.0: Add Move Ordering Benchmarks (1 day, Medium impact)
+- Task 10.0: Enhance Statistics (4-8 hours, Low impact)
+- Task 11.0: Enhance PV Move Ordering (1-2 days, Medium impact)
+- Task 12.0: Coordinate Move Ordering with LMR, IID, and Search Core (2-3 days, High impact)
+
+---
+
+**Status:** In Progress - Task list generated from move ordering review. Tasks organized by priority with detailed subtasks for each improvement area.
+

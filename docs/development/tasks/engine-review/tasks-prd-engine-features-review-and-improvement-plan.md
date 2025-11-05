@@ -106,16 +106,16 @@
   - [x] 5.8 Generate improvement recommendations
   - [x] 5.9 Coordinate with null-move and transposition table review
 
-- [ ] 6.0 Feature: Move Ordering
-  - [ ] 6.1 Review move_ordering.rs implementation
-  - [ ] 6.2 Verify capture ordering (MVV/LVA) effectiveness
-  - [ ] 6.3 Check killer move usage and effectiveness
-  - [ ] 6.4 Assess history heuristic implementation
-  - [ ] 6.5 Review PV move ordering integration
-  - [ ] 6.6 Measure ordering effectiveness (cutoff rate, search efficiency)
-  - [ ] 6.7 Identify strengths and weaknesses
-  - [ ] 6.8 Generate improvement recommendations
-  - [ ] 6.9 Coordinate analysis with LMR, IID, and search core reviews
+- [x] 6.0 Feature: Move Ordering
+  - [x] 6.1 Review move_ordering.rs implementation
+  - [x] 6.2 Verify capture ordering (MVV/LVA) effectiveness
+  - [x] 6.3 Check killer move usage and effectiveness
+  - [x] 6.4 Assess history heuristic implementation
+  - [x] 6.5 Review PV move ordering integration
+  - [x] 6.6 Measure ordering effectiveness (cutoff rate, search efficiency)
+  - [x] 6.7 Identify strengths and weaknesses
+  - [x] 6.8 Generate improvement recommendations
+  - [x] 6.9 Coordinate analysis with LMR, IID, and search core reviews
 
 - [ ] 7.0 Dependency Coordination: Search Algorithm Integration
   - [ ] 7.1 Analyze integration points between search algorithms
