@@ -626,6 +626,7 @@ pub struct QuiescenceEntry {
     pub best_move: Option<Move>,
     pub access_count: u64, // For LRU tracking - number of times this entry was accessed
     pub last_access_age: u64, // For LRU tracking - age when last accessed
+    pub stand_pat_score: Option<i32>, // Task 6.0: Cached stand-pat evaluation (optional, not all entries have it)
 }
 
 /// Represents a dual-phase evaluation score for tapered evaluation
@@ -1105,6 +1106,8 @@ pub struct QuiescenceStats {
     pub move_ordering_total_moves: u64, // Total moves ordered
     pub move_ordering_first_move_cutoffs: u64, // Cutoffs from first move in ordering
     pub move_ordering_second_move_cutoffs: u64, // Cutoffs from second move in ordering
+    pub stand_pat_tt_hits: u64, // Task 6.0: Number of times stand-pat was retrieved from TT
+    pub stand_pat_tt_misses: u64, // Task 6.0: Number of times stand-pat was not found in TT
 }
 
 impl QuiescenceStats {

@@ -4450,6 +4450,8 @@ impl SearchEngine {
 
         // Task 5.11: Extract TT best move as hint (if available)
         let mut tt_move_hint: Option<Move> = None;
+        // Task 6.0: Extract stand-pat from TT if available
+        let mut cached_stand_pat: Option<i32> = None;
         
         // Transposition table lookup
         if self.quiescence_config.enable_tt {
@@ -4473,6 +4475,14 @@ impl SearchEngine {
                         tt_move_hint = Some(best_move.clone());
                     }
                     
+                    // Task 6.0: Extract cached stand-pat if available
+                    if let Some(stand_pat_score) = entry.stand_pat_score {
+                        cached_stand_pat = Some(stand_pat_score);
+                        self.quiescence_stats.stand_pat_tt_hits += 1;
+                    } else {
+                        self.quiescence_stats.stand_pat_tt_misses += 1;
+                    }
+                    
                     let score_to_return = entry.score; // Store score before dropping mutable reference
                     let flag_to_return = entry.flag; // Store flag before dropping mutable reference
                     
@@ -4492,6 +4502,7 @@ impl SearchEngine {
                 }
             } else {
                 self.quiescence_stats.tt_misses += 1;
+                self.quiescence_stats.stand_pat_tt_misses += 1;
                 // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT miss");
             }
         }
@@ -4499,22 +4510,41 @@ impl SearchEngine {
         // Task 5.11: Use TT best move as hint if available, otherwise use provided hint
         let effective_hint = tt_move_hint.as_ref().or(move_hint);
         
+        // Task 6.0: Use cached stand-pat if available, otherwise evaluate
+        // 
+        // Stand-pat caching optimization:
+        // - Stand-pat evaluation is expensive (position evaluation)
+        // - Many positions are revisited in quiescence search
+        // - Caching stand-pat in TT avoids redundant evaluations
+        // - Stand-pat is cached when position is fully evaluated
+        // - Stand-pat can be used for bounds checking (beta cutoff, alpha update)
+        // 
+        // Note: Stand-pat is not cached at beta cutoffs (position not fully evaluated)
+        // It will be cached when the position is fully evaluated later
         // crate::debug_utils::trace_log("QUIESCENCE", "Evaluating stand-pat position");
-        let stand_pat = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
-        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {}", stand_pat));
+        let stand_pat = if let Some(cached) = cached_stand_pat {
+            // Use cached stand-pat from TT (Task 6.0)
+            cached
+        } else {
+            // Evaluate stand-pat (will be cached later in TT entry)
+            self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true)
+        };
+        // crate::debug_utils::trace_log("QUIESCENCE", &format!("Stand-pat evaluation: {} (cached: {})", stand_pat, cached_stand_pat.is_some()));
         
         // Track stand-pat as initial best score
         best_score_tracked = Some(stand_pat);
         
+        // Task 6.0: Use cached stand-pat for bounds checking
+        // Stand-pat can be used for beta cutoff and alpha update
         if stand_pat >= beta { 
             crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat beta cutoff", 
-                &format!("Stand-pat {} >= beta {}, returning beta", stand_pat, beta), 
+                &format!("Stand-pat {} >= beta {}, returning beta (cached: {})", stand_pat, beta, cached_stand_pat.is_some()), 
                 Some(stand_pat));
             return beta; 
         }
         if alpha < stand_pat { 
             crate::debug_utils::log_decision("QUIESCENCE", "Stand-pat alpha update", 
-                &format!("Stand-pat {} > alpha {}, updating alpha", stand_pat, alpha), 
+                &format!("Stand-pat {} > alpha {}, updating alpha (cached: {})", stand_pat, alpha, cached_stand_pat.is_some()), 
                 Some(stand_pat));
             alpha = stand_pat; 
         }
@@ -4635,6 +4665,11 @@ impl SearchEngine {
                 if self.quiescence_config.enable_tt {
                     let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
                     let flag = TranspositionFlag::LowerBound;
+                    // Task 6.0: At beta cutoff, we don't have stand-pat for the position after the move
+                    // We could evaluate it, but that would be expensive. For now, store None.
+                    // The stand-pat will be cached when the position is fully evaluated later.
+                    let stand_pat_for_beta = None; // Don't cache stand-pat at beta cutoff (position not fully evaluated)
+                    
                     self.quiescence_tt.insert(fen_key, QuiescenceEntry {
                         score: beta,
                         depth,
@@ -4642,6 +4677,7 @@ impl SearchEngine {
                         best_move: Some(move_.clone()),
                         access_count: 1,
                         last_access_age: self.quiescence_tt_age,
+                        stand_pat_score: stand_pat_for_beta, // Task 6.0: Cache stand-pat evaluation (None at beta cutoff)
                     });
                     self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
                 }
@@ -4667,15 +4703,40 @@ impl SearchEngine {
             let flag = if alpha <= -beta { TranspositionFlag::UpperBound } 
                       else if alpha >= beta { TranspositionFlag::LowerBound } 
                       else { TranspositionFlag::Exact };
-            self.quiescence_tt.insert(fen_key, QuiescenceEntry {
-                score: alpha,
-                depth,
-                flag,
-                best_move: None, // We don't store best move for quiescence search
-                access_count: 1,
-                last_access_age: self.quiescence_tt_age,
-            });
-            self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
+            
+            // Task 6.0: Store stand-pat evaluation in TT entry
+            // 
+            // Stand-pat caching strategy:
+            // - Cache stand-pat when position is fully evaluated (not at beta cutoff)
+            // - Update existing entries with stand-pat if not already cached
+            // - Stand-pat is cached to avoid redundant evaluations
+            // - Stand-pat can be used for bounds checking in future searches
+            // 
+            // If entry already exists, update it with stand-pat if not already cached
+            if let Some(existing_entry) = self.quiescence_tt.get_mut(&fen_key) {
+                // Update existing entry with stand-pat if not already cached
+                if existing_entry.stand_pat_score.is_none() {
+                    existing_entry.stand_pat_score = Some(stand_pat);
+                }
+                // Update score, depth, and flag if this search was deeper or provides better bounds
+                if depth >= existing_entry.depth || flag == TranspositionFlag::Exact {
+                    existing_entry.score = alpha;
+                    existing_entry.depth = depth;
+                    existing_entry.flag = flag;
+                }
+            } else {
+                // Create new entry with stand-pat cached
+                self.quiescence_tt.insert(fen_key, QuiescenceEntry {
+                    score: alpha,
+                    depth,
+                    flag,
+                    best_move: None, // We don't store best move for quiescence search
+                    access_count: 1,
+                    last_access_age: self.quiescence_tt_age,
+                    stand_pat_score: Some(stand_pat), // Task 6.0: Cache stand-pat evaluation
+                });
+                self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
+            }
         }
         
         // Return best score: prefer tracked score (from timeout) if available, otherwise use alpha
