@@ -4437,10 +4437,20 @@ impl SearchEngine {
             GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
         }
 
-        // Check depth limit
-        // Note: depth > max_depth check is sufficient since depth is decremented properly (depth - 1)
-        // The depth == 0 check is kept as a safety check in case depth could be 0 from external calls
-        // This also serves as a minimum depth check to prevent infinite recursion (depth 0 terminates)
+        // Task 7.8: Depth limit check - updated documentation
+        //
+        // Depth limit termination:
+        // - depth == 0: Safety check to prevent infinite recursion (depth 0 terminates immediately)
+        // - depth > max_depth: Maximum depth limit reached (quiescence search has explored deep enough)
+        // - When depth limit is reached, we evaluate the position statically and return
+        // - This prevents quiescence search from going too deep and consuming excessive resources
+        // - The max_depth configuration controls how deep quiescence search can go
+        // 
+        // Depth limit rationale:
+        // - Quiescence search is meant to evaluate "noisy" positions (captures, checks, promotions)
+        // - Beyond a certain depth, positions become quiet and static evaluation is sufficient
+        // - The depth limit ensures quiescence search terminates in a reasonable time
+        // - Task 1.0 fix: Changed from hardcoded depth limit to config.max_depth
         if depth == 0 || depth > self.quiescence_config.max_depth {
             // crate::debug_utils::trace_log("QUIESCENCE", &format!("Depth limit reached (depth={}), evaluating position", depth));
             let score = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
@@ -4553,6 +4563,45 @@ impl SearchEngine {
         let noisy_moves = self.generate_noisy_moves(board, player, captured_pieces);
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Found {} noisy moves", noisy_moves.len()));
         
+        // Task 7.2, 7.3: Explicit check for empty move list before main search loop
+        // If no noisy moves are available, return stand-pat evaluation (quiescence search terminates)
+        // This is a common case in quiet positions where there are no captures, checks, or promotions
+        if noisy_moves.is_empty() {
+            // No noisy moves available - quiescence search terminates at stand-pat
+            // crate::debug_utils::trace_log("QUIESCENCE", "No noisy moves available, returning stand-pat");
+            
+            // Store result in transposition table (Task 6.0)
+            if self.quiescence_config.enable_tt {
+                let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
+                let flag = TranspositionFlag::Exact; // Exact score since no moves to search
+                
+                // Task 6.0: Update or create entry with stand-pat cached
+                if let Some(existing_entry) = self.quiescence_tt.get_mut(&fen_key) {
+                    if existing_entry.stand_pat_score.is_none() {
+                        existing_entry.stand_pat_score = Some(stand_pat);
+                    }
+                    if depth >= existing_entry.depth || flag == TranspositionFlag::Exact {
+                        existing_entry.score = stand_pat;
+                        existing_entry.depth = depth;
+                        existing_entry.flag = flag;
+                    }
+                } else {
+                    self.quiescence_tt.insert(fen_key, QuiescenceEntry {
+                        score: stand_pat,
+                        depth,
+                        flag,
+                        best_move: None,
+                        access_count: 1,
+                        last_access_age: self.quiescence_tt_age,
+                        stand_pat_score: Some(stand_pat),
+                    });
+                    self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
+                }
+            }
+            
+            return stand_pat;
+        }
+        
         // Track move type statistics
         for move_ in &noisy_moves {
             if move_.gives_check {
@@ -4575,6 +4624,7 @@ impl SearchEngine {
 
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
 
+        // Task 7.2: Main search loop - explicit check ensures we only enter if moves are available
         for (move_index, move_) in sorted_noisy_moves.iter().enumerate() {
             if self.should_stop(&start_time, time_limit_ms) { 
                 // crate::debug_utils::trace_log("QUIESCENCE", "Time limit reached, stopping move evaluation");
@@ -4588,6 +4638,31 @@ impl SearchEngine {
             // crate::debug_utils::trace_log("QUIESCENCE", &format!("Evaluating move {}: {} (alpha: {}, beta: {})", 
             //     move_index + 1, move_.to_usi_string(), alpha, beta));
             
+            // Task 7.6: Pruning conditions and logic
+            // 
+            // Delta pruning:
+            // - Prunes moves where the material gain from a capture is insufficient
+            // - Formula: stand_pat + material_gain + safety_margin < alpha
+            // - If even the best-case scenario (material gain + safety margin) can't beat alpha,
+            //   the move is pruned without searching
+            // - Adaptive delta pruning adjusts the safety margin based on depth and move count
+            // - Standard delta pruning uses a fixed safety margin
+            // 
+            // Futility pruning:
+            // - Prunes moves where the current evaluation + margin is worse than alpha
+            // - Formula: stand_pat + futility_margin < alpha
+            // - Applied to quiet moves (non-captures) that are unlikely to improve the position
+            // - Excludes checking moves and high-value captures (they can significantly change evaluation)
+            // - Adaptive futility pruning adjusts the margin based on depth and move count
+            // - Standard futility pruning uses a fixed margin based on depth
+            // 
+            // Pruning rationale:
+            // - Pruning reduces the number of moves searched, improving search efficiency
+            // - Delta pruning targets captures with insufficient material gain
+            // - Futility pruning targets quiet moves unlikely to improve the position
+            // - Both pruning techniques are safe (they don't prune moves that could improve alpha)
+            // - Adaptive pruning dynamically adjusts margins for better effectiveness
+            // 
             // Apply pruning checks
             // Use adaptive pruning if enabled, otherwise use standard pruning
             // Adaptive pruning adjusts margins based on depth and total move count
@@ -4621,13 +4696,32 @@ impl SearchEngine {
                 new_captured.add_piece(captured.piece_type, player);
             }
             
-            // Check for selective extension
+            // Task 7.6, 7.7: Extension logic and depth decrement behavior
+            // 
+            // Selective extension logic:
+            // - Extensions are applied to important moves (checks, recaptures, promotions, high-value captures)
+            // - Extensions maintain the current depth instead of decrementing, allowing deeper tactical sequences
+            // - Extensions are only applied if depth > 1 (prevents infinite recursion at depth 1)
+            // - The should_extend() method determines if a move is important enough to extend
+            // 
+            // Depth decrement behavior:
+            // - Normal moves: depth is decremented (depth - 1) to limit search depth
+            // - Extended moves: depth is maintained (depth) to allow deeper search
+            // - This ensures extended moves can explore deeper tactical sequences
+            // - The depth parameter controls how deep we search in quiescence (max_depth limit)
+            // 
+            // Extension rationale:
+            // - Tactical sequences (checks, captures, recaptures) often require deeper search
+            // - Extending these moves improves tactical accuracy
+            // - Depth maintenance allows extended moves to explore critical variations
+            // - The max_depth limit prevents infinite recursion
             let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
+                // Extensions maintain depth to allow deeper tactical sequences
                 // crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
                 self.quiescence_stats.extensions += 1;
                 depth // Extensions maintain depth to allow deeper tactical sequences
             } else {
-                depth - 1
+                depth - 1 // Normal moves decrement depth
             };
             // Update seldepth for quiescence extensions - quiescence extends beyond normal depth
             // When in quiescence, we've already reached current_depth plies from root
@@ -4658,6 +4752,17 @@ impl SearchEngine {
                 }
                 self.quiescence_stats.move_ordering_cutoffs += 1;
                 
+                // Task 7.6: Beta cutoff condition
+                // 
+                // Beta cutoff occurs when a move's score is >= beta (the opponent's best move score).
+                // This means the opponent has a better move available, so we can stop searching
+                // this branch (the opponent will avoid this position).
+                // 
+                // Beta cutoff optimization:
+                // - Once we find a move with score >= beta, we can prune remaining moves
+                // - This is a key optimization in alpha-beta pruning
+                // - The move causing the cutoff is stored in TT as the best move
+                // - Beta cutoffs significantly reduce the number of positions searched
                 crate::debug_utils::log_decision("QUIESCENCE", "Beta cutoff", 
                     &format!("Score {} >= beta {}, cutting off search", score, beta), 
                     Some(score));

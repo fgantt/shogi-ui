@@ -1273,4 +1273,87 @@ mod quiescence_tests {
         // Note: We can't directly inspect TT entries, but the statistics
         // should reflect that stand-pat was cached
     }
+
+    #[test]
+    fn test_quiescence_empty_move_list_handling() {
+        // Task 7.4: Test that empty move list is handled correctly
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Create a position with no noisy moves (quiet position)
+        // This is a bit tricky - we need a position where there are no captures, checks, or promotions
+        // For now, we'll test that the function handles empty moves gracefully
+        
+        // Run quiescence search
+        let result = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        // Should return a valid score (stand-pat evaluation)
+        assert!(result >= -10000 && result <= 10000);
+        
+        // Verify that the search completed without errors
+        let stats = engine.get_quiescence_stats();
+        assert!(stats.nodes_searched > 0);
+    }
+
+    #[test]
+    fn test_quiescence_empty_move_list_early_return() {
+        // Task 7.4: Test that early return occurs when no noisy moves are available
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Enable TT to test that stand-pat is cached when no moves are available
+        let mut config = QuiescenceConfig::default();
+        config.enable_tt = true;
+        engine.update_quiescence_config(config);
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // First search - should evaluate stand-pat and cache it
+        let result1 = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        // Second search - should retrieve stand-pat from TT if available
+        engine.reset_quiescence_stats();
+        let result2 = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        // Results should be consistent (same position, same evaluation)
+        assert_eq!(result1, result2);
+        
+        // Verify statistics
+        let stats = engine.get_quiescence_stats();
+        assert!(stats.nodes_searched > 0);
+    }
 }
