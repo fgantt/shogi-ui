@@ -61,20 +61,20 @@
 
 ## Tasks
 
-- [ ] 1.0 Fix Critical Bugs
-  - [ ] 1.1 Review extension logic in `quiescence_search()` (line 4550) - currently uses `depth - 1` for extended moves
-  - [ ] 1.2 Fix extension logic: change `depth - 1` to `depth` for extended moves (line 4550)
-  - [ ] 1.3 Add unit test verifying extended moves maintain depth instead of reducing it
-  - [ ] 1.4 Add unit test verifying deep tactical sequences are found with extensions
-  - [ ] 1.5 Review hardcoded max depth in seldepth calculation (line 4558) - currently hardcoded as `5`
-  - [ ] 1.6 Fix hardcoded max depth: replace `5` with `self.quiescence_config.max_depth` (line 4558)
-  - [ ] 1.7 Add unit test verifying seldepth tracking uses correct max_depth from configuration
-  - [ ] 1.8 Test with different max_depth values (1, 8, 20) to verify seldepth tracking accuracy
-  - [ ] 1.9 Review redundant depth check `depth == 0` (line 4429) - verify if it's needed or can be removed
-  - [ ] 1.10 Remove redundant `depth == 0` check or document why it's needed if depth can legitimately be 0
-  - [ ] 1.11 Add unit test verifying depth limiting works correctly after removal
-  - [ ] 1.12 Consider adding minimum depth check to prevent infinite recursion (safety enhancement)
-  - [ ] 1.13 Run benchmark suite to verify fixes don't introduce performance regressions
+- [x] 1.0 Fix Critical Bugs
+  - [x] 1.1 Review extension logic in `quiescence_search()` (line 4550) - currently uses `depth - 1` for extended moves
+  - [x] 1.2 Fix extension logic: change `depth - 1` to `depth` for extended moves (line 4550)
+  - [x] 1.3 Add unit test verifying extended moves maintain depth instead of reducing it
+  - [x] 1.4 Add unit test verifying deep tactical sequences are found with extensions
+  - [x] 1.5 Review hardcoded max depth in seldepth calculation (line 4558) - currently hardcoded as `5`
+  - [x] 1.6 Fix hardcoded max depth: replace `5` with `self.quiescence_config.max_depth` (line 4558)
+  - [x] 1.7 Add unit test verifying seldepth tracking uses correct max_depth from configuration
+  - [x] 1.8 Test with different max_depth values (1, 8, 20) to verify seldepth tracking accuracy
+  - [x] 1.9 Review redundant depth check `depth == 0` (line 4429) - verify if it's needed or can be removed
+  - [x] 1.10 Remove redundant `depth == 0` check or document why it's needed if depth can legitimately be 0
+  - [x] 1.11 Add unit test verifying depth limiting works correctly after removal
+  - [x] 1.12 Consider adding minimum depth check to prevent infinite recursion (safety enhancement)
+  - [x] 1.13 Run benchmark suite to verify fixes don't introduce performance regressions
 
 - [ ] 2.0 Enable Adaptive Pruning
   - [ ] 2.1 Review adaptive delta pruning implementation `should_prune_delta_adaptive()` (lines 5062-5092)

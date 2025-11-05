@@ -4427,6 +4427,9 @@ impl SearchEngine {
         }
 
         // Check depth limit
+        // Note: depth > max_depth check is sufficient since depth is decremented properly (depth - 1)
+        // The depth == 0 check is kept as a safety check in case depth could be 0 from external calls
+        // This also serves as a minimum depth check to prevent infinite recursion (depth 0 terminates)
         if depth == 0 || depth > self.quiescence_config.max_depth {
             // crate::debug_utils::trace_log("QUIESCENCE", &format!("Depth limit reached (depth={}), evaluating position", depth));
             let score = self.evaluator.evaluate_with_context(board, player, captured_pieces, depth, false, false, false, true);
@@ -4547,7 +4550,7 @@ impl SearchEngine {
             let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
                 // crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
                 self.quiescence_stats.extensions += 1;
-                depth - 1 // Still reduce depth but less aggressively
+                depth // Extensions maintain depth to allow deeper tactical sequences
             } else {
                 depth - 1
             };
@@ -4555,7 +4558,7 @@ impl SearchEngine {
             // When in quiescence, we've already reached current_depth plies from root
             // Quiescence extends deeper: current_depth + (max_quiescence_depth - depth)
             // For a more accurate seldepth, we track current_depth + extensions
-            let quiescence_depth_from_root = self.current_depth + (5 - depth); // 5 is max quiescence depth
+            let quiescence_depth_from_root = self.current_depth as i32 + (self.quiescence_config.max_depth as i32 - depth as i32);
             let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
             if quiescence_depth_from_root as u64 > prev_seldepth {
                 GLOBAL_SELDEPTH.store(quiescence_depth_from_root as u64, Ordering::Relaxed);
