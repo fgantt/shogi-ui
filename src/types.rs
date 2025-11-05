@@ -624,6 +624,8 @@ pub struct QuiescenceEntry {
     pub depth: u8,
     pub flag: TranspositionFlag,
     pub best_move: Option<Move>,
+    pub access_count: u64, // For LRU tracking - number of times this entry was accessed
+    pub last_access_age: u64, // For LRU tracking - age when last accessed
 }
 
 /// Represents a dual-phase evaluation score for tapered evaluation
@@ -965,6 +967,21 @@ pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
     }
 }
 
+/// Replacement policy for quiescence transposition table cleanup
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TTReplacementPolicy {
+    Simple,        // Simple cleanup: remove half entries arbitrarily (original behavior)
+    LRU,           // Least Recently Used: prefer keeping recently accessed entries
+    DepthPreferred, // Prefer keeping entries with deeper depth
+    Hybrid,        // Hybrid: combine LRU and depth-preferred
+}
+
+impl Default for TTReplacementPolicy {
+    fn default() -> Self {
+        TTReplacementPolicy::DepthPreferred // Default to depth-preferred for better tactical accuracy
+    }
+}
+
 /// Configuration for quiescence search parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct QuiescenceConfig {
@@ -979,6 +996,7 @@ pub struct QuiescenceConfig {
     pub high_value_capture_threshold: i32, // Threshold for high-value captures (excluded from futility pruning)
     pub tt_size_mb: usize,               // Quiescence TT size in MB
     pub tt_cleanup_threshold: usize,     // Threshold for TT cleanup
+    pub tt_replacement_policy: TTReplacementPolicy, // Replacement policy for TT cleanup
 }
 
 impl Default for QuiescenceConfig {
@@ -995,6 +1013,7 @@ impl Default for QuiescenceConfig {
             high_value_capture_threshold: 200, // High-value captures (200+ centipawns) excluded from futility pruning
             tt_size_mb: 4,                // 4MB for quiescence TT
             tt_cleanup_threshold: 10000,  // Clean up when TT has 10k entries
+            tt_replacement_policy: TTReplacementPolicy::DepthPreferred, // Default to depth-preferred
         }
     }
 }

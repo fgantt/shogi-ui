@@ -33,6 +33,7 @@ pub struct SearchEngine {
     move_orderer: crate::search::TranspositionMoveOrderer,
     advanced_move_orderer: MoveOrdering,
     quiescence_tt: HashMap<String, QuiescenceEntry>,
+    quiescence_tt_age: u64, // Age counter for LRU tracking
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
     nodes_searched: u64,
@@ -298,6 +299,7 @@ impl SearchEngine {
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
             advanced_move_orderer: MoveOrdering::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
+            quiescence_tt_age: 0,
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
@@ -518,6 +520,7 @@ impl SearchEngine {
             move_orderer: crate::search::TranspositionMoveOrderer::new(),
             advanced_move_orderer: MoveOrdering::new(),
             quiescence_tt: HashMap::with_capacity(quiescence_capacity),
+            quiescence_tt_age: 0,
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
@@ -4446,20 +4449,28 @@ impl SearchEngine {
             }
             
             let fen_key = format!("q_{}", board.to_fen(player, captured_pieces));
-            if let Some(entry) = self.quiescence_tt.get(&fen_key) {
+            if let Some(entry) = self.quiescence_tt.get_mut(&fen_key) {
                 if entry.depth >= depth {
                     self.quiescence_stats.tt_hits += 1;
+                    // Update LRU tracking
+                    entry.access_count += 1;
+                    entry.last_access_age = self.quiescence_tt_age;
+                    self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
+                    
+                    let score_to_return = entry.score; // Store score before dropping mutable reference
+                    let flag_to_return = entry.flag; // Store flag before dropping mutable reference
+                    
                     // crate::debug_utils::trace_log("QUIESCENCE", &format!("Quiescence TT hit: depth={}, score={}, flag={:?}", 
                     //     entry.depth, entry.score, entry.flag));
-                    match entry.flag {
-                        TranspositionFlag::Exact => return entry.score,
-                        TranspositionFlag::LowerBound => if entry.score >= beta { 
+                    match flag_to_return {
+                        TranspositionFlag::Exact => return score_to_return,
+                        TranspositionFlag::LowerBound => if score_to_return >= beta { 
                             // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT lower bound cutoff");
-                            return entry.score; 
+                            return score_to_return; 
                         },
-                        TranspositionFlag::UpperBound => if entry.score <= alpha { 
+                        TranspositionFlag::UpperBound => if score_to_return <= alpha { 
                             // crate::debug_utils::trace_log("QUIESCENCE", "Quiescence TT upper bound cutoff");
-                            return entry.score; 
+                            return score_to_return; 
                         },
                     }
                 }
@@ -4600,7 +4611,10 @@ impl SearchEngine {
                         depth,
                         flag,
                         best_move: Some(move_.clone()),
+                        access_count: 1,
+                        last_access_age: self.quiescence_tt_age,
                     });
+                    self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
                 }
                 return beta; 
             }
@@ -4629,7 +4643,10 @@ impl SearchEngine {
                 depth,
                 flag,
                 best_move: None, // We don't store best move for quiescence search
+                access_count: 1,
+                last_access_age: self.quiescence_tt_age,
             });
+            self.quiescence_tt_age = self.quiescence_tt_age.wrapping_add(1);
         }
         
         // Return best score: prefer tracked score (from timeout) if available, otherwise use alpha
@@ -5585,17 +5602,90 @@ impl SearchEngine {
     }
 
     /// Clean up old entries from the quiescence transposition table
+    /// Clean up quiescence transposition table using configured replacement policy
+    /// 
+    /// Supports multiple replacement policies:
+    /// - Simple: Remove half entries arbitrarily (original behavior)
+    /// - LRU: Remove least recently used entries (keep recently accessed)
+    /// - DepthPreferred: Remove shallow entries (keep deeper tactical results)
+    /// - Hybrid: Combine LRU and depth-preferred (prefer keeping deep, recently accessed entries)
     pub fn cleanup_quiescence_tt(&mut self, max_entries: usize) {
-        if self.quiescence_tt.len() > max_entries {
-            // Simple cleanup: clear half the entries
-            let entries_to_remove = self.quiescence_tt.len() / 2;
-            let keys_to_remove: Vec<String> = self.quiescence_tt.keys()
-                .take(entries_to_remove)
-                .cloned()
-                .collect();
-            
-            for key in keys_to_remove {
-                self.quiescence_tt.remove(&key);
+        if self.quiescence_tt.len() <= max_entries {
+            return;
+        }
+        
+        let entries_to_remove = self.quiescence_tt.len() - max_entries;
+        
+        match self.quiescence_config.tt_replacement_policy {
+            TTReplacementPolicy::Simple => {
+                // Simple cleanup: clear half the entries arbitrarily
+                let keys_to_remove: Vec<String> = self.quiescence_tt.keys()
+                    .take(entries_to_remove)
+                    .cloned()
+                    .collect();
+                
+                for key in keys_to_remove {
+                    self.quiescence_tt.remove(&key);
+                }
+            }
+            TTReplacementPolicy::LRU => {
+                // LRU: Remove least recently used entries
+                let mut entries: Vec<(String, &QuiescenceEntry)> = self.quiescence_tt.iter()
+                    .map(|(k, v)| (k.clone(), v))
+                    .collect();
+                
+                // Sort by last_access_age (ascending) - oldest first
+                entries.sort_by_key(|(_, entry)| entry.last_access_age);
+                
+                // Remove oldest entries
+                for (key, _) in entries.iter().take(entries_to_remove) {
+                    self.quiescence_tt.remove(key);
+                }
+            }
+            TTReplacementPolicy::DepthPreferred => {
+                // Depth-preferred: Remove shallow entries (keep deeper tactical results)
+                let mut entries: Vec<(String, &QuiescenceEntry)> = self.quiescence_tt.iter()
+                    .map(|(k, v)| (k.clone(), v))
+                    .collect();
+                
+                // Sort by depth (ascending) - shallowest first
+                // For same depth, prefer keeping entries with lower last_access_age (older)
+                entries.sort_by(|(_, a), (_, b)| {
+                    match a.depth.cmp(&b.depth) {
+                        std::cmp::Ordering::Equal => a.last_access_age.cmp(&b.last_access_age),
+                        other => other,
+                    }
+                });
+                
+                // Remove shallowest entries
+                for (key, _) in entries.iter().take(entries_to_remove) {
+                    self.quiescence_tt.remove(key);
+                }
+            }
+            TTReplacementPolicy::Hybrid => {
+                // Hybrid: Combine LRU and depth-preferred
+                // Score = (max_depth - depth) * depth_weight + (current_age - last_access_age) * age_weight
+                // Higher score = keep, lower score = remove
+                let max_depth = self.quiescence_config.max_depth as u8;
+                let depth_weight = 1000u64; // Weight for depth (prefer deeper)
+                let age_weight = 1u64; // Weight for recency (prefer recent)
+                
+                let mut entries: Vec<(String, u64)> = self.quiescence_tt.iter()
+                    .map(|(k, v)| {
+                        let depth_score = (max_depth as u64 - v.depth as u64) * depth_weight;
+                        let age_score = (self.quiescence_tt_age.wrapping_sub(v.last_access_age)) * age_weight;
+                        let total_score = depth_score + age_score;
+                        (k.clone(), total_score)
+                    })
+                    .collect();
+                
+                // Sort by score (ascending) - lowest score first (remove these)
+                entries.sort_by_key(|(_, score)| *score);
+                
+                // Remove entries with lowest scores
+                for (key, _) in entries.iter().take(entries_to_remove) {
+                    self.quiescence_tt.remove(key);
+                }
             }
         }
     }

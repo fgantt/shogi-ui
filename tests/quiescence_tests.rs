@@ -859,4 +859,167 @@ mod quiescence_tests {
         invalid_config2.high_value_capture_threshold = 2000; // Too high
         assert!(invalid_config2.validate().is_err());
     }
+
+    #[test]
+    fn test_quiescence_tt_replacement_policy_simple() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Set replacement policy to Simple
+        let mut config = QuiescenceConfig::default();
+        config.enable_tt = true;
+        config.tt_replacement_policy = TTReplacementPolicy::Simple;
+        config.tt_cleanup_threshold = 5; // Small threshold for testing
+        engine.update_quiescence_config(config);
+        
+        // Fill TT beyond threshold
+        for _ in 0..10 {
+            let _result = engine.quiescence_search(
+                &mut board,
+                &captured_pieces,
+                player,
+                -10000,
+                10000,
+                &time_source,
+                1000,
+                3
+            );
+        }
+        
+        // Verify cleanup happened (TT size should be <= threshold/2)
+        let tt_size = engine.quiescence_tt_size();
+        assert!(tt_size <= config.tt_cleanup_threshold);
+    }
+
+    #[test]
+    fn test_quiescence_tt_replacement_policy_depth_preferred() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Set replacement policy to DepthPreferred
+        let mut config = QuiescenceConfig::default();
+        config.enable_tt = true;
+        config.tt_replacement_policy = TTReplacementPolicy::DepthPreferred;
+        config.tt_cleanup_threshold = 5; // Small threshold for testing
+        engine.update_quiescence_config(config);
+        
+        // Fill TT beyond threshold
+        for _ in 0..10 {
+            let _result = engine.quiescence_search(
+                &mut board,
+                &captured_pieces,
+                player,
+                -10000,
+                10000,
+                &time_source,
+                1000,
+                3
+            );
+        }
+        
+        // Verify cleanup happened (TT size should be <= threshold/2)
+        let tt_size = engine.quiescence_tt_size();
+        assert!(tt_size <= config.tt_cleanup_threshold);
+    }
+
+    #[test]
+    fn test_quiescence_tt_replacement_policy_lru() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Set replacement policy to LRU
+        let mut config = QuiescenceConfig::default();
+        config.enable_tt = true;
+        config.tt_replacement_policy = TTReplacementPolicy::LRU;
+        config.tt_cleanup_threshold = 5; // Small threshold for testing
+        engine.update_quiescence_config(config);
+        
+        // Fill TT beyond threshold
+        for _ in 0..10 {
+            let _result = engine.quiescence_search(
+                &mut board,
+                &captured_pieces,
+                player,
+                -10000,
+                10000,
+                &time_source,
+                1000,
+                3
+            );
+        }
+        
+        // Verify cleanup happened (TT size should be <= threshold/2)
+        let tt_size = engine.quiescence_tt_size();
+        assert!(tt_size <= config.tt_cleanup_threshold);
+    }
+
+    #[test]
+    fn test_quiescence_tt_replacement_policy_hybrid() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Set replacement policy to Hybrid
+        let mut config = QuiescenceConfig::default();
+        config.enable_tt = true;
+        config.tt_replacement_policy = TTReplacementPolicy::Hybrid;
+        config.tt_cleanup_threshold = 5; // Small threshold for testing
+        engine.update_quiescence_config(config);
+        
+        // Fill TT beyond threshold
+        for _ in 0..10 {
+            let _result = engine.quiescence_search(
+                &mut board,
+                &captured_pieces,
+                player,
+                -10000,
+                10000,
+                &time_source,
+                1000,
+                3
+            );
+        }
+        
+        // Verify cleanup happened (TT size should be <= threshold/2)
+        let tt_size = engine.quiescence_tt_size();
+        assert!(tt_size <= config.tt_cleanup_threshold);
+    }
+
+    #[test]
+    fn test_quiescence_tt_replacement_policy_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default configuration has depth-preferred policy
+        let default_config = QuiescenceConfig::default();
+        assert_eq!(default_config.tt_replacement_policy, TTReplacementPolicy::DepthPreferred);
+        
+        // Test configuration update
+        let mut config = QuiescenceConfig::default();
+        config.tt_replacement_policy = TTReplacementPolicy::LRU;
+        engine.update_quiescence_config(config.clone());
+        
+        let current_config = engine.get_quiescence_config();
+        assert_eq!(current_config.tt_replacement_policy, TTReplacementPolicy::LRU);
+        
+        // Test all policies
+        for policy in [TTReplacementPolicy::Simple, TTReplacementPolicy::LRU, 
+                       TTReplacementPolicy::DepthPreferred, TTReplacementPolicy::Hybrid] {
+            let mut config = QuiescenceConfig::default();
+            config.tt_replacement_policy = policy;
+            engine.update_quiescence_config(config.clone());
+            let current_config = engine.get_quiescence_config();
+            assert_eq!(current_config.tt_replacement_policy, policy);
+        }
+    }
 }

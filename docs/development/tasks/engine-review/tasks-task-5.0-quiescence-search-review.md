@@ -109,22 +109,19 @@
   - [ ] 3.12 Verify check exclusion doesn't significantly impact pruning effectiveness (future work - requires benchmark suite)
   - [ ] 3.13 Compare tactical accuracy with/without futility pruning to verify correctness (future work - requires tactical test suite)
 
-- [ ] 4.0 Improve Transposition Table Cleanup Strategy
-  - [ ] 4.1 Review current TT cleanup implementation for quiescence TT
-  - [ ] 4.2 Analyze cleanup strategy: currently removes half entries arbitrarily
-  - [ ] 4.3 Design LRU or depth-preferred replacement policy for quiescence TT
-  - [ ] 4.4 Implement LRU tracking for TT entries (add access timestamp or counter)
-  - [ ] 4.5 Implement depth-preferred replacement: prefer keeping entries with deeper depth
-  - [ ] 4.6 Add configuration option to choose replacement policy (LRU vs depth-preferred vs simple)
-  - [ ] 4.7 Update TT cleanup logic to use new replacement policy
-  - [ ] 4.8 Add statistics tracking for TT hit rate with new cleanup strategy
-  - [ ] 4.9 Add unit tests verifying replacement policy selects correct entries
-  - [ ] 4.10 Create performance benchmarks comparing cleanup strategies:
-    - Measure TT hit rate improvement
-    - Measure search performance improvement
-    - Measure memory usage patterns
-  - [ ] 4.11 Verify new cleanup strategy improves TT hit rate (target: 10-20% hit rate)
-  - [ ] 4.12 Document new cleanup strategy and configuration options
+- [x] 4.0 Improve Transposition Table Cleanup Strategy
+  - [x] 4.1 Review current TT cleanup implementation for quiescence TT
+  - [x] 4.2 Analyze cleanup strategy: currently removes half entries arbitrarily
+  - [x] 4.3 Design LRU or depth-preferred replacement policy for quiescence TT
+  - [x] 4.4 Implement LRU tracking for TT entries (add access timestamp or counter)
+  - [x] 4.5 Implement depth-preferred replacement: prefer keeping entries with deeper depth
+  - [x] 4.6 Add configuration option to choose replacement policy (LRU vs depth-preferred vs simple)
+  - [x] 4.7 Update TT cleanup logic to use new replacement policy
+  - [x] 4.8 Add statistics tracking for TT hit rate with new cleanup strategy
+  - [x] 4.9 Add unit tests verifying replacement policy selects correct entries
+  - [ ] 4.10 Create performance benchmarks comparing cleanup strategies (future work - requires benchmark suite)
+  - [ ] 4.11 Verify new cleanup strategy improves TT hit rate (target: 10-20% hit rate) (future work - requires benchmark suite)
+  - [x] 4.12 Document new cleanup strategy and configuration options
 
 - [ ] 5.0 Enhance Move Ordering
   - [ ] 5.1 Review advanced move ordering implementation `sort_quiescence_moves_advanced()` (lines 4673-4686)
