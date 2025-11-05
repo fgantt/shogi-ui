@@ -125,9 +125,9 @@ fn test_move_ordering_with_depth_awareness() {
         100000
     );
     
-          // Both should have same number of moves
-      assert_eq!(ordered_shallow.len(), ordered_deep.len(), "Should have same number of moves");
-      assert_eq!(ordered_shallow.len(), moves.len(), "Should include all moves");
+    // Both should have same number of moves
+    assert_eq!(ordered_shallow.len(), ordered_deep.len(), "Should have same number of moves");
+    assert_eq!(ordered_shallow.len(), moves.len(), "Should include all moves");
 }
 
 #[test]

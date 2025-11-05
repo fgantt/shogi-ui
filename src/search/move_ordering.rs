@@ -5901,13 +5901,13 @@ impl MoveOrdering {
         
         // Check if we have a cached ordering result for this position and depth
         if !skip_cache {
-            if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
-                // Verify that cached moves match current moves (moves might differ for same position)
-                if cached_ordered.len() == moves.len() && 
-                   cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
-                    self.stats.cache_hits += 1;
-                    self.stats.total_moves_ordered += moves.len() as u64;
-                    return cached_ordered.clone();
+        if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
+            // Verify that cached moves match current moves (moves might differ for same position)
+            if cached_ordered.len() == moves.len() && 
+               cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
+                self.stats.cache_hits += 1;
+                self.stats.total_moves_ordered += moves.len() as u64;
+                return cached_ordered.clone();
                 }
             }
         }

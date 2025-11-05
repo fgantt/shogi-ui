@@ -1,6 +1,6 @@
 use shogi_engine::search::SearchEngine;
 use shogi_engine::types::{
-    IIDConfig, IIDStats, IIDPerformanceMetrics, IIDDepthStrategy,
+    IIDConfig, IIDStats, IIDPerformanceMetrics, IIDDepthStrategy, IIDPreset,
     EngineConfig, EnginePreset, Player, Move, Position, PieceType, CapturedPieces,
     IIDPVResult, MultiPVAnalysis, TacticalTheme, PositionComplexity,
     IIDProbeResult, PromisingMove, TacticalIndicators,
@@ -4660,6 +4660,197 @@ fn test_time_pressure_detection_configuration_options() {
     
     // Configuration should validate successfully
     assert!(config.validate().is_ok());
+}
+
+// ===== TASK 10.0: IID CONFIGURATION PRESETS =====
+
+/// Task 10.1, 10.2: Test IIDPreset enum and from_preset() method
+#[test]
+fn test_iid_preset_enum() {
+    // Test preset variants exist
+    let conservative = IIDPreset::Conservative;
+    let aggressive = IIDPreset::Aggressive;
+    let balanced = IIDPreset::Balanced;
+    
+    // Test string representation
+    assert_eq!(conservative.to_string(), "Conservative");
+    assert_eq!(aggressive.to_string(), "Aggressive");
+    assert_eq!(balanced.to_string(), "Balanced");
+    
+    // Test from_str parsing
+    assert_eq!(IIDPreset::from_str("conservative"), Some(IIDPreset::Conservative));
+    assert_eq!(IIDPreset::from_str("CONSERVATIVE"), Some(IIDPreset::Conservative));
+    assert_eq!(IIDPreset::from_str("aggressive"), Some(IIDPreset::Aggressive));
+    assert_eq!(IIDPreset::from_str("AGGRESSIVE"), Some(IIDPreset::Aggressive));
+    assert_eq!(IIDPreset::from_str("balanced"), Some(IIDPreset::Balanced));
+    assert_eq!(IIDPreset::from_str("BALANCED"), Some(IIDPreset::Balanced));
+    assert_eq!(IIDPreset::from_str("invalid"), None);
+}
+
+/// Task 10.3, 10.7: Test preset configurations match expected values
+#[test]
+fn test_iid_preset_configurations() {
+    // Test Conservative preset
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    assert_eq!(conservative_config.min_depth, 5); // Higher min_depth
+    assert_eq!(conservative_config.iid_depth_ply, 1); // Shallower IID depth
+    assert_eq!(conservative_config.max_legal_moves, 30); // Lower move count
+    assert_eq!(conservative_config.time_overhead_threshold, 0.10); // Lower overhead (10%)
+    assert_eq!(conservative_config.max_estimated_iid_time_ms, 30); // Lower time estimate
+    assert_eq!(conservative_config.preset, Some(IIDPreset::Conservative));
+    
+    // Test Aggressive preset
+    let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
+    assert_eq!(aggressive_config.min_depth, 3); // Lower min_depth
+    assert_eq!(aggressive_config.iid_depth_ply, 3); // Deeper IID depth
+    assert_eq!(aggressive_config.max_legal_moves, 40); // Higher move count
+    assert_eq!(aggressive_config.time_overhead_threshold, 0.20); // Higher overhead (20%)
+    assert_eq!(aggressive_config.max_estimated_iid_time_ms, 70); // Higher time estimate
+    assert_eq!(aggressive_config.depth_strategy, IIDDepthStrategy::Dynamic); // Dynamic strategy
+    assert_eq!(aggressive_config.adaptive_min_depth, true); // Adaptive min depth enabled
+    assert_eq!(aggressive_config.preset, Some(IIDPreset::Aggressive));
+    
+    // Test Balanced preset
+    let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
+    assert_eq!(balanced_config.min_depth, 4); // Default min_depth
+    assert_eq!(balanced_config.iid_depth_ply, 2); // Default IID depth
+    assert_eq!(balanced_config.max_legal_moves, 35); // Default move count
+    assert_eq!(balanced_config.time_overhead_threshold, 0.15); // Default overhead (15%)
+    assert_eq!(balanced_config.max_estimated_iid_time_ms, 50); // Default time estimate
+    assert_eq!(balanced_config.preset, Some(IIDPreset::Balanced));
+}
+
+/// Task 10.5: Test apply_preset() method
+#[test]
+fn test_iid_config_apply_preset() {
+    let mut config = IIDConfig::default();
+    
+    // Apply Conservative preset
+    config.apply_preset(IIDPreset::Conservative);
+    assert_eq!(config.min_depth, 5);
+    assert_eq!(config.iid_depth_ply, 1);
+    assert_eq!(config.preset, Some(IIDPreset::Conservative));
+    
+    // Apply Aggressive preset
+    config.apply_preset(IIDPreset::Aggressive);
+    assert_eq!(config.min_depth, 3);
+    assert_eq!(config.iid_depth_ply, 3);
+    assert_eq!(config.preset, Some(IIDPreset::Aggressive));
+    
+    // Apply Balanced preset
+    config.apply_preset(IIDPreset::Balanced);
+    assert_eq!(config.min_depth, 4);
+    assert_eq!(config.iid_depth_ply, 2);
+    assert_eq!(config.preset, Some(IIDPreset::Balanced));
+}
+
+/// Task 10.4: Test preset field tracking
+#[test]
+fn test_iid_config_preset_field() {
+    // Default config should have no preset
+    let default_config = IIDConfig::default();
+    assert_eq!(default_config.preset, None);
+    
+    // Configs created from presets should have preset set
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    assert_eq!(conservative_config.preset, Some(IIDPreset::Conservative));
+    
+    let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
+    assert_eq!(aggressive_config.preset, Some(IIDPreset::Aggressive));
+    
+    let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
+    assert_eq!(balanced_config.preset, Some(IIDPreset::Balanced));
+    
+    // Manually configured configs can have preset set
+    let mut manual_config = IIDConfig::default();
+    manual_config.preset = Some(IIDPreset::Balanced);
+    assert_eq!(manual_config.preset, Some(IIDPreset::Balanced));
+}
+
+/// Task 10.9: Test summary() includes preset information
+#[test]
+fn test_iid_config_summary_includes_preset() {
+    // Config with preset
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    let summary = conservative_config.summary();
+    assert!(summary.contains("preset=Conservative"));
+    
+    // Config without preset
+    let default_config = IIDConfig::default();
+    let summary = default_config.summary();
+    assert!(!summary.contains("preset="));
+}
+
+/// Task 10.7: Test preset configurations are valid
+#[test]
+fn test_iid_preset_configurations_are_valid() {
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    assert!(conservative_config.validate().is_ok());
+    
+    let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
+    assert!(aggressive_config.validate().is_ok());
+    
+    let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
+    assert!(balanced_config.validate().is_ok());
+}
+
+/// Task 10.8: Test preset integration with SearchEngine
+#[test]
+fn test_iid_preset_integration_with_search_engine() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Apply Conservative preset
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    assert!(engine.update_iid_config(conservative_config).is_ok());
+    let config = engine.get_iid_config();
+    assert_eq!(config.min_depth, 5);
+    assert_eq!(config.preset, Some(IIDPreset::Conservative));
+    
+    // Apply Aggressive preset
+    let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
+    assert!(engine.update_iid_config(aggressive_config).is_ok());
+    let config = engine.get_iid_config();
+    assert_eq!(config.min_depth, 3);
+    assert_eq!(config.preset, Some(IIDPreset::Aggressive));
+    
+    // Apply Balanced preset
+    let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
+    assert!(engine.update_iid_config(balanced_config).is_ok());
+    let config = engine.get_iid_config();
+    assert_eq!(config.min_depth, 4);
+    assert_eq!(config.preset, Some(IIDPreset::Balanced));
+}
+
+/// Task 10.8: Test preset performance comparison (basic functionality test)
+#[test]
+fn test_iid_preset_performance_comparison() {
+    let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
+    let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
+    let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
+    
+    // Conservative should have lower overhead threshold
+    assert!(conservative_config.time_overhead_threshold < aggressive_config.time_overhead_threshold);
+    assert!(conservative_config.time_overhead_threshold < balanced_config.time_overhead_threshold);
+    
+    // Aggressive should have higher overhead threshold
+    assert!(aggressive_config.time_overhead_threshold > conservative_config.time_overhead_threshold);
+    assert!(aggressive_config.time_overhead_threshold > balanced_config.time_overhead_threshold);
+    
+    // Conservative should have higher min_depth
+    assert!(conservative_config.min_depth > aggressive_config.min_depth);
+    assert!(conservative_config.min_depth > balanced_config.min_depth);
+    
+    // Aggressive should have lower min_depth
+    assert!(aggressive_config.min_depth < conservative_config.min_depth);
+    assert!(aggressive_config.min_depth < balanced_config.min_depth);
+    
+    // Aggressive should have deeper IID depth
+    assert!(aggressive_config.iid_depth_ply > conservative_config.iid_depth_ply);
+    assert!(aggressive_config.iid_depth_ply > balanced_config.iid_depth_ply);
+    
+    // Conservative should have shallower IID depth
+    assert!(conservative_config.iid_depth_ply < aggressive_config.iid_depth_ply);
+    assert!(conservative_config.iid_depth_ply < balanced_config.iid_depth_ply);
 }
 
 

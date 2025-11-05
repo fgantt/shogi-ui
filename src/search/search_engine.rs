@@ -708,7 +708,7 @@ impl SearchEngine {
             if should_skip_due_to_tt {
                 // Task 9.9: Track TT move condition effectiveness
                 self.iid_stats.tt_move_condition_skips += 1;
-                self.iid_stats.positions_skipped_tt_move += 1;
+            self.iid_stats.positions_skipped_tt_move += 1;
                 // Task 9.10: Debug logging for TT move condition
                 if let (Some(board), Some(captured), Some(current_player)) = (board, captured_pieces, player) {
                     let position_hash = self.hash_calculator.get_position_hash(board, current_player, captured);
@@ -723,7 +723,7 @@ impl SearchEngine {
                 } else {
                     crate::debug_utils::trace_log("IID_TT_MOVE", "IID skipped: TT move available (no position info)");
                 }
-                return false;
+            return false; 
             } else {
                 // Task 9.9: Track when TT move exists but IID is still applied (TT entry too old/shallow)
                 self.iid_stats.tt_move_condition_tt_move_used += 1;
@@ -838,7 +838,7 @@ impl SearchEngine {
             if in_time_pressure {
                 // Task 9.8: Track time pressure detection
                 self.iid_stats.time_pressure_detection_total += 1;
-                self.iid_stats.positions_skipped_time_pressure += 1;
+            self.iid_stats.positions_skipped_time_pressure += 1;
                 
                 // Task 9.10: Debug logging for time pressure detection
                 crate::debug_utils::trace_log("IID_TIME_PRESSURE", &format!(
@@ -848,7 +848,7 @@ impl SearchEngine {
                     complexity_opt,
                     estimated_iid_time_ms
                 ));
-                return false;
+            return false; 
             } else {
                 // Task 9.8: Track successful time pressure predictions (not in pressure when predicted not in pressure)
                 self.iid_stats.time_pressure_detection_total += 1;
@@ -881,8 +881,8 @@ impl SearchEngine {
                         _ => base_depth,
                     }
                 } else {
-                    base_depth
-                }
+                base_depth
+            }
             },
             IIDDepthStrategy::Dynamic => {
                 // Task 4.5: Use calculate_dynamic_iid_depth() for Dynamic strategy
@@ -1021,28 +1021,28 @@ impl SearchEngine {
             
             // Shallow search for this move with null window for efficiency
             let score = -self.negamax_with_context(
-                board,
+            board, 
                 &new_captured,
                 player.opposite(),
                 iid_depth - 1,
                 beta.saturating_neg(),
                 best_score_tracked.saturating_neg(),
-                start_time,
-                time_limit_ms,
-                &mut local_hash_history,
+            start_time, 
+            time_limit_ms, 
+            &mut local_hash_history, 
                 true,
                 false,
                 false,
                 false
-            );
-            
+        );
+        
             // Restore board state by unmaking the move
             board.unmake_move(&move_info);
             
             if score > best_score_tracked {
                 best_score_tracked = score;
                 best_move_tracked = Some(move_.clone());
-                
+        
                 // Early termination if we have a good enough move
                 if score >= beta {
                     break;
@@ -1055,18 +1055,18 @@ impl SearchEngine {
         
         // Task 2.0: Try to extract best move from transposition table as fallback
         // The TT might have a better move if the position was searched before
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+            let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         let mut best_move_from_tt: Option<Move> = None;
-        if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
+            if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
             if let Some(ref tt_move) = entry.best_move {
                 // Task 2.8: Verify IID move is in legal moves list before using
                 if legal_moves.iter().any(|m| self.moves_equal(m, tt_move)) {
                     // Only use TT move if it's different from our tracked move or we didn't find one
                     if best_move_tracked.is_none() || !best_move_tracked.as_ref().map_or(false, |m| self.moves_equal(m, tt_move)) {
                         best_move_from_tt = Some(tt_move.clone());
-                    }
                 }
             }
+        }
         }
         
         // Record IID statistics
@@ -1084,8 +1084,8 @@ impl SearchEngine {
             self.iid_stats.iid_move_extracted_from_tracked += 1;
             Some(tracked_move)
         } else {
-            self.iid_stats.iid_searches_failed += 1;
-            None
+        self.iid_stats.iid_searches_failed += 1;
+        None
         };
         
         // Task 2.5: Remove dependency on iid_score > alpha - IID should provide ordering even if score doesn't beat alpha
@@ -1321,7 +1321,7 @@ impl SearchEngine {
         // Task 7.9: Use configurable thresholds
         let threshold_low = self.iid_config.complexity_threshold_low;
         let threshold_medium = self.iid_config.complexity_threshold_medium;
-        
+
         // Categorize complexity
         let complexity = if complexity_score < threshold_low {
             PositionComplexity::Low
@@ -1568,24 +1568,24 @@ impl SearchEngine {
             ((base_depth as i32) + (adjustment as i32)).max(1) as u8
         } else {
             // Fallback to original logic if complexity-based adjustments disabled
-            match complexity {
-                PositionComplexity::Low => {
-                    // Simple positions: reduce IID depth to save time
-                    base_depth.saturating_sub(1).max(1)
-                },
-                PositionComplexity::Medium => {
-                    // Medium positions: use base depth
-                    base_depth
-                },
-                PositionComplexity::High => {
-                    // Complex positions: increase IID depth for better move ordering
+        match complexity {
+            PositionComplexity::Low => {
+                // Simple positions: reduce IID depth to save time
+                base_depth.saturating_sub(1).max(1)
+            },
+            PositionComplexity::Medium => {
+                // Medium positions: use base depth
+                base_depth
+            },
+            PositionComplexity::High => {
+                // Complex positions: increase IID depth for better move ordering
                     base_depth.saturating_add(1)
-                },
-                PositionComplexity::Unknown => {
-                    // Unknown complexity: use base depth as fallback
-                    base_depth
-                }
+            },
+            PositionComplexity::Unknown => {
+                // Unknown complexity: use base depth as fallback
+                base_depth
             }
+        }
         };
         
         // Task 4.11: Apply maximum depth cap from configuration
@@ -1893,20 +1893,20 @@ impl SearchEngine {
     fn calculate_average_overhead(&self) -> f64 {
         if self.iid_overhead_history.is_empty() {
             // Fallback to estimate based on skip statistics if no history
-            if self.iid_stats.iid_searches_performed == 0 {
-                return 0.0;
-            }
-            let skip_rate = self.iid_stats.positions_skipped_time_pressure as f64 / 
-                           self.iid_stats.iid_searches_performed as f64;
-            
-            // Estimate average overhead based on skip rate
-            if skip_rate > 0.5 {
+        if self.iid_stats.iid_searches_performed == 0 {
+            return 0.0;
+        }
+        let skip_rate = self.iid_stats.positions_skipped_time_pressure as f64 / 
+                       self.iid_stats.iid_searches_performed as f64;
+        
+        // Estimate average overhead based on skip rate
+        if skip_rate > 0.5 {
                 return 25.0; // High overhead
-            } else if skip_rate > 0.2 {
+        } else if skip_rate > 0.2 {
                 return 15.0; // Medium overhead
-            } else {
+        } else {
                 return 8.0;  // Low overhead
-            }
+        }
         }
         
         // Task 8.6: Calculate actual average from overhead history
@@ -3634,7 +3634,7 @@ impl SearchEngine {
         // Note: Total search time is tracked at the IterativeDeepening::search() level
         // search_at_depth() is called from iterative deepening, so we don't track here
         // to avoid double-counting
-        
+
         crate::debug_utils::end_timing(&format!("search_at_depth_{}", depth), "SEARCH_AT_DEPTH");
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", &format!("Search completed: best_move={:?}, best_score={}", 
             best_move.as_ref().map(|m| m.to_usi_string()), best_score));
@@ -3958,7 +3958,7 @@ impl SearchEngine {
                     estimated_iid_time_ms,
                     if estimated_iid_time_ms > 0 {
                         (1.0 - ((actual_iid_time as f64 - estimated_iid_time_ms as f64).abs() / estimated_iid_time_ms as f64)) * 100.0
-                    } else {
+            } else {
                         100.0
                     },
                     iid_score_result

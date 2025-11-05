@@ -3744,6 +3744,51 @@ pub struct IIDConfig {
     pub tt_move_min_depth_for_skip: u8,
     /// Task 9.6: Maximum TT entry age to skip IID (default: 100, if TT entry age > this, still apply IID)
     pub tt_move_max_age_for_skip: u32,
+    /// Task 10.4: Track which preset was used (optional, None if manually configured)
+    pub preset: Option<IIDPreset>,
+}
+
+/// Task 10.1: IID configuration presets
+/// 
+/// Presets provide convenient ways to configure IID for different use cases:
+/// - **Conservative**: Lower time overhead threshold, higher min_depth, shallower IID depth
+///   Best for: Critical positions, endgame analysis, when safety is more important than speed
+/// - **Aggressive**: Higher time overhead threshold, lower min_depth, deeper IID depth
+///   Best for: Fast time controls, opening/middlegame, when speed is more important than safety
+/// - **Balanced**: Default values optimized for general play
+///   Best for: Standard time controls, general use cases
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum IIDPreset {
+    /// Conservative preset: Lower time overhead threshold, higher min_depth, shallower IID depth
+    /// Best for: Critical positions, endgame analysis, when safety is more important than speed
+    Conservative,
+    /// Aggressive preset: Higher time overhead threshold, lower min_depth, deeper IID depth
+    /// Best for: Fast time controls, opening/middlegame, when speed is more important than safety
+    Aggressive,
+    /// Balanced preset: Default values optimized for general play
+    /// Best for: Standard time controls, general use cases
+    Balanced,
+}
+
+impl IIDPreset {
+    /// Get a string representation of the preset
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            IIDPreset::Conservative => "Conservative",
+            IIDPreset::Aggressive => "Aggressive",
+            IIDPreset::Balanced => "Balanced",
+        }
+    }
+    
+    /// Parse a preset from a string (case-insensitive)
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "conservative" => Some(IIDPreset::Conservative),
+            "aggressive" => Some(IIDPreset::Aggressive),
+            "balanced" => Some(IIDPreset::Balanced),
+            _ => None,
+        }
+    }
 }
 
 impl Default for IIDConfig {
@@ -3782,11 +3827,125 @@ impl Default for IIDConfig {
             // Task 9.6: TT move condition configuration
             tt_move_min_depth_for_skip: 3, // Only skip IID if TT entry depth >= 3
             tt_move_max_age_for_skip: 100, // Only skip IID if TT entry age <= 100
+            // Task 10.4: No preset by default (manually configured)
+            preset: None,
         }
     }
 }
 
 impl IIDConfig {
+    /// Task 10.2: Create an IIDConfig from a preset
+    pub fn from_preset(preset: IIDPreset) -> Self {
+        let mut config = match preset {
+            IIDPreset::Conservative => Self {
+                enabled: true,
+                min_depth: 5,                      // Higher min_depth (more conservative)
+                iid_depth_ply: 1,                 // Shallower IID depth (less aggressive)
+                max_legal_moves: 30,              // Lower move count threshold
+                time_overhead_threshold: 0.10,    // Lower time overhead (10% max)
+                depth_strategy: IIDDepthStrategy::Fixed,
+                enable_time_pressure_detection: true,
+                enable_adaptive_tuning: false,
+                // Task 10.3: Conservative preset configuration
+                dynamic_base_depth: 1,            // Shallower base depth
+                dynamic_max_depth: 3,            // Lower max depth
+                adaptive_min_depth: false,
+                max_estimated_iid_time_ms: 30,    // Lower time estimate threshold
+                max_estimated_iid_time_percentage: false,
+                enable_complexity_based_adjustments: true,
+                complexity_threshold_low: 10,
+                complexity_threshold_medium: 25,
+                complexity_depth_adjustment_low: -1,
+                complexity_depth_adjustment_medium: 0,
+                complexity_depth_adjustment_high: 1,
+                enable_adaptive_move_count_threshold: true,
+                tactical_move_count_multiplier: 1.2, // Lower multiplier
+                quiet_move_count_multiplier: 0.7,    // Lower threshold
+                time_pressure_base_threshold: 0.08,  // Lower threshold (8%)
+                time_pressure_complexity_multiplier: 0.9, // Lower multiplier
+                time_pressure_depth_multiplier: 0.9,     // Lower multiplier
+                tt_move_min_depth_for_skip: 4,     // Higher threshold (more conservative)
+                tt_move_max_age_for_skip: 80,      // Lower age threshold (more conservative)
+                preset: Some(IIDPreset::Conservative),
+            },
+            IIDPreset::Aggressive => Self {
+                enabled: true,
+                min_depth: 3,                      // Lower min_depth (more aggressive)
+                iid_depth_ply: 3,                 // Deeper IID depth (more aggressive)
+                max_legal_moves: 40,              // Higher move count threshold
+                time_overhead_threshold: 0.20,    // Higher time overhead (20% max)
+                depth_strategy: IIDDepthStrategy::Dynamic, // Use dynamic for better performance
+                enable_time_pressure_detection: true,
+                enable_adaptive_tuning: false,
+                // Task 10.3: Aggressive preset configuration
+                dynamic_base_depth: 2,
+                dynamic_max_depth: 5,            // Higher max depth
+                adaptive_min_depth: true,        // Enable adaptive min depth
+                max_estimated_iid_time_ms: 70,    // Higher time estimate threshold
+                max_estimated_iid_time_percentage: false,
+                enable_complexity_based_adjustments: true,
+                complexity_threshold_low: 10,
+                complexity_threshold_medium: 25,
+                complexity_depth_adjustment_low: -1,
+                complexity_depth_adjustment_medium: 0,
+                complexity_depth_adjustment_high: 1,
+                enable_adaptive_move_count_threshold: true,
+                tactical_move_count_multiplier: 1.8, // Higher multiplier
+                quiet_move_count_multiplier: 0.9,    // Higher threshold
+                time_pressure_base_threshold: 0.12,   // Higher threshold (12%)
+                time_pressure_complexity_multiplier: 1.2, // Higher multiplier
+                time_pressure_depth_multiplier: 1.1,      // Higher multiplier
+                tt_move_min_depth_for_skip: 2,      // Lower threshold (more aggressive)
+                tt_move_max_age_for_skip: 120,      // Higher age threshold (more aggressive)
+                preset: Some(IIDPreset::Aggressive),
+            },
+            IIDPreset::Balanced => Self {
+                enabled: true,
+                min_depth: 4,                      // Default min_depth
+                iid_depth_ply: 2,                 // Default IID depth
+                max_legal_moves: 35,              // Default move count
+                time_overhead_threshold: 0.15,    // Default time overhead (15%)
+                depth_strategy: IIDDepthStrategy::Fixed,
+                enable_time_pressure_detection: true,
+                enable_adaptive_tuning: false,
+                // Task 10.3: Balanced preset configuration (default values)
+                dynamic_base_depth: 2,
+                dynamic_max_depth: 4,
+                adaptive_min_depth: false,
+                max_estimated_iid_time_ms: 50,
+                max_estimated_iid_time_percentage: false,
+                enable_complexity_based_adjustments: true,
+                complexity_threshold_low: 10,
+                complexity_threshold_medium: 25,
+                complexity_depth_adjustment_low: -1,
+                complexity_depth_adjustment_medium: 0,
+                complexity_depth_adjustment_high: 1,
+                enable_adaptive_move_count_threshold: true,
+                tactical_move_count_multiplier: 1.5,
+                quiet_move_count_multiplier: 0.8,
+                time_pressure_base_threshold: 0.10,
+                time_pressure_complexity_multiplier: 1.0,
+                time_pressure_depth_multiplier: 1.0,
+                tt_move_min_depth_for_skip: 3,
+                tt_move_max_age_for_skip: 100,
+                preset: Some(IIDPreset::Balanced),
+            },
+        };
+        
+        // Validate the configuration
+        if let Err(_) = config.validate() {
+            // If validation fails, fall back to default
+            config = Self::default();
+            config.preset = Some(preset);
+        }
+        
+        config
+    }
+    
+    /// Task 10.5: Apply a preset to this configuration
+    pub fn apply_preset(&mut self, preset: IIDPreset) {
+        *self = Self::from_preset(preset);
+    }
     /// Validate the configuration parameters and return any errors
     pub fn validate(&self) -> Result<(), String> {
         if self.min_depth < 2 {
@@ -3814,15 +3973,23 @@ impl IIDConfig {
     }
 
     /// Get a summary of the configuration
+    /// Task 10.9: Include preset information if set
     pub fn summary(&self) -> String {
+        let preset_str = if let Some(preset) = self.preset {
+            format!(", preset={}", preset.to_string())
+        } else {
+            String::new()
+        };
+        
         format!(
-            "IIDConfig: enabled={}, min_depth={}, iid_depth_ply={}, max_moves={}, overhead_threshold={:.2}, strategy={:?}",
+            "IIDConfig: enabled={}, min_depth={}, iid_depth_ply={}, max_moves={}, overhead_threshold={:.2}, strategy={:?}{}",
             self.enabled,
             self.min_depth,
             self.iid_depth_ply,
             self.max_legal_moves,
             self.time_overhead_threshold,
-            self.depth_strategy
+            self.depth_strategy,
+            preset_str
         )
     }
 }
@@ -5333,6 +5500,8 @@ impl EngineConfig {
                     // Task 9.6: TT move condition configuration
                     tt_move_min_depth_for_skip: 3,
                     tt_move_max_age_for_skip: 100,
+                    // Task 10.4: No preset by default
+                    preset: None,
                 },
                 tt_size_mb: 128,
                 debug_logging: false,
@@ -5442,6 +5611,8 @@ impl EngineConfig {
                     // Task 9.6: TT move condition configuration
                     tt_move_min_depth_for_skip: 3,
                     tt_move_max_age_for_skip: 100,
+                    // Task 10.4: No preset by default
+                    preset: None,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,
