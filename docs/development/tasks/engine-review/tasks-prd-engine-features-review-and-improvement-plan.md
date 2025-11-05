@@ -95,16 +95,16 @@
   - [x] 4.8 Generate improvement recommendations
   - [x] 4.9 Coordinate analysis with move ordering effectiveness metrics
 
-- [ ] 5.0 Feature: Quiescence Search
-  - [ ] 5.1 Review quiescence search implementation
-  - [ ] 5.2 Verify delta pruning implementation
-  - [ ] 5.3 Check futility pruning logic
-  - [ ] 5.4 Assess stand-pat optimization
-  - [ ] 5.5 Review depth limits and termination conditions
-  - [ ] 5.6 Measure search stability and tactical accuracy
-  - [ ] 5.7 Identify strengths and weaknesses
-  - [ ] 5.8 Generate improvement recommendations
-  - [ ] 5.9 Coordinate with null-move and transposition table review
+- [x] 5.0 Feature: Quiescence Search
+  - [x] 5.1 Review quiescence search implementation
+  - [x] 5.2 Verify delta pruning implementation
+  - [x] 5.3 Check futility pruning logic
+  - [x] 5.4 Assess stand-pat optimization
+  - [x] 5.5 Review depth limits and termination conditions
+  - [x] 5.6 Measure search stability and tactical accuracy
+  - [x] 5.7 Identify strengths and weaknesses
+  - [x] 5.8 Generate improvement recommendations
+  - [x] 5.9 Coordinate with null-move and transposition table review
 
 - [ ] 6.0 Feature: Move Ordering
   - [ ] 6.1 Review move_ordering.rs implementation
