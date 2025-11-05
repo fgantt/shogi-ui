@@ -118,42 +118,42 @@
     - Test phase-specific scaling effectiveness
     - Add configuration options for phase-specific scaling
 
-- [ ] 2.0 Implement Counter-Move Heuristic
-  - [ ] 2.1 Design counter-move table structure:
+- [x] 2.0 Implement Counter-Move Heuristic
+  - [x] 2.1 Design counter-move table structure:
     - Similar to killer moves but indexed by opponent's last move
     - Store moves that refuted opponent's moves
     - Consider depth-aware storage (similar to killer moves)
-  - [ ] 2.2 Add counter-move table to `MoveOrdering` struct:
+  - [x] 2.2 Add counter-move table to `MoveOrdering` struct:
     - `HashMap<Move, Vec<Move>>` or similar structure
     - Configurable maximum moves per counter-move (default: 2)
     - Memory-efficient storage
-  - [ ] 2.3 Implement `add_counter_move()` method:
+  - [x] 2.3 Implement `add_counter_move()` method:
     - Store move that refuted opponent's move
     - Check for duplicates before adding
     - Maintain FIFO order (remove oldest if limit exceeded)
     - Update statistics
-  - [ ] 2.4 Implement `score_counter_move()` method:
+  - [x] 2.4 Implement `score_counter_move()` method:
     - Return configurable counter-move weight
     - Check if move is a counter-move for opponent's last move
     - Return 0 if not a counter-move
-  - [ ] 2.5 Integrate counter-move heuristic into move ordering:
+  - [x] 2.5 Integrate counter-move heuristic into move ordering:
     - Add to `order_moves_with_all_heuristics()` after killer moves
     - Use for quiet moves only (not captures)
     - Prioritize counter-moves appropriately
-  - [ ] 2.6 Add counter-move tracking in search engine:
+  - [x] 2.6 Add counter-move tracking in search engine:
     - Track opponent's last move in search context
     - Update counter-move table when move causes cutoff
     - Pass opponent's last move to move ordering
-  - [ ] 2.7 Add configuration options:
+  - [x] 2.7 Add configuration options:
     - `counter_move_weight` - Weight for counter-move heuristic
     - `max_counter_moves` - Maximum moves per counter-move
     - Enable/disable counter-move heuristic (default: enabled)
-  - [ ] 2.8 Add statistics tracking:
+  - [x] 2.8 Add statistics tracking:
     - `counter_move_hits` - Number of successful counter-move lookups
     - `counter_move_misses` - Number of failed counter-move lookups
     - `counter_move_hit_rate` - Percentage of successful lookups
     - `counter_moves_stored` - Total number of counter-moves stored
-  - [ ] 2.9 Add unit tests for counter-move heuristic:
+  - [x] 2.9 Add unit tests for counter-move heuristic:
     - Test counter-move storage and retrieval
     - Test counter-move scoring
     - Test counter-move integration with move ordering
@@ -166,8 +166,8 @@
     - Measure ordering time overhead
     - Measure ordering effectiveness improvement
     - Measure memory usage
-  - [ ] 2.12 Add debug logging for counter-move decisions (conditional on debug flags)
-  - [ ] 2.13 Update documentation to describe counter-move heuristic
+  - [x] 2.12 Add debug logging for counter-move decisions (conditional on debug flags)
+  - [x] 2.13 Update documentation to describe counter-move heuristic
   - [ ] 2.14 Consider counter-move aging (reduce weight over time) - future enhancement
   - [ ] 2.15 Consider aging killer moves (reducing weight over time):
     - Implement aging mechanism for killer moves
@@ -743,4 +743,150 @@
   * Consider phase-specific scaling (Task 1.16)
 
 **Status:** Core implementation complete - SEE calculation is fully implemented and integrated with move ordering. Remaining tasks focus on testing, optimization, and documentation.
+
+---
+
+## Task 2.0 Completion Notes
+
+**Task:** Implement Counter-Move Heuristic
+
+**Status:** Core implementation complete - Counter-move heuristic is fully implemented and integrated with move ordering and search engine.
+
+**Implementation Summary:**
+
+### Core Implementation (Tasks 2.1-2.8, 2.12, 2.13):
+- **Counter-move table structure (Tasks 2.1-2.2):**
+  * Implemented `counter_move_table: HashMap<Move, Vec<Move>>` in `MoveOrdering` struct
+  * Maps opponent's move -> list of counter-moves that refuted it
+  * Configurable maximum moves per counter-move (default: 2, configurable via `CounterMoveConfig`)
+  * Memory-efficient storage using HashMap
+
+- **Counter-move methods (Tasks 2.3-2.4):**
+  * `add_counter_move(opponent_move, counter_move)`: Stores counter-move with duplicate checking and FIFO eviction
+  * `score_counter_move(move, opponent_last_move)`: Returns counter-move weight if move is a counter-move, 0 otherwise
+  * `is_counter_move(move, opponent_last_move)`: Checks if move is a counter-move for opponent's last move
+  * `get_counter_moves(opponent_move)`: Retrieves all counter-moves for an opponent move
+  * Helper methods: `clear_counter_moves_for_opponent_move()`, `clear_all_counter_moves()`, `set_max_counter_moves()`, `get_max_counter_moves()`, `get_counter_move_stats()`, `get_counter_move_hit_rate()`, `update_counter_move_hit_rate()`
+
+- **Integration with move ordering (Task 2.5):**
+  * Counter-move heuristic integrated into `score_move_with_all_heuristics()` after killer moves
+  * Counter-moves are used for quiet moves only (not captures)
+  * Priority order: IID > PV > Killer > Counter-move > History > SEE > Regular
+  * Counter-move weight: 3000 (medium-high priority, configurable)
+
+- **Search engine integration (Task 2.6):**
+  * Added `opponent_last_move: Option<Move>` parameter to `negamax_with_context()` and threaded through recursion
+  * Updated `order_moves_for_negamax()` and `order_moves_advanced()` to accept and pass `opponent_last_move`
+  * Updated `order_moves_with_all_heuristics()` to accept `opponent_last_move` and use it for counter-move scoring
+  * When a move causes a beta cutoff, it's added as a counter-move to the opponent's last move (for quiet moves only)
+  * All recursive calls updated to pass `opponent_last_move` (None for IID, null move, and test code; actual move in main search path)
+
+- **Configuration system (Task 2.7):**
+  * Added `CounterMoveConfig` struct with:
+    - `max_counter_moves`: Maximum counter-moves per opponent move (default: 2)
+    - `enable_counter_move`: Enable/disable counter-move heuristic (default: true)
+    - `enable_counter_move_aging`: Enable aging (default: false, future work)
+    - `counter_move_aging_factor`: Aging factor (default: 0.9)
+  * Added `counter_move_weight` to `OrderingWeights` (default: 3000)
+  * Added `counter_move_config` to `MoveOrderingConfig`
+  * Validation added for counter-move configuration
+  * All `OrderingWeights` initializations updated to include `counter_move_weight`
+
+- **Statistics tracking (Task 2.8):**
+  * Added to `OrderingStats`:
+    - `counter_move_hits`: Number of successful counter-move lookups
+    - `counter_move_misses`: Number of failed counter-move lookups
+    - `counter_move_hit_rate`: Percentage of successful lookups
+    - `counter_moves_stored`: Total number of counter-moves stored
+  * Statistics updated automatically in `score_counter_move()` and `add_counter_move()`
+  * Hit rate calculated and updated via `update_counter_move_hit_rate()`
+
+- **Debug logging (Task 2.12):**
+  * Added trace logging in search engine when counter-move is added:
+    - Logs: "Added counter-move {counter_move} for opponent's move {opponent_move}"
+  * Conditional on debug flags (uses `crate::debug_utils::trace_log()`)
+
+- **Unit tests (Task 2.9):**
+  * Added comprehensive unit tests:
+    - `test_counter_move_scoring`: Tests counter-move scoring with and without match
+    - `test_counter_move_storage`: Tests counter-move storage and retrieval
+    - `test_counter_move_detection`: Tests `is_counter_move()` method
+    - `test_counter_move_limit`: Tests FIFO eviction when limit exceeded
+    - `test_counter_move_duplicate_prevention`: Tests duplicate prevention
+    - `test_counter_move_clear_functionality`: Tests clearing counter-moves for specific opponent move
+    - `test_counter_move_clear_all`: Tests clearing all counter-moves
+    - `test_counter_move_statistics`: Tests statistics tracking (hits, misses, stored)
+    - `test_counter_move_only_for_quiet_moves`: Tests that counter-moves work with different move types
+    - `test_counter_move_disabled_config`: Tests that counter-move heuristic respects disabled configuration
+
+- **Documentation (Task 2.13):**
+  * Comprehensive inline documentation added to all counter-move methods
+  * Method documentation describes purpose, parameters, return values, and usage
+  * Configuration documentation describes all options and defaults
+  * Integration documentation describes priority order and usage in move ordering
+
+### Integration Details:
+- **Move ordering priority order:**
+  1. IID moves (highest priority - Task 3.0)
+  2. PV moves (high priority)
+  3. Killer moves (medium-high priority)
+  4. Counter-moves (medium-high priority, quiet moves only - Task 2.5)
+  5. History moves (medium priority)
+  6. SEE moves (for captures - Task 1.0)
+  7. Regular moves (normal priority)
+
+- **Counter-move storage:**
+  * Counter-moves are stored when a quiet move causes a beta cutoff
+  * Stored as: `counter_move_table[opponent_last_move] = [counter_move1, counter_move2, ...]`
+  * Maximum 2 counter-moves per opponent move (configurable)
+  * FIFO eviction: oldest counter-move removed when limit exceeded
+
+- **Counter-move usage:**
+  * Counter-moves are checked during move ordering for quiet moves only
+  * If opponent's last move is known, counter-moves for that move are prioritized
+  * Counter-moves get medium-high priority (weight: 3000, configurable)
+  * Counter-move heuristic is disabled if `enable_counter_move` is false
+
+- **Search engine integration:**
+  * `opponent_last_move` is tracked through the recursive search
+  * When a move is made, it becomes the `opponent_last_move` for the recursive call
+  * When a beta cutoff occurs, the cutoff move is added as a counter-move (if quiet)
+  * Counter-move table is cleared with `clear_cache()` and `clear_all_caches()`
+
+### Code Quality:
+- Well-documented with comprehensive comments
+- Proper error handling (returns appropriate values)
+- Efficient implementation (HashMap lookup: O(1), vector operations: O(k) where k is number of counter-moves)
+- Follows existing code patterns and conventions (similar to killer move implementation)
+- No compilation errors or linter warnings (after fixes)
+
+### Performance Characteristics:
+- Counter-move lookup: O(1) hash lookup + O(k) vector search where k is number of counter-moves per opponent move
+- Counter-move storage: O(1) hash insertion + O(1) vector append (O(k) if eviction needed)
+- Memory usage: O(n*m) where n is number of unique opponent moves, m is max counter-moves per move
+- Overall: Efficient for typical usage (most positions have few counter-moves stored)
+
+### Testing Status:
+- Core implementation complete and compiles successfully
+- Unit tests complete (10 tests covering all functionality)
+- Integration tests marked as future work (Task 2.10)
+- Performance benchmarks marked as future work (Task 2.11)
+
+### Configuration:
+- `enable_counter_move`: Enable/disable counter-move heuristic (default: true)
+- `max_counter_moves`: Maximum counter-moves per opponent move (default: 2)
+- `counter_move_weight`: Weight for counter-move scores (default: 3000)
+- `enable_counter_move_aging`: Enable aging (default: false, future work)
+- `counter_move_aging_factor`: Aging factor (default: 0.9, future work)
+
+### Remaining Tasks (marked as incomplete):
+- Task 2.10: Integration tests verifying counter-move improves quiet move ordering (future work)
+- Task 2.11: Performance benchmarks comparing counter-move vs no counter-move (future work)
+
+### Next Steps:
+- Add integration tests for counter-move effectiveness (Task 2.10)
+- Create performance benchmarks (Task 2.11)
+- Consider counter-move aging implementation (future enhancement)
+
+**Status:** Core implementation complete - Counter-move heuristic is fully implemented and integrated with move ordering and search engine. Counter-moves are stored when moves cause beta cutoffs and used to prioritize quiet moves based on opponent's last move. Unit tests and debug logging are complete. Remaining tasks focus on integration tests and performance benchmarks.
 

@@ -440,12 +440,14 @@ impl SearchEngine {
 
     /// Order moves using advanced move ordering system
     /// Task 3.0: Added iid_move parameter to integrate IID move into advanced ordering
-    fn order_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>) -> Result<Vec<Move>, String> {
+    /// Task 2.6: Added opponent_last_move parameter for counter-move heuristic
+    fn order_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>, opponent_last_move: Option<&Move>) -> Result<Vec<Move>, String> {
         // Initialize advanced move orderer for this position
         self.initialize_advanced_move_orderer(board, captured_pieces, player, depth);
         
         // Task 3.0: Use advanced move ordering with all heuristics and IID move
-        Ok(self.advanced_move_orderer.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, iid_move))
+        // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
+        Ok(self.advanced_move_orderer.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, iid_move, opponent_last_move))
     }
 
     /// Order moves for negamax search with advanced move ordering
@@ -455,12 +457,13 @@ impl SearchEngine {
     /// 
     /// Task 6.8: Made public for testing integration
     /// Task 3.0: Added iid_move parameter to integrate IID move into all ordering paths
-    pub fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, iid_move: Option<&Move>) -> Vec<Move> {
+    pub fn order_moves_for_negamax(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, iid_move: Option<&Move>, opponent_last_move: Option<&Move>) -> Vec<Move> {  // Task 2.6: Added opponent_last_move parameter
         // Task 6.4: Check if position is in check (affects move ordering priority)
         let is_check = board.is_king_in_check(player, captured_pieces);
         
         // Task 3.0: Try advanced move ordering first with IID move
-        match self.order_moves_advanced(moves, board, captured_pieces, player, depth, iid_move) {
+        // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
+        match self.order_moves_advanced(moves, board, captured_pieces, player, depth, iid_move, opponent_last_move) {
             Ok(ordered_moves) => {
                 // Task 6.2: If we have a TT hit, the ordering might already be cached
                 // Update PV move if we have a best move from transposition table
@@ -1120,6 +1123,7 @@ impl SearchEngine {
             }
             
             // Shallow search for this move with null window for efficiency
+            // Task 2.6: Pass None for opponent_last_move in IID search (not applicable)
             let score = -self.negamax_with_context(
             board, 
                 &new_captured,
@@ -1133,8 +1137,9 @@ impl SearchEngine {
                 true,
                 false,
                 false,
-                false
-        );
+                false,
+                None  // Task 2.6: IID search doesn't track opponent's move
+            );
         
             // Restore board state by unmaking the move
             board.unmake_move(&move_info);
@@ -1892,7 +1897,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                false
+                false,
+                None  // Task 2.6: IID search doesn't track opponent's move
             );
             
             // Restore board state by unmaking the move
@@ -2355,7 +2361,8 @@ impl SearchEngine {
                     false,
                     false,
                     false,
-                    false
+                    false,
+                    None  // Task 2.6: IID search doesn't track opponent's move
                 );
                 
                 // Restore board state by unmaking the move
@@ -2736,7 +2743,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                false
+                false,
+                None  // Task 2.6: IID search doesn't track opponent's move
             );
             
             // Restore board state by unmaking the move
@@ -2808,7 +2816,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                false
+                false,
+                None  // Task 2.6: IID search doesn't track opponent's move
             );
             
             // Restore board state by unmaking the move
@@ -2961,7 +2970,7 @@ impl SearchEngine {
             let iid_result = self.negamax_with_context(
                 board, captured_pieces, player, depth,
                 -10000, 10000, &iid_start, time_limit_ms,
-                &mut hash_history, false, false, false, false
+                &mut hash_history, false, false, false, false, None  // Task 2.6: Benchmark doesn't track opponent's move
             );
             let iid_time = iid_start.elapsed_ms();
             let iid_nodes = self.iid_stats.total_iid_nodes;
@@ -2972,7 +2981,7 @@ impl SearchEngine {
             let non_iid_result = self.negamax_with_context(
                 board, captured_pieces, player, depth,
                 -10000, 10000, &non_iid_start, time_limit_ms,
-                &mut hash_history, false, false, false, false
+                &mut hash_history, false, false, false, false, None  // Task 2.6: Benchmark doesn't track opponent's move
             );
             let non_iid_time = non_iid_start.elapsed_ms();
 
@@ -3280,7 +3289,8 @@ impl SearchEngine {
             false,
             false,
             false,
-            false
+            false,
+            None  // Task 2.6: Test doesn't track opponent's move
         );
         
         // Extract best move from transposition table or search results
@@ -3821,10 +3831,10 @@ impl SearchEngine {
     }
 
     fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool) -> i32 {
-        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, hash_history, can_null_move, false, false, false)
+        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, hash_history, can_null_move, false, false, false, None)
     }
     
-    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool) -> i32 {
+    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool, opponent_last_move: Option<Move>) -> i32 {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
@@ -4120,7 +4130,8 @@ impl SearchEngine {
         self.initialize_move_orderer();
         
         // Task 3.0: Use advanced move ordering for better performance with IID move integration
-        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref());
+        // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, iid_move.as_ref(), opponent_last_move.as_ref());
         
         // Task 12.3: Track IID move position in ordered list to verify it's prioritized
         if let Some(iid_mv) = &iid_move {
@@ -4204,12 +4215,13 @@ impl SearchEngine {
             }
 
             crate::debug_utils::start_timing(&format!("move_search_{}", move_index));
+            // Task 2.6: Pass current move as opponent_last_move to recursive call
             let score = self.search_move_with_lmr(
                 board, 
                 &new_captured, 
                 player, 
                 depth, 
-                alpha, 
+                alpha,
                 beta, 
                 &start_time, 
                 time_limit_ms, 
@@ -4218,7 +4230,8 @@ impl SearchEngine {
                 move_index,
                 is_root,
                 move_.is_capture,
-                has_check
+                has_check,
+                opponent_last_move.clone()  // Task 2.6: Pass opponent's last move for counter-move heuristic
             );
             crate::debug_utils::end_timing(&format!("move_search_{}", move_index), "NEGAMAX");
             
@@ -4314,6 +4327,19 @@ impl SearchEngine {
                             best_move_for_tt = Some(move_.clone());
                             crate::debug_utils::trace_log("NEGAMAX", &format!("Storing cutoff move {} as best_move for PV", move_.to_usi_string()));
                         }
+                        // Task 2.6: Add counter-move when move causes beta cutoff
+                        // The move that caused the cutoff is a good counter-move to the opponent's last move
+                        if let Some(opp_last_move) = &opponent_last_move {
+                            if !move_.is_capture {  // Counter-moves are typically for quiet moves
+                                self.advanced_move_orderer.add_counter_move(opp_last_move.clone(), move_.clone());
+                                crate::debug_utils::trace_log("COUNTER_MOVE", &format!(
+                                    "Added counter-move {} for opponent's move {}",
+                                    move_.to_usi_string(),
+                                    opp_last_move.to_usi_string()
+                                ));
+                            }
+                        }
+                        
                         // Opportunistically flush buffered TT writes on cutoffs to reduce later bursts
                         self.flush_tt_buffer();
                         break;
@@ -6550,7 +6576,7 @@ impl SearchEngine {
             board, captured_pieces, player.opposite(), 
             search_depth, beta.saturating_neg(), beta.saturating_neg().saturating_add(1), 
             start_time, time_limit_ms, hash_history, 
-            false, false, false, false  // Prevent recursive null moves
+            false, false, false, false, None  // Task 2.6: Null move search doesn't track opponent's move
         );
         
         null_move_score
@@ -6587,7 +6613,7 @@ impl SearchEngine {
             board, captured_pieces, player.opposite(),
             depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
             start_time, time_limit_ms, hash_history,
-            false, false, false, false  // Prevent recursive null moves
+            false, false, false, false, None  // Task 2.6: Null move verification doesn't track opponent's move
         );
         
         verification_score
@@ -6628,7 +6654,7 @@ impl SearchEngine {
             board, captured_pieces, player.opposite(),
             depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
             start_time, time_limit_ms, hash_history,
-            false, false, false, false  // Prevent recursive null moves
+            false, false, false, false, None  // Task 2.6: Mate threat verification doesn't track opponent's move
         );
         
         if mate_threat_score >= beta {
@@ -7984,7 +8010,8 @@ impl SearchEngine {
                            move_index: usize,
                            _is_root: bool,
                            has_capture: bool,
-                           has_check: bool) -> i32 {
+                           has_check: bool,
+                           opponent_last_move: Option<Move>) -> i32 {  // Task 2.6: Track opponent's last move for counter-move heuristic
         
         self.lmr_stats.moves_considered += 1;
         
@@ -8072,6 +8099,7 @@ impl SearchEngine {
             
             // Perform reduced-depth search with null window
             let reduced_depth = depth - 1 - reduction;
+            // Task 2.6: Pass current move as opponent_last_move to recursive call
             let score = -self.negamax_with_context(
                 board, 
                 captured_pieces, 
@@ -8085,7 +8113,8 @@ impl SearchEngine {
                 true,
                 false, // not root
                 has_capture,
-                has_check
+                has_check,
+                Some(move_.clone())  // Task 2.6: Pass current move as opponent's last move
             );
             
             // Check if re-search is needed (with margin)
@@ -8102,6 +8131,7 @@ impl SearchEngine {
                 ));
                 
                 // Re-search at full depth
+                // Task 2.6: Pass current move as opponent_last_move to recursive call
                 let full_score = -self.negamax_with_context(
                     board, 
                     captured_pieces, 
@@ -8115,7 +8145,8 @@ impl SearchEngine {
                     true,
                     false, // not root
                     has_capture,
-                    has_check
+                    has_check,
+                    Some(move_.clone())  // Task 2.6: Pass current move as opponent's last move
                 );
                 
                 let cutoff_after_research = full_score >= beta;

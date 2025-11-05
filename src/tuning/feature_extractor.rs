@@ -746,7 +746,7 @@ impl Default for FeatureExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BitboardBoard, types::{Player, CapturedPieces, PieceType}};
+    use crate::{BitboardBoard, types::{Player, CapturedPieces, PieceType}, NUM_EVAL_FEATURES};
 
     #[test]
     fn test_feature_extraction() {

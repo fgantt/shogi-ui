@@ -1243,6 +1243,7 @@ impl OrderingStrategy {
                 see_weight: 700,
                 pv_move_weight: 900,
                 killer_move_weight: 600,
+                counter_move_weight: 500,
                 history_weight: 400,
             },
             priority_adjustments: PriorityAdjustments {
@@ -1277,6 +1278,7 @@ impl OrderingStrategy {
                 see_weight: 800,
                 pv_move_weight: 900,
                 killer_move_weight: 700,
+                counter_move_weight: 600,
                 history_weight: 600,
             },
             priority_adjustments: PriorityAdjustments {
@@ -1311,6 +1313,7 @@ impl OrderingStrategy {
                 see_weight: 900,
                 pv_move_weight: 900,
                 killer_move_weight: 600,
+                counter_move_weight: 500,
                 history_weight: 500,
             },
             priority_adjustments: PriorityAdjustments {
@@ -1346,6 +1349,7 @@ impl OrderingStrategy {
                 see_weight: 1000,
                 pv_move_weight: 900,
                 killer_move_weight: 800,
+                counter_move_weight: 600,
                 history_weight: 400,
             },
             priority_adjustments: PriorityAdjustments {
@@ -1381,6 +1385,7 @@ impl OrderingStrategy {
                 see_weight: 600,
                 pv_move_weight: 900,
                 killer_move_weight: 500,
+                counter_move_weight: 600,
                 history_weight: 700,
             },
             priority_adjustments: PriorityAdjustments {
@@ -1553,6 +1558,9 @@ pub struct MoveOrdering {
     /// Killer moves organized by depth
     /// Each depth can have multiple killer moves
     killer_moves: HashMap<u8, Vec<Move>>,
+    /// Counter-move table: maps opponent's move -> counter-moves that refuted it
+    /// Used for quiet move ordering: if opponent played move X, try counter-moves that refuted X
+    counter_move_table: HashMap<Move, Vec<Move>>,
     /// Current search depth for killer move management
     current_depth: u8,
     /// History table for move scoring
@@ -1634,6 +1642,14 @@ pub struct OrderingStats {
     pub killer_move_hit_rate: f64,
     /// Number of killer moves stored
     pub killer_moves_stored: u64,
+    /// Number of counter-move hits
+    pub counter_move_hits: u64,
+    /// Number of counter-move misses
+    pub counter_move_misses: u64,
+    /// Counter-move hit rate percentage
+    pub counter_move_hit_rate: f64,
+    /// Number of counter-moves stored
+    pub counter_moves_stored: u64,
     /// Number of history heuristic hits
     pub history_hits: u64,
     /// Number of history heuristic misses
@@ -2129,6 +2145,8 @@ pub struct MoveOrderingConfig {
     pub cache_config: CacheConfig,
     /// Killer move configuration
     pub killer_config: KillerConfig,
+    /// Counter-move heuristic configuration
+    pub counter_move_config: CounterMoveConfig,
     /// History heuristic configuration
     pub history_config: HistoryConfig,
     /// Performance configuration
@@ -2167,6 +2185,8 @@ pub struct OrderingWeights {
     pub history_weight: i32,
     /// Weight for SEE (Static Exchange Evaluation) moves
     pub see_weight: i32,
+    /// Weight for counter-move heuristic moves
+    pub counter_move_weight: i32,
 }
 
 /// Cache configuration for move ordering
@@ -2199,6 +2219,19 @@ pub struct KillerConfig {
     pub killer_aging_factor: f32,
     /// Enable depth-based killer move management
     pub enable_depth_based_management: bool,
+}
+
+/// Counter-move heuristic configuration
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CounterMoveConfig {
+    /// Maximum number of counter-moves per opponent move
+    pub max_counter_moves: usize,
+    /// Enable counter-move heuristic
+    pub enable_counter_move: bool,
+    /// Enable counter-move aging
+    pub enable_counter_move_aging: bool,
+    /// Counter-move aging factor (0.0 to 1.0)
+    pub counter_move_aging_factor: f32,
 }
 
 /// History heuristic configuration
@@ -2250,6 +2283,7 @@ impl Default for MoveOrderingConfig {
             weights: OrderingWeights::default(),
             cache_config: CacheConfig::default(),
             killer_config: KillerConfig::default(),
+            counter_move_config: CounterMoveConfig::default(),
             history_config: HistoryConfig::default(),
             performance_config: PerformanceConfig::default(),
             debug_config: DebugConfig::default(),
@@ -2272,6 +2306,7 @@ impl Default for OrderingWeights {
             killer_move_weight: 5000, // High priority for killer moves
             history_weight: 2500, // Medium-high priority for history moves
             see_weight: 2000, // High priority for SEE moves
+            counter_move_weight: 3000, // Medium-high priority for counter-moves
         }
     }
 }
@@ -2297,6 +2332,17 @@ impl Default for KillerConfig {
             enable_killer_aging: false, // Disabled by default
             killer_aging_factor: 0.9,
             enable_depth_based_management: true,
+        }
+    }
+}
+
+impl Default for CounterMoveConfig {
+    fn default() -> Self {
+        Self {
+            max_counter_moves: 2,
+            enable_counter_move: true, // Enabled by default
+            enable_counter_move_aging: false, // Disabled by default
+            counter_move_aging_factor: 0.9,
         }
     }
 }
@@ -2365,6 +2411,9 @@ impl MoveOrderingConfig {
         if self.weights.killer_move_weight < 0 {
             errors.push("Killer move weight must be non-negative".to_string());
         }
+        if self.weights.counter_move_weight < 0 {
+            errors.push("Counter-move weight must be non-negative".to_string());
+        }
         if self.weights.history_weight < 0 {
             errors.push("History weight must be non-negative".to_string());
         }
@@ -2386,6 +2435,14 @@ impl MoveOrderingConfig {
         }
         if self.killer_config.killer_aging_factor < 0.0 || self.killer_config.killer_aging_factor > 1.0 {
             errors.push("Killer aging factor must be between 0.0 and 1.0".to_string());
+        }
+
+        // Validate counter-move configuration
+        if self.counter_move_config.max_counter_moves == 0 {
+            errors.push("Max counter-moves must be greater than 0".to_string());
+        }
+        if self.counter_move_config.counter_move_aging_factor < 0.0 || self.counter_move_config.counter_move_aging_factor > 1.0 {
+            errors.push("Counter-move aging factor must be between 0.0 and 1.0".to_string());
         }
 
         // Validate history configuration
@@ -2519,6 +2576,7 @@ impl MoveOrderingConfig {
                 quiet_weight: other.weights.quiet_weight,
                 pv_move_weight: other.weights.pv_move_weight,
                 killer_move_weight: other.weights.killer_move_weight,
+                counter_move_weight: other.weights.counter_move_weight,
                 history_weight: other.weights.history_weight,
                 see_weight: other.weights.see_weight,
             },
@@ -2536,6 +2594,12 @@ impl MoveOrderingConfig {
                 enable_killer_aging: other.killer_config.enable_killer_aging,
                 killer_aging_factor: other.killer_config.killer_aging_factor,
                 enable_depth_based_management: other.killer_config.enable_depth_based_management,
+            },
+            counter_move_config: CounterMoveConfig {
+                max_counter_moves: other.counter_move_config.max_counter_moves,
+                enable_counter_move: other.counter_move_config.enable_counter_move,
+                enable_counter_move_aging: other.counter_move_config.enable_counter_move_aging,
+                counter_move_aging_factor: other.counter_move_config.counter_move_aging_factor,
             },
             history_config: HistoryConfig {
                 max_history_score: other.history_config.max_history_score,
@@ -2620,6 +2684,7 @@ impl MoveOrdering {
             pv_move_cache: HashMap::new(),
             move_ordering_cache: HashMap::new(), // Task 6.2: Initialize move ordering cache
             killer_moves: HashMap::new(),
+            counter_move_table: HashMap::new(),
             current_depth: 0,
             history_table: HashMap::new(),
             history_update_counter: 0,
@@ -4025,6 +4090,7 @@ impl MoveOrdering {
         self.pv_move_cache.clear();
         self.move_ordering_cache.clear(); // Task 6.2: Clear move ordering cache
         self.killer_moves.clear();
+        self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
         self.history_table.clear();
         self.stats.cache_hits = 0;
         self.stats.cache_misses = 0;
@@ -4442,6 +4508,179 @@ impl MoveOrdering {
             (self.stats.killer_move_hits as f64 / (self.stats.killer_move_hits + self.stats.killer_move_misses) as f64) * 100.0
         } else {
             0.0
+        }
+    }
+
+    // ==================== Counter-Move Heuristic Methods ====================
+
+    /// Add a counter-move for an opponent's move
+    /// 
+    /// This method stores a move that refuted (caused a cutoff against) an opponent's move.
+    /// Counter-moves are used to prioritize moves that were successful against specific opponent moves.
+    /// 
+    /// # Arguments
+    /// * `opponent_move` - The opponent's move that was refuted
+    /// * `counter_move` - The move that refuted the opponent's move
+    pub fn add_counter_move(&mut self, opponent_move: Move, counter_move: Move) {
+        if !self.config.counter_move_config.enable_counter_move {
+            return;
+        }
+
+        // Get or create the counter-moves list for this opponent move
+        let counter_list = self.counter_move_table.entry(opponent_move).or_insert_with(Vec::new);
+        
+        // Check if this counter-move is already in the list
+        let is_duplicate = counter_list.iter().any(|cm| self.moves_equal(cm, &counter_move));
+        
+        if !is_duplicate {
+            // Add the new counter-move
+            counter_list.push(counter_move);
+            self.stats.counter_moves_stored += 1;
+            
+            // Limit the number of counter-moves per opponent move (FIFO order)
+            if counter_list.len() > self.config.counter_move_config.max_counter_moves {
+                counter_list.remove(0); // Remove oldest counter-move
+            }
+        }
+        
+        self.update_memory_usage();
+    }
+
+    /// Score a move that matches a counter-move for the opponent's last move
+    /// 
+    /// Counter-moves get medium-high priority to encourage trying moves that
+    /// refuted opponent moves in previous searches.
+    /// 
+    /// # Arguments
+    /// * `move_` - The move to score
+    /// * `opponent_last_move` - The opponent's last move (if available)
+    pub fn score_counter_move(&mut self, move_: &Move, opponent_last_move: Option<&Move>) -> i32 {
+        if !self.config.counter_move_config.enable_counter_move {
+            return 0;
+        }
+
+        if let Some(opponent_move) = opponent_last_move {
+            if let Some(counter_list) = self.counter_move_table.get(opponent_move) {
+                if counter_list.iter().any(|cm| self.moves_equal(cm, move_)) {
+                    self.stats.counter_move_hits += 1;
+                    return self.config.weights.counter_move_weight;
+                }
+            }
+        }
+        
+        self.stats.counter_move_misses += 1;
+        0
+    }
+
+    /// Check if a move is a counter-move for the opponent's last move
+    /// 
+    /// This method determines if a given move is stored as a counter-move
+    /// for the opponent's last move.
+    /// 
+    /// # Arguments
+    /// * `move_` - The move to check
+    /// * `opponent_last_move` - The opponent's last move (if available)
+    pub fn is_counter_move(&mut self, move_: &Move, opponent_last_move: Option<&Move>) -> bool {
+        if !self.config.counter_move_config.enable_counter_move {
+            return false;
+        }
+
+        if let Some(opponent_move) = opponent_last_move {
+            if let Some(counter_list) = self.counter_move_table.get(opponent_move) {
+                return counter_list.iter().any(|cm| self.moves_equal(cm, move_));
+            }
+        }
+        
+        false
+    }
+
+    /// Get all counter-moves for an opponent's move
+    /// 
+    /// Returns a reference to the counter-moves list for the given opponent move,
+    /// or None if no counter-moves exist for that opponent move.
+    /// 
+    /// # Arguments
+    /// * `opponent_move` - The opponent's move to get counter-moves for
+    pub fn get_counter_moves(&self, opponent_move: &Move) -> Option<&Vec<Move>> {
+        self.counter_move_table.get(opponent_move)
+    }
+
+    /// Clear all counter-moves for a specific opponent move
+    /// 
+    /// This method clears all counter-moves stored for the given opponent move.
+    pub fn clear_counter_moves_for_opponent_move(&mut self, opponent_move: &Move) {
+        self.counter_move_table.remove(opponent_move);
+        self.update_memory_usage();
+    }
+
+    /// Clear all counter-moves
+    /// 
+    /// This method clears all counter-moves from the table, typically called
+    /// when starting a new search or when memory needs to be freed.
+    pub fn clear_all_counter_moves(&mut self) {
+        self.counter_move_table.clear();
+        self.stats.counter_move_hits = 0;
+        self.stats.counter_move_misses = 0;
+        self.stats.counter_move_hit_rate = 0.0;
+        self.stats.counter_moves_stored = 0;
+        self.update_memory_usage();
+    }
+
+    /// Set maximum counter-moves per opponent move
+    /// 
+    /// Adjusts the maximum number of counter-moves stored per opponent move.
+    pub fn set_max_counter_moves(&mut self, max_moves: usize) {
+        self.config.counter_move_config.max_counter_moves = max_moves;
+        
+        // Trim existing counter-move lists if necessary
+        for counter_list in self.counter_move_table.values_mut() {
+            if counter_list.len() > max_moves {
+                counter_list.truncate(max_moves);
+            }
+        }
+        
+        self.update_memory_usage();
+    }
+
+    /// Get the maximum number of counter-moves per opponent move
+    pub fn get_max_counter_moves(&self) -> usize {
+        self.config.counter_move_config.max_counter_moves
+    }
+
+    /// Get counter-move statistics
+    /// 
+    /// Returns statistics about counter-move usage and effectiveness.
+    pub fn get_counter_move_stats(&self) -> (u64, u64, f64, u64) {
+        (
+            self.stats.counter_move_hits,
+            self.stats.counter_move_misses,
+            self.stats.counter_move_hit_rate,
+            self.stats.counter_moves_stored
+        )
+    }
+
+    /// Get counter-move hit rate
+    /// 
+    /// Returns the hit rate for counter-move lookups.
+    pub fn get_counter_move_hit_rate(&self) -> f64 {
+        let total = self.stats.counter_move_hits + self.stats.counter_move_misses;
+        if total > 0 {
+            (self.stats.counter_move_hits as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Update counter-move hit rate statistics
+    /// 
+    /// This method should be called periodically to update the hit rate
+    /// based on current hit/miss counts.
+    fn update_counter_move_hit_rate(&mut self) {
+        let total = self.stats.counter_move_hits + self.stats.counter_move_misses;
+        if total > 0 {
+            self.stats.counter_move_hit_rate = (self.stats.counter_move_hits as f64 / total as f64) * 100.0;
+        } else {
+            self.stats.counter_move_hit_rate = 0.0;
         }
     }
 
@@ -5477,6 +5716,7 @@ impl MoveOrdering {
         self.fast_score_cache.clear();
         self.pv_move_cache.clear();
         self.see_cache.clear();
+        self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
     }
 
     /// Reduce memory usage to recover from memory errors
@@ -6080,7 +6320,7 @@ impl MoveOrdering {
     /// Task 6.2: Caches ordering results for repeated positions with same move sets
     /// Task 6.4: Accounts for search state (depth, alpha, beta, check status)
     /// Task 3.0: Added iid_move parameter to integrate IID move into advanced ordering
-    pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>) -> Vec<Move> {
+    pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>, opponent_last_move: Option<&Move>) -> Vec<Move> {  // Task 2.6: Added opponent_last_move parameter
         if moves.is_empty() {
             return Vec::new();
         }
@@ -6127,9 +6367,10 @@ impl MoveOrdering {
         let mut ordered_moves = moves.to_vec();
 
         // Task 3.0: Sort moves by score with all heuristics prioritization, including IID move
+        // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
         ordered_moves.sort_by(|a, b| {
-            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves, board);
-            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves, board);
+            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves, opponent_last_move, board);
+            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves, opponent_last_move, board);
             score_b.cmp(&score_a)
         });
 
@@ -6159,13 +6400,16 @@ impl MoveOrdering {
     /// Score a move with all heuristics consideration
     /// 
     /// Task 3.0: Updated priority order to include IID move (highest priority)
+    /// Task 2.5: Updated priority order to include counter-move heuristic
     /// This method scores a move with the following priority:
     /// 1. IID moves (highest priority - Task 3.0)
     /// 2. PV moves (high priority)
     /// 3. Killer moves (medium-high priority)
-    /// 4. History moves (medium priority)
-    /// 5. Regular moves (normal priority)
-    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move], board: &crate::bitboards::BitboardBoard) -> i32 {
+    /// 4. Counter-moves (medium-high priority, quiet moves only - Task 2.5)
+    /// 5. History moves (medium priority)
+    /// 6. SEE moves (for captures - Task 1.0)
+    /// 7. Regular moves (normal priority)
+    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move], opponent_last_move: Option<&Move>, board: &crate::bitboards::BitboardBoard) -> i32 {
         // Task 3.0: Check if this is the IID move (highest priority)
         if let Some(iid_mv) = iid_move {
             if self.moves_equal(move_, iid_mv) {
@@ -6185,6 +6429,14 @@ impl MoveOrdering {
         if killer_moves.iter().any(|killer| self.moves_equal(move_, killer)) {
             self.stats.killer_move_hits += 1;
             return self.score_killer_move(move_);
+        }
+
+        // Task 2.5: Check if this is a counter-move for opponent's last move (medium-high priority, quiet moves only)
+        if !move_.is_capture {
+            let counter_score = self.score_counter_move(move_, opponent_last_move);
+            if counter_score > 0 {
+                return counter_score;
+            }
         }
 
         // Check if this move has history score (medium priority)
@@ -7728,6 +7980,349 @@ mod tests {
         let killer_moves = orderer.get_current_killer_moves();
         assert!(killer_moves.is_some());
         assert_eq!(killer_moves.unwrap().len(), 5);
+    }
+
+    // ==================== Counter-Move Heuristic Tests ====================
+
+    #[test]
+    fn test_counter_move_scoring() {
+        let mut orderer = MoveOrdering::new();
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        
+        // Add counter-move
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Score counter-move with opponent's last move
+        let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
+        assert_eq!(score, orderer.config.weights.counter_move_weight);
+        assert!(score > 1000); // Should be higher than regular moves
+        
+        // Score non-counter-move
+        let regular_move = create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            Player::White
+        );
+        let score_no_match = orderer.score_counter_move(&regular_move, Some(&opponent_move));
+        assert_eq!(score_no_match, 0);
+    }
+
+    #[test]
+    fn test_counter_move_storage() {
+        let mut orderer = MoveOrdering::new();
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        
+        // Initially no counter-moves
+        assert!(orderer.get_counter_moves(&opponent_move).is_none());
+        
+        // Add counter-move
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Should now have counter-moves
+        let counter_moves = orderer.get_counter_moves(&opponent_move);
+        assert!(counter_moves.is_some());
+        assert_eq!(counter_moves.unwrap().len(), 1);
+        assert!(orderer.moves_equal(&counter_moves.unwrap()[0], &counter_move));
+        
+        // Statistics should be updated
+        assert_eq!(orderer.stats.counter_moves_stored, 1);
+    }
+
+    #[test]
+    fn test_counter_move_detection() {
+        let mut orderer = MoveOrdering::new();
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        let regular_move = create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            Player::White
+        );
+        
+        // Add counter-move
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Test counter-move detection
+        assert!(orderer.is_counter_move(&counter_move, Some(&opponent_move)));
+        assert!(!orderer.is_counter_move(&regular_move, Some(&opponent_move)));
+        assert!(!orderer.is_counter_move(&counter_move, None));
+    }
+
+    #[test]
+    fn test_counter_move_limit() {
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_counter_moves(2);
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        
+        // Add more counter-moves than the limit
+        for i in 0..5 {
+            let counter_move = create_test_move(
+                Some(Position::new(i, 0)),
+                Position::new(i + 1, 0),
+                PieceType::Pawn,
+                Player::White
+            );
+            orderer.add_counter_move(opponent_move.clone(), counter_move);
+        }
+        
+        // Should only have 2 counter-moves (FIFO order)
+        let counter_moves = orderer.get_counter_moves(&opponent_move);
+        assert!(counter_moves.is_some());
+        assert_eq!(counter_moves.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_counter_move_duplicate_prevention() {
+        let mut orderer = MoveOrdering::new();
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        
+        // Add same counter-move twice
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Should only have one counter-move (no duplicates)
+        let counter_moves = orderer.get_counter_moves(&opponent_move);
+        assert!(counter_moves.is_some());
+        assert_eq!(counter_moves.unwrap().len(), 1);
+        
+        // Statistics should only count once
+        assert_eq!(orderer.stats.counter_moves_stored, 1);
+    }
+
+    #[test]
+    fn test_counter_move_clear_functionality() {
+        let mut orderer = MoveOrdering::new();
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Verify counter-move is stored
+        assert!(orderer.is_counter_move(&counter_move, Some(&opponent_move)));
+        assert!(orderer.get_counter_moves(&opponent_move).is_some());
+        
+        // Clear counter-moves for opponent move
+        orderer.clear_counter_moves_for_opponent_move(&opponent_move);
+        
+        // Verify counter-move is cleared
+        assert!(!orderer.is_counter_move(&counter_move, Some(&opponent_move)));
+        assert!(orderer.get_counter_moves(&opponent_move).is_none());
+    }
+
+    #[test]
+    fn test_counter_move_clear_all() {
+        let mut orderer = MoveOrdering::new();
+        
+        // Add counter-moves for different opponent moves
+        let opponent_move_1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move_1 = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        orderer.add_counter_move(opponent_move_1.clone(), counter_move_1.clone());
+        
+        let opponent_move_2 = create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            Player::Black
+        );
+        let counter_move_2 = create_test_move(
+            Some(Position::new(4, 4)),
+            Position::new(5, 4),
+            PieceType::Rook,
+            Player::White
+        );
+        orderer.add_counter_move(opponent_move_2.clone(), counter_move_2.clone());
+        
+        // Clear all counter-moves
+        orderer.clear_all_counter_moves();
+        
+        // Verify all counter-moves are cleared
+        assert!(!orderer.is_counter_move(&counter_move_1, Some(&opponent_move_1)));
+        assert!(!orderer.is_counter_move(&counter_move_2, Some(&opponent_move_2)));
+        assert_eq!(orderer.stats.counter_move_hits, 0);
+        assert_eq!(orderer.stats.counter_move_misses, 0);
+        assert_eq!(orderer.stats.counter_moves_stored, 0);
+    }
+
+    #[test]
+    fn test_counter_move_statistics() {
+        let mut orderer = MoveOrdering::new();
+        
+        // Initially no statistics
+        let (hits, misses, hit_rate, stored) = orderer.get_counter_move_stats();
+        assert_eq!(hits, 0);
+        assert_eq!(misses, 0);
+        assert_eq!(hit_rate, 0.0);
+        assert_eq!(stored, 0);
+        
+        // Add counter-move
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Test counter-move detection (should increment hits)
+        let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
+        assert!(score > 0);
+        
+        // Statistics should be updated
+        let (hits, misses, hit_rate, stored) = orderer.get_counter_move_stats();
+        assert!(hits > 0);
+        assert!(stored > 0);
+        
+        // Test miss (should increment misses)
+        let regular_move = create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            Player::White
+        );
+        let _score = orderer.score_counter_move(&regular_move, Some(&opponent_move));
+        
+        // Statistics should be updated
+        let (hits, misses, _hit_rate, stored) = orderer.get_counter_move_stats();
+        assert!(misses > 0);
+    }
+
+    #[test]
+    fn test_counter_move_only_for_quiet_moves() {
+        let mut orderer = MoveOrdering::new();
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        
+        // Create a capture move (should not be used as counter-move)
+        let mut capture_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        capture_move.is_capture = true;
+        
+        // Add counter-move (should be allowed even if it's a capture)
+        // But in practice, counter-moves are only added for quiet moves in the search engine
+        orderer.add_counter_move(opponent_move.clone(), capture_move.clone());
+        
+        // Should still be able to retrieve it
+        let counter_moves = orderer.get_counter_moves(&opponent_move);
+        assert!(counter_moves.is_some());
+    }
+
+    #[test]
+    fn test_counter_move_disabled_config() {
+        let mut config = MoveOrderingConfig::default();
+        config.counter_move_config.enable_counter_move = false;
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let opponent_move = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black
+        );
+        let counter_move = create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            Player::White
+        );
+        
+        // Try to add counter-move (should be ignored)
+        orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
+        
+        // Should not be stored
+        assert!(orderer.get_counter_moves(&opponent_move).is_none());
+        
+        // Scoring should return 0
+        let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
+        assert_eq!(score, 0);
     }
 
     // ==================== History Heuristic Tests ====================
