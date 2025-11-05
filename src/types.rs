@@ -5918,7 +5918,7 @@ pub struct PerformanceMetrics {
 use crate::bitboards::BitboardBoard;
 
 /// Game phase for position-dependent pruning decisions
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GamePhase {
     Opening,
     Middlegame,

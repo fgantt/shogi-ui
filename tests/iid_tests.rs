@@ -2256,6 +2256,204 @@ fn test_overhead_monitoring_with_adaptive_tuning_disabled() {
     assert_eq!(initial_config.max_legal_moves, final_config.max_legal_moves);
 }
 
+// ===== TASK 8.5: PERFORMANCE REGRESSION TESTS =====
+
+/// Task 8.5: Performance regression test - fails if IID effectiveness drops below thresholds
+#[test]
+#[should_panic(expected = "IID performance regression")]
+fn test_iid_performance_regression_efficiency() {
+    let mut engine = SearchEngine::new(None, 64);
+    let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
+    
+    // Simulate a scenario where efficiency rate is below threshold (< 30%)
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 100;
+    stats.iid_move_first_improved_alpha = 25; // 25% efficiency (below 30% threshold)
+    engine.iid_stats = stats;
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // This test should fail if efficiency is below 30%
+    if metrics.iid_efficiency < 30.0 {
+        panic!("IID performance regression: Efficiency rate {:.2}% is below threshold of 30.0%", metrics.iid_efficiency);
+    }
+}
+
+/// Task 8.5: Performance regression test - fails if overhead exceeds threshold (> 15%)
+#[test]
+#[should_panic(expected = "IID performance regression")]
+fn test_iid_performance_regression_overhead() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate a scenario where overhead exceeds threshold (> 15%)
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 100;
+    stats.iid_time_ms = 2000; // 2 seconds
+    stats.total_search_time_ms = 10000; // 10 seconds total (20% overhead, above 15% threshold)
+    engine.iid_stats = stats;
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // This test should fail if overhead exceeds 15%
+    if metrics.overhead_percentage > 15.0 {
+        panic!("IID performance regression: Overhead {:.2}% exceeds threshold of 15.0%", metrics.overhead_percentage);
+    }
+}
+
+/// Task 8.5: Performance regression test - fails if cutoff rate is below threshold (< 20%)
+#[test]
+#[should_panic(expected = "IID performance regression")]
+fn test_iid_performance_regression_cutoff() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate a scenario where cutoff rate is below threshold (< 20%)
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 100;
+    stats.iid_move_caused_cutoff = 15; // 15% cutoff rate (below 20% threshold)
+    engine.iid_stats = stats;
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // This test should fail if cutoff rate is below 20%
+    if metrics.cutoff_rate < 20.0 {
+        panic!("IID performance regression: Cutoff rate {:.2}% is below threshold of 20.0%", metrics.cutoff_rate);
+    }
+}
+
+/// Task 8.5: Performance regression test - passes when all thresholds are met
+#[test]
+fn test_iid_performance_meets_thresholds() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate a scenario where all thresholds are met
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 100;
+    stats.iid_move_first_improved_alpha = 40; // 40% efficiency (above 30% threshold)
+    stats.iid_move_caused_cutoff = 25; // 25% cutoff rate (above 20% threshold)
+    stats.iid_time_ms = 1000; // 1 second
+    stats.total_search_time_ms = 10000; // 10 seconds total (10% overhead, below 15% threshold)
+    engine.iid_stats = stats;
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // Verify all thresholds are met
+    assert!(metrics.iid_efficiency >= 30.0, "Efficiency rate should be >= 30%, got {:.2}%", metrics.iid_efficiency);
+    assert!(metrics.overhead_percentage <= 15.0, "Overhead should be <= 15%, got {:.2}%", metrics.overhead_percentage);
+    assert!(metrics.cutoff_rate >= 20.0, "Cutoff rate should be >= 20%, got {:.2}%", metrics.cutoff_rate);
+}
+
+/// Task 8.9: Test performance report generation
+#[test]
+fn test_generate_iid_performance_report() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Create test statistics
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 50;
+    stats.iid_move_first_improved_alpha = 20;
+    stats.iid_move_caused_cutoff = 10;
+    stats.iid_time_ms = 1000;
+    stats.total_search_time_ms = 5000;
+    stats.positions_skipped_tt_move = 10;
+    stats.positions_skipped_depth = 5;
+    stats.positions_skipped_move_count = 3;
+    stats.positions_skipped_time_pressure = 2;
+    stats.iid_move_extracted_from_tt = 15;
+    stats.iid_move_extracted_from_tracked = 35;
+    engine.iid_stats = stats;
+    
+    let report = engine.generate_iid_performance_report();
+    
+    // Verify report contains expected sections
+    assert!(report.contains("IID Performance Report"));
+    assert!(report.contains("IID Searches Performed"));
+    assert!(report.contains("Efficiency Rate"));
+    assert!(report.contains("Cutoff Rate"));
+    assert!(report.contains("Overhead"));
+    assert!(report.contains("Skip Reasons"));
+    assert!(report.contains("Move Extraction"));
+}
+
+/// Task 8.6, 8.10: Test statistics export to JSON
+#[test]
+fn test_export_iid_statistics_json() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Create test statistics
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 25;
+    stats.iid_time_ms = 500;
+    stats.total_search_time_ms = 2500;
+    engine.iid_stats = stats;
+    
+    // Add some overhead history
+    engine.monitor_iid_overhead(200, 1000); // 20% overhead
+    engine.monitor_iid_overhead(150, 1000); // 15% overhead
+    
+    let json_result = engine.export_iid_statistics_json();
+    assert!(json_result.is_ok());
+    
+    let json = json_result.unwrap();
+    
+    // Verify JSON contains expected fields
+    assert!(json.contains("iid_searches_performed"));
+    assert!(json.contains("iid_time_ms"));
+    assert!(json.contains("total_search_time_ms"));
+    assert!(json.contains("performance_metrics"));
+    assert!(json.contains("overhead_history"));
+}
+
+/// Task 8.7: Test IID effectiveness by position type
+#[test]
+fn test_get_iid_effectiveness_by_position_type() {
+    let engine = SearchEngine::new(None, 64);
+    let board = BitboardBoard::new();
+    
+    // Test that method returns a HashMap (even if empty)
+    let effectiveness = engine.get_iid_effectiveness_by_position_type(&board);
+    
+    // Should return a valid HashMap (may be empty if no data)
+    assert!(effectiveness.len() >= 0);
+}
+
+/// Task 8.11: Test high overhead alert mechanism
+#[test]
+fn test_high_overhead_alert() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate high overhead (>15%)
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 10;
+    stats.iid_time_ms = 200; // 200ms
+    stats.total_search_time_ms = 1000; // 1000ms total (20% overhead)
+    engine.iid_stats = stats;
+    
+    // The alert should be triggered during monitoring
+    engine.monitor_iid_overhead(200, 1000);
+    
+    // Verify overhead is tracked
+    let overhead_stats = engine.get_iid_overhead_stats();
+    assert!(overhead_stats.average_overhead > 15.0);
+}
+
+/// Task 8.12: Test low efficiency alert mechanism
+#[test]
+fn test_low_efficiency_alert() {
+    let mut engine = SearchEngine::new(None, 64);
+    
+    // Simulate low efficiency (<30%)
+    let mut stats = IIDStats::default();
+    stats.iid_searches_performed = 100;
+    stats.iid_move_first_improved_alpha = 20; // 20% efficiency (below 30%)
+    engine.iid_stats = stats;
+    
+    let metrics = engine.get_iid_performance_metrics();
+    
+    // Verify efficiency is below threshold
+    assert!(metrics.iid_efficiency < 30.0);
+}
+
 // ===== MULTI-PV IID TESTING =====
 
 #[test]

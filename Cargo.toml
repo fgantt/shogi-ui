@@ -108,6 +108,10 @@ name = "move_unmaking_performance_benchmarks"
 harness = false
 
 [[bench]]
+name = "iid_performance_monitoring"
+harness = false
+
+[[bench]]
 name = "repetition_detection_performance_benchmarks"
 harness = false
 

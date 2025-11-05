@@ -50,6 +50,8 @@ pub struct SearchEngine {
     aspiration_stats: AspirationWindowStats,
     iid_config: IIDConfig,
     iid_stats: IIDStats,
+    /// Task 8.6: Overhead history for performance monitoring (rolling window of last 100 samples)
+    iid_overhead_history: Vec<f64>,
     previous_scores: Vec<i32>,
     /// Time management configuration (Task 4.5-4.8)
     time_management_config: TimeManagementConfig,
@@ -311,6 +313,7 @@ impl SearchEngine {
             aspiration_stats: AspirationWindowStats::default(),
             iid_config: IIDConfig::default(),
             iid_stats: IIDStats::default(),
+            iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
             time_management_config: TimeManagementConfig::default(),
             time_budget_stats: TimeBudgetStats::default(),
@@ -533,6 +536,7 @@ impl SearchEngine {
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
+            iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
@@ -810,8 +814,8 @@ impl SearchEngine {
                 if let (Some(board), Some(captured)) = (board, captured_pieces) {
                     let complexity = self.assess_position_complexity(board, captured);
                     match complexity {
-                        PositionComplexity::High => base_depth.saturating_add(1).min(4),
-                        PositionComplexity::Low => base_depth.saturating_sub(1).max(1),
+                        PositionComplexity::High => (base_depth as u8).saturating_add(1).min(4),
+                        PositionComplexity::Low => (base_depth as u8).saturating_sub(1).max(1),
                         _ => base_depth,
                     }
                 } else {
@@ -1714,14 +1718,23 @@ impl SearchEngine {
     }
 
     /// Update overhead statistics for monitoring
+    /// Task 8.1, 8.6: Enhanced to track overhead data over time for historical analysis
     fn update_overhead_statistics(&mut self, overhead_percentage: f64) {
-        // In a real implementation, this would maintain rolling averages
-        // For now, we'll use the existing IID stats structure
-        
+        // Task 8.1: Track overhead statistics for monitoring
         // Track if this is a high overhead search
         if overhead_percentage > self.iid_config.time_overhead_threshold * 100.0 {
             self.iid_stats.positions_skipped_time_pressure += 1;
         }
+        
+        // Task 8.6: Track overhead history (limited to recent samples for memory efficiency)
+        // Store overhead percentage for trend analysis
+        // In a full implementation, this could be stored to a file or database
+        // For now, we'll maintain a simple rolling window in memory
+        if self.iid_overhead_history.len() >= 100 {
+            // Keep only the most recent 100 samples
+            self.iid_overhead_history.remove(0);
+        }
+        self.iid_overhead_history.push(overhead_percentage);
     }
 
     /// Automatically adjust IID overhead thresholds based on performance
@@ -1775,24 +1788,29 @@ impl SearchEngine {
     }
 
     /// Calculate average IID overhead percentage
+    /// Task 8.6: Enhanced to use actual overhead history
     fn calculate_average_overhead(&self) -> f64 {
-        if self.iid_stats.iid_searches_performed == 0 {
-            return 0.0;
+        if self.iid_overhead_history.is_empty() {
+            // Fallback to estimate based on skip statistics if no history
+            if self.iid_stats.iid_searches_performed == 0 {
+                return 0.0;
+            }
+            let skip_rate = self.iid_stats.positions_skipped_time_pressure as f64 / 
+                           self.iid_stats.iid_searches_performed as f64;
+            
+            // Estimate average overhead based on skip rate
+            if skip_rate > 0.5 {
+                return 25.0; // High overhead
+            } else if skip_rate > 0.2 {
+                return 15.0; // Medium overhead
+            } else {
+                return 8.0;  // Low overhead
+            }
         }
         
-        // In a real implementation, this would calculate from actual timing data
-        // For now, return a placeholder based on skip statistics
-        let skip_rate = self.iid_stats.positions_skipped_time_pressure as f64 / 
-                       self.iid_stats.iid_searches_performed as f64;
-        
-        // Estimate average overhead based on skip rate
-        if skip_rate > 0.5 {
-            25.0 // High overhead
-        } else if skip_rate > 0.2 {
-            15.0 // Medium overhead
-        } else {
-            8.0  // Low overhead
-        }
+        // Task 8.6: Calculate actual average from overhead history
+        let sum: f64 = self.iid_overhead_history.iter().sum();
+        sum / self.iid_overhead_history.len() as f64
     }
 
     /// Count how many times thresholds have been adjusted
@@ -1829,6 +1847,169 @@ impl SearchEngine {
 
         // Scale by depth (exponential growth)
         base_time * (depth as u32 + 1)
+    }
+
+    /// Task 8.7: Get IID effectiveness metrics by position type (opening, middlegame, endgame)
+    pub fn get_iid_effectiveness_by_position_type(&self, board: &BitboardBoard) -> HashMap<GamePhase, (f64, f64, u64)> {
+        let mut result = HashMap::new();
+        let game_phase = self.get_game_phase(board);
+        
+        // Task 8.7: Calculate effectiveness metrics for each game phase
+        // This would ideally track statistics per phase, but for now we'll use complexity-based tracking
+        // and map complexity to game phases based on typical position characteristics
+        
+        for (complexity, (successful_searches, total_searches, _nodes_saved, _time_saved)) in &self.iid_stats.complexity_effectiveness {
+            // Map complexity to game phase (simplified mapping)
+            // In a full implementation, we'd track phase-specific statistics separately
+            let phase = match complexity {
+                PositionComplexity::Low => GamePhase::Endgame, // Endgames often simpler
+                PositionComplexity::Medium => GamePhase::Middlegame, // Middlegames medium complexity
+                PositionComplexity::High => GamePhase::Opening, // Openings can be complex
+                PositionComplexity::Unknown => game_phase, // Use current phase for unknown
+            };
+            
+            if *total_searches > 0 {
+                let efficiency = (*successful_searches as f64 / *total_searches as f64) * 100.0;
+                let overhead = if *total_searches > 0 {
+                    // Estimate overhead from complexity (simplified)
+                    match complexity {
+                        PositionComplexity::Low => 5.0,
+                        PositionComplexity::Medium => 12.0,
+                        PositionComplexity::High => 20.0,
+                        PositionComplexity::Unknown => 10.0,
+                    }
+                } else {
+                    0.0
+                };
+                
+                let entry = result.entry(phase).or_insert((0.0, 0.0, 0));
+                entry.0 = (entry.0 * entry.2 as f64 + efficiency * (*total_searches as f64)) / (entry.2 + total_searches) as f64;
+                entry.1 = (entry.1 * entry.2 as f64 + overhead * (*total_searches as f64)) / (entry.2 + total_searches) as f64;
+                entry.2 += total_searches;
+            }
+        }
+        
+        result
+    }
+    
+    /// Task 8.9: Generate automated performance report (efficiency rate, cutoff rate, overhead, speedup, etc.)
+    pub fn generate_iid_performance_report(&self) -> String {
+        let metrics = self.get_iid_performance_metrics();
+        let overhead_stats = self.get_iid_overhead_stats();
+        
+        let mut report = String::new();
+        report.push_str("=== IID Performance Report ===\n\n");
+        
+        // Overall statistics
+        report.push_str(&format!("IID Searches Performed: {}\n", self.iid_stats.iid_searches_performed));
+        report.push_str(&format!("IID Time: {} ms\n", self.iid_stats.iid_time_ms));
+        report.push_str(&format!("Total Search Time: {} ms\n", self.iid_stats.total_search_time_ms));
+        report.push_str("\n");
+        
+        // Performance metrics
+        report.push_str(&format!("Efficiency Rate: {:.2}%\n", metrics.iid_efficiency));
+        report.push_str(&format!("Cutoff Rate: {:.2}%\n", metrics.cutoff_rate));
+        report.push_str(&format!("Overhead: {:.2}%\n", metrics.overhead_percentage));
+        report.push_str(&format!("Success Rate: {:.2}%\n", metrics.success_rate));
+        report.push_str(&format!("Speedup: {:.2}%\n", metrics.speedup_percentage));
+        report.push_str(&format!("Node Reduction: {:.2}%\n", metrics.node_reduction_percentage));
+        report.push_str(&format!("Net Benefit: {:.2}%\n", metrics.net_benefit));
+        report.push_str("\n");
+        
+        // Overhead statistics
+        report.push_str(&format!("Average Overhead: {:.2}%\n", overhead_stats.average_overhead));
+        report.push_str(&format!("Current Threshold: {:.2}%\n", overhead_stats.current_threshold * 100.0));
+        report.push_str(&format!("Threshold Adjustments: {}\n", overhead_stats.threshold_adjustments));
+        report.push_str("\n");
+        
+        // Skip statistics
+        report.push_str("Skip Reasons:\n");
+        report.push_str(&format!("  TT Move: {} ({:.2}%)\n", 
+            self.iid_stats.positions_skipped_tt_move,
+            metrics.tt_skip_rate));
+        report.push_str(&format!("  Depth: {} ({:.2}%)\n",
+            self.iid_stats.positions_skipped_depth,
+            metrics.depth_skip_rate));
+        report.push_str(&format!("  Move Count: {} ({:.2}%)\n",
+            self.iid_stats.positions_skipped_move_count,
+            metrics.move_count_skip_rate));
+        report.push_str(&format!("  Time Pressure: {} ({:.2}%)\n",
+            self.iid_stats.positions_skipped_time_pressure,
+            metrics.time_pressure_skip_rate));
+        report.push_str("\n");
+        
+        // Move extraction statistics
+        report.push_str("Move Extraction:\n");
+        report.push_str(&format!("  From TT: {}\n", self.iid_stats.iid_move_extracted_from_tt));
+        report.push_str(&format!("  From Tracked: {}\n", self.iid_stats.iid_move_extracted_from_tracked));
+        report.push_str("\n");
+        
+        // Alerts
+        if metrics.overhead_percentage > 15.0 {
+            report.push_str(&format!("⚠️  WARNING: High overhead ({:.2}%) detected!\n", metrics.overhead_percentage));
+        }
+        if metrics.iid_efficiency < 30.0 {
+            report.push_str(&format!("⚠️  WARNING: Low efficiency ({:.2}%) detected!\n", metrics.iid_efficiency));
+        }
+        
+        report.push_str("\n=== End Report ===\n");
+        report
+    }
+    
+    /// Task 8.6, 8.10: Export IID statistics to JSON for analysis
+    pub fn export_iid_statistics_json(&self) -> Result<String, String> {
+        use serde_json;
+        
+        let stats = serde_json::json!({
+            "iid_searches_performed": self.iid_stats.iid_searches_performed,
+            "iid_time_ms": self.iid_stats.iid_time_ms,
+            "total_search_time_ms": self.iid_stats.total_search_time_ms,
+            "iid_move_first_improved_alpha": self.iid_stats.iid_move_first_improved_alpha,
+            "iid_move_caused_cutoff": self.iid_stats.iid_move_caused_cutoff,
+            "total_iid_nodes": self.iid_stats.total_iid_nodes,
+            "positions_skipped_tt_move": self.iid_stats.positions_skipped_tt_move,
+            "positions_skipped_depth": self.iid_stats.positions_skipped_depth,
+            "positions_skipped_move_count": self.iid_stats.positions_skipped_move_count,
+            "positions_skipped_time_pressure": self.iid_stats.positions_skipped_time_pressure,
+            "iid_searches_failed": self.iid_stats.iid_searches_failed,
+            "iid_moves_ineffective": self.iid_stats.iid_moves_ineffective,
+            "iid_move_extracted_from_tt": self.iid_stats.iid_move_extracted_from_tt,
+            "iid_move_extracted_from_tracked": self.iid_stats.iid_move_extracted_from_tracked,
+            "performance_metrics": {
+                "efficiency_rate": self.get_iid_performance_metrics().iid_efficiency,
+                "cutoff_rate": self.get_iid_performance_metrics().cutoff_rate,
+                "overhead_percentage": self.get_iid_performance_metrics().overhead_percentage,
+                "speedup_percentage": self.get_iid_performance_metrics().speedup_percentage,
+                "node_reduction_percentage": self.get_iid_performance_metrics().node_reduction_percentage,
+            },
+            "overhead_history": self.iid_overhead_history,
+            "overhead_stats": {
+                "average_overhead": self.get_iid_overhead_stats().average_overhead,
+                "current_threshold": self.get_iid_overhead_stats().current_threshold,
+                "threshold_adjustments": self.get_iid_overhead_stats().threshold_adjustments,
+            }
+        });
+        
+        serde_json::to_string_pretty(&stats).map_err(|e| format!("Failed to serialize statistics: {}", e))
+    }
+    
+    /// Task 8.6: Save IID statistics to file for historical tracking
+    pub fn save_iid_statistics_to_file(&self, filepath: &str) -> Result<(), String> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        
+        let json = self.export_iid_statistics_json()?;
+        
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(filepath)
+            .map_err(|e| format!("Failed to open file {}: {}", filepath, e))?;
+        
+        writeln!(file, "{}", json)
+            .map_err(|e| format!("Failed to write to file {}: {}", filepath, e))?;
+        
+        Ok(())
     }
 
     /// Get overhead monitoring recommendations
@@ -2186,6 +2367,35 @@ impl SearchEngine {
         }
 
         recommendations
+    }
+    
+    /// Task 8.11: Alert mechanism for high overhead (>15%) indicating too-aggressive IID
+    fn trigger_high_overhead_alert(&mut self, overhead_percentage: f64) {
+        // Log warning if overhead exceeds threshold
+        crate::debug_utils::trace_log("IID_ALERT", &format!(
+            "WARNING: High IID overhead detected: {:.1}% (threshold: {:.1}%). Consider adjusting IID configuration to reduce overhead.",
+            overhead_percentage,
+            self.iid_config.time_overhead_threshold * 100.0
+        ));
+        
+        // In a production system, this could also:
+        // - Send alert to monitoring system
+        // - Automatically reduce IID aggressiveness
+        // - Log to persistent storage for analysis
+    }
+    
+    /// Task 8.12: Alert mechanism for low efficiency (<30%) indicating IID not being effective
+    fn trigger_low_efficiency_alert(&mut self, efficiency: f64) {
+        // Log warning if efficiency is below threshold
+        crate::debug_utils::trace_log("IID_ALERT", &format!(
+            "WARNING: Low IID efficiency detected: {:.1}% (threshold: 30.0%). IID may not be effective in current position. Consider adjusting IID configuration or disabling in certain position types.",
+            efficiency
+        ));
+        
+        // In a production system, this could also:
+        // - Send alert to monitoring system
+        // - Adjust IID depth or skip conditions
+        // - Log to persistent storage for analysis
     }
 
     /// IID with probing for deeper verification of promising moves
@@ -9739,6 +9949,27 @@ impl IterativeDeepening {
         // Task 1.0: Calculate and store total search time for IID overhead calculation
         let total_search_time_ms = start_time.elapsed_ms() as u64;
         search_engine.iid_stats.total_search_time_ms = total_search_time_ms;
+        
+        // Task 8.2: Integrate monitor_iid_overhead() into main search flow
+        // Monitor overhead after search completes to track and adjust thresholds
+        if total_search_time_ms > 0 && search_engine.iid_stats.iid_time_ms > 0 {
+            search_engine.monitor_iid_overhead(
+                search_engine.iid_stats.iid_time_ms as u32,
+                total_search_time_ms as u32
+            );
+            
+            // Task 8.11: Check for high overhead alert (>15%)
+            let overhead_percentage = (search_engine.iid_stats.iid_time_ms as f64 / total_search_time_ms as f64) * 100.0;
+            if overhead_percentage > 15.0 {
+                search_engine.trigger_high_overhead_alert(overhead_percentage);
+            }
+            
+            // Task 8.12: Check for low efficiency alert (<30%)
+            let metrics = search_engine.get_iid_performance_metrics();
+            if metrics.iid_efficiency < 30.0 {
+                search_engine.trigger_low_efficiency_alert(metrics.iid_efficiency);
+            }
+        }
         
         // Task 6.0: Update IID performance measurements after search completes
         search_engine.update_iid_performance_measurements();
