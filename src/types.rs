@@ -1101,6 +1101,10 @@ pub struct QuiescenceStats {
     pub promotion_moves_found: u64,
     pub checks_excluded_from_futility: u64, // Checks excluded from futility pruning
     pub high_value_captures_excluded_from_futility: u64, // High-value captures excluded from futility pruning
+    pub move_ordering_cutoffs: u64, // Number of beta cutoffs from move ordering
+    pub move_ordering_total_moves: u64, // Total moves ordered
+    pub move_ordering_first_move_cutoffs: u64, // Cutoffs from first move in ordering
+    pub move_ordering_second_move_cutoffs: u64, // Cutoffs from second move in ordering
 }
 
 impl QuiescenceStats {

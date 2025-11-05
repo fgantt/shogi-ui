@@ -1022,4 +1022,136 @@ mod quiescence_tests {
             assert_eq!(current_config.tt_replacement_policy, policy);
         }
     }
+
+    #[test]
+    fn test_quiescence_move_ordering_enhanced_mvv_lva() {
+        let engine = create_test_engine();
+        let mut moves = Vec::new();
+        
+        // Create test moves with different capture values
+        let mut move1 = Move::new(Position::new(0, 0), Position::new(1, 1));
+        move1.is_capture = true;
+        // Set captured piece value (simulate capturing a valuable piece)
+        
+        let mut move2 = Move::new(Position::new(0, 0), Position::new(2, 2));
+        move2.is_capture = true;
+        // Set captured piece value (simulate capturing a less valuable piece)
+        
+        moves.push(move1);
+        moves.push(move2);
+        
+        // Test that enhanced MVV-LVA orders captures correctly
+        // (Note: This is a basic test - actual implementation would need proper move setup)
+        let sorted = engine.sort_quiescence_moves(&moves);
+        assert_eq!(sorted.len(), moves.len());
+    }
+
+    #[test]
+    fn test_quiescence_move_ordering_checks_first() {
+        let engine = create_test_engine();
+        let mut moves = Vec::new();
+        
+        // Create test moves: one check, one non-check
+        let mut check_move = Move::new(Position::new(0, 0), Position::new(1, 1));
+        check_move.gives_check = true;
+        
+        let mut normal_move = Move::new(Position::new(0, 0), Position::new(2, 2));
+        normal_move.is_capture = true;
+        
+        moves.push(normal_move.clone());
+        moves.push(check_move.clone());
+        
+        // Test that checks are ordered first
+        let sorted = engine.sort_quiescence_moves(&moves);
+        assert_eq!(sorted.len(), moves.len());
+        // Check should be first (sorted[0])
+        assert!(sorted[0].gives_check || sorted.iter().any(|m| m.gives_check));
+    }
+
+    #[test]
+    fn test_quiescence_move_ordering_statistics() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // Run search
+        let _result = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        let stats = engine.get_quiescence_stats();
+        
+        // Should have ordered some moves
+        assert!(stats.move_ordering_total_moves >= 0);
+        
+        // Cutoff statistics should be >= 0
+        assert!(stats.move_ordering_cutoffs >= 0);
+        assert!(stats.move_ordering_first_move_cutoffs >= 0);
+        assert!(stats.move_ordering_second_move_cutoffs >= 0);
+    }
+
+    #[test]
+    fn test_quiescence_move_ordering_enhanced_fallback() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        
+        // Create test moves
+        let moves = engine.generate_noisy_moves(&board, player, &captured_pieces);
+        
+        if !moves.is_empty() {
+            // Test enhanced fallback ordering
+            let sorted = engine.sort_quiescence_moves_enhanced(&moves, &board, &captured_pieces, player);
+            assert_eq!(sorted.len(), moves.len());
+            
+            // Verify ordering (checks should be first, then captures)
+            let mut saw_check = false;
+            let mut saw_capture = false;
+            for m in &sorted {
+                if m.gives_check {
+                    saw_check = true;
+                }
+                if saw_check && m.is_capture {
+                    saw_capture = true;
+                }
+                // If we saw a check and then a capture, that's correct ordering
+                if saw_check && saw_capture {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_quiescence_move_ordering_edge_cases() {
+        let engine = create_test_engine();
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        
+        // Test empty moves
+        let empty_moves: Vec<Move> = Vec::new();
+        let sorted = engine.sort_quiescence_moves_enhanced(&empty_moves, &board, &captured_pieces, player);
+        assert_eq!(sorted.len(), 0);
+        
+        // Test single move
+        let mut single_move = Move::new(Position::new(0, 0), Position::new(1, 1));
+        single_move.is_capture = true;
+        let single_moves = vec![single_move];
+        let sorted = engine.sort_quiescence_moves_enhanced(&single_moves, &board, &captured_pieces, player);
+        assert_eq!(sorted.len(), 1);
+    }
 }

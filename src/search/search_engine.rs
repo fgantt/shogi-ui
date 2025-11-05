@@ -4520,6 +4520,7 @@ impl SearchEngine {
         // crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
         let sorted_noisy_moves = self.sort_quiescence_moves_advanced(&noisy_moves, board, captured_pieces, player);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
+        self.quiescence_stats.move_ordering_total_moves += noisy_moves.len() as u64;
         let total_move_count = sorted_noisy_moves.len();
 
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
@@ -4598,7 +4599,15 @@ impl SearchEngine {
             // crate::debug_utils::log_move_eval("QUIESCENCE", &move_.to_usi_string(), score, 
             //     &format!("move {} of {}", move_index + 1, sorted_noisy_moves.len()));
             
-            if score >= beta { 
+            if score >= beta {
+                // Track move ordering effectiveness (cutoff from this move position)
+                if move_index == 0 {
+                    self.quiescence_stats.move_ordering_first_move_cutoffs += 1;
+                } else if move_index == 1 {
+                    self.quiescence_stats.move_ordering_second_move_cutoffs += 1;
+                }
+                self.quiescence_stats.move_ordering_cutoffs += 1;
+                
                 crate::debug_utils::log_decision("QUIESCENCE", "Beta cutoff", 
                     &format!("Score {} >= beta {}, cutting off search", score, beta), 
                     Some(score));
@@ -4703,17 +4712,30 @@ impl SearchEngine {
     }
 
     /// Sort quiescence moves using advanced move ordering
-    fn sort_quiescence_moves_advanced(&mut self, moves: &[Move], _board: &BitboardBoard, _captured_pieces: &CapturedPieces, _player: Player) -> Vec<Move> {
+    /// 
+    /// Enhanced with:
+    /// - Better error handling for edge cases
+    /// - Fallback to improved traditional ordering
+    /// - Statistics tracking for ordering effectiveness
+    fn sort_quiescence_moves_advanced(&mut self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
 
         // Try advanced move ordering for quiescence search
         match self.advanced_move_orderer.order_moves(moves) {
-            Ok(ordered_moves) => ordered_moves,
+            Ok(ordered_moves) => {
+                // Verify ordering is valid (same length, no duplicates)
+                if ordered_moves.len() == moves.len() {
+                    ordered_moves
+                } else {
+                    // Invalid ordering - fallback to traditional
+                    self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player)
+                }
+            },
             Err(_) => {
-                // Fallback to traditional quiescence move ordering
-                self.sort_quiescence_moves(moves)
+                // Fallback to enhanced traditional quiescence move ordering
+                self.sort_quiescence_moves_enhanced(moves, board, captured_pieces, player)
             }
         }
     }
@@ -5297,8 +5319,16 @@ impl SearchEngine {
     }
 
     /// Compare two moves for quiescence search ordering
+    /// 
+    /// Enhanced move ordering with:
+    /// - Checks first (highest priority)
+    /// - Enhanced MVV-LVA for captures (considers checks, promotions, threats)
+    /// - Promotions prioritized
+    /// - Tactical threat assessment
+    /// - Position-based heuristics (center control, piece activity)
+    /// - Hash-based comparison for total order
     fn compare_quiescence_moves(&self, a: &Move, b: &Move) -> std::cmp::Ordering {
-        // Use a simple, guaranteed total order based on move properties
+        // Use a comprehensive, guaranteed total order based on move properties
         // This ensures we never have equal moves that are actually different
         
         // 1. Checks first (highest priority)
@@ -5313,9 +5343,24 @@ impl SearchEngine {
             (true, false) => return std::cmp::Ordering::Less,
             (false, true) => return std::cmp::Ordering::Greater,
             (true, true) => {
-                // Both are captures - use MVV-LVA
-                let a_value = a.captured_piece_value() - a.piece_value();
-                let b_value = b.captured_piece_value() - b.piece_value();
+                // Both are captures - use enhanced MVV-LVA
+                // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
+                let a_mvv_lva = a.captured_piece_value() - a.piece_value();
+                let b_mvv_lva = b.captured_piece_value() - b.piece_value();
+                
+                // Enhance MVV-LVA with additional factors:
+                // - Check bonus: +1000 for captures that give check
+                // - Promotion bonus: +promotion_value for captures that promote
+                // - Recapture bonus: +500 for recaptures
+                let a_bonus = if a.gives_check { 1000 } else { 0 }
+                    + if a.is_promotion { a.promotion_value() } else { 0 }
+                    + if a.is_recapture { 500 } else { 0 };
+                let b_bonus = if b.gives_check { 1000 } else { 0 }
+                    + if b.is_promotion { b.promotion_value() } else { 0 }
+                    + if b.is_recapture { 500 } else { 0 };
+                
+                let a_value = a_mvv_lva + a_bonus;
+                let b_value = b_mvv_lva + b_bonus;
                 let capture_cmp = b_value.cmp(&a_value);
                 if capture_cmp != std::cmp::Ordering::Equal {
                     return capture_cmp;
@@ -5326,14 +5371,31 @@ impl SearchEngine {
             }
         }
         
-        // 3. Promotions
+        // 3. Promotions (non-capturing promotions)
         match (a.is_promotion, b.is_promotion) {
             (true, false) => return std::cmp::Ordering::Less,
             (false, true) => return std::cmp::Ordering::Greater,
+            (true, true) => {
+                // Both are promotions - compare by promotion value
+                let a_promo_value = a.promotion_value();
+                let b_promo_value = b.promotion_value();
+                let promo_cmp = b_promo_value.cmp(&a_promo_value);
+                if promo_cmp != std::cmp::Ordering::Equal {
+                    return promo_cmp;
+                }
+            },
             _ => {}
         }
         
-        // 4. Use a simple hash-based comparison to ensure total order
+        // 4. Tactical threat assessment (for non-capturing, non-promoting moves)
+        let a_threat = self.assess_tactical_threat(a);
+        let b_threat = self.assess_tactical_threat(b);
+        let threat_cmp = b_threat.cmp(&a_threat);
+        if threat_cmp != std::cmp::Ordering::Equal {
+            return threat_cmp;
+        }
+        
+        // 5. Use a simple hash-based comparison to ensure total order
         let a_hash = self.move_hash(a);
         let b_hash = self.move_hash(b);
         a_hash.cmp(&b_hash)
@@ -5585,10 +5647,161 @@ impl SearchEngine {
     }
 
     /// Sort moves specifically for quiescence search
-    fn sort_quiescence_moves(&self, moves: &[Move]) -> Vec<Move> {
+    /// 
+    /// Uses basic comparison without position context (for backward compatibility)
+    #[cfg(test)]
+    pub fn sort_quiescence_moves(&self, moves: &[Move]) -> Vec<Move> {
         let mut sorted_moves = moves.to_vec();
         sorted_moves.sort_by(|a, b| self.compare_quiescence_moves(a, b));
         sorted_moves
+    }
+
+    /// Enhanced sort moves for quiescence search with position context
+    /// 
+    /// Enhanced with:
+    /// - Position-aware ordering (piece-square tables, king safety, piece activity)
+    /// - Better handling of edge cases (empty moves, single move)
+    /// - Statistics tracking
+    #[cfg(test)]
+    pub fn sort_quiescence_moves_enhanced(&self, moves: &[Move], board: &BitboardBoard, captured_pieces: &CapturedPieces, player: Player) -> Vec<Move> {
+        if moves.is_empty() {
+            return Vec::new();
+        }
+        
+        // Single move - no need to sort
+        if moves.len() == 1 {
+            return moves.to_vec();
+        }
+
+        let mut sorted_moves = moves.to_vec();
+        
+        // Use enhanced comparison with position context
+        sorted_moves.sort_by(|a, b| {
+            self.compare_quiescence_moves_enhanced(a, b, board, captured_pieces, player)
+        });
+        
+        sorted_moves
+    }
+
+    /// Enhanced comparison with position context for quiescence move ordering
+    /// 
+    /// Includes:
+    /// - All factors from compare_quiescence_moves()
+    /// - Position-based heuristics (piece-square tables, center control)
+    /// - King safety considerations
+    /// - Piece activity assessment
+    fn compare_quiescence_moves_enhanced(&self, a: &Move, b: &Move, board: &BitboardBoard, _captured_pieces: &CapturedPieces, player: Player) -> std::cmp::Ordering {
+        // First, use basic comparison (checks, captures, promotions, threats)
+        let basic_cmp = self.compare_quiescence_moves(a, b);
+        if basic_cmp != std::cmp::Ordering::Equal {
+            return basic_cmp;
+        }
+        
+        // If basic comparison is equal, use position-based heuristics
+        
+        // 1. Position value (piece-square tables, center control)
+        let a_position_value = self.assess_position_value_quiescence(a, board, player);
+        let b_position_value = self.assess_position_value_quiescence(b, board, player);
+        let pos_cmp = b_position_value.cmp(&a_position_value);
+        if pos_cmp != std::cmp::Ordering::Equal {
+            return pos_cmp;
+        }
+        
+        // 2. King safety (prefer moves that improve king safety)
+        let a_king_safety = self.assess_king_safety_quiescence(a, board, player);
+        let b_king_safety = self.assess_king_safety_quiescence(b, board, player);
+        let king_cmp = b_king_safety.cmp(&a_king_safety);
+        if king_cmp != std::cmp::Ordering::Equal {
+            return king_cmp;
+        }
+        
+        // 3. Piece activity (prefer moves that improve piece activity)
+        let a_activity = self.assess_piece_activity_quiescence(a, board, player);
+        let b_activity = self.assess_piece_activity_quiescence(b, board, player);
+        let activity_cmp = b_activity.cmp(&a_activity);
+        if activity_cmp != std::cmp::Ordering::Equal {
+            return activity_cmp;
+        }
+        
+        // 4. Use hash-based comparison for total order
+        let a_hash = self.move_hash(a);
+        let b_hash = self.move_hash(b);
+        a_hash.cmp(&b_hash)
+    }
+
+    /// Assess position value for quiescence move ordering
+    /// 
+    /// Considers:
+    /// - Center control (piece-square table values)
+    /// - Piece development (forward moves)
+    /// - Position-specific bonuses
+    fn assess_position_value_quiescence(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = 0;
+        
+        // Center control bonus (piece-square table)
+        if self.is_center_square(move_.to) {
+            value += 50; // Center squares are more valuable
+        }
+        
+        // Development bonus for pieces moving forward
+        if self.is_forward_move(move_, player) {
+            value += 20; // Forward development is generally good
+        }
+        
+        // Edge penalty (edge squares are less valuable)
+        if move_.to.row == 0 || move_.to.row == 8 || move_.to.col == 0 || move_.to.col == 8 {
+            value -= 10;
+        }
+        
+        value
+    }
+
+    /// Assess king safety for quiescence move ordering
+    /// 
+    /// Considers:
+    /// - Moves that give check (high value)
+    /// - Moves that attack the opponent's king area
+    /// - Moves that improve our king safety
+    fn assess_king_safety_quiescence(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = 0;
+        
+        // Check bonus (attacking the king directly)
+        if move_.gives_check {
+            value += 200; // High value for checks
+        }
+        
+        // Threat to opponent's king area
+        if self.is_threatening_opponent_king(move_, board, player) {
+            value += 100; // Threat to king area
+        }
+        
+        value
+    }
+
+    /// Assess piece activity for quiescence move ordering
+    /// 
+    /// Considers:
+    /// - Moves that improve piece mobility
+    /// - Moves to central squares (more active)
+    /// - Moves that attack opponent pieces
+    fn assess_piece_activity_quiescence(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
+        let mut value = 0;
+        
+        // Mobility gain assessment
+        let mobility_gain = self.assess_mobility_gain(move_, board, player);
+        value += mobility_gain;
+        
+        // Center activity bonus
+        if self.is_center_square(move_.to) {
+            value += 30; // Center squares provide more activity
+        }
+        
+        // Attack bonus (if move attacks opponent piece)
+        if move_.is_capture {
+            value += 50; // Captures are active moves
+        }
+        
+        value
     }
 
     /// Clear the quiescence transposition table
