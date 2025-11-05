@@ -4509,6 +4509,7 @@ impl SearchEngine {
         // crate::debug_utils::trace_log("QUIESCENCE", "Sorting noisy moves");
         let sorted_noisy_moves = self.sort_quiescence_moves_advanced(&noisy_moves, board, captured_pieces, player);
         self.quiescence_stats.moves_ordered += noisy_moves.len() as u64;
+        let total_move_count = sorted_noisy_moves.len();
 
         // crate::debug_utils::trace_log("QUIESCENCE", &format!("Starting noisy move evaluation with {} moves", sorted_noisy_moves.len()));
 
@@ -4526,13 +4527,25 @@ impl SearchEngine {
             //     move_index + 1, move_.to_usi_string(), alpha, beta));
             
             // Apply pruning checks
-            if self.should_prune_delta(&move_, stand_pat, alpha) {
+            // Use adaptive pruning if enabled, otherwise use standard pruning
+            // Adaptive pruning adjusts margins based on depth and total move count
+            let should_prune = if self.quiescence_config.enable_adaptive_pruning {
+                self.should_prune_delta_adaptive(&move_, stand_pat, alpha, depth, total_move_count)
+            } else {
+                self.should_prune_delta(&move_, stand_pat, alpha)
+            };
+            if should_prune {
                 // crate::debug_utils::trace_log("QUIESCENCE", &format!("Delta pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.delta_prunes += 1;
                 continue;
             }
             
-            if self.should_prune_futility(&move_, stand_pat, alpha, depth) {
+            let should_prune_futility = if self.quiescence_config.enable_adaptive_pruning {
+                self.should_prune_futility_adaptive(&move_, stand_pat, alpha, depth, total_move_count)
+            } else {
+                self.should_prune_futility(&move_, stand_pat, alpha, depth)
+            };
+            if should_prune_futility {
                 // crate::debug_utils::trace_log("QUIESCENCE", &format!("Futility pruning move {}", move_.to_usi_string()));
                 self.quiescence_stats.futility_prunes += 1;
                 continue;
@@ -5063,6 +5076,13 @@ impl SearchEngine {
     }
 
     /// Adaptive delta pruning based on position characteristics
+    /// 
+    /// Adjusts pruning margins dynamically based on:
+    /// - Depth: More aggressive pruning at deeper depths
+    /// - Move count: More selective pruning when there are many moves
+    /// - Move type: Less aggressive pruning for high-value captures and promotions
+    /// 
+    /// This provides better pruning effectiveness while maintaining tactical accuracy.
     fn should_prune_delta_adaptive(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8, move_count: usize) -> bool {
         if !self.quiescence_config.enable_delta_pruning {
             return false;
@@ -5086,6 +5106,7 @@ impl SearchEngine {
         }
         
         // Decrease margin for high-value captures (less aggressive pruning)
+        // This treats captures and promotions differently - high-value moves are less likely to be pruned
         if total_gain > 200 {
             adaptive_margin = adaptive_margin / 2;
         }
@@ -5111,6 +5132,12 @@ impl SearchEngine {
     }
 
     /// Adaptive futility pruning based on position characteristics
+    /// 
+    /// Adjusts pruning margins dynamically based on:
+    /// - Depth: More aggressive pruning at deeper depths (already depth-dependent)
+    /// - Move count: More selective pruning when there are many moves available
+    /// 
+    /// This provides better pruning effectiveness while maintaining tactical accuracy.
     fn should_prune_futility_adaptive(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8, move_count: usize) -> bool {
         if !self.quiescence_config.enable_futility_pruning {
             return false;

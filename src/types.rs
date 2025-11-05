@@ -973,6 +973,7 @@ pub struct QuiescenceConfig {
     pub enable_futility_pruning: bool,    // Enable futility pruning
     pub enable_selective_extensions: bool, // Enable selective extensions
     pub enable_tt: bool,                 // Enable transposition table
+    pub enable_adaptive_pruning: bool,   // Enable adaptive pruning (adjusts margins based on depth/move count)
     pub futility_margin: i32,            // Futility pruning margin
     pub delta_margin: i32,               // Delta pruning margin
     pub tt_size_mb: usize,               // Quiescence TT size in MB
@@ -987,6 +988,7 @@ impl Default for QuiescenceConfig {
             enable_futility_pruning: true,
             enable_selective_extensions: true,
             enable_tt: true,
+            enable_adaptive_pruning: true, // Adaptive pruning enabled by default
             futility_margin: 200,
             delta_margin: 100,
             tt_size_mb: 4,                // 4MB for quiescence TT

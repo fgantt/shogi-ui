@@ -621,4 +621,136 @@ mod quiescence_tests {
         // Should return static evaluation (depth limit reached)
         assert!(result > -10000 && result < 10000);
     }
+
+    #[test]
+    fn test_quiescence_adaptive_pruning_enabled() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Enable adaptive pruning
+        let mut config = QuiescenceConfig::default();
+        config.enable_adaptive_pruning = true;
+        config.enable_delta_pruning = true;
+        config.enable_futility_pruning = true;
+        engine.update_quiescence_config(config);
+        
+        // Reset stats
+        engine.reset_quiescence_stats();
+        
+        // Run search
+        let _result = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            3
+        );
+        
+        let stats = engine.get_quiescence_stats();
+        
+        // Should have searched some nodes
+        assert!(stats.nodes_searched > 0);
+        
+        // Pruning should work (may be 0 for simple positions)
+        assert!(stats.delta_prunes >= 0);
+        assert!(stats.futility_prunes >= 0);
+    }
+
+    #[test]
+    fn test_quiescence_adaptive_vs_non_adaptive_pruning() {
+        let mut engine = create_test_engine();
+        let mut board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Sente;
+        let time_source = TimeSource::new();
+        
+        // Test with adaptive pruning enabled
+        let mut config_adaptive = QuiescenceConfig::default();
+        config_adaptive.enable_adaptive_pruning = true;
+        config_adaptive.enable_delta_pruning = true;
+        config_adaptive.enable_futility_pruning = true;
+        engine.update_quiescence_config(config_adaptive);
+        engine.reset_quiescence_stats();
+        
+        let result_adaptive = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            4
+        );
+        
+        let stats_adaptive = engine.get_quiescence_stats();
+        let pruning_efficiency_adaptive = stats_adaptive.pruning_efficiency();
+        let nodes_adaptive = stats_adaptive.nodes_searched;
+        
+        // Test with adaptive pruning disabled
+        let mut config_non_adaptive = QuiescenceConfig::default();
+        config_non_adaptive.enable_adaptive_pruning = false;
+        config_non_adaptive.enable_delta_pruning = true;
+        config_non_adaptive.enable_futility_pruning = true;
+        engine.update_quiescence_config(config_non_adaptive);
+        engine.reset_quiescence_stats();
+        
+        let result_non_adaptive = engine.quiescence_search(
+            &mut board,
+            &captured_pieces,
+            player,
+            -10000,
+            10000,
+            &time_source,
+            1000,
+            4
+        );
+        
+        let stats_non_adaptive = engine.get_quiescence_stats();
+        let pruning_efficiency_non_adaptive = stats_non_adaptive.pruning_efficiency();
+        let nodes_non_adaptive = stats_non_adaptive.nodes_searched;
+        
+        // Both should return reasonable evaluations
+        assert!(result_adaptive > -10000 && result_adaptive < 10000);
+        assert!(result_non_adaptive > -10000 && result_non_adaptive < 10000);
+        
+        // Adaptive pruning should generally be more effective (higher pruning efficiency)
+        // or search fewer nodes, but this depends on the position
+        // For now, just verify both work correctly
+        assert!(pruning_efficiency_adaptive >= 0.0 && pruning_efficiency_adaptive <= 100.0);
+        assert!(pruning_efficiency_non_adaptive >= 0.0 && pruning_efficiency_non_adaptive <= 100.0);
+        assert!(nodes_adaptive > 0);
+        assert!(nodes_non_adaptive > 0);
+    }
+
+    #[test]
+    fn test_quiescence_adaptive_pruning_configuration() {
+        let mut engine = create_test_engine();
+        
+        // Test default configuration has adaptive pruning enabled
+        let default_config = QuiescenceConfig::default();
+        assert_eq!(default_config.enable_adaptive_pruning, true);
+        
+        // Test configuration update
+        let mut config = QuiescenceConfig::default();
+        config.enable_adaptive_pruning = false;
+        engine.update_quiescence_config(config.clone());
+        
+        let current_config = engine.get_quiescence_config();
+        assert_eq!(current_config.enable_adaptive_pruning, false);
+        
+        // Test enabling it again
+        let mut config2 = QuiescenceConfig::default();
+        config2.enable_adaptive_pruning = true;
+        engine.update_quiescence_config(config2.clone());
+        
+        let current_config2 = engine.get_quiescence_config();
+        assert_eq!(current_config2.enable_adaptive_pruning, true);
+    }
 }

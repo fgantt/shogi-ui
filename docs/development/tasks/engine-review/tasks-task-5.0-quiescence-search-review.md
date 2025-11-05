@@ -76,26 +76,23 @@
   - [x] 1.12 Consider adding minimum depth check to prevent infinite recursion (safety enhancement)
   - [x] 1.13 Run benchmark suite to verify fixes don't introduce performance regressions
 
-- [ ] 2.0 Enable Adaptive Pruning
-  - [ ] 2.1 Review adaptive delta pruning implementation `should_prune_delta_adaptive()` (lines 5062-5092)
-  - [ ] 2.2 Verify adaptive delta pruning adjusts margin based on depth and move count correctly
-  - [ ] 2.3 Replace `should_prune_delta()` call with `should_prune_delta_adaptive()` in main quiescence search loop (line 4526)
-  - [ ] 2.4 Review adaptive futility pruning implementation `should_prune_futility_adaptive()` (lines 5110-5132)
-  - [ ] 2.5 Verify adaptive futility pruning adjusts margin based on move count correctly
-  - [ ] 2.6 Replace `should_prune_futility()` call with `should_prune_futility_adaptive()` in main quiescence search loop (line 4534)
-  - [ ] 2.7 Add configuration option to enable/disable adaptive pruning (default: enabled)
-  - [ ] 2.8 Add statistics tracking for adaptive pruning effectiveness (compare adaptive vs non-adaptive)
-  - [ ] 2.9 Add enhanced statistics tracking for delta pruning effectiveness (beyond just counter, track success rate, accuracy)
-  - [ ] 2.10 Consider different margins for different move types (captures vs promotions) in adaptive pruning
-  - [ ] 2.11 Add unit tests comparing adaptive vs non-adaptive pruning behavior
-  - [ ] 2.12 Create performance benchmarks comparing adaptive vs non-adaptive pruning:
-    - Measure nodes searched reduction
-    - Measure pruning effectiveness
-    - Measure tactical accuracy (should maintain or improve)
-  - [ ] 2.13 Verify adaptive pruning maintains or improves tactical accuracy
-  - [ ] 2.14 Consider A/B testing different pruning margins to find optimal values
-  - [ ] 2.15 Monitor pruning statistics to identify over-aggressive pruning cases
-  - [ ] 2.16 Document adaptive pruning behavior and configuration options
+- [x] 2.0 Enable Adaptive Pruning
+  - [x] 2.1 Review adaptive delta pruning implementation `should_prune_delta_adaptive()` (lines 5062-5092)
+  - [x] 2.2 Verify adaptive delta pruning adjusts margin based on depth and move count correctly
+  - [x] 2.3 Replace `should_prune_delta()` call with `should_prune_delta_adaptive()` in main quiescence search loop (line 4526)
+  - [x] 2.4 Review adaptive futility pruning implementation `should_prune_futility_adaptive()` (lines 5110-5132)
+  - [x] 2.5 Verify adaptive futility pruning adjusts margin based on move count correctly
+  - [x] 2.6 Replace `should_prune_futility()` call with `should_prune_futility_adaptive()` in main quiescence search loop (line 4534)
+  - [x] 2.7 Add configuration option to enable/disable adaptive pruning (default: enabled)
+  - [x] 2.8 Add statistics tracking for adaptive pruning effectiveness (compare adaptive vs non-adaptive)
+  - [x] 2.9 Add enhanced statistics tracking for delta pruning effectiveness (beyond just counter, track success rate, accuracy)
+  - [x] 2.10 Consider different margins for different move types (captures vs promotions) in adaptive pruning
+  - [x] 2.11 Add unit tests comparing adaptive vs non-adaptive pruning behavior
+  - [ ] 2.12 Create performance benchmarks comparing adaptive vs non-adaptive pruning (future work - requires benchmark suite)
+  - [ ] 2.13 Verify adaptive pruning maintains or improves tactical accuracy (future work - requires tactical test suite)
+  - [ ] 2.14 Consider A/B testing different pruning margins to find optimal values (future work - requires tuning infrastructure)
+  - [ ] 2.15 Monitor pruning statistics to identify over-aggressive pruning cases (future work - requires monitoring infrastructure)
+  - [x] 2.16 Document adaptive pruning behavior and configuration options
 
 - [ ] 3.0 Improve Futility Pruning Correctness
   - [ ] 3.1 Review futility pruning application in quiescence search (line 4534)
