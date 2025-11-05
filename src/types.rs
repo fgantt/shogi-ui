@@ -3734,6 +3734,16 @@ pub struct IIDConfig {
     pub tactical_move_count_multiplier: f64,
     /// Task 7.8: Move count threshold multiplier for quiet positions (default: 0.8)
     pub quiet_move_count_multiplier: f64,
+    /// Task 9.7: Base threshold for time pressure detection (default: 0.10 = 10%)
+    pub time_pressure_base_threshold: f64,
+    /// Task 9.7: Complexity multiplier for time pressure detection (default: 1.0)
+    pub time_pressure_complexity_multiplier: f64,
+    /// Task 9.7: Depth multiplier for time pressure detection (default: 1.0)
+    pub time_pressure_depth_multiplier: f64,
+    /// Task 9.6: Minimum TT entry depth to skip IID (default: 3, if TT entry depth < this, still apply IID)
+    pub tt_move_min_depth_for_skip: u8,
+    /// Task 9.6: Maximum TT entry age to skip IID (default: 100, if TT entry age > this, still apply IID)
+    pub tt_move_max_age_for_skip: u32,
 }
 
 impl Default for IIDConfig {
@@ -3765,6 +3775,13 @@ impl Default for IIDConfig {
             enable_adaptive_move_count_threshold: true, // Enable by default
             tactical_move_count_multiplier: 1.5, // Allow more moves in tactical positions
             quiet_move_count_multiplier: 0.8, // Reduce threshold for quiet positions
+            // Task 9.7: Time pressure detection configuration
+            time_pressure_base_threshold: 0.10, // 10% base threshold
+            time_pressure_complexity_multiplier: 1.0, // Default multiplier
+            time_pressure_depth_multiplier: 1.0, // Default multiplier
+            // Task 9.6: TT move condition configuration
+            tt_move_min_depth_for_skip: 3, // Only skip IID if TT entry depth >= 3
+            tt_move_max_age_for_skip: 100, // Only skip IID if TT entry age <= 100
         }
     }
 }
@@ -3870,6 +3887,12 @@ pub struct IIDStats {
     pub performance_measurement_accuracy_sum: f64,
     /// Task 6.8: Number of performance measurement samples
     pub performance_measurement_samples: u64,
+    /// Task 9.8: Time pressure detection accuracy (correct predictions / total predictions)
+    pub time_pressure_detection_correct: u64,
+    pub time_pressure_detection_total: u64,
+    /// Task 9.9: TT move condition effectiveness (times TT move was used vs times IID was skipped)
+    pub tt_move_condition_skips: u64,
+    pub tt_move_condition_tt_move_used: u64,
     /// Task 7.10: Position complexity distribution tracking
     pub complexity_distribution_low: u64,
     pub complexity_distribution_medium: u64,
@@ -5292,6 +5315,24 @@ impl EngineConfig {
                     // Task 5.4: Time estimation configuration
                     max_estimated_iid_time_ms: 50,
                     max_estimated_iid_time_percentage: false,
+                    // Task 7.9: Complexity-based adjustments configuration
+                    enable_complexity_based_adjustments: true,
+                    complexity_threshold_low: 10,
+                    complexity_threshold_medium: 25,
+                    complexity_depth_adjustment_low: -1,
+                    complexity_depth_adjustment_medium: 0,
+                    complexity_depth_adjustment_high: 1,
+                    // Task 7.8: Adaptive move count threshold configuration
+                    enable_adaptive_move_count_threshold: true,
+                    tactical_move_count_multiplier: 1.5,
+                    quiet_move_count_multiplier: 0.8,
+                    // Task 9.7: Time pressure detection configuration
+                    time_pressure_base_threshold: 0.10,
+                    time_pressure_complexity_multiplier: 1.0,
+                    time_pressure_depth_multiplier: 1.0,
+                    // Task 9.6: TT move condition configuration
+                    tt_move_min_depth_for_skip: 3,
+                    tt_move_max_age_for_skip: 100,
                 },
                 tt_size_mb: 128,
                 debug_logging: false,
@@ -5394,6 +5435,13 @@ impl EngineConfig {
                     enable_adaptive_move_count_threshold: true,
                     tactical_move_count_multiplier: 1.5,
                     quiet_move_count_multiplier: 0.8,
+                    // Task 9.7: Time pressure detection configuration
+                    time_pressure_base_threshold: 0.10,
+                    time_pressure_complexity_multiplier: 1.0,
+                    time_pressure_depth_multiplier: 1.0,
+                    // Task 9.6: TT move condition configuration
+                    tt_move_min_depth_for_skip: 3,
+                    tt_move_max_age_for_skip: 100,
                 },
                 tt_size_mb: 256,
                 debug_logging: false,

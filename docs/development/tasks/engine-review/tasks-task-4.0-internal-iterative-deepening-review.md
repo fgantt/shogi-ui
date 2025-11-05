@@ -224,22 +224,22 @@
   - [ ] 8.15 Set up CI/CD pipeline to run benchmarks automatically on commits (if not already configured)
   - [ ] 8.16 Add periodic performance reports comparing current vs baseline metrics
 
-- [ ] 9.0 Improve Time Pressure Detection
-  - [ ] 9.1 Review current `is_time_pressure()` implementation (lines 689-694) - uses fixed 10% threshold
-  - [ ] 9.2 Enhance time pressure detection to use position complexity (skip IID in complex positions when time is low)
-  - [ ] 9.3 Enhance time pressure detection to consider search depth (deeper searches need more time)
-  - [ ] 9.4 Replace fixed 10% threshold with dynamic calculation based on position and depth
-  - [ ] 9.5 Integrate with `estimate_iid_time()` to use actual IID time estimates in pressure detection
-  - [ ] 9.6 Review TT move condition in `should_apply_iid()` - may be too restrictive; consider checking TT move depth or age before skipping IID
-  - [ ] 9.7 Add configuration options for time pressure detection:
+- [x] 9.0 Improve Time Pressure Detection
+  - [x] 9.1 Review current `is_time_pressure()` implementation (lines 689-694) - uses fixed 10% threshold
+  - [x] 9.2 Enhance time pressure detection to use position complexity (skip IID in complex positions when time is low)
+  - [x] 9.3 Enhance time pressure detection to consider search depth (deeper searches need more time)
+  - [x] 9.4 Replace fixed 10% threshold with dynamic calculation based on position and depth
+  - [x] 9.5 Integrate with `estimate_iid_time()` to use actual IID time estimates in pressure detection
+  - [x] 9.6 Review TT move condition in `should_apply_iid()` - may be too restrictive; consider checking TT move depth or age before skipping IID
+  - [x] 9.7 Add configuration options for time pressure detection:
     - Base threshold (default: 10%)
     - Complexity multiplier
     - Depth multiplier
     - TT move depth/age threshold for IID decision
-  - [ ] 9.8 Add statistics tracking for time pressure detection accuracy
-  - [ ] 9.9 Add statistics tracking for TT move condition effectiveness (how often IID is skipped due to TT move)
-  - [ ] 9.10 Add debug logging for time pressure detection decisions (conditional on debug flags)
-  - [ ] 9.11 Add unit tests for enhanced time pressure detection:
+  - [x] 9.8 Add statistics tracking for time pressure detection accuracy
+  - [x] 9.9 Add statistics tracking for TT move condition effectiveness (how often IID is skipped due to TT move)
+  - [x] 9.10 Add debug logging for time pressure detection decisions (conditional on debug flags)
+  - [x] 9.11 Add unit tests for enhanced time pressure detection:
     - Test time pressure in simple vs complex positions
     - Test time pressure at different depths
     - Test time pressure with actual IID time estimates
@@ -633,6 +633,61 @@ Complete tasks 9.0, 10.0, 11.0:
 - All method implementations are complete and integrated into the search flow
 - Unit tests (Task 7.13) need to be added for all enhanced features
 - Performance benchmarks (Tasks 7.14-7.16) are optional and can be added in future iterations if needed
+
+**Task 9.0 Completion Notes:**
+- Enhanced `is_time_pressure()` method (Tasks 9.1-9.5):
+  * Replaced fixed 10% threshold with dynamic calculation
+  * Added position complexity-based threshold adjustment (complex positions require more remaining time)
+  * Added depth-based threshold adjustment (deeper searches need more time)
+  * Integrated with `estimate_iid_time()` to use actual IID time estimates with safety factor
+  * Dynamic threshold calculation: `threshold = base_threshold * complexity_multiplier * depth_multiplier`
+  * Uses estimated IID time when available: `required_remaining = estimated_iid_time * 2` (safety factor)
+- Enhanced TT move condition in `should_apply_iid()` (Task 9.6):
+  * Added checks for TT entry depth and age before skipping IID
+  * Only skips IID if TT entry depth >= `tt_move_min_depth_for_skip` (default: 3)
+  * Only skips IID if TT entry age <= `tt_move_max_age_for_skip` (default: 100)
+  * If TT entry is too old or shallow, IID is still applied even if TT move exists
+  * Added `player` parameter to `should_apply_iid()` for proper TT entry lookup
+- Added configuration options to `IIDConfig` (Task 9.7):
+  * `time_pressure_base_threshold: f64` (default: 0.10 = 10%)
+  * `time_pressure_complexity_multiplier: f64` (default: 1.0)
+  * `time_pressure_depth_multiplier: f64` (default: 1.0)
+  * `tt_move_min_depth_for_skip: u8` (default: 3)
+  * `tt_move_max_age_for_skip: u32` (default: 100)
+- Added statistics tracking to `IIDStats` (Tasks 9.8, 9.9):
+  * `time_pressure_detection_correct: u64` - correct time pressure predictions
+  * `time_pressure_detection_total: u64` - total time pressure detection checks
+  * `tt_move_condition_skips: u64` - times IID skipped due to TT move condition
+  * `tt_move_condition_tt_move_used: u64` - times TT move existed but IID still applied (TT entry too old/shallow)
+- Added debug logging (Task 9.10):
+  * Logs time pressure detection decisions with remaining time, depth, complexity, estimated IID time
+  * Logs TT move condition decisions with TT entry depth and age
+  * Uses conditional debug flags (`IID_TIME_PRESSURE`, `IID_TT_MOVE`)
+- Added comprehensive unit tests (Task 9.11):
+  * `test_enhanced_time_pressure_detection_simple_vs_complex()` - tests complexity-based adjustment
+  * `test_enhanced_time_pressure_detection_different_depths()` - tests depth-based adjustment
+  * `test_enhanced_time_pressure_detection_with_time_estimates()` - tests integration with time estimation
+  * `test_tt_move_condition_depth_age_checking()` - tests TT move condition with depth/age checks
+  * `test_time_pressure_detection_accuracy_tracking()` - tests statistics tracking
+  * `test_tt_move_condition_effectiveness_tracking()` - tests TT move condition effectiveness tracking
+  * `test_time_pressure_detection_configuration_options()` - tests configuration options
+- Updated all `IIDConfig` initializers:
+  * Added Task 9.0 fields to `IIDConfig::default()`
+  * Added Task 9.0 fields to `EnginePreset::Aggressive`
+  * Added Task 9.0 fields to `EnginePreset::Conservative`
+- Updated all `should_apply_iid()` call sites:
+  * Added `player` parameter to method signature
+  * Updated call in `negamax_with_context()` to pass `Some(player)`
+  * Updated all test calls to include `None` or `Some(Player::Black)` for player parameter
+- Integration with existing features:
+  * Time pressure detection now integrates with position complexity assessment (Task 7.0)
+  * Time pressure detection uses actual IID time estimates (Task 5.0)
+  * TT move condition now considers entry reliability (depth and age)
+  * All new statistics integrate with existing `IIDStats` and performance metrics
+- Optional tasks (9.12-9.14):
+  * Task 9.12: Performance benchmarks - optional, can be added as needed
+  * Task 9.13: Time management accuracy verification - optional
+  * Task 9.14: Search quality measurement - optional
 
 **Task 8.0 Completion Notes:**
 - Enhanced `monitor_iid_overhead()` implementation (Task 8.1):

@@ -641,7 +641,8 @@ impl SearchEngine {
     /// Task 4.9: Added board and captured_pieces for adaptive minimum depth
     /// Task 5.0: Integrated time estimation into decision logic
     /// Task 7.7, 7.8: Use complexity assessment for skip conditions and adaptive move count threshold
-    pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>) -> bool {
+    /// Task 9.6: Added player parameter for TT entry checking
+    pub fn should_apply_iid(&mut self, depth: u8, tt_move: Option<&Move>, legal_moves: &[Move], start_time: &TimeSource, time_limit_ms: u32, board: Option<&BitboardBoard>, captured_pieces: Option<&CapturedPieces>, player: Option<Player>) -> bool {
         // 1. IID must be enabled
         if !self.iid_config.enabled { 
             self.iid_stats.positions_skipped_depth += 1;
@@ -681,10 +682,53 @@ impl SearchEngine {
             return false; 
         }
         
-        // 3. No transposition table move available
-        if tt_move.is_some() { 
-            self.iid_stats.positions_skipped_tt_move += 1;
-            return false; 
+        // 3. No transposition table move available (or TT move is not reliable)
+        // Task 9.6: Enhanced TT move condition - check depth and age before skipping IID
+        if let Some(_tt_move) = tt_move {
+            // Task 9.6: Check TT entry depth and age if position info available
+            // Only skip IID if TT entry is recent enough (age) and deep enough (depth)
+            let should_skip_due_to_tt = if let (Some(board), Some(captured), Some(current_player)) = (board, captured_pieces, player) {
+                let position_hash = self.hash_calculator.get_position_hash(board, current_player, captured);
+                if let Some(tt_entry) = self.transposition_table.probe(position_hash, 0) {
+                    // Task 9.6: Check if TT entry depth is sufficient and age is acceptable
+                    let tt_depth_ok = tt_entry.depth >= self.iid_config.tt_move_min_depth_for_skip;
+                    let tt_age_ok = tt_entry.age <= self.iid_config.tt_move_max_age_for_skip;
+                    
+                    // Only skip if both depth and age conditions are met
+                    tt_depth_ok && tt_age_ok
+                } else {
+                    // No TT entry found - shouldn't happen if tt_move is Some, but handle gracefully
+                    true // Skip IID if we can't verify TT entry
+                }
+            } else {
+                // No position info or player available - use old behavior (skip if TT move exists)
+                true
+            };
+            
+            if should_skip_due_to_tt {
+                // Task 9.9: Track TT move condition effectiveness
+                self.iid_stats.tt_move_condition_skips += 1;
+                self.iid_stats.positions_skipped_tt_move += 1;
+                // Task 9.10: Debug logging for TT move condition
+                if let (Some(board), Some(captured), Some(current_player)) = (board, captured_pieces, player) {
+                    let position_hash = self.hash_calculator.get_position_hash(board, current_player, captured);
+                    if let Some(entry) = self.transposition_table.probe(position_hash, 0) {
+                        crate::debug_utils::trace_log("IID_TT_MOVE", &format!(
+                            "IID skipped: TT move available (depth: {}, age: {}, min_depth: {}, max_age: {})",
+                            entry.depth, entry.age, 
+                            self.iid_config.tt_move_min_depth_for_skip,
+                            self.iid_config.tt_move_max_age_for_skip
+                        ));
+                    }
+                } else {
+                    crate::debug_utils::trace_log("IID_TT_MOVE", "IID skipped: TT move available (no position info)");
+                }
+                return false;
+            } else {
+                // Task 9.9: Track when TT move exists but IID is still applied (TT entry too old/shallow)
+                self.iid_stats.tt_move_condition_tt_move_used += 1;
+                crate::debug_utils::trace_log("IID_TT_MOVE", "TT move exists but IID still applied (TT entry too old/shallow)");
+            }
         }
         
         // Task 7.7: Use complexity assessment in IID skip conditions (skip IID in very simple positions)
@@ -780,17 +824,35 @@ impl SearchEngine {
             return false;
         }
         
-        // Task 5.6, 5.7: Update time pressure detection to use actual IID time estimates
+        // Task 9.0: Enhanced time pressure detection
+        // Task 5.6, 5.7, 9.1-9.5: Update time pressure detection to use dynamic calculation
         if self.iid_config.enable_time_pressure_detection {
-            // Task 5.7: Integrate time estimation with time pressure detection
-            // Skip IID if remaining time < estimated_iid_time * 2 (safety margin)
-            if remaining_time < estimated_iid_time_ms * 2 {
+            let in_time_pressure = self.is_time_pressure(
+                start_time, 
+                time_limit_ms, 
+                complexity_opt, 
+                depth, 
+                Some(estimated_iid_time_ms)
+            );
+            
+            if in_time_pressure {
+                // Task 9.8: Track time pressure detection
+                self.iid_stats.time_pressure_detection_total += 1;
                 self.iid_stats.positions_skipped_time_pressure += 1;
-                crate::debug_utils::trace_log("IID_TIME_EST", &format!(
-                    "IID skipped: time pressure (remaining {}ms < estimated {}ms * 2)", 
-                    remaining_time, estimated_iid_time_ms
+                
+                // Task 9.10: Debug logging for time pressure detection
+                crate::debug_utils::trace_log("IID_TIME_PRESSURE", &format!(
+                    "IID skipped: time pressure (remaining {}ms, depth: {}, complexity: {:?}, estimated_iid: {}ms)", 
+                    remaining_time, 
+                    depth,
+                    complexity_opt,
+                    estimated_iid_time_ms
                 ));
                 return false;
+            } else {
+                // Task 9.8: Track successful time pressure predictions (not in pressure when predicted not in pressure)
+                self.iid_stats.time_pressure_detection_total += 1;
+                self.iid_stats.time_pressure_detection_correct += 1;
             }
         }
         
@@ -857,10 +919,49 @@ impl SearchEngine {
     }
 
     /// Check if we're in time pressure
-    fn is_time_pressure(&self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
+    /// Task 9.1-9.4: Enhanced to use dynamic calculation based on position complexity and depth
+    fn is_time_pressure(&self, start_time: &TimeSource, time_limit_ms: u32, 
+                       complexity: Option<PositionComplexity>, depth: u8, 
+                       estimated_iid_time_ms: Option<u32>) -> bool {
+        if !self.iid_config.enable_time_pressure_detection {
+            return false;
+        }
+        
         let elapsed = start_time.elapsed_ms() as u32;
         let remaining = time_limit_ms.saturating_sub(elapsed);
-        remaining < time_limit_ms / 10 // Less than 10% time remaining
+        
+        // Task 9.4: Replace fixed 10% threshold with dynamic calculation
+        // Start with base threshold
+        let mut threshold = self.iid_config.time_pressure_base_threshold;
+        
+        // Task 9.2: Adjust threshold based on position complexity
+        if let Some(complexity_val) = complexity {
+            let complexity_multiplier = match complexity_val {
+                PositionComplexity::Low => 1.0 / self.iid_config.time_pressure_complexity_multiplier, // Less pressure in simple positions
+                PositionComplexity::Medium => 1.0, // Default
+                PositionComplexity::High => self.iid_config.time_pressure_complexity_multiplier, // More pressure in complex positions
+                PositionComplexity::Unknown => 1.0, // Default
+            };
+            threshold *= complexity_multiplier;
+        }
+        
+        // Task 9.3: Adjust threshold based on search depth (deeper searches need more time)
+        let depth_multiplier = 1.0 + ((depth as f64 - 4.0) / 10.0) * self.iid_config.time_pressure_depth_multiplier;
+        threshold *= depth_multiplier.max(0.5); // Clamp to prevent negative thresholds
+        
+        // Task 9.5: Integrate with estimate_iid_time() - use actual IID time estimates
+        let dynamic_threshold = if let Some(est_time) = estimated_iid_time_ms {
+            // Use estimated IID time as basis: remaining time should be at least est_time * safety_factor
+            let safety_factor = 2.0; // Need at least 2x estimated time remaining
+            let required_remaining = est_time as f64 * safety_factor;
+            (required_remaining / time_limit_ms as f64).max(threshold)
+        } else {
+            // Fallback to percentage-based threshold
+            threshold
+        };
+        
+        let threshold_time = (time_limit_ms as f64 * dynamic_threshold) as u32;
+        remaining < threshold_time
     }
 
     /// Perform IID search and extract the best move
@@ -3808,7 +3909,7 @@ impl SearchEngine {
         let mut iid_move = None;
         let tt_move = self.transposition_table.probe(position_hash, 255).and_then(|entry| entry.best_move.clone());
         // Task 4.9: Pass board and captured_pieces for adaptive minimum depth
-        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms, Some(board), Some(captured_pieces));
+        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms, Some(board), Some(captured_pieces), Some(player));
         
         if should_apply_iid {
             crate::debug_utils::trace_log("IID", &format!("Applying Internal Iterative Deepening at depth {}", depth));
