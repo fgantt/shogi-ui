@@ -55,17 +55,33 @@ mod counter_moves;
 #[path = "move_ordering/pv_ordering.rs"]
 mod pv_ordering;
 
+pub use pv_ordering::{PVOrdering, score_pv_move as score_pv_move_helper, moves_equal as moves_equal_helper};
+
 #[path = "move_ordering/capture_ordering.rs"]
 mod capture_ordering;
+
+pub use capture_ordering::{score_capture_move as score_capture_move_helper, score_promotion_move as score_promotion_move_helper, score_capture_move_inline as score_capture_move_inline_helper, score_promotion_move_inline as score_promotion_move_inline_helper, calculate_mvv_lva_score, get_capture_bonus, get_attacker_bonus};
 
 #[path = "move_ordering/see_calculation.rs"]
 mod see_calculation;
 
+pub use see_calculation::{calculate_see_internal as calculate_see_internal_helper, score_see_move as score_see_move_helper, find_attackers_defenders as find_attackers_defenders_helper, piece_attacks_square as piece_attacks_square_helper, SEECache};
+
 // Re-export statistics structures
-pub use statistics::{OrderingStats, HotPathStats, HeuristicStats, HeuristicPerformance, TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats, FragmentationStats, CacheStats, CachePerformance, PerformanceStats, CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity, StatisticsExport, PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection, AdvancedIntegrationStats};
+// Note: PerformanceStats and StatisticsExport remain in main file (depend on MemoryUsage/MoveOrderingConfig)
+pub use statistics::{OrderingStats, HotPathStats, HeuristicStats, HeuristicPerformance, TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats, FragmentationStats, CacheStats, CachePerformance, CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity, PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection, AdvancedIntegrationStats, TTIntegrationStats, PerformanceTuningResult, PerformanceMonitoringReport, AutoOptimizationResult, PerformanceSnapshot, PerformanceComparison, TuningRecommendation, TuningCategory, TuningPriority};
 
 // Re-export cache structures
-pub use cache::{CacheEvictionPolicy, MoveOrderingCacheEntry, CacheConfig};
+pub use cache::{CacheEvictionPolicy, MoveOrderingCacheEntry, CacheConfig, MoveOrderingCacheManager};
+
+// Re-export killer moves structures
+pub use killer_moves::{KillerConfig, KillerMoveManager, score_killer_move as score_killer_move_helper};
+
+// Re-export counter-moves structures
+pub use counter_moves::{CounterMoveConfig, CounterMoveManager, score_counter_move as score_counter_move_helper};
+
+// Re-export history heuristic structures
+pub use history_heuristic::{HistoryEntry, HistoryConfig, HistoryHeuristicManager, score_history_move as score_history_move_helper};
 
 // ==================== Error Handling Types ====================
 
@@ -119,144 +135,9 @@ pub enum MoveResult {
     Bound,
 }
 
-/// Statistics for transposition table integration
-#[derive(Debug, Clone, PartialEq)]
-pub struct TTIntegrationStats {
-    /// Number of TT integration hits
-    pub tt_integration_hits: u64,
-    /// Number of TT integration updates
-    pub tt_integration_updates: u64,
-    /// Number of cutoff updates from TT
-    pub tt_cutoff_updates: u64,
-    /// Number of exact updates from TT
-    pub tt_exact_updates: u64,
-    /// Number of bound updates from TT
-    pub tt_bound_updates: u64,
-    /// Number of killer moves from TT
-    pub killer_moves_from_tt: u64,
-    /// Number of PV moves from TT
-    pub pv_moves_from_tt: u64,
-    /// Number of history updates from TT
-    pub history_updates_from_tt: u64,
-    /// Number of cutoff history updates
-    pub cutoff_history_updates: u64,
-}
-
-// ==================== Performance Tuning Types ====================
-
-/// Result of runtime performance tuning
-#[derive(Debug, Clone)]
-pub struct PerformanceTuningResult {
-    /// Number of adjustments made
-    pub adjustments_made: usize,
-    /// List of adjustments applied
-    pub adjustments: Vec<String>,
-    /// Cache hit rate before tuning
-    pub cache_hit_rate_before: f64,
-    /// Average ordering time before tuning
-    pub avg_ordering_time_before: f64,
-}
-
-/// Performance monitoring report
-#[derive(Debug, Clone)]
-pub struct PerformanceMonitoringReport {
-    /// Overall health score (0-100)
-    pub overall_health_score: f64,
-    /// Current cache hit rate
-    pub cache_hit_rate: f64,
-    /// Average ordering time in microseconds
-    pub avg_ordering_time_us: f64,
-    /// Memory usage in MB
-    pub memory_usage_mb: f64,
-    /// PV move hit rate
-    pub pv_hit_rate: f64,
-    /// Killer move hit rate
-    pub killer_hit_rate: f64,
-    /// History heuristic hit rate
-    pub history_hit_rate: f64,
-    /// Performance warnings
-    pub warnings: Vec<String>,
-    /// Tuning recommendations
-    pub recommendations: Vec<String>,
-}
-
-/// Automatic optimization result
-#[derive(Debug, Clone)]
-pub struct AutoOptimizationResult {
-    /// Number of optimizations applied
-    pub optimizations_applied: usize,
-    /// List of optimizations
-    pub optimizations: Vec<String>,
-    /// Performance snapshot before optimization
-    pub performance_before: PerformanceSnapshot,
-    /// Performance snapshot after optimization
-    pub performance_after: PerformanceSnapshot,
-}
-
-/// Performance snapshot for comparison
-#[derive(Debug, Clone)]
-pub struct PerformanceSnapshot {
-    /// Cache hit rate at snapshot time
-    pub cache_hit_rate: f64,
-    /// Average ordering time at snapshot time
-    pub avg_ordering_time_us: f64,
-    /// Memory usage at snapshot time
-    pub memory_usage_bytes: usize,
-}
-
-/// Performance comparison between two snapshots
-#[derive(Debug, Clone)]
-pub struct PerformanceComparison {
-    /// Change in cache hit rate
-    pub cache_hit_rate_change: f64,
-    /// Change in ordering time (negative is better)
-    pub ordering_time_change: f64,
-    /// Change in memory usage (negative is better)
-    pub memory_usage_change: i64,
-    /// Whether performance improved overall
-    pub is_improved: bool,
-}
-
-/// Tuning recommendation
-#[derive(Debug, Clone)]
-pub struct TuningRecommendation {
-    /// Category of the recommendation
-    pub category: TuningCategory,
-    /// Priority level
-    pub priority: TuningPriority,
-    /// Description of the recommendation
-    pub description: String,
-    /// Expected impact of applying the recommendation
-    pub expected_impact: String,
-}
-
-/// Tuning category
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TuningCategory {
-    /// Cache size tuning
-    CacheSize,
-    /// Weight adjustment
-    Weights,
-    /// Performance optimization
-    Performance,
-    /// Memory optimization
-    Memory,
-    /// Heuristic configuration
-    Heuristics,
-}
-
-/// Tuning priority level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TuningPriority {
-    /// Low priority - optional optimization
-    Low,
-    /// Medium priority - recommended optimization
-    Medium,
-    /// High priority - important optimization
-    High,
-    /// Critical - should be applied immediately
-    Critical,
-}
+// TTIntegrationStats, PerformanceTuningResult, PerformanceMonitoringReport, AutoOptimizationResult,
+// PerformanceSnapshot, PerformanceComparison, TuningRecommendation, TuningCategory, TuningPriority
+// moved to statistics module
 
 /// Platform-specific memory limits
 #[derive(Debug, Clone)]
@@ -288,18 +169,7 @@ pub struct ParallelSearchConfig {
     pub shared_killers: bool,
 }
 
-/// Statistics for advanced integrations
-#[derive(Debug, Clone, Default)]
-pub struct AdvancedIntegrationStats {
-    /// Number of opening book integrations
-    pub opening_book_integrations: u64,
-    /// Number of tablebase integrations
-    pub tablebase_integrations: u64,
-    /// Number of analysis mode orderings
-    pub analysis_orderings: u64,
-    /// Number of phase-specific orderings
-    pub phase_specific_orderings: u64,
-}
+// AdvancedIntegrationStats moved to statistics module
 
 
 /// Error severity levels
@@ -1580,41 +1450,17 @@ pub struct MoveOrdering {
     transposition_table: *const crate::search::ThreadSafeTranspositionTable,
     /// Hash calculator for position hashing
     hash_calculator: crate::search::ShogiHashHandler,
-    /// PV move cache for performance optimization
-    pv_move_cache: HashMap<u64, Option<Move>>,
-    /// Move ordering result cache (Task 6.2, Task 3.0)
-    /// Maps (position_hash, depth) -> cache entry with metadata
-    /// This caches entire move ordering results for repeated positions
-    /// Task 3.0: Now uses MoveOrderingCacheEntry for LRU and depth tracking
-    move_ordering_cache: HashMap<(u64, u8), MoveOrderingCacheEntry>,
-    /// LRU access counter (incremented on each cache access for LRU tracking)
-    /// Task 3.0: Tracks access order for LRU eviction policy
-    lru_access_counter: u64,
-    /// Killer moves organized by depth
-    /// Each depth can have multiple killer moves
-    killer_moves: HashMap<u8, Vec<Move>>,
-    /// Counter-move table: maps opponent's move -> counter-moves that refuted it
-    /// Used for quiet move ordering: if opponent played move X, try counter-moves that refuted X
-    counter_move_table: HashMap<Move, Vec<Move>>,
-    /// Current search depth for killer move management
-    current_depth: u8,
-    /// History table for move scoring
-    /// Maps (piece_type, from_square, to_square) -> history score (absolute history)
-    /// Task 4.0: When enable_relative is true, uses (from_square, to_square) -> HistoryEntry
-    history_table: HashMap<(PieceType, Position, Position), u32>,
-    /// Relative history table (Task 4.0)
-    /// Maps (from_square, to_square) -> HistoryEntry (when enable_relative is true)
-    relative_history_table: HashMap<(Position, Position), HistoryEntry>,
-    /// Quiet-move-only history table (Task 4.0)
-    /// Maps (piece_type, from_square, to_square) -> HistoryEntry (when enable_quiet_only is true)
-    quiet_history_table: HashMap<(PieceType, Position, Position), HistoryEntry>,
-    /// Phase-aware history tables (Task 4.0)
-    /// Maps GamePhase -> history table
-    phase_history_tables: HashMap<crate::types::GamePhase, HashMap<(PieceType, Position, Position), HistoryEntry>>,
-    /// Current game phase (Task 4.0)
-    current_game_phase: crate::types::GamePhase,
-    /// Time-based aging counter (Task 4.0)
-    time_aging_counter: u64,
+    /// PV ordering manager (Task 6.0: extracted to module)
+    pv_ordering: PVOrdering,
+    /// Move ordering cache manager (Task 6.0: extracted to module)
+    /// Manages move ordering result cache with multiple eviction policies
+    cache_manager: MoveOrderingCacheManager,
+    /// Killer move manager (Task 6.0: extracted to module)
+    killer_move_manager: KillerMoveManager,
+    /// Counter-move manager (Task 6.0: extracted to module)
+    counter_move_manager: CounterMoveManager,
+    /// History heuristic manager (Task 6.0: extracted to module)
+    history_manager: HistoryHeuristicManager,
     /// Heuristic effectiveness tracking (Task 5.0)
     /// Maps heuristic name -> effectiveness metrics
     heuristic_effectiveness: HashMap<String, HeuristicEffectivenessMetrics>,
@@ -1631,11 +1477,8 @@ pub struct MoveOrdering {
     /// Pattern-based search integrator (Phase 3 - Task 3.2, available for search enhancements)
     #[allow(dead_code)]
     pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator,
-    /// SEE cache for performance optimization
-    /// Maps (from_square, to_square) -> SEE value
-    see_cache: HashMap<(Position, Position), i32>,
-    /// Maximum SEE cache size
-    max_see_cache_size: usize,
+    /// SEE cache manager (Task 6.0: extracted to module)
+    see_cache: SEECache,
     /// Object pool for move scoring vectors (memory optimization)
     move_score_pool: Vec<(i32, usize)>,
     /// Object pool for move vectors (memory optimization)
@@ -1648,336 +1491,11 @@ pub struct MoveOrdering {
     memory_tracker: MemoryTracker,
     /// Advanced features manager
     advanced_features: AdvancedFeatures,
-    /// PV moves organized by depth
-    pv_moves: HashMap<u8, Move>,
+    // PV moves organized by depth (Task 6.0: now managed by PVOrdering)
 }
 
-/// Performance statistics for move ordering
-/// 
-/// Tracks various metrics to monitor the effectiveness and performance
-/// of the move ordering system.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct OrderingStats {
-    /// Total number of moves ordered
-    pub total_moves_ordered: u64,
-    /// Total time spent on move ordering (microseconds)
-    pub total_ordering_time_us: u64,
-    /// Average time per move ordering operation (microseconds)
-    pub avg_ordering_time_us: f64,
-    /// Number of cache hits in move scoring
-    pub cache_hits: u64,
-    /// Number of cache misses in move scoring
-    pub cache_misses: u64,
-    /// Cache hit rate percentage
-    pub cache_hit_rate: f64,
-    /// Number of moves sorted
-    pub moves_sorted: u64,
-    /// Number of scoring operations performed
-    pub scoring_operations: u64,
-    /// Memory usage in bytes
-    pub memory_usage_bytes: usize,
-    /// Peak memory usage in bytes
-    pub peak_memory_usage_bytes: usize,
-    /// Number of memory allocations
-    pub memory_allocations: u64,
-    /// Number of memory deallocations
-    pub memory_deallocations: u64,
-    /// Number of PV move hits
-    pub pv_move_hits: u64,
-    /// Number of PV move misses
-    pub pv_move_misses: u64,
-    /// PV move hit rate percentage
-    pub pv_move_hit_rate: f64,
-    /// Number of transposition table lookups
-    pub tt_lookups: u64,
-    /// Number of successful transposition table hits
-    pub tt_hits: u64,
-    /// Number of killer move hits
-    pub killer_move_hits: u64,
-    /// Number of killer move misses
-    pub killer_move_misses: u64,
-    /// Killer move hit rate percentage
-    pub killer_move_hit_rate: f64,
-    /// Number of killer moves stored
-    pub killer_moves_stored: u64,
-    /// Number of counter-move hits
-    pub counter_move_hits: u64,
-    /// Number of counter-move misses
-    pub counter_move_misses: u64,
-    /// Counter-move hit rate percentage
-    pub counter_move_hit_rate: f64,
-    /// Number of counter-moves stored
-    pub counter_moves_stored: u64,
-    /// Number of cache evictions (Task 3.0)
-    pub cache_evictions: u64,
-    /// Number of cache evictions due to size limit (Task 3.0)
-    pub cache_evictions_size_limit: u64,
-    /// Number of cache evictions due to policy (Task 3.0)
-    pub cache_evictions_policy: u64,
-    /// Cache hit rate by entry age (Task 3.0)
-    pub cache_hit_rate_by_age: f64,
-    /// Cache hit rate by entry depth (Task 3.0)
-    pub cache_hit_rate_by_depth: f64,
-    /// Number of weight adjustments made (Task 5.0)
-    pub weight_adjustments: u64,
-    /// Learning effectiveness improvement (Task 5.0)
-    pub learning_effectiveness: f64,
-    /// Number of history heuristic hits
-    pub history_hits: u64,
-    /// Number of history heuristic misses
-    pub history_misses: u64,
-    /// History heuristic hit rate percentage
-    pub history_hit_rate: f64,
-    /// Number of history table updates
-    pub history_updates: u64,
-    /// Number of history table aging operations
-    pub history_aging_operations: u64,
-    /// Number of SEE calculations performed
-    pub see_calculations: u64,
-    /// Number of SEE cache hits
-    pub see_cache_hits: u64,
-    /// Number of SEE cache misses
-    pub see_cache_misses: u64,
-    /// SEE cache hit rate percentage
-    pub see_cache_hit_rate: f64,
-    /// Total time spent on SEE calculations (microseconds)
-    pub see_calculation_time_us: u64,
-    /// Average time per SEE calculation (microseconds)
-    pub avg_see_calculation_time_us: f64,
-    /// Hot path profiling data
-    pub hot_path_stats: HotPathStats,
-    /// Detailed heuristic statistics
-    pub heuristic_stats: HeuristicStats,
-    /// Advanced timing statistics
-    pub timing_stats: TimingStats,
-    /// Memory usage statistics
-    pub memory_stats: MemoryStats,
-    /// Cache performance statistics
-    pub cache_stats: CacheStats,
-    /// Transposition table integration statistics
-    pub tt_integration_hits: u64,
-    /// Number of TT integration updates
-    pub tt_integration_updates: u64,
-    /// Number of cutoff updates from TT
-    pub tt_cutoff_updates: u64,
-    /// Number of exact updates from TT
-    pub tt_exact_updates: u64,
-    /// Number of bound updates from TT
-    pub tt_bound_updates: u64,
-    /// Number of killer moves from TT
-    pub killer_moves_from_tt: u64,
-    /// Number of PV moves from TT
-    pub pv_moves_from_tt: u64,
-    /// Number of history updates from TT
-    pub history_updates_from_tt: u64,
-    /// Number of cutoff history updates
-    pub cutoff_history_updates: u64,
-    /// Number of opening book integrations
-    pub opening_book_integrations: u64,
-    /// Number of tablebase integrations
-    pub tablebase_integrations: u64,
-    /// Number of analysis mode orderings
-    pub analysis_orderings: u64,
-    /// Number of phase-specific orderings
-    pub phase_specific_orderings: u64,
-}
-
-/// Hot path performance statistics for profiling bottlenecks
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct HotPathStats {
-    /// Number of score_move calls
-    pub score_move_calls: u64,
-    /// Number of cache lookups
-    pub cache_lookups: u64,
-    /// Number of hash calculations
-    pub hash_calculations: u64,
-    /// Time spent in score_move (microseconds)
-    pub score_move_time_us: u64,
-    /// Time spent in cache operations (microseconds)
-    pub cache_time_us: u64,
-    /// Time spent in hash calculations (microseconds)
-    pub hash_time_us: u64,
-}
-
-/// Detailed heuristic statistics for tracking individual heuristic performance
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct HeuristicStats {
-    /// Capture move statistics
-    pub capture_stats: HeuristicPerformance,
-    /// Promotion move statistics
-    pub promotion_stats: HeuristicPerformance,
-    /// Tactical move statistics
-    pub tactical_stats: HeuristicPerformance,
-    /// Piece value statistics
-    pub piece_value_stats: HeuristicPerformance,
-    /// Position value statistics
-    pub position_stats: HeuristicPerformance,
-    /// Development move statistics
-    pub development_stats: HeuristicPerformance,
-    /// Quiet move statistics
-    pub quiet_stats: HeuristicPerformance,
-    /// PV move statistics
-    pub pv_stats: HeuristicPerformance,
-    /// Killer move statistics
-    pub killer_stats: HeuristicPerformance,
-    /// History move statistics
-    pub history_stats: HeuristicPerformance,
-    /// SEE move statistics
-    pub see_stats: HeuristicPerformance,
-}
-
-/// Individual heuristic performance metrics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct HeuristicPerformance {
-    /// Number of times this heuristic was applied
-    pub applications: u64,
-    /// Number of times this heuristic contributed to the best move
-    pub best_move_contributions: u64,
-    /// Average score contribution from this heuristic
-    pub avg_score_contribution: f64,
-    /// Total score contribution from this heuristic
-    pub total_score_contribution: i64,
-    /// Time spent in this heuristic (microseconds)
-    pub execution_time_us: u64,
-    /// Average execution time per application (microseconds)
-    pub avg_execution_time_us: f64,
-}
-
-/// Advanced timing statistics for detailed performance analysis
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct TimingStats {
-    /// Move scoring timing breakdown
-    pub move_scoring_times: OperationTiming,
-    /// Move ordering timing breakdown
-    pub move_ordering_times: OperationTiming,
-    /// Cache operation timing breakdown
-    pub cache_times: OperationTiming,
-    /// Hash calculation timing breakdown
-    pub hash_times: OperationTiming,
-    /// SEE calculation timing breakdown
-    pub see_times: OperationTiming,
-    /// PV move retrieval timing breakdown
-    pub pv_times: OperationTiming,
-    /// Killer move operations timing breakdown
-    pub killer_times: OperationTiming,
-    /// History table operations timing breakdown
-    pub history_times: OperationTiming,
-}
-
-/// Timing statistics for a specific operation
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct OperationTiming {
-    /// Total time spent in this operation (microseconds)
-    pub total_time_us: u64,
-    /// Number of operations performed
-    pub operation_count: u64,
-    /// Average time per operation (microseconds)
-    pub avg_time_us: f64,
-    /// Minimum time recorded (microseconds)
-    pub min_time_us: u64,
-    /// Maximum time recorded (microseconds)
-    pub max_time_us: u64,
-    /// Standard deviation of operation times
-    pub std_dev_time_us: f64,
-}
-
-/// Detailed memory usage statistics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct MemoryStats {
-    /// Current memory usage breakdown
-    pub current_usage: MemoryBreakdown,
-    /// Peak memory usage breakdown
-    pub peak_usage: MemoryBreakdown,
-    /// Memory allocation statistics
-    pub allocation_stats: AllocationStats,
-    /// Memory fragmentation metrics
-    pub fragmentation_stats: FragmentationStats,
-}
-
-/// Memory usage breakdown by component
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct MemoryBreakdown {
-    /// Move score cache memory usage
-    pub move_score_cache_bytes: usize,
-    /// Fast cache memory usage
-    pub fast_cache_bytes: usize,
-    /// PV move cache memory usage
-    pub pv_cache_bytes: usize,
-    /// Killer moves memory usage
-    pub killer_moves_bytes: usize,
-    /// History table memory usage
-    pub history_table_bytes: usize,
-    /// SEE cache memory usage
-    pub see_cache_bytes: usize,
-    /// Object pools memory usage
-    pub object_pools_bytes: usize,
-    /// Total memory usage
-    pub total_bytes: usize,
-}
-
-/// Memory allocation statistics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct AllocationStats {
-    /// Total number of allocations
-    pub total_allocations: u64,
-    /// Number of deallocations
-    pub total_deallocations: u64,
-    /// Current number of active allocations
-    pub active_allocations: u64,
-    /// Peak number of active allocations
-    pub peak_allocations: u64,
-    /// Average allocation size
-    pub avg_allocation_size: f64,
-    /// Total memory allocated
-    pub total_allocated_bytes: u64,
-}
-
-/// Memory fragmentation statistics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct FragmentationStats {
-    /// Fragmentation percentage
-    pub fragmentation_percentage: f64,
-    /// Number of free memory blocks
-    pub free_blocks: u64,
-    /// Average free block size
-    pub avg_free_block_size: f64,
-    /// Largest free block size
-    pub largest_free_block: u64,
-}
-
-/// Cache performance statistics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct CacheStats {
-    /// Move score cache statistics
-    pub move_score_cache: CachePerformance,
-    /// Fast cache statistics
-    pub fast_cache: CachePerformance,
-    /// PV move cache statistics
-    pub pv_cache: CachePerformance,
-    /// SEE cache statistics
-    pub see_cache: CachePerformance,
-}
-
-/// Cache performance metrics
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct CachePerformance {
-    /// Cache hit rate percentage
-    pub hit_rate: f64,
-    /// Total cache hits
-    pub hits: u64,
-    /// Total cache misses
-    pub misses: u64,
-    /// Cache evictions
-    pub evictions: u64,
-    /// Cache insertions
-    pub insertions: u64,
-    /// Current cache size
-    pub current_size: usize,
-    /// Maximum cache size
-    pub max_size: usize,
-    /// Cache utilization percentage
-    pub utilization: f64,
-}
+// Statistics structures moved to statistics module - see statistics.rs
+// Remaining here: PerformanceStats and StatisticsExport (depend on MemoryUsage/MoveOrderingConfig)
 
 /// Comprehensive performance statistics
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1998,70 +1516,7 @@ pub struct PerformanceStats {
     pub cache_sizes: CacheSizes,
 }
 
-/// Cache size information for monitoring
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CacheSizes {
-    /// Move score cache size
-    pub move_score_cache: usize,
-    /// Fast cache size
-    pub fast_cache: usize,
-    /// PV cache size
-    pub pv_cache: usize,
-    /// SEE cache size
-    pub see_cache: usize,
-    /// History table size
-    pub history_table: usize,
-}
-
-/// Bottleneck analysis results
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct BottleneckAnalysis {
-    /// List of identified bottlenecks
-    pub bottlenecks: Vec<Bottleneck>,
-    /// Overall performance score (0-100)
-    pub overall_score: u8,
-}
-
-/// Individual bottleneck information
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct Bottleneck {
-    /// Category of the bottleneck
-    pub category: BottleneckCategory,
-    /// Severity of the bottleneck
-    pub severity: BottleneckSeverity,
-    /// Description of the bottleneck
-    pub description: String,
-    /// Recommendation for fixing the bottleneck
-    pub recommendation: String,
-}
-
-/// Categories of performance bottlenecks
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
-pub enum BottleneckCategory {
-    /// Cache-related performance issues
-    Cache,
-    /// Hot path performance issues
-    HotPath,
-    /// Memory usage issues
-    Memory,
-    /// SEE cache performance issues
-    SEECache,
-    /// Hash calculation issues
-    HashCalculation,
-}
-
-/// Severity levels for bottlenecks
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
-pub enum BottleneckSeverity {
-    /// Critical issue requiring immediate attention
-    Critical,
-    /// High priority issue
-    High,
-    /// Medium priority issue
-    Medium,
-    /// Low priority issue
-    Low,
-}
+// CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity moved to statistics module
 
 /// Statistics export data structure
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2078,132 +1533,9 @@ pub struct StatisticsExport {
     pub cache_sizes: CacheSizes,
 }
 
-/// Performance summary for quick analysis
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct PerformanceSummary {
-    /// Total moves ordered
-    pub total_moves_ordered: u64,
-    /// Average ordering time per operation
-    pub avg_ordering_time_us: f64,
-    /// Cache hit rate percentage
-    pub cache_hit_rate: f64,
-    /// SEE cache hit rate percentage
-    pub see_cache_hit_rate: f64,
-    /// Current memory usage in MB
-    pub memory_usage_mb: f64,
-    /// Peak memory usage in MB
-    pub peak_memory_mb: f64,
-    /// Most effective heuristic
-    pub most_effective_heuristic: String,
-    /// Overall performance score (0-100)
-    pub performance_score: u8,
-    /// Number of identified bottlenecks
-    pub bottleneck_count: usize,
-}
-
-/// Performance chart data for visualization
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct PerformanceChartData {
-    /// Cache hit rates for different caches
-    pub cache_hit_rates: CacheHitRates,
-    /// Heuristic effectiveness percentages
-    pub heuristic_effectiveness: HeuristicEffectiveness,
-    /// Memory usage trend data
-    pub memory_usage_trend: MemoryUsageTrend,
-    /// Timing breakdown data
-    pub timing_breakdown: TimingBreakdown,
-}
-
-/// Cache hit rates for visualization
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CacheHitRates {
-    /// Move score cache hit rate
-    pub move_score_cache: f64,
-    /// Fast cache hit rate
-    pub fast_cache: f64,
-    /// PV cache hit rate
-    pub pv_cache: f64,
-    /// SEE cache hit rate
-    pub see_cache: f64,
-}
-
-/// Heuristic effectiveness for visualization
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct HeuristicEffectiveness {
-    /// Capture heuristic effectiveness
-    pub capture: f64,
-    /// Promotion heuristic effectiveness
-    pub promotion: f64,
-    /// Tactical heuristic effectiveness
-    pub tactical: f64,
-    /// PV heuristic effectiveness
-    pub pv: f64,
-    /// Killer heuristic effectiveness
-    pub killer: f64,
-    /// History heuristic effectiveness
-    pub history: f64,
-}
-
-/// Memory usage trend for visualization
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct MemoryUsageTrend {
-    /// Current memory usage in MB
-    pub current_mb: f64,
-    /// Peak memory usage in MB
-    pub peak_mb: f64,
-    /// Total allocation count
-    pub allocation_count: u64,
-}
-
-/// Timing breakdown for visualization
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TimingBreakdown {
-    /// Average move scoring time in microseconds
-    pub move_scoring_avg_us: f64,
-    /// Average move ordering time in microseconds
-    pub move_ordering_avg_us: f64,
-    /// Average cache operation time in microseconds
-    pub cache_avg_us: f64,
-    /// Average hash calculation time in microseconds
-    pub hash_avg_us: f64,
-}
-
-/// Performance trend analysis results
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct PerformanceTrendAnalysis {
-    /// Cache efficiency trend analysis
-    pub cache_efficiency_trend: TrendAnalysis,
-    /// Memory usage trend analysis
-    pub memory_usage_trend: TrendAnalysis,
-    /// Heuristic effectiveness trend analysis
-    pub heuristic_effectiveness_trend: TrendAnalysis,
-    /// Timing trend analysis
-    pub timing_trend: TrendAnalysis,
-    /// Overall performance trend analysis
-    pub overall_performance_trend: TrendAnalysis,
-}
-
-/// Individual trend analysis
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TrendAnalysis {
-    /// Direction of the trend
-    pub direction: TrendDirection,
-    /// Confidence level in the trend (0.0 to 1.0)
-    pub confidence: f64,
-    /// Recommendation based on the trend
-    pub recommendation: String,
-}
-
-/// Trend direction indicators
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
-pub enum TrendDirection {
-    /// Performance is improving
-    Improving,
-    /// Performance is declining
-    Declining,
-    /// Performance is stable
-    Stable,
-}
+// PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, 
+// MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection
+// moved to statistics module
 
 /// Comprehensive configuration system for move ordering
 /// 
@@ -2263,128 +1595,9 @@ pub struct OrderingWeights {
     pub counter_move_weight: i32,
 }
 
-/// Cache eviction policy for move ordering cache
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-pub enum CacheEvictionPolicy {
-    /// First-In-First-Out: Remove oldest entries first
-    FIFO,
-    /// Least-Recently-Used: Remove entries that haven't been accessed recently
-    LRU,
-    /// Depth-preferred: Prefer keeping entries with higher depth
-    DepthPreferred,
-    /// Hybrid: Combination of LRU and depth-preferred
-    Hybrid,
-}
+// CacheEvictionPolicy, MoveOrderingCacheEntry, and CacheConfig moved to cache module
 
-/// Cache entry metadata for move ordering cache
-/// Task 3.0: Tracks LRU and depth information for improved eviction
-#[derive(Debug, Clone)]
-struct MoveOrderingCacheEntry {
-    /// The ordered moves list
-    moves: Vec<Move>,
-    /// Last access counter (for LRU tracking)
-    last_access: u64,
-    /// Depth of the cache entry
-    depth: u8,
-    /// Access count (for LRU tracking)
-    access_count: u64,
-}
-
-/// Cache configuration for move ordering
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CacheConfig {
-    /// Maximum cache size for move scores
-    pub max_cache_size: usize,
-    /// Enable cache warming
-    pub enable_cache_warming: bool,
-    /// Cache warming size (percentage of max_cache_size)
-    pub cache_warming_ratio: f32,
-    /// Enable automatic cache optimization
-    pub enable_auto_optimization: bool,
-    /// Cache hit rate threshold for optimization (percentage)
-    pub optimization_hit_rate_threshold: f64,
-    /// Maximum SEE cache size
-    pub max_see_cache_size: usize,
-    /// Enable SEE cache
-    pub enable_see_cache: bool,
-    /// Cache eviction policy for move ordering cache (Task 3.0)
-    pub cache_eviction_policy: CacheEvictionPolicy,
-    /// LRU access counter (incremented on each cache access)
-    pub lru_access_counter: u64,
-    /// Hybrid eviction weight for LRU vs depth (0.0 = pure depth, 1.0 = pure LRU)
-    pub hybrid_lru_weight: f32,
-}
-
-/// Killer move configuration
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct KillerConfig {
-    /// Maximum number of killer moves per depth
-    pub max_killer_moves_per_depth: usize,
-    /// Enable killer move aging
-    pub enable_killer_aging: bool,
-    /// Killer move aging factor (0.0 to 1.0)
-    pub killer_aging_factor: f32,
-    /// Enable depth-based killer move management
-    pub enable_depth_based_management: bool,
-}
-
-/// Counter-move heuristic configuration
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CounterMoveConfig {
-    /// Maximum number of counter-moves per opponent move
-    pub max_counter_moves: usize,
-    /// Enable counter-move heuristic
-    pub enable_counter_move: bool,
-    /// Enable counter-move aging
-    pub enable_counter_move_aging: bool,
-    /// Counter-move aging factor (0.0 to 1.0)
-    pub counter_move_aging_factor: f32,
-}
-
-// Task 4.0: Use GamePhase from crate::types instead of defining a new one
-
-/// History entry with timestamp for time-based aging
-/// Task 4.0: Added timestamp for time-based aging
-#[derive(Debug, Clone)]
-struct HistoryEntry {
-    /// History score
-    score: u32,
-    /// Timestamp of last update (for time-based aging)
-    last_update: u64,
-    /// Update count (for statistics)
-    update_count: u64,
-}
-
-/// History heuristic configuration
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct HistoryConfig {
-    /// Maximum history score to prevent overflow
-    pub max_history_score: u32,
-    /// History aging factor (0.0 to 1.0)
-    pub history_aging_factor: f32,
-    /// Enable automatic history aging
-    pub enable_automatic_aging: bool,
-    /// History aging frequency (number of updates between aging)
-    pub aging_frequency: u64,
-    /// Enable history score clamping
-    pub enable_score_clamping: bool,
-    /// Enable phase-aware history tables (Task 4.0)
-    pub enable_phase_aware: bool,
-    /// Enable relative history (key from (piece_type, from, to) to (from, to)) (Task 4.0)
-    pub enable_relative: bool,
-    /// Enable time-based aging (exponential decay based on entry age) (Task 4.0)
-    pub enable_time_based_aging: bool,
-    /// Enable quiet-move-only history (separate table for quiet moves) (Task 4.0)
-    pub enable_quiet_only: bool,
-    /// Time-based aging decay factor (0.0 to 1.0) (Task 4.0)
-    pub time_aging_decay_factor: f32,
-    /// Time-based aging update frequency (milliseconds) (Task 4.0)
-    pub time_aging_update_frequency_ms: u64,
-    /// Phase-specific aging factors (Task 4.0)
-    pub opening_aging_factor: f32,
-    pub middlegame_aging_factor: f32,
-    pub endgame_aging_factor: f32,
-}
+// KillerConfig, CounterMoveConfig, HistoryEntry, HistoryConfig moved to their respective modules
 
 /// Performance configuration
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2505,65 +1718,9 @@ impl Default for OrderingWeights {
     }
 }
 
-impl Default for CacheConfig {
-    fn default() -> Self {
-        Self {
-            max_cache_size: 1000,
-            enable_cache_warming: true,
-            cache_warming_ratio: 0.5, // 50% of max cache size
-            enable_auto_optimization: true,
-            optimization_hit_rate_threshold: 30.0, // 30% hit rate threshold
-            max_see_cache_size: 500,
-            enable_see_cache: true,
-            cache_eviction_policy: CacheEvictionPolicy::LRU, // Task 3.0: Default to LRU
-            lru_access_counter: 0, // Task 3.0: Initialize LRU counter
-            hybrid_lru_weight: 0.7, // Task 3.0: Default hybrid weight (70% LRU, 30% depth)
-        }
-    }
-}
+// CacheConfig::Default implementation moved to cache module
 
-impl Default for KillerConfig {
-    fn default() -> Self {
-        Self {
-            max_killer_moves_per_depth: 2,
-            enable_killer_aging: false, // Disabled by default
-            killer_aging_factor: 0.9,
-            enable_depth_based_management: true,
-        }
-    }
-}
-
-impl Default for CounterMoveConfig {
-    fn default() -> Self {
-        Self {
-            max_counter_moves: 2,
-            enable_counter_move: true, // Enabled by default
-            enable_counter_move_aging: false, // Disabled by default
-            counter_move_aging_factor: 0.9,
-        }
-    }
-}
-
-impl Default for HistoryConfig {
-    fn default() -> Self {
-        Self {
-            max_history_score: 10000,
-            history_aging_factor: 0.9,
-            enable_automatic_aging: true,
-            aging_frequency: 1000, // Age every 1000 updates
-            enable_score_clamping: true,
-            enable_phase_aware: false, // Task 4.0: Disabled by default (can be enabled)
-            enable_relative: false, // Task 4.0: Disabled by default (can be enabled)
-            enable_time_based_aging: false, // Task 4.0: Disabled by default (can be enabled)
-            enable_quiet_only: false, // Task 4.0: Disabled by default (can be enabled)
-            time_aging_decay_factor: 0.95, // Task 4.0: Decay factor for time-based aging
-            time_aging_update_frequency_ms: 1000, // Task 4.0: Update every 1 second
-            opening_aging_factor: 0.9, // Task 4.0: Opening phase aging factor
-            middlegame_aging_factor: 0.9, // Task 4.0: Middlegame phase aging factor
-            endgame_aging_factor: 0.95, // Task 4.0: Endgame phase aging factor (less aggressive)
-        }
-    }
-}
+// KillerConfig::Default, CounterMoveConfig::Default, HistoryConfig::Default moved to their respective modules
 
 impl Default for PerformanceConfig {
     fn default() -> Self {
@@ -2834,7 +1991,7 @@ impl MoveOrderingConfig {
                 max_see_cache_size: other.cache_config.max_see_cache_size,
                 enable_see_cache: other.cache_config.enable_see_cache,
                 cache_eviction_policy: other.cache_config.cache_eviction_policy,
-                lru_access_counter: other.cache_config.lru_access_counter,
+                lru_access_counter: other.cache_config.lru_access_counter, // Note: This is now managed by cache_manager
                 hybrid_lru_weight: other.cache_config.hybrid_lru_weight,
             },
             killer_config: KillerConfig {
@@ -2949,25 +2106,17 @@ impl MoveOrdering {
             fast_score_cache: Vec::with_capacity(64), // Small L1 cache for hot scores
             transposition_table: ptr::null(),
             hash_calculator: crate::search::ShogiHashHandler::new(config.cache_config.max_cache_size),
-            pv_move_cache: HashMap::new(),
-            move_ordering_cache: HashMap::new(), // Task 6.2: Initialize move ordering cache
-            lru_access_counter: 0, // Task 3.0: Initialize LRU access counter
-            killer_moves: HashMap::new(),
-            counter_move_table: HashMap::new(),
-            current_depth: 0,
-            history_table: HashMap::new(),
-            relative_history_table: HashMap::new(), // Task 4.0: Initialize relative history table
-            quiet_history_table: HashMap::new(), // Task 4.0: Initialize quiet history table
-            phase_history_tables: HashMap::new(), // Task 4.0: Initialize phase-aware history tables
-            current_game_phase: crate::types::GamePhase::Opening, // Task 4.0: Default to opening phase
-            time_aging_counter: 0, // Task 4.0: Initialize time-based aging counter
+            pv_ordering: PVOrdering::new(),
+            cache_manager: MoveOrderingCacheManager::new(), // Task 6.0: use MoveOrderingCacheManager
+            killer_move_manager: KillerMoveManager::new(),
+            counter_move_manager: CounterMoveManager::new(),
+            history_manager: HistoryHeuristicManager::new(),
             heuristic_effectiveness: HashMap::new(), // Task 5.0: Initialize heuristic effectiveness tracking
             weight_change_history: Vec::new(), // Task 5.0: Initialize weight change history
             learning_update_counter: 0, // Task 5.0: Initialize learning update counter
             history_update_counter: 0,
             pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator::new(),
-            see_cache: HashMap::new(),
-            max_see_cache_size: config.cache_config.max_see_cache_size,
+            see_cache: SEECache::new(config.cache_config.max_see_cache_size),
             move_score_pool: Vec::with_capacity(256), // Pre-allocate for common move lists
             move_pool: Vec::with_capacity(256), // Pre-allocate for common move lists
             error_handler: ErrorHandler::default(),
@@ -2975,7 +2124,6 @@ impl MoveOrdering {
             memory_tracker: MemoryTracker::default(),
             advanced_features: AdvancedFeatures::default(),
             simple_history_table: [[0; 9]; 9],
-            pv_moves: HashMap::new(),
         }
     }
 
@@ -3279,10 +2427,10 @@ impl MoveOrdering {
         let current_usage = MemoryBreakdown {
             move_score_cache_bytes: self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
             fast_cache_bytes: self.fast_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
-            pv_cache_bytes: self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Move>()),
-            killer_moves_bytes: self.killer_moves.len() * (std::mem::size_of::<u8>() + std::mem::size_of::<Vec<Move>>()),
-            history_table_bytes: self.history_table.len() * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<u32>()),
-            see_cache_bytes: self.see_cache.len() * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<i32>()),
+            pv_cache_bytes: self.pv_ordering.cache_memory_bytes(), // Task 6.0: use PVOrdering module
+            killer_moves_bytes: self.killer_move_manager.memory_bytes(), // Task 6.0: use KillerMoveManager
+            history_table_bytes: self.history_manager.memory_bytes(), // Task 6.0: use HistoryHeuristicManager
+            see_cache_bytes: self.see_cache.memory_bytes(), // Task 6.0: use SEECache module
             object_pools_bytes: self.move_score_pool.capacity() * (std::mem::size_of::<(i32, usize)>()) + self.move_pool.capacity() * (std::mem::size_of::<Move>()),
             total_bytes: 0,
         };
@@ -3342,8 +2490,8 @@ impl MoveOrdering {
             let from_pos = move_.from.unwrap_or(Position::new(0, 0));
             let cache_key = (from_pos, move_.to);
             
-            // OPTIMIZATION: Use direct hash lookup instead of HashMap iteration
-            if let Some(&cached_value) = self.see_cache.get(&cache_key) {
+            // OPTIMIZATION: Use direct hash lookup (Task 6.0: use SEECache module)
+            if let Some(cached_value) = self.see_cache.get(from_pos, move_.to) {
                 self.stats.see_cache_hits += 1;
                 self.stats.see_calculation_time_us += start_time.elapsed_ms() as u64 * 1000;
                 return Ok(cached_value);
@@ -3351,13 +2499,12 @@ impl MoveOrdering {
             self.stats.see_cache_misses += 1;
         }
 
-        let see_value = self.calculate_see_internal(move_, board);
+        let see_value = calculate_see_internal_helper(move_, board); // Task 6.0: use see_calculation module
         
-        // Cache the result if enabled and cache not full
-        if self.config.cache_config.enable_see_cache && 
-           self.see_cache.len() < self.max_see_cache_size {
+        // Cache the result if enabled and cache not full (Task 6.0: use SEECache module)
+        if self.config.cache_config.enable_see_cache && !self.see_cache.is_full() {
             let cache_key = (move_.from.unwrap_or(Position::new(0, 0)), move_.to);
-            self.see_cache.insert(cache_key, see_value);
+            self.see_cache.insert(cache_key.0, cache_key.1, see_value);
         }
 
         // Update timing statistics
@@ -3369,143 +2516,20 @@ impl MoveOrdering {
         Ok(see_value)
     }
 
-    /// Internal SEE calculation implementation
+    /// Internal SEE calculation implementation (Task 6.0: now delegates to module)
     /// 
-    /// This method performs the actual SEE calculation by simulating
-    /// the exchange sequence. SEE (Static Exchange Evaluation) calculates
-    /// the net material gain/loss from a capture exchange.
+    /// This method delegates to the see_calculation module's calculate_see_internal.
+    /// The actual implementation has been extracted to the module for better organization.
     fn calculate_see_internal(&self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> i32 {
-        let from = move_.from.unwrap_or(Position::new(0, 0));
-        let to = move_.to;
-        let moving_player = move_.player;
-        let opponent = moving_player.opposite();
-        
-        // Get the piece being captured
-        let captured_piece = match &move_.captured_piece {
-            Some(piece) => piece,
-            None => return 0, // No capture, no SEE value
-        };
-        
-        // Get the attacking piece (the piece making the capture)
-        let attacking_piece = match board.get_piece(from) {
-            Some(piece) => piece.clone(),
-            None => {
-                // Drop move - use the piece type from the move
-                crate::types::Piece::new(move_.piece_type, moving_player)
-            }
-        };
-        
-        // Start with the value of the captured piece, subtract the attacker's value
-        let mut gain = captured_piece.piece_type.base_value() - attacking_piece.piece_type.base_value();
-        
-        // Find all pieces that can attack the target square
-        let (all_attackers, _) = self.find_attackers_defenders(to, board);
-        
-        // Separate attackers and defenders by player
-        // Attackers: pieces from the moving player that can continue the exchange
-        // Defenders: pieces from the opponent that can recapture
-        let attackers: Vec<crate::types::Piece> = all_attackers.iter()
-            .filter(|(pos, p)| p.player == moving_player && *pos != from)
-            .map(|(_, p)| p.clone())
-            .collect();
-        let defenders: Vec<crate::types::Piece> = all_attackers.iter()
-            .filter(|(_, p)| p.player == opponent)
-            .map(|(_, p)| p.clone())
-            .collect();
-        
-        // If no defenders, it's a winning capture
-        if defenders.is_empty() {
-            return gain;
-        }
-        
-        // Simulate the exchange sequence
-        // The exchange continues with the least valuable piece at each step
-        // We alternate between attackers and defenders
-        // After the initial capture, the opponent recaptures, then we can recapture, etc.
-        
-        // Start with defenders (opponent recaptures after the initial capture)
-        let mut current_side = defenders; // Current side's pieces (opponent recaptures first)
-        let mut other_side = attackers; // Other side's pieces (we can recapture)
-        
-        // Continue the exchange until one side runs out of pieces
-        loop {
-            // Find the least valuable piece on the current side
-            if current_side.is_empty() {
-                break; // Current side can't continue, exchange ends (we win)
-            }
-            
-            // Find least valuable piece
-            let mut min_value = i32::MAX;
-            let mut min_index = None;
-            for (index, piece) in current_side.iter().enumerate() {
-                let value = piece.piece_type.base_value();
-                if value < min_value {
-                    min_value = value;
-                    min_index = Some(index);
-                }
-            }
-            
-            if min_index.is_none() {
-                break;
-            }
-            
-            let capturing_piece = current_side.remove(min_index.unwrap());
-            
-            // Subtract the value of the capturing piece (we lose this piece)
-            gain -= capturing_piece.piece_type.base_value();
-            
-            // If the other side can't recapture, we win the exchange
-            if other_side.is_empty() {
-                break;
-            }
-            
-            // Switch sides - the other side now captures
-            std::mem::swap(&mut current_side, &mut other_side);
-            
-            // Add the value of the captured piece (the piece that was just captured)
-            // This is the piece we just captured from the opponent
-            gain += capturing_piece.piece_type.base_value();
-        }
-        
-        gain
+        calculate_see_internal_helper(move_, board)
     }
 
-    /// Find all attackers and defenders of a given square
+    /// Find all attackers and defenders of a given square (Task 6.0: now delegates to module)
     /// 
-    /// This method identifies all pieces that can attack the target square.
-    /// For SEE calculation, we need to know which pieces can capture on this square.
-    /// 
-    /// Returns (all_attackers, empty) where all_attackers contains all pieces
-    /// that can attack the square. The caller will separate them by player.
-    /// 
-    /// Note: We return pieces with their positions implicitly tracked by the iteration order.
-    /// For SEE, we need to track which specific piece (by position) attacks the square.
+    /// This method delegates to the see_calculation module's find_attackers_defenders.
+    /// The actual implementation has been extracted to the module for better organization.
     fn find_attackers_defenders(&self, square: Position, board: &crate::bitboards::BitboardBoard) -> (Vec<(Position, crate::types::Piece)>, Vec<(Position, crate::types::Piece)>) {
-        let mut all_attackers = Vec::new();
-        
-        // Iterate through all squares on the board to find pieces
-        for row in 0..9 {
-            for col in 0..9 {
-                let position = Position::new(row, col);
-                
-                // Skip the target square itself (we're evaluating captures on it)
-                if position == square {
-                    continue;
-                }
-                
-                // Check if there's a piece at this position
-                if let Some(piece) = board.get_piece(position) {
-                    // Check if this specific piece attacks the target square
-                    if self.piece_attacks_square_internal(piece, position, square, board) {
-                        all_attackers.push((position, piece.clone()));
-                    }
-                }
-            }
-        }
-        
-        // Sort by piece value (ascending) - least valuable first for SEE
-        all_attackers.sort_by_key(|(_, p)| p.piece_type.base_value());
-        
+        let all_attackers = find_attackers_defenders_helper(square, board); // Task 6.0: use see_calculation module
         // Return all attackers with their positions; the caller will separate by player
         (all_attackers, Vec::new())
     }
@@ -4127,10 +3151,10 @@ impl MoveOrdering {
     fn update_memory_usage(&mut self) {
         // Calculate current memory usage
         let move_score_cache_memory = self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
-        let pv_cache_memory = self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>());
-        let killer_moves_memory = self.killer_moves.values().map(|moves| moves.len() * std::mem::size_of::<Move>()).sum::<usize>();
-        let history_table_memory = self.history_table.len() * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<u32>());
-        let see_cache_memory = self.see_cache.len() * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<i32>());
+        let pv_cache_memory = self.pv_ordering.cache_memory_bytes(); // Task 6.0: use PVOrdering module
+        let killer_moves_memory = self.killer_move_manager.memory_bytes(); // Task 6.0: use KillerMoveManager
+        let history_table_memory = self.history_manager.memory_bytes(); // Task 6.0: use HistoryHeuristicManager
+        let see_cache_memory = self.see_cache.memory_bytes(); // Task 6.0: use SEECache module
         let struct_memory = std::mem::size_of::<Self>();
         
         self.memory_usage.current_bytes = move_score_cache_memory + pv_cache_memory + killer_moves_memory + history_table_memory + see_cache_memory + struct_memory;
@@ -4310,57 +3334,65 @@ impl MoveOrdering {
         let max_weight = self.config.learning_config.max_weight;
 
         // Adjust weights for each heuristic based on effectiveness
-        for (heuristic_name, metrics) in &self.heuristic_effectiveness {
-            let effectiveness_diff = metrics.effectiveness_score - avg_effectiveness;
-
-            // Only adjust if effectiveness difference is significant
-            if effectiveness_diff.abs() < min_effectiveness_diff as f64 {
-                continue;
-            }
-
+        // Collect heuristic names and effectiveness differences first to avoid borrow conflicts
+        let adjustments: Vec<(String, f64, f64)> = self.heuristic_effectiveness.iter()
+            .filter_map(|(heuristic_name, metrics)| {
+                let effectiveness_diff = metrics.effectiveness_score - avg_effectiveness;
+                
+                // Only adjust if effectiveness difference is significant
+                if effectiveness_diff.abs() < min_effectiveness_diff as f64 {
+                    return None;
+                }
+                
+                Some((heuristic_name.clone(), metrics.effectiveness_score, effectiveness_diff))
+            })
+            .collect();
+        
+        // Now apply adjustments (no longer borrowing heuristic_effectiveness)
+        for (heuristic_name, effectiveness_score, effectiveness_diff) in adjustments {
             // Determine which weight to adjust
-            let weight_ref = self.get_weight_ref_mut(heuristic_name);
-            if weight_ref.is_none() {
-                continue;
-            }
+            if let Some(weight_ref) = self.get_weight_ref_mut(&heuristic_name) {
+                // Get the old weight value
+                let old_weight = *weight_ref;
+                
+                // Calculate new weight
+                let mut new_weight = old_weight;
+                
+                // Adjust weight based on effectiveness
+                // Positive effectiveness_diff -> increase weight
+                // Negative effectiveness_diff -> decrease weight
+                let adjustment = (effectiveness_diff * learning_rate as f64) * old_weight as f64;
+                let max_adjustment = (old_weight as f64 * max_weight_change_percent as f64).abs();
 
-            let old_weight = *weight_ref.unwrap();
-            let mut new_weight = old_weight;
+                // Clamp adjustment to max_weight_change_percent
+                let clamped_adjustment = adjustment.signum() * adjustment.abs().min(max_adjustment);
+                new_weight = (old_weight as f64 + clamped_adjustment) as i32;
 
-            // Adjust weight based on effectiveness
-            // Positive effectiveness_diff -> increase weight
-            // Negative effectiveness_diff -> decrease weight
-            let adjustment = (effectiveness_diff * learning_rate as f64) * old_weight as f64;
-            let max_adjustment = (old_weight as f64 * max_weight_change_percent as f64).abs();
+                // Apply weight bounds if enabled
+                if enable_weight_bounds {
+                    new_weight = new_weight.max(min_weight)
+                        .min(max_weight);
+                }
 
-            // Clamp adjustment to max_weight_change_percent
-            let clamped_adjustment = adjustment.signum() * adjustment.abs().min(max_adjustment);
-            new_weight = (old_weight as f64 + clamped_adjustment) as i32;
+                // Only update if weight actually changed
+                if new_weight != old_weight {
+                    *weight_ref = new_weight;
+                    weights_adjusted = true;
+                    adjustments_made += 1;
 
-            // Apply weight bounds if enabled
-            if enable_weight_bounds {
-                new_weight = new_weight.max(min_weight)
-                    .min(max_weight);
-            }
+                    // Record weight change in history
+                    self.weight_change_history.push(WeightChange {
+                        weight_name: heuristic_name.clone(),
+                        old_weight,
+                        new_weight,
+                        reason: format!("Effectiveness: {:.2} (avg: {:.2})", effectiveness_score, avg_effectiveness),
+                        timestamp: self.history_update_counter,
+                    });
 
-            // Only update if weight actually changed
-            if new_weight != old_weight {
-                *weight_ref.unwrap() = new_weight;
-                weights_adjusted = true;
-                adjustments_made += 1;
-
-                // Record weight change in history
-                self.weight_change_history.push(WeightChange {
-                    weight_name: heuristic_name.clone(),
-                    old_weight,
-                    new_weight,
-                    reason: format!("Effectiveness: {:.2} (avg: {:.2})", metrics.effectiveness_score, avg_effectiveness),
-                    timestamp: self.history_update_counter,
-                });
-
-                // Limit history size to prevent unbounded growth
-                if self.weight_change_history.len() > 1000 {
-                    self.weight_change_history.remove(0);
+                    // Limit history size to prevent unbounded growth
+                    if self.weight_change_history.len() > 1000 {
+                        self.weight_change_history.remove(0);
+                    }
                 }
             }
         }
@@ -4468,20 +3500,12 @@ impl MoveOrdering {
             }
         }
 
-        // Update killer move limits if needed
-        for (_depth, killer_list) in self.killer_moves.iter_mut() {
-            if killer_list.len() > self.config.killer_config.max_killer_moves_per_depth {
-                killer_list.truncate(self.config.killer_config.max_killer_moves_per_depth);
-            }
-        }
+        // Update killer move limits if needed (Task 6.0: use KillerMoveManager)
+        self.killer_move_manager.set_max_killer_moves_per_depth(self.config.killer_config.max_killer_moves_per_depth);
 
-        // Update history table if needed
+        // Update history table if needed (Task 6.0: use HistoryHeuristicManager)
         if self.config.history_config.enable_score_clamping {
-            for score in self.history_table.values_mut() {
-                if *score > self.config.history_config.max_history_score {
-                    *score = self.config.history_config.max_history_score;
-                }
-            }
+            self.history_manager.clamp_history_scores(self.config.history_config.max_history_score);
         }
 
         self.update_memory_usage();
@@ -4573,110 +3597,22 @@ impl MoveOrdering {
 
     /// Evict cache entry based on eviction policy
     /// Task 3.0: Implements LRU, depth-preferred, FIFO, and hybrid eviction policies
+    /// Evict cache entry (Task 6.0: delegates to cache manager)
     fn evict_cache_entry(&mut self, _new_key: &(u64, u8)) -> Option<(u64, u8)> {
-        if self.move_ordering_cache.is_empty() {
-            return None;
-        }
-
-        match self.config.cache_config.cache_eviction_policy {
-            CacheEvictionPolicy::FIFO => {
-                // FIFO: Remove first entry (oldest insertion)
-                self.move_ordering_cache.keys().next().copied()
-            }
-            CacheEvictionPolicy::LRU => {
-                // LRU: Remove least recently used entry (lowest last_access)
-                let mut lru_key = None;
-                let mut lru_access = u64::MAX;
-                
-                for (key, entry) in &self.move_ordering_cache {
-                    if entry.last_access < lru_access {
-                        lru_access = entry.last_access;
-                        lru_key = Some(*key);
-                    }
-                }
-                lru_key
-            }
-            CacheEvictionPolicy::DepthPreferred => {
-                // Depth-preferred: Remove entry with lowest depth
-                let mut min_depth_key = None;
-                let mut min_depth = u8::MAX;
-                
-                for (key, entry) in &self.move_ordering_cache {
-                    if entry.depth < min_depth {
-                        min_depth = entry.depth;
-                        min_depth_key = Some(*key);
-                    }
-                }
-                min_depth_key
-            }
-            CacheEvictionPolicy::Hybrid => {
-                // Hybrid: Combine LRU and depth-preferred
-                // Score = (1 - hybrid_lru_weight) * depth_score + hybrid_lru_weight * lru_score
-                // Lower score = higher priority for eviction
-                let lru_weight = self.config.cache_config.hybrid_lru_weight;
-                let depth_weight = 1.0 - lru_weight;
-                
-                // Normalize LRU: older = lower score (more likely to evict)
-                let max_access = self.move_ordering_cache.values()
-                    .map(|e| e.last_access)
-                    .max()
-                    .unwrap_or(1);
-                let min_access = self.move_ordering_cache.values()
-                    .map(|e| e.last_access)
-                    .min()
-                    .unwrap_or(1);
-                let access_range = (max_access - min_access).max(1) as f32;
-                
-                // Normalize depth: lower depth = lower score (more likely to evict)
-                let max_depth = self.move_ordering_cache.values()
-                    .map(|e| e.depth as f32)
-                    .fold(0.0, f32::max);
-                let min_depth = self.move_ordering_cache.values()
-                    .map(|e| e.depth as f32)
-                    .fold(u8::MAX as f32, f32::min);
-                let depth_range = (max_depth - min_depth).max(1.0);
-                
-                let mut evict_key = None;
-                let mut evict_score = f32::MAX;
-                
-                for (key, entry) in &self.move_ordering_cache {
-                    // LRU score: normalized to 0.0 (oldest) .. 1.0 (newest)
-                    let lru_score = if access_range > 0.0 {
-                        1.0 - ((entry.last_access - min_access) as f32 / access_range)
-                    } else {
-                        0.5
-                    };
-                    
-                    // Depth score: normalized to 0.0 (shallowest) .. 1.0 (deepest)
-                    let depth_score = if depth_range > 0.0 {
-                        (entry.depth as f32 - min_depth) / depth_range
-                    } else {
-                        0.5
-                    };
-                    
-                    // Combined score: lower = more likely to evict
-                    let combined_score = depth_weight * (1.0 - depth_score) + lru_weight * lru_score;
-                    
-                    if combined_score < evict_score {
-                        evict_score = combined_score;
-                        evict_key = Some(*key);
-                    }
-                }
-                
-                evict_key
-            }
-        }
+        self.cache_manager.evict_entry(
+            self.config.cache_config.cache_eviction_policy,
+            self.config.cache_config.hybrid_lru_weight,
+        )
     }
 
     /// Clear the move scoring cache
     pub fn clear_cache(&mut self) {
         self.move_score_cache.clear();
-        self.pv_move_cache.clear();
-        self.move_ordering_cache.clear(); // Task 6.2: Clear move ordering cache
-        self.lru_access_counter = 0; // Task 3.0: Reset LRU counter
-        self.killer_moves.clear();
-        self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
-        self.history_table.clear();
+        self.pv_ordering.clear_cache(); // Task 6.0: use PVOrdering module
+        self.cache_manager.clear(); // Task 6.0: use MoveOrderingCacheManager
+        self.killer_move_manager.clear_all_killer_moves(); // Task 6.0: use KillerMoveManager
+        self.counter_move_manager.clear_all_counter_moves(); // Task 6.0: use CounterMoveManager
+        self.history_manager.clear_history_table(); // Task 6.0: use HistoryHeuristicManager
         self.stats.cache_hits = 0;
         self.stats.cache_misses = 0;
         self.stats.cache_hit_rate = 0.0;
@@ -4733,7 +3669,7 @@ impl MoveOrdering {
     /// 
     /// PV moves get the highest priority score to ensure they are tried first.
     pub fn score_pv_move(&mut self, _move_: &Move) -> i32 {
-        self.config.weights.pv_move_weight
+        score_pv_move_helper(self.config.weights.pv_move_weight) // Task 6.0: use pv_ordering module
     }
 
     /// Get the PV move for a given position from the transposition table
@@ -4748,14 +3684,14 @@ impl MoveOrdering {
         // Calculate position hash
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         
-        // Check cache first
-        if let Some(cached_move) = self.pv_move_cache.get(&position_hash) {
+        // Check cache first (Task 6.0: use PVOrdering module)
+        if let Some(cached_move) = self.pv_ordering.get_cached_pv_move(position_hash) {
             if cached_move.is_some() {
                 self.stats.pv_move_hits += 1;
             } else {
                 self.stats.pv_move_misses += 1;
             }
-            return cached_move.clone();
+            return cached_move;
         }
 
         // Query transposition table
@@ -4774,9 +3710,9 @@ impl MoveOrdering {
             None
         };
 
-        // Cache the result
-        if self.pv_move_cache.len() < self.config.cache_config.max_cache_size {
-            self.pv_move_cache.insert(position_hash, pv_move.clone());
+        // Cache the result (Task 6.0: use PVOrdering module)
+        if !self.pv_ordering.is_cache_full(self.config.cache_config.max_cache_size) {
+            self.pv_ordering.cache_pv_move(position_hash, pv_move.clone());
         }
 
         // Update PV move statistics
@@ -4825,9 +3761,9 @@ impl MoveOrdering {
             }
         }
 
-        // Update cache
-        if self.pv_move_cache.len() < self.config.cache_config.max_cache_size {
-            self.pv_move_cache.insert(position_hash, Some(best_move));
+        // Update cache (Task 6.0: use PVOrdering module)
+        if !self.pv_ordering.is_cache_full(self.config.cache_config.max_cache_size) {
+            self.pv_ordering.cache_pv_move(position_hash, Some(best_move));
         }
     }
 
@@ -4836,7 +3772,7 @@ impl MoveOrdering {
     /// This method clears all cached PV moves, typically called
     /// when starting a new search or when memory needs to be freed.
     pub fn clear_pv_move_cache(&mut self) {
-        self.pv_move_cache.clear();
+        self.pv_ordering.clear_cache();
         self.stats.pv_move_hits = 0;
         self.stats.pv_move_misses = 0;
         self.stats.pv_move_hit_rate = 0.0;
@@ -4856,16 +3792,11 @@ impl MoveOrdering {
         }
     }
 
-    /// Compare two moves for equality
+    /// Compare two moves for equality (Task 6.0: now uses module helper)
     /// 
-    /// This is a helper method to check if two moves are the same,
-    /// used for PV move matching.
+    /// This method delegates to the pv_ordering module's moves_equal function.
     fn moves_equal(&self, a: &Move, b: &Move) -> bool {
-        a.from == b.from && 
-        a.to == b.to && 
-        a.piece_type == b.piece_type && 
-        a.player == b.player &&
-        a.is_promotion == b.is_promotion
+        moves_equal_helper(a, b) // Task 6.0: use pv_ordering module
     }
 
     /// Order moves with PV move prioritization
@@ -4955,12 +3886,12 @@ impl MoveOrdering {
     /// This method should be called at the beginning of each search depth
     /// to ensure killer moves are properly organized by depth.
     pub fn set_current_depth(&mut self, depth: u8) {
-        self.current_depth = depth;
+        self.killer_move_manager.set_current_depth(depth);
     }
 
     /// Get the current search depth
     pub fn get_current_depth(&self) -> u8 {
-        self.current_depth
+        self.killer_move_manager.get_current_depth()
     }
 
     /// Score a move that matches a killer move
@@ -4968,7 +3899,7 @@ impl MoveOrdering {
     /// Killer moves get high priority to encourage trying moves that
     /// caused beta cutoffs in previous searches at the same depth.
     pub fn score_killer_move(&mut self, _move_: &Move) -> i32 {
-        self.config.weights.killer_move_weight
+        score_killer_move_helper(self.config.weights.killer_move_weight)
     }
 
     /// Add a killer move for the current depth
@@ -4976,27 +3907,14 @@ impl MoveOrdering {
     /// This method stores a move that caused a beta cutoff, making it
     /// a candidate for early consideration in future searches at the same depth.
     pub fn add_killer_move(&mut self, move_: Move) {
-        let depth = self.current_depth;
+        let was_added = self.killer_move_manager.add_killer_move(
+            move_,
+            moves_equal_helper,
+            self.config.killer_config.max_killer_moves_per_depth,
+        );
         
-        // Check if this move is already a killer move at this depth
-        let is_duplicate = if let Some(killer_list) = self.killer_moves.get(&depth) {
-            killer_list.iter().any(|killer| self.moves_equal(killer, &move_))
-        } else {
-            false
-        };
-        
-        if !is_duplicate {
-            // Get or create the killer moves list for this depth
-            let killer_list = self.killer_moves.entry(depth).or_insert_with(Vec::new);
-            
-            // Add the new killer move
-            killer_list.push(move_);
+        if was_added {
             self.stats.killer_moves_stored += 1;
-            
-                    // Limit the number of killer moves per depth
-                    if killer_list.len() > self.config.killer_config.max_killer_moves_per_depth {
-                        killer_list.remove(0); // Remove oldest killer move
-                    }
         }
         
         self.update_memory_usage();
@@ -5007,13 +3925,7 @@ impl MoveOrdering {
     /// This method determines if a given move is stored as a killer move
     /// for the current search depth.
     pub fn is_killer_move(&mut self, move_: &Move) -> bool {
-        let depth = self.current_depth;
-        
-        if let Some(killer_list) = self.killer_moves.get(&depth) {
-            killer_list.iter().any(|killer| self.moves_equal(killer, move_))
-        } else {
-            false
-        }
+        self.killer_move_manager.is_killer_move(move_, moves_equal_helper)
     }
 
     /// Get all killer moves for a specific depth
@@ -5021,7 +3933,7 @@ impl MoveOrdering {
     /// Returns a reference to the killer moves list for the given depth,
     /// or None if no killer moves exist for that depth.
     pub fn get_killer_moves(&self, depth: u8) -> Option<&Vec<Move>> {
-        self.killer_moves.get(&depth)
+        self.killer_move_manager.get_killer_moves(depth)
     }
 
     /// Get all killer moves for the current depth
@@ -5029,16 +3941,14 @@ impl MoveOrdering {
     /// Returns a reference to the killer moves list for the current depth,
     /// or None if no killer moves exist for the current depth.
     pub fn get_current_killer_moves(&self) -> Option<&Vec<Move>> {
-        self.get_killer_moves(self.current_depth)
+        self.killer_move_manager.get_current_killer_moves()
     }
 
     /// Clear killer moves for a specific depth
     /// 
     /// This method removes all killer moves stored for the given depth.
     pub fn clear_killer_moves_for_depth(&mut self, depth: u8) {
-        if let Some(killer_list) = self.killer_moves.get_mut(&depth) {
-            killer_list.clear();
-        }
+        self.killer_move_manager.clear_killer_moves_for_depth(depth);
         self.update_memory_usage();
     }
 
@@ -5046,7 +3956,7 @@ impl MoveOrdering {
     /// 
     /// This method removes all killer moves from all depths.
     pub fn clear_all_killer_moves(&mut self) {
-        self.killer_moves.clear();
+        self.killer_move_manager.clear_all_killer_moves();
         self.stats.killer_move_hits = 0;
         self.stats.killer_move_misses = 0;
         self.stats.killer_move_hit_rate = 0.0;
@@ -5060,14 +3970,7 @@ impl MoveOrdering {
     /// are stored for each search depth.
     pub fn set_max_killer_moves_per_depth(&mut self, max_moves: usize) {
         self.config.killer_config.max_killer_moves_per_depth = max_moves;
-        
-        // Trim existing killer move lists if necessary
-        for killer_list in self.killer_moves.values_mut() {
-            if killer_list.len() > max_moves {
-                killer_list.truncate(max_moves);
-            }
-        }
-        
+        self.killer_move_manager.set_max_killer_moves_per_depth(max_moves);
         self.update_memory_usage();
     }
 
@@ -5114,21 +4017,15 @@ impl MoveOrdering {
             return;
         }
 
-        // Get or create the counter-moves list for this opponent move
-        let counter_list = self.counter_move_table.entry(opponent_move).or_insert_with(Vec::new);
+        let was_added = self.counter_move_manager.add_counter_move(
+            opponent_move,
+            counter_move,
+            moves_equal_helper,
+            self.config.counter_move_config.max_counter_moves,
+        );
         
-        // Check if this counter-move is already in the list
-        let is_duplicate = counter_list.iter().any(|cm| self.moves_equal(cm, &counter_move));
-        
-        if !is_duplicate {
-            // Add the new counter-move
-            counter_list.push(counter_move);
+        if was_added {
             self.stats.counter_moves_stored += 1;
-            
-            // Limit the number of counter-moves per opponent move (FIFO order)
-            if counter_list.len() > self.config.counter_move_config.max_counter_moves {
-                counter_list.remove(0); // Remove oldest counter-move
-            }
         }
         
         self.update_memory_usage();
@@ -5147,13 +4044,9 @@ impl MoveOrdering {
             return 0;
         }
 
-        if let Some(opponent_move) = opponent_last_move {
-            if let Some(counter_list) = self.counter_move_table.get(opponent_move) {
-                if counter_list.iter().any(|cm| self.moves_equal(cm, move_)) {
-                    self.stats.counter_move_hits += 1;
-                    return self.config.weights.counter_move_weight;
-                }
-            }
+        if self.counter_move_manager.is_counter_move(move_, opponent_last_move, moves_equal_helper) {
+            self.stats.counter_move_hits += 1;
+            return score_counter_move_helper(self.config.weights.counter_move_weight);
         }
         
         self.stats.counter_move_misses += 1;
@@ -5173,13 +4066,7 @@ impl MoveOrdering {
             return false;
         }
 
-        if let Some(opponent_move) = opponent_last_move {
-            if let Some(counter_list) = self.counter_move_table.get(opponent_move) {
-                return counter_list.iter().any(|cm| self.moves_equal(cm, move_));
-            }
-        }
-        
-        false
+        self.counter_move_manager.is_counter_move(move_, opponent_last_move, moves_equal_helper)
     }
 
     /// Get all counter-moves for an opponent's move
@@ -5190,14 +4077,14 @@ impl MoveOrdering {
     /// # Arguments
     /// * `opponent_move` - The opponent's move to get counter-moves for
     pub fn get_counter_moves(&self, opponent_move: &Move) -> Option<&Vec<Move>> {
-        self.counter_move_table.get(opponent_move)
+        self.counter_move_manager.get_counter_moves(opponent_move)
     }
 
     /// Clear all counter-moves for a specific opponent move
     /// 
     /// This method clears all counter-moves stored for the given opponent move.
     pub fn clear_counter_moves_for_opponent_move(&mut self, opponent_move: &Move) {
-        self.counter_move_table.remove(opponent_move);
+        self.counter_move_manager.clear_counter_moves_for_opponent_move(opponent_move);
         self.update_memory_usage();
     }
 
@@ -5206,7 +4093,7 @@ impl MoveOrdering {
     /// This method clears all counter-moves from the table, typically called
     /// when starting a new search or when memory needs to be freed.
     pub fn clear_all_counter_moves(&mut self) {
-        self.counter_move_table.clear();
+        self.counter_move_manager.clear_all_counter_moves();
         self.stats.counter_move_hits = 0;
         self.stats.counter_move_misses = 0;
         self.stats.counter_move_hit_rate = 0.0;
@@ -5219,14 +4106,7 @@ impl MoveOrdering {
     /// Adjusts the maximum number of counter-moves stored per opponent move.
     pub fn set_max_counter_moves(&mut self, max_moves: usize) {
         self.config.counter_move_config.max_counter_moves = max_moves;
-        
-        // Trim existing counter-move lists if necessary
-        for counter_list in self.counter_move_table.values_mut() {
-            if counter_list.len() > max_moves {
-                counter_list.truncate(max_moves);
-            }
-        }
-        
+        self.counter_move_manager.set_max_counter_moves(max_moves);
         self.update_memory_usage();
     }
 
@@ -5404,24 +4284,15 @@ impl MoveOrdering {
     /// Determine game phase based on material count
     /// Task 4.0: Helper method for phase-aware history
     fn determine_game_phase_from_material(&self, board: &crate::bitboards::BitboardBoard) -> crate::types::GamePhase {
-        let mut material_count = 0;
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(_piece) = board.get_piece(pos) {
-                    material_count += 1;
-                }
-            }
-        }
-        crate::types::GamePhase::from_material_count(material_count)
+        // Task 6.0: Delegate to history manager
+        self.history_manager.determine_game_phase_from_material(board)
     }
 
     /// Get current timestamp for time-based aging
-    /// Task 4.0: Helper method for time-based aging
-    fn get_current_timestamp(&self) -> u64 {
-        // Use history_update_counter as a proxy for time
-        // In a real implementation, this could use SystemTime::now()
-        self.history_update_counter
+    /// Task 4.0: Helper method for time-based aging (now delegates to manager)
+    fn get_current_timestamp(&mut self) -> u64 {
+        // Task 6.0: Delegate to history manager
+        self.history_manager.get_current_timestamp()
     }
 
     /// Score a move using history heuristic
@@ -5430,49 +4301,16 @@ impl MoveOrdering {
     /// in previous searches.
     /// Task 4.0: Enhanced to support relative history, phase-aware history, and quiet-move-only history
     pub fn score_history_move(&mut self, move_: &Move) -> i32 {
-        if let Some(from) = move_.from {
-            // Task 4.0: Check quiet-move-only history first
-            if self.config.history_config.enable_quiet_only && !move_.is_capture {
-                let key = (move_.piece_type, from, move_.to);
-                if let Some(entry) = self.quiet_history_table.get(&key) {
-                    self.stats.history_hits += 1;
-                    let score = self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                    return (score as i32 * self.config.weights.history_weight) / 1000;
-                }
-            }
-
-            // Task 4.0: Check phase-aware history
-            if self.config.history_config.enable_phase_aware {
-                if let Some(phase_table) = self.phase_history_tables.get(&self.current_game_phase) {
-                    let key = (move_.piece_type, from, move_.to);
-                    if let Some(entry) = phase_table.get(&key) {
-                        self.stats.history_hits += 1;
-                        let score = self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                        return (score as i32 * self.config.weights.history_weight) / 1000;
-                    }
-                }
-            }
-
-            // Task 4.0: Check relative history
-            if self.config.history_config.enable_relative {
-                let relative_key = (from, move_.to);
-                if let Some(entry) = self.relative_history_table.get(&relative_key) {
-                    self.stats.history_hits += 1;
-                    let score = self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                    return (score as i32 * self.config.weights.history_weight) / 1000;
-                }
-            }
-
-            // Fall back to absolute history (original implementation)
-            let key = (move_.piece_type, from, move_.to);
-            if let Some(&history_score) = self.history_table.get(&key) {
-                self.stats.history_hits += 1;
-                // Scale history score to match other weights
-                (history_score as i32 * self.config.weights.history_weight) / 1000
-            } else {
-                self.stats.history_misses += 1;
-                0
-            }
+        let current_time = self.history_manager.get_current_timestamp();
+        let history_score = self.history_manager.get_history_score(
+            move_,
+            &self.config.history_config,
+            current_time,
+        );
+        
+        if history_score > 0 {
+            self.stats.history_hits += 1;
+            score_history_move_helper(history_score, self.config.weights.history_weight)
         } else {
             self.stats.history_misses += 1;
             0
@@ -5480,22 +4318,16 @@ impl MoveOrdering {
     }
 
     /// Apply time-based aging to history score if enabled
-    /// Task 4.0: Helper method for time-based aging
+    /// Task 4.0: Helper method for time-based aging (now delegates to manager)
     fn apply_time_based_aging_if_enabled(&self, score: u32, last_update: u64) -> u32 {
-        if !self.config.history_config.enable_time_based_aging {
-            return score;
-        }
-
-        let current_time = self.get_current_timestamp();
-        let age = current_time.saturating_sub(last_update);
-        
-        // Apply exponential decay based on age
-        // Decay factor: (decay_factor ^ age) where age is normalized
-        let decay_factor = self.config.history_config.time_aging_decay_factor;
-        let age_normalized = age.min(1000) as f32 / 1000.0; // Normalize age to 0-1 range
-        let decay = decay_factor.powf(age_normalized);
-        
-        (score as f32 * decay) as u32
+        let current_time = self.history_manager.get_time_aging_counter();
+        self.history_manager.apply_time_based_aging_if_enabled(
+            score,
+            last_update,
+            current_time,
+            self.config.history_config.enable_time_based_aging,
+            self.config.history_config.time_aging_decay_factor,
+        )
     }
 
     /// Update history score for a move
@@ -5504,93 +4336,28 @@ impl MoveOrdering {
     /// improves the alpha bound during search.
     /// Task 4.0: Enhanced to support relative history, phase-aware history, quiet-move-only history, and time-based aging
     pub fn update_history_score(&mut self, move_: &Move, depth: u8, board: Option<&crate::bitboards::BitboardBoard>) {
-        if let Some(from) = move_.from {
+        if let Some(_from) = move_.from {
             // Use safe multiplication to prevent overflow (depth is u8, max value is 255)
             // depth * depth can overflow u8 if depth > 16, so cast to u32 first
             let bonus = ((depth as u32) * (depth as u32)) as u32; // Bonus proportional to depth
             
-            let current_time = self.get_current_timestamp();
-            let key = (move_.piece_type, from, move_.to);
-            let relative_key = (from, move_.to);
-            
-            // Task 4.0: Update quiet-move-only history if enabled
-            if self.config.history_config.enable_quiet_only && !move_.is_capture {
-                let current_entry = self.quiet_history_table.get(&key).cloned();
-                let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
-                let new_score = current_score + bonus;
-                let final_score = new_score.min(self.config.history_config.max_history_score);
-                
-                let entry = HistoryEntry {
-                    score: final_score,
-                    last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
-                };
-                self.quiet_history_table.insert(key, entry);
-            }
-            
-            // Task 4.0: Update phase-aware history if enabled
-            if self.config.history_config.enable_phase_aware {
-                // Update current game phase if board is provided
-                if let Some(board_ref) = board {
-                    let new_phase = self.determine_game_phase_from_material(board_ref);
-                    if new_phase != self.current_game_phase {
-                        self.current_game_phase = new_phase;
-                    }
-                }
-                
-                // Get or create phase table
-                let phase_table = self.phase_history_tables.entry(self.current_game_phase).or_insert_with(HashMap::new);
-                let current_entry = phase_table.get(&key).cloned();
-                let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
-                let new_score = current_score + bonus;
-                let final_score = new_score.min(self.config.history_config.max_history_score);
-                
-                let entry = HistoryEntry {
-                    score: final_score,
-                    last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
-                };
-                phase_table.insert(key, entry);
-            }
-            
-            // Task 4.0: Update relative history if enabled
-            if self.config.history_config.enable_relative {
-                let current_entry = self.relative_history_table.get(&relative_key).cloned();
-                let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
-                let new_score = current_score + bonus;
-                let final_score = new_score.min(self.config.history_config.max_history_score);
-                
-                let entry = HistoryEntry {
-                    score: final_score,
-                    last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
-                };
-                self.relative_history_table.insert(relative_key, entry);
-            }
-            
-            // Always update absolute history (backward compatibility)
-            let current_score = self.history_table.get(&key).copied().unwrap_or(0);
-            let new_score = current_score + bonus;
-            let final_score = new_score.min(self.config.history_config.max_history_score);
-            self.history_table.insert(key, final_score);
+            // Task 6.0: Delegate to history manager
+            self.history_manager.update_history_score(
+                move_,
+                depth,
+                bonus,
+                &self.config.history_config,
+                board,
+            );
             
             self.stats.history_updates += 1;
-            self.history_update_counter += 1;
-            
-            // Task 4.0: Update time-based aging counter
-            self.time_aging_counter += 1;
+            self.history_update_counter = self.history_manager.get_history_update_counter();
             
             // Check if automatic aging should be performed
             if self.config.history_config.enable_automatic_aging {
                 if self.history_update_counter % self.config.history_config.aging_frequency == 0 {
                     self.age_history_table();
                 }
-            }
-            
-            // Task 4.0: Check if time-based aging should be performed
-            if self.config.history_config.enable_time_based_aging {
-                // Time-based aging is applied during scoring, but we can also periodically clean up
-                // old entries here if needed
             }
             
             self.update_memory_usage();
@@ -5602,39 +4369,12 @@ impl MoveOrdering {
     /// Returns the current history score for the given move, or 0 if not found.
     /// Task 4.0: Enhanced to support all history table types
     pub fn get_history_score(&mut self, move_: &Move) -> u32 {
-        if let Some(from) = move_.from {
-            // Task 4.0: Check quiet-move-only history first
-            if self.config.history_config.enable_quiet_only && !move_.is_capture {
-                let key = (move_.piece_type, from, move_.to);
-                if let Some(entry) = self.quiet_history_table.get(&key) {
-                    return self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                }
-            }
-
-            // Task 4.0: Check phase-aware history
-            if self.config.history_config.enable_phase_aware {
-                if let Some(phase_table) = self.phase_history_tables.get(&self.current_game_phase) {
-                    let key = (move_.piece_type, from, move_.to);
-                    if let Some(entry) = phase_table.get(&key) {
-                        return self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                    }
-                }
-            }
-
-            // Task 4.0: Check relative history
-            if self.config.history_config.enable_relative {
-                let relative_key = (from, move_.to);
-                if let Some(entry) = self.relative_history_table.get(&relative_key) {
-                    return self.apply_time_based_aging_if_enabled(entry.score, entry.last_update);
-                }
-            }
-
-            // Fall back to absolute history (original implementation)
-            let key = (move_.piece_type, from, move_.to);
-            self.history_table.get(&key).copied().unwrap_or(0)
-        } else {
-            0
-        }
+        let current_time = self.history_manager.get_time_aging_counter();
+        self.history_manager.get_history_score(
+            move_,
+            &self.config.history_config,
+            current_time,
+        )
     }
 
     /// Age the history table to prevent overflow
@@ -5643,84 +4383,8 @@ impl MoveOrdering {
     /// helping to prevent overflow and giving more weight to recent moves.
     /// Task 4.0: Enhanced to age all history table types (absolute, relative, quiet, phase-aware)
     pub fn age_history_table(&mut self) {
-        // Determine aging factor based on current game phase if phase-aware
-        let aging_factor = if self.config.history_config.enable_phase_aware {
-            match self.current_game_phase {
-                crate::types::GamePhase::Opening => self.config.history_config.opening_aging_factor,
-                crate::types::GamePhase::Middlegame => self.config.history_config.middlegame_aging_factor,
-                crate::types::GamePhase::Endgame => self.config.history_config.endgame_aging_factor,
-            }
-        } else {
-            self.config.history_config.history_aging_factor
-        };
-
-        // Age absolute history table
-        if !self.history_table.is_empty() {
-            let mut entries_to_remove = Vec::new();
-            
-            for (key, score) in self.history_table.iter_mut() {
-                *score = (*score as f32 * aging_factor) as u32;
-                if *score == 0 {
-                    entries_to_remove.push(*key);
-                }
-            }
-            
-            // Remove entries with zero scores
-            for key in entries_to_remove {
-                self.history_table.remove(&key);
-            }
-        }
-
-        // Task 4.0: Age relative history table
-        if self.config.history_config.enable_relative && !self.relative_history_table.is_empty() {
-            let mut entries_to_remove = Vec::new();
-            
-            for (key, entry) in self.relative_history_table.iter_mut() {
-                entry.score = (entry.score as f32 * aging_factor) as u32;
-                if entry.score == 0 {
-                    entries_to_remove.push(*key);
-                }
-            }
-            
-            for key in entries_to_remove {
-                self.relative_history_table.remove(&key);
-            }
-        }
-
-        // Task 4.0: Age quiet-move-only history table
-        if self.config.history_config.enable_quiet_only && !self.quiet_history_table.is_empty() {
-            let mut entries_to_remove = Vec::new();
-            
-            for (key, entry) in self.quiet_history_table.iter_mut() {
-                entry.score = (entry.score as f32 * aging_factor) as u32;
-                if entry.score == 0 {
-                    entries_to_remove.push(*key);
-                }
-            }
-            
-            for key in entries_to_remove {
-                self.quiet_history_table.remove(&key);
-            }
-        }
-
-        // Task 4.0: Age phase-aware history tables
-        if self.config.history_config.enable_phase_aware {
-            for phase_table in self.phase_history_tables.values_mut() {
-                let mut entries_to_remove = Vec::new();
-                
-                for (key, entry) in phase_table.iter_mut() {
-                    entry.score = (entry.score as f32 * aging_factor) as u32;
-                    if entry.score == 0 {
-                        entries_to_remove.push(*key);
-                    }
-                }
-                
-                for key in entries_to_remove {
-                    phase_table.remove(&key);
-                }
-            }
-        }
-        
+        // Task 6.0: Delegate to history manager
+        self.history_manager.age_history_table(&self.config.history_config);
         self.stats.history_aging_operations += 1;
         self.update_memory_usage();
     }
@@ -5730,13 +4394,8 @@ impl MoveOrdering {
     /// This method removes all history entries and resets statistics.
     /// Task 4.0: Enhanced to clear all history table types
     pub fn clear_history_table(&mut self) {
-        self.history_table.clear();
-        // Task 4.0: Clear all enhanced history tables
-        self.relative_history_table.clear();
-        self.quiet_history_table.clear();
-        self.phase_history_tables.clear();
-        self.current_game_phase = crate::types::GamePhase::Opening;
-        self.time_aging_counter = 0;
+        // Task 6.0: Delegate to history manager
+        self.history_manager.clear_history_table();
         self.stats.history_hits = 0;
         self.stats.history_misses = 0;
         self.stats.history_hit_rate = 0.0;
@@ -5752,12 +4411,8 @@ impl MoveOrdering {
     pub fn set_max_history_score(&mut self, max_score: u32) {
         self.config.history_config.max_history_score = max_score;
         
-        // Trim any existing scores that exceed the new limit
-        for score in self.history_table.values_mut() {
-            if *score > max_score {
-                *score = max_score;
-            }
-        }
+        // Task 6.0: Delegate to history manager
+        self.history_manager.clamp_history_scores(max_score);
     }
 
     /// Get the maximum history score
@@ -5856,18 +4511,12 @@ impl MoveOrdering {
     /// Adjusts the maximum number of entries in the SEE cache.
     /// If the current cache is larger than the new size, it will be trimmed.
     pub fn set_max_see_cache_size(&mut self, max_size: usize) {
-        self.max_see_cache_size = max_size;
         self.config.cache_config.max_see_cache_size = max_size;
         
-        // Trim cache if necessary
+        // Task 6.0: SEECache manages its own max size
+        // For now, just clear if over limit (can be enhanced with proper resizing)
         if self.see_cache.len() > max_size {
-            let excess = self.see_cache.len() - max_size;
-            let keys_to_remove: Vec<(Position, Position)> = 
-                self.see_cache.keys().take(excess).copied().collect();
-            
-            for key in keys_to_remove {
-                self.see_cache.remove(&key);
-            }
+            self.see_cache.clear(); // Simple approach: clear if over limit
         }
         
         self.update_memory_usage();
@@ -5977,9 +4626,9 @@ impl MoveOrdering {
             cache_sizes: CacheSizes {
                 move_score_cache: self.move_score_cache.len(),
                 fast_cache: self.fast_score_cache.len(),
-                pv_cache: self.pv_move_cache.len(),
-                see_cache: self.see_cache.len(),
-                history_table: self.history_table.len(),
+                pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
+                see_cache: self.see_cache.len(), // Task 6.0: use SEECache module
+                history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
             },
         }
     }
@@ -5999,9 +4648,9 @@ impl MoveOrdering {
             cache_sizes: CacheSizes {
                 move_score_cache: self.move_score_cache.len(),
                 fast_cache: self.fast_score_cache.len(),
-                pv_cache: self.pv_move_cache.len(),
-                see_cache: self.see_cache.len(),
-                history_table: self.history_table.len(),
+                pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
+                see_cache: self.see_cache.len(), // Task 6.0: use SEECache module
+                history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
             },
         };
 
@@ -6540,11 +5189,10 @@ impl MoveOrdering {
     fn clear_all_caches(&mut self) {
         self.move_score_cache.clear();
         self.fast_score_cache.clear();
-        self.pv_move_cache.clear();
-        self.see_cache.clear();
-        self.move_ordering_cache.clear(); // Task 6.2, Task 3.0: Clear move ordering cache
-        self.lru_access_counter = 0; // Task 3.0: Reset LRU counter
-        self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
+        self.pv_ordering.clear_cache(); // Task 6.0: use PVOrdering module
+        self.see_cache.clear(); // Task 6.0: use SEECache module
+        self.cache_manager.clear(); // Task 6.0: use MoveOrderingCacheManager
+        self.counter_move_manager.clear_all_counter_moves(); // Task 6.0: use CounterMoveManager
     }
 
     /// Reduce memory usage to recover from memory errors
@@ -7010,9 +5658,9 @@ impl MoveOrdering {
         // Force garbage collection by shrinking vectors
         self.move_score_cache.shrink_to_fit();
         self.fast_score_cache.shrink_to_fit();
-        self.pv_move_cache.shrink_to_fit();
-        self.see_cache.shrink_to_fit();
-        self.history_table.shrink_to_fit();
+        // Task 6.0: PVOrdering manages its own memory
+        // Task 6.0: SEECache manages its own memory
+        // Task 6.0: HistoryHeuristicManager manages its own memory (HashMap doesn't have shrink_to_fit)
         
         let after_usage = self.get_current_memory_usage().clone();
         let memory_freed = before_usage.total_memory.saturating_sub(after_usage.total_memory);
@@ -7073,7 +5721,7 @@ impl MoveOrdering {
             self.move_score_cache.clear();
         }
         if self.see_cache.len() > 500 {
-            self.see_cache.clear();
+            self.see_cache.clear(); // Task 6.0: use SEECache module
         }
     }
 
@@ -7081,9 +5729,9 @@ impl MoveOrdering {
     fn shrink_vectors(&mut self) {
         self.move_score_cache.shrink_to_fit();
         self.fast_score_cache.shrink_to_fit();
-        self.pv_move_cache.shrink_to_fit();
-        self.see_cache.shrink_to_fit();
-        self.history_table.shrink_to_fit();
+        // Task 6.0: PVOrdering manages its own memory
+        // Task 6.0: SEECache manages its own memory
+        // Task 6.0: HistoryHeuristicManager manages its own memory (HashMap doesn't have shrink_to_fit)
         self.move_score_pool.shrink_to_fit();
         self.move_pool.shrink_to_fit();
     }
@@ -7163,19 +5811,16 @@ impl MoveOrdering {
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         let cache_key = (position_hash, depth);
         
-        // Check if we have a cached ordering result for this position and depth
+        // Check if we have a cached ordering result for this position and depth (Task 6.0: use cache_manager)
         if !skip_cache {
-        if let Some(cached_entry) = self.move_ordering_cache.get_mut(&cache_key) {
-            // Verify that cached moves match current moves (moves might differ for same position)
-            if cached_entry.moves.len() == moves.len() && 
-               cached_entry.moves.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
-                // Task 3.0: Update LRU tracking on cache hit
-                self.lru_access_counter += 1;
-                cached_entry.last_access = self.lru_access_counter;
-                cached_entry.access_count += 1;
-                self.stats.cache_hits += 1;
-                self.stats.total_moves_ordered += moves.len() as u64;
-                return cached_entry.moves.clone();
+            if let Some(cached_entry) = self.cache_manager.get_mut(&cache_key) {
+                // Verify that cached moves match current moves (moves might differ for same position)
+                if cached_entry.moves.len() == moves.len() && 
+                   cached_entry.moves.iter().zip(moves.iter()).all(|(cached, current)| moves_equal_helper(cached, current)) {
+                    // Task 6.0: LRU tracking is handled by cache_manager.get_mut()
+                    self.stats.cache_hits += 1;
+                    self.stats.total_moves_ordered += moves.len() as u64;
+                    return cached_entry.moves.clone();
                 }
             }
         }
@@ -7206,35 +5851,24 @@ impl MoveOrdering {
             score_b.cmp(&score_a)
         });
 
-        // Task 6.2: Cache the ordering result for this position and depth
+        // Task 6.2: Cache the ordering result for this position and depth (Task 6.0: use cache_manager)
         // Task 3.0: Use improved eviction policy (LRU, depth-preferred, or hybrid)
-        if self.move_ordering_cache.len() < self.config.cache_config.max_cache_size {
-            // Task 3.0: Create cache entry with metadata
-            self.lru_access_counter += 1;
-            let entry = MoveOrderingCacheEntry {
-                moves: ordered_moves.clone(),
-                last_access: self.lru_access_counter,
-                depth,
-                access_count: 1,
-            };
-            self.move_ordering_cache.insert(cache_key, entry);
-        } else {
-            // Task 3.0: Cache is full - use improved eviction policy
-            let evicted_key = self.evict_cache_entry(&cache_key);
-            if let Some(key) = evicted_key {
-                self.move_ordering_cache.remove(&key);
-                self.stats.cache_evictions += 1;
-                self.stats.cache_evictions_size_limit += 1;
-            }
-            // Insert new entry
-            self.lru_access_counter += 1;
-            let entry = MoveOrderingCacheEntry {
-                moves: ordered_moves.clone(),
-                last_access: self.lru_access_counter,
-                depth,
-                access_count: 1,
-            };
-            self.move_ordering_cache.insert(cache_key, entry);
+        let entry = MoveOrderingCacheEntry {
+            moves: ordered_moves.clone(),
+            last_access: 0, // Will be updated by cache_manager.insert()
+            depth,
+            access_count: 1,
+        };
+        let evicted_key = self.cache_manager.insert(
+            cache_key,
+            entry,
+            self.config.cache_config.max_cache_size,
+            self.config.cache_config.cache_eviction_policy,
+            self.config.cache_config.hybrid_lru_weight,
+        );
+        if evicted_key.is_some() {
+            self.stats.cache_evictions += 1;
+            self.stats.cache_evictions_size_limit += 1;
         }
 
         // Update timing statistics
@@ -7415,8 +6049,8 @@ impl MoveOrdering {
 
     /// Update PV move from transposition table
     fn update_pv_move_from_tt(&mut self, move_: &Move, _score: i32, depth: u8) {
-        // Store as PV move for future reference
-        self.pv_moves.insert(depth, move_.clone());
+        // Store as PV move for future reference (Task 6.0: use PVOrdering module)
+        self.pv_ordering.update_pv_move_for_depth(depth, move_.clone());
         
         // Update PV move statistics
         self.stats.pv_moves_from_tt += 1;
@@ -7878,7 +6512,7 @@ impl MoveOrdering {
         
         // Use all heuristics but with more balanced weights for exploration
         // Task 3.0: No IID move context for analysis ordering
-        let mut analysis_ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None);
+        let mut analysis_ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None);
         
         // In analysis mode, also consider quiet moves more
         analysis_ordered.sort_by(|a, b| {
@@ -7920,7 +6554,7 @@ impl MoveOrdering {
             self.order_moves_with_pv_and_killer(moves, board, captured_pieces, player, depth)
         } else {
             // Task 3.0: Plenty of time - use all heuristics (no IID move context)
-            self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None)
+            self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None)
         }
     }
 
@@ -7969,7 +6603,7 @@ impl MoveOrdering {
         }
         
         // Task 3.0: Order with adjusted weights (no IID move context)
-        let ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None);
+        let ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None);
         
         // Restore original weights
         self.config.weights = original_weights;
@@ -8343,12 +6977,12 @@ mod tests {
     fn test_pv_move_cache_functionality() {
         let mut orderer = MoveOrdering::new();
         
-        // Initially no PV moves cached
-        assert_eq!(orderer.pv_move_cache.len(), 0);
+        // Initially no PV moves cached (Task 6.0: use PVOrdering module)
+        assert_eq!(orderer.pv_ordering.cache_size(), 0);
         
         // Clear PV move cache
         orderer.clear_pv_move_cache();
-        assert_eq!(orderer.pv_move_cache.len(), 0);
+        assert_eq!(orderer.pv_ordering.cache_size(), 0);
         assert_eq!(orderer.stats.pv_move_hits, 0);
         assert_eq!(orderer.stats.pv_move_misses, 0);
     }
@@ -9206,7 +7840,7 @@ mod tests {
         
         // Order moves 1 - should be cached
         let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
-        assert_eq!(orderer.move_ordering_cache.len(), 1);
+        assert_eq!(orderer.cache_manager.len(), 1);
         
         // Order moves 2 - should be cached
         let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
@@ -9216,7 +7850,7 @@ mod tests {
         let hash3 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
         let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 5, None, None);
         assert_eq!(orderer.move_ordering_cache.len(), 2);
-        assert!(orderer.move_ordering_cache.contains_key(&(hash3, 5)));
+        assert!(orderer.cache_manager.contains_key(&(hash3, 5)));
     }
 
     #[test]
@@ -9385,7 +8019,7 @@ mod tests {
         let _ordered1 = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, 3, None, None);
         
         // Get initial access counter from entry
-        let entry1 = orderer.move_ordering_cache.get(&cache_key).unwrap();
+        let entry1 = orderer.cache_manager.get(&cache_key).unwrap();
         let initial_access = entry1.last_access;
         let initial_count = entry1.access_count;
         assert!(initial_access > 0);
@@ -9781,7 +8415,7 @@ mod tests {
         );
         
         // Update history in opening phase
-        assert_eq!(orderer.current_game_phase, crate::types::GamePhase::Opening);
+        assert_eq!(orderer.history_manager.get_current_game_phase(), crate::types::GamePhase::Opening);
         orderer.update_history_score(&move_, 3, Some(&board));
         
         // Should have history score in opening phase
@@ -9790,7 +8424,7 @@ mod tests {
         
         // Switch to endgame phase (simulate by changing material count)
         // Note: This is a simplified test - in practice, phase would be determined by board state
-        orderer.current_game_phase = crate::types::GamePhase::Endgame;
+        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Endgame);
         
         // Should have history score in endgame phase if it was stored there
         // But initially it's in opening phase, so it might not be found
@@ -9846,14 +8480,14 @@ mod tests {
         );
         
         // Update history in opening phase
-        orderer.current_game_phase = crate::types::GamePhase::Opening;
+        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Opening);
         orderer.update_history_score(&move_, 3, Some(&board));
         
         // Age with opening factor
         orderer.age_history_table();
         
         // Switch to endgame and age again
-        orderer.current_game_phase = crate::types::GamePhase::Endgame;
+        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Endgame);
         orderer.age_history_table();
         
         // Verify aging occurred
@@ -9908,21 +8542,21 @@ mod tests {
         // Update history in all tables
         orderer.update_history_score(&move_, 3, Some(&board));
         
-        // Verify entries exist
-        assert!(!orderer.history_table.is_empty());
-        assert!(!orderer.relative_history_table.is_empty());
-        assert!(!orderer.quiet_history_table.is_empty());
+        // Verify entries exist (Task 6.0: use HistoryHeuristicManager)
+        assert!(!orderer.history_manager.is_absolute_history_empty());
+        assert!(!orderer.history_manager.is_relative_history_empty());
+        assert!(!orderer.history_manager.is_quiet_history_empty());
         
         // Clear all history
         orderer.clear_history_table();
         
-        // Verify all tables are cleared
-        assert!(orderer.history_table.is_empty());
-        assert!(orderer.relative_history_table.is_empty());
-        assert!(orderer.quiet_history_table.is_empty());
-        assert!(orderer.phase_history_tables.is_empty());
-        assert_eq!(orderer.current_game_phase, crate::types::GamePhase::Opening);
-        assert_eq!(orderer.time_aging_counter, 0);
+        // Verify all tables are cleared (Task 6.0: use HistoryHeuristicManager)
+        assert!(orderer.history_manager.is_absolute_history_empty());
+        assert!(orderer.history_manager.is_relative_history_empty());
+        assert!(orderer.history_manager.is_quiet_history_empty());
+        assert!(orderer.history_manager.is_phase_history_empty());
+        assert_eq!(orderer.history_manager.get_current_game_phase(), crate::types::GamePhase::Opening);
+        assert_eq!(orderer.history_manager.get_time_aging_counter(), 0);
     }
 
     #[test]
@@ -9944,10 +8578,12 @@ mod tests {
         // Update history in all tables
         orderer.update_history_score(&move_, 4, Some(&board));
         
-        // Get initial scores
-        let initial_absolute = orderer.history_table.get(&(move_.piece_type, move_.from.unwrap(), move_.to)).copied().unwrap_or(0);
-        let initial_relative = orderer.relative_history_table.get(&(move_.from.unwrap(), move_.to)).map(|e| e.score).unwrap_or(0);
-        let initial_quiet = orderer.quiet_history_table.get(&(move_.piece_type, move_.from.unwrap(), move_.to)).map(|e| e.score).unwrap_or(0);
+        // Get initial scores (Task 6.0: use HistoryHeuristicManager)
+        let key = (move_.piece_type, move_.from.unwrap(), move_.to);
+        let relative_key = (move_.from.unwrap(), move_.to);
+        let initial_absolute = orderer.history_manager.get_absolute_history_score(key).unwrap_or(0);
+        let initial_relative = orderer.history_manager.get_relative_history_entry(relative_key).map(|e| e.score).unwrap_or(0);
+        let initial_quiet = orderer.history_manager.get_quiet_history_entry(key).map(|e| e.score).unwrap_or(0);
         
         assert!(initial_absolute > 0);
         assert!(initial_relative > 0);
@@ -9956,10 +8592,10 @@ mod tests {
         // Age all tables
         orderer.age_history_table();
         
-        // Verify scores are reduced
-        let aged_absolute = orderer.history_table.get(&(move_.piece_type, move_.from.unwrap(), move_.to)).copied().unwrap_or(0);
-        let aged_relative = orderer.relative_history_table.get(&(move_.from.unwrap(), move_.to)).map(|e| e.score).unwrap_or(0);
-        let aged_quiet = orderer.quiet_history_table.get(&(move_.piece_type, move_.from.unwrap(), move_.to)).map(|e| e.score).unwrap_or(0);
+        // Verify scores are reduced (Task 6.0: use HistoryHeuristicManager)
+        let aged_absolute = orderer.history_manager.get_absolute_history_score(key).unwrap_or(0);
+        let aged_relative = orderer.history_manager.get_relative_history_entry(relative_key).map(|e| e.score).unwrap_or(0);
+        let aged_quiet = orderer.history_manager.get_quiet_history_entry(key).map(|e| e.score).unwrap_or(0);
         
         assert!(aged_absolute <= initial_absolute);
         assert!(aged_relative <= initial_relative);

@@ -3,8 +3,7 @@
 //! This module contains structures and methods for tracking performance
 //! metrics and statistics for the move ordering system.
 
-use crate::types::*;
-use serde::Serialize;
+// Statistics structures - no external dependencies needed
 
 /// Performance statistics for move ordering
 /// 
@@ -98,23 +97,583 @@ pub struct OrderingStats {
     pub see_calculation_time_us: u64,
     /// Average time per SEE calculation (microseconds)
     pub avg_see_calculation_time_us: f64,
-    // Additional statistics structures would be added here
-    // For now, this is a placeholder showing the structure
+    /// Hot path profiling data
+    pub hot_path_stats: HotPathStats,
+    /// Detailed heuristic statistics
+    pub heuristic_stats: HeuristicStats,
+    /// Advanced timing statistics
+    pub timing_stats: TimingStats,
+    /// Memory usage statistics
+    pub memory_stats: MemoryStats,
+    /// Cache performance statistics
+    pub cache_stats: CacheStats,
+    /// Transposition table integration statistics
+    pub tt_integration_hits: u64,
+    /// Number of TT integration updates
+    pub tt_integration_updates: u64,
+    /// Number of cutoff updates from TT
+    pub tt_cutoff_updates: u64,
+    /// Number of exact updates from TT
+    pub tt_exact_updates: u64,
+    /// Number of bound updates from TT
+    pub tt_bound_updates: u64,
+    /// Number of killer moves from TT
+    pub killer_moves_from_tt: u64,
+    /// Number of PV moves from TT
+    pub pv_moves_from_tt: u64,
+    /// Number of history updates from TT
+    pub history_updates_from_tt: u64,
+    /// Number of cutoff history updates
+    pub cutoff_history_updates: u64,
+    /// Number of opening book integrations
+    pub opening_book_integrations: u64,
+    /// Number of tablebase integrations
+    pub tablebase_integrations: u64,
+    /// Number of analysis mode orderings
+    pub analysis_orderings: u64,
+    /// Number of phase-specific orderings
+    pub phase_specific_orderings: u64,
 }
 
-// TODO: Extract additional statistics structures from move_ordering.rs:
-// - HotPathStats
-// - HeuristicStats
-// - TimingStats
-// - MemoryStats
-// - CacheStats
-// - HeuristicPerformance
-// - OperationTiming
-// - MemoryBreakdown
-// - AllocationStats
-// - FragmentationStats
-// - PerformanceChartData
-// - PerformanceTrendAnalysis
-// - AdvancedIntegrationStats
-// And related methods for updating/accessing these statistics
+/// Hot path performance statistics for profiling bottlenecks
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HotPathStats {
+    /// Number of score_move calls
+    pub score_move_calls: u64,
+    /// Number of cache lookups
+    pub cache_lookups: u64,
+    /// Number of hash calculations
+    pub hash_calculations: u64,
+    /// Time spent in score_move (microseconds)
+    pub score_move_time_us: u64,
+    /// Time spent in cache operations (microseconds)
+    pub cache_time_us: u64,
+    /// Time spent in hash calculations (microseconds)
+    pub hash_time_us: u64,
+}
 
+/// Detailed heuristic statistics for tracking individual heuristic performance
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HeuristicStats {
+    /// Capture move statistics
+    pub capture_stats: HeuristicPerformance,
+    /// Promotion move statistics
+    pub promotion_stats: HeuristicPerformance,
+    /// Tactical move statistics
+    pub tactical_stats: HeuristicPerformance,
+    /// Piece value statistics
+    pub piece_value_stats: HeuristicPerformance,
+    /// Position value statistics
+    pub position_stats: HeuristicPerformance,
+    /// Development move statistics
+    pub development_stats: HeuristicPerformance,
+    /// Quiet move statistics
+    pub quiet_stats: HeuristicPerformance,
+    /// PV move statistics
+    pub pv_stats: HeuristicPerformance,
+    /// Killer move statistics
+    pub killer_stats: HeuristicPerformance,
+    /// History move statistics
+    pub history_stats: HeuristicPerformance,
+    /// SEE move statistics
+    pub see_stats: HeuristicPerformance,
+}
+
+/// Individual heuristic performance metrics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HeuristicPerformance {
+    /// Number of times this heuristic was applied
+    pub applications: u64,
+    /// Number of times this heuristic contributed to the best move
+    pub best_move_contributions: u64,
+    /// Average score contribution from this heuristic
+    pub avg_score_contribution: f64,
+    /// Total score contribution from this heuristic
+    pub total_score_contribution: i64,
+    /// Time spent in this heuristic (microseconds)
+    pub execution_time_us: u64,
+    /// Average execution time per application (microseconds)
+    pub avg_execution_time_us: f64,
+}
+
+/// Advanced timing statistics for detailed performance analysis
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct TimingStats {
+    /// Move scoring timing breakdown
+    pub move_scoring_times: OperationTiming,
+    /// Move ordering timing breakdown
+    pub move_ordering_times: OperationTiming,
+    /// Cache operation timing breakdown
+    pub cache_times: OperationTiming,
+    /// Hash calculation timing breakdown
+    pub hash_times: OperationTiming,
+    /// SEE calculation timing breakdown
+    pub see_times: OperationTiming,
+    /// PV move retrieval timing breakdown
+    pub pv_times: OperationTiming,
+    /// Killer move operations timing breakdown
+    pub killer_times: OperationTiming,
+    /// History table operations timing breakdown
+    pub history_times: OperationTiming,
+}
+
+/// Timing statistics for a specific operation
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct OperationTiming {
+    /// Total time spent in this operation (microseconds)
+    pub total_time_us: u64,
+    /// Number of operations performed
+    pub operation_count: u64,
+    /// Average time per operation (microseconds)
+    pub avg_time_us: f64,
+    /// Minimum time recorded (microseconds)
+    pub min_time_us: u64,
+    /// Maximum time recorded (microseconds)
+    pub max_time_us: u64,
+    /// Standard deviation of operation times
+    pub std_dev_time_us: f64,
+}
+
+/// Detailed memory usage statistics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct MemoryStats {
+    /// Current memory usage breakdown
+    pub current_usage: MemoryBreakdown,
+    /// Peak memory usage breakdown
+    pub peak_usage: MemoryBreakdown,
+    /// Memory allocation statistics
+    pub allocation_stats: AllocationStats,
+    /// Memory fragmentation metrics
+    pub fragmentation_stats: FragmentationStats,
+}
+
+/// Memory usage breakdown by component
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct MemoryBreakdown {
+    /// Move score cache memory usage
+    pub move_score_cache_bytes: usize,
+    /// Fast cache memory usage
+    pub fast_cache_bytes: usize,
+    /// PV move cache memory usage
+    pub pv_cache_bytes: usize,
+    /// Killer moves memory usage
+    pub killer_moves_bytes: usize,
+    /// History table memory usage
+    pub history_table_bytes: usize,
+    /// SEE cache memory usage
+    pub see_cache_bytes: usize,
+    /// Object pools memory usage
+    pub object_pools_bytes: usize,
+    /// Total memory usage
+    pub total_bytes: usize,
+}
+
+/// Memory allocation statistics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct AllocationStats {
+    /// Total number of allocations
+    pub total_allocations: u64,
+    /// Number of deallocations
+    pub total_deallocations: u64,
+    /// Current number of active allocations
+    pub active_allocations: u64,
+    /// Peak number of active allocations
+    pub peak_allocations: u64,
+    /// Average allocation size
+    pub avg_allocation_size: f64,
+    /// Total memory allocated
+    pub total_allocated_bytes: u64,
+}
+
+/// Memory fragmentation statistics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct FragmentationStats {
+    /// Fragmentation percentage
+    pub fragmentation_percentage: f64,
+    /// Number of free memory blocks
+    pub free_blocks: u64,
+    /// Average free block size
+    pub avg_free_block_size: f64,
+    /// Largest free block size
+    pub largest_free_block: u64,
+}
+
+/// Cache performance statistics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CacheStats {
+    /// Move score cache statistics
+    pub move_score_cache: CachePerformance,
+    /// Fast cache statistics
+    pub fast_cache: CachePerformance,
+    /// PV move cache statistics
+    pub pv_cache: CachePerformance,
+    /// SEE cache statistics
+    pub see_cache: CachePerformance,
+}
+
+/// Cache performance metrics
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CachePerformance {
+    /// Cache hit rate percentage
+    pub hit_rate: f64,
+    /// Total cache hits
+    pub hits: u64,
+    /// Total cache misses
+    pub misses: u64,
+    /// Cache evictions
+    pub evictions: u64,
+    /// Cache insertions
+    pub insertions: u64,
+    /// Current cache size
+    pub current_size: usize,
+    /// Maximum cache size
+    pub max_size: usize,
+    /// Cache utilization percentage
+    pub utilization: f64,
+}
+
+/// Cache size information for monitoring
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CacheSizes {
+    /// Move score cache size
+    pub move_score_cache: usize,
+    /// Fast cache size
+    pub fast_cache: usize,
+    /// PV cache size
+    pub pv_cache: usize,
+    /// SEE cache size
+    pub see_cache: usize,
+    /// History table size
+    pub history_table: usize,
+}
+
+/// Bottleneck analysis results
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BottleneckAnalysis {
+    /// List of identified bottlenecks
+    pub bottlenecks: Vec<Bottleneck>,
+    /// Overall performance score (0-100)
+    pub overall_score: u8,
+}
+
+/// Individual bottleneck information
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Bottleneck {
+    /// Category of the bottleneck
+    pub category: BottleneckCategory,
+    /// Severity of the bottleneck
+    pub severity: BottleneckSeverity,
+    /// Description of the bottleneck
+    pub description: String,
+    /// Recommendation for fixing the bottleneck
+    pub recommendation: String,
+}
+
+/// Categories of performance bottlenecks
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub enum BottleneckCategory {
+    /// Cache-related performance issues
+    Cache,
+    /// Hot path performance issues
+    HotPath,
+    /// Memory usage issues
+    Memory,
+    /// SEE cache performance issues
+    SEECache,
+    /// Hash calculation issues
+    HashCalculation,
+}
+
+/// Severity levels for bottlenecks
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub enum BottleneckSeverity {
+    /// Critical issue requiring immediate attention
+    Critical,
+    /// High priority issue
+    High,
+    /// Medium priority issue
+    Medium,
+    /// Low priority issue
+    Low,
+}
+
+/// Performance summary for quick analysis
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PerformanceSummary {
+    /// Total moves ordered
+    pub total_moves_ordered: u64,
+    /// Average ordering time per operation
+    pub avg_ordering_time_us: f64,
+    /// Cache hit rate percentage
+    pub cache_hit_rate: f64,
+    /// SEE cache hit rate percentage
+    pub see_cache_hit_rate: f64,
+    /// Current memory usage in MB
+    pub memory_usage_mb: f64,
+    /// Peak memory usage in MB
+    pub peak_memory_mb: f64,
+    /// Most effective heuristic
+    pub most_effective_heuristic: String,
+    /// Overall performance score (0-100)
+    pub performance_score: u8,
+    /// Number of identified bottlenecks
+    pub bottleneck_count: usize,
+}
+
+/// Performance chart data for visualization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PerformanceChartData {
+    /// Cache hit rates for different caches
+    pub cache_hit_rates: CacheHitRates,
+    /// Heuristic effectiveness percentages
+    pub heuristic_effectiveness: HeuristicEffectiveness,
+    /// Memory usage trend data
+    pub memory_usage_trend: MemoryUsageTrend,
+    /// Timing breakdown data
+    pub timing_breakdown: TimingBreakdown,
+}
+
+/// Cache hit rates for visualization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CacheHitRates {
+    /// Move score cache hit rate
+    pub move_score_cache: f64,
+    /// Fast cache hit rate
+    pub fast_cache: f64,
+    /// PV cache hit rate
+    pub pv_cache: f64,
+    /// SEE cache hit rate
+    pub see_cache: f64,
+}
+
+/// Heuristic effectiveness for visualization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HeuristicEffectiveness {
+    /// Capture heuristic effectiveness
+    pub capture: f64,
+    /// Promotion heuristic effectiveness
+    pub promotion: f64,
+    /// Tactical heuristic effectiveness
+    pub tactical: f64,
+    /// PV heuristic effectiveness
+    pub pv: f64,
+    /// Killer heuristic effectiveness
+    pub killer: f64,
+    /// History heuristic effectiveness
+    pub history: f64,
+}
+
+/// Memory usage trend for visualization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MemoryUsageTrend {
+    /// Current memory usage in MB
+    pub current_mb: f64,
+    /// Peak memory usage in MB
+    pub peak_mb: f64,
+    /// Total allocation count
+    pub allocation_count: u64,
+}
+
+/// Timing breakdown for visualization
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TimingBreakdown {
+    /// Average move scoring time in microseconds
+    pub move_scoring_avg_us: f64,
+    /// Average move ordering time in microseconds
+    pub move_ordering_avg_us: f64,
+    /// Average cache operation time in microseconds
+    pub cache_avg_us: f64,
+    /// Average hash calculation time in microseconds
+    pub hash_avg_us: f64,
+}
+
+/// Performance trend analysis results
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PerformanceTrendAnalysis {
+    /// Cache efficiency trend analysis
+    pub cache_efficiency_trend: TrendAnalysis,
+    /// Memory usage trend analysis
+    pub memory_usage_trend: TrendAnalysis,
+    /// Heuristic effectiveness trend analysis
+    pub heuristic_effectiveness_trend: TrendAnalysis,
+    /// Timing trend analysis
+    pub timing_trend: TrendAnalysis,
+    /// Overall performance trend analysis
+    pub overall_performance_trend: TrendAnalysis,
+}
+
+/// Individual trend analysis
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TrendAnalysis {
+    /// Direction of the trend
+    pub direction: TrendDirection,
+    /// Confidence level in the trend (0.0 to 1.0)
+    pub confidence: f64,
+    /// Recommendation based on the trend
+    pub recommendation: String,
+}
+
+/// Trend direction indicators
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub enum TrendDirection {
+    /// Performance is improving
+    Improving,
+    /// Performance is declining
+    Declining,
+    /// Performance is stable
+    Stable,
+}
+
+/// Statistics for advanced integrations
+#[derive(Debug, Clone, Default)]
+pub struct AdvancedIntegrationStats {
+    /// Number of opening book integrations
+    pub opening_book_integrations: u64,
+    /// Number of tablebase integrations
+    pub tablebase_integrations: u64,
+    /// Number of analysis mode orderings
+    pub analysis_orderings: u64,
+    /// Number of phase-specific orderings
+    pub phase_specific_orderings: u64,
+}
+
+// ==================== Transposition Table Integration Statistics ====================
+
+/// Statistics for transposition table integration
+#[derive(Debug, Clone, PartialEq)]
+pub struct TTIntegrationStats {
+    /// Number of TT integration hits
+    pub tt_integration_hits: u64,
+    /// Number of TT integration updates
+    pub tt_integration_updates: u64,
+    /// Number of cutoff updates from TT
+    pub tt_cutoff_updates: u64,
+    /// Number of exact updates from TT
+    pub tt_exact_updates: u64,
+    /// Number of bound updates from TT
+    pub tt_bound_updates: u64,
+    /// Number of killer moves from TT
+    pub killer_moves_from_tt: u64,
+    /// Number of PV moves from TT
+    pub pv_moves_from_tt: u64,
+    /// Number of history updates from TT
+    pub history_updates_from_tt: u64,
+    /// Number of cutoff history updates
+    pub cutoff_history_updates: u64,
+}
+
+// ==================== Performance Tuning Types ====================
+
+/// Result of runtime performance tuning
+#[derive(Debug, Clone)]
+pub struct PerformanceTuningResult {
+    /// Number of adjustments made
+    pub adjustments_made: usize,
+    /// List of adjustments applied
+    pub adjustments: Vec<String>,
+    /// Cache hit rate before tuning
+    pub cache_hit_rate_before: f64,
+    /// Average ordering time before tuning
+    pub avg_ordering_time_before: f64,
+}
+
+/// Performance monitoring report
+#[derive(Debug, Clone)]
+pub struct PerformanceMonitoringReport {
+    /// Overall health score (0-100)
+    pub overall_health_score: f64,
+    /// Current cache hit rate
+    pub cache_hit_rate: f64,
+    /// Average ordering time in microseconds
+    pub avg_ordering_time_us: f64,
+    /// Memory usage in MB
+    pub memory_usage_mb: f64,
+    /// PV move hit rate
+    pub pv_hit_rate: f64,
+    /// Killer move hit rate
+    pub killer_hit_rate: f64,
+    /// History heuristic hit rate
+    pub history_hit_rate: f64,
+    /// Performance warnings
+    pub warnings: Vec<String>,
+    /// Tuning recommendations
+    pub recommendations: Vec<String>,
+}
+
+/// Automatic optimization result
+#[derive(Debug, Clone)]
+pub struct AutoOptimizationResult {
+    /// Number of optimizations applied
+    pub optimizations_applied: usize,
+    /// List of optimizations
+    pub optimizations: Vec<String>,
+    /// Performance snapshot before optimization
+    pub performance_before: PerformanceSnapshot,
+    /// Performance snapshot after optimization
+    pub performance_after: PerformanceSnapshot,
+}
+
+/// Performance snapshot for comparison
+#[derive(Debug, Clone)]
+pub struct PerformanceSnapshot {
+    /// Cache hit rate at snapshot time
+    pub cache_hit_rate: f64,
+    /// Average ordering time at snapshot time
+    pub avg_ordering_time_us: f64,
+    /// Memory usage at snapshot time
+    pub memory_usage_bytes: usize,
+}
+
+/// Performance comparison between two snapshots
+#[derive(Debug, Clone)]
+pub struct PerformanceComparison {
+    /// Change in cache hit rate
+    pub cache_hit_rate_change: f64,
+    /// Change in ordering time (negative is better)
+    pub ordering_time_change: f64,
+    /// Change in memory usage (negative is better)
+    pub memory_usage_change: i64,
+    /// Whether performance improved overall
+    pub is_improved: bool,
+}
+
+/// Tuning recommendation
+#[derive(Debug, Clone)]
+pub struct TuningRecommendation {
+    /// Category of the recommendation
+    pub category: TuningCategory,
+    /// Priority level
+    pub priority: TuningPriority,
+    /// Description of the recommendation
+    pub description: String,
+    /// Expected impact of applying the recommendation
+    pub expected_impact: String,
+}
+
+/// Tuning category
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TuningCategory {
+    /// Cache size tuning
+    CacheSize,
+    /// Weight adjustment
+    Weights,
+    /// Performance optimization
+    Performance,
+    /// Memory optimization
+    Memory,
+    /// Heuristic configuration
+    Heuristics,
+}
+
+/// Tuning priority level
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TuningPriority {
+    /// Low priority - optional optimization
+    Low,
+    /// Medium priority - recommended optimization
+    Medium,
+    /// High priority - important optimization
+    High,
+    /// Critical - should be applied immediately
+    Critical,
+}
