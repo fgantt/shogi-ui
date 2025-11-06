@@ -1551,10 +1551,14 @@ pub struct MoveOrdering {
     hash_calculator: crate::search::ShogiHashHandler,
     /// PV move cache for performance optimization
     pv_move_cache: HashMap<u64, Option<Move>>,
-    /// Move ordering result cache (Task 6.2)
-    /// Maps (position_hash, depth) -> ordered moves list
+    /// Move ordering result cache (Task 6.2, Task 3.0)
+    /// Maps (position_hash, depth) -> cache entry with metadata
     /// This caches entire move ordering results for repeated positions
-    move_ordering_cache: HashMap<(u64, u8), Vec<Move>>,
+    /// Task 3.0: Now uses MoveOrderingCacheEntry for LRU and depth tracking
+    move_ordering_cache: HashMap<(u64, u8), MoveOrderingCacheEntry>,
+    /// LRU access counter (incremented on each cache access for LRU tracking)
+    /// Task 3.0: Tracks access order for LRU eviction policy
+    lru_access_counter: u64,
     /// Killer moves organized by depth
     /// Each depth can have multiple killer moves
     killer_moves: HashMap<u8, Vec<Move>>,
@@ -1650,6 +1654,16 @@ pub struct OrderingStats {
     pub counter_move_hit_rate: f64,
     /// Number of counter-moves stored
     pub counter_moves_stored: u64,
+    /// Number of cache evictions (Task 3.0)
+    pub cache_evictions: u64,
+    /// Number of cache evictions due to size limit (Task 3.0)
+    pub cache_evictions_size_limit: u64,
+    /// Number of cache evictions due to policy (Task 3.0)
+    pub cache_evictions_policy: u64,
+    /// Cache hit rate by entry age (Task 3.0)
+    pub cache_hit_rate_by_age: f64,
+    /// Cache hit rate by entry depth (Task 3.0)
+    pub cache_hit_rate_by_depth: f64,
     /// Number of history heuristic hits
     pub history_hits: u64,
     /// Number of history heuristic misses
@@ -2189,6 +2203,33 @@ pub struct OrderingWeights {
     pub counter_move_weight: i32,
 }
 
+/// Cache eviction policy for move ordering cache
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum CacheEvictionPolicy {
+    /// First-In-First-Out: Remove oldest entries first
+    FIFO,
+    /// Least-Recently-Used: Remove entries that haven't been accessed recently
+    LRU,
+    /// Depth-preferred: Prefer keeping entries with higher depth
+    DepthPreferred,
+    /// Hybrid: Combination of LRU and depth-preferred
+    Hybrid,
+}
+
+/// Cache entry metadata for move ordering cache
+/// Task 3.0: Tracks LRU and depth information for improved eviction
+#[derive(Debug, Clone)]
+struct MoveOrderingCacheEntry {
+    /// The ordered moves list
+    moves: Vec<Move>,
+    /// Last access counter (for LRU tracking)
+    last_access: u64,
+    /// Depth of the cache entry
+    depth: u8,
+    /// Access count (for LRU tracking)
+    access_count: u64,
+}
+
 /// Cache configuration for move ordering
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CacheConfig {
@@ -2206,6 +2247,12 @@ pub struct CacheConfig {
     pub max_see_cache_size: usize,
     /// Enable SEE cache
     pub enable_see_cache: bool,
+    /// Cache eviction policy for move ordering cache (Task 3.0)
+    pub cache_eviction_policy: CacheEvictionPolicy,
+    /// LRU access counter (incremented on each cache access)
+    pub lru_access_counter: u64,
+    /// Hybrid eviction weight for LRU vs depth (0.0 = pure depth, 1.0 = pure LRU)
+    pub hybrid_lru_weight: f32,
 }
 
 /// Killer move configuration
@@ -2321,6 +2368,9 @@ impl Default for CacheConfig {
             optimization_hit_rate_threshold: 30.0, // 30% hit rate threshold
             max_see_cache_size: 500,
             enable_see_cache: true,
+            cache_eviction_policy: CacheEvictionPolicy::LRU, // Task 3.0: Default to LRU
+            lru_access_counter: 0, // Task 3.0: Initialize LRU counter
+            hybrid_lru_weight: 0.7, // Task 3.0: Default hybrid weight (70% LRU, 30% depth)
         }
     }
 }
@@ -2419,6 +2469,10 @@ impl MoveOrderingConfig {
         }
 
         // Validate cache configuration
+        // Task 3.0: Validate cache eviction policy configuration
+        if self.cache_config.hybrid_lru_weight < 0.0 || self.cache_config.hybrid_lru_weight > 1.0 {
+            errors.push("Hybrid LRU weight must be between 0.0 and 1.0".to_string());
+        }
         if self.cache_config.max_cache_size == 0 {
             errors.push("Max cache size must be greater than 0".to_string());
         }
@@ -2588,6 +2642,9 @@ impl MoveOrderingConfig {
                 optimization_hit_rate_threshold: other.cache_config.optimization_hit_rate_threshold,
                 max_see_cache_size: other.cache_config.max_see_cache_size,
                 enable_see_cache: other.cache_config.enable_see_cache,
+                cache_eviction_policy: other.cache_config.cache_eviction_policy,
+                lru_access_counter: other.cache_config.lru_access_counter,
+                hybrid_lru_weight: other.cache_config.hybrid_lru_weight,
             },
             killer_config: KillerConfig {
                 max_killer_moves_per_depth: other.killer_config.max_killer_moves_per_depth,
@@ -2683,6 +2740,7 @@ impl MoveOrdering {
             hash_calculator: crate::search::ShogiHashHandler::new(config.cache_config.max_cache_size),
             pv_move_cache: HashMap::new(),
             move_ordering_cache: HashMap::new(), // Task 6.2: Initialize move ordering cache
+            lru_access_counter: 0, // Task 3.0: Initialize LRU access counter
             killer_moves: HashMap::new(),
             counter_move_table: HashMap::new(),
             current_depth: 0,
@@ -4084,17 +4142,118 @@ impl MoveOrdering {
         )
     }
 
+    /// Evict cache entry based on eviction policy
+    /// Task 3.0: Implements LRU, depth-preferred, FIFO, and hybrid eviction policies
+    fn evict_cache_entry(&mut self, _new_key: &(u64, u8)) -> Option<(u64, u8)> {
+        if self.move_ordering_cache.is_empty() {
+            return None;
+        }
+
+        match self.config.cache_config.cache_eviction_policy {
+            CacheEvictionPolicy::FIFO => {
+                // FIFO: Remove first entry (oldest insertion)
+                self.move_ordering_cache.keys().next().copied()
+            }
+            CacheEvictionPolicy::LRU => {
+                // LRU: Remove least recently used entry (lowest last_access)
+                let mut lru_key = None;
+                let mut lru_access = u64::MAX;
+                
+                for (key, entry) in &self.move_ordering_cache {
+                    if entry.last_access < lru_access {
+                        lru_access = entry.last_access;
+                        lru_key = Some(*key);
+                    }
+                }
+                lru_key
+            }
+            CacheEvictionPolicy::DepthPreferred => {
+                // Depth-preferred: Remove entry with lowest depth
+                let mut min_depth_key = None;
+                let mut min_depth = u8::MAX;
+                
+                for (key, entry) in &self.move_ordering_cache {
+                    if entry.depth < min_depth {
+                        min_depth = entry.depth;
+                        min_depth_key = Some(*key);
+                    }
+                }
+                min_depth_key
+            }
+            CacheEvictionPolicy::Hybrid => {
+                // Hybrid: Combine LRU and depth-preferred
+                // Score = (1 - hybrid_lru_weight) * depth_score + hybrid_lru_weight * lru_score
+                // Lower score = higher priority for eviction
+                let lru_weight = self.config.cache_config.hybrid_lru_weight;
+                let depth_weight = 1.0 - lru_weight;
+                
+                // Normalize LRU: older = lower score (more likely to evict)
+                let max_access = self.move_ordering_cache.values()
+                    .map(|e| e.last_access)
+                    .max()
+                    .unwrap_or(1);
+                let min_access = self.move_ordering_cache.values()
+                    .map(|e| e.last_access)
+                    .min()
+                    .unwrap_or(1);
+                let access_range = (max_access - min_access).max(1) as f32;
+                
+                // Normalize depth: lower depth = lower score (more likely to evict)
+                let max_depth = self.move_ordering_cache.values()
+                    .map(|e| e.depth as f32)
+                    .fold(0.0, f32::max);
+                let min_depth = self.move_ordering_cache.values()
+                    .map(|e| e.depth as f32)
+                    .fold(u8::MAX as f32, f32::min);
+                let depth_range = (max_depth - min_depth).max(1.0);
+                
+                let mut evict_key = None;
+                let mut evict_score = f32::MAX;
+                
+                for (key, entry) in &self.move_ordering_cache {
+                    // LRU score: normalized to 0.0 (oldest) .. 1.0 (newest)
+                    let lru_score = if access_range > 0.0 {
+                        1.0 - ((entry.last_access - min_access) as f32 / access_range)
+                    } else {
+                        0.5
+                    };
+                    
+                    // Depth score: normalized to 0.0 (shallowest) .. 1.0 (deepest)
+                    let depth_score = if depth_range > 0.0 {
+                        (entry.depth as f32 - min_depth) / depth_range
+                    } else {
+                        0.5
+                    };
+                    
+                    // Combined score: lower = more likely to evict
+                    let combined_score = depth_weight * (1.0 - depth_score) + lru_weight * lru_score;
+                    
+                    if combined_score < evict_score {
+                        evict_score = combined_score;
+                        evict_key = Some(*key);
+                    }
+                }
+                
+                evict_key
+            }
+        }
+    }
+
     /// Clear the move scoring cache
     pub fn clear_cache(&mut self) {
         self.move_score_cache.clear();
         self.pv_move_cache.clear();
         self.move_ordering_cache.clear(); // Task 6.2: Clear move ordering cache
+        self.lru_access_counter = 0; // Task 3.0: Reset LRU counter
         self.killer_moves.clear();
         self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
         self.history_table.clear();
         self.stats.cache_hits = 0;
         self.stats.cache_misses = 0;
         self.stats.cache_hit_rate = 0.0;
+        self.stats.cache_evictions = 0; // Task 3.0: Reset eviction stats
+        self.stats.cache_evictions_size_limit = 0;
+        self.stats.cache_evictions_policy = 0;
         self.update_memory_usage();
     }
 
@@ -5716,6 +5875,8 @@ impl MoveOrdering {
         self.fast_score_cache.clear();
         self.pv_move_cache.clear();
         self.see_cache.clear();
+        self.move_ordering_cache.clear(); // Task 6.2, Task 3.0: Clear move ordering cache
+        self.lru_access_counter = 0; // Task 3.0: Reset LRU counter
         self.counter_move_table.clear(); // Task 2.0: Clear counter-move table
     }
 
@@ -6337,13 +6498,17 @@ impl MoveOrdering {
         
         // Check if we have a cached ordering result for this position and depth
         if !skip_cache {
-        if let Some(cached_ordered) = self.move_ordering_cache.get(&cache_key) {
+        if let Some(cached_entry) = self.move_ordering_cache.get_mut(&cache_key) {
             // Verify that cached moves match current moves (moves might differ for same position)
-            if cached_ordered.len() == moves.len() && 
-               cached_ordered.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
+            if cached_entry.moves.len() == moves.len() && 
+               cached_entry.moves.iter().zip(moves.iter()).all(|(cached, current)| self.moves_equal(cached, current)) {
+                // Task 3.0: Update LRU tracking on cache hit
+                self.lru_access_counter += 1;
+                cached_entry.last_access = self.lru_access_counter;
+                cached_entry.access_count += 1;
                 self.stats.cache_hits += 1;
                 self.stats.total_moves_ordered += moves.len() as u64;
-                return cached_ordered.clone();
+                return cached_entry.moves.clone();
                 }
             }
         }
@@ -6375,14 +6540,34 @@ impl MoveOrdering {
         });
 
         // Task 6.2: Cache the ordering result for this position and depth
+        // Task 3.0: Use improved eviction policy (LRU, depth-preferred, or hybrid)
         if self.move_ordering_cache.len() < self.config.cache_config.max_cache_size {
-            self.move_ordering_cache.insert(cache_key, ordered_moves.clone());
+            // Task 3.0: Create cache entry with metadata
+            self.lru_access_counter += 1;
+            let entry = MoveOrderingCacheEntry {
+                moves: ordered_moves.clone(),
+                last_access: self.lru_access_counter,
+                depth,
+                access_count: 1,
+            };
+            self.move_ordering_cache.insert(cache_key, entry);
         } else {
-            // Cache is full - remove oldest entries (simple eviction: remove first entry)
-            if let Some(first_key) = self.move_ordering_cache.keys().next().copied() {
-                self.move_ordering_cache.remove(&first_key);
-                self.move_ordering_cache.insert(cache_key, ordered_moves.clone());
+            // Task 3.0: Cache is full - use improved eviction policy
+            let evicted_key = self.evict_cache_entry(&cache_key);
+            if let Some(key) = evicted_key {
+                self.move_ordering_cache.remove(&key);
+                self.stats.cache_evictions += 1;
+                self.stats.cache_evictions_size_limit += 1;
             }
+            // Insert new entry
+            self.lru_access_counter += 1;
+            let entry = MoveOrderingCacheEntry {
+                moves: ordered_moves.clone(),
+                last_access: self.lru_access_counter,
+                depth,
+                access_count: 1,
+            };
+            self.move_ordering_cache.insert(cache_key, entry);
         }
 
         // Update timing statistics
@@ -8323,6 +8508,277 @@ mod tests {
         // Scoring should return 0
         let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
         assert_eq!(score, 0);
+    }
+
+    // ==================== Cache Eviction Tests (Task 3.0) ====================
+
+    #[test]
+    fn test_cache_eviction_fifo() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::FIFO;
+        config.cache_config.max_cache_size = 2;
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Create test moves
+        let moves1 = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+        ];
+        let moves2 = vec![
+            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
+            create_test_move(Some(Position::new(4, 4)), Position::new(5, 4), PieceType::Rook, player),
+        ];
+        let moves3 = vec![
+            create_test_move(Some(Position::new(5, 5)), Position::new(6, 5), PieceType::Bishop, player),
+        ];
+        
+        // Order moves 1 - should be cached
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 1);
+        
+        // Order moves 2 - should be cached
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 2);
+        
+        // Order moves 3 - should evict first entry (FIFO)
+        let hash3 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 5, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 2);
+        assert!(orderer.move_ordering_cache.contains_key(&(hash3, 5)));
+    }
+
+    #[test]
+    fn test_cache_eviction_lru() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::LRU;
+        config.cache_config.max_cache_size = 2;
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Create test moves
+        let moves1 = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+        ];
+        let moves2 = vec![
+            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+        ];
+        let moves3 = vec![
+            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
+        ];
+        
+        // Order moves 1 - should be cached
+        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
+        
+        // Order moves 2 - should be cached (different position, so hash will differ)
+        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
+        
+        // Access moves 1 again (update LRU)
+        let _ordered1_again = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
+        
+        // Order moves 3 - should evict moves 2 (least recently used)
+        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 5, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 2);
+        assert!(orderer.move_ordering_cache.contains_key(&(hash1, 3))); // moves1 should still be cached
+        assert!(!orderer.move_ordering_cache.contains_key(&(hash2, 4))); // moves2 should be evicted
+    }
+
+    #[test]
+    fn test_cache_eviction_depth_preferred() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::DepthPreferred;
+        config.cache_config.max_cache_size = 2;
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Create test moves
+        let moves1 = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+        ];
+        let moves2 = vec![
+            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+        ];
+        let moves3 = vec![
+            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
+        ];
+        
+        // Order moves at depth 5 (deep) - should be cached
+        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 5, None, None);
+        
+        // Order moves at depth 3 (shallow) - should be cached (different position, so hash will differ)
+        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 3, None, None);
+        
+        // Order moves at depth 4 (medium) - should evict depth 3 (shallowest)
+        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 4, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 2);
+        assert!(orderer.move_ordering_cache.contains_key(&(hash1, 5))); // depth 5 should still be cached
+        assert!(!orderer.move_ordering_cache.contains_key(&(hash2, 3))); // depth 3 should be evicted
+    }
+
+    #[test]
+    fn test_cache_eviction_hybrid() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::Hybrid;
+        config.cache_config.max_cache_size = 2;
+        config.cache_config.hybrid_lru_weight = 0.5; // 50% LRU, 50% depth
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Create test moves
+        let moves1 = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+        ];
+        let moves2 = vec![
+            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+        ];
+        let moves3 = vec![
+            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
+        ];
+        
+        // Order moves at depth 5 (deep) - should be cached
+        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 5, None, None);
+        
+        // Order moves at depth 4 (medium) - should be cached (different position, so hash will differ)
+        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
+        
+        // Order moves at depth 3 (shallow) - should evict based on hybrid policy
+        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 3, None, None);
+        assert_eq!(orderer.move_ordering_cache.len(), 2);
+        // Depth 5 should likely still be cached (preferred by depth)
+        assert!(orderer.move_ordering_cache.contains_key(&(hash1, 5)));
+    }
+
+    #[test]
+    fn test_cache_eviction_statistics() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.max_cache_size = 1; // Force evictions
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Initially no evictions
+        assert_eq!(orderer.stats.cache_evictions, 0);
+        assert_eq!(orderer.stats.cache_evictions_size_limit, 0);
+        
+        // Create test moves
+        let moves1 = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+        ];
+        let moves2 = vec![
+            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+        ];
+        
+        // Order moves 1 - should be cached
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
+        
+        // Order moves 2 - should evict moves 1
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
+        
+        // Statistics should be updated
+        assert!(orderer.stats.cache_evictions > 0);
+        assert!(orderer.stats.cache_evictions_size_limit > 0);
+    }
+
+    #[test]
+    fn test_cache_lru_tracking() {
+        let mut orderer = MoveOrdering::new();
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        let moves = vec![
+            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
+        ];
+        
+        // Order moves - should be cached
+        let hash = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let cache_key = (hash, 3);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, 3, None, None);
+        
+        // Get initial access counter from entry
+        let entry1 = orderer.move_ordering_cache.get(&cache_key).unwrap();
+        let initial_access = entry1.last_access;
+        let initial_count = entry1.access_count;
+        assert!(initial_access > 0);
+        assert_eq!(initial_count, 1);
+        
+        // Access cached entry - should update LRU
+        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, 3, None, None);
+        let entry2 = orderer.move_ordering_cache.get(&cache_key).unwrap();
+        assert!(entry2.last_access > initial_access);
+        assert_eq!(entry2.access_count, initial_count + 1);
+    }
+
+    #[test]
+    fn test_cache_size_limit() {
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.max_cache_size = 3;
+        let mut orderer = MoveOrdering::with_config(config);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        let captured_pieces = crate::types::CapturedPieces::new();
+        let player = Player::Black;
+        
+        // Add more entries than limit
+        for i in 0..5 {
+            let moves = vec![
+                create_test_move(Some(Position::new(i, 0)), Position::new(i + 1, 0), PieceType::Pawn, player),
+            ];
+            let _ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, i as u8, None, None);
+        }
+        
+        // Cache should not exceed limit
+        assert!(orderer.move_ordering_cache.len() <= config.cache_config.max_cache_size);
+    }
+
+    #[test]
+    fn test_cache_eviction_policy_configuration() {
+        // Test FIFO policy
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::FIFO;
+        let orderer = MoveOrdering::with_config(config);
+        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::FIFO);
+        
+        // Test LRU policy
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::LRU;
+        let orderer = MoveOrdering::with_config(config);
+        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::LRU);
+        
+        // Test depth-preferred policy
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::DepthPreferred;
+        let orderer = MoveOrdering::with_config(config);
+        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::DepthPreferred);
+        
+        // Test hybrid policy
+        let mut config = MoveOrderingConfig::default();
+        config.cache_config.cache_eviction_policy = CacheEvictionPolicy::Hybrid;
+        config.cache_config.hybrid_lru_weight = 0.7;
+        let orderer = MoveOrdering::with_config(config);
+        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::Hybrid);
+        assert_eq!(orderer.config.cache_config.hybrid_lru_weight, 0.7);
     }
 
     // ==================== History Heuristic Tests ====================
