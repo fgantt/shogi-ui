@@ -1584,6 +1584,15 @@ pub struct MoveOrdering {
     current_game_phase: crate::types::GamePhase,
     /// Time-based aging counter (Task 4.0)
     time_aging_counter: u64,
+    /// Heuristic effectiveness tracking (Task 5.0)
+    /// Maps heuristic name -> effectiveness metrics
+    heuristic_effectiveness: HashMap<String, HeuristicEffectivenessMetrics>,
+    /// Weight change history (Task 5.0)
+    /// Tracks weight changes over time for learning analysis
+    weight_change_history: Vec<WeightChange>,
+    /// Learning update counter (Task 5.0)
+    /// Tracks number of games/moves for learning frequency
+    learning_update_counter: u64,
     /// Simple history table for position-based history (9x9 board)
     simple_history_table: [[i32; 9]; 9],
     /// History update counter for aging
@@ -1678,6 +1687,10 @@ pub struct OrderingStats {
     pub cache_hit_rate_by_age: f64,
     /// Cache hit rate by entry depth (Task 3.0)
     pub cache_hit_rate_by_depth: f64,
+    /// Number of weight adjustments made (Task 5.0)
+    pub weight_adjustments: u64,
+    /// Learning effectiveness improvement (Task 5.0)
+    pub learning_effectiveness: f64,
     /// Number of history heuristic hits
     pub history_hits: u64,
     /// Number of history heuristic misses
@@ -2177,6 +2190,8 @@ pub struct MoveOrderingConfig {
     pub counter_move_config: CounterMoveConfig,
     /// History heuristic configuration
     pub history_config: HistoryConfig,
+    /// Learning configuration (Task 5.0)
+    pub learning_config: LearningConfig,
     /// Performance configuration
     pub performance_config: PerformanceConfig,
     /// Debug and logging configuration
@@ -2355,6 +2370,62 @@ pub struct PerformanceConfig {
     pub enable_auto_optimization: bool,
 }
 
+/// Learning configuration for move ordering
+/// Task 5.0: Configuration for adaptive weight adjustment
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LearningConfig {
+    /// Enable adaptive weight adjustment based on effectiveness
+    pub enable_learning: bool,
+    /// Learning rate - how quickly weights adjust (0.0 to 1.0)
+    pub learning_rate: f32,
+    /// Learning frequency - how often weights are updated (number of games/moves)
+    pub learning_frequency: u64,
+    /// Minimum games/moves before adjusting weights
+    pub min_games_for_learning: u64,
+    /// Minimum effectiveness difference to trigger weight adjustment
+    pub min_effectiveness_diff: f32,
+    /// Maximum weight change per adjustment (as percentage)
+    pub max_weight_change_percent: f32,
+    /// Enable weight bounds (prevent extreme values)
+    pub enable_weight_bounds: bool,
+    /// Minimum weight value (if bounds enabled)
+    pub min_weight: i32,
+    /// Maximum weight value (if bounds enabled)
+    pub max_weight: i32,
+}
+
+/// Heuristic effectiveness metrics for learning
+/// Task 5.0: Tracks effectiveness of each heuristic for weight adjustment
+#[derive(Debug, Clone)]
+pub struct HeuristicEffectivenessMetrics {
+    /// Hit rate for this heuristic (0.0 to 1.0)
+    pub hit_rate: f64,
+    /// Number of times this heuristic caused a cutoff
+    pub cutoff_count: u64,
+    /// Total number of times this heuristic was used
+    pub total_uses: u64,
+    /// Effectiveness score (calculated from hit rate and cutoff count)
+    pub effectiveness_score: f64,
+    /// Last update timestamp
+    pub last_update: u64,
+}
+
+/// Weight change history entry
+/// Task 5.0: Tracks weight changes over time
+#[derive(Debug, Clone)]
+pub struct WeightChange {
+    /// Weight name/field
+    pub weight_name: String,
+    /// Old weight value
+    pub old_weight: i32,
+    /// New weight value
+    pub new_weight: i32,
+    /// Reason for change
+    pub reason: String,
+    /// Timestamp of change
+    pub timestamp: u64,
+}
+
 /// Debug and logging configuration
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DebugConfig {
@@ -2376,6 +2447,7 @@ impl Default for MoveOrderingConfig {
             killer_config: KillerConfig::default(),
             counter_move_config: CounterMoveConfig::default(),
             history_config: HistoryConfig::default(),
+            learning_config: LearningConfig::default(),
             performance_config: PerformanceConfig::default(),
             debug_config: DebugConfig::default(),
         }
@@ -2474,6 +2546,22 @@ impl Default for PerformanceConfig {
     }
 }
 
+impl Default for LearningConfig {
+    fn default() -> Self {
+        Self {
+            enable_learning: false, // Task 5.0: Disabled by default
+            learning_rate: 0.1, // Task 5.0: 10% adjustment per update
+            learning_frequency: 100, // Task 5.0: Update every 100 games/moves
+            min_games_for_learning: 10, // Task 5.0: Minimum 10 games before learning
+            min_effectiveness_diff: 0.05, // Task 5.0: 5% minimum difference to trigger adjustment
+            max_weight_change_percent: 0.2, // Task 5.0: Maximum 20% change per adjustment
+            enable_weight_bounds: true, // Task 5.0: Enable weight bounds by default
+            min_weight: 0, // Task 5.0: Minimum weight (non-negative)
+            max_weight: 20000, // Task 5.0: Maximum weight (reasonable upper bound)
+        }
+    }
+}
+
 impl Default for DebugConfig {
     fn default() -> Self {
         Self {
@@ -2519,6 +2607,25 @@ impl MoveOrderingConfig {
         }
         if self.weights.history_weight < 0 {
             errors.push("History weight must be non-negative".to_string());
+        }
+
+        // Validate learning configuration (Task 5.0)
+        if self.learning_config.learning_rate < 0.0 || self.learning_config.learning_rate > 1.0 {
+            errors.push("Learning rate must be between 0.0 and 1.0".to_string());
+        }
+        if self.learning_config.min_effectiveness_diff < 0.0 || self.learning_config.min_effectiveness_diff > 1.0 {
+            errors.push("Minimum effectiveness difference must be between 0.0 and 1.0".to_string());
+        }
+        if self.learning_config.max_weight_change_percent < 0.0 || self.learning_config.max_weight_change_percent > 1.0 {
+            errors.push("Maximum weight change percent must be between 0.0 and 1.0".to_string());
+        }
+        if self.learning_config.enable_weight_bounds {
+            if self.learning_config.min_weight < 0 {
+                errors.push("Minimum weight must be non-negative".to_string());
+            }
+            if self.learning_config.max_weight <= self.learning_config.min_weight {
+                errors.push("Maximum weight must be greater than minimum weight".to_string());
+            }
         }
 
         // Validate cache configuration
@@ -2727,6 +2834,17 @@ impl MoveOrderingConfig {
                 middlegame_aging_factor: other.history_config.middlegame_aging_factor,
                 endgame_aging_factor: other.history_config.endgame_aging_factor,
             },
+            learning_config: LearningConfig {
+                enable_learning: other.learning_config.enable_learning,
+                learning_rate: other.learning_config.learning_rate,
+                learning_frequency: other.learning_config.learning_frequency,
+                min_games_for_learning: other.learning_config.min_games_for_learning,
+                min_effectiveness_diff: other.learning_config.min_effectiveness_diff,
+                max_weight_change_percent: other.learning_config.max_weight_change_percent,
+                enable_weight_bounds: other.learning_config.enable_weight_bounds,
+                min_weight: other.learning_config.min_weight,
+                max_weight: other.learning_config.max_weight,
+            },
             performance_config: PerformanceConfig {
                 enable_performance_monitoring: other.performance_config.enable_performance_monitoring,
                 monitoring_interval_ms: other.performance_config.monitoring_interval_ms,
@@ -2812,6 +2930,9 @@ impl MoveOrdering {
             phase_history_tables: HashMap::new(), // Task 4.0: Initialize phase-aware history tables
             current_game_phase: crate::types::GamePhase::Opening, // Task 4.0: Default to opening phase
             time_aging_counter: 0, // Task 4.0: Initialize time-based aging counter
+            heuristic_effectiveness: HashMap::new(), // Task 5.0: Initialize heuristic effectiveness tracking
+            weight_change_history: Vec::new(), // Task 5.0: Initialize weight change history
+            learning_update_counter: 0, // Task 5.0: Initialize learning update counter
             history_update_counter: 0,
             pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator::new(),
             see_cache: HashMap::new(),
@@ -4083,6 +4204,216 @@ impl MoveOrdering {
     pub fn set_weights(&mut self, weights: OrderingWeights) {
         self.config.weights = weights;
     }
+
+    // Task 5.0: Learning methods
+
+    /// Record heuristic effectiveness (Task 5.0)
+    /// Called when a heuristic is used to track its effectiveness
+    pub fn record_heuristic_effectiveness(&mut self, heuristic_name: &str, caused_cutoff: bool) {
+        if !self.config.learning_config.enable_learning {
+            return;
+        }
+
+        let entry = self.heuristic_effectiveness.entry(heuristic_name.to_string())
+            .or_insert_with(|| HeuristicEffectivenessMetrics {
+                hit_rate: 0.0,
+                cutoff_count: 0,
+                total_uses: 0,
+                effectiveness_score: 0.0,
+                last_update: self.history_update_counter,
+            });
+
+        entry.total_uses += 1;
+        if caused_cutoff {
+            entry.cutoff_count += 1;
+        }
+
+        // Update hit rate
+        if entry.total_uses > 0 {
+            entry.hit_rate = entry.cutoff_count as f64 / entry.total_uses as f64;
+        }
+
+        // Calculate effectiveness score (weighted combination of hit rate and cutoff count)
+        // Formula: effectiveness = hit_rate * 0.7 + (cutoff_count / max(total_uses, 1)) * 0.3
+        let cutoff_ratio = if entry.total_uses > 0 {
+            entry.cutoff_count as f64 / entry.total_uses as f64
+        } else {
+            0.0
+        };
+        entry.effectiveness_score = entry.hit_rate * 0.7 + cutoff_ratio * 0.3;
+
+        entry.last_update = self.history_update_counter;
+    }
+
+    /// Adjust weights based on effectiveness statistics (Task 5.0)
+    /// Uses effectiveness scores to adjust heuristic weights
+    pub fn adjust_weights_based_on_effectiveness(&mut self) -> bool {
+        if !self.config.learning_config.enable_learning {
+            return false;
+        }
+
+        // Check if we have enough games/moves for learning
+        if self.learning_update_counter < self.config.learning_config.min_games_for_learning {
+            return false;
+        }
+
+        // Check if it's time to update (based on learning frequency)
+        if self.learning_update_counter % self.config.learning_config.learning_frequency != 0 {
+            return false;
+        }
+
+        let mut weights_adjusted = false;
+        let mut adjustments_made = 0;
+
+        // Calculate average effectiveness score
+        let avg_effectiveness: f64 = self.heuristic_effectiveness.values()
+            .map(|m| m.effectiveness_score)
+            .sum::<f64>() / self.heuristic_effectiveness.len().max(1) as f64;
+
+        // Extract learning config values to avoid borrow checker issues
+        let learning_rate = self.config.learning_config.learning_rate;
+        let max_weight_change_percent = self.config.learning_config.max_weight_change_percent;
+        let min_effectiveness_diff = self.config.learning_config.min_effectiveness_diff;
+        let enable_weight_bounds = self.config.learning_config.enable_weight_bounds;
+        let min_weight = self.config.learning_config.min_weight;
+        let max_weight = self.config.learning_config.max_weight;
+
+        // Adjust weights for each heuristic based on effectiveness
+        for (heuristic_name, metrics) in &self.heuristic_effectiveness {
+            let effectiveness_diff = metrics.effectiveness_score - avg_effectiveness;
+
+            // Only adjust if effectiveness difference is significant
+            if effectiveness_diff.abs() < min_effectiveness_diff as f64 {
+                continue;
+            }
+
+            // Determine which weight to adjust
+            let weight_ref = self.get_weight_ref_mut(heuristic_name);
+            if weight_ref.is_none() {
+                continue;
+            }
+
+            let old_weight = *weight_ref.unwrap();
+            let mut new_weight = old_weight;
+
+            // Adjust weight based on effectiveness
+            // Positive effectiveness_diff -> increase weight
+            // Negative effectiveness_diff -> decrease weight
+            let adjustment = (effectiveness_diff * learning_rate as f64) * old_weight as f64;
+            let max_adjustment = (old_weight as f64 * max_weight_change_percent as f64).abs();
+
+            // Clamp adjustment to max_weight_change_percent
+            let clamped_adjustment = adjustment.signum() * adjustment.abs().min(max_adjustment);
+            new_weight = (old_weight as f64 + clamped_adjustment) as i32;
+
+            // Apply weight bounds if enabled
+            if enable_weight_bounds {
+                new_weight = new_weight.max(min_weight)
+                    .min(max_weight);
+            }
+
+            // Only update if weight actually changed
+            if new_weight != old_weight {
+                *weight_ref.unwrap() = new_weight;
+                weights_adjusted = true;
+                adjustments_made += 1;
+
+                // Record weight change in history
+                self.weight_change_history.push(WeightChange {
+                    weight_name: heuristic_name.clone(),
+                    old_weight,
+                    new_weight,
+                    reason: format!("Effectiveness: {:.2} (avg: {:.2})", metrics.effectiveness_score, avg_effectiveness),
+                    timestamp: self.history_update_counter,
+                });
+
+                // Limit history size to prevent unbounded growth
+                if self.weight_change_history.len() > 1000 {
+                    self.weight_change_history.remove(0);
+                }
+            }
+        }
+
+        // Update statistics
+        if weights_adjusted {
+            self.stats.weight_adjustments += adjustments_made;
+            self.stats.learning_effectiveness = avg_effectiveness;
+        }
+
+        weights_adjusted
+    }
+
+    /// Get mutable reference to weight by heuristic name (Task 5.0)
+    fn get_weight_ref_mut(&mut self, heuristic_name: &str) -> Option<&mut i32> {
+        match heuristic_name {
+            "capture" => Some(&mut self.config.weights.capture_weight),
+            "promotion" => Some(&mut self.config.weights.promotion_weight),
+            "center_control" => Some(&mut self.config.weights.center_control_weight),
+            "development" => Some(&mut self.config.weights.development_weight),
+            "piece_value" => Some(&mut self.config.weights.piece_value_weight),
+            "position_value" => Some(&mut self.config.weights.position_value_weight),
+            "tactical" => Some(&mut self.config.weights.tactical_weight),
+            "quiet" => Some(&mut self.config.weights.quiet_weight),
+            "pv_move" => Some(&mut self.config.weights.pv_move_weight),
+            "killer_move" => Some(&mut self.config.weights.killer_move_weight),
+            "history" => Some(&mut self.config.weights.history_weight),
+            "see" => Some(&mut self.config.weights.see_weight),
+            "counter_move" => Some(&mut self.config.weights.counter_move_weight),
+            _ => None,
+        }
+    }
+
+    /// Increment learning update counter (Task 5.0)
+    /// Called after each game/move to track learning frequency
+    pub fn increment_learning_counter(&mut self) {
+        self.learning_update_counter += 1;
+
+        // Attempt weight adjustment if learning is enabled
+        if self.config.learning_config.enable_learning {
+            self.adjust_weights_based_on_effectiveness();
+        }
+    }
+
+    /// Save learned weights to configuration (Task 5.0)
+    /// Currently a no-op, but can be extended to save to file/JSON
+    pub fn save_learned_weights(&self) -> Result<(), String> {
+        // For now, weights are already in config, so nothing to do
+        // Future: Could serialize to JSON file
+        Ok(())
+    }
+
+    /// Load learned weights from configuration (Task 5.0)
+    /// Currently a no-op, but can be extended to load from file/JSON
+    pub fn load_learned_weights(&mut self) -> Result<(), String> {
+        // For now, weights are already in config, so nothing to do
+        // Future: Could deserialize from JSON file
+        Ok(())
+    }
+
+    /// Get heuristic effectiveness metrics (Task 5.0)
+    pub fn get_heuristic_effectiveness(&self, heuristic_name: &str) -> Option<&HeuristicEffectivenessMetrics> {
+        self.heuristic_effectiveness.get(heuristic_name)
+    }
+
+    /// Get all heuristic effectiveness metrics (Task 5.0)
+    pub fn get_all_heuristic_effectiveness(&self) -> &HashMap<String, HeuristicEffectivenessMetrics> {
+        &self.heuristic_effectiveness
+    }
+
+    /// Get weight change history (Task 5.0)
+    pub fn get_weight_change_history(&self) -> &[WeightChange] {
+        &self.weight_change_history
+    }
+
+    /// Clear learning data (Task 5.0)
+    pub fn clear_learning_data(&mut self) {
+        self.heuristic_effectiveness.clear();
+        self.weight_change_history.clear();
+        self.learning_update_counter = 0;
+        self.stats.weight_adjustments = 0;
+        self.stats.learning_effectiveness = 0.0;
+    }
+
 
     /// Reset configuration to default values
     pub fn reset_config_to_default(&mut self) {
@@ -7227,7 +7558,7 @@ impl MoveOrdering {
         let mut optimizations = Vec::new();
         
         // Adjust weights based on heuristic effectiveness
-        let weight_adjustments = self.adjust_weights_based_on_effectiveness();
+        let weight_adjustments = self.adjust_weights_based_on_effectiveness_legacy();
         optimizations.extend(weight_adjustments);
         
         // Optimize cache configuration
@@ -7254,8 +7585,9 @@ impl MoveOrdering {
         }
     }
 
-    /// Adjust weights based on heuristic effectiveness
-    fn adjust_weights_based_on_effectiveness(&mut self) -> Vec<String> {
+    /// Adjust weights based on heuristic effectiveness (legacy method)
+    /// Note: Task 5.0 has a new implementation that uses effectiveness-based learning.
+    fn adjust_weights_based_on_effectiveness_legacy(&mut self) -> Vec<String> {
         let mut adjustments = Vec::new();
         
         // Adjust PV weight based on hit rate
@@ -12373,6 +12705,203 @@ mod tests {
         assert_eq!(ordered.len(), 1);
         assert_eq!(ordered[0].from, moves[0].from);
         assert_eq!(ordered[0].to, moves[0].to);
+    }
+
+    // Task 5.0: Learning tests
+
+    #[test]
+    fn test_heuristic_effectiveness_tracking() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+
+        // Record effectiveness for different heuristics
+        orderer.record_heuristic_effectiveness("capture", true);
+        orderer.record_heuristic_effectiveness("capture", true);
+        orderer.record_heuristic_effectiveness("capture", false);
+        
+        orderer.record_heuristic_effectiveness("history", true);
+        orderer.record_heuristic_effectiveness("history", false);
+
+        // Check effectiveness metrics
+        let capture_metrics = orderer.get_heuristic_effectiveness("capture").unwrap();
+        assert_eq!(capture_metrics.total_uses, 3);
+        assert_eq!(capture_metrics.cutoff_count, 2);
+        assert!((capture_metrics.hit_rate - 2.0 / 3.0).abs() < 0.01);
+        assert!(capture_metrics.effectiveness_score > 0.0);
+
+        let history_metrics = orderer.get_heuristic_effectiveness("history").unwrap();
+        assert_eq!(history_metrics.total_uses, 2);
+        assert_eq!(history_metrics.cutoff_count, 1);
+        assert!((history_metrics.hit_rate - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_weight_adjustment_based_on_effectiveness() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+        orderer.config.learning_config.min_games_for_learning = 1;
+        orderer.config.learning_config.learning_frequency = 1;
+        orderer.config.learning_config.learning_rate = 0.1;
+        orderer.config.learning_config.min_effectiveness_diff = 0.01;
+
+        // Record effectiveness - make capture more effective
+        for _ in 0..10 {
+            orderer.record_heuristic_effectiveness("capture", true);
+            orderer.record_heuristic_effectiveness("history", false);
+        }
+
+        // Get initial weights
+        let initial_capture_weight = orderer.config.weights.capture_weight;
+        let initial_history_weight = orderer.config.weights.history_weight;
+
+        // Increment counter to trigger adjustment
+        orderer.learning_update_counter = orderer.config.learning_config.min_games_for_learning;
+        orderer.adjust_weights_based_on_effectiveness();
+
+        // Check that weights were adjusted
+        let capture_metrics = orderer.get_heuristic_effectiveness("capture").unwrap();
+        let history_metrics = orderer.get_heuristic_effectiveness("history").unwrap();
+        
+        // Capture should have higher effectiveness, so it should get a higher weight
+        if capture_metrics.effectiveness_score > history_metrics.effectiveness_score {
+            assert!(orderer.config.weights.capture_weight >= initial_capture_weight);
+            assert!(orderer.config.weights.history_weight <= initial_history_weight);
+        }
+
+        // Check that weight change history was recorded
+        assert!(!orderer.get_weight_change_history().is_empty());
+    }
+
+    #[test]
+    fn test_weight_bounds() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+        orderer.config.learning_config.enable_weight_bounds = true;
+        orderer.config.learning_config.min_weight = 0;
+        orderer.config.learning_config.max_weight = 1000;
+        orderer.config.learning_config.min_games_for_learning = 1;
+        orderer.config.learning_config.learning_frequency = 1;
+        orderer.config.learning_config.learning_rate = 10.0; // Very high learning rate to test bounds
+
+        // Set initial weight to a medium value
+        orderer.config.weights.capture_weight = 500;
+
+        // Record very high effectiveness
+        for _ in 0..100 {
+            orderer.record_heuristic_effectiveness("capture", true);
+        }
+
+        // Attempt adjustment
+        orderer.learning_update_counter = orderer.config.learning_config.min_games_for_learning;
+        orderer.adjust_weights_based_on_effectiveness();
+
+        // Check that weight is within bounds
+        assert!(orderer.config.weights.capture_weight >= orderer.config.learning_config.min_weight);
+        assert!(orderer.config.weights.capture_weight <= orderer.config.learning_config.max_weight);
+    }
+
+    #[test]
+    fn test_learning_disabled() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = false;
+
+        // Record effectiveness
+        orderer.record_heuristic_effectiveness("capture", true);
+
+        // Check that no effectiveness was recorded
+        assert!(orderer.get_heuristic_effectiveness("capture").is_none());
+
+        // Attempt adjustment
+        let adjusted = orderer.adjust_weights_based_on_effectiveness();
+        assert!(!adjusted);
+    }
+
+    #[test]
+    fn test_learning_frequency() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+        orderer.config.learning_config.min_games_for_learning = 1;
+        orderer.config.learning_config.learning_frequency = 5; // Update every 5 increments
+
+        // Record effectiveness
+        for _ in 0..10 {
+            orderer.record_heuristic_effectiveness("capture", true);
+        }
+
+        // First 4 increments should not trigger adjustment
+        for i in 1..5 {
+            orderer.learning_update_counter = i;
+            let adjusted = orderer.adjust_weights_based_on_effectiveness();
+            assert!(!adjusted, "Should not adjust at counter {}", i);
+        }
+
+        // 5th increment should trigger adjustment
+        orderer.learning_update_counter = 5;
+        let adjusted = orderer.adjust_weights_based_on_effectiveness();
+        assert!(adjusted, "Should adjust at counter 5");
+    }
+
+    #[test]
+    fn test_min_games_for_learning() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+        orderer.config.learning_config.min_games_for_learning = 10;
+        orderer.config.learning_config.learning_frequency = 1;
+
+        // Record effectiveness
+        for _ in 0..5 {
+            orderer.record_heuristic_effectiveness("capture", true);
+        }
+
+        // Should not adjust before min_games_for_learning
+        orderer.learning_update_counter = 5;
+        let adjusted = orderer.adjust_weights_based_on_effectiveness();
+        assert!(!adjusted);
+
+        // Should adjust after min_games_for_learning
+        orderer.learning_update_counter = 10;
+        let adjusted = orderer.adjust_weights_based_on_effectiveness();
+        assert!(adjusted);
+    }
+
+    #[test]
+    fn test_clear_learning_data() {
+        let mut orderer = MoveOrdering::new();
+        orderer.config.learning_config.enable_learning = true;
+
+        // Record effectiveness
+        orderer.record_heuristic_effectiveness("capture", true);
+        orderer.record_heuristic_effectiveness("history", true);
+        orderer.increment_learning_counter();
+
+        // Clear learning data
+        orderer.clear_learning_data();
+
+        // Check that all data was cleared
+        assert!(orderer.get_all_heuristic_effectiveness().is_empty());
+        assert!(orderer.get_weight_change_history().is_empty());
+        assert_eq!(orderer.learning_update_counter, 0);
+        assert_eq!(orderer.stats.weight_adjustments, 0);
+        assert_eq!(orderer.stats.learning_effectiveness, 0.0);
+    }
+
+    #[test]
+    fn test_learning_configuration() {
+        let mut orderer = MoveOrdering::new();
+        
+        // Test default configuration
+        assert!(!orderer.config.learning_config.enable_learning);
+        assert_eq!(orderer.config.learning_config.learning_rate, 0.1);
+        assert_eq!(orderer.config.learning_config.learning_frequency, 100);
+        assert_eq!(orderer.config.learning_config.min_games_for_learning, 10);
+        assert!(orderer.config.learning_config.enable_weight_bounds);
+
+        // Test configuration validation
+        let mut config = MoveOrderingConfig::default();
+        config.learning_config.learning_rate = 1.5; // Invalid: > 1.0
+        let errors = config.validate();
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| e.contains("Learning rate")));
     }
 
     #[test]

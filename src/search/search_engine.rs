@@ -3604,7 +3604,7 @@ impl SearchEngine {
         self.initialize_move_orderer();
         
         // Task 3.0: Use advanced move ordering for better performance (no IID at this level)
-        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, None);
+        let sorted_moves = self.order_moves_for_negamax(&legal_moves, board, captured_pieces, player, depth, alpha, beta, None, None);
         crate::debug_utils::end_timing("move_sorting", "SEARCH_AT_DEPTH");
         
         crate::debug_utils::trace_log("SEARCH_AT_DEPTH", "Starting move evaluation loop");
