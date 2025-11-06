@@ -36,6 +36,37 @@ use std::collections::HashMap;
 use std::ptr;
 use std::fmt;
 
+// Task 6.0: Include extracted modules
+#[path = "move_ordering/statistics.rs"]
+mod statistics;
+
+#[path = "move_ordering/cache.rs"]
+mod cache;
+
+#[path = "move_ordering/history_heuristic.rs"]
+mod history_heuristic;
+
+#[path = "move_ordering/killer_moves.rs"]
+mod killer_moves;
+
+#[path = "move_ordering/counter_moves.rs"]
+mod counter_moves;
+
+#[path = "move_ordering/pv_ordering.rs"]
+mod pv_ordering;
+
+#[path = "move_ordering/capture_ordering.rs"]
+mod capture_ordering;
+
+#[path = "move_ordering/see_calculation.rs"]
+mod see_calculation;
+
+// Re-export statistics structures
+pub use statistics::{OrderingStats, HotPathStats, HeuristicStats, HeuristicPerformance, TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats, FragmentationStats, CacheStats, CachePerformance, PerformanceStats, CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity, StatisticsExport, PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection, AdvancedIntegrationStats};
+
+// Re-export cache structures
+pub use cache::{CacheEvictionPolicy, MoveOrderingCacheEntry, CacheConfig};
+
 // ==================== Error Handling Types ====================
 
 /// Result type for move ordering operations
