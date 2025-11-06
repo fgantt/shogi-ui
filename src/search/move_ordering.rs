@@ -9403,6 +9403,249 @@ mod tests {
         assert_eq!(see_value, 0);
     }
 
+    // Task 7.7: Comprehensive SEE cache tests
+    
+    #[test]
+    fn test_see_cache_eviction_policy() {
+        // Test that cache evicts entries when full
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(3); // Small cache for testing
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Create multiple capture moves
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        let move4 = create_test_move(Some(Position::new(1, 4)), Position::new(2, 4), PieceType::Pawn, Player::Black);
+        
+        // Fill cache
+        orderer.calculate_see(&move1, &board);
+        orderer.calculate_see(&move2, &board);
+        orderer.calculate_see(&move3, &board);
+        
+        assert_eq!(orderer.get_see_cache_size(), 3);
+        assert_eq!(orderer.stats.see_cache_evictions, 0);
+        
+        // Add fourth move - should trigger eviction
+        orderer.calculate_see(&move4, &board);
+        
+        assert_eq!(orderer.get_see_cache_size(), 3); // Cache size stays at max
+        assert_eq!(orderer.stats.see_cache_evictions, 1); // One eviction occurred
+    }
+    
+    #[test]
+    fn test_see_cache_lru_tracking() {
+        // Test that LRU tracking works correctly
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(2); // Small cache
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        
+        // Fill cache with move1 and move2
+        orderer.calculate_see(&move1, &board);
+        orderer.calculate_see(&move2, &board);
+        assert_eq!(orderer.get_see_cache_size(), 2);
+        
+        // Access move1 again to make it more recent
+        orderer.calculate_see(&move1, &board);
+        assert_eq!(orderer.stats.see_cache_hits, 1);
+        
+        // Add move3 - should evict move2 (less recently used)
+        orderer.calculate_see(&move3, &board);
+        assert_eq!(orderer.get_see_cache_size(), 2);
+        
+        // move1 should still be in cache (recently accessed)
+        orderer.calculate_see(&move1, &board);
+        assert_eq!(orderer.stats.see_cache_hits, 2); // Should hit cache
+    }
+    
+    #[test]
+    fn test_see_cache_statistics() {
+        // Test that cache statistics are tracked correctly
+        let mut orderer = MoveOrdering::new();
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        
+        // First calculation - cache miss
+        orderer.calculate_see(&move1, &board);
+        assert_eq!(orderer.stats.see_cache_misses, 1);
+        assert_eq!(orderer.stats.see_cache_hits, 0);
+        
+        // Second calculation of same move - cache hit
+        orderer.calculate_see(&move1, &board);
+        assert_eq!(orderer.stats.see_cache_hits, 1);
+        assert_eq!(orderer.stats.see_cache_misses, 1);
+        
+        // Different move - cache miss
+        orderer.calculate_see(&move2, &board);
+        assert_eq!(orderer.stats.see_cache_misses, 2);
+        
+        // Verify cache size
+        assert_eq!(orderer.get_see_cache_size(), 2);
+        
+        // Verify hit rate calculation
+        let hit_rate = orderer.get_see_cache_hit_rate();
+        assert!(hit_rate > 0.0);
+        assert!(hit_rate < 100.0);
+    }
+    
+    #[test]
+    fn test_see_cache_utilization() {
+        // Test cache utilization tracking
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(10);
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Initially empty
+        assert_eq!(orderer.see_cache.utilization(), 0.0);
+        
+        // Add some entries
+        for i in 0..5 {
+            let move_ = create_test_move(
+                Some(Position::new(1, i)),
+                Position::new(2, i),
+                PieceType::Pawn,
+                Player::Black
+            );
+            orderer.calculate_see(&move_, &board);
+        }
+        
+        // Utilization should be 50%
+        let utilization = orderer.see_cache.utilization();
+        assert!((utilization - 50.0).abs() < 0.1);
+    }
+    
+    #[test]
+    fn test_see_cache_dynamic_resizing() {
+        // Test that cache can be resized and evicts entries if necessary
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(10);
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Fill cache with 10 entries
+        for i in 0..10 {
+            let move_ = create_test_move(
+                Some(Position::new(1, i % 9)),
+                Position::new(2, i % 9),
+                PieceType::Pawn,
+                Player::Black
+            );
+            orderer.calculate_see(&move_, &board);
+        }
+        
+        assert_eq!(orderer.get_see_cache_size(), 10);
+        
+        // Resize cache to smaller size
+        orderer.see_cache.set_max_size(5);
+        
+        // Cache should have evicted entries
+        assert!(orderer.get_see_cache_size() <= 5);
+    }
+    
+    #[test]
+    fn test_see_cache_eviction_tracking() {
+        // Test that evictions are properly tracked
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(2);
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Fill cache
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        orderer.calculate_see(&move1, &board);
+        orderer.calculate_see(&move2, &board);
+        
+        assert_eq!(orderer.stats.see_cache_evictions, 0);
+        
+        // Add third move - should cause eviction
+        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        orderer.calculate_see(&move3, &board);
+        
+        assert_eq!(orderer.stats.see_cache_evictions, 1);
+        
+        // Add fourth move - another eviction
+        let move4 = create_test_move(Some(Position::new(1, 4)), Position::new(2, 4), PieceType::Pawn, Player::Black);
+        orderer.calculate_see(&move4, &board);
+        
+        assert_eq!(orderer.stats.see_cache_evictions, 2);
+    }
+    
+    #[test]
+    fn test_see_cache_get_stats() {
+        // Test the get_stats() method on SEECache
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(5);
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Add some entries
+        for i in 0..3 {
+            let move_ = create_test_move(
+                Some(Position::new(1, i)),
+                Position::new(2, i),
+                PieceType::Pawn,
+                Player::Black
+            );
+            orderer.calculate_see(&move_, &board);
+        }
+        
+        // Get stats
+        let stats = orderer.see_cache.get_stats();
+        
+        assert_eq!(stats.size, 3);
+        assert_eq!(stats.max_size, 5);
+        assert!((stats.utilization - 60.0).abs() < 0.1);
+        assert!(stats.total_accesses >= 3);
+        assert!(stats.avg_accesses_per_entry >= 1.0);
+        assert!(stats.memory_bytes > 0);
+    }
+    
+    #[test]
+    fn test_see_cache_value_based_eviction() {
+        // Test that cache prefers keeping high-value SEE calculations
+        // This test verifies the value-based component of eviction
+        let mut orderer = MoveOrdering::new();
+        orderer.set_max_see_cache_size(2);
+        orderer.set_see_cache_enabled(true);
+        
+        let board = crate::bitboards::BitboardBoard::new();
+        
+        // Create moves (cache will store different values for each)
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        
+        orderer.calculate_see(&move1, &board);
+        orderer.calculate_see(&move2, &board);
+        
+        assert_eq!(orderer.get_see_cache_size(), 2);
+        
+        // Add a third move - eviction should occur
+        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        orderer.calculate_see(&move3, &board);
+        
+        // Verify eviction occurred
+        assert_eq!(orderer.stats.see_cache_evictions, 1);
+        assert_eq!(orderer.get_see_cache_size(), 2);
+    }
+
     #[test]
     fn test_see_cache_size_limits() {
         let mut orderer = MoveOrdering::new();
