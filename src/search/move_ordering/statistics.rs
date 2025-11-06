@@ -91,6 +91,8 @@ pub struct OrderingStats {
     pub see_cache_hits: u64,
     /// Number of SEE cache misses
     pub see_cache_misses: u64,
+    /// Number of SEE cache evictions (Task 7.0)
+    pub see_cache_evictions: u64,
     /// SEE cache hit rate percentage
     pub see_cache_hit_rate: f64,
     /// Total time spent on SEE calculations (microseconds)

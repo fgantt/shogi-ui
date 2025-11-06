@@ -65,7 +65,7 @@ pub use capture_ordering::{score_capture_move as score_capture_move_helper, scor
 #[path = "move_ordering/see_calculation.rs"]
 mod see_calculation;
 
-pub use see_calculation::{calculate_see_internal as calculate_see_internal_helper, score_see_move as score_see_move_helper, find_attackers_defenders as find_attackers_defenders_helper, piece_attacks_square as piece_attacks_square_helper, SEECache};
+pub use see_calculation::{calculate_see_internal as calculate_see_internal_helper, score_see_move as score_see_move_helper, find_attackers_defenders as find_attackers_defenders_helper, piece_attacks_square as piece_attacks_square_helper, SEECache, SEECacheEntry, SEECacheStats};
 
 // Re-export statistics structures
 // Note: PerformanceStats and StatisticsExport remain in main file (depend on MemoryUsage/MoveOrderingConfig)
@@ -2501,10 +2501,13 @@ impl MoveOrdering {
 
         let see_value = calculate_see_internal_helper(move_, board); // Task 6.0: use see_calculation module
         
-        // Cache the result if enabled and cache not full (Task 6.0: use SEECache module)
-        if self.config.cache_config.enable_see_cache && !self.see_cache.is_full() {
+        // Cache the result if enabled (Task 7.0: enhanced with eviction tracking)
+        if self.config.cache_config.enable_see_cache {
             let cache_key = (move_.from.unwrap_or(Position::new(0, 0)), move_.to);
-            self.see_cache.insert(cache_key.0, cache_key.1, see_value);
+            let evicted = self.see_cache.insert(cache_key.0, cache_key.1, see_value);
+            if evicted {
+                self.stats.see_cache_evictions += 1;
+            }
         }
 
         // Update timing statistics
@@ -4484,6 +4487,7 @@ impl MoveOrdering {
         self.see_cache.clear();
         self.stats.see_cache_hits = 0;
         self.stats.see_cache_misses = 0;
+        self.stats.see_cache_evictions = 0; // Task 7.0
         self.update_memory_usage();
     }
 

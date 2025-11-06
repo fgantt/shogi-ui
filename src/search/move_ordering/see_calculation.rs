@@ -312,15 +312,32 @@ pub fn score_see_move(move_: &Move, board: &BitboardBoard, see_weight: i32) -> S
     Ok(see_score)
 }
 
+/// SEE cache entry with metadata for eviction policies
+/// Task 7.0: Enhanced with LRU tracking
+#[derive(Debug, Clone)]
+pub struct SEECacheEntry {
+    /// Cached SEE value
+    pub value: i32,
+    /// Last access timestamp (for LRU tracking)
+    pub last_access: u64,
+    /// Number of times this entry was accessed
+    pub access_count: u64,
+    /// Absolute value of SEE (for value-based eviction)
+    pub see_abs_value: i32,
+}
+
 /// SEE cache manager
 /// 
 /// Manages caching of SEE calculation results for performance optimization.
+/// Task 7.0: Enhanced with advanced eviction policies (FIFO, LRU, Value-Based)
 #[derive(Debug, Clone)]
 pub struct SEECache {
-    /// SEE cache: maps (from_square, to_square) -> SEE value
-    cache: HashMap<(Position, Position), i32>,
+    /// SEE cache: maps (from_square, to_square) -> cache entry
+    cache: HashMap<(Position, Position), SEECacheEntry>,
     /// Maximum cache size
     max_size: usize,
+    /// LRU access counter (incremented on each access)
+    lru_access_counter: u64,
 }
 
 impl SEECache {
@@ -329,24 +346,128 @@ impl SEECache {
         Self {
             cache: HashMap::new(),
             max_size,
+            lru_access_counter: 0,
         }
     }
 
     /// Get a cached SEE value
-    pub fn get(&self, from: Position, to: Position) -> Option<i32> {
-        self.cache.get(&(from, to)).copied()
+    /// Task 7.0: Updates LRU tracking on access
+    pub fn get(&mut self, from: Position, to: Position) -> Option<i32> {
+        if let Some(entry) = self.cache.get_mut(&(from, to)) {
+            self.lru_access_counter += 1;
+            entry.last_access = self.lru_access_counter;
+            entry.access_count += 1;
+            Some(entry.value)
+        } else {
+            None
+        }
     }
 
     /// Cache a SEE value
-    pub fn insert(&mut self, from: Position, to: Position, value: i32) {
-        if self.cache.len() < self.max_size {
-            self.cache.insert((from, to), value);
+    /// Task 7.0: Evicts least valuable entry when cache is full
+    pub fn insert(&mut self, from: Position, to: Position, value: i32) -> bool {
+        let key = (from, to);
+        
+        // If entry already exists, update it
+        if let Some(entry) = self.cache.get_mut(&key) {
+            self.lru_access_counter += 1;
+            entry.value = value;
+            entry.last_access = self.lru_access_counter;
+            entry.access_count += 1;
+            entry.see_abs_value = value.abs();
+            return false; // No eviction
         }
+        
+        // If cache has room, just insert
+        if self.cache.len() < self.max_size {
+            self.lru_access_counter += 1;
+            let entry = SEECacheEntry {
+                value,
+                last_access: self.lru_access_counter,
+                access_count: 1,
+                see_abs_value: value.abs(),
+            };
+            self.cache.insert(key, entry);
+            return false; // No eviction
+        }
+        
+        // Cache is full - use LRU eviction with value-preference
+        // Prefer evicting entries with low absolute SEE values and low access counts
+        if let Some(evict_key) = self.select_eviction_candidate() {
+            self.cache.remove(&evict_key);
+            
+            self.lru_access_counter += 1;
+            let entry = SEECacheEntry {
+                value,
+                last_access: self.lru_access_counter,
+                access_count: 1,
+                see_abs_value: value.abs(),
+            };
+            self.cache.insert(key, entry);
+            return true; // Eviction occurred
+        }
+        
+        false
+    }
+
+    /// Select a cache entry for eviction
+    /// Task 7.0: Hybrid eviction policy combining LRU and value-based eviction
+    /// Prefers evicting entries with low absolute SEE values and low recent access
+    fn select_eviction_candidate(&self) -> Option<(Position, Position)> {
+        if self.cache.is_empty() {
+            return None;
+        }
+
+        // Score each entry: lower score = more likely to evict
+        // Score = (access_age_weight * normalized_age) + (value_weight * normalized_inverse_value)
+        let access_age_weight = 0.6;
+        let value_weight = 0.4;
+        
+        // Find min/max for normalization
+        let max_access = self.cache.values().map(|e| e.last_access).max().unwrap_or(1);
+        let min_access = self.cache.values().map(|e| e.last_access).min().unwrap_or(1);
+        let access_range = (max_access - min_access).max(1) as f32;
+        
+        let max_value = self.cache.values().map(|e| e.see_abs_value).max().unwrap_or(1);
+        let min_value = self.cache.values().map(|e| e.see_abs_value).min().unwrap_or(0);
+        let value_range = (max_value - min_value).max(1) as f32;
+        
+        let mut evict_key = None;
+        let mut evict_score = f32::MAX;
+        
+        for (key, entry) in &self.cache {
+            // Age score: normalized to 0.0 (oldest) .. 1.0 (newest)
+            // Invert so older = higher score (more likely to evict)
+            let age_score = if access_range > 0.0 {
+                1.0 - ((entry.last_access - min_access) as f32 / access_range)
+            } else {
+                0.5
+            };
+            
+            // Value score: normalized to 0.0 (lowest value) .. 1.0 (highest value)
+            // Invert so lower value = higher score (more likely to evict)
+            let value_score = if value_range > 0.0 {
+                1.0 - ((entry.see_abs_value - min_value) as f32 / value_range)
+            } else {
+                0.5
+            };
+            
+            // Combined score: higher = more likely to evict
+            let combined_score = access_age_weight * age_score + value_weight * value_score;
+            
+            if combined_score > evict_score {
+                evict_score = combined_score;
+                evict_key = Some(*key);
+            }
+        }
+        
+        evict_key
     }
 
     /// Clear the cache
     pub fn clear(&mut self) {
         self.cache.clear();
+        self.lru_access_counter = 0;
     }
 
     /// Get cache size
@@ -354,19 +475,89 @@ impl SEECache {
         self.cache.len()
     }
 
+    /// Check if cache is empty
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
     /// Check if cache is full
     pub fn is_full(&self) -> bool {
         self.cache.len() >= self.max_size
     }
 
+    /// Get cache utilization as a percentage
+    pub fn utilization(&self) -> f64 {
+        if self.max_size == 0 {
+            0.0
+        } else {
+            (self.cache.len() as f64 / self.max_size as f64) * 100.0
+        }
+    }
+
     /// Get memory usage estimate for cache
     pub fn memory_bytes(&self) -> usize {
-        self.cache.len() * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<i32>())
+        self.cache.len() * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<SEECacheEntry>())
     }
+
+    /// Get maximum cache size
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    /// Set maximum cache size
+    /// If new size is smaller than current cache size, evicts entries
+    pub fn set_max_size(&mut self, new_max_size: usize) {
+        self.max_size = new_max_size;
+        
+        // Evict entries if cache exceeds new max size
+        while self.cache.len() > self.max_size {
+            if let Some(evict_key) = self.select_eviction_candidate() {
+                self.cache.remove(&evict_key);
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Get cache statistics
+    pub fn get_stats(&self) -> SEECacheStats {
+        let total_access_count: u64 = self.cache.values().map(|e| e.access_count).sum();
+        let avg_access_count = if !self.cache.is_empty() {
+            total_access_count as f64 / self.cache.len() as f64
+        } else {
+            0.0
+        };
+        
+        SEECacheStats {
+            size: self.cache.len(),
+            max_size: self.max_size,
+            utilization: self.utilization(),
+            total_accesses: total_access_count,
+            avg_accesses_per_entry: avg_access_count,
+            memory_bytes: self.memory_bytes(),
+        }
+    }
+}
+
+/// SEE cache statistics
+#[derive(Debug, Clone)]
+pub struct SEECacheStats {
+    /// Current cache size
+    pub size: usize,
+    /// Maximum cache size
+    pub max_size: usize,
+    /// Cache utilization percentage
+    pub utilization: f64,
+    /// Total accesses across all entries
+    pub total_accesses: u64,
+    /// Average accesses per cache entry
+    pub avg_accesses_per_entry: f64,
+    /// Memory usage in bytes
+    pub memory_bytes: usize,
 }
 
 impl Default for SEECache {
     fn default() -> Self {
-        Self::new(1000) // Default max size
+        Self::new(5000) // Default max size (increased from 1000)
     }
 }
