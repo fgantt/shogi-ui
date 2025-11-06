@@ -2854,25 +2854,16 @@ impl MoveOrdering {
     /// 
     /// Evaluates the positional value of the move, including center control,
     /// king safety, piece activity, and other positional factors.
+    /// Task 8.0: Simplified - removed calls to unimplemented stub functions
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_position_value_comprehensive(&self, move_: &Move) -> i32 {
-        let mut score = 0;
-
         // Center control scoring
-        score += self.score_position_value(&move_.to) * self.config.weights.position_value_weight / 100;
-
-        // King safety scoring
-        score += self.score_king_safety(move_);
-
-        // Piece activity scoring
-        score += self.score_piece_activity(move_);
-
-        // Pawn structure scoring
-        if move_.piece_type == PieceType::Pawn {
-            score += self.score_pawn_structure(move_);
-        }
-
-        score
+        self.score_position_value(&move_.to) * self.config.weights.position_value_weight / 100
+        
+        // Task 8.0: Removed calls to unimplemented stubs:
+        // - score_king_safety() - returns 0
+        // - score_piece_activity() - returns 0
+        // - score_pawn_structure() - returns 0
     }
 
     /// Score development move
@@ -2906,85 +2897,30 @@ impl MoveOrdering {
     /// 
     /// Evaluates quiet (non-capturing, non-promoting) moves based on
     /// positional considerations and strategic value.
+    /// Task 8.0: Simplified - removed calls to unimplemented stub functions
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_quiet_move(&self, move_: &Move) -> i32 {
         if move_.is_capture || move_.is_promotion || move_.gives_check {
             return 0; // Not a quiet move
         }
 
-        let mut score = self.config.weights.quiet_weight;
-
-        // Bonus for improving piece mobility
-        score += self.score_mobility_improvement(move_);
-
-        // Bonus for improving piece coordination
-        score += self.score_coordination_improvement(move_);
-
-        // Bonus for moves that support other pieces
-        score += self.score_support_value(move_);
-
-        score
+        // Base quiet move weight
+        self.config.weights.quiet_weight
+        
+        // Task 8.0: Removed calls to unimplemented stubs:
+        // - score_mobility_improvement() - returns 0
+        // - score_coordination_improvement() - returns 0
+        // - score_support_value() - returns 0
     }
 
-    /// Score king safety
-    /// 
-    /// Evaluates how the move affects king safety for both sides.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_king_safety(&self, _move_: &Move) -> i32 {
-        // King safety evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
-
-    /// Score piece activity
-    /// 
-    /// Evaluates how the move affects piece activity and mobility.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_piece_activity(&self, _move_: &Move) -> i32 {
-        // Piece activity evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
-
-    /// Score pawn structure
-    /// 
-    /// Evaluates how the move affects pawn structure and pawn chains.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_pawn_structure(&self, _move_: &Move) -> i32 {
-        // Pawn structure evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
-
-    /// Score mobility improvement
-    /// 
-    /// Evaluates how the move improves piece mobility.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_mobility_improvement(&self, _move_: &Move) -> i32 {
-        // Mobility evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
-
-    /// Score coordination improvement
-    /// 
-    /// Evaluates how the move improves piece coordination.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_coordination_improvement(&self, _move_: &Move) -> i32 {
-        // Coordination evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
-
-    /// Score support value
-    /// 
-    /// Evaluates how the move supports other pieces or positions.
-    #[allow(dead_code)] // Kept for debugging and future use
-    fn score_support_value(&self, _move_: &Move) -> i32 {
-        // Support evaluation could be implemented here
-        // when position analysis is available
-        0
-    }
+    // Task 8.0: Removed placeholder methods that returned 0:
+    // - score_king_safety() - Not implemented, returns 0
+    // - score_piece_activity() - Not implemented, returns 0
+    // - score_pawn_structure() - Not implemented, returns 0
+    // - score_mobility_improvement() - Not implemented, returns 0
+    // - score_coordination_improvement() - Not implemented, returns 0
+    // - score_support_value() - Not implemented, returns 0
+    // These can be re-added when position analysis is available
 
     /// Calculate distance to center
     /// 
