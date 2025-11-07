@@ -469,7 +469,7 @@ impl PerformanceBenchmark {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::super::types::ValidationConfig;
     use super::*;

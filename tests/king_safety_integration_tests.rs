@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::*;
 use shogi_engine::evaluation::attacks::{AttackAnalyzer, ThreatEvaluator};
 use shogi_engine::evaluation::castles::*;

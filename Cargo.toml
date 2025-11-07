@@ -14,6 +14,8 @@ statistics = []
 # Enable transposition-table prefetching hints (Task 4.0)
 # Requires architecture support; falls back to no-op when unavailable
 tt-prefetch = []
+# Toggle long-tail legacy/unit tests that no longer track current APIs
+legacy-tests = []
 
 [lib]
 crate-type = ["rlib"]

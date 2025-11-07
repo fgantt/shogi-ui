@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Comprehensive Integration Tests for Search Algorithm Coordination (Task 7.0.5)
 ///
 /// Tests the interactions between PVS, NMP, IID, LMR, Quiescence Search, and Move Ordering

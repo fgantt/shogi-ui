@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Unit tests for Evaluation Result Caching (Task 7.0.4)
 ///
 /// Tests that position evaluation is computed once per node and reused

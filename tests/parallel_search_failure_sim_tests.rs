@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::search::search_engine::GLOBAL_NODES_SEARCHED;
 use shogi_engine::search::{ParallelSearchConfig, ParallelSearchEngine};

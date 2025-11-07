@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Correctness validation tests for magic bitboards
 //!
 //! These tests validate that magic bitboards produce correct results

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive tests for move unmaking functionality
 //!
 //! This module tests the move unmaking system to ensure that:

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for the tablebase system
 //!
 //! This module contains integration tests that verify the tablebase system

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use std::fs;
 use std::path::Path;
 

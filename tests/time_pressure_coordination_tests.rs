@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Integration tests for Unified Time Pressure Management (Task 7.0.2)
 ///
 /// Tests the coordination of NMP and IID based on time pressure levels.

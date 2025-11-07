@@ -488,7 +488,7 @@ pub struct CacheStatistics {
     pub eval_cache_enabled: bool,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

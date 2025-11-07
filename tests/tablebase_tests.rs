@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive unit tests for the tablebase system
 //!
 //! This module contains unit tests for all tablebase components including

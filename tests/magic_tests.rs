@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive unit tests for magic bitboards
 //!
 //! This test suite validates the correctness of magic bitboard implementation

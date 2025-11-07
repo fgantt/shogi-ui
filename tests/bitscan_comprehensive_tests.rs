@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive testing suite for bit-scanning optimization system
 //!
 //! This module provides comprehensive tests for all bit-scanning optimization

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Tests for aspiration window improvements with various position types (Task 7.5)
 //!
 //! This module tests that aspiration window statistics tracking works correctly

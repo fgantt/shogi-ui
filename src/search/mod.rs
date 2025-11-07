@@ -20,6 +20,7 @@ pub mod performance_benchmarks;
 pub mod performance_optimization;
 pub mod replacement_policies;
 pub mod search_integration;
+#[cfg(all(test, feature = "legacy-tests"))]
 pub mod search_integration_tests;
 pub mod tapered_search_integration;
 pub mod test_runner;

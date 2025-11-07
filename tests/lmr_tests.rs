@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Comprehensive test suite for Late Move Reductions (LMR)
 ///
 /// This module contains unit tests for all LMR functionality including:

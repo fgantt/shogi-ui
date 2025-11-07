@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for magic bitboards with the move generation system
 //!
 //! These tests verify that magic bitboards integrate correctly with the

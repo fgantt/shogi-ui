@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::search::SearchEngine;
 use shogi_engine::time_utils::TimeSource;

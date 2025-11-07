@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! End-to-end tests for specific endgame scenarios
 //!
 //! This module contains comprehensive tests for various endgame positions

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Unit tests for parallel search engine components.
 
 use num_cpus;

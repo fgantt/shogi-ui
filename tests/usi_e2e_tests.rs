@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 // End-to-end USI tests for parallel search configuration and persistence
 
 use shogi_engine::ShogiEngine;

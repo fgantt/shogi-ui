@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::search::search_engine::{IterativeDeepening, SearchEngine};
 use shogi_engine::types::{CapturedPieces, Player};

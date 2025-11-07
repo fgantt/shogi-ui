@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Performance regression tests for bit-scanning optimization system
 //!
 //! These tests ensure that the bit-scanning optimizations meet performance

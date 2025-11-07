@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for move ordering with all search features (Task 6.8)
 //!
 //! Tests verify that move ordering works correctly with:

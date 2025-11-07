@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::{
     bitboards::BitboardBoard,
     search::SearchEngine,

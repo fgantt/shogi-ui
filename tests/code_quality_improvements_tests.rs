@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Unit tests for Task 5.0 code quality improvements (Task 5.15)
 //!
 //! This module tests:

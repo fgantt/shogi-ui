@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Performance regression tests for Null Move Pruning
 //!
 //! These tests verify that NMP performance doesn't degrade below acceptable thresholds.

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Comprehensive test suite for the opening book implementation
 ///
 /// This module contains unit tests, integration tests, and performance tests

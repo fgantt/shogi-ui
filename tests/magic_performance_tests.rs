@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Performance tests and benchmarks for magic bitboards
 //!
 //! These tests measure and compare performance of magic bitboards

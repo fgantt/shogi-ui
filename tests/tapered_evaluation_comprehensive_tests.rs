@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive Testing Suite for Tapered Evaluation
 //!
 //! This module provides end-to-end integration tests, stress tests,

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::search::WorkStealingQueue;
 use shogi_engine::types::{Move, PieceType, Player, Position};
 

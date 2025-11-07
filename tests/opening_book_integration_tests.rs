@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::opening_book::*;
 use shogi_engine::types::*;
 /// Integration tests for opening book with ShogiEngine

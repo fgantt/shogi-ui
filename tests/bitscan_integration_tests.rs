@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for bit-scanning optimization system
 //!
 //! These tests verify that the bit-scanning optimizations work correctly

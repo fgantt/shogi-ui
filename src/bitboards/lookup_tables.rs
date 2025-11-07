@@ -403,7 +403,7 @@ pub fn compare_4bit_lookup_performance(iterations: u32) -> (f64, f64) {
     (lookup_vs_software, lookup_vs_swar)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

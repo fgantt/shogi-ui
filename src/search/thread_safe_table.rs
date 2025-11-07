@@ -125,6 +125,8 @@ pub struct ThreadSafeEntry {
     hash_key: AtomicU64,
     /// Age counter for replacement policies
     age: AtomicU32,
+    /// Entry source tracking for replacement prioritisation
+    source: AtomicU32,
 }
 
 /// Packed entry data for atomic storage
@@ -357,6 +359,7 @@ impl ThreadSafeTranspositionTable {
                 packed_data: AtomicPackedEntry::empty(),
                 hash_key: AtomicU64::new(0),
                 age: AtomicU32::new(0),
+                source: AtomicU32::new(EntrySource::MainSearch.to_discriminant()),
             });
         }
 
@@ -444,7 +447,7 @@ impl ThreadSafeTranspositionTable {
             best_move: packed_data.best_move(),
             hash_key: hash,
             age: entry.age.load(Ordering::Acquire),
-            source: crate::types::EntrySource::MainSearch, // Task 7.0.3: Default to MainSearch for reconstructed entries
+            source: EntrySource::from_discriminant(entry.source.load(Ordering::SeqCst)),
         };
 
         self.increment_hits();
@@ -575,29 +578,29 @@ impl ThreadSafeTranspositionTable {
             format!("bucket lock for hash 0x{:016x}", entry.hash_key)
         });
 
-        let table_entry = &mut self.entries[index];
-
         // Check if we should replace the existing entry
-        let current_hash = table_entry.hash_key.load(Ordering::Acquire);
+        let current_hash = self.entries[index].hash_key.load(Ordering::Acquire);
         if current_hash != 0 {
-            let current_entry = Self::reconstruct_entry_static(table_entry, current_hash);
+            let current_entry = Self::reconstruct_entry_static(&self.entries[index], current_hash);
 
-            // Use replacement policy to decide
-            let cache_age = {
-                let cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
-                    "cache manager mutex during store".to_string()
+            // Use replacement policy to decide (drop guards before mutating entry)
+            let decision = {
+                let cache_age = {
+                    let cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
+                        "cache manager mutex during store".to_string()
+                    });
+                    cache_manager.current_age()
+                };
+
+                let mut handler = self.recover_mutex_guard(self.replacement_handler.lock(), || {
+                    "replacement handler mutex during store".to_string()
                 });
-                cache_manager.current_age()
+                handler.should_replace_entry(&current_entry, &entry, cache_age)
             };
-
-            let mut handler = self.recover_mutex_guard(self.replacement_handler.lock(), || {
-                "replacement handler mutex during store".to_string()
-            });
-            let decision = handler.should_replace_entry(&current_entry, &entry, cache_age);
 
             match decision {
                 ReplacementDecision::Replace => {
-                    Self::store_atomic_entry_static(table_entry, entry);
+                    Self::store_atomic_entry_static(&mut self.entries[index], entry);
                     #[cfg(not(target_arch = "wasm32"))]
                     self.increment_replacements();
                     self.increment_atomic_operations();
@@ -607,7 +610,7 @@ impl ThreadSafeTranspositionTable {
                 }
                 ReplacementDecision::ReplaceIfExact => {
                     if entry.is_exact() && !current_entry.is_exact() {
-                        Self::store_atomic_entry_static(table_entry, entry);
+                        Self::store_atomic_entry_static(&mut self.entries[index], entry);
                         #[cfg(not(target_arch = "wasm32"))]
                         self.increment_replacements();
                         self.increment_atomic_operations();
@@ -616,7 +619,7 @@ impl ThreadSafeTranspositionTable {
             }
         } else {
             // Empty slot, store directly
-            Self::store_atomic_entry_static(table_entry, entry);
+            Self::store_atomic_entry_static(&mut self.entries[index], entry);
             self.increment_atomic_operations();
         }
     }
@@ -650,6 +653,7 @@ impl ThreadSafeTranspositionTable {
                     0,
                     EntrySource::OpeningBook,
                 );
+                debug_assert_eq!(entry.source, EntrySource::OpeningBook);
                 self.store(entry);
                 inserted += 1;
             }
@@ -675,6 +679,11 @@ impl ThreadSafeTranspositionTable {
 
         // Atomic write of age
         table_entry.age.store(entry.age, Ordering::Release);
+
+        // Atomic write of entry source metadata
+        table_entry
+            .source
+            .store(entry.source.to_discriminant(), Ordering::SeqCst);
     }
 
     /// Reconstruct entry from atomic data (static helper)
@@ -686,7 +695,7 @@ impl ThreadSafeTranspositionTable {
             best_move: table_entry.packed_data.best_move(),
             hash_key: hash,
             age: table_entry.age.load(Ordering::Acquire),
-            source: crate::types::EntrySource::MainSearch, // Task 7.0.3: Default to MainSearch for reconstructed entries
+            source: EntrySource::from_discriminant(table_entry.source.load(Ordering::SeqCst)),
         }
     }
 
@@ -821,15 +830,27 @@ impl ThreadSafeTranspositionTable {
         let stats = self.recover_mutex_guard(self.stats.lock(), || {
             "statistics mutex during get_stats".to_string()
         });
+        let total_probes = stats.total_probes.load(Ordering::Acquire);
+        let hits = stats.hits.load(Ordering::Acquire);
+        let misses = stats.misses.load(Ordering::Acquire);
+        let stores = stats.stores.load(Ordering::Acquire);
+        let replacements = stats.replacements.load(Ordering::Acquire);
+        let atomic_operations = stats.atomic_operations.load(Ordering::Acquire);
+        let hit_rate = if total_probes == 0 {
+            0.0
+        } else {
+            (hits as f64 / total_probes as f64) * 100.0
+        };
+
         ThreadSafeStatsSnapshot {
-            total_probes: stats.total_probes.load(Ordering::Acquire),
-            hits: stats.hits.load(Ordering::Acquire),
-            misses: stats.misses.load(Ordering::Acquire),
-            stores: stats.stores.load(Ordering::Acquire),
-            replacements: stats.replacements.load(Ordering::Acquire),
-            atomic_operations: stats.atomic_operations.load(Ordering::Acquire),
+            total_probes,
+            hits,
+            misses,
+            stores,
+            replacements,
+            atomic_operations,
             poison_recoveries: self.poison_recoveries.load(Ordering::Relaxed),
-            hit_rate: self.hit_rate(),
+            hit_rate,
             thread_mode: self.thread_mode,
         }
     }
@@ -1011,6 +1032,7 @@ mod tests {
     use crate::opening_book::{BookMove, OpeningBookBuilder};
     use crate::search::zobrist::{RepetitionState, ZobristHasher};
     use std::panic;
+    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
@@ -1026,9 +1048,11 @@ mod tests {
         depth: u8,
         flag: TranspositionFlag,
         age: u32,
+        hash: u64,
     ) -> TranspositionEntry {
         let mut entry = TranspositionEntry::new_with_age(score, depth, flag, None, 0);
         entry.age = age;
+        entry.hash_key = hash;
         entry
     }
 
@@ -1061,7 +1085,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1000);
         table.store(entry.clone());
 
         let retrieved = table.probe(entry.hash_key, 5);
@@ -1079,7 +1103,7 @@ mod tests {
         config.enable_statistics = false;
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1001);
         table.store(entry.clone());
         table.probe(entry.hash_key, 5);
 
@@ -1099,7 +1123,7 @@ mod tests {
         config.enable_statistics = false;
         let mut table = ThreadSafeTranspositionTable::with_statistics_tracking(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1002);
         table.store(entry.clone());
         table.probe(entry.hash_key, 5);
 
@@ -1132,7 +1156,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1003);
         table.store(entry.clone());
 
         // Probe with higher depth requirement - should miss
@@ -1149,7 +1173,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1004);
         table.store(entry.clone());
 
         // Verify entry is stored
@@ -1167,7 +1191,7 @@ mod tests {
     #[test]
     fn test_thread_safe_table_single_threaded_mode() {
         let config = create_test_config();
-        let table = ThreadSafeTranspositionTable::with_thread_mode(
+        let mut table = ThreadSafeTranspositionTable::with_thread_mode(
             config,
             ThreadSafetyMode::SingleThreaded,
         );
@@ -1175,7 +1199,7 @@ mod tests {
         assert!(!table.is_thread_safe());
         assert_eq!(table.thread_mode(), ThreadSafetyMode::SingleThreaded);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1005);
         table.store(entry.clone());
 
         let retrieved = table.probe(entry.hash_key, 5);
@@ -1197,7 +1221,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1006);
         table.store(entry.clone());
 
         // Hit
@@ -1232,9 +1256,15 @@ mod tests {
         let inserted = table.prefill_from_book(&mut book, 4);
         assert_eq!(inserted, 1);
 
+        assert_eq!(EntrySource::OpeningBook.to_discriminant(), 4);
+
         let (board, player, captured) = BitboardBoard::from_fen(fen).unwrap();
         let hash =
             ZobristHasher::new().hash_position(&board, player, &captured, RepetitionState::None);
+
+        let index = table.get_index(hash);
+        let raw_source = table.entries[index].source.load(Ordering::Acquire);
+        assert_eq!(raw_source, EntrySource::OpeningBook.to_discriminant());
 
         let entry = table.probe(hash, 4).expect("prefilled entry should exist");
         assert_eq!(entry.score, 60);
@@ -1249,7 +1279,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0x1007);
         table.store(entry.clone());
 
         let stats = table.get_stats();
@@ -1265,7 +1295,7 @@ mod tests {
             ThreadSafeTranspositionTable::with_thread_mode(config, ThreadSafetyMode::MultiThreaded);
 
         // Seed the table so the next store triggers the replacement path
-        let mut initial_entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let mut initial_entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1, 0);
         initial_entry.hash_key = 0xAA55_AA55_AA55_AA55;
         table.store(initial_entry.clone());
 
@@ -1277,7 +1307,7 @@ mod tests {
         });
 
         // Attempt to store a replacement entry and ensure recovery succeeds
-        let mut replacement_entry = create_test_entry(120, 6, TranspositionFlag::Exact, 2);
+        let mut replacement_entry = create_test_entry(120, 6, TranspositionFlag::Exact, 2, 0);
         replacement_entry.hash_key = initial_entry.hash_key;
         table.store(replacement_entry.clone());
 
@@ -1302,13 +1332,15 @@ mod tests {
 
         // Spawn multiple threads that read and write
         for i in 0..4 {
+            let config_clone = config.clone();
             let handle = thread::spawn(move || {
                 let mut table = ThreadSafeTranspositionTable::with_thread_mode(
-                    config,
+                    config_clone,
                     ThreadSafetyMode::MultiThreaded,
                 );
                 for j in 0..100 {
-                    let entry = create_test_entry(100 + i, 5, TranspositionFlag::Exact, j);
+                    let hash = ((i as u64) << 32) | (j as u64 + 1);
+                    let entry = create_test_entry(100 + i, 5, TranspositionFlag::Exact, j, hash);
                     table.store(entry.clone());
                     let _result = table.probe(entry.hash_key, 5);
                 }
@@ -1329,7 +1361,7 @@ mod tests {
     fn test_bucket_count() {
         let mut config = create_test_config();
         config.bucket_count = 256;
-        let table = ThreadSafeTranspositionTable::new(config);
+        let mut table = ThreadSafeTranspositionTable::new(config);
 
         #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(table.bucket_count(), 256);
@@ -1343,21 +1375,22 @@ mod tests {
     fn test_bucketed_lock_isolation() {
         let mut config = create_test_config();
         config.bucket_count = 4; // Small number for testing
-        let table = ThreadSafeTranspositionTable::new(config);
+        let mut table = ThreadSafeTranspositionTable::new(config);
 
         // Verify different buckets use different locks
         assert_eq!(table.bucket_count(), 4);
 
         // Create entries that map to different buckets
-        let hash1 = 0x0000000000000001u64;
-        let hash2 = 0x1000000000000000u64;
-        let hash3 = 0x2000000000000000u64;
-        let hash4 = 0x3000000000000000u64;
+        let bucket_shift = 64 - (4u64.trailing_zeros() as u32);
+        let hash1 = 0x0001u64;
+        let hash2 = (1u64 << bucket_shift) | 0x0002;
+        let hash3 = (2u64 << bucket_shift) | 0x0003;
+        let hash4 = (3u64 << bucket_shift) | 0x0004;
 
-        let entry1 = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
-        let entry2 = create_test_entry(200, 5, TranspositionFlag::Exact, 1);
-        let entry3 = create_test_entry(300, 5, TranspositionFlag::Exact, 1);
-        let entry4 = create_test_entry(400, 5, TranspositionFlag::Exact, 1);
+        let entry1 = create_test_entry(100, 5, TranspositionFlag::Exact, 1, hash1);
+        let entry2 = create_test_entry(200, 5, TranspositionFlag::Exact, 1, hash2);
+        let entry3 = create_test_entry(300, 5, TranspositionFlag::Exact, 1, hash3);
+        let entry4 = create_test_entry(400, 5, TranspositionFlag::Exact, 1, hash4);
 
         // These should map to different buckets and can be stored concurrently
         table.store(entry1);
@@ -1458,7 +1491,7 @@ mod tests {
         let config = create_test_config();
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        let entry = create_test_entry(75, 4, TranspositionFlag::Exact, 2);
+        let entry = create_test_entry(75, 4, TranspositionFlag::Exact, 2, 0x2000);
         table.store(entry.clone());
 
         let result = table.probe_with_prefetch(entry.hash_key, 4, Some(0x1234));

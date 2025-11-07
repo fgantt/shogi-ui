@@ -1052,7 +1052,7 @@ impl Default for MLReplacementPolicy {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

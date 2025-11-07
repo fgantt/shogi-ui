@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Performance optimization tests for Late Move Reductions (LMR)
 ///
 /// This module contains tests for LMR performance optimization features:

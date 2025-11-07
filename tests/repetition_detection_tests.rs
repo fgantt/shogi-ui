@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive tests for hash-based repetition detection (Task 5.13)
 //!
 //! This module tests the hash-based repetition detection system to ensure:

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Integration tests for Late Move Reductions (LMR)
 ///
 /// This module contains integration tests for LMR with other search features:

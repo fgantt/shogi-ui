@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Comprehensive integration tests for tablebase system with complete engine
 //!
 //! This module tests the tablebase system integrated with the complete

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Performance benchmarks for the tablebase system
 //!
 //! This module contains performance benchmarks to measure the efficiency

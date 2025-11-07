@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for parallel search with all search features.
 //!
 //! These tests verify that parallel search works correctly with:

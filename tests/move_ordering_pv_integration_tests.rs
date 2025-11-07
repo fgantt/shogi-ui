@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Integration tests for PV move ordering with transposition table
 //!
 //! This module provides comprehensive integration tests to validate

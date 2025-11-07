@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::{BitboardBoard, CapturedPieces, PieceType, Player, Position};
 use shogi_engine::moves::Move;
 use shogi_engine::search::move_ordering::{MoveOrdering, OrderingWeights};

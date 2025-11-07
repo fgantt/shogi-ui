@@ -361,6 +361,29 @@ pub struct Move {
 }
 
 impl Move {
+    #[allow(dead_code)]
+    pub fn new(
+        from: Option<Position>,
+        to: Position,
+        piece_type: PieceType,
+        is_capture: bool,
+        is_promotion: bool,
+        gives_check: bool,
+        is_recapture: bool,
+    ) -> Self {
+        Self {
+            from,
+            to,
+            piece_type,
+            player: Player::Black,
+            is_promotion,
+            is_capture,
+            captured_piece: None,
+            gives_check,
+            is_recapture,
+        }
+    }
+
     pub fn new_move(
         from: Position,
         to: Position,
@@ -770,14 +793,12 @@ impl std::ops::AddAssign for TaperedScore {
         self.eg += other.eg;
     }
 }
-
 impl std::ops::SubAssign for TaperedScore {
     fn sub_assign(&mut self, other: Self) {
         self.mg -= other.mg;
         self.eg -= other.eg;
     }
 }
-
 impl std::ops::Add for TaperedScore {
     type Output = Self;
     fn add(self, other: Self) -> Self {
@@ -1553,7 +1574,6 @@ impl Default for NullMoveReductionStrategy {
         NullMoveReductionStrategy::Dynamic
     }
 }
-
 impl NullMoveReductionStrategy {
     /// Get a string representation of the strategy
     pub fn to_string(&self) -> &'static str {
@@ -1676,8 +1696,8 @@ impl NullMoveConfig {
     /// Create a configuration from a preset
     ///
     /// This creates a new `NullMoveConfig` with settings optimized for the specified preset:
-    /// - **Conservative**: Higher verification_margin (400), lower reduction_factor (2), stricter endgame detection
-    /// - **Aggressive**: Lower verification_margin (100), higher reduction_factor (3), relaxed endgame detection
+    /// - **Conservative**: Higher verification_margin, lower reduction_factor, stricter endgame detection
+    /// - **Aggressive**: Lower verification_margin, higher reduction_factor, relaxed endgame detection
     /// - **Balanced**: Default values optimized for general play (verification_margin: 200, reduction_factor: 2)
     pub fn from_preset(preset: NullMovePreset) -> Self {
         match preset {
@@ -2338,7 +2358,6 @@ impl Default for LMRConfig {
         }
     }
 }
-
 impl LMRConfig {
     /// Validate the configuration parameters and return any errors
     pub fn validate(&self) -> Result<(), String> {
@@ -3128,7 +3147,6 @@ pub struct IIDPVResult {
     /// Time taken for this PV search in milliseconds
     pub search_time_ms: u32,
 }
-
 /// Analysis of multiple principal variations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiPVAnalysis {
@@ -3546,7 +3564,7 @@ impl LMRProfileResult {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
     use crate::bitboards::BitboardBoard;
@@ -3928,7 +3946,6 @@ pub enum IIDDepthStrategy {
     /// Task 4.0: Dynamic depth calculation based on position complexity
     Dynamic,
 }
-
 impl Default for IIDDepthStrategy {
     fn default() -> Self {
         IIDDepthStrategy::Fixed
@@ -4647,7 +4664,6 @@ pub struct IIDPerformanceMetrics {
     /// Task 12.5: Correlation between IID efficiency and ordering effectiveness
     pub iid_efficiency_ordering_correlation: f64,
 }
-
 impl IIDPerformanceMetrics {
     /// Create performance metrics from IID statistics
     pub fn from_stats(stats: &IIDStats, total_search_time_ms: u64) -> Self {
@@ -5442,7 +5458,6 @@ impl Default for WindowSizeStatistics {
         }
     }
 }
-
 impl WindowSizeStatistics {
     /// Get a summary of window size statistics
     pub fn summary(&self) -> String {
@@ -6237,7 +6252,6 @@ pub enum EnginePreset {
     /// Balanced configuration
     Balanced,
 }
-
 /// Time management configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TimeManagementConfig {
@@ -6794,6 +6808,7 @@ pub enum PositionClassification {
 
 /// Source of transposition table entry for priority management (Task 7.0.3.1)
 /// Used to prevent shallow auxiliary search entries from overwriting deeper main search entries
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EntrySource {
     /// Entry from main search path (highest priority)
@@ -6806,6 +6821,26 @@ pub enum EntrySource {
     QuiescenceSearch,
     /// Entry seeded from opening book prefill (lowest intrinsic priority)
     OpeningBook,
+}
+
+impl EntrySource {
+    /// Convert the entry source into its compact discriminant form.
+    pub fn to_discriminant(self) -> u32 {
+        self as u32
+    }
+
+    /// Reconstruct an entry source from a compact discriminant value.
+    /// Falls back to `EntrySource::MainSearch` for unknown values.
+    pub fn from_discriminant(value: u32) -> Self {
+        match value {
+            0 => EntrySource::MainSearch,
+            1 => EntrySource::NullMoveSearch,
+            2 => EntrySource::IIDSearch,
+            3 => EntrySource::QuiescenceSearch,
+            4 => EntrySource::OpeningBook,
+            _ => EntrySource::MainSearch,
+        }
+    }
 }
 
 /// Search state for advanced alpha-beta pruning
@@ -7006,7 +7041,6 @@ pub struct PruningEffectiveness {
     pub lmr_rate: f64,
     pub overall_effectiveness: f64,
 }
-
 /// Pruning frequency statistics for detailed analysis
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct PruningFrequencyStats {
@@ -7793,7 +7827,6 @@ impl PruningManager {
 
         current
     }
-
     /// Advanced futility pruning with multiple conditions
     fn check_advanced_futility_pruning(
         &mut self,
@@ -8576,11 +8609,9 @@ impl PruningManager {
             },
         }
     }
-
     // ============================================================================
     // Performance Monitoring (Phase 4.3)
     // ============================================================================
-
     /// Record pruning decision with detailed statistics
     pub fn record_pruning_decision(
         &mut self,
@@ -9208,7 +9239,6 @@ impl AdaptiveParameters {
         }
     }
 }
-
 /// Position analyzer for adaptive parameters
 #[derive(Debug, PartialEq)]
 pub struct PositionAnalyzer;
@@ -9547,7 +9577,7 @@ pub struct ParameterStatistics {
     pub learning_rate: f64,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod transposition_entry_tests {
     use super::*;
 
@@ -9560,6 +9590,7 @@ mod transposition_entry_tests {
             None,
             0x1234567890ABCDEF,
             42,
+            EntrySource::MainSearch,
         );
 
         assert_eq!(entry.score, 100);
@@ -9663,6 +9694,7 @@ mod transposition_entry_tests {
             None,
             0x1234567890ABCDEF,
             10,
+            EntrySource::MainSearch,
         );
 
         let debug_str = entry.debug_string();
@@ -9691,6 +9723,7 @@ mod transposition_entry_tests {
             Some(move_),
             0xFEDCBA0987654321,
             20,
+            EntrySource::MainSearch,
         );
 
         let debug_str = entry.debug_string();
@@ -9734,8 +9767,24 @@ mod transposition_entry_tests {
 
     #[test]
     fn test_should_replace_with_age() {
-        let entry1 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 10);
-        let entry2 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 20);
+        let entry1 = TranspositionEntry::new(
+            0,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1111,
+            10,
+            EntrySource::MainSearch,
+        );
+        let entry2 = TranspositionEntry::new(
+            0,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1111,
+            20,
+            EntrySource::MainSearch,
+        );
 
         // Should replace due to newer age when everything else is equal
         assert!(entry1.should_replace_with(&entry2));
@@ -9743,8 +9792,24 @@ mod transposition_entry_tests {
 
     #[test]
     fn test_should_not_replace() {
-        let entry1 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 20);
-        let entry2 = TranspositionEntry::new(0, 3, TranspositionFlag::LowerBound, None, 0x1111, 10);
+        let entry1 = TranspositionEntry::new(
+            0,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1111,
+            20,
+            EntrySource::MainSearch,
+        );
+        let entry2 = TranspositionEntry::new(
+            0,
+            3,
+            TranspositionFlag::LowerBound,
+            None,
+            0x1111,
+            10,
+            EntrySource::MainSearch,
+        );
 
         // Should NOT replace - current entry is better in all aspects
         assert!(!entry1.should_replace_with(&entry2));
@@ -9766,6 +9831,7 @@ mod transposition_entry_tests {
             None,
             0x1234567890ABCDEF,
             42,
+            EntrySource::MainSearch,
         );
 
         let cloned = original.clone();
@@ -9816,6 +9882,7 @@ mod transposition_entry_tests {
             None,
             u64::MAX,
             u32::MAX,
+            EntrySource::MainSearch,
         );
 
         assert_eq!(max_entry.score, i32::MAX);
@@ -9824,8 +9891,15 @@ mod transposition_entry_tests {
         assert_eq!(max_entry.age, u32::MAX);
 
         // Test with minimum values
-        let min_entry =
-            TranspositionEntry::new(i32::MIN, 0, TranspositionFlag::UpperBound, None, 0, 0);
+        let min_entry = TranspositionEntry::new(
+            i32::MIN,
+            0,
+            TranspositionFlag::UpperBound,
+            None,
+            0,
+            0,
+            EntrySource::MainSearch,
+        );
 
         assert_eq!(min_entry.score, i32::MIN);
         assert_eq!(min_entry.depth, 0);

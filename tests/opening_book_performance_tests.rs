@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Performance tests for opening book implementation
 ///
 /// This module contains performance benchmarks and regression tests

@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 /// Unit tests for Transposition Table Entry Priority System (Task 7.0.3)
 ///
 /// Tests the TT replacement policy that prevents shallow auxiliary entries

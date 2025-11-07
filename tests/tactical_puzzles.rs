@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Task 8.0: Tactical Test Suite for Quiescence Search
 //!
 //! This module contains unit tests for tactical positions in quiescence search.

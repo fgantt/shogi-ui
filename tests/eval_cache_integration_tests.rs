@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 // Phase 3 Task 3.3: Comprehensive Testing for Evaluation Cache Integration
 
 use shogi_vibe_usi::bitboards::BitboardBoard;

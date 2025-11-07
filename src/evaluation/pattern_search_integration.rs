@@ -269,27 +269,23 @@ mod tests {
     fn test_central_move_detection() {
         let integrator = PatternSearchIntegrator::new();
 
-        let central_move = Move {
-            from: Some(Position::new(6, 4)),
-            to: Position::new(4, 4),
-            piece_type: PieceType::Knight,
-            captured_piece: None,
-            is_promotion: false,
-            is_capture: false,
-            is_drop: false,
-        };
+        let central_move = Move::new_move(
+            Position::new(6, 4),
+            Position::new(4, 4),
+            PieceType::Knight,
+            Player::Black,
+            false,
+        );
 
         assert!(integrator.is_central_move(&central_move));
 
-        let edge_move = Move {
-            from: Some(Position::new(6, 0)),
-            to: Position::new(4, 0),
-            piece_type: PieceType::Lance,
-            captured_piece: None,
-            is_promotion: false,
-            is_capture: false,
-            is_drop: false,
-        };
+        let edge_move = Move::new_move(
+            Position::new(6, 0),
+            Position::new(4, 0),
+            PieceType::Lance,
+            Player::Black,
+            false,
+        );
 
         assert!(!integrator.is_central_move(&edge_move));
     }
