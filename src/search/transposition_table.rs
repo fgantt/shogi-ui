@@ -5,6 +5,17 @@ use crate::types::*;
 /// This struct provides a hash table-based cache for storing and retrieving
 /// transposition table entries. It supports configurable size, replacement policies,
 /// and comprehensive statistics tracking.
+/// 
+/// # Hash Key Generation
+/// 
+/// **Important:** This basic table does NOT generate hash keys internally.
+/// Callers must provide valid hash keys when storing entries, typically generated
+/// using a Zobrist hasher for the board position. Hash keys are used for:
+/// - Converting positions to table indices
+/// - Detecting hash collisions
+/// - Validating entry integrity
+/// 
+/// Use `crate::search::zobrist::ZobristHasher` to generate position hash keys.
 pub struct TranspositionTable {
     /// The actual hash table storing entries
     entries: Vec<Option<TranspositionEntry>>,
@@ -109,10 +120,14 @@ impl TranspositionTable {
     }
     
     /// Store an entry in the transposition table
+    /// 
+    /// # Important
+    /// The caller must provide a valid hash key in the `entry.hash_key` field.
+    /// Hash keys should be generated using a Zobrist hasher for the position.
+    /// This method does NOT generate or modify the hash key.
     pub fn store(&mut self, mut entry: TranspositionEntry) {
-        // Update the entry's age and hash key
+        // Update the entry's age (but preserve the hash key provided by caller)
         entry.age = self.age;
-        entry.hash_key = self.get_hash_key(&entry);
         
         let index = self.hash_to_index(entry.hash_key);
         
@@ -253,13 +268,6 @@ impl TranspositionTable {
         }
     }
     
-    /// Get hash key for an entry (placeholder - will be enhanced in later tasks)
-    fn get_hash_key(&self, _entry: &TranspositionEntry) -> u64 {
-        // For now, just use the entry's existing hash key
-        // This will be enhanced when we integrate with Zobrist hashing
-        0
-    }
-    
     /// Determine if an existing entry should be replaced
     fn should_replace(&self, existing: &TranspositionEntry, new: &TranspositionEntry) -> bool {
         match self.config.replacement_policy {
@@ -382,6 +390,43 @@ mod tests {
         let result = table.probe(0xFEDCBA0987654321, 5);
         assert!(result.is_none());
         assert_eq!(table.get_statistics(), (0, 1, 0.0));
+    }
+    
+    #[test]
+    fn test_hash_collision_detection_with_different_keys() {
+        let mut table = TranspositionTable::with_size(100);
+        
+        // Store first entry with specific hash
+        let entry1 = TranspositionEntry::new_with_age(
+            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+        );
+        table.store(entry1);
+        
+        // Verify first entry is retrievable
+        let result1 = table.probe(0x1234567890ABCDEF, 5);
+        assert!(result1.is_some());
+        assert_eq!(result1.unwrap().score, 100);
+        
+        // Store second entry with different hash that maps to same index
+        // Calculate a hash that will collide in the table index
+        let table_size = 100;
+        let hash2 = 0x1234567890ABCDEF + (table_size as u64);
+        let entry2 = TranspositionEntry::new_with_age(
+            200, 6, TranspositionFlag::Exact, None, hash2
+        );
+        table.store(entry2);
+        
+        // Probe with second hash - should find second entry
+        let result2 = table.probe(hash2, 5);
+        assert!(result2.is_some());
+        assert_eq!(result2.unwrap().score, 200);
+        
+        // Probe with first hash - should NOT find anything (replaced by collision)
+        let result1_after = table.probe(0x1234567890ABCDEF, 5);
+        assert!(result1_after.is_none(), "First entry should be replaced or hash mismatch detected");
+        
+        // Verify hash collision detection is working
+        assert_eq!(table.get_entry_count(), 1, "Should have exactly one entry");
     }
     
     #[test]
