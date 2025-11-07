@@ -6731,6 +6731,10 @@ pub struct CoreSearchMetrics {
     pub tt_lower_bound_hits: u64,
     /// Number of upper bound entries in TT
     pub tt_upper_bound_hits: u64,
+    /// Number of times auxiliary entry was prevented from overwriting deeper main entry (Task 7.0.3.10)
+    pub tt_auxiliary_overwrites_prevented: u64,
+    /// Number of times main entry preserved another main entry (Task 7.0.3.10)
+    pub tt_main_entries_preserved: u64,
 }
 
 impl CoreSearchMetrics {

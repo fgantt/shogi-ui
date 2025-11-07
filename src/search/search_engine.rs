@@ -252,6 +252,32 @@ impl SearchEngine {
 
     #[inline]
     fn maybe_buffer_tt_store(&mut self, entry: TranspositionEntry, depth: u8, flag: TranspositionFlag) {
+        // Task 7.0.3.8-3.9: TT Entry Priority - Prevent auxiliary entries from overwriting deeper main entries
+        // Check if we should skip storing this entry to preserve higher-quality entries
+        if entry.source != crate::types::EntrySource::MainSearch {
+            // This is an auxiliary search entry (NMP, IID, etc.)
+            // Check if there's an existing entry that should be preserved
+            if let Some(existing) = self.transposition_table.probe(entry.hash_key, 0) {
+                // Only prevent overwrite if existing entry is from MainSearch AND deeper
+                if existing.source == crate::types::EntrySource::MainSearch && existing.depth > entry.depth {
+                    // Don't overwrite deeper main search entry with shallow auxiliary entry
+                    self.core_search_metrics.tt_auxiliary_overwrites_prevented += 1;
+                    crate::debug_utils::trace_log("TT_PRIORITY", &format!(
+                        "Prevented auxiliary entry (source: {:?}, depth: {}) from overwriting main entry (depth: {})",
+                        entry.source, entry.depth, existing.depth
+                    ));
+                    return;
+                }
+            }
+        } else {
+            // MainSearch entry - track if it's preserving a main entry
+            if let Some(existing) = self.transposition_table.probe(entry.hash_key, 0) {
+                if existing.source == crate::types::EntrySource::MainSearch {
+                    self.core_search_metrics.tt_main_entries_preserved += 1;
+                }
+            }
+        }
+        
         // Gate writes: at shallow depths, only store Exact entries
         // BUT: Always store entries with best_move to enable PV construction
         // This is critical - PV building needs best_move entries for all positions in the line
