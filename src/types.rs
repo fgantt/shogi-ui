@@ -2550,6 +2550,7 @@ pub struct LMRStats {
     pub re_search_margin_allowed: u64,        // Number of re-searches allowed despite margin
     pub tt_move_exempted: u64,                // Number of TT moves exempted from LMR
     pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
+    pub iid_move_explicitly_exempted: u64,    // Number of IID moves explicitly exempted from LMR (Task 7.0.1)
     /// Statistics by game phase (Task 4.6)
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
     /// Position classification statistics (Task 5.10)

@@ -501,3 +501,181 @@ mod lmr_end_to_end_tests {
         assert_eq!(engine.transposition_table_len(), 0);
     }
 }
+
+#[cfg(test)]
+mod iid_lmr_coordination_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16)
+    }
+
+    fn create_test_board() -> BitboardBoard {
+        BitboardBoard::new()
+    }
+
+    fn create_test_captured_pieces() -> CapturedPieces {
+        CapturedPieces::new()
+    }
+
+    /// Test 7.0.1.8: Test that IID moves are explicitly exempted from LMR
+    #[test]
+    fn test_iid_move_explicit_exemption() {
+        let mut engine = create_test_engine();
+        
+        // Enable both IID and LMR
+        let mut iid_config = IIDConfig::default();
+        iid_config.enabled = true;
+        iid_config.min_depth = 3;
+        engine.update_iid_config(iid_config).unwrap();
+        
+        let mut lmr_config = LMRConfig::default();
+        lmr_config.enabled = true;
+        lmr_config.min_depth = 3;
+        lmr_config.min_move_index = 2;  // Apply LMR starting from move 2
+        engine.update_lmr_config(lmr_config).unwrap();
+        
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Reset statistics before search
+        engine.reset_lmr_stats();
+        engine.reset_iid_stats();
+        
+        // Perform search at sufficient depth to trigger IID
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 5, 5000);
+        
+        // Check that IID was performed
+        let iid_stats = engine.get_iid_stats();
+        assert!(iid_stats.iid_searches_performed > 0, "IID should have been performed");
+        
+        // Check that IID move explicit exemption counter was incremented
+        let lmr_stats = engine.get_lmr_stats();
+        
+        // IID move should have been explicitly exempted at least once
+        assert!(
+            lmr_stats.iid_move_explicitly_exempted > 0,
+            "IID move should have been explicitly exempted from LMR at least once, but count was {}",
+            lmr_stats.iid_move_explicitly_exempted
+        );
+        
+        println!("IID searches performed: {}", iid_stats.iid_searches_performed);
+        println!("IID moves explicitly exempted: {}", lmr_stats.iid_move_explicitly_exempted);
+        println!("Total moves considered: {}", lmr_stats.moves_considered);
+        println!("Reductions applied: {}", lmr_stats.reductions_applied);
+    }
+
+    /// Test 7.0.1.9: Integration test to ensure IID move is first in ordering AND exempted from LMR
+    #[test]
+    fn test_iid_move_ordering_and_exemption() {
+        let mut engine = create_test_engine();
+        
+        // Enable IID with configuration that ensures it runs
+        let mut iid_config = IIDConfig::default();
+        iid_config.enabled = true;
+        iid_config.min_depth = 4;
+        engine.update_iid_config(iid_config).unwrap();
+        
+        // Enable LMR with low thresholds to ensure it triggers
+        let mut lmr_config = LMRConfig::default();
+        lmr_config.enabled = true;
+        lmr_config.min_depth = 4;
+        lmr_config.min_move_index = 1;  // Try to reduce even second move
+        engine.update_lmr_config(lmr_config).unwrap();
+        
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Reset statistics
+        engine.reset_lmr_stats();
+        engine.reset_iid_stats();
+        
+        // Perform search
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 6, 10000);
+        
+        // Get statistics
+        let iid_stats = engine.get_iid_stats();
+        let lmr_stats = engine.get_lmr_stats();
+        
+        // Verify IID was performed
+        assert!(iid_stats.iid_searches_performed > 0, "IID should have been performed");
+        
+        // Verify IID move was ordered first (when IID finds a move)
+        if iid_stats.iid_move_position_tracked > 0 {
+            let avg_position = iid_stats.iid_move_position_sum as f64 
+                / iid_stats.iid_move_position_tracked as f64;
+            
+            println!("IID move average position: {:.2}", avg_position);
+            println!("IID moves ordered first: {}", iid_stats.iid_move_ordered_first);
+            println!("IID moves not ordered first: {}", iid_stats.iid_move_not_ordered_first);
+            
+            // IID move should be ordered first most of the time
+            assert!(
+                iid_stats.iid_move_ordered_first > 0,
+                "IID move should be ordered first at least once"
+            );
+        }
+        
+        // Verify IID move explicit exemption was used
+        println!("IID moves explicitly exempted from LMR: {}", lmr_stats.iid_move_explicitly_exempted);
+        
+        // The IID move should have been explicitly exempted
+        // (This verifies the coordination between IID and LMR)
+        assert!(
+            lmr_stats.iid_move_explicitly_exempted > 0,
+            "IID move should have been explicitly exempted from LMR"
+        );
+    }
+
+    /// Test that IID move exemption doesn't interfere with other LMR exemptions
+    #[test]
+    fn test_iid_exemption_with_other_exemptions() {
+        let mut engine = create_test_engine();
+        
+        // Enable IID and LMR
+        let mut iid_config = IIDConfig::default();
+        iid_config.enabled = true;
+        iid_config.min_depth = 3;
+        engine.update_iid_config(iid_config).unwrap();
+        
+        let mut lmr_config = LMRConfig::default();
+        lmr_config.enabled = true;
+        lmr_config.min_depth = 3;
+        lmr_config.min_move_index = 2;
+        lmr_config.enable_extended_exemptions = true;  // Enable killer/TT exemptions
+        engine.update_lmr_config(lmr_config).unwrap();
+        
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Reset statistics
+        engine.reset_lmr_stats();
+        engine.reset_iid_stats();
+        
+        // Perform search
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 5, 5000);
+        
+        let lmr_stats = engine.get_lmr_stats();
+        let iid_stats = engine.get_iid_stats();
+        
+        // Verify various exemptions work together
+        println!("IID moves exempted: {}", lmr_stats.iid_move_explicitly_exempted);
+        println!("TT moves exempted: {}", lmr_stats.tt_move_exempted);
+        println!("Total moves considered: {}", lmr_stats.moves_considered);
+        println!("Reductions applied: {}", lmr_stats.reductions_applied);
+        
+        // If IID ran and found moves, they should be exempted
+        if iid_stats.iid_searches_performed > 0 {
+            // IID exemption should work alongside other exemptions
+            assert!(
+                lmr_stats.iid_move_explicitly_exempted > 0 ||
+                lmr_stats.tt_move_exempted > 0 ||
+                lmr_stats.reductions_applied > 0,
+                "Some form of LMR activity should have occurred"
+            );
+        }
+    }
+}

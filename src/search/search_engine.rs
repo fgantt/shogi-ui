@@ -4216,6 +4216,7 @@ impl SearchEngine {
 
             crate::debug_utils::start_timing(&format!("move_search_{}", move_index));
             // Task 2.6: Pass current move as opponent_last_move to recursive call
+            // Task 7.0.1: Pass IID move for explicit exemption from LMR
             let score = self.search_move_with_lmr(
                 board, 
                 &new_captured, 
@@ -4231,7 +4232,8 @@ impl SearchEngine {
                 is_root,
                 move_.is_capture,
                 has_check,
-                opponent_last_move.clone()  // Task 2.6: Pass opponent's last move for counter-move heuristic
+                opponent_last_move.clone(),  // Task 2.6: Pass opponent's last move for counter-move heuristic
+                iid_move.as_ref()  // Task 7.0.1: Pass IID move for explicit exemption from LMR
             );
             crate::debug_utils::end_timing(&format!("move_search_{}", move_index), "NEGAMAX");
             
@@ -8011,7 +8013,8 @@ impl SearchEngine {
                            _is_root: bool,
                            has_capture: bool,
                            has_check: bool,
-                           opponent_last_move: Option<Move>) -> i32 {  // Task 2.6: Track opponent's last move for counter-move heuristic
+                           opponent_last_move: Option<Move>,  // Task 2.6: Track opponent's last move for counter-move heuristic
+                           iid_move: Option<&Move>) -> i32 {  // Task 7.0.1: IID move for explicit exemption
         
         self.lmr_stats.moves_considered += 1;
         
@@ -8079,10 +8082,25 @@ impl SearchEngine {
             ));
         }
         
+        // Task 7.0.1: Explicit IID move exemption from LMR
+        let is_iid_move = if let Some(iid_mv) = iid_move {
+            self.moves_equal(move_, iid_mv)
+        } else {
+            false
+        };
+        
+        if is_iid_move {
+            self.lmr_stats.iid_move_explicitly_exempted += 1;
+            crate::debug_utils::trace_log("LMR", &format!(
+                "IID move explicitly exempted from LMR: {}",
+                move_.to_usi_string()
+            ));
+        }
+        
         // Check if LMR should be applied using new PruningManager (Task 3.4, 3.6)
-        // Escape moves are exempted from LMR (Task 6.5)
-        let reduction = if is_escape {
-            0  // Escape moves are exempted from LMR
+        // Escape moves and IID moves are exempted from LMR (Task 6.5, Task 7.0.1)
+        let reduction = if is_escape || is_iid_move {
+            0  // Escape moves and IID moves are exempted from LMR
         } else {
             self.pruning_manager.calculate_lmr_reduction(
                 &search_state, 
