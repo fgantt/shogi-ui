@@ -17,11 +17,11 @@
 //! - Re-search margin should improve efficiency without significantly impacting accuracy
 //! - Optimal margin value should balance re-search reduction with search accuracy
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, LMRConfig},
+    search::SearchEngine,
+    types::{CapturedPieces, LMRConfig, Player},
 };
 use std::time::Duration;
 
@@ -39,11 +39,11 @@ fn benchmark_lmr_without_margin(c: &mut Criterion) {
     let mut group = c.benchmark_group("lmr_without_margin");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test across different depths
     for depth in [3, 4, 5, 6] {
         group.bench_with_input(
@@ -53,7 +53,7 @@ fn benchmark_lmr_without_margin(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_margin(0);
                     engine.reset_lmr_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -62,14 +62,14 @@ fn benchmark_lmr_without_margin(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_lmr_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -78,12 +78,12 @@ fn benchmark_lmr_with_margin_values(c: &mut Criterion) {
     let mut group = c.benchmark_group("lmr_with_margin_values");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Test different margin values
     for margin in [0, 25, 50, 75, 100] {
         group.bench_with_input(
@@ -93,7 +93,7 @@ fn benchmark_lmr_with_margin_values(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_margin(margin);
                     engine.reset_lmr_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let start_time = std::time::Instant::now();
                     let result = engine.search_at_depth_legacy(
@@ -104,18 +104,25 @@ fn benchmark_lmr_with_margin_values(c: &mut Criterion) {
                         1000,
                     );
                     let search_time = start_time.elapsed();
-                    
+
                     let stats = engine.get_lmr_stats().clone();
                     let efficiency = stats.efficiency();
                     let research_rate = stats.research_rate();
                     let margin_effectiveness = stats.re_search_margin_effectiveness();
-                    
-                    black_box((result, stats, search_time, efficiency, research_rate, margin_effectiveness))
+
+                    black_box((
+                        result,
+                        stats,
+                        search_time,
+                        efficiency,
+                        research_rate,
+                        margin_effectiveness,
+                    ))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -124,17 +131,17 @@ fn benchmark_re_search_margin_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("re_search_margin_effectiveness");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     group.bench_function("margin_0", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_margin(0);
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -143,17 +150,17 @@ fn benchmark_re_search_margin_effectiveness(c: &mut Criterion) {
                 depth,
                 1000,
             );
-            
+
             let stats = engine.get_lmr_stats().clone();
             black_box((result, stats))
         });
     });
-    
+
     group.bench_function("margin_50", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_margin(50);
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -162,13 +169,13 @@ fn benchmark_re_search_margin_effectiveness(c: &mut Criterion) {
                 depth,
                 1000,
             );
-            
+
             let stats = engine.get_lmr_stats().clone();
             let margin_effectiveness = stats.re_search_margin_effectiveness();
             black_box((result, stats, margin_effectiveness))
         });
     });
-    
+
     group.finish();
 }
 
@@ -177,59 +184,55 @@ fn benchmark_optimal_margin_value(c: &mut Criterion) {
     let mut group = c.benchmark_group("optimal_margin_value");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(15);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Test margin values: 0, 25, 50, 75, 100
     for margin in [0, 25, 50, 75, 100] {
-        group.bench_with_input(
-            BenchmarkId::new("margin", margin),
-            &margin,
-            |b, &margin| {
-                b.iter(|| {
-                    let mut engine = create_test_engine_with_margin(margin);
-                    engine.reset_lmr_stats();
-                    
-                    let mut board_mut = board.clone();
-                    let start_time = std::time::Instant::now();
-                    let result = engine.search_at_depth_legacy(
-                        black_box(&mut board_mut),
-                        black_box(&captured_pieces),
-                        player,
-                        depth,
-                        2000,
-                    );
-                    let search_time = start_time.elapsed();
-                    
-                    let stats = engine.get_lmr_stats().clone();
-                    
-                    // Calculate key metrics
-                    let efficiency = stats.efficiency();
-                    let research_rate = stats.research_rate();
-                    let cutoff_rate = stats.cutoff_rate();
-                    let margin_effectiveness = stats.re_search_margin_effectiveness();
-                    let margin_prevented = stats.re_search_margin_prevented;
-                    let margin_allowed = stats.re_search_margin_allowed;
-                    
-                    black_box((
-                        result,
-                        stats,
-                        search_time,
-                        efficiency,
-                        research_rate,
-                        cutoff_rate,
-                        margin_effectiveness,
-                        margin_prevented,
-                        margin_allowed,
-                    ))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("margin", margin), &margin, |b, &margin| {
+            b.iter(|| {
+                let mut engine = create_test_engine_with_margin(margin);
+                engine.reset_lmr_stats();
+
+                let mut board_mut = board.clone();
+                let start_time = std::time::Instant::now();
+                let result = engine.search_at_depth_legacy(
+                    black_box(&mut board_mut),
+                    black_box(&captured_pieces),
+                    player,
+                    depth,
+                    2000,
+                );
+                let search_time = start_time.elapsed();
+
+                let stats = engine.get_lmr_stats().clone();
+
+                // Calculate key metrics
+                let efficiency = stats.efficiency();
+                let research_rate = stats.research_rate();
+                let cutoff_rate = stats.cutoff_rate();
+                let margin_effectiveness = stats.re_search_margin_effectiveness();
+                let margin_prevented = stats.re_search_margin_prevented;
+                let margin_allowed = stats.re_search_margin_allowed;
+
+                black_box((
+                    result,
+                    stats,
+                    search_time,
+                    efficiency,
+                    research_rate,
+                    cutoff_rate,
+                    margin_effectiveness,
+                    margin_prevented,
+                    margin_allowed,
+                ))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -238,18 +241,18 @@ fn benchmark_re_search_rate_impact(c: &mut Criterion) {
     let mut group = c.benchmark_group("re_search_rate_impact");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Compare margin = 0 vs margin = 50
     group.bench_function("margin_0_research_rate", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_margin(0);
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -258,18 +261,18 @@ fn benchmark_re_search_rate_impact(c: &mut Criterion) {
                 depth,
                 1000,
             );
-            
+
             let stats = engine.get_lmr_stats().clone();
             let research_rate = stats.research_rate();
             black_box((result, stats, research_rate))
         });
     });
-    
+
     group.bench_function("margin_50_research_rate", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_margin(50);
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -278,14 +281,14 @@ fn benchmark_re_search_rate_impact(c: &mut Criterion) {
                 depth,
                 1000,
             );
-            
+
             let stats = engine.get_lmr_stats().clone();
             let research_rate = stats.research_rate();
             let margin_prevented = stats.re_search_margin_prevented;
             black_box((result, stats, research_rate, margin_prevented))
         });
     });
-    
+
     group.finish();
 }
 
@@ -294,17 +297,17 @@ fn benchmark_comprehensive_margin_analysis(c: &mut Criterion) {
     let mut group = c.benchmark_group("comprehensive_margin_analysis");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(15);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     group.bench_function("full_analysis", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_margin(50);
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start_time = std::time::Instant::now();
             let result = engine.search_at_depth_legacy(
@@ -315,9 +318,9 @@ fn benchmark_comprehensive_margin_analysis(c: &mut Criterion) {
                 2000,
             );
             let search_time = start_time.elapsed();
-            
+
             let stats = engine.get_lmr_stats().clone();
-            
+
             // Comprehensive metrics
             let efficiency = stats.efficiency();
             let research_rate = stats.research_rate();
@@ -327,7 +330,7 @@ fn benchmark_comprehensive_margin_analysis(c: &mut Criterion) {
             let margin_allowed = stats.re_search_margin_allowed;
             let avg_reduction = stats.average_reduction;
             let avg_depth_saved = stats.average_depth_saved();
-            
+
             black_box((
                 result,
                 stats,
@@ -343,7 +346,7 @@ fn benchmark_comprehensive_margin_analysis(c: &mut Criterion) {
             ))
         });
     });
-    
+
     group.finish();
 }
 
@@ -352,7 +355,7 @@ criterion_group! {
     config = Criterion::default()
         .measurement_time(Duration::from_secs(30))
         .sample_size(10);
-    targets = 
+    targets =
         benchmark_lmr_without_margin,
         benchmark_lmr_with_margin_values,
         benchmark_re_search_margin_effectiveness,
@@ -362,4 +365,3 @@ criterion_group! {
 }
 
 criterion_main!(benches);
-

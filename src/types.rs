@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -114,13 +114,14 @@ impl PieceType {
     }
 
     pub fn can_promote(self) -> bool {
-        matches!(self, 
-            PieceType::Pawn | 
-            PieceType::Lance | 
-            PieceType::Knight | 
-            PieceType::Silver | 
-            PieceType::Bishop | 
-            PieceType::Rook
+        matches!(
+            self,
+            PieceType::Pawn
+                | PieceType::Lance
+                | PieceType::Knight
+                | PieceType::Silver
+                | PieceType::Bishop
+                | PieceType::Rook
         )
     }
 
@@ -150,12 +151,55 @@ impl PieceType {
 
     pub fn get_move_offsets(&self, direction: i8) -> Vec<(i8, i8)> {
         match self {
-            PieceType::Silver => vec![(direction, 0), (direction, -1), (direction, 1), (-direction, -1), (-direction, 1)],
-            PieceType::Gold | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => 
-                vec![(direction, 0), (direction, -1), (direction, 1), (0, -1), (0, 1), (-direction, 0)],
-            PieceType::King => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
-            PieceType::PromotedBishop => vec![(1, 1), (1, -1), (-1, 1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)],
-            PieceType::PromotedRook => vec![(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)],
+            PieceType::Silver => vec![
+                (direction, 0),
+                (direction, -1),
+                (direction, 1),
+                (-direction, -1),
+                (-direction, 1),
+            ],
+            PieceType::Gold
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => vec![
+                (direction, 0),
+                (direction, -1),
+                (direction, 1),
+                (0, -1),
+                (0, 1),
+                (-direction, 0),
+            ],
+            PieceType::King => vec![
+                (1, 0),
+                (-1, 0),
+                (0, 1),
+                (0, -1),
+                (1, 1),
+                (1, -1),
+                (-1, 1),
+                (-1, -1),
+            ],
+            PieceType::PromotedBishop => vec![
+                (1, 1),
+                (1, -1),
+                (-1, 1),
+                (-1, -1),
+                (1, 0),
+                (-1, 0),
+                (0, 1),
+                (0, -1),
+            ],
+            PieceType::PromotedRook => vec![
+                (1, 0),
+                (-1, 0),
+                (0, 1),
+                (0, -1),
+                (1, 1),
+                (1, -1),
+                (-1, 1),
+                (-1, -1),
+            ],
             _ => vec![], // Pawn, Lance, Knight, Rook, Bishop are handled by sliding logic
         }
     }
@@ -202,8 +246,16 @@ impl Position {
     }
 
     pub fn distance_to(self, other: Position) -> u8 {
-        let dr = if self.row > other.row { self.row - other.row } else { other.row - self.row };
-        let dc = if self.col > other.col { self.col - other.col } else { other.col - self.col };
+        let dr = if self.row > other.row {
+            self.row - other.row
+        } else {
+            other.row - self.row
+        };
+        let dc = if self.col > other.col {
+            self.col - other.col
+        } else {
+            other.col - self.col
+        };
         dr + dc
     }
 
@@ -215,7 +267,9 @@ impl Position {
     }
 
     pub fn from_usi_string(usi_str: &str) -> Result<Position, &str> {
-        if usi_str.len() != 2 { return Err("Invalid position string"); }
+        if usi_str.len() != 2 {
+            return Err("Invalid position string");
+        }
         let mut chars = usi_str.chars();
         let file_char = chars.next().ok_or("Invalid position string")?;
         let rank_char = chars.next().ok_or("Invalid position string")?;
@@ -223,7 +277,9 @@ impl Position {
         let col = 9 - (file_char.to_digit(10).ok_or("Invalid file")? as u8);
         let row = (rank_char as u8) - b'a';
 
-        if col > 8 || row > 8 { return Err("Position out of bounds"); }
+        if col > 8 || row > 8 {
+            return Err("Position out of bounds");
+        }
         Ok(Position::new(row, col))
     }
 }
@@ -244,7 +300,10 @@ impl Piece {
                 "[PIECE::NEW ERROR] Invalid piece_type with to_u8() = {}. Defaulting to Pawn.",
                 piece_idx
             ));
-            return Self { piece_type: PieceType::Pawn, player };
+            return Self {
+                piece_type: PieceType::Pawn,
+                player,
+            };
         }
         Self { piece_type, player }
     }
@@ -277,7 +336,8 @@ impl Piece {
             PieceType::PromotedSilver => "+s",
             PieceType::PromotedBishop => "+b",
             PieceType::PromotedRook => "+r",
-        }.to_string();
+        }
+        .to_string();
 
         if self.player == Player::Black {
             fen_char = fen_char.to_uppercase();
@@ -289,19 +349,25 @@ impl Piece {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Move {
-    pub from: Option<Position>,  // None for drops
+    pub from: Option<Position>, // None for drops
     pub to: Position,
     pub piece_type: PieceType,
     pub player: Player,
     pub is_promotion: bool,
     pub is_capture: bool,
     pub captured_piece: Option<Piece>,
-    pub gives_check: bool,       // Whether this move gives check
-    pub is_recapture: bool,      // Whether this is a recapture move
+    pub gives_check: bool,  // Whether this move gives check
+    pub is_recapture: bool, // Whether this is a recapture move
 }
 
 impl Move {
-    pub fn new_move(from: Position, to: Position, piece_type: PieceType, player: Player, promote: bool) -> Self {
+    pub fn new_move(
+        from: Position,
+        to: Position,
+        piece_type: PieceType,
+        player: Player,
+        promote: bool,
+    ) -> Self {
         Self {
             from: Some(from),
             to,
@@ -333,7 +399,11 @@ impl Move {
         self.from.is_none()
     }
 
-    pub fn from_usi_string(usi_str: &str, player: Player, board: &crate::bitboards::BitboardBoard) -> Result<Move, &'static str> {
+    pub fn from_usi_string(
+        usi_str: &str,
+        player: Player,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> Result<Move, &'static str> {
         if usi_str.len() < 4 {
             return Err("Invalid USI move string length");
         }
@@ -341,8 +411,10 @@ impl Move {
         if usi_str.contains('*') {
             // Drop move, e.g., "P*5e"
             let parts: Vec<&str> = usi_str.split('*').collect();
-            if parts.len() != 2 { return Err("Invalid drop move format"); }
-            
+            if parts.len() != 2 {
+                return Err("Invalid drop move format");
+            }
+
             let piece_type = match parts[0] {
                 "P" => PieceType::Pawn,
                 "L" => PieceType::Lance,
@@ -354,7 +426,8 @@ impl Move {
                 _ => return Err("Invalid piece type for drop"),
             };
 
-            let to = Position::from_usi_string(parts[1]).map_err(|_| "Invalid position in drop move")?;
+            let to =
+                Position::from_usi_string(parts[1]).map_err(|_| "Invalid position in drop move")?;
             Ok(Move::new_drop(piece_type, to, player))
         } else {
             // Normal move, e.g., "7g7f" or "2b8h+"
@@ -371,11 +444,11 @@ impl Move {
             }
 
             let mut mv = Move::new_move(from, to, piece_to_move.piece_type, player, is_promotion);
-            
+
             if board.is_square_occupied(to) {
                 mv.is_capture = true;
             }
-            
+
             Ok(mv)
         }
     }
@@ -461,7 +534,7 @@ impl CapturedPieces {
             Player::Black => &mut self.black,
             Player::White => &mut self.white,
         };
-        
+
         if let Some(index) = pieces.iter().position(|&p| p == piece_type) {
             pieces.remove(index);
             true
@@ -490,9 +563,9 @@ pub struct ImpasseResult {
 /// Possible outcomes of an impasse situation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ImpasseOutcome {
-    Draw,         // Both players have 24+ points
-    BlackWins,    // White has < 24 points
-    WhiteWins,    // Black has < 24 points
+    Draw,      // Both players have 24+ points
+    BlackWins, // White has < 24 points
+    WhiteWins, // Black has < 24 points
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -512,7 +585,15 @@ pub struct TranspositionEntry {
 impl TranspositionEntry {
     /// Create a new transposition table entry
     /// Task 7.0.3.3: Added source parameter for entry priority management
-    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64, age: u32, source: EntrySource) -> Self {
+    pub fn new(
+        score: i32,
+        depth: u8,
+        flag: TranspositionFlag,
+        best_move: Option<Move>,
+        hash_key: u64,
+        age: u32,
+        source: EntrySource,
+    ) -> Self {
         Self {
             score,
             depth,
@@ -523,82 +604,96 @@ impl TranspositionEntry {
             source,
         }
     }
-    
+
     /// Create a new entry with default age (0) and MainSearch source
-    pub fn new_with_age(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64) -> Self {
-        Self::new(score, depth, flag, best_move, hash_key, 0, EntrySource::MainSearch)
+    pub fn new_with_age(
+        score: i32,
+        depth: u8,
+        flag: TranspositionFlag,
+        best_move: Option<Move>,
+        hash_key: u64,
+    ) -> Self {
+        Self::new(
+            score,
+            depth,
+            flag,
+            best_move,
+            hash_key,
+            0,
+            EntrySource::MainSearch,
+        )
     }
-    
+
     /// Check if this entry is valid for the given search depth
     pub fn is_valid_for_depth(&self, required_depth: u8) -> bool {
         self.depth >= required_depth
     }
-    
+
     /// Check if this entry matches the given hash key
     pub fn matches_hash(&self, hash_key: u64) -> bool {
         self.hash_key == hash_key
     }
-    
+
     /// Check if this entry is exact (not a bound)
     pub fn is_exact(&self) -> bool {
         matches!(self.flag, TranspositionFlag::Exact)
     }
-    
+
     /// Check if this entry is a lower bound
     pub fn is_lower_bound(&self) -> bool {
         matches!(self.flag, TranspositionFlag::LowerBound)
     }
-    
+
     /// Check if this entry is an upper bound
     pub fn is_upper_bound(&self) -> bool {
         matches!(self.flag, TranspositionFlag::UpperBound)
     }
-    
+
     /// Update the age of this entry
     pub fn update_age(&mut self, new_age: u32) {
         self.age = new_age;
     }
-    
+
     /// Get the memory size of this entry in bytes
     pub fn memory_size(&self) -> usize {
         std::mem::size_of::<Self>()
     }
-    
+
     /// Create a debug string representation
     pub fn debug_string(&self) -> String {
         let move_str = match &self.best_move {
             Some(m) => format!("{}", m.to_usi_string()),
             None => "None".to_string(),
         };
-        
+
         format!(
             "TranspositionEntry {{ score: {}, depth: {}, flag: {:?}, best_move: {}, hash_key: 0x{:016x}, age: {} }}",
             self.score, self.depth, self.flag, move_str, self.hash_key, self.age
         )
     }
-    
+
     /// Check if this entry should be replaced by another entry
     pub fn should_replace_with(&self, other: &TranspositionEntry) -> bool {
         // Replace if hash keys don't match (collision)
         if !self.matches_hash(other.hash_key) {
             return true;
         }
-        
+
         // Replace if the new entry has greater depth
         if other.depth > self.depth {
             return true;
         }
-        
+
         // Replace if depths are equal but new entry is exact and current is not
         if other.depth == self.depth && other.is_exact() && !self.is_exact() {
             return true;
         }
-        
+
         // Replace if the new entry is newer (higher age)
         if other.age > self.age {
             return true;
         }
-        
+
         false
     }
 }
@@ -645,14 +740,17 @@ pub struct TaperedScore {
 impl TaperedScore {
     /// Create a new TaperedScore with both values equal
     pub fn new(value: i32) -> Self {
-        Self { mg: value, eg: value }
+        Self {
+            mg: value,
+            eg: value,
+        }
     }
-    
+
     /// Create a TaperedScore with different mg and eg values
     pub fn new_tapered(mg: i32, eg: i32) -> Self {
         Self { mg, eg }
     }
-    
+
     /// Interpolate between mg and eg based on game phase
     /// phase: 0 = endgame, GAME_PHASE_MAX = opening
     pub fn interpolate(&self, phase: i32) -> i32 {
@@ -848,12 +946,12 @@ pub struct KingSafetyConfig {
 impl Default for KingSafetyConfig {
     fn default() -> Self {
         Self {
-            enabled: true,  // Re-enabled with aggressive optimizations
-            castle_weight: 0.3,  // Reduced weights for performance
+            enabled: true,      // Re-enabled with aggressive optimizations
+            castle_weight: 0.3, // Reduced weights for performance
             attack_weight: 0.3,
-            threat_weight: 0.2,  // Lowest weight since threats are most expensive
+            threat_weight: 0.2, // Lowest weight since threats are most expensive
             phase_adjustment: 0.8,
-            performance_mode: true,  // Enable performance mode by default
+            performance_mode: true, // Enable performance mode by default
         }
     }
 }
@@ -893,7 +991,7 @@ impl TaperedEvaluationConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create a configuration with tapered evaluation disabled
     pub fn disabled() -> Self {
         Self {
@@ -905,7 +1003,7 @@ impl TaperedEvaluationConfig {
             king_safety: KingSafetyConfig::default(),
         }
     }
-    
+
     /// Create a configuration optimized for performance
     pub fn performance_optimized() -> Self {
         Self {
@@ -917,7 +1015,7 @@ impl TaperedEvaluationConfig {
             king_safety: KingSafetyConfig::default(),
         }
     }
-    
+
     /// Create a configuration optimized for memory usage
     pub fn memory_optimized() -> Self {
         Self {
@@ -932,10 +1030,10 @@ impl TaperedEvaluationConfig {
 }
 
 // Bitboard representation for efficient operations
-pub type Bitboard = u128;  // 81 squares need 81 bits, u128 gives us 128 bits
+pub type Bitboard = u128; // 81 squares need 81 bits, u128 gives us 128 bits
 
 pub const EMPTY_BITBOARD: Bitboard = 0;
-pub const ALL_SQUARES: Bitboard = 0x1FFFFFFFFFFFFFFFFFFFFFFFF;  // 81 bits set
+pub const ALL_SQUARES: Bitboard = 0x1FFFFFFFFFFFFFFFFFFFFFFFF; // 81 bits set
 
 // Bitboard utilities
 pub fn set_bit(bitboard: &mut Bitboard, position: Position) {
@@ -975,10 +1073,10 @@ pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
 /// Replacement policy for quiescence transposition table cleanup
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TTReplacementPolicy {
-    Simple,        // Simple cleanup: remove half entries arbitrarily (original behavior)
-    LRU,           // Least Recently Used: prefer keeping recently accessed entries
+    Simple,         // Simple cleanup: remove half entries arbitrarily (original behavior)
+    LRU,            // Least Recently Used: prefer keeping recently accessed entries
     DepthPreferred, // Prefer keeping entries with deeper depth
-    Hybrid,        // Hybrid: combine LRU and depth-preferred
+    Hybrid,         // Hybrid: combine LRU and depth-preferred
 }
 
 impl Default for TTReplacementPolicy {
@@ -990,17 +1088,17 @@ impl Default for TTReplacementPolicy {
 /// Configuration for quiescence search parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct QuiescenceConfig {
-    pub max_depth: u8,                    // Maximum quiescence depth
-    pub enable_delta_pruning: bool,       // Enable delta pruning
-    pub enable_futility_pruning: bool,    // Enable futility pruning
-    pub enable_selective_extensions: bool, // Enable selective extensions
-    pub enable_tt: bool,                 // Enable transposition table
-    pub enable_adaptive_pruning: bool,   // Enable adaptive pruning (adjusts margins based on depth/move count)
-    pub futility_margin: i32,            // Futility pruning margin
-    pub delta_margin: i32,               // Delta pruning margin
+    pub max_depth: u8,                              // Maximum quiescence depth
+    pub enable_delta_pruning: bool,                 // Enable delta pruning
+    pub enable_futility_pruning: bool,              // Enable futility pruning
+    pub enable_selective_extensions: bool,          // Enable selective extensions
+    pub enable_tt: bool,                            // Enable transposition table
+    pub enable_adaptive_pruning: bool, // Enable adaptive pruning (adjusts margins based on depth/move count)
+    pub futility_margin: i32,          // Futility pruning margin
+    pub delta_margin: i32,             // Delta pruning margin
     pub high_value_capture_threshold: i32, // Threshold for high-value captures (excluded from futility pruning)
-    pub tt_size_mb: usize,               // Quiescence TT size in MB
-    pub tt_cleanup_threshold: usize,     // Threshold for TT cleanup
+    pub tt_size_mb: usize,                 // Quiescence TT size in MB
+    pub tt_cleanup_threshold: usize,       // Threshold for TT cleanup
     pub tt_replacement_policy: TTReplacementPolicy, // Replacement policy for TT cleanup
 }
 
@@ -1016,8 +1114,8 @@ impl Default for QuiescenceConfig {
             futility_margin: 200,
             delta_margin: 100,
             high_value_capture_threshold: 200, // High-value captures (200+ centipawns) excluded from futility pruning
-            tt_size_mb: 4,                // 4MB for quiescence TT
-            tt_cleanup_threshold: 10000,  // Clean up when TT has 10k entries
+            tt_size_mb: 4,                     // 4MB for quiescence TT
+            tt_cleanup_threshold: 10000,       // Clean up when TT has 10k entries
             tt_replacement_policy: TTReplacementPolicy::DepthPreferred, // Default to depth-preferred
         }
     }
@@ -1110,8 +1208,8 @@ pub struct QuiescenceStats {
     pub move_ordering_total_moves: u64, // Total moves ordered
     pub move_ordering_first_move_cutoffs: u64, // Cutoffs from first move in ordering
     pub move_ordering_second_move_cutoffs: u64, // Cutoffs from second move in ordering
-    pub stand_pat_tt_hits: u64, // Task 6.0: Number of times stand-pat was retrieved from TT
-    pub stand_pat_tt_misses: u64, // Task 6.0: Number of times stand-pat was not found in TT
+    pub stand_pat_tt_hits: u64,     // Task 6.0: Number of times stand-pat was retrieved from TT
+    pub stand_pat_tt_misses: u64,   // Task 6.0: Number of times stand-pat was not found in TT
 }
 
 impl QuiescenceStats {
@@ -1152,7 +1250,8 @@ impl QuiescenceStats {
 
     /// Get move type distribution
     pub fn move_type_distribution(&self) -> (f64, f64, f64) {
-        let total_moves = self.check_moves_found + self.capture_moves_found + self.promotion_moves_found;
+        let total_moves =
+            self.check_moves_found + self.capture_moves_found + self.promotion_moves_found;
         if total_moves == 0 {
             return (0.0, 0.0, 0.0);
         }
@@ -1252,7 +1351,11 @@ impl QuiescenceProfile {
 
         let total_duration: u64 = self.samples.iter().map(|s| s.duration_ms).sum();
         let total_nodes: u64 = self.samples.iter().map(|s| s.nodes_searched).sum();
-        let total_prunes: u64 = self.samples.iter().map(|s| s.delta_prunes + s.futility_prunes).sum();
+        let total_prunes: u64 = self
+            .samples
+            .iter()
+            .map(|s| s.delta_prunes + s.futility_prunes)
+            .sum();
         let total_tt_attempts: u64 = self.samples.iter().map(|s| s.tt_hits + s.tt_misses).sum();
         let total_extensions: u64 = self.samples.iter().map(|s| s.extensions).sum();
 
@@ -1260,13 +1363,20 @@ impl QuiescenceProfile {
         self.average_nodes_searched = total_nodes as f64 / self.samples.len() as f64;
         self.average_pruning_efficiency = if total_nodes > 0 {
             (total_prunes as f64 / total_nodes as f64) * 100.0
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         self.average_tt_hit_rate = if total_tt_attempts > 0 {
-            (self.samples.iter().map(|s| s.tt_hits).sum::<u64>() as f64 / total_tt_attempts as f64) * 100.0
-        } else { 0.0 };
+            (self.samples.iter().map(|s| s.tt_hits).sum::<u64>() as f64 / total_tt_attempts as f64)
+                * 100.0
+        } else {
+            0.0
+        };
         self.average_extension_rate = if total_nodes > 0 {
             (total_extensions as f64 / total_nodes as f64) * 100.0
-        } else { 0.0 };
+        } else {
+            0.0
+        };
     }
 
     pub fn get_performance_report(&self) -> String {
@@ -1356,35 +1466,35 @@ impl Default for DynamicReductionFormula {
 
 impl DynamicReductionFormula {
     /// Calculate reduction value for given depth and base reduction
-    /// 
+    ///
     /// # Formula Selection Guidelines
-    /// 
+    ///
     /// **Static**: Always returns base_reduction. Most conservative approach.
     /// - Use when: You want consistent, predictable reduction regardless of depth
     /// - Best for: Positions requiring maximum safety
-    /// 
+    ///
     /// **Linear**: R = base_reduction + depth / 6 (integer division)
     /// - Use when: You want step-wise scaling that increases at multiples of 6
     /// - Behavior: Creates steps - depth 3-5 -> R=base, 6-11 -> R=base+1, 12-17 -> R=base+2
     /// - Best for: General play with predictable reduction scaling
-    /// 
+    ///
     /// **Smooth**: R = base_reduction + (depth / 6.0).round()
     /// - Use when: You want smoother, more gradual scaling without large steps
     /// - Behavior: Increases reduction earlier than Linear (e.g., depth 3-5 -> R=base+1)
     /// - Best for: Positions where smoother scaling improves NMP effectiveness
-    /// 
+    ///
     /// # Examples (with base_reduction = 2)
     /// ```
     /// // At depth 3
     /// Static: 2
     /// Linear: 2 + 3/6 = 2
     /// Smooth: 2 + (3/6.0).round() = 3
-    /// 
+    ///
     /// // At depth 9
     /// Static: 2
     /// Linear: 2 + 9/6 = 3
     /// Smooth: 2 + (9/6.0).round() = 4
-    /// 
+    ///
     /// // At depth 12
     /// Static: 2
     /// Linear: 2 + 12/6 = 4
@@ -1409,7 +1519,7 @@ impl DynamicReductionFormula {
 }
 
 /// Advanced reduction strategies for Null Move Pruning
-/// 
+///
 /// These strategies determine how the reduction factor is calculated:
 /// - **Static**: Always use base `reduction_factor` (simple, conservative)
 /// - **Dynamic**: Use `dynamic_reduction_formula` (Linear/Smooth scaling based on depth)
@@ -1455,22 +1565,28 @@ impl NullMoveReductionStrategy {
             NullMoveReductionStrategy::PositionTypeBased => "PositionTypeBased",
         }
     }
-    
+
     /// Parse a strategy from a string (case-insensitive)
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "static" => Some(NullMoveReductionStrategy::Static),
             "dynamic" => Some(NullMoveReductionStrategy::Dynamic),
-            "depthbased" | "depth_based" | "depth-based" => Some(NullMoveReductionStrategy::DepthBased),
-            "materialbased" | "material_based" | "material-based" => Some(NullMoveReductionStrategy::MaterialBased),
-            "positiontypebased" | "position_type_based" | "position-type-based" => Some(NullMoveReductionStrategy::PositionTypeBased),
+            "depthbased" | "depth_based" | "depth-based" => {
+                Some(NullMoveReductionStrategy::DepthBased)
+            }
+            "materialbased" | "material_based" | "material-based" => {
+                Some(NullMoveReductionStrategy::MaterialBased)
+            }
+            "positiontypebased" | "position_type_based" | "position-type-based" => {
+                Some(NullMoveReductionStrategy::PositionTypeBased)
+            }
             _ => None,
         }
     }
 }
 
 /// Preset configurations for Null Move Pruning
-/// 
+///
 /// These presets provide pre-configured settings optimized for different playing styles:
 /// - **Conservative**: Higher safety margins, lower reduction, stricter endgame detection (safer but slower)
 /// - **Aggressive**: Lower safety margins, higher reduction, relaxed endgame detection (faster but riskier)
@@ -1497,7 +1613,7 @@ impl NullMovePreset {
             NullMovePreset::Balanced => "Balanced",
         }
     }
-    
+
     /// Parse a preset from a string (case-insensitive)
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -1512,39 +1628,39 @@ impl NullMovePreset {
 /// Configuration for null move pruning parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NullMoveConfig {
-    pub enabled: bool,                      // Enable null move pruning
-    pub min_depth: u8,                      // Minimum depth to use NMP
-    pub reduction_factor: u8,               // Static reduction factor (R)
-    pub max_pieces_threshold: u8,           // Disable NMP when pieces < threshold
-    pub enable_dynamic_reduction: bool,     // Use dynamic reduction (deprecated, use dynamic_reduction_formula instead)
-    pub enable_endgame_detection: bool,     // Disable NMP in endgame
-    pub verification_margin: i32,           // Safety margin for verification search (centipawns)
-    pub dynamic_reduction_formula: DynamicReductionFormula,  // Formula for dynamic reduction calculation
-    pub enable_mate_threat_detection: bool,  // Enable mate threat detection (default: false, opt-in feature)
-    pub mate_threat_margin: i32,            // Threshold for mate threat detection (default: 500 centipawns)
-    pub enable_endgame_type_detection: bool,  // Enable endgame type detection (default: false, opt-in feature)
-    pub material_endgame_threshold: u8,       // Threshold for material endgame detection (default: 12 pieces)
-    pub king_activity_threshold: u8,          // Threshold for king activity endgame detection (default: 8 pieces)
-    pub zugzwang_threshold: u8,              // Threshold for zugzwang-prone endgame detection (default: 6 pieces)
-    pub preset: Option<NullMovePreset>,      // Optional: Track which preset was used to create this config
-    pub reduction_strategy: NullMoveReductionStrategy,  // Advanced reduction strategy (default: Dynamic)
+    pub enabled: bool,                                      // Enable null move pruning
+    pub min_depth: u8,                                      // Minimum depth to use NMP
+    pub reduction_factor: u8,                               // Static reduction factor (R)
+    pub max_pieces_threshold: u8,                           // Disable NMP when pieces < threshold
+    pub enable_dynamic_reduction: bool, // Use dynamic reduction (deprecated, use dynamic_reduction_formula instead)
+    pub enable_endgame_detection: bool, // Disable NMP in endgame
+    pub verification_margin: i32,       // Safety margin for verification search (centipawns)
+    pub dynamic_reduction_formula: DynamicReductionFormula, // Formula for dynamic reduction calculation
+    pub enable_mate_threat_detection: bool, // Enable mate threat detection (default: false, opt-in feature)
+    pub mate_threat_margin: i32, // Threshold for mate threat detection (default: 500 centipawns)
+    pub enable_endgame_type_detection: bool, // Enable endgame type detection (default: false, opt-in feature)
+    pub material_endgame_threshold: u8, // Threshold for material endgame detection (default: 12 pieces)
+    pub king_activity_threshold: u8, // Threshold for king activity endgame detection (default: 8 pieces)
+    pub zugzwang_threshold: u8, // Threshold for zugzwang-prone endgame detection (default: 6 pieces)
+    pub preset: Option<NullMovePreset>, // Optional: Track which preset was used to create this config
+    pub reduction_strategy: NullMoveReductionStrategy, // Advanced reduction strategy (default: Dynamic)
     // Advanced reduction strategy parameters
-    pub depth_scaling_factor: u8,            // Depth-based scaling factor (default: 1, used with DepthBased strategy)
-    pub min_depth_for_scaling: u8,          // Minimum depth for depth-based scaling (default: 4, used with DepthBased strategy)
-    pub material_adjustment_factor: u8,       // Material-based adjustment factor (default: 1, used with MaterialBased strategy)
-    pub piece_count_threshold: u8,          // Piece count threshold for material-based adjustment (default: 20, used with MaterialBased strategy)
-    pub threshold_step: u8,                  // Threshold step for material-based adjustment (default: 4, used with MaterialBased strategy)
-    pub opening_reduction_factor: u8,        // Reduction factor for opening positions (default: 3, used with PositionTypeBased strategy)
-    pub middlegame_reduction_factor: u8,      // Reduction factor for middlegame positions (default: 2, used with PositionTypeBased strategy)
-    pub endgame_reduction_factor: u8,        // Reduction factor for endgame positions (default: 1, used with PositionTypeBased strategy)
+    pub depth_scaling_factor: u8, // Depth-based scaling factor (default: 1, used with DepthBased strategy)
+    pub min_depth_for_scaling: u8, // Minimum depth for depth-based scaling (default: 4, used with DepthBased strategy)
+    pub material_adjustment_factor: u8, // Material-based adjustment factor (default: 1, used with MaterialBased strategy)
+    pub piece_count_threshold: u8, // Piece count threshold for material-based adjustment (default: 20, used with MaterialBased strategy)
+    pub threshold_step: u8, // Threshold step for material-based adjustment (default: 4, used with MaterialBased strategy)
+    pub opening_reduction_factor: u8, // Reduction factor for opening positions (default: 3, used with PositionTypeBased strategy)
+    pub middlegame_reduction_factor: u8, // Reduction factor for middlegame positions (default: 2, used with PositionTypeBased strategy)
+    pub endgame_reduction_factor: u8, // Reduction factor for endgame positions (default: 1, used with PositionTypeBased strategy)
     // Per-depth reduction tuning
-    pub enable_per_depth_reduction: bool,     // Enable per-depth reduction factors (default: false)
-    pub reduction_factor_by_depth: HashMap<u8, u8>,  // Depth -> reduction_factor mapping (optional, for fine-tuning)
+    pub enable_per_depth_reduction: bool, // Enable per-depth reduction factors (default: false)
+    pub reduction_factor_by_depth: HashMap<u8, u8>, // Depth -> reduction_factor mapping (optional, for fine-tuning)
     // Per-position-type endgame thresholds
-    pub enable_per_position_type_threshold: bool,  // Enable per-position-type thresholds (default: false)
-    pub opening_pieces_threshold: u8,        // Threshold for opening positions (default: 12, same as max_pieces_threshold)
-    pub middlegame_pieces_threshold: u8,      // Threshold for middlegame positions (default: 12, same as max_pieces_threshold)
-    pub endgame_pieces_threshold: u8,        // Threshold for endgame positions (default: 12, same as max_pieces_threshold)
+    pub enable_per_position_type_threshold: bool, // Enable per-position-type thresholds (default: false)
+    pub opening_pieces_threshold: u8, // Threshold for opening positions (default: 12, same as max_pieces_threshold)
+    pub middlegame_pieces_threshold: u8, // Threshold for middlegame positions (default: 12, same as max_pieces_threshold)
+    pub endgame_pieces_threshold: u8, // Threshold for endgame positions (default: 12, same as max_pieces_threshold)
 }
 
 impl Default for NullMoveConfig {
@@ -1558,7 +1674,7 @@ impl Default for NullMoveConfig {
 
 impl NullMoveConfig {
     /// Create a configuration from a preset
-    /// 
+    ///
     /// This creates a new `NullMoveConfig` with settings optimized for the specified preset:
     /// - **Conservative**: Higher verification_margin (400), lower reduction_factor (2), stricter endgame detection
     /// - **Aggressive**: Lower verification_margin (100), higher reduction_factor (3), relaxed endgame detection
@@ -1568,18 +1684,18 @@ impl NullMoveConfig {
             NullMovePreset::Conservative => Self {
                 enabled: true,
                 min_depth: 3,
-                reduction_factor: 2,           // Lower reduction for safety
-                max_pieces_threshold: 14,      // Stricter endgame detection (disable when < 14 pieces)
+                reduction_factor: 2,      // Lower reduction for safety
+                max_pieces_threshold: 14, // Stricter endgame detection (disable when < 14 pieces)
                 enable_dynamic_reduction: true,
                 enable_endgame_detection: true,
-                verification_margin: 400,       // Higher safety margin (400 centipawns)
+                verification_margin: 400, // Higher safety margin (400 centipawns)
                 dynamic_reduction_formula: DynamicReductionFormula::Linear,
-                enable_mate_threat_detection: true,  // Enable mate threat detection for safety
-                mate_threat_margin: 600,       // Higher mate threat margin (600 centipawns)
-                enable_endgame_type_detection: true,  // Enable endgame type detection
-                material_endgame_threshold: 14,  // Higher threshold (14 pieces)
-                king_activity_threshold: 10,    // Higher threshold (10 pieces)
-                zugzwang_threshold: 8,         // Higher threshold (8 pieces)
+                enable_mate_threat_detection: true, // Enable mate threat detection for safety
+                mate_threat_margin: 600,            // Higher mate threat margin (600 centipawns)
+                enable_endgame_type_detection: true, // Enable endgame type detection
+                material_endgame_threshold: 14,     // Higher threshold (14 pieces)
+                king_activity_threshold: 10,        // Higher threshold (10 pieces)
+                zugzwang_threshold: 8,              // Higher threshold (8 pieces)
                 preset: Some(NullMovePreset::Conservative),
                 reduction_strategy: NullMoveReductionStrategy::Dynamic,
                 depth_scaling_factor: 1,
@@ -1599,19 +1715,19 @@ impl NullMoveConfig {
             },
             NullMovePreset::Aggressive => Self {
                 enabled: true,
-                min_depth: 2,                  // Lower min_depth for more aggressiveness
-                reduction_factor: 3,            // Higher reduction for speed
-                max_pieces_threshold: 10,       // Relaxed endgame detection (disable when < 10 pieces)
+                min_depth: 2,             // Lower min_depth for more aggressiveness
+                reduction_factor: 3,      // Higher reduction for speed
+                max_pieces_threshold: 10, // Relaxed endgame detection (disable when < 10 pieces)
                 enable_dynamic_reduction: true,
                 enable_endgame_detection: true,
-                verification_margin: 100,       // Lower safety margin (100 centipawns)
-                dynamic_reduction_formula: DynamicReductionFormula::Smooth,  // Use smooth formula for better scaling
-                enable_mate_threat_detection: false,  // Disable mate threat detection for speed
-                mate_threat_margin: 400,        // Lower mate threat margin (400 centipawns)
-                enable_endgame_type_detection: false,  // Disable endgame type detection for speed
-                material_endgame_threshold: 10,  // Lower threshold (10 pieces)
-                king_activity_threshold: 6,     // Lower threshold (6 pieces)
-                zugzwang_threshold: 4,          // Lower threshold (4 pieces)
+                verification_margin: 100, // Lower safety margin (100 centipawns)
+                dynamic_reduction_formula: DynamicReductionFormula::Smooth, // Use smooth formula for better scaling
+                enable_mate_threat_detection: false, // Disable mate threat detection for speed
+                mate_threat_margin: 400,             // Lower mate threat margin (400 centipawns)
+                enable_endgame_type_detection: false, // Disable endgame type detection for speed
+                material_endgame_threshold: 10,      // Lower threshold (10 pieces)
+                king_activity_threshold: 6,          // Lower threshold (6 pieces)
+                zugzwang_threshold: 4,               // Lower threshold (4 pieces)
                 preset: Some(NullMovePreset::Aggressive),
                 reduction_strategy: NullMoveReductionStrategy::Dynamic,
                 depth_scaling_factor: 1,
@@ -1633,17 +1749,17 @@ impl NullMoveConfig {
                 enabled: true,
                 min_depth: 3,
                 reduction_factor: 2,
-                max_pieces_threshold: 12,       // Standard endgame detection
+                max_pieces_threshold: 12, // Standard endgame detection
                 enable_dynamic_reduction: true,
                 enable_endgame_detection: true,
-                verification_margin: 200,       // Default safety margin (200 centipawns)
+                verification_margin: 200, // Default safety margin (200 centipawns)
                 dynamic_reduction_formula: DynamicReductionFormula::Linear,
-                enable_mate_threat_detection: false,  // Disabled by default (opt-in)
-                mate_threat_margin: 500,        // Default mate threat margin (500 centipawns)
-                enable_endgame_type_detection: false,  // Disabled by default (opt-in)
-                material_endgame_threshold: 12,  // Default threshold (12 pieces)
-                king_activity_threshold: 8,      // Default threshold (8 pieces)
-                zugzwang_threshold: 6,          // Default threshold (6 pieces)
+                enable_mate_threat_detection: false, // Disabled by default (opt-in)
+                mate_threat_margin: 500,             // Default mate threat margin (500 centipawns)
+                enable_endgame_type_detection: false, // Disabled by default (opt-in)
+                material_endgame_threshold: 12,      // Default threshold (12 pieces)
+                king_activity_threshold: 8,          // Default threshold (8 pieces)
+                zugzwang_threshold: 6,               // Default threshold (6 pieces)
                 preset: Some(NullMovePreset::Balanced),
                 reduction_strategy: NullMoveReductionStrategy::Dynamic,
                 depth_scaling_factor: 1,
@@ -1663,16 +1779,16 @@ impl NullMoveConfig {
             },
         }
     }
-    
+
     /// Apply a preset to this configuration
-    /// 
+    ///
     /// This updates the configuration with settings from the specified preset,
     /// preserving the preset reference for tracking.
     pub fn apply_preset(&mut self, preset: NullMovePreset) {
         let preset_config = Self::from_preset(preset);
         *self = preset_config;
     }
-    
+
     /// Validate the configuration parameters and return any errors
     pub fn validate(&self) -> Result<(), String> {
         if self.min_depth == 0 {
@@ -1776,16 +1892,24 @@ impl NullMoveConfig {
         if self.enable_per_depth_reduction {
             for (depth, factor) in &self.reduction_factor_by_depth {
                 if *depth == 0 {
-                    return Err("reduction_factor_by_depth: depth must be greater than 0".to_string());
+                    return Err(
+                        "reduction_factor_by_depth: depth must be greater than 0".to_string()
+                    );
                 }
                 if *depth > 50 {
                     return Err("reduction_factor_by_depth: depth should not exceed 50".to_string());
                 }
                 if *factor == 0 {
-                    return Err("reduction_factor_by_depth: reduction_factor must be greater than 0".to_string());
+                    return Err(
+                        "reduction_factor_by_depth: reduction_factor must be greater than 0"
+                            .to_string(),
+                    );
                 }
                 if *factor > 5 {
-                    return Err("reduction_factor_by_depth: reduction_factor should not exceed 5".to_string());
+                    return Err(
+                        "reduction_factor_by_depth: reduction_factor should not exceed 5"
+                            .to_string(),
+                    );
                 }
             }
         }
@@ -1847,7 +1971,10 @@ impl NullMoveConfig {
         } else {
             String::new()
         };
-        let strategy_str = format!(", reduction_strategy={}", self.reduction_strategy.to_string());
+        let strategy_str = format!(
+            ", reduction_strategy={}",
+            self.reduction_strategy.to_string()
+        );
         format!(
             "NullMoveConfig: enabled={}, min_depth={}, reduction_factor={}, max_pieces_threshold={}, dynamic_reduction={}, endgame_detection={}, verification_margin={}, reduction_formula={:?}, mate_threat_detection={}, mate_threat_margin={}, endgame_type_detection={}, material_endgame_threshold={}, king_activity_threshold={}, zugzwang_threshold={}{}{}",
             self.enabled,
@@ -1873,19 +2000,19 @@ impl NullMoveConfig {
 /// Performance statistics for null move pruning
 #[derive(Debug, Clone, Default)]
 pub struct NullMoveStats {
-    pub attempts: u64,                      // Number of null move attempts
-    pub cutoffs: u64,                       // Number of successful cutoffs
-    pub depth_reductions: u64,              // Total depth reductions applied
-    pub disabled_in_check: u64,             // Times disabled due to check
-    pub disabled_endgame: u64,              // Times disabled due to endgame
-    pub verification_attempts: u64,         // Number of verification searches attempted
-    pub verification_cutoffs: u64,           // Number of verification searches that resulted in cutoffs
-    pub mate_threat_attempts: u64,           // Number of mate threat detection attempts
-    pub mate_threat_detected: u64,            // Number of mate threats detected and verified
-    pub disabled_material_endgame: u64,      // Times disabled due to material endgame detection
-    pub disabled_king_activity_endgame: u64,  // Times disabled due to king activity endgame detection
-    pub disabled_zugzwang: u64,              // Times disabled due to zugzwang-prone endgame detection
-    pub skipped_time_pressure: u64,          // Times skipped due to time pressure (Task 7.0.2.8)
+    pub attempts: u64,                       // Number of null move attempts
+    pub cutoffs: u64,                        // Number of successful cutoffs
+    pub depth_reductions: u64,               // Total depth reductions applied
+    pub disabled_in_check: u64,              // Times disabled due to check
+    pub disabled_endgame: u64,               // Times disabled due to endgame
+    pub verification_attempts: u64,          // Number of verification searches attempted
+    pub verification_cutoffs: u64, // Number of verification searches that resulted in cutoffs
+    pub mate_threat_attempts: u64, // Number of mate threat detection attempts
+    pub mate_threat_detected: u64, // Number of mate threats detected and verified
+    pub disabled_material_endgame: u64, // Times disabled due to material endgame detection
+    pub disabled_king_activity_endgame: u64, // Times disabled due to king activity endgame detection
+    pub disabled_zugzwang: u64, // Times disabled due to zugzwang-prone endgame detection
+    pub skipped_time_pressure: u64, // Times skipped due to time pressure (Task 7.0.2.8)
 }
 
 impl NullMoveStats {
@@ -1990,15 +2117,15 @@ impl NullMoveStats {
 /// Configuration for Late Move Reductions (LMR) parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LMRConfig {
-    pub enabled: bool,                        // Enable late move reductions
-    pub min_depth: u8,                        // Minimum depth to apply LMR
-    pub min_move_index: u8,                   // Minimum move index to consider for reduction
-    pub base_reduction: u8,                   // Base reduction amount
-    pub max_reduction: u8,                    // Maximum reduction allowed
-    pub enable_dynamic_reduction: bool,       // Use dynamic vs static reduction
-    pub enable_adaptive_reduction: bool,      // Use position-based adaptation
-    pub enable_extended_exemptions: bool,     // Extended move exemption rules
-    pub re_search_margin: i32,               // Margin for re-search decision (centipawns, default: 50, range: 0-500)
+    pub enabled: bool,                    // Enable late move reductions
+    pub min_depth: u8,                    // Minimum depth to apply LMR
+    pub min_move_index: u8,               // Minimum move index to consider for reduction
+    pub base_reduction: u8,               // Base reduction amount
+    pub max_reduction: u8,                // Maximum reduction allowed
+    pub enable_dynamic_reduction: bool,   // Use dynamic vs static reduction
+    pub enable_adaptive_reduction: bool,  // Use position-based adaptation
+    pub enable_extended_exemptions: bool, // Extended move exemption rules
+    pub re_search_margin: i32, // Margin for re-search decision (centipawns, default: 50, range: 0-500)
     /// Enable position-type adaptive re-search margin (Task 7.0.6.1)
     pub enable_position_type_margin: bool,
     /// Re-search margin for tactical positions (default: 75cp) (Task 7.0.6.3)
@@ -2044,9 +2171,9 @@ pub struct EscapeMoveConfig {
 /// Tuning aggressiveness level (Task 7.8)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum TuningAggressiveness {
-    Conservative,  // Small, gradual adjustments
-    Moderate,      // Balanced adjustments
-    Aggressive,    // Larger, more frequent adjustments
+    Conservative, // Small, gradual adjustments
+    Moderate,     // Balanced adjustments
+    Aggressive,   // Larger, more frequent adjustments
 }
 
 impl Default for TuningAggressiveness {
@@ -2199,10 +2326,10 @@ impl Default for LMRConfig {
             enable_dynamic_reduction: true,
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
-            re_search_margin: 50,             // Default: 50 centipawns
-            enable_position_type_margin: false,  // Task 7.0.6.1: Disabled by default
-            tactical_re_search_margin: 75,    // Task 7.0.6.3: 75cp for tactical positions
-            quiet_re_search_margin: 25,       // Task 7.0.6.3: 25cp for quiet positions
+            re_search_margin: 50,               // Default: 50 centipawns
+            enable_position_type_margin: false, // Task 7.0.6.1: Disabled by default
+            tactical_re_search_margin: 75,      // Task 7.0.6.3: 75cp for tactical positions
+            quiet_re_search_margin: 25,         // Task 7.0.6.3: 25cp for quiet positions
             classification_config: PositionClassificationConfig::default(),
             escape_move_config: EscapeMoveConfig::default(),
             adaptive_tuning_config: AdaptiveTuningConfig::default(),
@@ -2325,27 +2452,27 @@ impl MoveOrderingEffectivenessStats {
         self.total_cutoffs += 1;
         *self.cutoffs_by_index.entry(move_index).or_insert(0) += 1;
         self.total_cutoff_index_sum += move_index as u64;
-        
+
         // Track cutoffs after LMR threshold (Task 10.4)
         if move_index >= lmr_threshold {
             self.cutoffs_after_lmr_threshold += 1;
-            self.late_ordered_cutoffs += 1;  // Late-ordered move caused cutoff (Task 10.2)
+            self.late_ordered_cutoffs += 1; // Late-ordered move caused cutoff (Task 10.2)
         } else {
             self.cutoffs_before_lmr_threshold += 1;
         }
     }
-    
+
     /// Record a move that didn't cause a cutoff (Task 10.3)
     pub fn record_no_cutoff(&mut self, move_index: u8, lmr_threshold: u8) {
         self.moves_no_cutoff += 1;
         self.total_no_cutoff_index_sum += move_index as u64;
-        
+
         // Track early-ordered moves that didn't cause cutoffs (indicates ordering is good) (Task 10.3)
         if move_index < lmr_threshold {
             self.early_ordered_no_cutoffs += 1;
         }
     }
-    
+
     /// Get percentage of cutoffs from moves after LMR threshold (Task 10.4)
     pub fn cutoffs_after_threshold_percentage(&self) -> f64 {
         if self.total_cutoffs == 0 {
@@ -2353,7 +2480,7 @@ impl MoveOrderingEffectivenessStats {
         }
         (self.cutoffs_after_lmr_threshold as f64 / self.total_cutoffs as f64) * 100.0
     }
-    
+
     /// Get average move index of cutoff-causing moves (Task 10.5)
     pub fn average_cutoff_index(&self) -> f64 {
         if self.total_cutoffs == 0 {
@@ -2361,7 +2488,7 @@ impl MoveOrderingEffectivenessStats {
         }
         self.total_cutoff_index_sum as f64 / self.total_cutoffs as f64
     }
-    
+
     /// Get average move index of non-cutoff moves
     pub fn average_no_cutoff_index(&self) -> f64 {
         if self.moves_no_cutoff == 0 {
@@ -2369,21 +2496,21 @@ impl MoveOrderingEffectivenessStats {
         }
         self.total_no_cutoff_index_sum as f64 / self.moves_no_cutoff as f64
     }
-    
+
     /// Get ordering effectiveness score (lower is better - indicates good ordering)
     pub fn ordering_effectiveness(&self) -> f64 {
         if self.total_cutoffs == 0 {
-            return 100.0;  // No cutoffs means perfect ordering (all moves pruned)
+            return 100.0; // No cutoffs means perfect ordering (all moves pruned)
         }
-        
+
         let avg_cutoff_index = self.average_cutoff_index();
         let late_cutoff_rate = self.cutoffs_after_threshold_percentage();
-        
+
         // Effectiveness = 100 - (average index * 10 + late cutoff rate)
         // Lower average index and lower late cutoff rate = better ordering
         100.0 - (avg_cutoff_index * 10.0 + late_cutoff_rate).min(100.0)
     }
-    
+
     /// Reset all statistics
     pub fn reset(&mut self) {
         *self = MoveOrderingEffectivenessStats::default();
@@ -2393,16 +2520,16 @@ impl MoveOrderingEffectivenessStats {
 /// Adaptive tuning statistics (Task 7.9)
 #[derive(Debug, Clone, Default)]
 pub struct AdaptiveTuningStats {
-    pub tuning_attempts: u64,                 // Number of tuning attempts
-    pub successful_tunings: u64,              // Number of successful parameter adjustments
-    pub parameter_changes: u64,               // Total number of parameter changes
-    pub base_reduction_changes: u64,          // Number of base_reduction adjustments
-    pub max_reduction_changes: u64,           // Number of max_reduction adjustments
-    pub min_move_index_changes: u64,          // Number of min_move_index adjustments
-    pub re_search_rate_adjustments: u64,      // Number of adjustments based on re-search rate
-    pub efficiency_adjustments: u64,          // Number of adjustments based on efficiency
-    pub game_phase_adjustments: u64,          // Number of adjustments based on game phase
-    pub position_type_adjustments: u64,        // Number of adjustments based on position type
+    pub tuning_attempts: u64,            // Number of tuning attempts
+    pub successful_tunings: u64,         // Number of successful parameter adjustments
+    pub parameter_changes: u64,          // Total number of parameter changes
+    pub base_reduction_changes: u64,     // Number of base_reduction adjustments
+    pub max_reduction_changes: u64,      // Number of max_reduction adjustments
+    pub min_move_index_changes: u64,     // Number of min_move_index adjustments
+    pub re_search_rate_adjustments: u64, // Number of adjustments based on re-search rate
+    pub efficiency_adjustments: u64,     // Number of adjustments based on efficiency
+    pub game_phase_adjustments: u64,     // Number of adjustments based on game phase
+    pub position_type_adjustments: u64,  // Number of adjustments based on position type
 }
 
 impl AdaptiveTuningStats {
@@ -2444,11 +2571,11 @@ impl AdaptiveTuningStats {
 /// Escape move detection statistics (Task 6.8)
 #[derive(Debug, Clone, Default)]
 pub struct EscapeMoveStats {
-    pub escape_moves_exempted: u64,          // Number of escape moves exempted from LMR
-    pub threat_based_detections: u64,         // Number of threat-based detections
-    pub heuristic_detections: u64,            // Number of heuristic detections (fallback)
-    pub false_positives: u64,                 // Number of false positives (heuristic said escape but no threat)
-    pub false_negatives: u64,                 // Number of false negatives (threat exists but not detected)
+    pub escape_moves_exempted: u64, // Number of escape moves exempted from LMR
+    pub threat_based_detections: u64, // Number of threat-based detections
+    pub heuristic_detections: u64,  // Number of heuristic detections (fallback)
+    pub false_positives: u64, // Number of false positives (heuristic said escape but no threat)
+    pub false_negatives: u64, // Number of false negatives (threat exists but not detected)
 }
 
 impl EscapeMoveStats {
@@ -2553,23 +2680,23 @@ impl LMRPhaseStats {
 /// Performance statistics for Late Move Reductions
 #[derive(Debug, Clone, Default)]
 pub struct LMRStats {
-    pub moves_considered: u64,                // Total moves considered for LMR
-    pub reductions_applied: u64,              // Number of reductions applied
-    pub researches_triggered: u64,            // Number of full-depth re-searches
-    pub cutoffs_after_reduction: u64,         // Cutoffs after reduced search
-    pub cutoffs_after_research: u64,          // Cutoffs after full re-search
-    pub total_depth_saved: u64,               // Total depth reduction applied
-    pub average_reduction: f64,               // Average reduction applied
-    pub re_search_margin_prevented: u64,      // Number of re-searches prevented by margin
-    pub re_search_margin_allowed: u64,        // Number of re-searches allowed despite margin
-    pub tt_move_exempted: u64,                // Number of TT moves exempted from LMR
-    pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
-    pub iid_move_explicitly_exempted: u64,    // Number of IID moves explicitly exempted from LMR (Task 7.0.1)
-    pub iid_move_reduced_count: u64,          // Number of times IID move was reduced (should be 0!) (Task 7.0.5.1)
+    pub moves_considered: u64,             // Total moves considered for LMR
+    pub reductions_applied: u64,           // Number of reductions applied
+    pub researches_triggered: u64,         // Number of full-depth re-searches
+    pub cutoffs_after_reduction: u64,      // Cutoffs after reduced search
+    pub cutoffs_after_research: u64,       // Cutoffs after full re-search
+    pub total_depth_saved: u64,            // Total depth reduction applied
+    pub average_reduction: f64,            // Average reduction applied
+    pub re_search_margin_prevented: u64,   // Number of re-searches prevented by margin
+    pub re_search_margin_allowed: u64,     // Number of re-searches allowed despite margin
+    pub tt_move_exempted: u64,             // Number of TT moves exempted from LMR
+    pub tt_move_missed: u64, // Number of moves that should have been TT moves but weren't detected
+    pub iid_move_explicitly_exempted: u64, // Number of IID moves explicitly exempted from LMR (Task 7.0.1)
+    pub iid_move_reduced_count: u64, // Number of times IID move was reduced (should be 0!) (Task 7.0.5.1)
     /// Re-search statistics by position type (Task 7.0.6.4)
-    pub tactical_researches: u64,             // Re-searches in tactical positions
-    pub quiet_researches: u64,                // Re-searches in quiet positions
-    pub neutral_researches: u64,              // Re-searches in neutral positions
+    pub tactical_researches: u64, // Re-searches in tactical positions
+    pub quiet_researches: u64,       // Re-searches in quiet positions
+    pub neutral_researches: u64,     // Re-searches in neutral positions
     /// Statistics by game phase (Task 4.6)
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
     /// Position classification statistics (Task 5.10)
@@ -2589,10 +2716,20 @@ impl LMRStats {
     }
 
     /// Record LMR statistics for a specific game phase (Task 4.6)
-    pub fn record_phase_stats(&mut self, phase: GamePhase, moves_considered: u64, reductions_applied: u64, 
-                             researches_triggered: u64, cutoffs_after_reduction: u64, 
-                             cutoffs_after_research: u64, depth_saved: u64) {
-        let stats = self.phase_stats.entry(phase).or_insert_with(LMRPhaseStats::default);
+    pub fn record_phase_stats(
+        &mut self,
+        phase: GamePhase,
+        moves_considered: u64,
+        reductions_applied: u64,
+        researches_triggered: u64,
+        cutoffs_after_reduction: u64,
+        cutoffs_after_research: u64,
+        depth_saved: u64,
+    ) {
+        let stats = self
+            .phase_stats
+            .entry(phase)
+            .or_insert_with(LMRPhaseStats::default);
         stats.moves_considered += moves_considered;
         stats.reductions_applied += reductions_applied;
         stats.researches_triggered += researches_triggered;
@@ -2603,7 +2740,9 @@ impl LMRStats {
 
     /// Get statistics for a specific game phase (Task 4.6)
     pub fn get_phase_stats(&self, phase: GamePhase) -> &LMRPhaseStats {
-        self.phase_stats.get(&phase).unwrap_or(&LMRPhaseStats::default())
+        self.phase_stats
+            .get(&phase)
+            .unwrap_or(&LMRPhaseStats::default())
     }
 
     /// Check if performance meets minimum thresholds (Task 4.4)
@@ -2645,10 +2784,12 @@ impl LMRStats {
                 cutoff_rate
             ));
         }
-        
+
         // Check move ordering effectiveness (Task 10.7)
         let ordering_effectiveness = self.move_ordering_stats.ordering_effectiveness();
-        let late_cutoff_rate = self.move_ordering_stats.cutoffs_after_threshold_percentage();
+        let late_cutoff_rate = self
+            .move_ordering_stats
+            .cutoffs_after_threshold_percentage();
         if late_cutoff_rate > 25.0 {
             is_healthy = false;
             alerts.push(format!(
@@ -2656,7 +2797,7 @@ impl LMRStats {
                 late_cutoff_rate
             ));
         }
-        
+
         // Check if ordering effectiveness is degrading (Task 10.7)
         let avg_cutoff_index = self.move_ordering_stats.average_cutoff_index();
         if avg_cutoff_index > 5.0 {
@@ -2668,25 +2809,29 @@ impl LMRStats {
 
         (is_healthy, alerts)
     }
-    
+
     /// Get move ordering effectiveness metrics (Task 10.4, 10.5)
     pub fn get_move_ordering_metrics(&self) -> MoveOrderingMetrics {
         MoveOrderingMetrics {
             total_cutoffs: self.move_ordering_stats.total_cutoffs,
-            cutoffs_after_threshold_percentage: self.move_ordering_stats.cutoffs_after_threshold_percentage(),
+            cutoffs_after_threshold_percentage: self
+                .move_ordering_stats
+                .cutoffs_after_threshold_percentage(),
             average_cutoff_index: self.move_ordering_stats.average_cutoff_index(),
             late_ordered_cutoffs: self.move_ordering_stats.late_ordered_cutoffs,
             early_ordered_no_cutoffs: self.move_ordering_stats.early_ordered_no_cutoffs,
             ordering_effectiveness: self.move_ordering_stats.ordering_effectiveness(),
         }
     }
-    
+
     /// Check if move ordering effectiveness is degrading (Task 10.7)
     pub fn check_ordering_degradation(&self) -> (bool, Vec<String>) {
         let mut alerts = Vec::new();
         let mut is_healthy = true;
-        
-        let late_cutoff_rate = self.move_ordering_stats.cutoffs_after_threshold_percentage();
+
+        let late_cutoff_rate = self
+            .move_ordering_stats
+            .cutoffs_after_threshold_percentage();
         if late_cutoff_rate > 30.0 {
             is_healthy = false;
             alerts.push(format!(
@@ -2694,7 +2839,7 @@ impl LMRStats {
                 late_cutoff_rate
             ));
         }
-        
+
         let avg_cutoff_index = self.move_ordering_stats.average_cutoff_index();
         if avg_cutoff_index > 6.0 {
             is_healthy = false;
@@ -2703,17 +2848,17 @@ impl LMRStats {
                 avg_cutoff_index
             ));
         }
-        
+
         (is_healthy, alerts)
     }
-    
+
     /// Create performance report comparing ordering effectiveness vs LMR effectiveness (Task 10.8)
     pub fn get_ordering_vs_lmr_report(&self) -> String {
         let ordering_metrics = self.get_move_ordering_metrics();
         let efficiency = self.efficiency();
         let research_rate = self.research_rate();
         let cutoff_rate = self.cutoff_rate();
-        
+
         format!(
             "Move Ordering vs LMR Effectiveness Report:\n\
             - Move Ordering Effectiveness: {:.1}%\n\
@@ -2864,20 +3009,44 @@ impl LMRStats {
     pub fn export_metrics(&self) -> HashMap<String, f64> {
         let mut metrics = HashMap::new();
         metrics.insert("moves_considered".to_string(), self.moves_considered as f64);
-        metrics.insert("reductions_applied".to_string(), self.reductions_applied as f64);
-        metrics.insert("researches_triggered".to_string(), self.researches_triggered as f64);
-        metrics.insert("cutoffs_after_reduction".to_string(), self.cutoffs_after_reduction as f64);
-        metrics.insert("cutoffs_after_research".to_string(), self.cutoffs_after_research as f64);
-        metrics.insert("total_depth_saved".to_string(), self.total_depth_saved as f64);
+        metrics.insert(
+            "reductions_applied".to_string(),
+            self.reductions_applied as f64,
+        );
+        metrics.insert(
+            "researches_triggered".to_string(),
+            self.researches_triggered as f64,
+        );
+        metrics.insert(
+            "cutoffs_after_reduction".to_string(),
+            self.cutoffs_after_reduction as f64,
+        );
+        metrics.insert(
+            "cutoffs_after_research".to_string(),
+            self.cutoffs_after_research as f64,
+        );
+        metrics.insert(
+            "total_depth_saved".to_string(),
+            self.total_depth_saved as f64,
+        );
         metrics.insert("average_reduction".to_string(), self.average_reduction);
         metrics.insert("efficiency".to_string(), self.efficiency());
         metrics.insert("research_rate".to_string(), self.research_rate());
         metrics.insert("cutoff_rate".to_string(), self.cutoff_rate());
-        metrics.insert("average_depth_saved".to_string(), self.average_depth_saved());
-        metrics.insert("re_search_margin_effectiveness".to_string(), self.re_search_margin_effectiveness());
+        metrics.insert(
+            "average_depth_saved".to_string(),
+            self.average_depth_saved(),
+        );
+        metrics.insert(
+            "re_search_margin_effectiveness".to_string(),
+            self.re_search_margin_effectiveness(),
+        );
         metrics.insert("tt_move_exempted".to_string(), self.tt_move_exempted as f64);
         metrics.insert("tt_move_missed".to_string(), self.tt_move_missed as f64);
-        metrics.insert("is_performing_well".to_string(), if self.is_performing_well() { 1.0 } else { 0.0 });
+        metrics.insert(
+            "is_performing_well".to_string(),
+            if self.is_performing_well() { 1.0 } else { 0.0 },
+        );
         metrics
     }
 
@@ -3253,9 +3422,12 @@ impl IIDStrengthTestResult {
         self.overall_improvement = self.average_iid_win_rate - self.average_non_iid_win_rate;
 
         // Calculate statistical significance (simplified)
-        let variance = self.position_results.iter()
+        let variance = self
+            .position_results
+            .iter()
             .map(|r| (r.improvement - self.overall_improvement).powi(2))
-            .sum::<f64>() / self.position_results.len() as f64;
+            .sum::<f64>()
+            / self.position_results.len() as f64;
         let standard_error = (variance / self.position_results.len() as f64).sqrt();
         self.statistical_significance = if standard_error > 0.0 {
             self.overall_improvement / standard_error
@@ -3305,10 +3477,7 @@ impl LMRPerformanceMetrics {
     pub fn summary(&self) -> String {
         format!(
             "LMR Performance: {:.1}% efficiency, {:.1}% research rate, {:.1}% cutoffs, {:.0} NPS",
-            self.efficiency,
-            self.research_rate,
-            self.cutoff_rate,
-            self.nodes_per_second
+            self.efficiency, self.research_rate, self.cutoff_rate, self.nodes_per_second
         )
     }
 
@@ -3320,27 +3489,30 @@ impl LMRPerformanceMetrics {
     /// Get optimization recommendations
     pub fn get_optimization_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if self.research_rate > 40.0 {
-            recommendations.push("Consider reducing LMR aggressiveness (too many re-searches)".to_string());
+            recommendations
+                .push("Consider reducing LMR aggressiveness (too many re-searches)".to_string());
         }
-        
+
         if self.efficiency < 20.0 {
-            recommendations.push("Consider increasing LMR aggressiveness (low efficiency)".to_string());
+            recommendations
+                .push("Consider increasing LMR aggressiveness (low efficiency)".to_string());
         }
-        
+
         if self.cutoff_rate < 5.0 {
             recommendations.push("Consider improving move ordering (low cutoff rate)".to_string());
         }
-        
+
         if self.average_depth_saved < 1.0 {
-            recommendations.push("Consider increasing base reduction (low depth savings)".to_string());
+            recommendations
+                .push("Consider increasing base reduction (low depth savings)".to_string());
         }
-        
+
         if recommendations.is_empty() {
             recommendations.push("LMR performance is optimal".to_string());
         }
-        
+
         recommendations
     }
 }
@@ -3384,9 +3556,18 @@ mod tests {
 
     #[test]
     fn test_position_from_usi() {
-        assert_eq!(Position::from_usi_string("1a").unwrap(), Position::new(0, 8));
-        assert_eq!(Position::from_usi_string("5e").unwrap(), Position::new(4, 4));
-        assert_eq!(Position::from_usi_string("9i").unwrap(), Position::new(8, 0));
+        assert_eq!(
+            Position::from_usi_string("1a").unwrap(),
+            Position::new(0, 8)
+        );
+        assert_eq!(
+            Position::from_usi_string("5e").unwrap(),
+            Position::new(4, 4)
+        );
+        assert_eq!(
+            Position::from_usi_string("9i").unwrap(),
+            Position::new(8, 0)
+        );
         assert!(Position::from_usi_string("0a").is_err());
         assert!(Position::from_usi_string("1j").is_err());
         assert!(Position::from_usi_string("1a1").is_err());
@@ -3395,11 +3576,23 @@ mod tests {
     #[test]
     fn test_move_to_usi() {
         // Normal move
-        let mv1 = Move::new_move(Position::new(6, 2), Position::new(5, 2), PieceType::Pawn, Player::Black, false);
+        let mv1 = Move::new_move(
+            Position::new(6, 2),
+            Position::new(5, 2),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        );
         assert_eq!(mv1.to_usi_string(), "7g7f");
 
         // Promotion
-        let mv2 = Move::new_move(Position::new(1, 1), Position::new(7, 7), PieceType::Bishop, Player::Black, true);
+        let mv2 = Move::new_move(
+            Position::new(1, 1),
+            Position::new(7, 7),
+            PieceType::Bishop,
+            Player::Black,
+            true,
+        );
         assert_eq!(mv2.to_usi_string(), "8b2h+");
 
         // Drop
@@ -3439,18 +3632,18 @@ mod tests {
     #[test]
     fn test_null_move_config_validation() {
         let mut config = NullMoveConfig::default();
-        
+
         // Valid configuration should pass
         assert!(config.validate().is_ok());
-        
+
         // Test invalid configurations
         config.min_depth = 0;
         assert!(config.validate().is_err());
-        
+
         config.min_depth = 3;
         config.reduction_factor = 0;
         assert!(config.validate().is_err());
-        
+
         config.reduction_factor = 2;
         config.max_pieces_threshold = 0;
         assert!(config.validate().is_err());
@@ -3460,9 +3653,9 @@ mod tests {
     fn test_null_move_config_new_validated() {
         let config = NullMoveConfig {
             enabled: true,
-            min_depth: 0,  // Invalid
-            reduction_factor: 10,  // Invalid
-            max_pieces_threshold: 50,  // Invalid
+            min_depth: 0,             // Invalid
+            reduction_factor: 10,     // Invalid
+            max_pieces_threshold: 50, // Invalid
             enable_dynamic_reduction: true,
             enable_endgame_detection: true,
             verification_margin: 200,
@@ -3490,7 +3683,7 @@ mod tests {
             middlegame_pieces_threshold: 12,
             endgame_pieces_threshold: 12,
         };
-        
+
         let validated = config.new_validated();
         assert_eq!(validated.min_depth, 1);
         assert_eq!(validated.reduction_factor, 5);
@@ -3516,12 +3709,12 @@ mod tests {
             disabled_in_check: 10,
             disabled_endgame: 5,
         };
-        
+
         assert_eq!(stats.cutoff_rate(), 25.0);
         assert_eq!(stats.average_reduction_factor(), 2.0);
         assert_eq!(stats.total_disabled(), 15);
         assert!((stats.efficiency() - 21.74).abs() < 0.01); // 25 / (100 + 15) * 100
-        
+
         stats.reset();
         assert_eq!(stats.attempts, 0);
         assert_eq!(stats.cutoff_rate(), 0.0);
@@ -3575,18 +3768,18 @@ mod tests {
     #[test]
     fn test_tapered_score_interpolation() {
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         // At phase 0 (endgame), should return eg value
         assert_eq!(score.interpolate(0), 200);
-        
+
         // At phase 256 (opening), should return mg value
         assert_eq!(score.interpolate(GAME_PHASE_MAX), 100);
-        
+
         // At phase 128 (middlegame), should return average
         assert_eq!(score.interpolate(128), 150);
-        
+
         // Test edge cases
-        assert_eq!(score.interpolate(64), 175);  // 100 * 64 + 200 * 192 / 256
+        assert_eq!(score.interpolate(64), 175); // 100 * 64 + 200 * 192 / 256
         assert_eq!(score.interpolate(192), 125); // 100 * 192 + 200 * 64 / 256
     }
 
@@ -3595,7 +3788,7 @@ mod tests {
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(50, 75);
         let result = score1 + score2;
-        
+
         assert_eq!(result.mg, 150);
         assert_eq!(result.eg, 275);
     }
@@ -3605,7 +3798,7 @@ mod tests {
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(30, 50);
         let result = score1 - score2;
-        
+
         assert_eq!(result.mg, 70);
         assert_eq!(result.eg, 150);
     }
@@ -3614,7 +3807,7 @@ mod tests {
     fn test_tapered_score_neg() {
         let score = TaperedScore::new_tapered(100, -200);
         let neg_score = -score;
-        
+
         assert_eq!(neg_score.mg, -100);
         assert_eq!(neg_score.eg, 200);
     }
@@ -3624,7 +3817,7 @@ mod tests {
         let mut score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(50, 75);
         score1 += score2;
-        
+
         assert_eq!(score1.mg, 150);
         assert_eq!(score1.eg, 275);
     }
@@ -3634,7 +3827,7 @@ mod tests {
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(100, 200);
         let score3 = TaperedScore::new_tapered(100, 201);
-        
+
         assert_eq!(score1, score2);
         assert_ne!(score1, score3);
     }
@@ -3644,7 +3837,7 @@ mod tests {
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = score1; // Copy
         let score3 = score1.clone(); // Clone
-        
+
         assert_eq!(score1, score2);
         assert_eq!(score1, score3);
         assert_eq!(score2, score3);
@@ -3653,11 +3846,11 @@ mod tests {
     #[test]
     fn test_tapered_score_hash() {
         use std::collections::HashMap;
-        
+
         let mut map = HashMap::new();
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(100, 200);
-        
+
         map.insert(score1, "first");
         assert_eq!(map.get(&score2), Some(&"first"));
     }
@@ -3665,7 +3858,7 @@ mod tests {
     #[test]
     fn test_tapered_score_serialization() {
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         // Test JSON serialization
         let json = serde_json::to_string(&score).unwrap();
         let deserialized: TaperedScore = serde_json::from_str(&json).unwrap();
@@ -3676,7 +3869,7 @@ mod tests {
     fn test_game_phase_constants() {
         assert_eq!(GAME_PHASE_MAX, 256);
         assert_eq!(PIECE_PHASE_VALUES.len(), 6);
-        
+
         // Test that all piece types have phase values
         let piece_types = [
             PieceType::Knight,
@@ -3686,7 +3879,7 @@ mod tests {
             PieceType::Rook,
             PieceType::Lance,
         ];
-        
+
         for piece_type in &piece_types {
             assert!(PIECE_PHASE_VALUES.iter().any(|(pt, _)| *pt == *piece_type));
         }
@@ -3695,15 +3888,15 @@ mod tests {
     #[test]
     fn test_tapered_score_interpolation_edge_cases() {
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         // Test with negative phase (should still work)
         // 100 * (-1) + 200 * (256 - (-1)) / 256 = -100 + 200 * 257 / 256 = 51300 / 256 = 200
         assert_eq!(score.interpolate(-1), 200);
-        
+
         // Test with phase > GAME_PHASE_MAX
         // 100 * 300 + 200 * (256 - 300) / 256 = 30000 + 200 * (-44) / 256 = (30000 - 8800) / 256 = 21200 / 256 = 82
         assert_eq!(score.interpolate(300), 82);
-        
+
         // Test with zero values
         let zero_score = TaperedScore::new_tapered(0, 0);
         assert_eq!(zero_score.interpolate(128), 0);
@@ -3713,12 +3906,12 @@ mod tests {
     fn test_tapered_score_arithmetic_consistency() {
         let score1 = TaperedScore::new_tapered(100, 200);
         let score2 = TaperedScore::new_tapered(50, 75);
-        
+
         // Test that (a + b) - b = a
         let sum = score1 + score2;
         let diff = sum - score2;
         assert_eq!(diff, score1);
-        
+
         // Test that a + (-a) = 0
         let neg_score1 = -score1;
         let zero = score1 + neg_score1;
@@ -3744,7 +3937,6 @@ impl Default for IIDDepthStrategy {
         IIDDepthStrategy::Fixed
     }
 }
-
 
 /// Configuration for Internal Iterative Deepening (IID) parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -3828,7 +4020,7 @@ pub struct IIDConfig {
 }
 
 /// Task 10.1: IID configuration presets
-/// 
+///
 /// Presets provide convenient ways to configure IID for different use cases:
 /// - **Conservative**: Lower time overhead threshold, higher min_depth, shallower IID depth
 ///   Best for: Critical positions, endgame analysis, when safety is more important than speed
@@ -3858,7 +4050,7 @@ impl IIDPreset {
             IIDPreset::Balanced => "Balanced",
         }
     }
-    
+
     /// Parse a preset from a string (case-insensitive)
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -3874,31 +4066,31 @@ impl Default for IIDConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_depth: 4,                    // Apply IID at depth 4+
-            iid_depth_ply: 2,               // 2-ply IID search
-            max_legal_moves: 35,            // Skip IID in tactical positions
-            time_overhead_threshold: 0.15,  // Max 15% time overhead
+            min_depth: 4,                  // Apply IID at depth 4+
+            iid_depth_ply: 2,              // 2-ply IID search
+            max_legal_moves: 35,           // Skip IID in tactical positions
+            time_overhead_threshold: 0.15, // Max 15% time overhead
             depth_strategy: IIDDepthStrategy::Fixed,
             enable_time_pressure_detection: true,
-            enable_adaptive_tuning: false,   // Disabled by default
+            enable_adaptive_tuning: false, // Disabled by default
             // Task 4.11: Dynamic depth calculation configuration
-            dynamic_base_depth: 2,          // Base depth for dynamic strategy
-            dynamic_max_depth: 4,           // Maximum depth cap for dynamic strategy
-            adaptive_min_depth: false,      // Disable adaptive min depth by default
+            dynamic_base_depth: 2,     // Base depth for dynamic strategy
+            dynamic_max_depth: 4,      // Maximum depth cap for dynamic strategy
+            adaptive_min_depth: false, // Disable adaptive min depth by default
             // Task 5.4: Time estimation configuration
-            max_estimated_iid_time_ms: 50,  // Default: 50ms maximum estimated IID time
+            max_estimated_iid_time_ms: 50, // Default: 50ms maximum estimated IID time
             max_estimated_iid_time_percentage: false, // Use absolute time, not percentage
             // Task 7.9: Complexity-based adjustments configuration
             enable_complexity_based_adjustments: true, // Enable by default
-            complexity_threshold_low: 10,  // Threshold for Low complexity
-            complexity_threshold_medium: 25, // Threshold for Medium complexity
-            complexity_depth_adjustment_low: -1, // Reduce depth for Low complexity
-            complexity_depth_adjustment_medium: 0, // No change for Medium complexity
-            complexity_depth_adjustment_high: 1, // Increase depth for High complexity
+            complexity_threshold_low: 10,              // Threshold for Low complexity
+            complexity_threshold_medium: 25,           // Threshold for Medium complexity
+            complexity_depth_adjustment_low: -1,       // Reduce depth for Low complexity
+            complexity_depth_adjustment_medium: 0,     // No change for Medium complexity
+            complexity_depth_adjustment_high: 1,       // Increase depth for High complexity
             // Task 7.8: Adaptive move count threshold configuration
             enable_adaptive_move_count_threshold: true, // Enable by default
-            tactical_move_count_multiplier: 1.5, // Allow more moves in tactical positions
-            quiet_move_count_multiplier: 0.8, // Reduce threshold for quiet positions
+            tactical_move_count_multiplier: 1.5,        // Allow more moves in tactical positions
+            quiet_move_count_multiplier: 0.8,           // Reduce threshold for quiet positions
             // Task 9.7: Time pressure detection configuration
             time_pressure_base_threshold: 0.10, // 10% base threshold
             time_pressure_complexity_multiplier: 1.0, // Default multiplier
@@ -3929,18 +4121,18 @@ impl IIDConfig {
         let mut config = match preset {
             IIDPreset::Conservative => Self {
                 enabled: true,
-                min_depth: 5,                      // Higher min_depth (more conservative)
-                iid_depth_ply: 1,                 // Shallower IID depth (less aggressive)
-                max_legal_moves: 30,              // Lower move count threshold
-                time_overhead_threshold: 0.10,    // Lower time overhead (10% max)
+                min_depth: 5,                  // Higher min_depth (more conservative)
+                iid_depth_ply: 1,              // Shallower IID depth (less aggressive)
+                max_legal_moves: 30,           // Lower move count threshold
+                time_overhead_threshold: 0.10, // Lower time overhead (10% max)
                 depth_strategy: IIDDepthStrategy::Fixed,
                 enable_time_pressure_detection: true,
                 enable_adaptive_tuning: false,
                 // Task 10.3: Conservative preset configuration
-                dynamic_base_depth: 1,            // Shallower base depth
-                dynamic_max_depth: 3,            // Lower max depth
+                dynamic_base_depth: 1, // Shallower base depth
+                dynamic_max_depth: 3,  // Lower max depth
                 adaptive_min_depth: false,
-                max_estimated_iid_time_ms: 30,    // Lower time estimate threshold
+                max_estimated_iid_time_ms: 30, // Lower time estimate threshold
                 max_estimated_iid_time_percentage: false,
                 enable_complexity_based_adjustments: true,
                 complexity_threshold_low: 10,
@@ -3953,9 +4145,9 @@ impl IIDConfig {
                 quiet_move_count_multiplier: 0.7,    // Lower threshold
                 time_pressure_base_threshold: 0.08,  // Lower threshold (8%)
                 time_pressure_complexity_multiplier: 0.9, // Lower multiplier
-                time_pressure_depth_multiplier: 0.9,     // Lower multiplier
-                tt_move_min_depth_for_skip: 4,     // Higher threshold (more conservative)
-                tt_move_max_age_for_skip: 80,      // Lower age threshold (more conservative)
+                time_pressure_depth_multiplier: 0.9, // Lower multiplier
+                tt_move_min_depth_for_skip: 4,       // Higher threshold (more conservative)
+                tt_move_max_age_for_skip: 80,        // Lower age threshold (more conservative)
                 preset: Some(IIDPreset::Conservative),
                 // Task 11.8: Advanced depth strategies (disabled for conservative preset)
                 enable_game_phase_based_adjustment: false,
@@ -3971,18 +4163,18 @@ impl IIDConfig {
             },
             IIDPreset::Aggressive => Self {
                 enabled: true,
-                min_depth: 3,                      // Lower min_depth (more aggressive)
-                iid_depth_ply: 3,                 // Deeper IID depth (more aggressive)
-                max_legal_moves: 40,              // Higher move count threshold
-                time_overhead_threshold: 0.20,    // Higher time overhead (20% max)
+                min_depth: 3,                  // Lower min_depth (more aggressive)
+                iid_depth_ply: 3,              // Deeper IID depth (more aggressive)
+                max_legal_moves: 40,           // Higher move count threshold
+                time_overhead_threshold: 0.20, // Higher time overhead (20% max)
                 depth_strategy: IIDDepthStrategy::Dynamic, // Use dynamic for better performance
                 enable_time_pressure_detection: true,
                 enable_adaptive_tuning: false,
                 // Task 10.3: Aggressive preset configuration
                 dynamic_base_depth: 2,
-                dynamic_max_depth: 5,            // Higher max depth
-                adaptive_min_depth: true,        // Enable adaptive min depth
-                max_estimated_iid_time_ms: 70,    // Higher time estimate threshold
+                dynamic_max_depth: 5,          // Higher max depth
+                adaptive_min_depth: true,      // Enable adaptive min depth
+                max_estimated_iid_time_ms: 70, // Higher time estimate threshold
                 max_estimated_iid_time_percentage: false,
                 enable_complexity_based_adjustments: true,
                 complexity_threshold_low: 10,
@@ -3993,30 +4185,30 @@ impl IIDConfig {
                 enable_adaptive_move_count_threshold: true,
                 tactical_move_count_multiplier: 1.8, // Higher multiplier
                 quiet_move_count_multiplier: 0.9,    // Higher threshold
-                time_pressure_base_threshold: 0.12,   // Higher threshold (12%)
+                time_pressure_base_threshold: 0.12,  // Higher threshold (12%)
                 time_pressure_complexity_multiplier: 1.2, // Higher multiplier
-                time_pressure_depth_multiplier: 1.1,      // Higher multiplier
-                tt_move_min_depth_for_skip: 2,      // Lower threshold (more aggressive)
-                tt_move_max_age_for_skip: 120,      // Higher age threshold (more aggressive)
+                time_pressure_depth_multiplier: 1.1, // Higher multiplier
+                tt_move_min_depth_for_skip: 2,       // Lower threshold (more aggressive)
+                tt_move_max_age_for_skip: 120,       // Higher age threshold (more aggressive)
                 preset: Some(IIDPreset::Aggressive),
                 // Task 11.8: Advanced depth strategies (enabled for aggressive preset)
                 enable_game_phase_based_adjustment: true,
                 enable_material_based_adjustment: true,
                 enable_time_based_adjustment: true,
-                game_phase_opening_multiplier: 1.2,  // Deeper IID in opening
+                game_phase_opening_multiplier: 1.2, // Deeper IID in opening
                 game_phase_middlegame_multiplier: 1.0,
-                game_phase_endgame_multiplier: 0.8,  // Shallower IID in endgame
-                material_depth_multiplier: 1.1,      // Deeper IID in material-rich positions
+                game_phase_endgame_multiplier: 0.8, // Shallower IID in endgame
+                material_depth_multiplier: 1.1,     // Deeper IID in material-rich positions
                 material_threshold_for_adjustment: 20,
-                time_depth_multiplier: 0.9,          // Shallower IID when time is low
+                time_depth_multiplier: 0.9, // Shallower IID when time is low
                 time_threshold_for_adjustment: 0.15,
             },
             IIDPreset::Balanced => Self {
                 enabled: true,
-                min_depth: 4,                      // Default min_depth
-                iid_depth_ply: 2,                 // Default IID depth
-                max_legal_moves: 35,              // Default move count
-                time_overhead_threshold: 0.15,    // Default time overhead (15%)
+                min_depth: 4,                  // Default min_depth
+                iid_depth_ply: 2,              // Default IID depth
+                max_legal_moves: 35,           // Default move count
+                time_overhead_threshold: 0.15, // Default time overhead (15%)
                 depth_strategy: IIDDepthStrategy::Fixed,
                 enable_time_pressure_detection: true,
                 enable_adaptive_tuning: false,
@@ -4054,17 +4246,17 @@ impl IIDConfig {
                 time_threshold_for_adjustment: 0.15,
             },
         };
-        
+
         // Validate the configuration
         if let Err(_) = config.validate() {
             // If validation fails, fall back to default
             config = Self::default();
             config.preset = Some(preset);
         }
-        
+
         config
     }
-    
+
     /// Task 10.5: Apply a preset to this configuration
     pub fn apply_preset(&mut self, preset: IIDPreset) {
         *self = Self::from_preset(preset);
@@ -4103,7 +4295,7 @@ impl IIDConfig {
         } else {
             String::new()
         };
-        
+
         format!(
             "IIDConfig: enabled={}, min_depth={}, iid_depth_ply={}, max_moves={}, overhead_threshold={:.2}, strategy={:?}{}",
             self.enabled,
@@ -4190,7 +4382,8 @@ pub struct IIDStats {
     pub complexity_distribution_unknown: u64,
     /// Task 7.11: IID effectiveness by complexity level
     /// Maps complexity level to (successful_searches, total_searches, nodes_saved, time_saved)
-    pub complexity_effectiveness: std::collections::HashMap<PositionComplexity, (u64, u64, u64, u64)>,
+    pub complexity_effectiveness:
+        std::collections::HashMap<PositionComplexity, (u64, u64, u64, u64)>,
     /// Task 11.9: Advanced depth strategy effectiveness tracking
     /// Game phase-based adjustment usage (times applied, times effective)
     pub game_phase_adjustment_applied: u64,
@@ -4257,8 +4450,10 @@ impl IIDStats {
 
     /// Get the skip rate for each condition
     pub fn skip_rate_tt_move(&self) -> f64 {
-        let total_skips = self.positions_skipped_tt_move + self.positions_skipped_depth + 
-                         self.positions_skipped_move_count + self.positions_skipped_time_pressure;
+        let total_skips = self.positions_skipped_tt_move
+            + self.positions_skipped_depth
+            + self.positions_skipped_move_count
+            + self.positions_skipped_time_pressure;
         if total_skips == 0 {
             return 0.0;
         }
@@ -4313,11 +4508,26 @@ impl IIDStats {
             self.positions_skipped_tt_move,
             self.skip_rate_tt_move(),
             self.positions_skipped_depth,
-            (self.positions_skipped_depth as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0,
+            (self.positions_skipped_depth as f64
+                / (self.positions_skipped_tt_move
+                    + self.positions_skipped_depth
+                    + self.positions_skipped_move_count
+                    + self.positions_skipped_time_pressure) as f64)
+                * 100.0,
             self.positions_skipped_move_count,
-            (self.positions_skipped_move_count as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0,
+            (self.positions_skipped_move_count as f64
+                / (self.positions_skipped_tt_move
+                    + self.positions_skipped_depth
+                    + self.positions_skipped_move_count
+                    + self.positions_skipped_time_pressure) as f64)
+                * 100.0,
             self.positions_skipped_time_pressure,
-            (self.positions_skipped_time_pressure as f64 / (self.positions_skipped_tt_move + self.positions_skipped_depth + self.positions_skipped_move_count + self.positions_skipped_time_pressure) as f64) * 100.0
+            (self.positions_skipped_time_pressure as f64
+                / (self.positions_skipped_tt_move
+                    + self.positions_skipped_depth
+                    + self.positions_skipped_move_count
+                    + self.positions_skipped_time_pressure) as f64)
+                * 100.0
         )
     }
 
@@ -4332,7 +4542,7 @@ impl IIDStats {
             self.average_time_per_iid()
         )
     }
-    
+
     /// Task 12.2: Get percentage of cutoffs from IID moves vs non-IID moves
     pub fn cutoff_percentage_from_iid_moves(&self) -> f64 {
         if self.total_cutoffs == 0 {
@@ -4340,7 +4550,7 @@ impl IIDStats {
         }
         (self.cutoffs_from_iid_moves as f64 / self.total_cutoffs as f64) * 100.0
     }
-    
+
     /// Task 12.2: Get percentage of cutoffs from non-IID moves
     pub fn cutoff_percentage_from_non_iid_moves(&self) -> f64 {
         if self.total_cutoffs == 0 {
@@ -4348,7 +4558,7 @@ impl IIDStats {
         }
         (self.cutoffs_from_non_iid_moves as f64 / self.total_cutoffs as f64) * 100.0
     }
-    
+
     /// Task 12.3: Get average IID move position in ordered list (0 = first, 1 = second, etc.)
     pub fn average_iid_move_position(&self) -> f64 {
         if self.iid_move_position_tracked == 0 {
@@ -4356,7 +4566,7 @@ impl IIDStats {
         }
         self.iid_move_position_sum as f64 / self.iid_move_position_tracked as f64
     }
-    
+
     /// Task 12.3: Get percentage of times IID move was ordered first
     pub fn iid_move_ordered_first_percentage(&self) -> f64 {
         let total = self.iid_move_ordered_first + self.iid_move_not_ordered_first;
@@ -4365,25 +4575,27 @@ impl IIDStats {
         }
         (self.iid_move_ordered_first as f64 / total as f64) * 100.0
     }
-    
+
     /// Task 12.4: Get ordering effectiveness with IID (cutoff rate when IID move exists)
     pub fn ordering_effectiveness_with_iid(&self) -> f64 {
         if self.ordering_effectiveness_with_iid_total == 0 {
             return 0.0;
         }
-        (self.ordering_effectiveness_with_iid_cutoffs as f64 / 
-         self.ordering_effectiveness_with_iid_total as f64) * 100.0
+        (self.ordering_effectiveness_with_iid_cutoffs as f64
+            / self.ordering_effectiveness_with_iid_total as f64)
+            * 100.0
     }
-    
+
     /// Task 12.4: Get ordering effectiveness without IID (cutoff rate when IID move doesn't exist)
     pub fn ordering_effectiveness_without_iid(&self) -> f64 {
         if self.ordering_effectiveness_without_iid_total == 0 {
             return 0.0;
         }
-        (self.ordering_effectiveness_without_iid_cutoffs as f64 / 
-         self.ordering_effectiveness_without_iid_total as f64) * 100.0
+        (self.ordering_effectiveness_without_iid_cutoffs as f64
+            / self.ordering_effectiveness_without_iid_total as f64)
+            * 100.0
     }
-    
+
     /// Task 12.5: Get correlation coefficient between IID efficiency and ordering effectiveness
     pub fn iid_efficiency_ordering_correlation(&self) -> f64 {
         if self.iid_efficiency_ordering_correlation_points == 0 {
@@ -4391,7 +4603,8 @@ impl IIDStats {
         }
         // Simplified correlation: average of (IID efficiency * ordering effectiveness)
         // A more sophisticated correlation would use Pearson correlation coefficient
-        self.iid_efficiency_ordering_correlation_sum / self.iid_efficiency_ordering_correlation_points as f64
+        self.iid_efficiency_ordering_correlation_sum
+            / self.iid_efficiency_ordering_correlation_points as f64
     }
 }
 
@@ -4441,34 +4654,48 @@ pub struct IIDPerformanceMetrics {
 impl IIDPerformanceMetrics {
     /// Create performance metrics from IID statistics
     pub fn from_stats(stats: &IIDStats, total_search_time_ms: u64) -> Self {
-        let total_skips = stats.positions_skipped_tt_move + stats.positions_skipped_depth + 
-                         stats.positions_skipped_move_count + stats.positions_skipped_time_pressure;
-        
+        let total_skips = stats.positions_skipped_tt_move
+            + stats.positions_skipped_depth
+            + stats.positions_skipped_move_count
+            + stats.positions_skipped_time_pressure;
+
         Self {
             iid_efficiency: stats.efficiency_rate(),
             cutoff_rate: stats.cutoff_rate(),
             overhead_percentage: if total_search_time_ms > 0 {
                 (stats.iid_time_ms as f64 / total_search_time_ms as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             nodes_saved_per_iid: stats.average_nodes_per_iid(),
             success_rate: stats.success_rate(),
             average_iid_time: stats.average_time_per_iid(),
             tt_skip_rate: if total_skips > 0 {
                 (stats.positions_skipped_tt_move as f64 / total_skips as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             depth_skip_rate: if total_skips > 0 {
                 (stats.positions_skipped_depth as f64 / total_skips as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             move_count_skip_rate: if total_skips > 0 {
                 (stats.positions_skipped_move_count as f64 / total_skips as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             time_pressure_skip_rate: if total_skips > 0 {
                 (stats.positions_skipped_time_pressure as f64 / total_skips as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             // Task 6.7: Calculate performance comparison metrics
             node_reduction_percentage: if stats.total_nodes_without_iid > 0 {
                 (stats.nodes_saved as f64 / stats.total_nodes_without_iid as f64) * 100.0
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             speedup_percentage: if stats.total_time_without_iid_ms > 0 {
                 let time_with_iid = total_search_time_ms;
                 let time_without_iid = stats.total_time_without_iid_ms;
@@ -4477,25 +4704,34 @@ impl IIDPerformanceMetrics {
                 } else {
                     0.0
                 }
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             net_benefit_percentage: {
                 let speedup = if stats.total_time_without_iid_ms > 0 {
                     let time_with_iid = total_search_time_ms;
                     let time_without_iid = stats.total_time_without_iid_ms;
                     if time_without_iid > time_with_iid {
-                        ((time_without_iid - time_with_iid) as f64 / time_without_iid as f64) * 100.0
+                        ((time_without_iid - time_with_iid) as f64 / time_without_iid as f64)
+                            * 100.0
                     } else {
                         0.0
                     }
-                } else { 0.0 };
+                } else {
+                    0.0
+                };
                 let overhead = if total_search_time_ms > 0 {
                     (stats.iid_time_ms as f64 / total_search_time_ms as f64) * 100.0
-                } else { 0.0 };
+                } else {
+                    0.0
+                };
                 speedup - overhead
             },
             efficiency_speedup_correlation: if stats.correlation_data_points > 0 {
                 stats.efficiency_speedup_correlation_sum / stats.correlation_data_points as f64
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             // Task 12.2-12.5: Cross-feature statistics
             cutoff_percentage_from_iid_moves: stats.cutoff_percentage_from_iid_moves(),
             cutoff_percentage_from_non_iid_moves: stats.cutoff_percentage_from_non_iid_moves(),
@@ -4553,12 +4789,12 @@ impl Default for AspirationWindowConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            base_window_size: 50,        // 50 centipawns
+            base_window_size: 50, // 50 centipawns
             dynamic_scaling: true,
-            max_window_size: 200,        // 200 centipawns
-            min_depth: 2,                // Start at depth 2
+            max_window_size: 200, // 200 centipawns
+            min_depth: 2,         // Start at depth 2
             enable_adaptive_sizing: true,
-            max_researches: 2,           // Allow up to 2 re-searches
+            max_researches: 2, // Allow up to 2 re-searches
             enable_statistics: true,
             use_static_eval_for_init: true, // Use static eval for first window (Task 4.1)
             enable_position_type_tracking: true, // Task 7.1: Enable position type tracking by default
@@ -4736,7 +4972,6 @@ impl Default for TimeAllocationStrategy {
     }
 }
 
-
 /// Time budget allocation tracking (Task 4.10)
 #[derive(Debug, Clone, Default)]
 pub struct TimeBudgetStats {
@@ -4761,7 +4996,7 @@ impl AspirationWindowStats {
     pub fn reset(&mut self) {
         *self = AspirationWindowStats::default();
     }
-    
+
     /// Update window size statistics by position type (Task 7.1)
     pub fn update_window_size_by_position_type(&mut self, phase: GamePhase, window_size: i32) {
         let stats = &mut self.window_size_by_position_type;
@@ -4770,26 +5005,26 @@ impl AspirationWindowStats {
                 let old_avg = stats.opening_avg_window_size;
                 let count = stats.opening_searches;
                 stats.opening_searches += 1;
-                stats.opening_avg_window_size = 
+                stats.opening_avg_window_size =
                     (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
-            },
+            }
             GamePhase::Middlegame => {
                 let old_avg = stats.middlegame_avg_window_size;
                 let count = stats.middlegame_searches;
                 stats.middlegame_searches += 1;
-                stats.middlegame_avg_window_size = 
+                stats.middlegame_avg_window_size =
                     (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
-            },
+            }
             GamePhase::Endgame => {
                 let old_avg = stats.endgame_avg_window_size;
                 let count = stats.endgame_searches;
                 stats.endgame_searches += 1;
-                stats.endgame_avg_window_size = 
+                stats.endgame_avg_window_size =
                     (old_avg * count as f64 + window_size as f64) / (count + 1) as f64;
-            },
+            }
         }
     }
-    
+
     /// Update success rate statistics by position type (Task 7.1)
     pub fn update_success_rate_by_position_type(&mut self, phase: GamePhase, successful: bool) {
         let stats = &mut self.success_rate_by_position_type;
@@ -4799,25 +5034,25 @@ impl AspirationWindowStats {
                 if successful {
                     stats.opening_successful += 1;
                 }
-                stats.opening_success_rate = 
+                stats.opening_success_rate =
                     stats.opening_successful as f64 / stats.opening_total as f64;
-            },
+            }
             GamePhase::Middlegame => {
                 stats.middlegame_total += 1;
                 if successful {
                     stats.middlegame_successful += 1;
                 }
-                stats.middlegame_success_rate = 
+                stats.middlegame_success_rate =
                     stats.middlegame_successful as f64 / stats.middlegame_total as f64;
-            },
+            }
             GamePhase::Endgame => {
                 stats.endgame_total += 1;
                 if successful {
                     stats.endgame_successful += 1;
                 }
-                stats.endgame_success_rate = 
+                stats.endgame_success_rate =
                     stats.endgame_successful as f64 / stats.endgame_total as f64;
-            },
+            }
         }
     }
 
@@ -4829,20 +5064,26 @@ impl AspirationWindowStats {
     }
 
     /// Update depth-based statistics
-    pub fn update_depth_stats(&mut self, depth: u8, success: bool, had_research: bool, window_size: i32) {
+    pub fn update_depth_stats(
+        &mut self,
+        depth: u8,
+        success: bool,
+        had_research: bool,
+        window_size: i32,
+    ) {
         if depth < self.success_rate_by_depth.len() as u8 {
             let depth_idx = depth as usize;
-            
+
             // Update success rate
             if success {
                 self.success_rate_by_depth[depth_idx] += 1.0;
             }
-            
+
             // Update research rate
             if had_research {
                 self.research_rate_by_depth[depth_idx] += 1.0;
             }
-            
+
             // Update window size
             self.window_size_by_depth[depth_idx] = window_size as f64;
         }
@@ -4883,10 +5124,12 @@ impl AspirationWindowStats {
 
         // Update average times
         if self.total_searches > 0 {
-            self.average_search_time_ms = self.total_search_time_ms as f64 / self.total_searches as f64;
+            self.average_search_time_ms =
+                self.total_search_time_ms as f64 / self.total_searches as f64;
         }
         if self.total_researches > 0 {
-            self.average_research_time_ms = self.total_research_time_ms as f64 / self.total_researches as f64;
+            self.average_research_time_ms =
+                self.total_research_time_ms as f64 / self.total_researches as f64;
         }
 
         // Calculate configuration effectiveness
@@ -4937,7 +5180,8 @@ impl AspirationWindowStats {
             self.average_window_size = window_size as f64;
         } else {
             let alpha = 0.1; // Smoothing factor
-            self.average_window_size = alpha * window_size as f64 + (1.0 - alpha) * self.average_window_size;
+            self.average_window_size =
+                alpha * window_size as f64 + (1.0 - alpha) * self.average_window_size;
         }
     }
 
@@ -4958,7 +5202,7 @@ impl AspirationWindowStats {
     /// Add performance data point for trend analysis
     pub fn add_performance_data_point(&mut self, performance: f64) {
         self.recent_performance.push(performance);
-        
+
         // Keep only last 100 data points
         if self.recent_performance.len() > 100 {
             self.recent_performance.remove(0);
@@ -4972,9 +5216,10 @@ impl AspirationWindowStats {
         }
 
         let mid = self.recent_performance.len() / 2;
-        let recent_avg = self.recent_performance[mid..].iter().sum::<f64>() / (self.recent_performance.len() - mid) as f64;
+        let recent_avg = self.recent_performance[mid..].iter().sum::<f64>()
+            / (self.recent_performance.len() - mid) as f64;
         let early_avg = self.recent_performance[..mid].iter().sum::<f64>() / mid as f64;
-        
+
         recent_avg - early_avg
     }
 
@@ -5138,27 +5383,32 @@ impl AspirationWindowPerformanceMetrics {
     /// Get optimization recommendations
     pub fn get_optimization_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if self.research_rate > 30.0 {
-            recommendations.push("Consider increasing window size (too many re-searches)".to_string());
+            recommendations
+                .push("Consider increasing window size (too many re-searches)".to_string());
         }
-        
+
         if self.success_rate < 70.0 {
             recommendations.push("Consider decreasing window size (too many failures)".to_string());
         }
-        
+
         if self.fail_lows > self.fail_highs * 2 {
-            recommendations.push("Consider asymmetric window sizing (more fail-lows than fail-highs)".to_string());
+            recommendations.push(
+                "Consider asymmetric window sizing (more fail-lows than fail-highs)".to_string(),
+            );
         }
-        
+
         if self.fail_highs > self.fail_lows * 2 {
-            recommendations.push("Consider asymmetric window sizing (more fail-highs than fail-lows)".to_string());
+            recommendations.push(
+                "Consider asymmetric window sizing (more fail-highs than fail-lows)".to_string(),
+            );
         }
-        
+
         if recommendations.is_empty() {
             recommendations.push("Aspiration windows are performing well".to_string());
         }
-        
+
         recommendations
     }
 }
@@ -5219,23 +5469,30 @@ impl WindowSizeStatistics {
     /// Get tuning recommendations
     pub fn get_tuning_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if self.success_rate < 0.6 {
-            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+            recommendations
+                .push("Low success rate: consider increasing base_window_size".to_string());
         }
         if self.fail_low_rate > 0.3 {
-            recommendations.push("High fail-low rate: consider larger base_window_size".to_string());
+            recommendations
+                .push("High fail-low rate: consider larger base_window_size".to_string());
         }
         if self.fail_high_rate > 0.3 {
-            recommendations.push("High fail-high rate: consider larger base_window_size".to_string());
+            recommendations
+                .push("High fail-high rate: consider larger base_window_size".to_string());
         }
         if self.average_window_size < (self.min_window_size as f64) * 1.5 {
-            recommendations.push("Very small average window: consider increasing base_window_size".to_string());
+            recommendations.push(
+                "Very small average window: consider increasing base_window_size".to_string(),
+            );
         }
         if self.average_window_size > (self.max_window_size as f64) * 0.8 {
-            recommendations.push("Very large average window: consider decreasing base_window_size".to_string());
+            recommendations.push(
+                "Very large average window: consider decreasing base_window_size".to_string(),
+            );
         }
-        
+
         recommendations
     }
 }
@@ -5294,36 +5551,47 @@ impl ResearchEfficiencyMetrics {
 
     /// Check if re-search efficiency is good
     pub fn is_efficient(&self) -> bool {
-        self.success_rate > 0.7 && self.research_rate < 1.5 && self.fail_low_rate < 0.3 && self.fail_high_rate < 0.3
+        self.success_rate > 0.7
+            && self.research_rate < 1.5
+            && self.fail_low_rate < 0.3
+            && self.fail_high_rate < 0.3
     }
 
     /// Get efficiency recommendations
     pub fn get_efficiency_recommendations(&self) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if self.success_rate < 0.6 {
-            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+            recommendations
+                .push("Low success rate: consider increasing base_window_size".to_string());
         }
         if self.research_rate > 2.0 {
-            recommendations.push("High re-search rate: consider increasing base_window_size or max_researches".to_string());
+            recommendations.push(
+                "High re-search rate: consider increasing base_window_size or max_researches"
+                    .to_string(),
+            );
         }
         if self.fail_low_rate > 0.4 {
-            recommendations.push("High fail-low rate: consider larger base_window_size".to_string());
+            recommendations
+                .push("High fail-low rate: consider larger base_window_size".to_string());
         }
         if self.fail_high_rate > 0.4 {
-            recommendations.push("High fail-high rate: consider larger base_window_size".to_string());
+            recommendations
+                .push("High fail-high rate: consider larger base_window_size".to_string());
         }
         if self.fail_lows > self.fail_highs * 2 {
-            recommendations.push("Asymmetric failures: consider asymmetric window sizing".to_string());
+            recommendations
+                .push("Asymmetric failures: consider asymmetric window sizing".to_string());
         }
         if self.fail_highs > self.fail_lows * 2 {
-            recommendations.push("Asymmetric failures: consider asymmetric window sizing".to_string());
+            recommendations
+                .push("Asymmetric failures: consider asymmetric window sizing".to_string());
         }
-        
+
         if recommendations.is_empty() {
             recommendations.push("Re-search efficiency is good".to_string());
         }
-        
+
         recommendations
     }
 }
@@ -5374,10 +5642,12 @@ impl DepthAnalysis {
 
         for start in 0..self.success_rate_by_depth.len() {
             for end in start..self.success_rate_by_depth.len() {
-                let range_success = self.success_rate_by_depth[start..=end].iter().sum::<f64>() / (end - start + 1) as f64;
-                let range_research = self.research_rate_by_depth[start..=end].iter().sum::<f64>() / (end - start + 1) as f64;
+                let range_success = self.success_rate_by_depth[start..=end].iter().sum::<f64>()
+                    / (end - start + 1) as f64;
+                let range_research = self.research_rate_by_depth[start..=end].iter().sum::<f64>()
+                    / (end - start + 1) as f64;
                 let score = range_success * (1.0 - range_research * 0.5);
-                
+
                 if score > best_score {
                     best_score = score;
                     best_start = start;
@@ -5412,10 +5682,11 @@ pub struct PerformanceSummary {
 impl PerformanceSummary {
     /// Get performance grade (A+ to F)
     pub fn get_performance_grade(&self) -> String {
-        let score = (self.success_rate * 0.4 + 
-                    (1.0 - self.research_rate) * 0.3 + 
-                    self.configuration_effectiveness * 0.2 + 
-                    self.memory_efficiency * 0.1) * 100.0;
+        let score = (self.success_rate * 0.4
+            + (1.0 - self.research_rate) * 0.3
+            + self.configuration_effectiveness * 0.2
+            + self.memory_efficiency * 0.1)
+            * 100.0;
 
         match score as u8 {
             95..=100 => "A+".to_string(),
@@ -5437,25 +5708,36 @@ impl PerformanceSummary {
         let mut recommendations = Vec::new();
 
         if self.success_rate < 0.7 {
-            recommendations.push("Low success rate: consider increasing base_window_size".to_string());
+            recommendations
+                .push("Low success rate: consider increasing base_window_size".to_string());
         }
         if self.research_rate > 1.5 {
-            recommendations.push("High research rate: consider increasing base_window_size or max_researches".to_string());
+            recommendations.push(
+                "High research rate: consider increasing base_window_size or max_researches"
+                    .to_string(),
+            );
         }
         if self.configuration_effectiveness < 0.6 {
-            recommendations.push("Poor configuration effectiveness: consider tuning parameters".to_string());
+            recommendations
+                .push("Poor configuration effectiveness: consider tuning parameters".to_string());
         }
         if self.performance_trend < -0.1 {
-            recommendations.push("Declining performance: consider resetting or retuning".to_string());
+            recommendations
+                .push("Declining performance: consider resetting or retuning".to_string());
         }
         if self.memory_efficiency < 0.5 {
-            recommendations.push("Low memory efficiency: consider optimizing memory usage".to_string());
+            recommendations
+                .push("Low memory efficiency: consider optimizing memory usage".to_string());
         }
         if self.average_window_size < 20.0 {
-            recommendations.push("Very small average window: consider increasing base_window_size".to_string());
+            recommendations.push(
+                "Very small average window: consider increasing base_window_size".to_string(),
+            );
         }
         if self.average_window_size > 150.0 {
-            recommendations.push("Very large average window: consider decreasing base_window_size".to_string());
+            recommendations.push(
+                "Very large average window: consider decreasing base_window_size".to_string(),
+            );
         }
 
         if recommendations.is_empty() {
@@ -5467,10 +5749,10 @@ impl PerformanceSummary {
 
     /// Check if performance is acceptable
     pub fn is_acceptable(&self) -> bool {
-        self.success_rate > 0.6 && 
-        self.research_rate < 2.0 && 
-        self.configuration_effectiveness > 0.5 &&
-        self.memory_efficiency > 0.3
+        self.success_rate > 0.6
+            && self.research_rate < 2.0
+            && self.configuration_effectiveness > 0.5
+            && self.memory_efficiency > 0.3
     }
 }
 
@@ -5512,7 +5794,7 @@ impl RealTimePerformance {
     /// Get performance alerts
     pub fn get_alerts(&self) -> Vec<String> {
         let mut alerts = Vec::new();
-        
+
         if self.current_searches > 50 {
             if self.current_success_rate < 0.5 {
                 alerts.push("Low success rate detected".to_string());
@@ -5527,7 +5809,7 @@ impl RealTimePerformance {
                 alerts.push("Poor configuration effectiveness".to_string());
             }
         }
-        
+
         alerts
     }
 
@@ -6015,7 +6297,7 @@ impl TimeManagementConfig {
         if self.pressure_threshold < 0.0 || self.pressure_threshold > 1.0 {
             return Err("Pressure threshold must be between 0.0 and 1.0".to_string());
         }
-        
+
         // Validate iterative deepening time allocation settings (Task 4.7)
         if self.safety_margin < 0.0 || self.safety_margin > 0.5 {
             return Err("safety_margin must be between 0.0 and 0.5".to_string());
@@ -6023,29 +6305,34 @@ impl TimeManagementConfig {
         if self.min_time_per_depth_ms == 0 {
             return Err("min_time_per_depth_ms must be greater than 0".to_string());
         }
-        if self.max_time_per_depth_ms > 0 && self.max_time_per_depth_ms < self.min_time_per_depth_ms {
+        if self.max_time_per_depth_ms > 0 && self.max_time_per_depth_ms < self.min_time_per_depth_ms
+        {
             return Err("max_time_per_depth_ms must be >= min_time_per_depth_ms".to_string());
         }
         if self.check_max_depth == 0 || self.check_max_depth > 10 {
             return Err("check_max_depth must be between 1 and 10".to_string());
         }
-        
+
         // Task 8.4: Validate time check frequency
         if self.time_check_frequency == 0 {
             return Err("time_check_frequency must be greater than 0".to_string());
         }
         if self.time_check_frequency > 100000 {
-            return Err("time_check_frequency should not exceed 100000 for performance reasons".to_string());
+            return Err(
+                "time_check_frequency should not exceed 100000 for performance reasons".to_string(),
+            );
         }
-        
+
         // Task 8.3: Validate absolute safety margin
         if self.absolute_safety_margin_ms > 10000 {
-            return Err("absolute_safety_margin_ms should not exceed 10000ms (10 seconds)".to_string());
+            return Err(
+                "absolute_safety_margin_ms should not exceed 10000ms (10 seconds)".to_string(),
+            );
         }
 
         Ok(())
     }
-    
+
     /// Get a summary of the time management configuration including iterative deepening settings
     pub fn summary_full(&self) -> String {
         format!(
@@ -6069,7 +6356,7 @@ impl TimeManagementConfig {
 
         let base_time = total_time_ms / moves_remaining;
         let buffered_time = (base_time as f64 * (1.0 - self.buffer_percentage)) as u32;
-        
+
         buffered_time.max(self.min_time_ms).min(self.max_time_ms)
     }
 
@@ -6156,7 +6443,7 @@ impl ConfigMigration {
     /// Get configuration recommendations based on system resources
     pub fn get_recommendations_for_system(available_memory_mb: usize) -> EngineConfig {
         let mut config = EngineConfig::default();
-        
+
         // Adjust TT size based on available memory
         if available_memory_mb >= 1024 {
             config.tt_size_mb = 256;
@@ -6222,19 +6509,19 @@ pub struct ConfigComparison {
 impl ConfigComparison {
     /// Check if any configuration is different
     pub fn has_differences(&self) -> bool {
-        self.quiescence_different ||
-        self.null_move_different ||
-        self.lmr_different ||
-        self.aspiration_different ||
-        self.tt_size_different ||
-        self.max_depth_different ||
-        self.time_management_different
+        self.quiescence_different
+            || self.null_move_different
+            || self.lmr_different
+            || self.aspiration_different
+            || self.tt_size_different
+            || self.max_depth_different
+            || self.time_management_different
     }
 
     /// Get summary of differences
     pub fn get_differences_summary(&self) -> Vec<String> {
         let mut differences = Vec::new();
-        
+
         if self.quiescence_different {
             differences.push("Quiescence configuration".to_string());
         }
@@ -6256,7 +6543,7 @@ impl ConfigComparison {
         if self.time_management_different {
             differences.push("Time management configuration".to_string());
         }
-        
+
         differences
     }
 }
@@ -6270,22 +6557,22 @@ impl ConfigComparison {
 pub enum MagicError {
     #[error("Failed to generate magic number for square {square} piece {piece_type:?}")]
     GenerationFailed { square: u8, piece_type: PieceType },
-    
+
     #[error("Magic number validation failed: {reason}")]
     ValidationFailed { reason: String },
-    
+
     #[error("Insufficient memory for magic table: required {required}, available {available}")]
     InsufficientMemory { required: usize, available: usize },
-    
+
     #[error("Magic table initialization failed: {reason}")]
     InitializationFailed { reason: String },
-    
+
     #[error("Invalid square index: {square}")]
     InvalidSquare { square: u8 },
-    
+
     #[error("Invalid piece type for magic bitboards: {piece_type:?}")]
     InvalidPieceType { piece_type: PieceType },
-    
+
     #[error("IO error: {0}")]
     IoError(String),
 }
@@ -6385,8 +6672,7 @@ pub struct AttackConfig {
 }
 
 /// Performance metrics for magic bitboard operations
-#[derive(Debug, Default, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct PerformanceMetrics {
     pub lookup_count: u64,
     pub total_lookup_time: std::time::Duration,
@@ -6438,7 +6724,10 @@ pub enum TimePressure {
 
 impl TimePressure {
     /// Determine time pressure level from remaining time percentage
-    pub fn from_remaining_time_percent(remaining_percent: f64, thresholds: &TimePressureThresholds) -> Self {
+    pub fn from_remaining_time_percent(
+        remaining_percent: f64,
+        thresholds: &TimePressureThresholds,
+    ) -> Self {
         if remaining_percent <= thresholds.high_pressure_threshold {
             TimePressure::High
         } else if remaining_percent <= thresholds.medium_pressure_threshold {
@@ -6475,9 +6764,9 @@ impl Default for TimePressureThresholds {
 /// Position classification for adaptive reduction
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PositionClassification {
-    Tactical,  // Position with high tactical activity (many cutoffs)
-    Quiet,     // Position with low tactical activity (few cutoffs)
-    Neutral,   // Position with moderate tactical activity or insufficient data
+    Tactical, // Position with high tactical activity (many cutoffs)
+    Quiet,    // Position with low tactical activity (few cutoffs)
+    Neutral,  // Position with moderate tactical activity or insufficient data
 }
 
 /// Source of transposition table entry for priority management (Task 7.0.3.1)
@@ -6532,31 +6821,37 @@ impl SearchState {
             conditional_exemption_config: None,
         }
     }
-    
+
     /// Update search state with current position information
     /// Note: This method should be called from SearchEngine with the appropriate values
-    pub fn update_fields(&mut self, is_in_check: bool, static_eval: i32, position_hash: u64, game_phase: GamePhase) {
+    pub fn update_fields(
+        &mut self,
+        is_in_check: bool,
+        static_eval: i32,
+        position_hash: u64,
+        game_phase: GamePhase,
+    ) {
         self.is_in_check = is_in_check;
         self.static_eval = static_eval;
         self.position_hash = position_hash;
         self.game_phase = game_phase;
     }
-    
+
     /// Set position classification for adaptive reduction
     pub fn set_position_classification(&mut self, classification: PositionClassification) {
         self.position_classification = Some(classification);
     }
-    
+
     /// Set the transposition table best move
     pub fn set_tt_move(&mut self, tt_move: Option<Move>) {
         self.tt_move = tt_move;
     }
-    
+
     /// Set advanced reduction strategies configuration (Task 11.4)
     pub fn set_advanced_reduction_config(&mut self, config: AdvancedReductionConfig) {
         self.advanced_reduction_config = Some(config);
     }
-    
+
     /// Set conditional exemption configuration (Task 12.2, 12.3)
     pub fn set_conditional_exemption_config(&mut self, config: ConditionalExemptionConfig) {
         self.conditional_exemption_config = Some(config);
@@ -6566,52 +6861,51 @@ impl SearchState {
 /// Pruning decision result
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PruningDecision {
-    Search,           // Search normally
-    ReducedSearch,    // Search with reduced depth
-    Skip,             // Skip this move
-    Razor,            // Use razoring
+    Search,        // Search normally
+    ReducedSearch, // Search with reduced depth
+    Skip,          // Skip this move
+    Razor,         // Use razoring
 }
 
 impl PruningDecision {
     pub fn is_pruned(&self) -> bool {
         matches!(self, PruningDecision::Skip)
     }
-    
+
     pub fn needs_reduction(&self) -> bool {
         matches!(self, PruningDecision::ReducedSearch)
     }
 }
 
 /// Parameters for advanced alpha-beta pruning techniques
-#[derive(Debug, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PruningParameters {
     // Futility pruning parameters
     pub futility_margin: [i32; 8],
     pub futility_depth_limit: u8,
     pub extended_futility_depth: u8,
-    
+
     // Late move reduction parameters
     pub lmr_base_reduction: u8,
     pub lmr_move_threshold: u8,
     pub lmr_depth_threshold: u8,
     pub lmr_max_reduction: u8,
-    pub lmr_enable_extended_exemptions: bool,  // Enable killer moves, TT moves, escape moves
-    pub lmr_enable_adaptive_reduction: bool,   // Enable position-based adaptive reduction
-    
+    pub lmr_enable_extended_exemptions: bool, // Enable killer moves, TT moves, escape moves
+    pub lmr_enable_adaptive_reduction: bool,  // Enable position-based adaptive reduction
+
     // Delta pruning parameters
     pub delta_margin: i32,
     pub delta_depth_limit: u8,
-    
+
     // Razoring parameters
     pub razoring_depth_limit: u8,
     pub razoring_margin: i32,
     pub razoring_margin_endgame: i32,
-    
+
     // Multi-cut pruning parameters
     pub multi_cut_threshold: u8,
     pub multi_cut_depth_limit: u8,
-    
+
     // Adaptive parameters
     pub adaptive_enabled: bool,
     pub position_dependent_margins: bool,
@@ -6659,17 +6953,17 @@ impl PruningStatistics {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn record_decision(&mut self, decision: PruningDecision) {
         self.total_moves += 1;
-        
+
         match decision {
             PruningDecision::Skip => self.pruned_moves += 1,
             PruningDecision::Razor => self.razored += 1,
             _ => {}
         }
     }
-    
+
     pub fn get_pruning_rate(&self) -> f64 {
         if self.total_moves == 0 {
             0.0
@@ -6677,7 +6971,7 @@ impl PruningStatistics {
             self.pruned_moves as f64 / self.total_moves as f64
         }
     }
-    
+
     pub fn reset(&mut self) {
         *self = Self::new();
     }
@@ -6756,12 +7050,12 @@ impl IntegrationStats {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Reset all statistics to zero
     pub fn reset(&mut self) {
         *self = Self::default();
     }
-    
+
     /// Calculate NMP-IID sequential overhead percentage
     pub fn sequential_overhead_percent(&self) -> f64 {
         let total_overhead = self.nmp_overhead_time_ms + self.iid_overhead_time_ms;
@@ -6772,7 +7066,7 @@ impl IntegrationStats {
         // For now return absolute overhead
         total_overhead as f64
     }
-    
+
     /// Calculate IID effectiveness after NMP failure
     pub fn iid_effectiveness_after_nmp_fail(&self) -> f64 {
         if self.iid_searches_after_nmp_fail == 0 {
@@ -6821,12 +7115,12 @@ impl CoreSearchMetrics {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Reset all metrics to zero
     pub fn reset(&mut self) {
         *self = Self::default();
     }
-    
+
     /// Calculate cutoff rate as a percentage (Task 5.7)
     pub fn cutoff_rate(&self) -> f64 {
         if self.total_nodes == 0 {
@@ -6834,7 +7128,7 @@ impl CoreSearchMetrics {
         }
         (self.total_cutoffs as f64 / self.total_nodes as f64) * 100.0
     }
-    
+
     /// Calculate transposition table hit rate as a percentage (Task 5.7)
     pub fn tt_hit_rate(&self) -> f64 {
         if self.total_tt_probes == 0 {
@@ -6842,7 +7136,7 @@ impl CoreSearchMetrics {
         }
         (self.total_tt_hits as f64 / self.total_tt_probes as f64) * 100.0
     }
-    
+
     /// Calculate aspiration window success rate as a percentage (Task 5.7)
     pub fn aspiration_success_rate(&self) -> f64 {
         if self.total_aspiration_searches == 0 {
@@ -6850,7 +7144,7 @@ impl CoreSearchMetrics {
         }
         (self.successful_aspiration_searches as f64 / self.total_aspiration_searches as f64) * 100.0
     }
-    
+
     /// Get breakdown of TT hit types
     pub fn tt_hit_breakdown(&self) -> (f64, f64, f64) {
         if self.total_tt_hits == 0 {
@@ -6861,14 +7155,14 @@ impl CoreSearchMetrics {
         let upper_pct = (self.tt_upper_bound_hits as f64 / self.total_tt_hits as f64) * 100.0;
         (exact_pct, lower_pct, upper_pct)
     }
-    
+
     /// Generate a comprehensive metrics report (Task 5.9)
     pub fn generate_report(&self) -> String {
         let cutoff_rate = self.cutoff_rate();
         let tt_hit_rate = self.tt_hit_rate();
         let aspiration_success = self.aspiration_success_rate();
         let (exact_pct, lower_pct, upper_pct) = self.tt_hit_breakdown();
-        
+
         format!(
             "Core Search Metrics Report:\n\
             =========================\n\
@@ -6889,15 +7183,21 @@ impl CoreSearchMetrics {
             - Re-searches: {}\n\
             ",
             self.total_nodes,
-            self.total_cutoffs, cutoff_rate,
+            self.total_cutoffs,
+            cutoff_rate,
             self.beta_cutoffs,
             self.total_tt_probes,
-            self.total_tt_hits, tt_hit_rate,
-            self.tt_exact_hits, exact_pct,
-            self.tt_lower_bound_hits, lower_pct,
-            self.tt_upper_bound_hits, upper_pct,
+            self.total_tt_hits,
+            tt_hit_rate,
+            self.tt_exact_hits,
+            exact_pct,
+            self.tt_lower_bound_hits,
+            lower_pct,
+            self.tt_upper_bound_hits,
+            upper_pct,
             self.total_aspiration_searches,
-            self.successful_aspiration_searches, aspiration_success,
+            self.successful_aspiration_searches,
+            aspiration_success,
             self.total_aspiration_searches - self.successful_aspiration_searches
         )
     }
@@ -6987,14 +7287,14 @@ impl PruningManager {
             cache_misses: 0,
         }
     }
-    
+
     /// Determine if a move should be pruned and how (optimized version)
     pub fn should_prune(&mut self, state: &SearchState, mv: &Move) -> PruningDecision {
         // Early exit for obvious cases
         if self.should_skip_pruning(state, mv) {
             return PruningDecision::Search;
         }
-        
+
         // Check cache first for performance
         let cache_key = self.compute_cache_key(state, mv);
         if let Some(cached_decision) = self.pruning_cache.get(&cache_key) {
@@ -7002,48 +7302,48 @@ impl PruningManager {
             return *cached_decision;
         }
         self.cache_misses += 1;
-        
+
         let mut decision = PruningDecision::Search;
-        
+
         // Apply pruning techniques in order of safety
         decision = self.check_advanced_futility_pruning(state, mv, decision);
         decision = self.check_advanced_delta_pruning(state, mv, decision);
         decision = self.check_advanced_razoring(state, decision);
-        
+
         // Cache the result (with size limit to prevent memory growth)
         if self.pruning_cache.len() < 10000 {
             self.pruning_cache.insert(cache_key, decision);
         }
-        
+
         self.statistics.record_decision(decision);
         decision
     }
-    
+
     /// Fast check to skip pruning for obvious cases
     fn should_skip_pruning(&self, state: &SearchState, mv: &Move) -> bool {
         // Skip if depth is too shallow
         if state.depth < 2 {
             return true;
         }
-        
+
         // Skip if in check (pruning is dangerous)
         if state.is_in_check {
             return true;
         }
-        
+
         // Skip if move is tactical (capture, promotion, check)
         if mv.is_capture || mv.is_promotion || mv.gives_check {
             return true;
         }
-        
+
         false
     }
-    
+
     /// Compute cache key for pruning decisions
     fn compute_cache_key(&self, state: &SearchState, mv: &Move) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         use std::hash::{Hash, Hasher};
-        
+
         state.position_hash.hash(&mut hasher);
         state.depth.hash(&mut hasher);
         state.move_number.hash(&mut hasher);
@@ -7052,7 +7352,7 @@ impl PruningManager {
         state.static_eval.hash(&mut hasher);
         // Hash game phase as u8
         (state.game_phase as u8).hash(&mut hasher);
-        
+
         // Hash move properties
         if let Some(from) = mv.from {
             from.row.hash(&mut hasher);
@@ -7064,97 +7364,112 @@ impl PruningManager {
         mv.is_capture.hash(&mut hasher);
         mv.is_promotion.hash(&mut hasher);
         mv.gives_check.hash(&mut hasher);
-        
+
         hasher.finish()
     }
-    
+
     /// Calculate late move reduction for a move
-    /// 
+    ///
     /// Extended exemptions can be provided via optional parameters:
     /// - `is_killer_move`: Whether the move is a killer move
     /// - `tt_move`: Optional TT best move to check against
     pub fn calculate_lmr_reduction(
-        &self, 
-        state: &SearchState, 
+        &self,
+        state: &SearchState,
         mv: &Move,
         is_killer_move: bool,
-        tt_move: Option<&Move>
+        tt_move: Option<&Move>,
     ) -> u8 {
         if !self.should_apply_lmr(state, mv, is_killer_move, tt_move) {
             return 0;
         }
-        
-        let mut reduction = self.parameters.lmr_base_reduction +
-                      (state.move_number / 8) as u8 +
-                      (state.depth / 4) as u8;
-        
+
+        let mut reduction = self.parameters.lmr_base_reduction
+            + (state.move_number / 8) as u8
+            + (state.depth / 4) as u8;
+
         // Apply advanced reduction strategies if enabled (Task 11.1-11.3)
         // Note: Advanced strategies are configured via LMRConfig, which is passed via SearchState
         // For now, we'll use the existing adaptive reduction logic
         // Advanced strategies can be added as optional enhancements
-        
+
         // Apply adaptive reduction if enabled
         if self.parameters.lmr_enable_adaptive_reduction {
             reduction = self.apply_adaptive_reduction(reduction, state, mv);
         }
-        
+
         // Apply advanced reduction strategies if enabled (Task 11.1-11.3)
         // Advanced reduction config is passed via SearchState if available
         if let Some(advanced_config) = &state.advanced_reduction_config {
             reduction = self.apply_advanced_reduction(reduction, state, mv, advanced_config);
         }
-        
-        reduction.min(self.parameters.lmr_max_reduction).min(state.depth - 1)
+
+        reduction
+            .min(self.parameters.lmr_max_reduction)
+            .min(state.depth - 1)
     }
-    
+
     /// Apply advanced reduction strategies (Task 11.1-11.3)
     /// This method applies depth-based, material-based, and history-based reduction adjustments
-    pub fn apply_advanced_reduction(&self, base_reduction: u8, state: &SearchState, mv: &Move,
-                                     config: &AdvancedReductionConfig) -> u8 {
+    pub fn apply_advanced_reduction(
+        &self,
+        base_reduction: u8,
+        state: &SearchState,
+        mv: &Move,
+        config: &AdvancedReductionConfig,
+    ) -> u8 {
         if !config.enabled {
             return base_reduction;
         }
-        
+
         let mut reduction = base_reduction;
-        
+
         // Apply depth-based reduction scaling (non-linear formulas) (Task 11.1)
         if config.enable_depth_based {
             reduction = self.apply_depth_based_reduction(reduction, state, config);
         }
-        
+
         // Apply material-based reduction adjustment (Task 11.2)
         if config.enable_material_based {
             reduction = self.apply_material_based_reduction(reduction, state, config);
         }
-        
+
         // Apply history-based reduction (Task 11.3)
         if config.enable_history_based {
             reduction = self.apply_history_based_reduction(reduction, state, mv, config);
         }
-        
+
         reduction
     }
-    
+
     /// Apply depth-based reduction scaling (non-linear formulas) (Task 11.1)
     /// Research shows non-linear depth scaling can be more effective than linear scaling
     /// Formula: R = base + depth_scaling_factor * (depth^1.5) / scaling_divisor
-    fn apply_depth_based_reduction(&self, base_reduction: u8, state: &SearchState,
-                                   config: &AdvancedReductionConfig) -> u8 {
+    fn apply_depth_based_reduction(
+        &self,
+        base_reduction: u8,
+        state: &SearchState,
+        config: &AdvancedReductionConfig,
+    ) -> u8 {
         let depth = state.depth as f64;
-        
+
         // Non-linear depth scaling: R = base + factor * (depth^1.5) / 10
         // This creates a smoother curve than linear scaling
         let depth_adjustment = (config.depth_scaling_factor * depth.powf(1.5) / 10.0) as u8;
-        
+
         (base_reduction as u16 + depth_adjustment as u16)
             .min(self.parameters.lmr_max_reduction as u16)
             .min(state.depth as u16 - 1) as u8
     }
-    
+
     /// Apply material-based reduction adjustment (Task 11.2)
     /// Reduce more in material-imbalanced positions (more tactical)
-    fn apply_material_based_reduction(&self, base_reduction: u8, state: &SearchState,
-                                     config: &AdvancedReductionConfig) -> u8 {
+    fn apply_material_based_reduction(
+        &self,
+        base_reduction: u8,
+        state: &SearchState,
+        config: &AdvancedReductionConfig,
+    ) -> u8 {
         // Use material balance from state if available
         // For now, use a simplified heuristic based on position classification
         if let Some(classification) = state.position_classification {
@@ -7164,11 +7479,11 @@ impl PruningManager {
                     (base_reduction as u16 + 1)
                         .min(self.parameters.lmr_max_reduction as u16)
                         .min(state.depth as u16 - 1) as u8
-                },
+                }
                 PositionClassification::Quiet => {
                     // Material-balanced positions: reduce less (more conservative)
                     base_reduction.saturating_sub(1).max(1)
-                },
+                }
                 PositionClassification::Neutral => {
                     // Neutral positions: keep base reduction
                     base_reduction
@@ -7178,15 +7493,20 @@ impl PruningManager {
             base_reduction
         }
     }
-    
+
     /// Apply history-based reduction (Task 11.3)
     /// Reduce more for moves with poor history scores
-    fn apply_history_based_reduction(&self, base_reduction: u8, state: &SearchState,
-                                    mv: &Move, config: &AdvancedReductionConfig) -> u8 {
+    fn apply_history_based_reduction(
+        &self,
+        base_reduction: u8,
+        state: &SearchState,
+        mv: &Move,
+        config: &AdvancedReductionConfig,
+    ) -> u8 {
         // Get history score for this move
         // For now, use a simplified heuristic based on move characteristics
         // In a full implementation, this would query the history table
-        
+
         // Poor moves (non-captures, non-promotions) can be reduced more
         if !mv.is_capture && !mv.is_promotion {
             // Increase reduction for quiet moves (poor history candidates)
@@ -7198,11 +7518,11 @@ impl PruningManager {
             base_reduction.saturating_sub(1).max(1)
         }
     }
-    
+
     /// Apply adaptive reduction based on position characteristics (Task 8.4, 8.5, 8.11)
     fn apply_adaptive_reduction(&self, base_reduction: u8, state: &SearchState, mv: &Move) -> u8 {
         let mut reduction = base_reduction;
-        
+
         // Use position classification if available (Task 8.5)
         if let Some(classification) = state.position_classification {
             match classification {
@@ -7211,47 +7531,59 @@ impl PruningManager {
                     reduction = reduction.saturating_sub(1);
                     // Debug logging (Task 8.11)
                     #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log("LMR", &format!(
-                        "Adaptive reduction: Tactical position, reduced by 1 ({} -> {})",
-                        base_reduction, reduction
-                    ));
-                },
+                    crate::debug_utils::trace_log(
+                        "LMR",
+                        &format!(
+                            "Adaptive reduction: Tactical position, reduced by 1 ({} -> {})",
+                            base_reduction, reduction
+                        ),
+                    );
+                }
                 PositionClassification::Quiet => {
                     // More aggressive reduction in quiet positions
                     reduction = reduction.saturating_add(1);
                     // Debug logging (Task 8.11)
                     #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log("LMR", &format!(
-                        "Adaptive reduction: Quiet position, increased by 1 ({} -> {})",
-                        base_reduction, reduction
-                    ));
-                },
+                    crate::debug_utils::trace_log(
+                        "LMR",
+                        &format!(
+                            "Adaptive reduction: Quiet position, increased by 1 ({} -> {})",
+                            base_reduction, reduction
+                        ),
+                    );
+                }
                 PositionClassification::Neutral => {
                     // Keep base reduction for neutral positions
                     // Debug logging (Task 8.11)
                     #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log("LMR", &format!(
-                        "Adaptive reduction: Neutral position, no adjustment ({})",
-                        base_reduction
-                    ));
+                    crate::debug_utils::trace_log(
+                        "LMR",
+                        &format!(
+                            "Adaptive reduction: Neutral position, no adjustment ({})",
+                            base_reduction
+                        ),
+                    );
                 }
             }
         }
-        
+
         // Adjust based on move characteristics (center moves are important)
         if self.is_center_move(mv) {
             reduction = reduction.saturating_sub(1);
             // Debug logging (Task 8.11)
             #[cfg(feature = "debug")]
-            crate::debug_utils::trace_log("LMR", &format!(
-                "Adaptive reduction: Center move, reduced by 1 ({} -> {})",
-                base_reduction, reduction
-            ));
+            crate::debug_utils::trace_log(
+                "LMR",
+                &format!(
+                    "Adaptive reduction: Center move, reduced by 1 ({} -> {})",
+                    base_reduction, reduction
+                ),
+            );
         }
-        
+
         reduction
     }
-    
+
     /// Check if a move targets center squares
     fn is_center_move(&self, mv: &Move) -> bool {
         // Center squares are roughly squares 3-5 in both row and column (0-indexed)
@@ -7260,104 +7592,116 @@ impl PruningManager {
         let center_row_max = 6;
         let center_col_min = 2;
         let center_col_max = 6;
-        
-        mv.to.row >= center_row_min && mv.to.row <= center_row_max &&
-        mv.to.col >= center_col_min && mv.to.col <= center_col_max
+
+        mv.to.row >= center_row_min
+            && mv.to.row <= center_row_max
+            && mv.to.col >= center_col_min
+            && mv.to.col <= center_col_max
     }
-    
+
     /// Check if futility pruning should be applied
-    fn check_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_futility_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.futility_depth_limit {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Enhanced futility pruning with move-specific analysis
         let margin = self.get_futility_margin(state);
         let move_potential = self.calculate_move_potential(mv, state);
-        
+
         // Apply futility pruning if static eval + margin + move potential < alpha
         if state.static_eval + margin + move_potential < state.alpha {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Check if delta pruning should be applied
-    fn check_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_delta_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.delta_depth_limit {
             return current;
         }
-        
+
         if !self.is_capture_move(mv) {
             return current;
         }
-        
+
         // Enhanced delta pruning with advanced analysis
         let material_gain = self.calculate_material_gain(mv);
         let margin = self.get_delta_margin(state);
         let capture_bonus = self.calculate_capture_bonus(mv, state);
-        
+
         // Apply delta pruning if static eval + material gain + margin + bonus < alpha
         if state.static_eval + material_gain + margin + capture_bonus < state.alpha {
             self.statistics.delta_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Check if razoring should be applied
     fn check_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.razoring_depth_limit {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Enhanced razoring with advanced analysis
         let margin = self.get_razoring_margin(state);
         let position_bonus = self.calculate_razoring_bonus(state);
-        
+
         // Apply razoring if static eval + margin + bonus < alpha
         if state.static_eval + margin + position_bonus < state.alpha {
             self.statistics.razored += 1;
             return PruningDecision::Razor;
         }
-        
+
         current
     }
-    
+
     /// Check if late move reduction should be applied
-    /// 
+    ///
     /// Extended exemptions can be provided via optional parameters:
     /// - `is_killer_move`: Whether the move is a killer move
     /// - `tt_move`: Optional TT best move to check against
     fn should_apply_lmr(
-        &self, 
-        state: &SearchState, 
+        &self,
+        state: &SearchState,
         mv: &Move,
         is_killer_move: bool,
-        tt_move: Option<&Move>
+        tt_move: Option<&Move>,
     ) -> bool {
         // Basic conditions: must meet depth and move index thresholds
         if state.move_number <= self.parameters.lmr_move_threshold {
@@ -7366,12 +7710,12 @@ impl PruningManager {
         if state.depth <= self.parameters.lmr_depth_threshold {
             return false;
         }
-        
+
         // Basic exemptions: checks (always exempt)
         if state.is_in_check {
             return false;
         }
-        
+
         // Conditional capture exemption (Task 12.2)
         // Research shows small captures might benefit from reduction in deep searches
         if self.is_capture_move(mv) {
@@ -7382,7 +7726,7 @@ impl PruningManager {
                     let captured_value = mv.captured_piece_value();
                     let depth_threshold = conditional_config.min_depth_for_conditional_capture;
                     let value_threshold = conditional_config.min_capture_value_threshold;
-                    
+
                     // Exempt if: (1) captured value >= threshold OR (2) depth < threshold
                     if captured_value >= value_threshold || state.depth < depth_threshold {
                         return false; // Exempt high-value captures or shallow depth
@@ -7397,7 +7741,7 @@ impl PruningManager {
                 return false;
             }
         }
-        
+
         // Conditional promotion exemption (Task 12.3)
         // Research shows quiet promotions might benefit from reduction in deep searches
         if self.is_promotion_move(mv) {
@@ -7405,11 +7749,11 @@ impl PruningManager {
             if let Some(conditional_config) = &state.conditional_exemption_config {
                 if conditional_config.enable_conditional_promotion_exemption {
                     let depth_threshold = conditional_config.min_depth_for_conditional_promotion;
-                    
+
                     // Only exempt tactical promotions (captures or checks) at deep depths
                     if conditional_config.exempt_tactical_promotions_only {
                         let is_tactical = mv.is_capture || mv.gives_check;
-                        
+
                         // Exempt if: (1) tactical promotion OR (2) depth < threshold
                         if is_tactical || state.depth < depth_threshold {
                             return false; // Exempt tactical promotions or shallow depth
@@ -7428,14 +7772,14 @@ impl PruningManager {
                 return false;
             }
         }
-        
+
         // Extended exemptions if enabled
         if self.parameters.lmr_enable_extended_exemptions {
             // Check killer move exemption
             if is_killer_move {
                 return false;
             }
-            
+
             // Check TT move exemption (Task 3.4, 3.5, 3.6)
             // Prefer TT move from SearchState if available, otherwise use parameter
             let tt_move_to_check = state.tt_move.as_ref().or(tt_move);
@@ -7444,16 +7788,16 @@ impl PruningManager {
                     return false;
                 }
             }
-            
+
             // Check escape move exemption (move from center to edge)
             if self.is_escape_move(mv) {
                 return false;
             }
         }
-        
+
         true
     }
-    
+
     /// Check if a move is an escape move (moves from center to edge)
     fn is_escape_move(&self, mv: &Move) -> bool {
         // Check if moving away from center (potential escape)
@@ -7466,31 +7810,33 @@ impl PruningManager {
         }
         false
     }
-    
+
     /// Check if a square is in the center
     fn is_center_square(&self, square: Position) -> bool {
         let center_row_min = 2;
         let center_row_max = 6;
         let center_col_min = 2;
         let center_col_max = 6;
-        
-        square.row >= center_row_min && square.row <= center_row_max &&
-        square.col >= center_col_min && square.col <= center_col_max
+
+        square.row >= center_row_min
+            && square.row <= center_row_max
+            && square.col >= center_col_min
+            && square.col <= center_col_max
     }
-    
+
     /// Check if two moves are equal
     fn moves_equal(&self, mv1: &Move, mv2: &Move) -> bool {
-        mv1.from == mv2.from &&
-        mv1.to == mv2.to &&
-        mv1.piece_type == mv2.piece_type &&
-        mv1.is_capture == mv2.is_capture &&
-        mv1.is_promotion == mv2.is_promotion
+        mv1.from == mv2.from
+            && mv1.to == mv2.to
+            && mv1.piece_type == mv2.piece_type
+            && mv1.is_capture == mv2.is_capture
+            && mv1.is_promotion == mv2.is_promotion
     }
-    
+
     /// Get futility margin based on position characteristics
     fn get_futility_margin(&self, state: &SearchState) -> i32 {
         let base_margin = self.parameters.futility_margin[state.depth as usize];
-        
+
         if self.parameters.position_dependent_margins {
             match state.game_phase {
                 GamePhase::Endgame => base_margin / 2,
@@ -7501,136 +7847,147 @@ impl PruningManager {
             base_margin
         }
     }
-    
+
     /// Calculate the potential value of a move for futility pruning
     fn calculate_move_potential(&self, mv: &Move, state: &SearchState) -> i32 {
         let mut potential = 0;
-        
+
         // Base move value
         if mv.is_capture {
             potential += self.calculate_material_gain(mv);
         }
-        
+
         if mv.is_promotion {
             potential += 100; // Promotion bonus
         }
-        
+
         // Position-dependent adjustments
         match state.game_phase {
             GamePhase::Opening => {
                 // Opening moves have higher potential for positional gains
                 potential += 50;
-            },
+            }
             GamePhase::Endgame => {
                 // Endgame moves focus on material and king safety
                 potential += 25;
-            },
+            }
             GamePhase::Middlegame => {
                 // Middlegame moves have moderate potential
                 potential += 35;
-            },
+            }
         }
-        
+
         // Depth-dependent potential (deeper moves have less potential)
         let depth_factor = (10 - state.depth as i32).max(1);
         potential = potential.saturating_mul(depth_factor as i32) / 10;
-        
+
         potential.max(0)
     }
-    
+
     /// Check if extended futility pruning should be applied (for deeper positions)
-    fn check_extended_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_extended_futility_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         // Only apply extended futility at deeper depths
-        if state.depth <= self.parameters.futility_depth_limit || 
-           state.depth > self.parameters.extended_futility_depth {
+        if state.depth <= self.parameters.futility_depth_limit
+            || state.depth > self.parameters.extended_futility_depth
+        {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Extended futility pruning with larger margins
         let extended_margin = self.get_futility_margin(state).saturating_mul(2);
         let move_potential = self.calculate_move_potential(mv, state);
-        
+
         // More conservative pruning at deeper depths
         if state.static_eval + extended_margin + move_potential < state.alpha {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Advanced futility pruning with multiple conditions
-    fn check_advanced_futility_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_advanced_futility_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.extended_futility_depth {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Multiple futility conditions
         let margin = self.get_futility_margin(state);
         let move_potential = self.calculate_move_potential(mv, state);
-        
+
         // Condition 1: Standard futility pruning
         if state.static_eval + margin + move_potential < state.alpha {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         // Condition 2: Aggressive futility for very bad positions
-        if state.static_eval < state.alpha.saturating_sub(500) && 
-           state.static_eval + margin / 2 + move_potential < state.alpha {
+        if state.static_eval < state.alpha.saturating_sub(500)
+            && state.static_eval + margin / 2 + move_potential < state.alpha
+        {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         // Condition 3: Late move futility (for moves beyond a certain threshold)
-        if state.move_number > 4 && 
-           state.static_eval + margin + move_potential / 2 < state.alpha {
+        if state.move_number > 4 && state.static_eval + margin + move_potential / 2 < state.alpha {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Get delta margin based on position characteristics
     fn get_delta_margin(&self, state: &SearchState) -> i32 {
         let base_margin = self.parameters.delta_margin;
-        
+
         if self.parameters.position_dependent_margins {
             match state.game_phase {
-                GamePhase::Endgame => base_margin / 2,  // More aggressive in endgame
-                GamePhase::Opening => base_margin * 3 / 2,  // More conservative in opening
+                GamePhase::Endgame => base_margin / 2, // More aggressive in endgame
+                GamePhase::Opening => base_margin * 3 / 2, // More conservative in opening
                 GamePhase::Middlegame => base_margin,
             }
         } else {
             base_margin
         }
     }
-    
+
     /// Calculate capture bonus for delta pruning
     fn calculate_capture_bonus(&self, mv: &Move, state: &SearchState) -> i32 {
         let mut bonus = 0;
-        
+
         // Bonus for capturing higher-value pieces
         if let Some(captured_piece) = mv.captured_piece {
             match captured_piece.piece_type {
-                PieceType::King => bonus += 1000,  // Should never be pruned
+                PieceType::King => bonus += 1000, // Should never be pruned
                 PieceType::Rook | PieceType::Bishop => bonus += 100,
                 PieceType::Gold | PieceType::Silver => bonus += 50,
                 PieceType::Knight | PieceType::Lance => bonus += 25,
@@ -7638,97 +7995,110 @@ impl PruningManager {
                 _ => bonus += 5,
             }
         }
-        
+
         // Bonus for capturing in endgame (more tactical)
         if state.game_phase == GamePhase::Endgame {
             bonus += 25;
         }
-        
+
         // Bonus for capturing at deeper depths (more tactical)
         if state.depth > 2 {
             bonus += state.depth as i32 * 10;
         }
-        
+
         // Bonus for capturing when ahead (more tactical)
         if state.static_eval > 100 {
             bonus += 20;
         }
-        
+
         bonus
     }
-    
+
     /// Check if extended delta pruning should be applied (for deeper positions)
-    fn check_extended_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_extended_delta_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         // Only apply extended delta pruning at deeper depths
-        if state.depth <= self.parameters.delta_depth_limit || 
-           state.depth > self.parameters.delta_depth_limit + 2 {
+        if state.depth <= self.parameters.delta_depth_limit
+            || state.depth > self.parameters.delta_depth_limit + 2
+        {
             return current;
         }
-        
+
         if !self.is_capture_move(mv) {
             return current;
         }
-        
+
         // Extended delta pruning with larger margins
         let material_gain = self.calculate_material_gain(mv);
         let extended_margin = self.get_delta_margin(state).saturating_mul(2);
         let capture_bonus = self.calculate_capture_bonus(mv, state);
-        
+
         // More conservative pruning at deeper depths
         if state.static_eval + material_gain + extended_margin + capture_bonus < state.alpha {
             self.statistics.delta_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Advanced delta pruning with multiple conditions
-    fn check_advanced_delta_pruning(&mut self, state: &SearchState, mv: &Move, current: PruningDecision) -> PruningDecision {
+    fn check_advanced_delta_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.delta_depth_limit + 2 {
             return current;
         }
-        
+
         if !self.is_capture_move(mv) {
             return current;
         }
-        
+
         // Multiple delta pruning conditions
         let material_gain = self.calculate_material_gain(mv);
         let margin = self.get_delta_margin(state);
         let capture_bonus = self.calculate_capture_bonus(mv, state);
-        
+
         // Condition 1: Standard delta pruning
         if state.static_eval + material_gain + margin + capture_bonus < state.alpha {
             self.statistics.delta_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         // Condition 2: Aggressive delta pruning for very bad positions
-        if state.static_eval < state.alpha.saturating_sub(300) && 
-           state.static_eval + material_gain + margin / 2 + capture_bonus < state.alpha {
+        if state.static_eval < state.alpha.saturating_sub(300)
+            && state.static_eval + material_gain + margin / 2 + capture_bonus < state.alpha
+        {
             self.statistics.delta_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         // Condition 3: Late move delta pruning (for moves beyond a certain threshold)
-        if state.move_number > 3 && 
-           state.static_eval + material_gain + margin + capture_bonus / 2 < state.alpha {
+        if state.move_number > 3
+            && state.static_eval + material_gain + margin + capture_bonus / 2 < state.alpha
+        {
             self.statistics.delta_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         current
     }
-    
+
     /// Get razoring margin based on game phase
     fn get_razoring_margin(&self, state: &SearchState) -> i32 {
         match state.game_phase {
@@ -7736,142 +8106,151 @@ impl PruningManager {
             _ => self.parameters.razoring_margin,
         }
     }
-    
+
     /// Calculate razoring bonus based on position characteristics
     fn calculate_razoring_bonus(&self, state: &SearchState) -> i32 {
         let mut bonus = 0;
-        
+
         // Bonus for tactical positions (more likely to have tactical shots)
         if state.depth <= 2 {
             bonus += 50; // More conservative at shallow depths
         }
-        
+
         // Bonus for endgame positions (more tactical)
         if state.game_phase == GamePhase::Endgame {
             bonus += 75;
         }
-        
+
         // Bonus for positions with material imbalance (more tactical)
         if state.static_eval.abs() > 200 {
             bonus += 25;
         }
-        
+
         // Bonus for deeper positions (more tactical)
         if state.depth > 1 {
             bonus += state.depth as i32 * 15;
         }
-        
+
         // Penalty for very bad positions (less likely to have tactical shots)
         if state.static_eval < -500 {
             bonus -= 50;
         }
-        
+
         bonus
     }
-    
+
     /// Check if extended razoring should be applied (for deeper positions)
-    fn check_extended_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
+    fn check_extended_razoring(
+        &mut self,
+        state: &SearchState,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         // Only apply extended razoring at deeper depths
-        if state.depth <= self.parameters.razoring_depth_limit || 
-           state.depth > self.parameters.razoring_depth_limit + 2 {
+        if state.depth <= self.parameters.razoring_depth_limit
+            || state.depth > self.parameters.razoring_depth_limit + 2
+        {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Extended razoring with larger margins
         let extended_margin = self.get_razoring_margin(state).saturating_mul(2);
         let position_bonus = self.calculate_razoring_bonus(state);
-        
+
         // More conservative razoring at deeper depths
         if state.static_eval + extended_margin + position_bonus < state.alpha {
             self.statistics.razored += 1;
             return PruningDecision::Razor;
         }
-        
+
         current
     }
-    
+
     /// Advanced razoring with multiple conditions
-    fn check_advanced_razoring(&mut self, state: &SearchState, current: PruningDecision) -> PruningDecision {
+    fn check_advanced_razoring(
+        &mut self,
+        state: &SearchState,
+        current: PruningDecision,
+    ) -> PruningDecision {
         if current != PruningDecision::Search {
             return current;
         }
-        
+
         if state.depth > self.parameters.razoring_depth_limit + 2 {
             return current;
         }
-        
+
         if state.is_in_check {
             return current;
         }
-        
+
         // Multiple razoring conditions
         let margin = self.get_razoring_margin(state);
         let position_bonus = self.calculate_razoring_bonus(state);
-        
+
         // Condition 1: Standard razoring
         if state.static_eval + margin + position_bonus < state.alpha {
             self.statistics.razored += 1;
             return PruningDecision::Razor;
         }
-        
+
         // Condition 2: Aggressive razoring for very bad positions
-        if state.static_eval < state.alpha.saturating_sub(400) && 
-           state.static_eval + margin / 2 + position_bonus < state.alpha {
+        if state.static_eval < state.alpha.saturating_sub(400)
+            && state.static_eval + margin / 2 + position_bonus < state.alpha
+        {
             self.statistics.razored += 1;
             return PruningDecision::Razor;
         }
-        
+
         // Condition 3: Late move razoring (for moves beyond a certain threshold)
-        if state.move_number > 2 && 
-           state.static_eval + margin + position_bonus / 2 < state.alpha {
+        if state.move_number > 2 && state.static_eval + margin + position_bonus / 2 < state.alpha {
             self.statistics.razored += 1;
             return PruningDecision::Razor;
         }
-        
+
         current
     }
-    
+
     /// Check if a move is tactical (capture, promotion, or check)
     fn is_tactical_move(&self, mv: &Move) -> bool {
         mv.is_capture || mv.is_promotion || mv.gives_check
     }
-    
+
     /// Optimized check detection with caching
     pub fn is_in_check_cached(&mut self, position_hash: u64, is_in_check: bool) -> bool {
         if let Some(&cached_result) = self.check_cache.get(&position_hash) {
             self.cache_hits += 1;
             return cached_result;
         }
-        
+
         self.cache_misses += 1;
-        
+
         // Cache the result (with size limit)
         if self.check_cache.len() < 5000 {
             self.check_cache.insert(position_hash, is_in_check);
         }
-        
+
         is_in_check
     }
-    
+
     /// Analyze position characteristics for adaptive pruning
     pub fn analyze_position(&mut self, state: &SearchState) -> PositionAnalysis {
         let cache_key = state.position_hash;
-        
+
         if let Some(cached_analysis) = self.position_cache.get(&cache_key) {
             self.cache_hits += 1;
             return cached_analysis.clone();
         }
-        
+
         self.cache_misses += 1;
-        
+
         let analysis = PositionAnalysis {
             position_type: self.classify_position_type(state),
             tactical_potential: self.calculate_tactical_potential(state),
@@ -7881,15 +8260,15 @@ impl PruningManager {
             is_tactical: self.is_tactical_position(state),
             complexity: self.calculate_position_complexity(state),
         };
-        
+
         // Cache the result (with size limit)
         if self.position_cache.len() < 3000 {
             self.position_cache.insert(cache_key, analysis.clone());
         }
-        
+
         analysis
     }
-    
+
     /// Classify position type for adaptive pruning
     fn classify_position_type(&self, state: &SearchState) -> PositionType {
         match state.game_phase {
@@ -7900,37 +8279,37 @@ impl PruningManager {
                 } else {
                     PositionType::Positional
                 }
-            },
+            }
             GamePhase::Middlegame => {
                 if state.static_eval.abs() > 300 {
                     PositionType::Tactical
                 } else {
                     PositionType::Positional
                 }
-            },
+            }
         }
     }
-    
+
     /// Calculate tactical potential of position
     fn calculate_tactical_potential(&self, state: &SearchState) -> u8 {
         let mut potential = 0;
-        
+
         // Material imbalance increases tactical potential
         if state.static_eval.abs() > 200 {
             potential += 30;
         }
-        
+
         // Endgame positions are more tactical
         if state.game_phase == GamePhase::Endgame {
             potential += 40;
         }
-        
+
         // Deeper positions have higher tactical potential
         potential += state.depth as u8 * 5;
-        
+
         potential.min(100)
     }
-    
+
     /// Calculate king safety
     fn calculate_king_safety(&self, state: &SearchState) -> u8 {
         // Simplified king safety calculation
@@ -7943,35 +8322,35 @@ impl PruningManager {
             50 // Neutral
         }
     }
-    
+
     /// Check if position is quiet
     fn is_quiet_position(&self, state: &SearchState) -> bool {
         state.static_eval.abs() < 100 && state.game_phase != GamePhase::Endgame
     }
-    
+
     /// Check if position is tactical
     fn is_tactical_position(&self, state: &SearchState) -> bool {
         state.static_eval.abs() > 200 || state.game_phase == GamePhase::Endgame
     }
-    
+
     /// Calculate position complexity
     fn calculate_position_complexity(&self, state: &SearchState) -> u8 {
         let mut complexity = 0;
-        
+
         // Material imbalance increases complexity
         complexity += (state.static_eval.abs() / 50) as u8;
-        
+
         // Endgame positions are more complex
         if state.game_phase == GamePhase::Endgame {
             complexity += 30;
         }
-        
+
         // Deeper positions are more complex
         complexity += state.depth as u8 * 3;
-        
+
         complexity.min(100)
     }
-    
+
     /// Get cache performance statistics
     pub fn get_cache_stats(&self) -> (u64, u64, f64) {
         let total_requests = self.cache_hits + self.cache_misses;
@@ -7982,7 +8361,7 @@ impl PruningManager {
         };
         (self.cache_hits, self.cache_misses, hit_rate)
     }
-    
+
     /// Clear all caches to free memory
     pub fn clear_caches(&mut self) {
         self.check_cache.clear();
@@ -7991,58 +8370,58 @@ impl PruningManager {
         self.cache_hits = 0;
         self.cache_misses = 0;
     }
-    
+
     /// Smart conditional pruning based on position characteristics
     pub fn should_apply_conditional_pruning(&mut self, state: &SearchState, _mv: &Move) -> bool {
         let analysis = self.analyze_position(state);
-        
+
         // Don't prune in very tactical positions
         if analysis.is_tactical && analysis.tactical_potential > 70 {
             return false;
         }
-        
+
         // Don't prune when king is in danger
         if analysis.king_safety < 30 {
             return false;
         }
-        
+
         // Don't prune in very complex positions
         if analysis.complexity > 80 {
             return false;
         }
-        
+
         // Don't prune the first few moves at each depth
         if state.move_number < 3 {
             return false;
         }
-        
+
         // Apply conditional pruning based on position type
         match analysis.position_type {
             PositionType::Tactical => {
                 // Be more conservative in tactical positions
                 state.move_number > 4 && analysis.tactical_potential < 50
-            },
+            }
             PositionType::Positional => {
                 // Can be more aggressive in positional positions
                 state.move_number > 2 && analysis.complexity < 60
-            },
+            }
             PositionType::Endgame => {
                 // Endgame pruning depends on material balance
                 state.move_number > 1 && analysis.material_balance.abs() < 200
-            },
+            }
             PositionType::Normal => {
                 // Standard pruning conditions
                 state.move_number > 2
-            },
+            }
         }
     }
-    
+
     /// Optimize pruning frequency based on current performance
     pub fn optimize_pruning_frequency(&mut self) {
         let stats = &self.statistics;
         let total_moves = stats.total_moves.max(1);
         let pruning_rate = stats.pruned_moves as f64 / total_moves as f64;
-        
+
         // Adjust parameters based on pruning effectiveness
         if pruning_rate > 0.4 {
             // High pruning rate - be more conservative
@@ -8055,41 +8434,43 @@ impl PruningManager {
             self.parameters.delta_depth_limit = self.parameters.delta_depth_limit.min(6);
             self.parameters.razoring_depth_limit = self.parameters.razoring_depth_limit.min(5);
         }
-        
+
         // Adjust margins based on success rate
         let success_rate = if stats.total_moves > 0 {
             (stats.total_moves - stats.pruned_moves) as f64 / stats.total_moves as f64
         } else {
             0.0
         };
-        
+
         if success_rate > 0.8 {
             // High success rate - can be more aggressive
             for i in 0..8 {
-                self.parameters.futility_margin[i] = (self.parameters.futility_margin[i] as f32 * 0.9) as i32;
+                self.parameters.futility_margin[i] =
+                    (self.parameters.futility_margin[i] as f32 * 0.9) as i32;
             }
             self.parameters.delta_margin = (self.parameters.delta_margin as f32 * 0.9) as i32;
             self.parameters.razoring_margin = (self.parameters.razoring_margin as f32 * 0.9) as i32;
         } else if success_rate < 0.6 {
             // Low success rate - be more conservative
             for i in 0..8 {
-                self.parameters.futility_margin[i] = (self.parameters.futility_margin[i] as f32 * 1.1) as i32;
+                self.parameters.futility_margin[i] =
+                    (self.parameters.futility_margin[i] as f32 * 1.1) as i32;
             }
             self.parameters.delta_margin = (self.parameters.delta_margin as f32 * 1.1) as i32;
             self.parameters.razoring_margin = (self.parameters.razoring_margin as f32 * 1.1) as i32;
         }
     }
-    
+
     /// Check if a move is a capture
     fn is_capture_move(&self, mv: &Move) -> bool {
         mv.is_capture
     }
-    
+
     /// Check if a move is a promotion
     fn is_promotion_move(&self, mv: &Move) -> bool {
         mv.is_promotion
     }
-    
+
     /// Calculate material gain from a capture move
     fn calculate_material_gain(&self, mv: &Move) -> i32 {
         if let Some(captured_piece) = mv.captured_piece {
@@ -8098,36 +8479,36 @@ impl PruningManager {
             0
         }
     }
-    
+
     // ============================================================================
     // Advanced Pruning Techniques (Phase 4.2)
     // ============================================================================
-    
+
     /// Extended futility pruning with more aggressive margins
     pub fn check_extended_futility(&mut self, state: &SearchState, mv: &Move) -> PruningDecision {
         // Only apply at appropriate depths
         if state.depth > self.parameters.extended_futility_depth {
             return PruningDecision::Search;
         }
-        
+
         // Skip for important moves
         if self.is_capture_move(mv) || self.is_promotion_move(mv) {
             return PruningDecision::Search;
         }
-        
+
         // Extended futility margin calculation
         let extended_margin = self.get_extended_futility_margin(state);
         let futility_value = state.static_eval + extended_margin;
-        
+
         // Check if the move is unlikely to raise alpha
         if futility_value <= state.alpha {
             self.statistics.futility_pruned += 1;
             return PruningDecision::Skip;
         }
-        
+
         PruningDecision::Search
     }
-    
+
     /// Get extended futility margin based on depth and position
     fn get_extended_futility_margin(&self, state: &SearchState) -> i32 {
         let base_margin = if state.depth < self.parameters.futility_margin.len() as u8 {
@@ -8135,108 +8516,121 @@ impl PruningManager {
         } else {
             self.parameters.futility_margin[self.parameters.futility_margin.len() - 1]
         };
-        
+
         // Extended margins are more aggressive
         let extended_multiplier = match state.game_phase {
             GamePhase::Opening => 1.5,
             GamePhase::Middlegame => 1.3,
             GamePhase::Endgame => 1.2,
         };
-        
+
         (base_margin as f32 * extended_multiplier) as i32
     }
-    
+
     /// Multi-cut pruning: prune if multiple moves fail to raise alpha
-    pub fn check_multi_cut(&mut self, state: &SearchState, moves_tried: usize, 
-                          consecutive_fails: usize) -> PruningDecision {
+    pub fn check_multi_cut(
+        &mut self,
+        state: &SearchState,
+        moves_tried: usize,
+        consecutive_fails: usize,
+    ) -> PruningDecision {
         // Only apply at appropriate depths
         if state.depth > self.parameters.multi_cut_depth_limit {
             return PruningDecision::Search;
         }
-        
+
         // Need to have tried at least a few moves
         if moves_tried < self.parameters.multi_cut_threshold as usize {
             return PruningDecision::Search;
         }
-        
+
         // Check if we have enough consecutive failures
         if consecutive_fails >= self.parameters.multi_cut_threshold as usize {
             self.statistics.multi_cuts += 1;
             return PruningDecision::Skip;
         }
-        
+
         PruningDecision::Search
     }
-    
+
     /// Probabilistic pruning: prune based on move success probability
-    pub fn check_probabilistic_pruning(&mut self, state: &SearchState, mv: &Move, 
-                                      move_index: usize) -> PruningDecision {
+    pub fn check_probabilistic_pruning(
+        &mut self,
+        state: &SearchState,
+        mv: &Move,
+        move_index: usize,
+    ) -> PruningDecision {
         // Only apply in late moves at appropriate depths
         if state.depth > 4 || move_index < 8 {
             return PruningDecision::Search;
         }
-        
+
         // Calculate move success probability
         let probability = self.calculate_move_probability(state, mv, move_index);
-        
+
         // Probabilistic threshold based on depth
         let threshold = match state.depth {
-            0..=1 => 0.05,  // Very aggressive at low depth
-            2..=3 => 0.10,  // Moderate at medium depth
-            _ => 0.15,      // Conservative at higher depth
+            0..=1 => 0.05, // Very aggressive at low depth
+            2..=3 => 0.10, // Moderate at medium depth
+            _ => 0.15,     // Conservative at higher depth
         };
-        
+
         // Prune if probability of success is too low
         if probability < threshold {
             self.statistics.pruned_moves += 1;
             return PruningDecision::Skip;
         }
-        
+
         PruningDecision::Search
     }
-    
+
     /// Calculate the probability that a move will improve the score
     fn calculate_move_probability(&self, state: &SearchState, mv: &Move, move_index: usize) -> f64 {
         let mut probability = 1.0;
-        
+
         // Reduce probability for late moves
         probability *= 1.0 / (1.0 + move_index as f64 * 0.1);
-        
+
         // Increase probability for captures
         if self.is_capture_move(mv) {
             probability *= 1.5;
         }
-        
+
         // Increase probability for promotions
         if self.is_promotion_move(mv) {
             probability *= 1.3;
         }
-        
+
         // Adjust based on game phase
         let phase_factor = match state.game_phase {
-            GamePhase::Opening => 0.8,   // Less reliable in opening
+            GamePhase::Opening => 0.8,    // Less reliable in opening
             GamePhase::Middlegame => 1.0, // Normal in middlegame
-            GamePhase::Endgame => 1.2,   // More reliable in endgame
+            GamePhase::Endgame => 1.2,    // More reliable in endgame
         };
         probability *= phase_factor;
-        
+
         // Adjust based on depth
         let depth_factor = 1.0 - (state.depth as f64 * 0.05);
         probability *= depth_factor.max(0.5);
-        
+
         // Clamp probability to [0, 1]
         probability.min(1.0).max(0.0)
     }
-    
+
     /// Enhanced multi-cut with position-dependent thresholds
-    pub fn check_enhanced_multi_cut(&mut self, state: &SearchState, moves_tried: usize,
-                                   consecutive_fails: usize, best_score: i32) -> PruningDecision {
+    pub fn check_enhanced_multi_cut(
+        &mut self,
+        state: &SearchState,
+        moves_tried: usize,
+        consecutive_fails: usize,
+        best_score: i32,
+    ) -> PruningDecision {
         // Basic multi-cut first
         let basic_decision = self.check_multi_cut(state, moves_tried, consecutive_fails);
         if matches!(basic_decision, PruningDecision::Skip) {
             return basic_decision;
         }
-        
+
         // Enhanced check: if best score is far below alpha, be more aggressive
         let score_gap = state.alpha.saturating_sub(best_score);
         let gap_threshold = match state.game_phase {
@@ -8244,40 +8638,40 @@ impl PruningManager {
             GamePhase::Middlegame => 250,
             GamePhase::Endgame => 200,
         };
-        
+
         if score_gap > gap_threshold && consecutive_fails >= 2 {
             self.statistics.multi_cuts += 1;
             return PruningDecision::Skip;
         }
-        
+
         PruningDecision::Search
     }
-    
+
     /// Validate extended futility pruning effectiveness
     pub fn validate_extended_futility(&self, state: &SearchState) -> bool {
         // Check if conditions are appropriate for extended futility
-        state.depth <= self.parameters.extended_futility_depth &&
-        state.static_eval < state.beta &&
-        !state.is_in_check
+        state.depth <= self.parameters.extended_futility_depth
+            && state.static_eval < state.beta
+            && !state.is_in_check
     }
-    
+
     /// Validate multi-cut pruning effectiveness
     pub fn validate_multi_cut(&self, moves_tried: usize, consecutive_fails: usize) -> bool {
-        moves_tried >= self.parameters.multi_cut_threshold as usize &&
-        consecutive_fails >= self.parameters.multi_cut_threshold as usize
+        moves_tried >= self.parameters.multi_cut_threshold as usize
+            && consecutive_fails >= self.parameters.multi_cut_threshold as usize
     }
-    
+
     /// Get pruning effectiveness statistics
     pub fn get_pruning_effectiveness(&self) -> PruningEffectiveness {
         let total_opportunities = self.statistics.total_moves;
         let total_pruned = self.statistics.pruned_moves;
-        
+
         let effectiveness_ratio = if total_opportunities > 0 {
             total_pruned as f64 / total_opportunities as f64
         } else {
             0.0
         };
-        
+
         PruningEffectiveness {
             futility_rate: if total_opportunities > 0 {
                 self.statistics.futility_pruned as f64 / total_opportunities as f64
@@ -8307,30 +8701,35 @@ impl PruningManager {
             },
         }
     }
-    
+
     // ============================================================================
     // Performance Monitoring (Phase 4.3)
     // ============================================================================
-    
+
     /// Record pruning decision with detailed statistics
-    pub fn record_pruning_decision(&mut self, decision: PruningDecision, move_type: MoveType, depth: u8) {
+    pub fn record_pruning_decision(
+        &mut self,
+        decision: PruningDecision,
+        move_type: MoveType,
+        depth: u8,
+    ) {
         self.statistics.total_moves += 1;
-        
+
         match decision {
             PruningDecision::Skip => {
                 self.statistics.pruned_moves += 1;
                 self.record_pruning_by_type(move_type, depth);
-            },
+            }
             PruningDecision::Razor => {
                 self.statistics.razored += 1;
-            },
+            }
             PruningDecision::ReducedSearch => {
                 self.statistics.lmr_applied += 1;
-            },
+            }
             _ => {}
         }
     }
-    
+
     /// Record pruning by move type and depth for detailed analysis
     fn record_pruning_by_type(&mut self, move_type: MoveType, _depth: u8) {
         // This would be enhanced with more detailed tracking
@@ -8338,24 +8737,24 @@ impl PruningManager {
         match move_type {
             MoveType::Capture => {
                 // Captures are rarely pruned, so this is significant
-            },
+            }
             MoveType::Quiet => {
                 // Quiet moves are commonly pruned
-            },
+            }
             MoveType::Check => {
                 // Check moves should be pruned carefully
-            },
+            }
             MoveType::Promotion => {
                 // Promotion moves should be pruned carefully
-            },
+            }
             _ => {}
         }
     }
-    
+
     /// Get detailed pruning frequency statistics
     pub fn get_pruning_frequency_stats(&self) -> PruningFrequencyStats {
         let total_moves = self.statistics.total_moves;
-        
+
         PruningFrequencyStats {
             total_moves,
             pruned_moves: self.statistics.pruned_moves,
@@ -8377,7 +8776,7 @@ impl PruningManager {
             },
         }
     }
-    
+
     /// Get search performance metrics
     pub fn get_search_performance_metrics(&self) -> SearchPerformanceMetrics {
         SearchPerformanceMetrics {
@@ -8394,13 +8793,13 @@ impl PruningManager {
             },
         }
     }
-    
+
     /// Generate comprehensive performance report
     pub fn generate_performance_report(&self) -> PerformanceReport {
         let pruning_effectiveness = self.get_pruning_effectiveness();
         let frequency_stats = self.get_pruning_frequency_stats();
         let search_metrics = self.get_search_performance_metrics();
-        
+
         PerformanceReport {
             pruning_effectiveness,
             frequency_stats,
@@ -8409,17 +8808,17 @@ impl PruningManager {
             report_id: self.generate_report_id(),
         }
     }
-    
+
     /// Generate unique report ID
     fn generate_report_id(&self) -> String {
         format!("pruning_report_{}", self.statistics.total_moves)
     }
-    
+
     /// Compare performance with baseline
     pub fn compare_with_baseline(&self, baseline: &PerformanceReport) -> PerformanceComparison {
         let current = self.generate_performance_report();
         let current_clone = current.clone();
-        
+
         PerformanceComparison {
             current_report: current,
             baseline_report: baseline.clone(),
@@ -8428,26 +8827,38 @@ impl PruningManager {
             overall_improvement: self.calculate_overall_improvement(&current_clone, baseline),
         }
     }
-    
+
     /// Calculate pruning improvement metrics
-    fn calculate_pruning_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> PruningImprovement {
+    fn calculate_pruning_improvement(
+        &self,
+        current: &PerformanceReport,
+        baseline: &PerformanceReport,
+    ) -> PruningImprovement {
         let current_effectiveness = &current.pruning_effectiveness;
         let baseline_effectiveness = &baseline.pruning_effectiveness;
-        
+
         PruningImprovement {
-            futility_improvement: current_effectiveness.futility_rate - baseline_effectiveness.futility_rate,
+            futility_improvement: current_effectiveness.futility_rate
+                - baseline_effectiveness.futility_rate,
             delta_improvement: current_effectiveness.delta_rate - baseline_effectiveness.delta_rate,
-            razoring_improvement: current_effectiveness.razoring_rate - baseline_effectiveness.razoring_rate,
-            multi_cut_improvement: current_effectiveness.multi_cut_rate - baseline_effectiveness.multi_cut_rate,
-            overall_effectiveness_improvement: current_effectiveness.overall_effectiveness - baseline_effectiveness.overall_effectiveness,
+            razoring_improvement: current_effectiveness.razoring_rate
+                - baseline_effectiveness.razoring_rate,
+            multi_cut_improvement: current_effectiveness.multi_cut_rate
+                - baseline_effectiveness.multi_cut_rate,
+            overall_effectiveness_improvement: current_effectiveness.overall_effectiveness
+                - baseline_effectiveness.overall_effectiveness,
         }
     }
-    
+
     /// Calculate cache improvement metrics
-    fn calculate_cache_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> CacheImprovement {
+    fn calculate_cache_improvement(
+        &self,
+        current: &PerformanceReport,
+        baseline: &PerformanceReport,
+    ) -> CacheImprovement {
         let current_metrics = &current.search_metrics;
         let baseline_metrics = &baseline.search_metrics;
-        
+
         CacheImprovement {
             hit_rate_improvement: current_metrics.cache_hit_rate - baseline_metrics.cache_hit_rate,
             size_efficiency: if baseline_metrics.cache_size > 0 {
@@ -8456,25 +8867,30 @@ impl PruningManager {
                 1.0
             },
             operation_efficiency: if baseline_metrics.total_cache_operations > 0 {
-                current_metrics.total_cache_operations as f64 / baseline_metrics.total_cache_operations as f64
+                current_metrics.total_cache_operations as f64
+                    / baseline_metrics.total_cache_operations as f64
             } else {
                 1.0
             },
         }
     }
-    
+
     /// Calculate overall improvement score
-    fn calculate_overall_improvement(&self, current: &PerformanceReport, baseline: &PerformanceReport) -> f64 {
+    fn calculate_overall_improvement(
+        &self,
+        current: &PerformanceReport,
+        baseline: &PerformanceReport,
+    ) -> f64 {
         let pruning_improvement = self.calculate_pruning_improvement(current, baseline);
         let cache_improvement = self.calculate_cache_improvement(current, baseline);
-        
+
         // Weighted combination of improvements
         let pruning_score = pruning_improvement.overall_effectiveness_improvement * 0.6;
         let cache_score = cache_improvement.hit_rate_improvement * 0.4;
-        
+
         pruning_score + cache_score
     }
-    
+
     /// Reset all performance statistics
     pub fn reset_performance_stats(&mut self) {
         self.statistics.reset();
@@ -8484,7 +8900,7 @@ impl PruningManager {
         self.position_cache.clear();
         self.check_cache.clear();
     }
-    
+
     /// Export performance data for analysis
     pub fn export_performance_data(&self) -> PerformanceDataExport {
         PerformanceDataExport {
@@ -8517,30 +8933,41 @@ impl AdaptiveParameters {
             learning_rate: 0.1,
         }
     }
-    
+
     /// Adjust parameters based on performance metrics and position analysis
-    pub fn adjust_parameters(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
-                           player: Player, performance: &PerformanceMetrics, 
-                           current_params: &PruningParameters) -> PruningParameters {
+    pub fn adjust_parameters(
+        &mut self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        performance: &PerformanceMetrics,
+        current_params: &PruningParameters,
+    ) -> PruningParameters {
         // Analyze current position
-        let position_analysis = self.position_analysis.analyze_position(board, captured_pieces, player);
-        
+        let position_analysis =
+            self.position_analysis
+                .analyze_position(board, captured_pieces, player);
+
         // Calculate parameter adjustments based on position type and performance
         let adjustment = self.calculate_adjustment(position_analysis.position_type, performance);
-        
+
         // Apply adjustments to current parameters
         let new_params = self.apply_adjustment(current_params, adjustment);
-        
+
         // Record parameter change in history
         self.record_parameter_change(new_params.clone(), performance.clone());
-        
+
         new_params
     }
-    
+
     /// Calculate parameter adjustment based on position type and performance
-    fn calculate_adjustment(&self, position_type: PositionType, performance: &PerformanceMetrics) -> ParameterAdjustment {
+    fn calculate_adjustment(
+        &self,
+        position_type: PositionType,
+        performance: &PerformanceMetrics,
+    ) -> ParameterAdjustment {
         let mut adjustment = ParameterAdjustment::default();
-        
+
         // Calculate cache hit ratio for performance assessment
         let total_cache_ops = performance.cache_hits + performance.cache_misses;
         let cache_hit_ratio = if total_cache_ops > 0 {
@@ -8548,7 +8975,7 @@ impl AdaptiveParameters {
         } else {
             0.5 // Default neutral ratio
         };
-        
+
         // Adjust parameters based on position type and performance
         match position_type {
             PositionType::Tactical => {
@@ -8557,21 +8984,21 @@ impl AdaptiveParameters {
                 adjustment.lmr_adjustment = 1;
                 adjustment.delta_adjustment = -50;
                 adjustment.razoring_adjustment = -200;
-            },
+            }
             PositionType::Positional => {
                 // In positional positions, can be more aggressive with pruning
                 adjustment.futility_adjustment = 50;
                 adjustment.lmr_adjustment = 0;
                 adjustment.delta_adjustment = 25;
                 adjustment.razoring_adjustment = 100;
-            },
+            }
             PositionType::Endgame => {
                 // In endgame, be very conservative to avoid tactical errors
                 adjustment.futility_adjustment = -200;
                 adjustment.lmr_adjustment = 2;
                 adjustment.delta_adjustment = -100;
                 adjustment.razoring_adjustment = -300;
-            },
+            }
             PositionType::Normal => {
                 // Normal adjustments based on performance
                 if cache_hit_ratio < 0.3 {
@@ -8589,75 +9016,95 @@ impl AdaptiveParameters {
                 }
             }
         }
-        
+
         // Apply learning rate to adjustments
-        adjustment.futility_adjustment = (adjustment.futility_adjustment as f64 * self.learning_rate) as i32;
+        adjustment.futility_adjustment =
+            (adjustment.futility_adjustment as f64 * self.learning_rate) as i32;
         adjustment.lmr_adjustment = (adjustment.lmr_adjustment as f64 * self.learning_rate) as u8;
-        adjustment.delta_adjustment = (adjustment.delta_adjustment as f64 * self.learning_rate) as i32;
-        adjustment.razoring_adjustment = (adjustment.razoring_adjustment as f64 * self.learning_rate) as i32;
-        
+        adjustment.delta_adjustment =
+            (adjustment.delta_adjustment as f64 * self.learning_rate) as i32;
+        adjustment.razoring_adjustment =
+            (adjustment.razoring_adjustment as f64 * self.learning_rate) as i32;
+
         adjustment
     }
-    
+
     /// Apply parameter adjustments to current parameters
-    fn apply_adjustment(&self, current_params: &PruningParameters, adjustment: ParameterAdjustment) -> PruningParameters {
+    fn apply_adjustment(
+        &self,
+        current_params: &PruningParameters,
+        adjustment: ParameterAdjustment,
+    ) -> PruningParameters {
         let mut new_params = current_params.clone();
-        
+
         // Apply futility pruning adjustments
         for i in 0..new_params.futility_margin.len() {
-            new_params.futility_margin[i] = (new_params.futility_margin[i] as i32 + adjustment.futility_adjustment)
+            new_params.futility_margin[i] = (new_params.futility_margin[i] as i32
+                + adjustment.futility_adjustment)
                 .max(50) // Minimum margin
                 .min(1000) as i32; // Maximum margin
         }
-        
+
         // Apply LMR adjustments
-        new_params.lmr_base_reduction = (new_params.lmr_base_reduction as i32 + adjustment.lmr_adjustment as i32)
+        new_params.lmr_base_reduction = (new_params.lmr_base_reduction as i32
+            + adjustment.lmr_adjustment as i32)
             .max(1) // Minimum reduction
             .min(4) as u8; // Maximum reduction
-        
+
         // Apply delta pruning adjustments
         new_params.delta_margin = (new_params.delta_margin + adjustment.delta_adjustment)
             .max(25) // Minimum margin
             .min(500); // Maximum margin
-        
+
         // Apply razoring adjustments
-        new_params.razoring_margin = (new_params.razoring_margin as i32 + adjustment.razoring_adjustment)
+        new_params.razoring_margin = (new_params.razoring_margin as i32
+            + adjustment.razoring_adjustment)
             .max(100) // Minimum margin
             .min(2000) as i32; // Maximum margin
-        
+
         new_params
     }
-    
+
     /// Record parameter change in history for learning
-    fn record_parameter_change(&mut self, parameters: PruningParameters, performance: PerformanceMetrics) {
+    fn record_parameter_change(
+        &mut self,
+        parameters: PruningParameters,
+        performance: PerformanceMetrics,
+    ) {
         let snapshot = ParameterSnapshot {
             timestamp: std::time::SystemTime::now(),
             parameters,
             performance,
         };
-        
+
         self.parameter_history.push(snapshot);
-        
+
         // Limit history size to prevent memory growth
         if self.parameter_history.len() > 1000 {
             self.parameter_history.remove(0);
         }
     }
-    
+
     /// Optimize learning rate based on recent performance
     pub fn optimize_learning_rate(&mut self) {
         if self.parameter_history.len() < 10 {
             return;
         }
-        
+
         let recent_snapshots = &self.parameter_history[self.parameter_history.len() - 10..];
-        let avg_cache_hit_ratio = recent_snapshots.iter()
+        let avg_cache_hit_ratio = recent_snapshots
+            .iter()
             .map(|s| {
                 let total = s.performance.cache_hits + s.performance.cache_misses;
-                if total > 0 { s.performance.cache_hits as f64 / total as f64 } else { 0.5 }
+                if total > 0 {
+                    s.performance.cache_hits as f64 / total as f64
+                } else {
+                    0.5
+                }
             })
-            .sum::<f64>() / recent_snapshots.len() as f64;
-        
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
+
         // Adjust learning rate based on performance
         if avg_cache_hit_ratio > 0.8 {
             // Good performance, can be more aggressive
@@ -8667,15 +9114,21 @@ impl AdaptiveParameters {
             self.learning_rate = (self.learning_rate * 0.95).max(0.01);
         }
     }
-    
+
     /// Get parameter recommendations based on position analysis
-    pub fn get_position_recommendations(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
-                                      player: Player) -> PruningParameters {
-        let position_analysis = self.position_analysis.analyze_position(board, captured_pieces, player);
-        
+    pub fn get_position_recommendations(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+    ) -> PruningParameters {
+        let position_analysis =
+            self.position_analysis
+                .analyze_position(board, captured_pieces, player);
+
         // Start with default parameters
         let mut params = PruningParameters::default();
-        
+
         // Adjust based on position characteristics
         match position_analysis.position_type {
             PositionType::Tactical => {
@@ -8684,21 +9137,21 @@ impl AdaptiveParameters {
                 params.lmr_base_reduction = 1;
                 params.delta_margin = 150;
                 params.razoring_margin = 800;
-            },
+            }
             PositionType::Positional => {
                 // More aggressive pruning for positional positions
                 params.futility_margin = [150, 175, 200, 225, 250, 275, 300, 325];
                 params.lmr_base_reduction = 2;
                 params.delta_margin = 75;
                 params.razoring_margin = 400;
-            },
+            }
             PositionType::Endgame => {
                 // Very conservative pruning for endgame
                 params.futility_margin = [400, 450, 500, 550, 600, 650, 700, 750];
                 params.lmr_base_reduction = 1;
                 params.delta_margin = 200;
                 params.razoring_margin = 1000;
-            },
+            }
             PositionType::Normal => {
                 // Standard parameters
                 params.futility_margin = [200, 225, 250, 275, 300, 325, 350, 375];
@@ -8707,21 +9160,21 @@ impl AdaptiveParameters {
                 params.razoring_margin = 600;
             }
         }
-        
+
         params
     }
-    
+
     /// Implement parameter learning system based on performance tracking
     pub fn learn_from_performance(&mut self, performance_history: &[PerformanceMetrics]) {
         if performance_history.len() < 5 {
             return;
         }
-        
+
         // Calculate performance trends
         let recent_performance = &performance_history[performance_history.len() - 5..];
         let avg_cache_hit_ratio = self.calculate_average_cache_hit_ratio(recent_performance);
         let performance_trend = self.calculate_performance_trend(performance_history);
-        
+
         // Adjust learning rate based on performance
         if performance_trend > 0.1 {
             // Improving performance, increase learning rate
@@ -8730,38 +9183,44 @@ impl AdaptiveParameters {
             // Declining performance, decrease learning rate
             self.learning_rate = (self.learning_rate * 0.9).max(0.01);
         }
-        
+
         // Update parameter recommendations based on performance patterns
         self.update_parameter_recommendations(avg_cache_hit_ratio, performance_trend);
     }
-    
+
     /// Calculate average cache hit ratio from performance metrics
     fn calculate_average_cache_hit_ratio(&self, performance_metrics: &[PerformanceMetrics]) -> f64 {
-        let total_ratio: f64 = performance_metrics.iter()
+        let total_ratio: f64 = performance_metrics
+            .iter()
             .map(|pm| {
                 let total = pm.cache_hits + pm.cache_misses;
-                if total > 0 { pm.cache_hits as f64 / total as f64 } else { 0.5 }
+                if total > 0 {
+                    pm.cache_hits as f64 / total as f64
+                } else {
+                    0.5
+                }
             })
             .sum();
-        
+
         total_ratio / performance_metrics.len() as f64
     }
-    
+
     /// Calculate performance trend over time
     fn calculate_performance_trend(&self, performance_history: &[PerformanceMetrics]) -> f64 {
         if performance_history.len() < 10 {
             return 0.0;
         }
-        
+
         let recent = &performance_history[performance_history.len() - 5..];
-        let older = &performance_history[performance_history.len() - 10..performance_history.len() - 5];
-        
+        let older =
+            &performance_history[performance_history.len() - 10..performance_history.len() - 5];
+
         let recent_avg = self.calculate_average_cache_hit_ratio(recent);
         let older_avg = self.calculate_average_cache_hit_ratio(older);
-        
+
         recent_avg - older_avg
     }
-    
+
     /// Update parameter recommendations based on performance patterns
     fn update_parameter_recommendations(&mut self, cache_hit_ratio: f64, performance_trend: f64) {
         // This would update the internal parameter recommendations
@@ -8773,11 +9232,11 @@ impl AdaptiveParameters {
             self.learning_rate = (self.learning_rate * 0.95).max(0.01);
         }
     }
-    
+
     /// Get optimized parameters for specific game phase
     pub fn get_phase_optimized_parameters(&self, game_phase: GamePhase) -> PruningParameters {
         let mut params = PruningParameters::default();
-        
+
         match game_phase {
             GamePhase::Opening => {
                 // Opening: moderate pruning, focus on development
@@ -8785,14 +9244,14 @@ impl AdaptiveParameters {
                 params.lmr_base_reduction = 2;
                 params.delta_margin = 90;
                 params.razoring_margin = 500;
-            },
+            }
             GamePhase::Middlegame => {
                 // Middlegame: standard pruning
                 params.futility_margin = [200, 225, 250, 275, 300, 325, 350, 375];
                 params.lmr_base_reduction = 2;
                 params.delta_margin = 100;
                 params.razoring_margin = 600;
-            },
+            }
             GamePhase::Endgame => {
                 // Endgame: conservative pruning to avoid tactical errors
                 params.futility_margin = [300, 350, 400, 450, 500, 550, 600, 650];
@@ -8801,10 +9260,10 @@ impl AdaptiveParameters {
                 params.razoring_margin = 800;
             }
         }
-        
+
         params
     }
-    
+
     /// Validate parameter ranges and constraints
     pub fn validate_parameters(&self, params: &PruningParameters) -> bool {
         // Check futility margin ranges
@@ -8813,48 +9272,58 @@ impl AdaptiveParameters {
                 return false;
             }
         }
-        
+
         // Check LMR reduction range
         if params.lmr_base_reduction < 1 || params.lmr_base_reduction > 4 {
             return false;
         }
-        
+
         // Check delta margin range
         if params.delta_margin < 25 || params.delta_margin > 500 {
             return false;
         }
-        
+
         // Check razoring margin range
         if params.razoring_margin < 100 || params.razoring_margin > 2000 {
             return false;
         }
-        
+
         true
     }
-    
+
     /// Get parameter statistics for analysis
     pub fn get_parameter_statistics(&self) -> ParameterStatistics {
         if self.parameter_history.is_empty() {
             return ParameterStatistics::default();
         }
-        
+
         let recent_snapshots = &self.parameter_history[self.parameter_history.len() - 10..];
-        
-        let avg_cache_hit_ratio = recent_snapshots.iter()
+
+        let avg_cache_hit_ratio = recent_snapshots
+            .iter()
             .map(|s| {
                 let total = s.performance.cache_hits + s.performance.cache_misses;
-                if total > 0 { s.performance.cache_hits as f64 / total as f64 } else { 0.5 }
+                if total > 0 {
+                    s.performance.cache_hits as f64 / total as f64
+                } else {
+                    0.5
+                }
             })
-            .sum::<f64>() / recent_snapshots.len() as f64;
-        
-        let avg_futility_margin = recent_snapshots.iter()
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
+
+        let avg_futility_margin = recent_snapshots
+            .iter()
             .map(|s| s.parameters.futility_margin[0] as f64)
-            .sum::<f64>() / recent_snapshots.len() as f64;
-        
-        let avg_lmr_reduction = recent_snapshots.iter()
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
+
+        let avg_lmr_reduction = recent_snapshots
+            .iter()
             .map(|s| s.parameters.lmr_base_reduction as f64)
-            .sum::<f64>() / recent_snapshots.len() as f64;
-        
+            .sum::<f64>()
+            / recent_snapshots.len() as f64;
+
         ParameterStatistics {
             total_adjustments: self.parameter_history.len(),
             avg_cache_hit_ratio,
@@ -8873,20 +9342,29 @@ impl PositionAnalyzer {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Analyze position and return detailed analysis
-    pub fn analyze_position(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
-                           player: Player) -> PositionAnalysis {
+    pub fn analyze_position(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+    ) -> PositionAnalysis {
         let material_balance = self.calculate_material_balance(board, captured_pieces, player);
         let tactical_potential = self.calculate_tactical_potential(board, player);
         let king_safety = self.calculate_king_safety(board, player);
         let is_quiet = self.is_quiet_position(board, player);
         let is_tactical = self.is_tactical_position(board, player);
         let complexity = self.calculate_position_complexity(board, captured_pieces);
-        
-        let position_type = self.classify_position_type(material_balance, tactical_potential, 
-                                                       king_safety, is_quiet, is_tactical);
-        
+
+        let position_type = self.classify_position_type(
+            material_balance,
+            tactical_potential,
+            king_safety,
+            is_quiet,
+            is_tactical,
+        );
+
         PositionAnalysis {
             position_type,
             tactical_potential,
@@ -8897,12 +9375,16 @@ impl PositionAnalyzer {
             complexity,
         }
     }
-    
+
     /// Calculate material balance for the current player
-    fn calculate_material_balance(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, 
-                                 player: Player) -> i32 {
+    fn calculate_material_balance(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+    ) -> i32 {
         let mut balance = 0;
-        
+
         // Calculate piece values on board
         for row in 0..9 {
             for col in 0..9 {
@@ -8923,7 +9405,7 @@ impl PositionAnalyzer {
                         PieceType::PromotedBishop => 650,
                         PieceType::PromotedRook => 750,
                     };
-                    
+
                     if piece.player == player {
                         balance += value;
                     } else {
@@ -8932,7 +9414,7 @@ impl PositionAnalyzer {
                 }
             }
         }
-        
+
         // Add captured pieces value (simplified - could be enhanced with actual piece values)
         let player_captures = match player {
             Player::Black => &captured_pieces.black,
@@ -8942,7 +9424,7 @@ impl PositionAnalyzer {
             Player::Black => &captured_pieces.white,
             Player::White => &captured_pieces.black,
         };
-        
+
         for piece_type in player_captures {
             let value = match piece_type {
                 PieceType::Pawn => 100,
@@ -8956,7 +9438,7 @@ impl PositionAnalyzer {
             };
             balance += value;
         }
-        
+
         for piece_type in opponent_captures {
             let value = match piece_type {
                 PieceType::Pawn => 100,
@@ -8970,14 +9452,14 @@ impl PositionAnalyzer {
             };
             balance -= value;
         }
-        
+
         balance
     }
-    
+
     /// Calculate tactical potential (0-255)
     fn calculate_tactical_potential(&self, board: &BitboardBoard, player: Player) -> u8 {
         let mut potential = 0;
-        
+
         // Check for pieces that can create tactical threats
         for row in 0..9 {
             for col in 0..9 {
@@ -8994,14 +9476,14 @@ impl PositionAnalyzer {
                 }
             }
         }
-        
+
         potential.min(255)
     }
-    
+
     /// Calculate king safety (0-255, higher = safer)
     fn calculate_king_safety(&self, board: &BitboardBoard, player: Player) -> u8 {
         let mut safety = 100; // Base safety
-        
+
         // Find king position
         for row in 0..9 {
             for col in 0..9 {
@@ -9010,11 +9492,19 @@ impl PositionAnalyzer {
                         // Check surrounding pieces for protection
                         for dr in -1..=1 {
                             for dc in -1..=1 {
-                                if dr == 0 && dc == 0 { continue; }
+                                if dr == 0 && dc == 0 {
+                                    continue;
+                                }
                                 let check_row = row as i32 + dr;
                                 let check_col = col as i32 + dc;
-                                if check_row >= 0 && check_row < 9 && check_col >= 0 && check_col < 9 {
-                                    if let Some(protector) = board.get_piece(Position::new(check_row as u8, check_col as u8)) {
+                                if check_row >= 0
+                                    && check_row < 9
+                                    && check_col >= 0
+                                    && check_col < 9
+                                {
+                                    if let Some(protector) = board
+                                        .get_piece(Position::new(check_row as u8, check_col as u8))
+                                    {
                                         if protector.player == player {
                                             safety += 10;
                                         }
@@ -9027,28 +9517,32 @@ impl PositionAnalyzer {
                 }
             }
         }
-        
+
         safety.min(255)
     }
-    
+
     /// Check if position is quiet (no immediate tactical threats)
     fn is_quiet_position(&self, _board: &BitboardBoard, _player: Player) -> bool {
         // Simplified quiet position detection
         // In a real implementation, this would check for immediate captures, checks, etc.
         true // Placeholder
     }
-    
+
     /// Check if position has tactical characteristics
     fn is_tactical_position(&self, board: &BitboardBoard, player: Player) -> bool {
         // Check for pieces in attacking positions
         let tactical_potential = self.calculate_tactical_potential(board, player);
         tactical_potential > 100
     }
-    
+
     /// Calculate position complexity (0-255)
-    fn calculate_position_complexity(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> u8 {
+    fn calculate_position_complexity(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> u8 {
         let mut complexity = 0;
-        
+
         // Count total pieces
         let mut piece_count = 0;
         for row in 0..9 {
@@ -9058,40 +9552,49 @@ impl PositionAnalyzer {
                 }
             }
         }
-        
+
         // More pieces = more complexity
         complexity += (piece_count * 3).min(100);
-        
+
         // Add captured pieces complexity
         let total_captures = captured_pieces.black.len() + captured_pieces.white.len();
         complexity += ((total_captures * 2) as u8).min(50);
-        
+
         complexity.min(255)
     }
-    
+
     /// Classify position type based on analysis
-    fn classify_position_type(&self, material_balance: i32, tactical_potential: u8, 
-                             king_safety: u8, is_quiet: bool, is_tactical: bool) -> PositionType {
+    fn classify_position_type(
+        &self,
+        material_balance: i32,
+        tactical_potential: u8,
+        king_safety: u8,
+        is_quiet: bool,
+        is_tactical: bool,
+    ) -> PositionType {
         // Determine if this is an endgame
         if material_balance.abs() > 800 || tactical_potential < 50 {
             return PositionType::Endgame;
         }
-        
+
         // Determine if this is tactical
         if is_tactical || tactical_potential > 150 || king_safety < 80 {
             return PositionType::Tactical;
         }
-        
+
         // Determine if this is positional
         if is_quiet && tactical_potential < 100 && king_safety > 120 {
             return PositionType::Positional;
         }
-        
+
         PositionType::Normal
     }
-    
+
     /// Get parameter recommendations for specific position type
-    pub fn get_parameter_recommendations(&self, position_type: PositionType) -> ParameterAdjustment {
+    pub fn get_parameter_recommendations(
+        &self,
+        position_type: PositionType,
+    ) -> ParameterAdjustment {
         match position_type {
             PositionType::Tactical => ParameterAdjustment {
                 futility_adjustment: -100,
@@ -9152,8 +9655,7 @@ pub struct ParameterAdjustment {
 }
 
 /// Parameter snapshot for tracking changes
-#[derive(Debug, Clone)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParameterSnapshot {
     pub timestamp: std::time::SystemTime,
     pub parameters: PruningParameters,
@@ -9173,18 +9675,18 @@ pub struct ParameterStatistics {
 #[cfg(test)]
 mod transposition_entry_tests {
     use super::*;
-    
+
     #[test]
     fn test_transposition_entry_creation() {
         let entry = TranspositionEntry::new(
-            100, 
-            5, 
-            TranspositionFlag::Exact, 
-            None, 
-            0x1234567890ABCDEF, 
-            42
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
+            42,
         );
-        
+
         assert_eq!(entry.score, 100);
         assert_eq!(entry.depth, 5);
         assert_eq!(entry.flag, TranspositionFlag::Exact);
@@ -9192,34 +9694,28 @@ mod transposition_entry_tests {
         assert_eq!(entry.hash_key, 0x1234567890ABCDEF);
         assert_eq!(entry.age, 42);
     }
-    
+
     #[test]
     fn test_transposition_entry_with_age() {
         let entry = TranspositionEntry::new_with_age(
-            -50, 
-            3, 
-            TranspositionFlag::LowerBound, 
-            None, 
-            0xFEDCBA0987654321
+            -50,
+            3,
+            TranspositionFlag::LowerBound,
+            None,
+            0xFEDCBA0987654321,
         );
-        
+
         assert_eq!(entry.score, -50);
         assert_eq!(entry.depth, 3);
         assert_eq!(entry.flag, TranspositionFlag::LowerBound);
         assert_eq!(entry.hash_key, 0xFEDCBA0987654321);
         assert_eq!(entry.age, 0); // Default age
     }
-    
+
     #[test]
     fn test_is_valid_for_depth() {
-        let entry = TranspositionEntry::new_with_age(
-            0, 
-            5, 
-            TranspositionFlag::Exact, 
-            None, 
-            0x1234
-        );
-        
+        let entry = TranspositionEntry::new_with_age(0, 5, TranspositionFlag::Exact, None, 0x1234);
+
         // Entry depth 5 should be valid for required depth 5
         assert!(entry.is_valid_for_depth(5));
         // Entry depth 5 should be valid for required depth 4
@@ -9227,84 +9723,73 @@ mod transposition_entry_tests {
         // Entry depth 5 should NOT be valid for required depth 6
         assert!(!entry.is_valid_for_depth(6));
     }
-    
+
     #[test]
     fn test_matches_hash() {
         let hash_key = 0x1234567890ABCDEF;
-        let entry = TranspositionEntry::new_with_age(
-            0, 
-            0, 
-            TranspositionFlag::Exact, 
-            None, 
-            hash_key
-        );
-        
+        let entry =
+            TranspositionEntry::new_with_age(0, 0, TranspositionFlag::Exact, None, hash_key);
+
         assert!(entry.matches_hash(hash_key));
         assert!(!entry.matches_hash(0xFEDCBA0987654321));
         assert!(!entry.matches_hash(0));
     }
-    
+
     #[test]
     fn test_flag_checks() {
-        let exact_entry = TranspositionEntry::new_with_age(
-            0, 0, TranspositionFlag::Exact, None, 0x1234
-        );
-        let lower_entry = TranspositionEntry::new_with_age(
-            0, 0, TranspositionFlag::LowerBound, None, 0x1234
-        );
-        let upper_entry = TranspositionEntry::new_with_age(
-            0, 0, TranspositionFlag::UpperBound, None, 0x1234
-        );
-        
+        let exact_entry =
+            TranspositionEntry::new_with_age(0, 0, TranspositionFlag::Exact, None, 0x1234);
+        let lower_entry =
+            TranspositionEntry::new_with_age(0, 0, TranspositionFlag::LowerBound, None, 0x1234);
+        let upper_entry =
+            TranspositionEntry::new_with_age(0, 0, TranspositionFlag::UpperBound, None, 0x1234);
+
         assert!(exact_entry.is_exact());
         assert!(!exact_entry.is_lower_bound());
         assert!(!exact_entry.is_upper_bound());
-        
+
         assert!(!lower_entry.is_exact());
         assert!(lower_entry.is_lower_bound());
         assert!(!lower_entry.is_upper_bound());
-        
+
         assert!(!upper_entry.is_exact());
         assert!(!upper_entry.is_lower_bound());
         assert!(upper_entry.is_upper_bound());
     }
-    
+
     #[test]
     fn test_age_management() {
-        let mut entry = TranspositionEntry::new_with_age(
-            0, 0, TranspositionFlag::Exact, None, 0x1234
-        );
-        
+        let mut entry =
+            TranspositionEntry::new_with_age(0, 0, TranspositionFlag::Exact, None, 0x1234);
+
         assert_eq!(entry.age, 0);
         entry.update_age(100);
         assert_eq!(entry.age, 100);
         entry.update_age(0);
         assert_eq!(entry.age, 0);
     }
-    
+
     #[test]
     fn test_memory_size() {
-        let entry = TranspositionEntry::new_with_age(
-            0, 0, TranspositionFlag::Exact, None, 0x1234
-        );
-        
+        let entry = TranspositionEntry::new_with_age(0, 0, TranspositionFlag::Exact, None, 0x1234);
+
         let size = entry.memory_size();
         assert!(size > 0);
         // Should be reasonable size (not too large)
         assert!(size < 1000);
     }
-    
+
     #[test]
     fn test_debug_string() {
         let entry = TranspositionEntry::new(
-            42, 
-            3, 
-            TranspositionFlag::Exact, 
-            None, 
-            0x1234567890ABCDEF, 
-            10
+            42,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
+            10,
         );
-        
+
         let debug_str = entry.debug_string();
         assert!(debug_str.contains("score: 42"));
         assert!(debug_str.contains("depth: 3"));
@@ -9313,26 +9798,26 @@ mod transposition_entry_tests {
         assert!(debug_str.contains("0x1234567890abcdef"));
         assert!(debug_str.contains("age: 10"));
     }
-    
+
     #[test]
     fn test_debug_string_with_move() {
         let move_ = Move::new_move(
-            Position::new(0, 0), 
-            Position::new(1, 1), 
-            PieceType::King, 
-            Player::White, 
-            false
+            Position::new(0, 0),
+            Position::new(1, 1),
+            PieceType::King,
+            Player::White,
+            false,
         );
-        
+
         let entry = TranspositionEntry::new(
-            100, 
-            5, 
-            TranspositionFlag::LowerBound, 
-            Some(move_), 
-            0xFEDCBA0987654321, 
-            20
+            100,
+            5,
+            TranspositionFlag::LowerBound,
+            Some(move_),
+            0xFEDCBA0987654321,
+            20,
         );
-        
+
         let debug_str = entry.debug_string();
         assert!(debug_str.contains("score: 100"));
         assert!(debug_str.contains("depth: 5"));
@@ -9341,92 +9826,75 @@ mod transposition_entry_tests {
         assert!(debug_str.contains("0xfedcba0987654321"));
         assert!(debug_str.contains("age: 20"));
     }
-    
+
     #[test]
     fn test_should_replace_with_hash_mismatch() {
-        let entry1 = TranspositionEntry::new_with_age(
-            0, 5, TranspositionFlag::Exact, None, 0x1111
-        );
-        let entry2 = TranspositionEntry::new_with_age(
-            0, 3, TranspositionFlag::LowerBound, None, 0x2222
-        );
-        
+        let entry1 = TranspositionEntry::new_with_age(0, 5, TranspositionFlag::Exact, None, 0x1111);
+        let entry2 =
+            TranspositionEntry::new_with_age(0, 3, TranspositionFlag::LowerBound, None, 0x2222);
+
         // Should replace due to hash mismatch (collision)
         assert!(entry1.should_replace_with(&entry2));
     }
-    
+
     #[test]
     fn test_should_replace_with_depth() {
-        let entry1 = TranspositionEntry::new_with_age(
-            0, 3, TranspositionFlag::Exact, None, 0x1111
-        );
-        let entry2 = TranspositionEntry::new_with_age(
-            0, 5, TranspositionFlag::LowerBound, None, 0x1111
-        );
-        
+        let entry1 = TranspositionEntry::new_with_age(0, 3, TranspositionFlag::Exact, None, 0x1111);
+        let entry2 =
+            TranspositionEntry::new_with_age(0, 5, TranspositionFlag::LowerBound, None, 0x1111);
+
         // Should replace due to greater depth
         assert!(entry1.should_replace_with(&entry2));
     }
-    
+
     #[test]
     fn test_should_replace_with_exact_flag() {
-        let entry1 = TranspositionEntry::new_with_age(
-            0, 5, TranspositionFlag::LowerBound, None, 0x1111
-        );
-        let entry2 = TranspositionEntry::new_with_age(
-            0, 5, TranspositionFlag::Exact, None, 0x1111
-        );
-        
+        let entry1 =
+            TranspositionEntry::new_with_age(0, 5, TranspositionFlag::LowerBound, None, 0x1111);
+        let entry2 = TranspositionEntry::new_with_age(0, 5, TranspositionFlag::Exact, None, 0x1111);
+
         // Should replace due to exact flag when depths are equal
         assert!(entry1.should_replace_with(&entry2));
     }
-    
+
     #[test]
     fn test_should_replace_with_age() {
-        let entry1 = TranspositionEntry::new(
-            0, 5, TranspositionFlag::Exact, None, 0x1111, 10
-        );
-        let entry2 = TranspositionEntry::new(
-            0, 5, TranspositionFlag::Exact, None, 0x1111, 20
-        );
-        
+        let entry1 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 10);
+        let entry2 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 20);
+
         // Should replace due to newer age when everything else is equal
         assert!(entry1.should_replace_with(&entry2));
     }
-    
+
     #[test]
     fn test_should_not_replace() {
-        let entry1 = TranspositionEntry::new(
-            0, 5, TranspositionFlag::Exact, None, 0x1111, 20
-        );
-        let entry2 = TranspositionEntry::new(
-            0, 3, TranspositionFlag::LowerBound, None, 0x1111, 10
-        );
-        
+        let entry1 = TranspositionEntry::new(0, 5, TranspositionFlag::Exact, None, 0x1111, 20);
+        let entry2 = TranspositionEntry::new(0, 3, TranspositionFlag::LowerBound, None, 0x1111, 10);
+
         // Should NOT replace - current entry is better in all aspects
         assert!(!entry1.should_replace_with(&entry2));
     }
-    
+
     #[test]
     fn test_transposition_flag_to_string() {
         assert_eq!(TranspositionFlag::Exact.to_string(), "Exact");
         assert_eq!(TranspositionFlag::LowerBound.to_string(), "LowerBound");
         assert_eq!(TranspositionFlag::UpperBound.to_string(), "UpperBound");
     }
-    
+
     #[test]
     fn test_transposition_entry_clone() {
         let original = TranspositionEntry::new(
-            100, 
-            5, 
-            TranspositionFlag::Exact, 
-            None, 
-            0x1234567890ABCDEF, 
-            42
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
+            42,
         );
-        
+
         let cloned = original.clone();
-        
+
         assert_eq!(original.score, cloned.score);
         assert_eq!(original.depth, cloned.depth);
         assert_eq!(original.flag, cloned.flag);
@@ -9434,62 +9902,56 @@ mod transposition_entry_tests {
         assert_eq!(original.hash_key, cloned.hash_key);
         assert_eq!(original.age, cloned.age);
     }
-    
+
     #[test]
     fn test_transposition_entry_with_best_move() {
         let move_ = Move::new_move(
-            Position::new(0, 0), 
-            Position::new(1, 1), 
-            PieceType::King, 
-            Player::White, 
-            false
+            Position::new(0, 0),
+            Position::new(1, 1),
+            PieceType::King,
+            Player::White,
+            false,
         );
-        
+
         let entry = TranspositionEntry::new_with_age(
-            150, 
-            7, 
-            TranspositionFlag::Exact, 
-            Some(move_), 
-            0xABCDEF1234567890
+            150,
+            7,
+            TranspositionFlag::Exact,
+            Some(move_),
+            0xABCDEF1234567890,
         );
-        
+
         assert_eq!(entry.score, 150);
         assert_eq!(entry.depth, 7);
         assert!(entry.best_move.is_some());
-        
+
         let best_move = entry.best_move.unwrap();
         assert_eq!(best_move.piece_type, PieceType::King);
         assert_eq!(best_move.player, Player::White);
         assert!(!best_move.is_promotion);
     }
-    
+
     #[test]
     fn test_edge_cases() {
         // Test with maximum values
         let max_entry = TranspositionEntry::new(
-            i32::MAX, 
-            u8::MAX, 
-            TranspositionFlag::Exact, 
-            None, 
-            u64::MAX, 
-            u32::MAX
+            i32::MAX,
+            u8::MAX,
+            TranspositionFlag::Exact,
+            None,
+            u64::MAX,
+            u32::MAX,
         );
-        
+
         assert_eq!(max_entry.score, i32::MAX);
         assert_eq!(max_entry.depth, u8::MAX);
         assert_eq!(max_entry.hash_key, u64::MAX);
         assert_eq!(max_entry.age, u32::MAX);
-        
+
         // Test with minimum values
-        let min_entry = TranspositionEntry::new(
-            i32::MIN, 
-            0, 
-            TranspositionFlag::UpperBound, 
-            None, 
-            0, 
-            0
-        );
-        
+        let min_entry =
+            TranspositionEntry::new(i32::MIN, 0, TranspositionFlag::UpperBound, None, 0, 0);
+
         assert_eq!(min_entry.score, i32::MIN);
         assert_eq!(min_entry.depth, 0);
         assert_eq!(min_entry.hash_key, 0);

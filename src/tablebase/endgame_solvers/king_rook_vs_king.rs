@@ -1,17 +1,17 @@
 //! King + Rook vs King endgame solver
-//! 
+//!
 //! This module implements the King + Rook vs King endgame solver,
 //! which can find optimal moves in positions with only a king and rook
 //! on one side versus a lone king on the other side.
 
-use crate::tablebase::TablebaseResult;
+use crate::bitboards::BitboardBoard;
 use crate::tablebase::solver_traits::EndgameSolver;
 use crate::tablebase::tablebase_config::KingRookConfig;
-use crate::bitboards::BitboardBoard;
-use crate::types::{CapturedPieces, Player, Position, PieceType, Piece, Move};
+use crate::tablebase::TablebaseResult;
+use crate::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
 
 /// Solver for King + Rook vs King endgames
-/// 
+///
 /// This solver handles positions where one side has a king and rook
 /// and the other side has only a king. The rook's ability to move
 /// horizontally and vertically makes it very powerful in endgames.
@@ -36,7 +36,7 @@ impl KingRookVsKingSolver {
     /// Check if the position is a King + Rook vs King endgame
     fn is_king_rook_vs_king(&self, board: &BitboardBoard, player: Player) -> bool {
         let pieces = self.extract_pieces(board, player);
-        
+
         // Check if we have exactly 2 pieces (king + rook)
         if pieces.len() != 2 {
             return false;
@@ -59,7 +59,7 @@ impl KingRookVsKingSolver {
     /// Extract pieces for the given player
     fn extract_pieces(&self, board: &BitboardBoard, player: Player) -> Vec<(Piece, Position)> {
         let mut pieces = Vec::new();
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 if let Some(piece) = board.get_piece(Position { row, col }) {
@@ -69,19 +69,24 @@ impl KingRookVsKingSolver {
                 }
             }
         }
-        
+
         pieces
     }
 
     /// Find the best move in a King + Rook vs King position
-    fn find_best_move(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<Move> {
+    fn find_best_move(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<Move> {
         if !self.is_king_rook_vs_king(board, player) {
             return None;
         }
 
         // Get all legal moves for the current player
         let moves = self.generate_moves(board, player, captured_pieces);
-        
+
         if moves.is_empty() {
             return None;
         }
@@ -104,7 +109,8 @@ impl KingRookVsKingSolver {
             let mut best_score = i32::MIN;
 
             for move_ in &moves {
-                let score = self.evaluate_move(board, player, move_, king_pos, rook_pos, def_king_pos);
+                let score =
+                    self.evaluate_move(board, player, move_, king_pos, rook_pos, def_king_pos);
                 if score > best_score {
                     best_score = score;
                     best_move = Some(move_.clone());
@@ -118,65 +124,97 @@ impl KingRookVsKingSolver {
     }
 
     /// Generate all legal moves for the current player
-    fn generate_moves(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Vec<Move> {
+    fn generate_moves(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Vec<Move> {
         let mut moves = Vec::new();
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 if let Some(piece) = board.get_piece(Position { row, col }) {
                     if piece.player == player {
                         let from = Position { row, col };
-                        let piece_moves = self.generate_piece_moves(board, *piece, from, captured_pieces);
+                        let piece_moves =
+                            self.generate_piece_moves(board, *piece, from, captured_pieces);
                         moves.extend(piece_moves);
                     }
                 }
             }
         }
-        
+
         moves
     }
 
     /// Generate moves for a specific piece
-    fn generate_piece_moves(&self, board: &BitboardBoard, piece: Piece, from: Position, _captured_pieces: &CapturedPieces) -> Vec<Move> {
+    fn generate_piece_moves(
+        &self,
+        board: &BitboardBoard,
+        piece: Piece,
+        from: Position,
+        _captured_pieces: &CapturedPieces,
+    ) -> Vec<Move> {
         let mut moves = Vec::new();
-        
+
         match piece.piece_type {
             PieceType::King => {
                 // King can move to any adjacent square
                 for dr in -1..=1 {
                     for dc in -1..=1 {
-                        if dr == 0 && dc == 0 { continue; }
-                        
+                        if dr == 0 && dc == 0 {
+                            continue;
+                        }
+
                         let new_row = (from.row as i32 + dr) as u8;
                         let new_col = (from.col as i32 + dc) as u8;
-                        
+
                         if new_row < 9 && new_col < 9 {
-                            let to = Position { row: new_row, col: new_col };
+                            let to = Position {
+                                row: new_row,
+                                col: new_col,
+                            };
                             if self.is_legal_move(board, from, to, piece) {
-                                moves.push(Move::new_move(from, to, piece.piece_type, piece.player, false));
+                                moves.push(Move::new_move(
+                                    from,
+                                    to,
+                                    piece.piece_type,
+                                    piece.player,
+                                    false,
+                                ));
                             }
                         }
                     }
                 }
-            },
+            }
             PieceType::Rook => {
                 // Rook can move horizontally and vertically
                 let directions = vec![(0, 1), (0, -1), (1, 0), (-1, 0)];
-                
+
                 for (dr, dc) in directions {
                     for distance in 1..9 {
                         let new_row = (from.row as i32 + dr * distance) as u8;
                         let new_col = (from.col as i32 + dc * distance) as u8;
-                        
+
                         if new_row >= 9 || new_col >= 9 {
                             break; // Out of bounds
                         }
-                        
-                        let to = Position { row: new_row, col: new_col };
-                        
+
+                        let to = Position {
+                            row: new_row,
+                            col: new_col,
+                        };
+
                         if self.is_legal_move(board, from, to, piece) {
-                            moves.push(Move::new_move(from, to, piece.piece_type, piece.player, false));
-                            
+                            moves.push(Move::new_move(
+                                from,
+                                to,
+                                piece.piece_type,
+                                piece.player,
+                                false,
+                            ));
+
                             // If we hit a piece, we can't go further
                             if board.get_piece(to).is_some() {
                                 break;
@@ -186,45 +224,64 @@ impl KingRookVsKingSolver {
                         }
                     }
                 }
-            },
+            }
             _ => {} // Other piece types not handled in this solver
         }
-        
+
         moves
     }
 
     /// Check if a move is legal
-    fn is_legal_move(&self, board: &BitboardBoard, _from: Position, to: Position, piece: Piece) -> bool {
+    fn is_legal_move(
+        &self,
+        board: &BitboardBoard,
+        _from: Position,
+        to: Position,
+        piece: Piece,
+    ) -> bool {
         // Check if destination is within bounds
         if to.row >= 9 || to.col >= 9 {
             return false;
         }
-        
+
         // Check if destination is empty or contains opponent piece
         if let Some(target_piece) = board.get_piece(to) {
             if target_piece.player == piece.player {
                 return false; // Can't capture own piece
             }
         }
-        
+
         // TODO: Add more sophisticated legality checks
         true
     }
 
     /// Check if the position is a checkmate
-    fn is_checkmate(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
+    fn is_checkmate(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> bool {
         // TODO: Implement checkmate detection
         false
     }
 
     /// Check if the position is a stalemate
-    fn is_stalemate(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
+    fn is_stalemate(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> bool {
         // TODO: Implement stalemate detection
         false
     }
 
     /// Find the king and rook pieces from the extracted pieces
-    fn find_king_and_rook(&self, pieces: &[(Piece, Position)]) -> (Option<Position>, Option<Position>) {
+    fn find_king_and_rook(
+        &self,
+        pieces: &[(Piece, Position)],
+    ) -> (Option<Position>, Option<Position>) {
         let mut king = None;
         let mut rook = None;
 
@@ -255,21 +312,35 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move results in checkmate
-    fn is_mating_move(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
+    fn is_mating_move(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _move_: &Move,
+        _defending_king: Position,
+    ) -> bool {
         // TODO: Implement proper checkmate detection
         // For now, return false
         false
     }
 
     /// Evaluate a move's quality in the King + Rook vs King endgame
-    fn evaluate_move(&self, board: &BitboardBoard, player: Player, move_: &Move, king: Position, rook: Position, defending_king: Position) -> i32 {
+    fn evaluate_move(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        king: Position,
+        rook: Position,
+        defending_king: Position,
+    ) -> i32 {
         let mut score = 0;
 
         // Prefer moves that bring pieces closer to the defending king
         if let Some(from) = move_.from {
             let distance_before = self.manhattan_distance(from, defending_king);
             let distance_after = self.manhattan_distance(move_.to, defending_king);
-            
+
             if distance_after < distance_before {
                 score += 100;
             }
@@ -299,7 +370,14 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move coordinates the king and rook effectively
-    fn coordinates_king_rook(&self, _board: &BitboardBoard, _player: Player, move_: &Move, _king: Position, rook: Position) -> bool {
+    fn coordinates_king_rook(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        move_: &Move,
+        _king: Position,
+        rook: Position,
+    ) -> bool {
         // TODO: Implement proper coordination logic
         // For now, return true if the move is by the rook piece
         if let Some(from) = move_.from {
@@ -310,14 +388,26 @@ impl KingRookVsKingSolver {
     }
 
     /// Check if a move restricts the defending king's mobility
-    fn restricts_king_mobility(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
+    fn restricts_king_mobility(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _move_: &Move,
+        _defending_king: Position,
+    ) -> bool {
         // TODO: Implement mobility restriction logic
         // For now, return false
         false
     }
 
     /// Check if a move controls key squares for rook mating patterns
-    fn controls_key_squares(&self, _board: &BitboardBoard, _player: Player, _move_: &Move, _defending_king: Position) -> bool {
+    fn controls_key_squares(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _move_: &Move,
+        _defending_king: Position,
+    ) -> bool {
         // TODO: Implement key square control logic
         // For now, return false
         false
@@ -325,15 +415,25 @@ impl KingRookVsKingSolver {
 }
 
 impl EndgameSolver for KingRookVsKingSolver {
-    fn can_solve(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> bool {
+    fn can_solve(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> bool {
         if !self.config.enabled {
             return false;
         }
-        
+
         self.is_king_rook_vs_king(board, player)
     }
 
-    fn solve(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<TablebaseResult> {
+    fn solve(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TablebaseResult> {
         if !self.can_solve(board, player, captured_pieces) {
             return None;
         }
@@ -376,7 +476,7 @@ mod tests {
         let solver = KingRookVsKingSolver::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Test with empty board (should not be K+R vs K)
         assert!(!solver.can_solve(&board, Player::Black, &captured_pieces));
     }
@@ -406,7 +506,7 @@ mod tests {
         let solver = KingRookVsKingSolver::new();
         let board = BitboardBoard::empty();
         let pieces = solver.extract_pieces(&board, Player::Black);
-        
+
         // Empty board should have no pieces
         assert_eq!(pieces.len(), 0);
     }
@@ -417,7 +517,7 @@ mod tests {
         let board = BitboardBoard::empty();
         let captured_pieces = CapturedPieces::new();
         let moves = solver.generate_moves(&board, Player::Black, &captured_pieces);
-        
+
         // Empty board should have no moves
         assert_eq!(moves.len(), 0);
     }

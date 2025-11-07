@@ -1,9 +1,9 @@
 // End-to-end USI tests for parallel search configuration and persistence
 
+use shogi_engine::ShogiEngine;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use shogi_engine::ShogiEngine;
 
 fn temp_dir() -> PathBuf {
     let mut dir = std::env::temp_dir();

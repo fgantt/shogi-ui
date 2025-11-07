@@ -1,13 +1,13 @@
 //! History heuristic implementation
-//! 
+//!
 //! This module contains the history heuristic implementation for move ordering.
 //! The history heuristic tracks how successful moves have been in the past
 //! and uses this information to prioritize moves in future searches.
-//! 
+//!
 //! Task 4.0: Enhanced with phase-aware, relative, time-based aging, and quiet-move-only history.
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use std::collections::HashMap;
 
 /// History entry for enhanced history heuristic (Task 4.0)
@@ -61,9 +61,9 @@ impl Default for HistoryConfig {
             aging_frequency: 1000, // Age every 1000 updates
             enable_score_clamping: true,
             enable_phase_aware: false, // Task 4.0: Disabled by default (can be enabled)
-            enable_relative: false, // Task 4.0: Disabled by default (can be enabled)
+            enable_relative: false,    // Task 4.0: Disabled by default (can be enabled)
             enable_time_based_aging: false, // Task 4.0: Disabled by default (can be enabled)
-            enable_quiet_only: false, // Task 4.0: Disabled by default (can be enabled)
+            enable_quiet_only: false,  // Task 4.0: Disabled by default (can be enabled)
             time_aging_decay_factor: 0.95, // Task 4.0: Decay factor for time-based aging
             time_aging_update_frequency_ms: 1000, // Task 4.0: Update every 1 second
             opening_aging_factor: 0.9, // Task 4.0: Opening phase aging factor
@@ -74,10 +74,10 @@ impl Default for HistoryConfig {
 }
 
 /// History heuristic manager
-/// 
+///
 /// Manages all history tables (absolute, relative, quiet, phase-aware) and provides
 /// methods for scoring, updating, and aging history entries.
-/// 
+///
 /// Task 4.0: Enhanced to support phase-aware, relative, time-based aging, and quiet-move-only history.
 #[derive(Debug, Clone)]
 pub struct HistoryHeuristicManager {
@@ -92,7 +92,8 @@ pub struct HistoryHeuristicManager {
     quiet_history_table: HashMap<(PieceType, Position, Position), HistoryEntry>,
     /// Phase-aware history tables (Task 4.0)
     /// Maps GamePhase -> history table
-    phase_history_tables: HashMap<GamePhase, HashMap<(PieceType, Position, Position), HistoryEntry>>,
+    phase_history_tables:
+        HashMap<GamePhase, HashMap<(PieceType, Position, Position), HistoryEntry>>,
     /// Current game phase (Task 4.0)
     current_game_phase: GamePhase,
     /// Time-based aging counter (Task 4.0)
@@ -116,7 +117,7 @@ impl HistoryHeuristicManager {
     }
 
     /// Get current timestamp for time-based aging
-    /// 
+    ///
     /// Returns a monotonically increasing counter for time-based aging.
     /// This is a simple implementation that increments on each call.
     pub fn get_current_timestamp(&mut self) -> u64 {
@@ -125,7 +126,7 @@ impl HistoryHeuristicManager {
     }
 
     /// Determine game phase from board material count
-    /// 
+    ///
     /// Uses material count to determine game phase:
     /// - 0-20 pieces: Endgame
     /// - 21-35 pieces: Middlegame
@@ -140,12 +141,12 @@ impl HistoryHeuristicManager {
                 }
             }
         }
-        
+
         GamePhase::from_material_count(material_count)
     }
 
     /// Apply time-based aging to history score if enabled
-    /// 
+    ///
     /// Task 4.0: Helper method for time-based aging with exponential decay.
     pub fn apply_time_based_aging_if_enabled(
         &self,
@@ -160,17 +161,17 @@ impl HistoryHeuristicManager {
         }
 
         let age = current_time.saturating_sub(last_update);
-        
+
         // Apply exponential decay based on age
         // Decay factor: (decay_factor ^ age) where age is normalized
         let age_normalized = age.min(1000) as f32 / 1000.0; // Normalize age to 0-1 range
         let decay = decay_factor.powf(age_normalized);
-        
+
         (score as f32 * decay) as u32
     }
 
     /// Get history score for a move
-    /// 
+    ///
     /// Returns the current history score for the given move, or 0 if not found.
     /// Task 4.0: Enhanced to support all history table types.
     pub fn get_history_score(
@@ -232,7 +233,7 @@ impl HistoryHeuristicManager {
     }
 
     /// Update history score for a move
-    /// 
+    ///
     /// This method should be called when a move causes a cutoff or
     /// improves the alpha bound during search.
     /// Task 4.0: Enhanced to support relative history, phase-aware history, quiet-move-only history, and time-based aging.
@@ -248,22 +249,25 @@ impl HistoryHeuristicManager {
             let current_time = self.get_current_timestamp();
             let key = (move_.piece_type, from, move_.to);
             let relative_key = (from, move_.to);
-            
+
             // Task 4.0: Update quiet-move-only history if enabled
             if config.enable_quiet_only && !move_.is_capture {
                 let current_entry = self.quiet_history_table.get(&key).cloned();
                 let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
                 let new_score = current_score + bonus;
                 let final_score = new_score.min(config.max_history_score);
-                
+
                 let entry = HistoryEntry {
                     score: final_score,
                     last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
+                    update_count: current_entry
+                        .as_ref()
+                        .map(|e| e.update_count + 1)
+                        .unwrap_or(1),
                 };
                 self.quiet_history_table.insert(key, entry);
             }
-            
+
             // Task 4.0: Update phase-aware history if enabled
             if config.enable_phase_aware {
                 // Update current game phase if board is provided
@@ -273,49 +277,58 @@ impl HistoryHeuristicManager {
                         self.current_game_phase = new_phase;
                     }
                 }
-                
+
                 // Get or create phase table
-                let phase_table = self.phase_history_tables.entry(self.current_game_phase).or_insert_with(HashMap::new);
+                let phase_table = self
+                    .phase_history_tables
+                    .entry(self.current_game_phase)
+                    .or_insert_with(HashMap::new);
                 let current_entry = phase_table.get(&key).cloned();
                 let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
                 let new_score = current_score + bonus;
                 let final_score = new_score.min(config.max_history_score);
-                
+
                 let entry = HistoryEntry {
                     score: final_score,
                     last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
+                    update_count: current_entry
+                        .as_ref()
+                        .map(|e| e.update_count + 1)
+                        .unwrap_or(1),
                 };
                 phase_table.insert(key, entry);
             }
-            
+
             // Task 4.0: Update relative history if enabled
             if config.enable_relative {
                 let current_entry = self.relative_history_table.get(&relative_key).cloned();
                 let current_score = current_entry.as_ref().map(|e| e.score).unwrap_or(0);
                 let new_score = current_score + bonus;
                 let final_score = new_score.min(config.max_history_score);
-                
+
                 let entry = HistoryEntry {
                     score: final_score,
                     last_update: current_time,
-                    update_count: current_entry.as_ref().map(|e| e.update_count + 1).unwrap_or(1),
+                    update_count: current_entry
+                        .as_ref()
+                        .map(|e| e.update_count + 1)
+                        .unwrap_or(1),
                 };
                 self.relative_history_table.insert(relative_key, entry);
             }
-            
+
             // Always update absolute history (backward compatibility)
             let current_score = self.history_table.get(&key).copied().unwrap_or(0);
             let new_score = current_score + bonus;
             let final_score = new_score.min(config.max_history_score);
             self.history_table.insert(key, final_score);
-            
+
             self.history_update_counter += 1;
         }
     }
 
     /// Age the history table to prevent overflow
-    /// 
+    ///
     /// This method reduces all history scores by the aging factor,
     /// helping to prevent overflow and giving more weight to recent moves.
     /// Task 4.0: Enhanced to age all history table types (absolute, relative, quiet, phase-aware).
@@ -334,14 +347,14 @@ impl HistoryHeuristicManager {
         // Age absolute history table
         if !self.history_table.is_empty() {
             let mut entries_to_remove = Vec::new();
-            
+
             for (key, score) in self.history_table.iter_mut() {
                 *score = (*score as f32 * aging_factor) as u32;
                 if *score == 0 {
                     entries_to_remove.push(*key);
                 }
             }
-            
+
             // Remove entries with zero scores
             for key in entries_to_remove {
                 self.history_table.remove(&key);
@@ -351,14 +364,14 @@ impl HistoryHeuristicManager {
         // Task 4.0: Age relative history table
         if config.enable_relative && !self.relative_history_table.is_empty() {
             let mut entries_to_remove = Vec::new();
-            
+
             for (key, entry) in self.relative_history_table.iter_mut() {
                 entry.score = (entry.score as f32 * aging_factor) as u32;
                 if entry.score == 0 {
                     entries_to_remove.push(*key);
                 }
             }
-            
+
             for key in entries_to_remove {
                 self.relative_history_table.remove(&key);
             }
@@ -367,14 +380,14 @@ impl HistoryHeuristicManager {
         // Task 4.0: Age quiet-move-only history table
         if config.enable_quiet_only && !self.quiet_history_table.is_empty() {
             let mut entries_to_remove = Vec::new();
-            
+
             for (key, entry) in self.quiet_history_table.iter_mut() {
                 entry.score = (entry.score as f32 * aging_factor) as u32;
                 if entry.score == 0 {
                     entries_to_remove.push(*key);
                 }
             }
-            
+
             for key in entries_to_remove {
                 self.quiet_history_table.remove(&key);
             }
@@ -384,14 +397,14 @@ impl HistoryHeuristicManager {
         if config.enable_phase_aware {
             for phase_table in self.phase_history_tables.values_mut() {
                 let mut entries_to_remove = Vec::new();
-                
+
                 for (key, entry) in phase_table.iter_mut() {
                     entry.score = (entry.score as f32 * aging_factor) as u32;
                     if entry.score == 0 {
                         entries_to_remove.push(*key);
                     }
                 }
-                
+
                 for key in entries_to_remove {
                     phase_table.remove(&key);
                 }
@@ -400,7 +413,7 @@ impl HistoryHeuristicManager {
     }
 
     /// Clear the history table
-    /// 
+    ///
     /// This method removes all history entries.
     /// Task 4.0: Enhanced to clear all history table types.
     pub fn clear_history_table(&mut self) {
@@ -440,7 +453,7 @@ impl HistoryHeuristicManager {
     }
 
     /// Clamp all history scores to maximum value
-    /// 
+    ///
     /// This method ensures all history scores do not exceed the maximum value.
     pub fn clamp_history_scores(&mut self, max_score: u32) {
         // Clamp absolute history table
@@ -449,21 +462,21 @@ impl HistoryHeuristicManager {
                 *score = max_score;
             }
         }
-        
+
         // Clamp relative history table
         for entry in self.relative_history_table.values_mut() {
             if entry.score > max_score {
                 entry.score = max_score;
             }
         }
-        
+
         // Clamp quiet history table
         for entry in self.quiet_history_table.values_mut() {
             if entry.score > max_score {
                 entry.score = max_score;
             }
         }
-        
+
         // Clamp phase-aware history tables
         for phase_table in self.phase_history_tables.values_mut() {
             for entry in phase_table.values_mut() {
@@ -491,23 +504,26 @@ impl HistoryHeuristicManager {
     }
 
     /// Get absolute history score for a move (for testing)
-    /// 
+    ///
     /// This method is primarily for testing purposes to verify history scores.
     pub fn get_absolute_history_score(&self, key: (PieceType, Position, Position)) -> Option<u32> {
         self.history_table.get(&key).copied()
     }
 
     /// Get relative history entry for a move (for testing)
-    /// 
+    ///
     /// This method is primarily for testing purposes to verify relative history scores.
     pub fn get_relative_history_entry(&self, key: (Position, Position)) -> Option<&HistoryEntry> {
         self.relative_history_table.get(&key)
     }
 
     /// Get quiet history entry for a move (for testing)
-    /// 
+    ///
     /// This method is primarily for testing purposes to verify quiet history scores.
-    pub fn get_quiet_history_entry(&self, key: (PieceType, Position, Position)) -> Option<&HistoryEntry> {
+    pub fn get_quiet_history_entry(
+        &self,
+        key: (PieceType, Position, Position),
+    ) -> Option<&HistoryEntry> {
         self.quiet_history_table.get(&key)
     }
 
@@ -534,21 +550,27 @@ impl HistoryHeuristicManager {
     /// Get memory usage estimate
     pub fn memory_bytes(&self) -> usize {
         let mut total = 0;
-        
+
         // Absolute history table
-        total += self.history_table.len() * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<u32>());
-        
+        total += self.history_table.len()
+            * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<u32>());
+
         // Relative history table
-        total += self.relative_history_table.len() * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<HistoryEntry>());
-        
+        total += self.relative_history_table.len()
+            * (std::mem::size_of::<(Position, Position)>() + std::mem::size_of::<HistoryEntry>());
+
         // Quiet history table
-        total += self.quiet_history_table.len() * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<HistoryEntry>());
-        
+        total += self.quiet_history_table.len()
+            * (std::mem::size_of::<(PieceType, Position, Position)>()
+                + std::mem::size_of::<HistoryEntry>());
+
         // Phase-aware history tables
         for phase_table in self.phase_history_tables.values() {
-            total += phase_table.len() * (std::mem::size_of::<(PieceType, Position, Position)>() + std::mem::size_of::<HistoryEntry>());
+            total += phase_table.len()
+                * (std::mem::size_of::<(PieceType, Position, Position)>()
+                    + std::mem::size_of::<HistoryEntry>());
         }
-        
+
         total
     }
 }
@@ -560,9 +582,9 @@ impl Default for HistoryHeuristicManager {
 }
 
 /// Score a history move
-/// 
+///
 /// Returns the scaled history score for a move.
-/// 
+///
 /// # Arguments
 /// * `history_score` - The raw history score
 /// * `history_weight` - The weight to apply to history scores

@@ -24,9 +24,9 @@
 //! let mobility = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
 use crate::moves::MoveGenerator;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 /// Position feature evaluator with phase-aware evaluation
@@ -103,11 +103,25 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate king shield (friendly pieces near king)
-    fn evaluate_king_shield(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> TaperedScore {
+    fn evaluate_king_shield(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
-        let shield_offsets = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)];
+        let shield_offsets = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ];
 
         for (dr, dc) in shield_offsets {
             let new_row = king_pos.row as i8 + dr;
@@ -118,12 +132,12 @@ impl PositionFeatureEvaluator {
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
                         let shield_value = match piece.piece_type {
-                            PieceType::Gold => (40, 20),         // Best defender
-                            PieceType::Silver => (30, 18),       // Good defender
-                            PieceType::Pawn => (20, 12),         // Pawn shield
-                            PieceType::Knight => (15, 8),        // Less useful
-                            PieceType::Lance => (15, 8),         // Less useful
-                            _ => (10, 5),                        // Other pieces
+                            PieceType::Gold => (40, 20),   // Best defender
+                            PieceType::Silver => (30, 18), // Good defender
+                            PieceType::Pawn => (20, 12),   // Pawn shield
+                            PieceType::Knight => (15, 8),  // Less useful
+                            PieceType::Lance => (15, 8),   // Less useful
+                            _ => (10, 5),                  // Other pieces
                         };
                         mg_score += shield_value.0;
                         eg_score += shield_value.1;
@@ -136,7 +150,12 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate pawn cover in front of king
-    fn evaluate_pawn_cover(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> TaperedScore {
+    fn evaluate_pawn_cover(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
@@ -162,7 +181,12 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate enemy attackers near king
-    fn evaluate_enemy_attackers(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> TaperedScore {
+    fn evaluate_enemy_attackers(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
@@ -190,10 +214,24 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate king exposure (open squares near king)
-    fn evaluate_king_exposure(&self, board: &BitboardBoard, king_pos: Position, _player: Player) -> TaperedScore {
+    fn evaluate_king_exposure(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        _player: Player,
+    ) -> TaperedScore {
         let mut open_squares = 0;
 
-        let offsets = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)];
+        let offsets = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ];
 
         for (dr, dc) in offsets {
             let new_row = king_pos.row as i8 + dr;
@@ -219,7 +257,11 @@ impl PositionFeatureEvaluator {
     // =======================================================================
 
     /// Evaluate pawn structure with phase-aware weights
-    pub fn evaluate_pawn_structure(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    pub fn evaluate_pawn_structure(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         self.stats.pawn_structure_evals += 1;
 
         let mut mg_score = 0;
@@ -310,8 +352,8 @@ impl PositionFeatureEvaluator {
             };
 
             if advancement > 0 {
-                mg_score += advancement * 10;  // Moderate in middlegame
-                eg_score += advancement * 20;  // Very important in endgame
+                mg_score += advancement * 10; // Moderate in middlegame
+                eg_score += advancement * 20; // Very important in endgame
             }
         }
 
@@ -319,7 +361,12 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate isolated pawns
-    fn evaluate_pawn_isolation(&self, board: &BitboardBoard, pawns: &[Position], player: Player) -> TaperedScore {
+    fn evaluate_pawn_isolation(
+        &self,
+        board: &BitboardBoard,
+        pawns: &[Position],
+        player: Player,
+    ) -> TaperedScore {
         let mut isolated_count = 0;
 
         for pawn in pawns {
@@ -357,7 +404,12 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate passed pawns
-    fn evaluate_passed_pawns(&self, board: &BitboardBoard, pawns: &[Position], player: Player) -> TaperedScore {
+    fn evaluate_passed_pawns(
+        &self,
+        board: &BitboardBoard,
+        pawns: &[Position],
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
@@ -369,9 +421,9 @@ impl PositionFeatureEvaluator {
                 } else {
                     pawn.row
                 };
-                
+
                 // Passed pawns exponentially more valuable as they advance
-                mg_score += (advancement * advancement) as i32 * 5;  // Moderate in mg
+                mg_score += (advancement * advancement) as i32 * 5; // Moderate in mg
                 eg_score += (advancement * advancement) as i32 * 12; // Critical in eg
             }
         }
@@ -383,7 +435,7 @@ impl PositionFeatureEvaluator {
     fn is_passed_pawn(&self, board: &BitboardBoard, pawn_pos: Position, player: Player) -> bool {
         // Check if there are any enemy pawns in front of this pawn
         let direction = if player == Player::Black { -1 } else { 1 };
-        
+
         for col_offset in -1..=1 {
             let check_col = pawn_pos.col as i8 + col_offset;
             if check_col < 0 || check_col >= 9 {
@@ -436,7 +488,12 @@ impl PositionFeatureEvaluator {
     /// - Restricted piece penalties
     /// - Central mobility bonuses
     /// - Attack move bonuses
-    pub fn evaluate_mobility(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> TaperedScore {
+    pub fn evaluate_mobility(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         self.stats.mobility_evals += 1;
 
         let mut mg_score = 0;
@@ -449,11 +506,11 @@ impl PositionFeatureEvaluator {
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
                         let piece_mobility = self.evaluate_piece_mobility(
-                            board, 
-                            pos, 
-                            piece.piece_type, 
-                            player, 
-                            captured_pieces
+                            board,
+                            pos,
+                            piece.piece_type,
+                            player,
+                            captured_pieces,
                         );
                         mg_score += piece_mobility.mg;
                         eg_score += piece_mobility.eg;
@@ -476,49 +533,46 @@ impl PositionFeatureEvaluator {
     ) -> TaperedScore {
         let move_generator = MoveGenerator::new();
         let all_moves = move_generator.generate_legal_moves(board, player, captured_pieces);
-        
+
         // Filter moves for this specific piece
-        let piece_moves: Vec<_> = all_moves.iter()
-            .filter(|m| m.from == Some(pos))
-            .collect();
-        
+        let piece_moves: Vec<_> = all_moves.iter().filter(|m| m.from == Some(pos)).collect();
+
         let move_count = piece_moves.len() as i32;
-        
+
         // Get mobility weight for this piece type
         let mobility_weight = self.get_mobility_weight(piece_type);
-        
+
         // Base mobility score (weighted by piece type)
         let mut mg_score = move_count * mobility_weight.0;
         let mut eg_score = move_count * mobility_weight.1;
-        
+
         // Restricted piece penalty (if very few moves)
         if move_count <= 2 {
             let restriction_penalty = self.get_restriction_penalty(piece_type);
             mg_score -= restriction_penalty.0;
             eg_score -= restriction_penalty.1;
         }
-        
+
         // Central mobility bonus (moves to/through center)
-        let central_moves = piece_moves.iter()
+        let central_moves = piece_moves
+            .iter()
             .filter(|m| self.is_central_square(m.to))
             .count() as i32;
-        
+
         if central_moves > 0 {
             let central_bonus = self.get_central_mobility_bonus(piece_type);
             mg_score += central_moves * central_bonus.0;
             eg_score += central_moves * central_bonus.1;
         }
-        
+
         // Attack move bonus
-        let attack_moves = piece_moves.iter()
-            .filter(|m| m.is_capture)
-            .count() as i32;
-        
+        let attack_moves = piece_moves.iter().filter(|m| m.is_capture).count() as i32;
+
         if attack_moves > 0 {
             mg_score += attack_moves * 3; // Attacks more important in middlegame
             eg_score += attack_moves * 2;
         }
-        
+
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 
@@ -530,19 +584,19 @@ impl PositionFeatureEvaluator {
             PieceType::PromotedRook => (5, 7),
             PieceType::Bishop => (3, 5),
             PieceType::PromotedBishop => (4, 6),
-            
+
             // Minor pieces - moderate mobility value
             PieceType::Gold => (2, 3),
             PieceType::Silver => (2, 3),
             PieceType::Knight => (2, 2),
             PieceType::Lance => (1, 2),
-            
+
             // Promoted minor pieces
             PieceType::PromotedPawn => (2, 3),
             PieceType::PromotedLance => (2, 3),
             PieceType::PromotedKnight => (2, 3),
             PieceType::PromotedSilver => (2, 3),
-            
+
             // Pawns and King - low mobility value
             PieceType::Pawn => (1, 1),
             PieceType::King => (1, 2), // King mobility important in endgame
@@ -555,15 +609,17 @@ impl PositionFeatureEvaluator {
             // Major pieces suffer most from restriction
             PieceType::Rook | PieceType::PromotedRook => (20, 25),
             PieceType::Bishop | PieceType::PromotedBishop => (18, 22),
-            
+
             // Minor pieces moderate penalty
             PieceType::Gold | PieceType::Silver => (10, 12),
             PieceType::Knight | PieceType::Lance => (8, 10),
-            
+
             // Promoted minor pieces
-            PieceType::PromotedPawn | PieceType::PromotedLance | 
-            PieceType::PromotedKnight | PieceType::PromotedSilver => (10, 12),
-            
+            PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => (10, 12),
+
             // Pawns and King less affected
             PieceType::Pawn => (3, 5),
             PieceType::King => (5, 8),
@@ -576,18 +632,20 @@ impl PositionFeatureEvaluator {
             // Major pieces benefit most from central mobility
             PieceType::Rook | PieceType::PromotedRook => (3, 2),
             PieceType::Bishop | PieceType::PromotedBishop => (3, 2),
-            
+
             // Knights especially strong in center
             PieceType::Knight => (4, 2),
-            
+
             // Other pieces moderate bonus
             PieceType::Gold | PieceType::Silver => (2, 1),
             PieceType::Lance => (1, 1),
-            
+
             // Promoted pieces
-            PieceType::PromotedPawn | PieceType::PromotedLance | 
-            PieceType::PromotedKnight | PieceType::PromotedSilver => (2, 1),
-            
+            PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => (2, 1),
+
             // Pawns and King minimal bonus
             PieceType::Pawn => (1, 0),
             PieceType::King => (0, 1), // King centralization good in endgame
@@ -606,7 +664,11 @@ impl PositionFeatureEvaluator {
     /// Evaluate center control with phase-aware weights
     ///
     /// Center control is more important in opening/middlegame.
-    pub fn evaluate_center_control(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    pub fn evaluate_center_control(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         self.stats.center_control_evals += 1;
 
         let mut mg_score = 0;
@@ -618,7 +680,7 @@ impl PositionFeatureEvaluator {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let value = self.get_center_control_value(piece.piece_type);
-                    
+
                     if piece.player == player {
                         mg_score += value.mg;
                         eg_score += value.eg;
@@ -637,11 +699,11 @@ impl PositionFeatureEvaluator {
                 if row >= 3 && row <= 5 && col >= 3 && col <= 5 {
                     continue;
                 }
-                
+
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let value = self.get_center_control_value(piece.piece_type);
-                    
+
                     if piece.player == player {
                         mg_score += value.mg / 2;
                         eg_score += value.eg / 2;
@@ -691,7 +753,9 @@ impl PositionFeatureEvaluator {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        if let Some(development_bonus) = self.get_development_bonus(piece.piece_type, pos, player) {
+                        if let Some(development_bonus) =
+                            self.get_development_bonus(piece.piece_type, pos, player)
+                        {
                             mg_score += development_bonus.mg;
                             eg_score += development_bonus.eg;
                         }
@@ -704,7 +768,12 @@ impl PositionFeatureEvaluator {
     }
 
     /// Get development bonus for a piece
-    fn get_development_bonus(&self, piece_type: PieceType, pos: Position, player: Player) -> Option<TaperedScore> {
+    fn get_development_bonus(
+        &self,
+        piece_type: PieceType,
+        pos: Position,
+        player: Player,
+    ) -> Option<TaperedScore> {
         let start_row = if player == Player::Black { 8 } else { 0 };
 
         match piece_type {
@@ -834,7 +903,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_king_safety(&board, Player::Black);
-        
+
         // Starting position should have positive king safety
         assert!(score.mg > 0 || score.eg > 0);
     }
@@ -845,7 +914,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_pawn_structure(&board, Player::Black);
-        
+
         // Starting position should have neutral or positive pawn structure
         assert!(score.mg >= 0);
     }
@@ -857,7 +926,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         let score = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
-        
+
         // Starting position should have positive mobility
         assert!(score.mg > 0);
         assert!(score.eg > 0);
@@ -870,7 +939,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_center_control(&board, Player::Black);
-        
+
         // Starting position is symmetric, so score should be near zero
         assert!(score.mg.abs() < 50);
     }
@@ -881,7 +950,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_development(&board, Player::Black);
-        
+
         // Starting position has no development
         assert_eq!(score.mg, 0);
         assert_eq!(score.eg, 0);
@@ -890,15 +959,15 @@ mod tests {
     #[test]
     fn test_pawn_chain_detection() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Create adjacent pawns
         let pawns = vec![
             Position::new(3, 3),
             Position::new(3, 4), // Adjacent horizontally
         ];
-        
+
         let chains = evaluator.evaluate_pawn_chains(&pawns);
-        
+
         // Should detect 1 chain
         assert_eq!(chains.mg, 18);
         assert_eq!(chains.eg, 12);
@@ -907,14 +976,14 @@ mod tests {
     #[test]
     fn test_pawn_advancement() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Advanced pawn for Black (low row number)
         let pawns = vec![
             Position::new(1, 4), // Very advanced (row 1)
         ];
-        
+
         let advancement = evaluator.evaluate_pawn_advancement(&pawns, Player::Black);
-        
+
         // Should have positive advancement bonus
         assert!(advancement.mg > 0);
         assert!(advancement.eg > advancement.mg); // More valuable in endgame
@@ -924,7 +993,7 @@ mod tests {
     fn test_isolated_pawn_detection() {
         let board = BitboardBoard::empty();
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Isolated pawn
         let pawn_pos = Position::new(4, 4);
         assert!(evaluator.is_pawn_isolated(&board, pawn_pos, Player::Black));
@@ -934,7 +1003,7 @@ mod tests {
     fn test_passed_pawn_detection() {
         let board = BitboardBoard::empty();
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Empty board means any pawn is passed
         let pawn_pos = Position::new(4, 4);
         assert!(evaluator.is_passed_pawn(&board, pawn_pos, Player::Black));
@@ -944,12 +1013,12 @@ mod tests {
     fn test_king_shield_evaluation() {
         let evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         // Find Black's king
         let king_pos = evaluator.find_king_position(&board, Player::Black).unwrap();
-        
+
         let shield = evaluator.evaluate_king_shield(&board, king_pos, Player::Black);
-        
+
         // Starting position should have some shield
         assert!(shield.mg > 0);
     }
@@ -1033,15 +1102,15 @@ mod tests {
     #[test]
     fn test_doubled_pawns_penalty() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Two pawns on same file
         let pawns = vec![
             Position::new(3, 4),
             Position::new(5, 4), // Same file (col 4)
         ];
-        
+
         let doubled = evaluator.evaluate_doubled_pawns(&pawns);
-        
+
         // Should have negative score (penalty)
         assert!(doubled.mg < 0);
         assert!(doubled.eg < 0);
@@ -1080,14 +1149,14 @@ mod tests {
     #[test]
     fn test_mobility_weights() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test that major pieces have higher mobility weights
         let rook_weight = evaluator.get_mobility_weight(PieceType::Rook);
         let pawn_weight = evaluator.get_mobility_weight(PieceType::Pawn);
-        
+
         assert!(rook_weight.0 > pawn_weight.0); // Middlegame
         assert!(rook_weight.1 > pawn_weight.1); // Endgame
-        
+
         // Test that promoted rook has higher weight than regular rook
         let promoted_rook = evaluator.get_mobility_weight(PieceType::PromotedRook);
         assert!(promoted_rook.0 >= rook_weight.0);
@@ -1097,14 +1166,14 @@ mod tests {
     #[test]
     fn test_restriction_penalties() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test that major pieces have higher restriction penalties
         let rook_penalty = evaluator.get_restriction_penalty(PieceType::Rook);
         let pawn_penalty = evaluator.get_restriction_penalty(PieceType::Pawn);
-        
+
         assert!(rook_penalty.0 > pawn_penalty.0); // Middlegame
         assert!(rook_penalty.1 > pawn_penalty.1); // Endgame
-        
+
         // Penalties should be significant
         assert!(rook_penalty.0 >= 15);
         assert!(rook_penalty.1 >= 20);
@@ -1113,13 +1182,13 @@ mod tests {
     #[test]
     fn test_central_mobility_bonus() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test that knights get highest central bonus
         let knight_bonus = evaluator.get_central_mobility_bonus(PieceType::Knight);
         let pawn_bonus = evaluator.get_central_mobility_bonus(PieceType::Pawn);
-        
+
         assert!(knight_bonus.0 > pawn_bonus.0);
-        
+
         // Test that major pieces get good central bonuses
         let rook_bonus = evaluator.get_central_mobility_bonus(PieceType::Rook);
         assert!(rook_bonus.0 >= 2);
@@ -1128,12 +1197,12 @@ mod tests {
     #[test]
     fn test_is_central_square() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test center squares
         assert!(evaluator.is_central_square(Position::new(4, 4))); // Dead center
         assert!(evaluator.is_central_square(Position::new(3, 3))); // Corner of center
         assert!(evaluator.is_central_square(Position::new(5, 5))); // Corner of center
-        
+
         // Test non-center squares
         assert!(!evaluator.is_central_square(Position::new(0, 0))); // Corner
         assert!(!evaluator.is_central_square(Position::new(2, 2))); // Just outside
@@ -1145,7 +1214,7 @@ mod tests {
         let evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Test mobility evaluation for a specific piece
         // In starting position, pieces should have limited mobility
         let pos = Position::new(8, 1); // Black's knight
@@ -1154,9 +1223,9 @@ mod tests {
             pos,
             PieceType::Knight,
             Player::Black,
-            &captured_pieces
+            &captured_pieces,
         );
-        
+
         // Starting knight has limited moves
         assert!(mobility.mg >= 0);
         assert!(mobility.eg >= 0);
@@ -1167,14 +1236,14 @@ mod tests {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Test overall mobility evaluation
         let mobility = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
-        
+
         // Starting position should have positive mobility
         assert!(mobility.mg > 0);
         assert!(mobility.eg > 0);
-        
+
         // Endgame should value mobility more
         assert!(mobility.eg >= mobility.mg);
     }
@@ -1184,7 +1253,7 @@ mod tests {
         let evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::empty();
         let captured_pieces = CapturedPieces::new();
-        
+
         // On empty board, pieces should have high mobility (not restricted)
         let pos = Position::new(4, 4); // Center
         let mobility = evaluator.evaluate_piece_mobility(
@@ -1192,9 +1261,9 @@ mod tests {
             pos,
             PieceType::Rook,
             Player::Black,
-            &captured_pieces
+            &captured_pieces,
         );
-        
+
         // Rook in center of empty board should have excellent mobility
         assert!(mobility.mg > 0);
         assert!(mobility.eg > 0);
@@ -1203,26 +1272,46 @@ mod tests {
     #[test]
     fn test_mobility_weights_all_pieces() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test that all piece types return valid weights
         let piece_types = [
-            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
-            PieceType::Silver, PieceType::Gold, PieceType::Bishop,
-            PieceType::Rook, PieceType::King,
-            PieceType::PromotedPawn, PieceType::PromotedLance,
-            PieceType::PromotedKnight, PieceType::PromotedSilver,
-            PieceType::PromotedBishop, PieceType::PromotedRook,
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::King,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
         ];
-        
+
         for piece_type in piece_types {
             let weight = evaluator.get_mobility_weight(piece_type);
-            
+
             // All weights should be positive
-            assert!(weight.0 > 0, "MG weight for {:?} should be positive", piece_type);
-            assert!(weight.1 > 0, "EG weight for {:?} should be positive", piece_type);
-            
+            assert!(
+                weight.0 > 0,
+                "MG weight for {:?} should be positive",
+                piece_type
+            );
+            assert!(
+                weight.1 > 0,
+                "EG weight for {:?} should be positive",
+                piece_type
+            );
+
             // Endgame weight should be >= middlegame weight
-            assert!(weight.1 >= weight.0, "EG weight should be >= MG weight for {:?}", piece_type);
+            assert!(
+                weight.1 >= weight.0,
+                "EG weight should be >= MG weight for {:?}",
+                piece_type
+            );
         }
     }
 
@@ -1231,28 +1320,35 @@ mod tests {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         let mobility = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
-        
+
         // Mobility should be more valuable in endgame
-        assert!(mobility.eg > mobility.mg, 
-            "Endgame mobility ({}) should be greater than middlegame ({})", 
-            mobility.eg, mobility.mg);
+        assert!(
+            mobility.eg > mobility.mg,
+            "Endgame mobility ({}) should be greater than middlegame ({})",
+            mobility.eg,
+            mobility.mg
+        );
     }
 
     #[test]
     fn test_central_mobility_detection() {
         let evaluator = PositionFeatureEvaluator::new();
-        
+
         // Test all central squares
         for row in 3..=5 {
             for col in 3..=5 {
                 let pos = Position::new(row, col);
-                assert!(evaluator.is_central_square(pos),
-                    "Position ({}, {}) should be central", row, col);
+                assert!(
+                    evaluator.is_central_square(pos),
+                    "Position ({}, {}) should be central",
+                    row,
+                    col
+                );
             }
         }
-        
+
         // Test edge squares are not central
         assert!(!evaluator.is_central_square(Position::new(0, 0)));
         assert!(!evaluator.is_central_square(Position::new(8, 8)));
@@ -1260,4 +1356,3 @@ mod tests {
         assert!(!evaluator.is_central_square(Position::new(6, 4)));
     }
 }
-

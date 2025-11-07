@@ -1,5 +1,5 @@
 //! Advanced Cache Warming
-//! 
+//!
 //! This module implements advanced cache warming for transposition tables,
 //! preloading the cache with relevant entries to improve initial performance
 //! and reduce cold start effects.
@@ -232,7 +232,7 @@ impl CacheWarmingConfig {
             memory_limit: 1024 * 1024, // 1MB
         }
     }
-    
+
     /// Create aggressive configuration
     pub fn aggressive() -> Self {
         Self {
@@ -247,7 +247,7 @@ impl CacheWarmingConfig {
             memory_limit: 10 * 1024 * 1024, // 10MB
         }
     }
-    
+
     /// Create selective configuration
     pub fn selective() -> Self {
         Self {
@@ -262,7 +262,7 @@ impl CacheWarmingConfig {
             memory_limit: 5 * 1024 * 1024, // 5MB
         }
     }
-    
+
     /// Create adaptive configuration
     pub fn adaptive() -> Self {
         Self {
@@ -299,11 +299,11 @@ impl AdvancedCacheWarmer {
             session_counter: 0,
         }
     }
-    
+
     /// Start a warming session
     pub fn start_warming_session(&mut self, _current_position: Option<u64>) -> WarmingSession {
         self.session_counter += 1;
-        
+
         let session = WarmingSession {
             session_id: self.session_counter,
             start_time: Instant::now(),
@@ -321,17 +321,21 @@ impl AdvancedCacheWarmer {
                 success_rate: 0.0,
             },
         };
-        
+
         self.sessions.push_back(session.clone());
         if self.sessions.len() > 100 {
             self.sessions.pop_front();
         }
-        
+
         session
     }
-    
+
     /// Warm cache with entries
-    pub fn warm_cache(&mut self, session_id: u64, target_table: &mut dyn TranspositionTableInterface) -> WarmingResults {
+    pub fn warm_cache(
+        &mut self,
+        session_id: u64,
+        target_table: &mut dyn TranspositionTableInterface,
+    ) -> WarmingResults {
         let start_time = Instant::now();
         let mut results = WarmingResults {
             total_entries: 0,
@@ -343,26 +347,26 @@ impl AdvancedCacheWarmer {
             memory_used: 0,
             success_rate: 0.0,
         };
-        
+
         // Generate warming entries based on strategy
         let warming_entries = self.generate_warming_entries();
-        
+
         let mut successful_entries = 0;
         let mut memory_used = 0;
-        
+
         for entry in warming_entries {
             if results.total_entries >= self.config.max_warm_entries {
                 break;
             }
-            
+
             if start_time.elapsed() > self.config.warming_timeout {
                 break;
             }
-            
+
             if memory_used >= self.config.memory_limit {
                 break;
             }
-            
+
             // Create transposition entry
             let transposition_entry = TranspositionEntry {
                 hash_key: entry.hash_key,
@@ -371,14 +375,14 @@ impl AdvancedCacheWarmer {
                 flag: entry.flag,
                 best_move: entry.best_move,
                 age: 0,
-            source: crate::types::EntrySource::MainSearch,
+                source: crate::types::EntrySource::MainSearch,
             };
-            
+
             // Store in target table
             if target_table.store(transposition_entry) {
                 successful_entries += 1;
                 memory_used += std::mem::size_of::<TranspositionEntry>() as u64;
-                
+
                 // Update counters
                 results.total_entries += 1;
                 match entry.entry_type {
@@ -390,7 +394,7 @@ impl AdvancedCacheWarmer {
                 }
             }
         }
-        
+
         results.warming_time_us = start_time.elapsed().as_micros() as u64;
         results.memory_used = memory_used;
         results.success_rate = if results.total_entries > 0 {
@@ -398,61 +402,65 @@ impl AdvancedCacheWarmer {
         } else {
             0.0
         };
-        
+
         // Update session
-        if let Some(session) = self.sessions.iter_mut().find(|s| s.session_id == session_id) {
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|s| s.session_id == session_id)
+        {
             session.end_time = Some(Instant::now());
             session.entries_warmed = results.total_entries;
             session.results = results.clone();
         }
-        
+
         // Update statistics
         self.update_stats(&results);
-        
+
         results
     }
-    
+
     /// Generate warming entries based on strategy
     fn generate_warming_entries(&self) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         match self.config.strategy {
             WarmingStrategy::Conservative => {
                 entries.extend(self.generate_position_entries(100));
-            },
+            }
             WarmingStrategy::Aggressive => {
                 entries.extend(self.generate_position_entries(2000));
                 entries.extend(self.generate_opening_entries(3000));
                 entries.extend(self.generate_endgame_entries(2000));
                 entries.extend(self.generate_tactical_entries(3000));
-            },
+            }
             WarmingStrategy::Selective => {
                 entries.extend(self.generate_position_entries(1000));
                 entries.extend(self.generate_opening_entries(1500));
                 entries.extend(self.generate_tactical_entries(1500));
-            },
+            }
             WarmingStrategy::Adaptive => {
                 entries.extend(self.generate_adaptive_entries());
-            },
+            }
             WarmingStrategy::PositionBased => {
                 entries.extend(self.generate_position_entries(2000));
-            },
+            }
         }
-        
+
         // Sort by priority
         entries.sort_by(|a, b| b.priority.partial_cmp(&a.priority).unwrap());
-        
+
         entries
     }
-    
+
     /// Generate position-based entries
     fn generate_position_entries(&self, count: usize) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         for i in 0..count {
             let hash_key = 0x1000 + i as u64;
             let priority = 0.8 - (i as f64 / count as f64) * 0.3;
-            
+
             entries.push(WarmingEntry {
                 hash_key,
                 depth: 3 + (i % 8) as u8,
@@ -462,23 +470,27 @@ impl AdvancedCacheWarmer {
                     1 => TranspositionFlag::LowerBound,
                     _ => TranspositionFlag::UpperBound,
                 },
-                best_move: if i % 2 == 0 { Some(create_sample_move()) } else { None },
+                best_move: if i % 2 == 0 {
+                    Some(create_sample_move())
+                } else {
+                    None
+                },
                 priority,
                 entry_type: WarmingEntryType::PositionBased,
             });
         }
-        
+
         entries
     }
-    
+
     /// Generate opening book entries
     fn generate_opening_entries(&self, count: usize) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         for i in 0..count {
             let hash_key = 0x2000 + i as u64;
             let priority = 0.9 - (i as f64 / count as f64) * 0.2;
-            
+
             entries.push(WarmingEntry {
                 hash_key,
                 depth: 1 + (i % 4) as u8,
@@ -489,40 +501,44 @@ impl AdvancedCacheWarmer {
                 entry_type: WarmingEntryType::OpeningBook,
             });
         }
-        
+
         entries
     }
-    
+
     /// Generate endgame entries
     fn generate_endgame_entries(&self, count: usize) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         for i in 0..count {
             let hash_key = 0x3000 + i as u64;
             let priority = 0.7 - (i as f64 / count as f64) * 0.3;
-            
+
             entries.push(WarmingEntry {
                 hash_key,
                 depth: 8 + (i % 12) as u8,
                 score: (i as i32 % 500) - 250,
                 flag: TranspositionFlag::Exact,
-                best_move: if i % 3 == 0 { Some(create_sample_move()) } else { None },
+                best_move: if i % 3 == 0 {
+                    Some(create_sample_move())
+                } else {
+                    None
+                },
                 priority,
                 entry_type: WarmingEntryType::Endgame,
             });
         }
-        
+
         entries
     }
-    
+
     /// Generate tactical entries
     fn generate_tactical_entries(&self, count: usize) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         for i in 0..count {
             let hash_key = 0x4000 + i as u64;
             let priority = 0.85 - (i as f64 / count as f64) * 0.25;
-            
+
             entries.push(WarmingEntry {
                 hash_key,
                 depth: 4 + (i % 6) as u8,
@@ -536,73 +552,75 @@ impl AdvancedCacheWarmer {
                 entry_type: WarmingEntryType::Tactical,
             });
         }
-        
+
         entries
     }
-    
+
     /// Generate adaptive entries
     fn generate_adaptive_entries(&self) -> Vec<WarmingEntry> {
         let mut entries = Vec::new();
-        
+
         // Combine different types based on historical performance
         let position_count = (self.config.max_warm_entries as f64 * 0.4) as usize;
         let opening_count = (self.config.max_warm_entries as f64 * 0.3) as usize;
         let tactical_count = (self.config.max_warm_entries as f64 * 0.3) as usize;
-        
+
         entries.extend(self.generate_position_entries(position_count));
         entries.extend(self.generate_opening_entries(opening_count));
         entries.extend(self.generate_tactical_entries(tactical_count));
-        
+
         entries
     }
-    
+
     /// Update warming statistics
     fn update_stats(&mut self, results: &WarmingResults) {
         self.stats.total_sessions += 1;
         self.stats.total_entries_warmed += results.total_entries as u64;
         self.stats.total_memory_used += results.memory_used;
-        
+
         // Update averages
         let sessions = self.stats.total_sessions as f64;
-        self.stats.avg_warming_time_us = 
-            (self.stats.avg_warming_time_us * (sessions - 1.0) + results.warming_time_us as f64) / sessions;
-        
-        self.stats.avg_success_rate = 
+        self.stats.avg_warming_time_us = (self.stats.avg_warming_time_us * (sessions - 1.0)
+            + results.warming_time_us as f64)
+            / sessions;
+
+        self.stats.avg_success_rate =
             (self.stats.avg_success_rate * (sessions - 1.0) + results.success_rate) / sessions;
-        
+
         // Calculate warming efficiency
         if results.warming_time_us > 0 {
-            let efficiency = results.total_entries as f64 / (results.warming_time_us as f64 / 1000.0);
-            self.stats.warming_efficiency = 
+            let efficiency =
+                results.total_entries as f64 / (results.warming_time_us as f64 / 1000.0);
+            self.stats.warming_efficiency =
                 (self.stats.warming_efficiency * (sessions - 1.0) + efficiency) / sessions;
         }
     }
-    
+
     /// Get warming statistics
     pub fn get_stats(&self) -> &WarmingStats {
         &self.stats
     }
-    
+
     /// Get recent sessions
     pub fn get_recent_sessions(&self, count: usize) -> Vec<&WarmingSession> {
         self.sessions.iter().rev().take(count).collect()
     }
-    
+
     /// Add position to database
     pub fn add_position(&mut self, hash: u64, analysis: PositionAnalysis) {
         self.position_database.insert(hash, analysis);
     }
-    
+
     /// Add opening book entry
     pub fn add_opening_entry(&mut self, hash: u64, entry: WarmingEntry) {
         self.opening_book.insert(hash, entry);
     }
-    
+
     /// Add endgame entry
     pub fn add_endgame_entry(&mut self, hash: u64, entry: WarmingEntry) {
         self.endgame_database.insert(hash, entry);
     }
-    
+
     /// Add tactical pattern
     pub fn add_tactical_pattern(&mut self, pattern: TacticalPattern) {
         self.tactical_patterns.push(pattern);
@@ -613,10 +631,10 @@ impl AdvancedCacheWarmer {
 pub trait TranspositionTableInterface {
     /// Store an entry in the table
     fn store(&mut self, entry: TranspositionEntry) -> bool;
-    
+
     /// Get table size
     fn size(&self) -> usize;
-    
+
     /// Get memory usage
     fn memory_usage(&self) -> u64;
 }
@@ -645,13 +663,13 @@ fn create_sample_move() -> Move {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // Mock transposition table for testing
     struct MockTranspositionTable {
         entries: HashMap<u64, TranspositionEntry>,
         max_size: usize,
     }
-    
+
     impl MockTranspositionTable {
         fn new(max_size: usize) -> Self {
             Self {
@@ -660,7 +678,7 @@ mod tests {
             }
         }
     }
-    
+
     impl TranspositionTableInterface for MockTranspositionTable {
         fn store(&mut self, entry: TranspositionEntry) -> bool {
             if self.entries.len() < self.max_size {
@@ -670,74 +688,74 @@ mod tests {
                 false
             }
         }
-        
+
         fn size(&self) -> usize {
             self.entries.len()
         }
-        
+
         fn memory_usage(&self) -> u64 {
             self.entries.len() as u64 * std::mem::size_of::<TranspositionEntry>() as u64
         }
     }
-    
+
     #[test]
     fn test_cache_warming_config() {
         let conservative = CacheWarmingConfig::conservative();
         assert_eq!(conservative.strategy, WarmingStrategy::Conservative);
         assert_eq!(conservative.max_warm_entries, 1000);
         assert!(!conservative.enable_opening_book_warming);
-        
+
         let aggressive = CacheWarmingConfig::aggressive();
         assert_eq!(aggressive.strategy, WarmingStrategy::Aggressive);
         assert_eq!(aggressive.max_warm_entries, 10000);
         assert!(aggressive.enable_opening_book_warming);
-        
+
         let selective = CacheWarmingConfig::selective();
         assert_eq!(selective.strategy, WarmingStrategy::Selective);
         assert!(selective.enable_tactical_warming);
         assert!(!selective.enable_endgame_warming);
-        
+
         let adaptive = CacheWarmingConfig::adaptive();
         assert_eq!(adaptive.strategy, WarmingStrategy::Adaptive);
         assert!(adaptive.enable_position_warming);
     }
-    
+
     #[test]
     fn test_advanced_cache_warmer_creation() {
         let config = CacheWarmingConfig::conservative();
         let warmer = AdvancedCacheWarmer::new(config);
-        
+
         assert_eq!(warmer.session_counter, 0);
         assert_eq!(warmer.sessions.len(), 0);
         assert_eq!(warmer.stats.total_sessions, 0);
     }
-    
+
     #[test]
     fn test_warming_session() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::default());
-        
+
         let session = warmer.start_warming_session(Some(0x1234));
-        
+
         assert_eq!(session.session_id, 1);
         assert_eq!(session.entries_warmed, 0);
         assert_eq!(session.end_time, None);
         assert_eq!(warmer.sessions.len(), 1);
     }
-    
+
     #[test]
     fn test_cache_warming() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::conservative());
         let mut mock_table = MockTranspositionTable::new(1000);
-        
+
         let session = warmer.start_warming_session(Some(0x1234));
         let results = warmer.warm_cache(session.session_id, &mut mock_table);
-        
+
         assert!(results.total_entries > 0);
         assert!(results.warming_time_us > 0);
         assert!(results.success_rate > 0.0);
         assert_eq!(mock_table.size(), results.total_entries);
     }
-    
+
     #[test]
     fn test_different_warming_strategies() {
         let strategies = [
@@ -746,44 +764,46 @@ mod tests {
             ("Selective", CacheWarmingConfig::selective()),
             ("Adaptive", CacheWarmingConfig::adaptive()),
         ];
-        
+
         for (name, config) in strategies {
             let mut warmer = AdvancedCacheWarmer::new(config);
             let mut mock_table = MockTranspositionTable::new(10000);
-            
+
             let session = warmer.start_warming_session(Some(0x1234));
             let results = warmer.warm_cache(session.session_id, &mut mock_table);
-            
-            println!("{}: {} entries warmed in {}μs", 
-                name, results.total_entries, results.warming_time_us);
-            
+
+            println!(
+                "{}: {} entries warmed in {}μs",
+                name, results.total_entries, results.warming_time_us
+            );
+
             assert!(results.total_entries > 0);
             assert!(results.warming_time_us > 0);
         }
     }
-    
+
     #[test]
     fn test_warming_statistics() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::default());
         let mut mock_table = MockTranspositionTable::new(1000);
-        
+
         // Perform multiple warming sessions
         for _ in 0..3 {
             let session = warmer.start_warming_session(Some(0x1234));
             warmer.warm_cache(session.session_id, &mut mock_table);
         }
-        
+
         let stats = warmer.get_stats();
         assert_eq!(stats.total_sessions, 3);
         assert!(stats.total_entries_warmed > 0);
         assert!(stats.avg_warming_time_us > 0.0);
         assert!(stats.avg_success_rate > 0.0);
     }
-    
+
     #[test]
     fn test_position_database() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::default());
-        
+
         let analysis = PositionAnalysis {
             position_hash: 0x1234,
             game_phase: GamePhase::Middlegame,
@@ -793,15 +813,15 @@ mod tests {
             king_safety: 0.8,
             mobility: 0.6,
         };
-        
+
         warmer.add_position(0x1234, analysis);
         assert_eq!(warmer.position_database.len(), 1);
     }
-    
+
     #[test]
     fn test_opening_book_entries() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::default());
-        
+
         let entry = WarmingEntry {
             hash_key: 0x5678,
             depth: 3,
@@ -811,15 +831,15 @@ mod tests {
             priority: 0.9,
             entry_type: WarmingEntryType::OpeningBook,
         };
-        
+
         warmer.add_opening_entry(0x5678, entry);
         assert_eq!(warmer.opening_book.len(), 1);
     }
-    
+
     #[test]
     fn test_tactical_patterns() {
         let mut warmer = AdvancedCacheWarmer::new(CacheWarmingConfig::default());
-        
+
         let pattern = TacticalPattern {
             pattern_hash: 0x9ABC,
             pattern_type: TacticalPatternType::Fork,
@@ -827,39 +847,39 @@ mod tests {
             success_rate: 0.7,
             entries: vec![],
         };
-        
+
         warmer.add_tactical_pattern(pattern);
         assert_eq!(warmer.tactical_patterns.len(), 1);
     }
-    
+
     #[test]
     fn test_warming_timeout() {
         let mut config = CacheWarmingConfig::conservative();
         config.warming_timeout = Duration::from_millis(1); // Very short timeout
         config.max_warm_entries = 10000; // Large number of entries
-        
+
         let mut warmer = AdvancedCacheWarmer::new(config);
         let mut mock_table = MockTranspositionTable::new(10000);
-        
+
         let session = warmer.start_warming_session(Some(0x1234));
         let results = warmer.warm_cache(session.session_id, &mut mock_table);
-        
+
         // Should timeout before warming all entries
         assert!(results.total_entries < 10000);
         assert!(results.warming_time_us >= 1000); // At least 1ms
     }
-    
+
     #[test]
     fn test_memory_limit() {
         let mut config = CacheWarmingConfig::conservative();
         config.memory_limit = 1000; // Very small limit
-        
+
         let mut warmer = AdvancedCacheWarmer::new(config);
         let mut mock_table = MockTranspositionTable::new(10000);
-        
+
         let session = warmer.start_warming_session(Some(0x1234));
         let results = warmer.warm_cache(session.session_id, &mut mock_table);
-        
+
         // Should respect memory limit
         assert!(results.memory_used <= 1000);
     }

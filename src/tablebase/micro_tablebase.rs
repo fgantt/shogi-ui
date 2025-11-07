@@ -1,73 +1,73 @@
 //! Core tablebase implementation
-//! 
+//!
 //! This module contains the main MicroTablebase struct that coordinates
 //! all endgame solvers and provides the primary interface for tablebase
 //! functionality.
 
-use crate::types::{Player};
+use super::endgame_solvers::{KingGoldVsKingSolver, KingRookVsKingSolver, KingSilverVsKingSolver};
+use super::{
+    EndgameSolver, PositionAnalyzer, PositionCache, TablebaseConfig, TablebaseProfiler,
+    TablebaseResult, TablebaseStats,
+};
+use crate::time_utils::TimeSource;
+use crate::types::Player;
 use crate::BitboardBoard;
 use crate::CapturedPieces;
-use crate::time_utils::TimeSource;
-use super::{
-    TablebaseResult, TablebaseStats, TablebaseConfig,
-    EndgameSolver, PositionCache, PositionAnalyzer, TablebaseProfiler,
-};
-use super::endgame_solvers::{KingGoldVsKingSolver, KingSilverVsKingSolver, KingRookVsKingSolver};
 
 /// Main tablebase implementation
-/// 
+///
 /// This struct coordinates all endgame solvers and provides caching
 /// and statistics for tablebase operations.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ## Basic Usage
-/// 
+///
 /// ```rust
 /// use shogi_engine::tablebase::MicroTablebase;
 /// use shogi_engine::{BitboardBoard, Player, CapturedPieces};
-/// 
+///
 /// let mut tablebase = MicroTablebase::new();
 /// let board = BitboardBoard::new();
 /// let captured_pieces = CapturedPieces::new();
-/// 
+///
 /// // Probe for best move
 /// if let Some(result) = tablebase.probe(&board, Player::Black, &captured_pieces) {
 ///     println!("Best move: {:?}", result.best_move);
 ///     println!("Distance to mate: {}", result.distance_to_mate);
 /// }
 /// ```
-/// 
+///
 /// ## Custom Configuration
-/// 
+///
 /// ```rust
 /// use shogi_engine::tablebase::{MicroTablebase, TablebaseConfig};
-/// 
+///
 /// let config = TablebaseConfig::performance_optimized();
 /// let tablebase = MicroTablebase::with_config(config);
 /// ```
-/// 
+///
 /// ## Performance Monitoring
-/// 
+///
 /// ```rust
 /// // Enable profiling
 /// tablebase.set_profiling_enabled(true);
-/// 
+///
 /// // Perform operations...
-/// 
+///
 /// // Get performance summary
 /// let profiler = tablebase.get_profiler();
 /// let summary = profiler.get_summary();
 /// println!("Performance: {}", summary);
 /// ```
-/// 
+///
 /// ## Memory Management
-/// 
+///
 /// ```rust
 /// // Check memory usage
 /// let memory_usage = tablebase.get_current_memory_usage();
 /// println!("Current memory: {} bytes", memory_usage);
-/// 
+///
 /// // Get memory summary
 /// let memory_summary = tablebase.get_memory_summary();
 /// println!("Memory: {}", memory_summary);
@@ -101,28 +101,29 @@ impl MicroTablebase {
     /// Create a new tablebase with specified configuration
     pub fn with_config(config: TablebaseConfig) -> Self {
         let mut solvers: Vec<Box<dyn EndgameSolver>> = Vec::new();
-        
+
         // Add actual solvers
         solvers.push(Box::new(KingGoldVsKingSolver::new()));
         solvers.push(Box::new(KingSilverVsKingSolver::new()));
         solvers.push(Box::new(KingRookVsKingSolver::new()));
-        
+
         // Sort by priority (highest first)
         solvers.sort_by_key(|s| std::cmp::Reverse(s.priority()));
-        
+
         // Create cache with configuration, applying WASM optimizations if needed
-        let cache_size = if config.wasm.enable_wasm_optimizations && config.wasm.reduce_cache_sizes {
+        let cache_size = if config.wasm.enable_wasm_optimizations && config.wasm.reduce_cache_sizes
+        {
             config.wasm.get_recommended_cache_size()
         } else {
             config.cache_size
         };
-        
+
         let cache_config = super::position_cache::CacheConfig {
             max_size: cache_size,
             eviction_strategy: config.performance.eviction_strategy,
             enable_adaptive_eviction: config.performance.enable_adaptive_caching,
         };
-        
+
         Self {
             solvers,
             position_cache: PositionCache::with_config(cache_config),
@@ -141,13 +142,17 @@ impl MicroTablebase {
         }
 
         // Skip memory monitoring in WASM if disabled
-        if self.config.wasm.enable_wasm_optimizations && self.config.wasm.should_disable_feature("memory_monitoring") {
+        if self.config.wasm.enable_wasm_optimizations
+            && self.config.wasm.should_disable_feature("memory_monitoring")
+        {
             return;
         }
 
         // Check if enough time has passed since last check
         let now = TimeSource::now();
-        let time_since_last_check = now.elapsed_ms().saturating_sub(self.last_memory_check.elapsed_ms());
+        let time_since_last_check = now
+            .elapsed_ms()
+            .saturating_sub(self.last_memory_check.elapsed_ms());
         if u64::from(time_since_last_check) < self.config.memory.check_interval_ms {
             return;
         }
@@ -159,22 +164,32 @@ impl MicroTablebase {
         self.stats.update_memory_usage(current_memory);
 
         // Check for memory warnings and critical alerts
-        if self.stats.is_memory_warning(self.config.memory.max_memory_bytes, self.config.memory.warning_threshold) {
+        if self.stats.is_memory_warning(
+            self.config.memory.max_memory_bytes,
+            self.config.memory.warning_threshold,
+        ) {
             self.stats.record_memory_warning();
             if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
-                println!("Tablebase memory warning: {} bytes used ({:.1}% of limit)", 
-                    current_memory, 
-                    self.stats.memory_usage_percentage(self.config.memory.max_memory_bytes)
+                println!(
+                    "Tablebase memory warning: {} bytes used ({:.1}% of limit)",
+                    current_memory,
+                    self.stats
+                        .memory_usage_percentage(self.config.memory.max_memory_bytes)
                 );
             }
         }
 
-        if self.stats.is_memory_critical(self.config.memory.max_memory_bytes, self.config.memory.critical_threshold) {
+        if self.stats.is_memory_critical(
+            self.config.memory.max_memory_bytes,
+            self.config.memory.critical_threshold,
+        ) {
             self.stats.record_memory_critical_alert();
             if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
-                println!("Tablebase memory critical: {} bytes used ({:.1}% of limit)", 
-                    current_memory, 
-                    self.stats.memory_usage_percentage(self.config.memory.max_memory_bytes)
+                println!(
+                    "Tablebase memory critical: {} bytes used ({:.1}% of limit)",
+                    current_memory,
+                    self.stats
+                        .memory_usage_percentage(self.config.memory.max_memory_bytes)
                 );
             }
 
@@ -192,7 +207,7 @@ impl MicroTablebase {
         let config_memory = std::mem::size_of::<TablebaseConfig>();
         let stats_memory = std::mem::size_of::<TablebaseStats>();
         let solvers_memory = self.solvers.len() * std::mem::size_of::<Box<dyn EndgameSolver>>();
-        
+
         cache_memory + config_memory + stats_memory + solvers_memory
     }
 
@@ -201,25 +216,30 @@ impl MicroTablebase {
         // Clear half of the cache
         self.position_cache.clear_half();
         self.stats.record_auto_eviction();
-        
+
         if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
             println!("Tablebase emergency eviction performed");
         }
     }
 
     /// Probe the tablebase for a position
-    /// 
+    ///
     /// This method checks the cache first, then tries each solver
     /// in priority order until one can solve the position.
-    /// 
+    ///
     /// # Arguments
     /// * `board` - The current board position
     /// * `player` - The player to move
     /// * `captured_pieces` - The captured pieces for both players
-    /// 
+    ///
     /// # Returns
     /// `Some(TablebaseResult)` if the position can be solved, `None` otherwise
-    pub fn probe(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<TablebaseResult> {
+    pub fn probe(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TablebaseResult> {
         if !self.config.enabled {
             return None;
         }
@@ -240,8 +260,10 @@ impl MicroTablebase {
         }
 
         // Analyze position complexity for adaptive solver selection
-        let position_analysis = self.position_analyzer.analyze_position(board, player, captured_pieces);
-        
+        let position_analysis =
+            self.position_analyzer
+                .analyze_position(board, player, captured_pieces);
+
         // Try each solver in priority order, but skip solvers that can't handle the complexity
         let mut solver_result = None;
         for solver in &self.solvers {
@@ -250,7 +272,10 @@ impl MicroTablebase {
             }
 
             // Skip solver if it can't handle the position complexity
-            if !position_analysis.complexity.is_suitable_for_priority(solver.priority()) {
+            if !position_analysis
+                .complexity
+                .is_suitable_for_priority(solver.priority())
+            {
                 continue;
             }
 
@@ -267,7 +292,8 @@ impl MicroTablebase {
 
         if let Some((result, solver_name)) = solver_result {
             let probe_time = start_time.elapsed_ms() as u64;
-            self.stats.record_probe(false, true, Some(solver_name), probe_time);
+            self.stats
+                .record_probe(false, true, Some(solver_name), probe_time);
             return Some(result);
         }
 
@@ -277,12 +303,17 @@ impl MicroTablebase {
     }
 
     /// Probe the tablebase and update statistics
-    /// 
+    ///
     /// This method is similar to `probe()` but also updates the
     /// internal statistics for monitoring purposes.
-    pub fn probe_with_stats(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<TablebaseResult> {
+    pub fn probe_with_stats(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TablebaseResult> {
         let start_time = TimeSource::now();
-        
+
         if !self.config.enabled {
             return None;
         }
@@ -305,10 +336,12 @@ impl MicroTablebase {
                     // Check if result meets confidence threshold
                     if result.confidence >= self.config.confidence_threshold {
                         let probe_time = start_time.elapsed_ms() as u64;
-                        self.stats.record_probe(false, true, Some(solver.name()), probe_time);
-                        
+                        self.stats
+                            .record_probe(false, true, Some(solver.name()), probe_time);
+
                         // Cache the result
-                        self.position_cache.put(board, player, captured_pieces, result.clone());
+                        self.position_cache
+                            .put(board, player, captured_pieces, result.clone());
                         return Some(result);
                     }
                 }
@@ -375,7 +408,8 @@ impl MicroTablebase {
 
     /// Get solver information
     pub fn get_solver_info(&self) -> Vec<String> {
-        self.solvers.iter()
+        self.solvers
+            .iter()
             .map(|solver| solver.get_config_info())
             .collect()
     }
@@ -401,14 +435,14 @@ impl Clone for MicroTablebase {
     fn clone(&self) -> Self {
         // Create a new tablebase with the same configuration
         let mut new_tablebase = MicroTablebase::with_config(self.config.clone());
-        
+
         // Copy the statistics
         new_tablebase.stats = self.stats.clone();
-        
+
         // Note: We can't clone the solvers because they're trait objects,
         // but that's okay since they're stateless and will be recreated
         // with the same configuration
-        
+
         new_tablebase
     }
 }
@@ -416,7 +450,7 @@ impl Clone for MicroTablebase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Player, Position, PieceType, Move};
+    use crate::types::{Move, PieceType, Player, Position};
     use crate::BitboardBoard;
     use crate::CapturedPieces;
 
@@ -457,11 +491,21 @@ mod tests {
     }
 
     impl EndgameSolver for MockSolver {
-        fn can_solve(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
+        fn can_solve(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> bool {
             self.can_solve_result
         }
 
-        fn solve(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> Option<TablebaseResult> {
+        fn solve(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> Option<TablebaseResult> {
             self.solve_result.clone()
         }
 
@@ -499,7 +543,7 @@ mod tests {
         let mut config = TablebaseConfig::default();
         config.enabled = false;
         let mut tablebase = MicroTablebase::with_config(config);
-        
+
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
@@ -570,10 +614,14 @@ mod tests {
         );
 
         let result = TablebaseResult::win(Some(move_), 5);
-        tablebase.position_cache.put(&board, player, &captured_pieces, result);
+        tablebase
+            .position_cache
+            .put(&board, player, &captured_pieces, result);
 
         // Should be able to get from cache
-        let cached_result = tablebase.position_cache.get(&board, player, &captured_pieces);
+        let cached_result = tablebase
+            .position_cache
+            .get(&board, player, &captured_pieces);
         assert!(cached_result.is_some());
     }
 

@@ -1,27 +1,27 @@
 //! Bit scanning implementations for bit-scanning optimizations
-//! 
+//!
 //! This module provides multiple implementations of bit scanning (finding bit positions)
 //! optimized for different platforms and capabilities.
 
-use crate::types::Bitboard;
 use crate::bitboards::platform_detection::{get_best_bitscan_impl, BitscanImpl};
+use crate::types::Bitboard;
 
 /// Main bit scan forward function with automatic implementation selection
-/// 
+///
 /// This function automatically selects the optimal implementation based on
 /// the current platform capabilities detected at runtime.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
-/// 
+///
 /// # Examples
 /// ```
 /// use shogi_engine::types::Bitboard;
 /// use shogi_engine::bitboards::bitscan::bit_scan_forward;
-/// 
+///
 /// let bb: Bitboard = 0b1010; // Bits at positions 1 and 3
 /// assert_eq!(bit_scan_forward(bb), Some(1)); // Returns position of LSB
 /// assert_eq!(bit_scan_forward(0), None); // Empty bitboard
@@ -35,21 +35,21 @@ pub fn bit_scan_forward(bb: Bitboard) -> Option<u8> {
 }
 
 /// Main bit scan reverse function with automatic implementation selection
-/// 
+///
 /// This function automatically selects the optimal implementation based on
 /// the current platform capabilities detected at runtime.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
-/// 
+///
 /// # Examples
 /// ```
 /// use shogi_engine::types::Bitboard;
 /// use shogi_engine::bitboards::bitscan::bit_scan_reverse;
-/// 
+///
 /// let bb: Bitboard = 0b1010; // Bits at positions 1 and 3
 /// assert_eq!(bit_scan_reverse(bb), Some(3)); // Returns position of MSB
 /// assert_eq!(bit_scan_reverse(0), None); // Empty bitboard
@@ -63,17 +63,17 @@ pub fn bit_scan_reverse(bb: Bitboard) -> Option<u8> {
 }
 
 /// Hardware-accelerated bit scan forward using x86_64 BSF instruction
-/// 
+///
 /// This implementation uses the native BSF (Bit Scan Forward) instruction available on
 /// x86_64 processors. It provides the fastest possible performance for finding the
 /// least significant bit.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
-/// 
+///
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// BMI1 support has been verified by the platform detection system.
@@ -82,7 +82,7 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     unsafe {
         // For u128, we need to check both halves
         let low = bb as u64;
@@ -96,17 +96,17 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
 }
 
 /// Hardware-accelerated bit scan reverse using x86_64 BSR instruction
-/// 
+///
 /// This implementation uses the native BSR (Bit Scan Reverse) instruction available on
 /// x86_64 processors. It provides the fastest possible performance for finding the
 /// most significant bit.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
-/// 
+///
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// BMI1 support has been verified by the platform detection system.
@@ -115,7 +115,7 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     unsafe {
         // For u128, we need to check both halves
         let high = (bb >> 64) as u64;
@@ -129,13 +129,13 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 }
 
 /// ARM hardware-accelerated bit scan forward using CLZ instruction
-/// 
+///
 /// This implementation uses the native CLZ (Count Leading Zeros) instruction available on
 /// ARM processors. It provides the fastest possible performance for finding bit positions.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
 #[cfg(target_arch = "aarch64")]
@@ -143,7 +143,7 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     // For u128, we need to check both halves
     let low = bb as u64;
     if low != 0 {
@@ -155,14 +155,14 @@ pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
 }
 
 /// ARM hardware-accelerated bit scan reverse using CLZ instruction
-/// 
+///
 /// This implementation uses the native CLZ (Count Leading Zeros) instruction available on
 /// ARM processors. It provides the fastest possible performance for finding the
 /// most significant bit.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
 #[cfg(target_arch = "aarch64")]
@@ -170,7 +170,7 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     // For u128, we need to check both halves
     let high = (bb >> 64) as u64;
     if high != 0 {
@@ -182,30 +182,24 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 }
 
 /// Fallback hardware implementation for non-x86_64/non-ARM platforms
-#[cfg(not(any(
-    all(target_arch = "x86_64"),
-    all(target_arch = "aarch64")
-)))]
+#[cfg(not(any(all(target_arch = "x86_64"), all(target_arch = "aarch64"))))]
 pub fn bit_scan_forward_hardware(bb: Bitboard) -> Option<u8> {
     bit_scan_forward_debruijn(bb)
 }
 
-#[cfg(not(any(
-    all(target_arch = "x86_64"),
-    all(target_arch = "aarch64")
-)))]
+#[cfg(not(any(all(target_arch = "x86_64"), all(target_arch = "aarch64"))))]
 pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
     bit_scan_reverse_debruijn(bb)
 }
 
 /// De Bruijn sequence bit scan forward implementation
-/// 
+///
 /// This implementation uses De Bruijn sequences for efficient bit position determination.
 /// It works on all platforms including WASM and provides good performance.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_forward_debruijn(bb: Bitboard) -> Option<u8> {
@@ -213,35 +207,34 @@ pub fn bit_scan_forward_debruijn(bb: Bitboard) -> Option<u8> {
 }
 
 /// De Bruijn sequence bit scan reverse implementation
-/// 
+///
 /// This implementation uses De Bruijn sequences for efficient bit position determination.
 /// It works on all platforms including WASM and provides good performance.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_reverse_debruijn(bb: Bitboard) -> Option<u8> {
     crate::bitboards::debruijn::bit_scan_reverse_debruijn(bb)
 }
 
-
 /// Software fallback bit scan forward implementation
-/// 
+///
 /// This implementation uses a simple loop-based approach that works on
 /// all platforms but is slower than the optimized versions.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_forward_software(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     // For u128, we need to check both halves
     let low = bb as u64;
     if low != 0 {
@@ -253,20 +246,20 @@ pub fn bit_scan_forward_software(bb: Bitboard) -> Option<u8> {
 }
 
 /// Software fallback bit scan reverse implementation
-/// 
+///
 /// This implementation uses a simple loop-based approach that works on
 /// all platforms but is slower than the optimized versions.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if the bitboard is empty
 pub fn bit_scan_reverse_software(bb: Bitboard) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     // For u128, we need to check both halves
     let high = (bb >> 64) as u64;
     if high != 0 {
@@ -278,15 +271,15 @@ pub fn bit_scan_reverse_software(bb: Bitboard) -> Option<u8> {
 }
 
 /// Bit scan with manual implementation selection
-/// 
+///
 /// This function allows manual selection of the implementation,
 /// useful for benchmarking or when you need specific behavior.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
 /// * `impl_type` - The implementation to use
 /// * `forward` - If true, scan forward (LSB); if false, scan reverse (MSB)
-/// 
+///
 /// # Returns
 /// The bit position (0-based), or None if the bitboard is empty
 pub fn bit_scan_with_impl(bb: Bitboard, impl_type: BitscanImpl, forward: bool) -> Option<u8> {
@@ -306,14 +299,14 @@ pub fn bit_scan_with_impl(bb: Bitboard, impl_type: BitscanImpl, forward: bool) -
 }
 
 /// Optimized bit scan with fast paths for common cases
-/// 
+///
 /// This function provides additional optimizations for common patterns
 /// like single-bit bitboards.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to scan
 /// * `forward` - If true, scan forward (LSB); if false, scan reverse (MSB)
-/// 
+///
 /// # Returns
 /// The bit position (0-based), or None if the bitboard is empty
 pub fn bit_scan_optimized(bb: Bitboard, forward: bool) -> Option<u8> {
@@ -321,7 +314,7 @@ pub fn bit_scan_optimized(bb: Bitboard, forward: bool) -> Option<u8> {
     if bb == 0 {
         return None;
     }
-    
+
     // Fast path for single bit (common case)
     if bb & (bb - 1) == 0 {
         return if forward {
@@ -330,7 +323,7 @@ pub fn bit_scan_optimized(bb: Bitboard, forward: bool) -> Option<u8> {
             bit_scan_reverse(bb)
         };
     }
-    
+
     // Use the best available implementation
     if forward {
         bit_scan_forward(bb)
@@ -340,10 +333,10 @@ pub fn bit_scan_optimized(bb: Bitboard, forward: bool) -> Option<u8> {
 }
 
 /// Clear the least significant bit
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to modify
-/// 
+///
 /// # Returns
 /// The bitboard with the least significant bit cleared
 pub fn clear_lsb(bb: Bitboard) -> Bitboard {
@@ -351,31 +344,31 @@ pub fn clear_lsb(bb: Bitboard) -> Bitboard {
 }
 
 /// Clear the most significant bit
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to modify
-/// 
+///
 /// # Returns
 /// The bitboard with the most significant bit cleared
 pub fn clear_msb(bb: Bitboard) -> Bitboard {
     if bb == 0 {
         return 0;
     }
-    
+
     let msb = if let Some(pos) = bit_scan_reverse(bb) {
         1u128 << pos
     } else {
         return 0;
     };
-    
+
     bb & !msb
 }
 
 /// Isolate the least significant bit
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to process
-/// 
+///
 /// # Returns
 /// A bitboard with only the least significant bit set
 pub fn isolate_lsb(bb: Bitboard) -> Bitboard {
@@ -383,17 +376,17 @@ pub fn isolate_lsb(bb: Bitboard) -> Bitboard {
 }
 
 /// Isolate the most significant bit
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to process
-/// 
+///
 /// # Returns
 /// A bitboard with only the most significant bit set
 pub fn isolate_msb(bb: Bitboard) -> Bitboard {
     if bb == 0 {
         return 0;
     }
-    
+
     if let Some(pos) = bit_scan_reverse(bb) {
         1u128 << pos
     } else {
@@ -402,16 +395,16 @@ pub fn isolate_msb(bb: Bitboard) -> Bitboard {
 }
 
 /// Get all bit positions in a bitboard
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to process
-/// 
+///
 /// # Returns
 /// A vector containing all bit positions (0-based), ordered from LSB to MSB
 pub fn get_all_bit_positions(bb: Bitboard) -> Vec<u8> {
     let mut positions = Vec::new();
     let mut remaining = bb;
-    
+
     while remaining != 0 {
         if let Some(pos) = bit_scan_forward(remaining) {
             positions.push(pos);
@@ -420,7 +413,7 @@ pub fn get_all_bit_positions(bb: Bitboard) -> Vec<u8> {
             break;
         }
     }
-    
+
     positions
 }
 
@@ -436,12 +429,15 @@ mod tests {
         assert_eq!(bit_scan_forward(2), Some(1));
         assert_eq!(bit_scan_forward(4), Some(2));
         assert_eq!(bit_scan_forward(8), Some(3));
-        
+
         // Test edge cases
         assert_eq!(bit_scan_forward(0x8000000000000000), Some(63));
         assert_eq!(bit_scan_forward(0x10000000000000000), Some(64));
-        assert_eq!(bit_scan_forward(0x80000000000000000000000000000000), Some(127));
-        
+        assert_eq!(
+            bit_scan_forward(0x80000000000000000000000000000000),
+            Some(127)
+        );
+
         // Test multiple bits (should return LSB)
         assert_eq!(bit_scan_forward(0b1010), Some(1)); // Bits at positions 1 and 3
         assert_eq!(bit_scan_forward(0b1100), Some(2)); // Bits at positions 2 and 3
@@ -455,12 +451,15 @@ mod tests {
         assert_eq!(bit_scan_reverse(2), Some(1));
         assert_eq!(bit_scan_reverse(4), Some(2));
         assert_eq!(bit_scan_reverse(8), Some(3));
-        
+
         // Test edge cases
         assert_eq!(bit_scan_reverse(0x8000000000000000), Some(63));
         assert_eq!(bit_scan_reverse(0x10000000000000000), Some(64));
-        assert_eq!(bit_scan_reverse(0x80000000000000000000000000000000), Some(127));
-        
+        assert_eq!(
+            bit_scan_reverse(0x80000000000000000000000000000000),
+            Some(127)
+        );
+
         // Test multiple bits (should return MSB)
         assert_eq!(bit_scan_reverse(0b1010), Some(3)); // Bits at positions 1 and 3
         assert_eq!(bit_scan_reverse(0b1100), Some(3)); // Bits at positions 2 and 3
@@ -492,15 +491,27 @@ mod tests {
             let reverse_debruijn = bit_scan_reverse_debruijn(bb);
             let reverse_software = bit_scan_reverse_software(bb);
 
-            assert_eq!(forward_hardware, forward_debruijn, 
-                      "Forward hardware vs DeBruijn mismatch for 0x{:X}", bb);
-            assert_eq!(forward_hardware, forward_software, 
-                      "Forward hardware vs Software mismatch for 0x{:X}", bb);
+            assert_eq!(
+                forward_hardware, forward_debruijn,
+                "Forward hardware vs DeBruijn mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                forward_hardware, forward_software,
+                "Forward hardware vs Software mismatch for 0x{:X}",
+                bb
+            );
 
-            assert_eq!(reverse_hardware, reverse_debruijn, 
-                      "Reverse hardware vs DeBruijn mismatch for 0x{:X}", bb);
-            assert_eq!(reverse_hardware, reverse_software, 
-                      "Reverse hardware vs Software mismatch for 0x{:X}", bb);
+            assert_eq!(
+                reverse_hardware, reverse_debruijn,
+                "Reverse hardware vs DeBruijn mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                reverse_hardware, reverse_software,
+                "Reverse hardware vs Software mismatch for 0x{:X}",
+                bb
+            );
         }
     }
 
@@ -509,21 +520,29 @@ mod tests {
         // Empty bitboard
         assert_eq!(bit_scan_forward(0), None);
         assert_eq!(bit_scan_reverse(0), None);
-        
+
         // Single bit cases
         for i in 0..128 {
             let bb = 1u128 << i;
-            assert_eq!(bit_scan_forward(bb), Some(i as u8), 
-                      "Single bit forward at position {} failed", i);
-            assert_eq!(bit_scan_reverse(bb), Some(i as u8), 
-                      "Single bit reverse at position {} failed", i);
+            assert_eq!(
+                bit_scan_forward(bb),
+                Some(i as u8),
+                "Single bit forward at position {} failed",
+                i
+            );
+            assert_eq!(
+                bit_scan_reverse(bb),
+                Some(i as u8),
+                "Single bit reverse at position {} failed",
+                i
+            );
         }
-        
+
         // All bits set
         let all_bits = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
         assert_eq!(bit_scan_forward(all_bits), Some(0));
         assert_eq!(bit_scan_reverse(all_bits), Some(127));
-        
+
         // Pattern tests
         assert_eq!(bit_scan_forward(0x5555555555555555), Some(0)); // Alternating bits
         assert_eq!(bit_scan_reverse(0x5555555555555555), Some(62));
@@ -537,17 +556,17 @@ mod tests {
         assert_eq!(clear_lsb(0b1010), 0b1000); // Clear LSB of 0b1010
         assert_eq!(clear_lsb(0b1000), 0b0000); // Clear LSB of 0b1000
         assert_eq!(clear_lsb(0), 0); // Clear LSB of 0
-        
+
         // Test clear_msb
         assert_eq!(clear_msb(0b1010), 0b0010); // Clear MSB of 0b1010
         assert_eq!(clear_msb(0b1000), 0b0000); // Clear MSB of 0b1000
         assert_eq!(clear_msb(0), 0); // Clear MSB of 0
-        
+
         // Test isolate_lsb
         assert_eq!(isolate_lsb(0b1010), 0b0010); // Isolate LSB of 0b1010
         assert_eq!(isolate_lsb(0b1000), 0b1000); // Isolate LSB of 0b1000
         assert_eq!(isolate_lsb(0), 0); // Isolate LSB of 0
-        
+
         // Test isolate_msb
         assert_eq!(isolate_msb(0b1010), 0b1000); // Isolate MSB of 0b1010
         assert_eq!(isolate_msb(0b0010), 0b0010); // Isolate MSB of 0b0010
@@ -558,15 +577,15 @@ mod tests {
     fn test_get_all_bit_positions() {
         // Test empty bitboard
         assert_eq!(get_all_bit_positions(0), Vec::<u8>::new());
-        
+
         // Test single bit
         assert_eq!(get_all_bit_positions(1), vec![0]);
         assert_eq!(get_all_bit_positions(0x8000000000000000), vec![63]);
-        
+
         // Test multiple bits
         assert_eq!(get_all_bit_positions(0b1010), vec![1, 3]); // Bits at positions 1 and 3
         assert_eq!(get_all_bit_positions(0b1100), vec![2, 3]); // Bits at positions 2 and 3
-        
+
         // Test pattern
         let positions = get_all_bit_positions(0x5555555555555555); // Every other bit
         assert_eq!(positions.len(), 32);
@@ -579,20 +598,20 @@ mod tests {
     #[test]
     fn test_bit_scan_with_impl() {
         let bb = 0b1010;
-        
+
         let forward_hardware = bit_scan_with_impl(bb, BitscanImpl::Hardware, true);
         let forward_debruijn = bit_scan_with_impl(bb, BitscanImpl::DeBruijn, true);
         let forward_software = bit_scan_with_impl(bb, BitscanImpl::Software, true);
-        
+
         let reverse_hardware = bit_scan_with_impl(bb, BitscanImpl::Hardware, false);
         let reverse_debruijn = bit_scan_with_impl(bb, BitscanImpl::DeBruijn, false);
         let reverse_software = bit_scan_with_impl(bb, BitscanImpl::Software, false);
-        
+
         assert_eq!(forward_hardware, forward_debruijn);
         assert_eq!(forward_hardware, forward_software);
         assert_eq!(reverse_hardware, reverse_debruijn);
         assert_eq!(reverse_hardware, reverse_software);
-        
+
         assert_eq!(forward_hardware, Some(1));
         assert_eq!(reverse_hardware, Some(3));
     }
@@ -602,13 +621,13 @@ mod tests {
         // Test empty bitboard fast path
         assert_eq!(bit_scan_optimized(0, true), None);
         assert_eq!(bit_scan_optimized(0, false), None);
-        
+
         // Test single bit fast path
         assert_eq!(bit_scan_optimized(1, true), Some(0));
         assert_eq!(bit_scan_optimized(1, false), Some(0));
         assert_eq!(bit_scan_optimized(0x8000000000000000, true), Some(63));
         assert_eq!(bit_scan_optimized(0x8000000000000000, false), Some(63));
-        
+
         // Test normal case
         assert_eq!(bit_scan_optimized(0b1010, true), Some(1));
         assert_eq!(bit_scan_optimized(0b1010, false), Some(3));
@@ -633,8 +652,11 @@ mod performance_tests {
                 let _result = bit_scan_forward_hardware(test_bitboard);
             }
             let hardware_duration = start.elapsed();
-            println!("Hardware bit_scan_forward: {:?} total, {:?} per call", 
-                    hardware_duration, hardware_duration / iterations);
+            println!(
+                "Hardware bit_scan_forward: {:?} total, {:?} per call",
+                hardware_duration,
+                hardware_duration / iterations
+            );
         }
 
         // Benchmark DeBruijn implementation
@@ -643,8 +665,11 @@ mod performance_tests {
             let _result = bit_scan_forward_debruijn(test_bitboard);
         }
         let debruijn_duration = start.elapsed();
-        println!("DeBruijn bit_scan_forward: {:?} total, {:?} per call", 
-                debruijn_duration, debruijn_duration / iterations);
+        println!(
+            "DeBruijn bit_scan_forward: {:?} total, {:?} per call",
+            debruijn_duration,
+            debruijn_duration / iterations
+        );
 
         // Benchmark software implementation
         let start = Instant::now();
@@ -652,26 +677,33 @@ mod performance_tests {
             let _result = bit_scan_forward_software(test_bitboard);
         }
         let software_duration = start.elapsed();
-        println!("Software bit_scan_forward: {:?} total, {:?} per call", 
-                software_duration, software_duration / iterations);
+        println!(
+            "Software bit_scan_forward: {:?} total, {:?} per call",
+            software_duration,
+            software_duration / iterations
+        );
 
         // Verify performance targets
         // DeBruijn should be faster than software
-        assert!(debruijn_duration <= software_duration, 
-                "DeBruijn implementation should be faster than software");
+        assert!(
+            debruijn_duration <= software_duration,
+            "DeBruijn implementation should be faster than software"
+        );
 
         #[cfg(target_arch = "x86_64")]
         {
             // Hardware should be fastest on x86_64
-            assert!(hardware_duration <= debruijn_duration,
-                    "Hardware implementation should be faster than DeBruijn on x86_64");
+            assert!(
+                hardware_duration <= debruijn_duration,
+                "Hardware implementation should be faster than DeBruijn on x86_64"
+            );
         }
     }
 
     #[test]
     fn test_bit_scan_optimized_performance() {
         let iterations = 1_000_000;
-        
+
         // Test fast path performance (single bit)
         let single_bit = 0x8000000000000000;
         let start = Instant::now();
@@ -679,7 +711,7 @@ mod performance_tests {
             let _result = bit_scan_optimized(single_bit, true);
         }
         let fast_path_duration = start.elapsed();
-        
+
         // Test normal case performance
         let normal_bitboard = 0x123456789ABCDEF0;
         let start = Instant::now();
@@ -687,13 +719,21 @@ mod performance_tests {
             let _result = bit_scan_optimized(normal_bitboard, true);
         }
         let normal_duration = start.elapsed();
-        
-        println!("Optimized bit_scan (single bit): {:?} per call", fast_path_duration / iterations);
-        println!("Optimized bit_scan (normal): {:?} per call", normal_duration / iterations);
-        
+
+        println!(
+            "Optimized bit_scan (single bit): {:?} per call",
+            fast_path_duration / iterations
+        );
+        println!(
+            "Optimized bit_scan (normal): {:?} per call",
+            normal_duration / iterations
+        );
+
         // Fast path should be very fast
-        assert!(fast_path_duration <= normal_duration, 
-                "Fast path should be faster than or equal to normal case");
+        assert!(
+            fast_path_duration <= normal_duration,
+            "Fast path should be faster than or equal to normal case"
+        );
     }
 
     #[test]
@@ -712,33 +752,54 @@ mod performance_tests {
 
         for bb in test_cases {
             let iterations = 100_000;
-            
+
             // Run multiple implementations in parallel to ensure consistency
             let hardware_forward_results: Vec<Option<u8>> = (0..iterations)
                 .map(|_| bit_scan_forward_hardware(bb))
                 .collect();
-            
+
             let debruijn_forward_results: Vec<Option<u8>> = (0..iterations)
                 .map(|_| bit_scan_forward_debruijn(bb))
                 .collect();
-            
+
             let software_forward_results: Vec<Option<u8>> = (0..iterations)
                 .map(|_| bit_scan_forward_software(bb))
                 .collect();
 
             // All results should be identical
-            assert!(hardware_forward_results.iter().all(|&x| x == hardware_forward_results[0]),
-                    "Hardware forward implementation inconsistent for 0x{:X}", bb);
-            assert!(debruijn_forward_results.iter().all(|&x| x == debruijn_forward_results[0]),
-                    "DeBruijn forward implementation inconsistent for 0x{:X}", bb);
-            assert!(software_forward_results.iter().all(|&x| x == software_forward_results[0]),
-                    "Software forward implementation inconsistent for 0x{:X}", bb);
-            
+            assert!(
+                hardware_forward_results
+                    .iter()
+                    .all(|&x| x == hardware_forward_results[0]),
+                "Hardware forward implementation inconsistent for 0x{:X}",
+                bb
+            );
+            assert!(
+                debruijn_forward_results
+                    .iter()
+                    .all(|&x| x == debruijn_forward_results[0]),
+                "DeBruijn forward implementation inconsistent for 0x{:X}",
+                bb
+            );
+            assert!(
+                software_forward_results
+                    .iter()
+                    .all(|&x| x == software_forward_results[0]),
+                "Software forward implementation inconsistent for 0x{:X}",
+                bb
+            );
+
             // All implementations should agree
-            assert_eq!(hardware_forward_results[0], debruijn_forward_results[0], 
-                      "Hardware vs DeBruijn forward mismatch for 0x{:X}", bb);
-            assert_eq!(hardware_forward_results[0], software_forward_results[0],
-                      "Hardware vs Software forward mismatch for 0x{:X}", bb);
+            assert_eq!(
+                hardware_forward_results[0], debruijn_forward_results[0],
+                "Hardware vs DeBruijn forward mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                hardware_forward_results[0], software_forward_results[0],
+                "Hardware vs Software forward mismatch for 0x{:X}",
+                bb
+            );
         }
     }
 }

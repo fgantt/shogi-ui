@@ -1,5 +1,5 @@
-use crate::types::*;
 use crate::evaluation::castles::*;
+use crate::types::*;
 
 /// Yagura castle pattern definition
 pub fn get_yagura_castle() -> CastlePattern {
@@ -59,15 +59,20 @@ mod tests {
     #[test]
     fn test_yagura_castle_required_pieces() {
         let yagura_castle = get_yagura_castle();
-        let required_pieces: Vec<&CastlePiece> = yagura_castle.pieces.iter().filter(|p| p.required).collect();
+        let required_pieces: Vec<&CastlePiece> =
+            yagura_castle.pieces.iter().filter(|p| p.required).collect();
         assert_eq!(required_pieces.len(), 2); // Gold and Silver should be required
-        
-        let gold_piece = required_pieces.iter().find(|p| p.piece_type == PieceType::Gold);
-        let silver_piece = required_pieces.iter().find(|p| p.piece_type == PieceType::Silver);
-        
+
+        let gold_piece = required_pieces
+            .iter()
+            .find(|p| p.piece_type == PieceType::Gold);
+        let silver_piece = required_pieces
+            .iter()
+            .find(|p| p.piece_type == PieceType::Silver);
+
         assert!(gold_piece.is_some());
         assert!(silver_piece.is_some());
-        
+
         assert_eq!(gold_piece.unwrap().weight, 10);
         assert_eq!(silver_piece.unwrap().weight, 9);
     }
@@ -75,15 +80,25 @@ mod tests {
     #[test]
     fn test_yagura_castle_optional_pieces() {
         let yagura_castle = get_yagura_castle();
-        let optional_pieces: Vec<&CastlePiece> = yagura_castle.pieces.iter().filter(|p| !p.required).collect();
+        let optional_pieces: Vec<&CastlePiece> = yagura_castle
+            .pieces
+            .iter()
+            .filter(|p| !p.required)
+            .collect();
         assert_eq!(optional_pieces.len(), 3); // Lance and two pawns should be optional
-        
-        let lance_piece = optional_pieces.iter().find(|p| p.piece_type == PieceType::Lance);
-        let pawn_pieces: Vec<&CastlePiece> = optional_pieces.iter().filter(|p| p.piece_type == PieceType::Pawn).cloned().collect();
-        
+
+        let lance_piece = optional_pieces
+            .iter()
+            .find(|p| p.piece_type == PieceType::Lance);
+        let pawn_pieces: Vec<&CastlePiece> = optional_pieces
+            .iter()
+            .filter(|p| p.piece_type == PieceType::Pawn)
+            .cloned()
+            .collect();
+
         assert!(lance_piece.is_some());
         assert_eq!(pawn_pieces.len(), 2);
-        
+
         assert_eq!(lance_piece.unwrap().weight, 5);
         for pawn in pawn_pieces {
             assert_eq!(pawn.weight, 6);

@@ -1,10 +1,10 @@
 //! Memory pool for efficient allocation of attack tables in magic bitboards
-//! 
+//!
 //! This module provides a memory pool implementation optimized for allocating
 //! attack pattern tables for magic bitboards. It uses pre-allocated blocks
 //! to reduce memory fragmentation and improve cache locality.
 
-use crate::types::{Bitboard, MemoryPool, MagicError, EMPTY_BITBOARD};
+use crate::types::{Bitboard, MagicError, MemoryPool, EMPTY_BITBOARD};
 
 impl MemoryPool {
     /// Create a new memory pool with default settings
@@ -23,7 +23,7 @@ impl MemoryPool {
     }
 
     /// Allocate memory for attack table
-    /// 
+    ///
     /// Returns the base index where the allocated memory starts
     pub fn allocate(&mut self, size: usize) -> Result<usize, MagicError> {
         // Check if current block has enough space
@@ -80,15 +80,15 @@ impl MemoryPool {
     }
 
     /// Reserve space for a specific number of attack patterns
-    /// 
+    ///
     /// This is useful for pre-allocating space when the total size is known
     pub fn reserve(&mut self, total_patterns: usize) -> Result<(), MagicError> {
         let blocks_needed = (total_patterns + self.block_size - 1) / self.block_size;
-        
+
         for _ in 0..blocks_needed {
             self.allocate_new_block()?;
         }
-        
+
         Ok(())
     }
 
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn test_memory_allocation() {
         let mut pool = MemoryPool::with_block_size(100);
-        
+
         // Allocate within first block
         let offset1 = pool.allocate(50).unwrap();
         assert_eq!(offset1, 0);
@@ -180,7 +180,7 @@ mod tests {
         let mut pool = MemoryPool::with_block_size(100);
         pool.allocate(50).unwrap();
         assert_eq!(pool.block_count(), 1);
-        
+
         pool.clear();
         assert!(pool.is_empty());
         assert_eq!(pool.block_count(), 0);
@@ -190,7 +190,7 @@ mod tests {
     fn test_memory_stats() {
         let mut pool = MemoryPool::with_block_size(100);
         pool.allocate(75).unwrap();
-        
+
         let stats = pool.memory_stats();
         assert_eq!(stats.total_blocks, 1);
         assert_eq!(stats.current_offset, 75);
@@ -202,7 +202,7 @@ mod tests {
     fn test_reserve() {
         let mut pool = MemoryPool::with_block_size(100);
         pool.reserve(250).unwrap();
-        
+
         assert_eq!(pool.block_count(), 3); // 250 / 100 = 3 blocks
         assert_eq!(pool.current_offset(), 0); // No allocation yet
     }

@@ -8,11 +8,11 @@
 //! - Enhanced detection should improve zugzwang detection accuracy
 //! - Performance impact should be acceptable for the added intelligence
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig},
+    search::SearchEngine,
+    types::{CapturedPieces, NullMoveConfig, Player},
 };
 use std::time::Duration;
 
@@ -46,11 +46,11 @@ fn benchmark_endgame_type_detection_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("endgame_type_detection_overhead");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test at different depths
     for depth in [3, 4, 5, 6] {
         // Benchmark with basic endgame detection
@@ -61,7 +61,7 @@ fn benchmark_endgame_type_detection_overhead(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_basic_endgame();
                     engine.reset_null_move_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -70,13 +70,13 @@ fn benchmark_endgame_type_detection_overhead(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
-        
+
         // Benchmark with enhanced endgame type detection
         group.bench_with_input(
             BenchmarkId::new("enhanced_endgame", depth),
@@ -85,7 +85,7 @@ fn benchmark_endgame_type_detection_overhead(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_enhanced_endgame();
                     engine.reset_null_move_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -94,14 +94,14 @@ fn benchmark_endgame_type_detection_overhead(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -110,18 +110,18 @@ fn benchmark_endgame_type_detection_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("endgame_type_detection_effectiveness");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Benchmark with basic endgame detection
     group.bench_function("basic_endgame", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_basic_endgame();
             engine.reset_null_move_stats();
-            
+
             let start = std::time::Instant::now();
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
@@ -132,21 +132,21 @@ fn benchmark_endgame_type_detection_effectiveness(c: &mut Criterion) {
                 1000,
             );
             let elapsed = start.elapsed();
-            
+
             let stats = engine.get_null_move_stats().clone();
             let nodes = engine.get_nodes_searched();
             let cutoff_rate = stats.cutoff_rate();
-            
+
             black_box((result, elapsed, nodes, cutoff_rate))
         });
     });
-    
+
     // Benchmark with enhanced endgame type detection
     group.bench_function("enhanced_endgame", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_enhanced_endgame();
             engine.reset_null_move_stats();
-            
+
             let start = std::time::Instant::now();
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
@@ -157,15 +157,15 @@ fn benchmark_endgame_type_detection_effectiveness(c: &mut Criterion) {
                 1000,
             );
             let elapsed = start.elapsed();
-            
+
             let stats = engine.get_null_move_stats().clone();
             let nodes = engine.get_nodes_searched();
             let cutoff_rate = stats.cutoff_rate();
-            
+
             black_box((result, elapsed, nodes, cutoff_rate))
         });
     });
-    
+
     group.finish();
 }
 
@@ -174,18 +174,18 @@ fn benchmark_endgame_type_thresholds(c: &mut Criterion) {
     let mut group = c.benchmark_group("endgame_type_thresholds");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     let threshold_configs = vec![
         ("conservative", 15, 10, 8),
         ("default", 12, 8, 6),
         ("aggressive", 10, 6, 4),
     ];
-    
+
     for (name, material, king_activity, zugzwang) in threshold_configs {
         group.bench_with_input(
             BenchmarkId::new("thresholds", name),
@@ -202,7 +202,7 @@ fn benchmark_endgame_type_thresholds(c: &mut Criterion) {
                     config.zugzwang_threshold = zugzwang;
                     engine.update_null_move_config(config).unwrap();
                     engine.reset_null_move_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -211,14 +211,14 @@ fn benchmark_endgame_type_thresholds(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -227,17 +227,14 @@ fn benchmark_comprehensive_endgame_analysis(c: &mut Criterion) {
     let mut group = c.benchmark_group("comprehensive_endgame_analysis");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test configurations
-    let configurations = vec![
-        ("basic", false),
-        ("enhanced", true),
-    ];
-    
+    let configurations = vec![("basic", false), ("enhanced", true)];
+
     for (name, enable_enhanced) in configurations {
         group.bench_with_input(
             BenchmarkId::new("configuration", name),
@@ -250,7 +247,7 @@ fn benchmark_comprehensive_endgame_analysis(c: &mut Criterion) {
                         create_test_engine_with_basic_endgame()
                     };
                     engine.reset_null_move_stats();
-                    
+
                     let start = std::time::Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -261,17 +258,17 @@ fn benchmark_comprehensive_endgame_analysis(c: &mut Criterion) {
                         1000,
                     );
                     let elapsed = start.elapsed();
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     let nodes = engine.get_nodes_searched();
                     let cutoff_rate = stats.cutoff_rate();
-                    
+
                     black_box((result, elapsed, nodes, cutoff_rate))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -284,4 +281,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

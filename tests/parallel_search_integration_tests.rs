@@ -10,14 +10,17 @@
 //! - Opening book integration
 
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{Player, CapturedPieces, Move};
 use shogi_engine::moves::MoveGenerator;
-use shogi_engine::search::search_engine::SearchEngine;
 use shogi_engine::search::parallel_search::{ParallelSearchConfig, ParallelSearchEngine};
+use shogi_engine::search::search_engine::SearchEngine;
 use shogi_engine::search::{ThreadSafeTranspositionTable, TranspositionConfig};
+use shogi_engine::types::{CapturedPieces, Move, Player};
 use shogi_engine::types::{TranspositionEntry, TranspositionFlag};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::sync::RwLock;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 /// Create a standard test position (starting position).
 fn create_test_position() -> (BitboardBoard, CapturedPieces, Player) {
@@ -35,34 +38,36 @@ fn test_parallel_tt_concurrent_access() {
     let config = TranspositionConfig::performance_optimized();
     let tt = Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(config)));
     let tt_clone = Arc::clone(&tt);
-    
+
     // Test concurrent writes from multiple threads
-    let handles: Vec<_> = (0..4).map(|i| {
-        let tt_thread = Arc::clone(&tt_clone);
-        std::thread::spawn(move || {
-            for j in 0..10 {
-                let hash = (i * 100 + j) as u64;
-                let entry = TranspositionEntry {
-                    hash_key: hash,
-                    depth: 5,
-                    score: (i * 100 + j) as i32,
-                    flag: TranspositionFlag::Exact,
-                    best_move: None,
-                    age: 0,
-                };
-                
-                if let Ok(mut tt_guard) = tt_thread.write() {
-                    tt_guard.store(entry);
+    let handles: Vec<_> = (0..4)
+        .map(|i| {
+            let tt_thread = Arc::clone(&tt_clone);
+            std::thread::spawn(move || {
+                for j in 0..10 {
+                    let hash = (i * 100 + j) as u64;
+                    let entry = TranspositionEntry {
+                        hash_key: hash,
+                        depth: 5,
+                        score: (i * 100 + j) as i32,
+                        flag: TranspositionFlag::Exact,
+                        best_move: None,
+                        age: 0,
+                    };
+
+                    if let Ok(mut tt_guard) = tt_thread.write() {
+                        tt_guard.store(entry);
+                    }
                 }
-            }
+            })
         })
-    }).collect();
-    
+        .collect();
+
     // Wait for all threads to complete
     for handle in handles {
         handle.join().unwrap();
     }
-    
+
     // Verify all entries were stored correctly
     let tt_read = Arc::clone(&tt);
     for i in 0..4 {
@@ -82,7 +87,7 @@ fn test_parallel_tt_concurrent_read_write() {
     // Test 4.1: Test concurrent read/write access
     let config = TranspositionConfig::performance_optimized();
     let tt = Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(config)));
-    
+
     // Writer thread
     let tt_write = Arc::clone(&tt);
     let writer = std::thread::spawn(move || {
@@ -95,15 +100,15 @@ fn test_parallel_tt_concurrent_read_write() {
                 best_move: None,
                 age: 0,
             };
-            
+
             if let Ok(mut tt_guard) = tt_write.write() {
                 tt_guard.store(entry);
             }
-            
+
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
     });
-    
+
     // Reader threads
     let mut readers = Vec::new();
     for _ in 0..4 {
@@ -111,7 +116,7 @@ fn test_parallel_tt_concurrent_read_write() {
         readers.push(std::thread::spawn(move || {
             let mut hits = 0;
             for k in 0..100 {
-                let hash = (k % 50) as u64;  // Deterministic hash pattern
+                let hash = (k % 50) as u64; // Deterministic hash pattern
                 if let Ok(tt_guard) = tt_read.read() {
                     if tt_guard.probe(hash, 3).is_some() {
                         hits += 1;
@@ -122,12 +127,12 @@ fn test_parallel_tt_concurrent_read_write() {
             hits
         }));
     }
-    
+
     writer.join().unwrap();
     for reader in readers {
         reader.join().unwrap();
     }
-    
+
     // Test completed without panics
     assert!(true);
 }
@@ -137,38 +142,40 @@ fn test_parallel_tt_statistics_aggregation() {
     // Test 4.3: TT statistics aggregation
     let config = TranspositionConfig::performance_optimized();
     let tt = Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(config)));
-    
-    let handles: Vec<_> = (0..4).map(|i| {
-        let tt_thread = Arc::clone(&tt);
-        std::thread::spawn(move || {
-            for j in 0..20 {
-                let hash = (i * 1000 + j) as u64;
-                let entry = TranspositionEntry {
-                    hash_key: hash,
-                    depth: 4,
-                    score: 100,
-                    flag: TranspositionFlag::Exact,
-                    best_move: None,
-                    age: 0,
-                };
-                
-                // Store
-                if let Ok(mut tt_guard) = tt_thread.write() {
-                    tt_guard.store(entry);
+
+    let handles: Vec<_> = (0..4)
+        .map(|i| {
+            let tt_thread = Arc::clone(&tt);
+            std::thread::spawn(move || {
+                for j in 0..20 {
+                    let hash = (i * 1000 + j) as u64;
+                    let entry = TranspositionEntry {
+                        hash_key: hash,
+                        depth: 4,
+                        score: 100,
+                        flag: TranspositionFlag::Exact,
+                        best_move: None,
+                        age: 0,
+                    };
+
+                    // Store
+                    if let Ok(mut tt_guard) = tt_thread.write() {
+                        tt_guard.store(entry);
+                    }
+
+                    // Probe
+                    if let Ok(tt_guard) = tt_thread.read() {
+                        tt_guard.probe(hash, 4);
+                    }
                 }
-                
-                // Probe
-                if let Ok(tt_guard) = tt_thread.read() {
-                    tt_guard.probe(hash, 4);
-                }
-            }
+            })
         })
-    }).collect();
-    
+        .collect();
+
     for handle in handles {
         handle.join().unwrap();
     }
-    
+
     // Get aggregated statistics (get_stats doesn't need a guard)
     let stats = tt.read().unwrap().get_stats();
     assert!(stats.total_probes > 0);
@@ -182,32 +189,34 @@ fn test_parallel_tt_collision_handling() {
     // Test 4.4: TT collision handling in parallel context
     let config = TranspositionConfig::performance_optimized();
     let tt = Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(config)));
-    
+
     // Store entries that may collide (same index but different hashes)
-    let handles: Vec<_> = (0..8).map(|i| {
-        let tt_thread = Arc::clone(&tt);
-        std::thread::spawn(move || {
-            // Use same hash to test replacement behavior
-            let hash = 12345u64;
-            let entry = TranspositionEntry {
-                hash_key: hash,
-                depth: (i % 3 + 3) as u8,  // Different depths
-                score: i as i32 * 10,
-                flag: TranspositionFlag::Exact,
-                best_move: None,
-                age: 0,
-            };
-            
-            if let Ok(mut tt_guard) = tt_thread.write() {
-                tt_guard.store(entry);
-            }
+    let handles: Vec<_> = (0..8)
+        .map(|i| {
+            let tt_thread = Arc::clone(&tt);
+            std::thread::spawn(move || {
+                // Use same hash to test replacement behavior
+                let hash = 12345u64;
+                let entry = TranspositionEntry {
+                    hash_key: hash,
+                    depth: (i % 3 + 3) as u8, // Different depths
+                    score: i as i32 * 10,
+                    flag: TranspositionFlag::Exact,
+                    best_move: None,
+                    age: 0,
+                };
+
+                if let Ok(mut tt_guard) = tt_thread.write() {
+                    tt_guard.store(entry);
+                }
+            })
         })
-    }).collect();
-    
+        .collect();
+
     for handle in handles {
         handle.join().unwrap();
     }
-    
+
     // Verify that at least one entry exists
     // Create a new Arc clone to avoid lifetime issues
     let tt_verify = Arc::clone(&tt);
@@ -228,11 +237,11 @@ fn test_parallel_search_with_lmr() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -244,7 +253,7 @@ fn test_parallel_search_with_lmr() {
             -10000,
             10000,
         );
-        
+
         // Search should complete (result may or may not be Some)
         assert!(true, "LMR should work in parallel context");
     }
@@ -257,11 +266,11 @@ fn test_parallel_search_with_null_move() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -273,7 +282,7 @@ fn test_parallel_search_with_null_move() {
             -10000,
             10000,
         );
-        
+
         // Search should complete
         assert!(true, "Null move pruning should work in parallel context");
     }
@@ -284,18 +293,19 @@ fn test_parallel_search_pruning_correctness() {
     // Test 4.8, 4.10: Verify thread-local move ordering doesn't interfere with pruning
     let config = ParallelSearchConfig::new(2);
     let stop_flag = Arc::new(AtomicBool::new(false));
-    
+
     // Single-threaded search
     let single_engine = SearchEngine::new(Some(stop_flag.clone()), 16);
-    
+
     // Parallel search
-    let parallel_engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag.clone()));
+    let parallel_engine_result =
+        ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag.clone()));
     assert!(parallel_engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         // Both should complete without panics
         let parallel_result = parallel_engine_result.unwrap().search_root_moves(
@@ -308,7 +318,7 @@ fn test_parallel_search_pruning_correctness() {
             -10000,
             10000,
         );
-        
+
         // Both should produce valid results (or None if interrupted)
         assert!(true, "Pruning should work correctly in parallel context");
     }
@@ -323,11 +333,11 @@ fn test_parallel_search_with_iid() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -339,7 +349,7 @@ fn test_parallel_search_with_iid() {
             -10000,
             10000,
         );
-        
+
         // IID should work in parallel context
         assert!(true, "IID should work in parallel search");
     }
@@ -352,11 +362,11 @@ fn test_parallel_search_with_aspiration_windows() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -366,9 +376,9 @@ fn test_parallel_search_with_aspiration_windows() {
             4,
             1000,
             -100,
-            100,  // Narrow window to trigger aspiration re-search
+            100, // Narrow window to trigger aspiration re-search
         );
-        
+
         assert!(true, "Aspiration windows should work in parallel context");
     }
 }
@@ -380,11 +390,11 @@ fn test_parallel_search_iid_tt_sharing() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         // First search with IID (depth 5)
         let result1 = engine_result.as_ref().unwrap().search_root_moves(
@@ -397,7 +407,7 @@ fn test_parallel_search_iid_tt_sharing() {
             -10000,
             10000,
         );
-        
+
         // Second search should benefit from TT entries created by IID
         let result2 = engine_result.unwrap().search_root_moves(
             &board,
@@ -409,7 +419,7 @@ fn test_parallel_search_iid_tt_sharing() {
             -10000,
             10000,
         );
-        
+
         // Both searches should complete
         assert!(true, "IID TT entries should be accessible across searches");
     }
@@ -424,11 +434,11 @@ fn test_parallel_search_with_tablebase() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -440,7 +450,7 @@ fn test_parallel_search_with_tablebase() {
             -10000,
             10000,
         );
-        
+
         // Tablebase lookups should work (may or may not hit)
         assert!(true, "Tablebase lookups should work in parallel context");
     }
@@ -455,11 +465,11 @@ fn test_parallel_search_tablebase_result_sharing() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -471,7 +481,7 @@ fn test_parallel_search_tablebase_result_sharing() {
             -10000,
             10000,
         );
-        
+
         // If tablebase hit occurs, stop flag should propagate
         assert!(true, "Tablebase results should be shareable across threads");
     }
@@ -486,10 +496,13 @@ fn test_parallel_search_with_opening_book() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     // Opening book is usually checked at a higher level (in lib.rs),
     // so this test just verifies parallel search doesn't interfere
-    assert!(engine_result.is_ok(), "Opening book integration should remain functional");
+    assert!(
+        engine_result.is_ok(),
+        "Opening book integration should remain functional"
+    );
 }
 
 #[test]
@@ -499,11 +512,11 @@ fn test_parallel_search_no_race_conditions_tablebase() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         // Run multiple searches concurrently to check for race conditions
         for _ in 0..5 {
@@ -532,23 +545,23 @@ fn test_parallel_search_shallow_depth() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
             &captured_pieces,
             player,
             &moves,
-            1,  // Very shallow depth
+            1, // Very shallow depth
             100,
             -10000,
             10000,
         );
-        
+
         assert!(true, "Shallow depth searches should work");
     }
 }
@@ -560,10 +573,10 @@ fn test_parallel_search_no_legal_moves() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let empty_moves: Vec<Move> = Vec::new();
-    
+
     let result = engine_result.unwrap().search_root_moves(
         &board,
         &captured_pieces,
@@ -574,7 +587,7 @@ fn test_parallel_search_no_legal_moves() {
         -10000,
         10000,
     );
-    
+
     // Should return None for empty move list
     assert!(result.is_none(), "Empty move list should return None");
 }
@@ -586,11 +599,11 @@ fn test_parallel_search_timeout() {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
     assert!(engine_result.is_ok());
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if !moves.is_empty() {
         let result = engine_result.unwrap().search_root_moves(
             &board,
@@ -598,11 +611,11 @@ fn test_parallel_search_timeout() {
             player,
             &moves,
             3,
-            1,  // Very short time limit
+            1, // Very short time limit
             -10000,
             10000,
         );
-        
+
         // May return None or a result depending on how fast it completes
         assert!(true, "Timeout should be handled gracefully");
     }
@@ -615,4 +628,3 @@ fn create_complex_position() -> (BitboardBoard, CapturedPieces, Player) {
     // Use starting position which has many legal moves
     create_test_position()
 }
-

@@ -26,8 +26,8 @@
 //! let score = evaluator.evaluate_material(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 /// Material evaluator with phase-aware piece values
@@ -107,7 +107,11 @@ impl MaterialEvaluator {
     }
 
     /// Evaluate material for captured pieces (pieces in hand)
-    fn evaluate_hand_material(&self, captured_pieces: &CapturedPieces, player: Player) -> TaperedScore {
+    fn evaluate_hand_material(
+        &self,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+    ) -> TaperedScore {
         let mut score = TaperedScore::default();
 
         // Get captured pieces for this player
@@ -449,7 +453,10 @@ mod tests {
         assert!(rook.eg > rook.mg, "Rook should be more valuable in endgame");
 
         let bishop = evaluator.get_piece_value(PieceType::Bishop);
-        assert!(bishop.eg > bishop.mg, "Bishop should be more valuable in endgame");
+        assert!(
+            bishop.eg > bishop.mg,
+            "Bishop should be more valuable in endgame"
+        );
 
         let pawn = evaluator.get_piece_value(PieceType::Pawn);
         assert!(pawn.eg > pawn.mg, "Pawn should be more valuable in endgame");
@@ -527,4 +534,3 @@ mod tests {
         assert_eq!(black_score.eg, -white_score.eg);
     }
 }
-

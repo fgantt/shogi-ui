@@ -1,13 +1,17 @@
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{CapturedPieces, Player};
 use shogi_engine::moves::MoveGenerator;
-use shogi_engine::search::search_engine::{SearchEngine, IterativeDeepening};
+use shogi_engine::search::search_engine::{IterativeDeepening, SearchEngine};
+use shogi_engine::types::{CapturedPieces, Player};
 
 fn parse_fen(fen: &str) -> (BitboardBoard, Player, CapturedPieces) {
     // BitboardBoard::from_fen expects three parts: board, player, captured
     // Ensure input meets that by stripping trailing move counts if present
     let parts: Vec<&str> = fen.split_whitespace().collect();
-    let fen3 = if parts.len() >= 3 { format!("{} {} {}", parts[0], parts[1], parts[2]) } else { fen.to_string() };
+    let fen3 = if parts.len() >= 3 {
+        format!("{} {} {}", parts[0], parts[1], parts[2])
+    } else {
+        fen.to_string()
+    };
     BitboardBoard::from_fen(&fen3).expect("valid FEN")
 }
 
@@ -19,7 +23,8 @@ fn best_move_threads(fen: &str, depth: u8, threads: usize) -> Option<String> {
     } else {
         IterativeDeepening::new(depth, 1000, None)
     };
-    id.search(&mut engine, &board, &captured, player).map(|(m, _)| m.to_usi_string())
+    id.search(&mut engine, &board, &captured, player)
+        .map(|(m, _)| m.to_usi_string())
 }
 
 #[test]
@@ -38,7 +43,11 @@ fn test_parallel_vs_single_threaded_on_positions() {
         let m1 = best_move_threads(fen, 3, 1);
         let m4 = best_move_threads(fen, 3, 4);
         // Parallel search can select different but comparable best moves; only require both respond
-        assert!(m1.is_some() && m4.is_some(), "Engine did not return a move at fen={}", fen);
+        assert!(
+            m1.is_some() && m4.is_some(),
+            "Engine did not return a move at fen={}",
+            fen
+        );
     }
 }
 
@@ -52,7 +61,11 @@ fn test_thread_safety_concurrent_searches() {
     }
     let res: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
     // Only assert all threads produced a move; allow benign divergence in PV under parallelism
-    assert!(res.iter().all(|m| m.is_some()), "Concurrent searches failed to return moves: {:?}", res);
+    assert!(
+        res.iter().all(|m| m.is_some()),
+        "Concurrent searches failed to return moves: {:?}",
+        res
+    );
 }
 
 #[test]
@@ -83,5 +96,3 @@ fn test_endgame_tablebase_parallel_sanity() {
     // We only assert that the engine responds; specific TB hits are environment-dependent
     assert!(m8.is_some());
 }
-
-

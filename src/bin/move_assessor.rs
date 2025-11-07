@@ -1,10 +1,10 @@
 //! Move Quality Assessor
-//! 
+//!
 //! Analyze game moves for quality, blunders, mistakes, and improvements.
 //! Evaluates each move in a game and provides detailed analysis.
 
 use clap::{Parser, Subcommand};
-use shogi_engine::{ShogiEngine, kif_parser::KifGame};
+use shogi_engine::{kif_parser::KifGame, ShogiEngine};
 // use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -78,10 +78,10 @@ enum Commands {
 #[derive(Debug, Clone)]
 enum MoveQuality {
     Excellent(i32),  // Score improvement > 0
-    Good,        // Score stable within ±50
-    Inaccuracy(i32),  // Score drops 50-100
-    Mistake(i32),     // Score drops 100-200
-    Blunder(i32),     // Score drops > 200
+    Good,            // Score stable within ±50
+    Inaccuracy(i32), // Score drops 50-100
+    Mistake(i32),    // Score drops 100-200
+    Blunder(i32),    // Score drops > 200
 }
 
 impl MoveQuality {
@@ -153,10 +153,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn analyze_kif_game(file_path: &PathBuf, _depth: u8, verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
+fn analyze_kif_game(
+    file_path: &PathBuf,
+    _depth: u8,
+    verbose: bool,
+) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
     // Load KIF game
     let kif_game = KifGame::from_file(file_path.to_str().unwrap())?;
-    
+
     if verbose {
         println!("Loaded KIF game with {} moves", kif_game.moves.len());
         if let Some(player1) = &kif_game.metadata.player1_name {
@@ -166,11 +170,11 @@ fn analyze_kif_game(file_path: &PathBuf, _depth: u8, verbose: bool) -> Result<Ga
             println!("Player 2 (後手): {}", player2);
         }
     }
-    
+
     let _engine = ShogiEngine::new();
     let mut analyses = Vec::new();
     let mut move_number = 1;
-    
+
     // Analyze each move in the game
     for kif_move in &kif_game.moves {
         let move_str = if let Some(usi) = &kif_move.usi_move {
@@ -178,24 +182,39 @@ fn analyze_kif_game(file_path: &PathBuf, _depth: u8, verbose: bool) -> Result<Ga
         } else {
             format!("KIF:{}", kif_move.move_text)
         };
-        
+
         // Assess move quality
         let quality = assess_move_quality(move_number, &move_str);
         analyses.push((move_number, move_str, quality));
-        
+
         // In real implementation, we would apply the move to the engine
         // and evaluate the position
-        
+
         move_number += 1;
     }
-    
+
     // Count classifications
-    let excellent = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_))).count();
-    let good = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Good)).count();
-    let inaccuracies = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Inaccuracy(_))).count();
-    let mistakes = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Mistake(_))).count();
-    let blunders = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_))).count();
-    
+    let excellent = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_)))
+        .count();
+    let good = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Good))
+        .count();
+    let inaccuracies = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Inaccuracy(_)))
+        .count();
+    let mistakes = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Mistake(_)))
+        .count();
+    let blunders = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_)))
+        .count();
+
     Ok(GameAnalysis {
         total_moves: move_number - 1,
         excellent_moves: excellent,
@@ -204,11 +223,13 @@ fn analyze_kif_game(file_path: &PathBuf, _depth: u8, verbose: bool) -> Result<Ga
         mistakes,
         blunders,
         average_score_change: 0.0,
-        worst_move: analyses.iter()
+        worst_move: analyses
+            .iter()
             .filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_)))
             .max_by_key(|(_, _, q)| q.centipawn_loss())
             .map(|(num, mv, _)| (*num, mv.clone(), 0)),
-        best_move: analyses.iter()
+        best_move: analyses
+            .iter()
             .filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_)))
             .max_by_key(|(_, _, q)| q.centipawn_loss())
             .map(|(num, mv, _)| (*num, mv.clone(), 0)),
@@ -220,7 +241,7 @@ fn analyze_game(
     input: &PathBuf,
     output: Option<&PathBuf>,
     depth: u8,
-    verbose: bool
+    verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Move Quality Assessor");
     println!("====================");
@@ -256,10 +277,13 @@ fn analyze_game(
     Ok(())
 }
 
-fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
+fn simulate_game_analysis(
+    depth: u8,
+    _verbose: bool,
+) -> Result<GameAnalysis, Box<dyn std::error::Error>> {
     // For demonstration, analyze a short simulated game
     let mut engine = ShogiEngine::new();
-    
+
     let mut analyses = Vec::new();
     let mut move_number = 1;
     let mut _previous_score = 0i32;
@@ -268,16 +292,16 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
     for _ in 0..10 {
         if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
             let move_str = best_move.to_usi_string();
-            
+
             // In real implementation, we would:
             // 1. Evaluate position before move
             // 2. Apply move and evaluate position after
             // 3. Compare with engine's best move
             // 4. Calculate score difference
-            
+
             let score_change = (move_number * 17) as i32 % 300 - 150;
             _previous_score = score_change;
-            
+
             let quality = match score_change {
                 change if change < -200 => MoveQuality::Blunder(change),
                 change if change < -100 => MoveQuality::Mistake(change),
@@ -285,7 +309,7 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
                 change if change > 50 => MoveQuality::Excellent(-change),
                 _ => MoveQuality::Good,
             };
-            
+
             analyses.push((move_number, move_str, quality));
             move_number += 1;
         } else {
@@ -294,11 +318,26 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
     }
 
     // Count classifications
-    let excellent = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_))).count();
-    let good = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Good)).count();
-    let inaccuracies = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Inaccuracy(_))).count();
-    let mistakes = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Mistake(_))).count();
-    let blunders = analyses.iter().filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_))).count();
+    let excellent = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_)))
+        .count();
+    let good = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Good))
+        .count();
+    let inaccuracies = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Inaccuracy(_)))
+        .count();
+    let mistakes = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Mistake(_)))
+        .count();
+    let blunders = analyses
+        .iter()
+        .filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_)))
+        .count();
 
     Ok(GameAnalysis {
         total_moves: move_number - 1,
@@ -308,11 +347,13 @@ fn simulate_game_analysis(depth: u8, _verbose: bool) -> Result<GameAnalysis, Box
         mistakes,
         blunders,
         average_score_change: 0.0,
-        worst_move: analyses.iter()
+        worst_move: analyses
+            .iter()
             .filter(|(_, _, q)| matches!(q, MoveQuality::Blunder(_)))
             .max_by_key(|(_, _, q)| q.centipawn_loss())
             .map(|(num, mv, _)| (*num, mv.clone(), 0)),
-        best_move: analyses.iter()
+        best_move: analyses
+            .iter()
             .filter(|(_, _, q)| matches!(q, MoveQuality::Excellent(_)))
             .max_by_key(|(_, _, q)| q.centipawn_loss())
             .map(|(num, mv, _)| (*num, mv.clone(), 0)),
@@ -344,24 +385,24 @@ fn assess_move_quality_real(
     engine: &mut ShogiEngine,
     player_move: &str,
     depth: u8,
-    _time_limit: u32
+    _time_limit: u32,
 ) -> Option<MoveQuality> {
     // Get engine's best move for comparison
     if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
         let best_move_str = best_move.to_usi_string();
-        
+
         // Compare the player's move with the engine's best move
         if player_move == best_move_str {
             return Some(MoveQuality::Excellent(0));
         }
-        
+
         // For simplicity, we simulate the score difference
         // In a full implementation, we would:
         // 1. Apply the player's move to get position A
         // 2. Apply engine's best move to get position B
         // 3. Evaluate both positions
         // 4. Calculate the score difference
-        
+
         Some(MoveQuality::Good)
     } else {
         None
@@ -378,8 +419,11 @@ fn print_analysis(analysis: &GameAnalysis, verbose: bool) {
     println!("  Mistakes (??):              {}", analysis.mistakes);
     println!("  Blunders (!!!):             {}", analysis.blunders);
 
-    println!("\nAccuracy: {:.1}%", 
-        ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64) * 100.0);
+    println!(
+        "\nAccuracy: {:.1}%",
+        ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64)
+            * 100.0
+    );
 
     if let Some((num, mv, _)) = &analysis.worst_move {
         println!("\nWorst move: #{} - {}", num, mv);
@@ -392,8 +436,13 @@ fn print_analysis(analysis: &GameAnalysis, verbose: bool) {
     if verbose {
         println!("\n=== Detailed Move Analysis ===");
         for (num, mv, quality) in &analysis.move_analyses {
-            println!("Move {}: {} {} ({})", 
-                num, mv, quality.to_string(), quality.name());
+            println!(
+                "Move {}: {} {} ({})",
+                num,
+                mv,
+                quality.to_string(),
+                quality.name()
+            );
         }
     }
 }
@@ -402,42 +451,51 @@ fn find_blunders(
     input: &PathBuf,
     threshold: i32,
     console: bool,
-    _verbose: bool
+    _verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Finding blunders with threshold: {} centipawns", threshold);
-    
+
     // Load and analyze the game
     let analysis = analyze_kif_game(input, 6, false)?;
-    
+
     println!("\n=== Blunder Analysis ===");
     println!("Total blunders found: {}", analysis.blunders);
-    
+
     if analysis.blunders > 0 {
         println!("\nBlunders (losing >{} centipawns):", threshold);
-        
+
         for (move_num, move_, quality) in &analysis.move_analyses {
             if matches!(quality, MoveQuality::Blunder(_)) {
                 let loss = quality.centipawn_loss();
                 println!("  Move {}: {} ({})", move_num, move_, loss);
-                
+
                 if !console {
                     break; // Only show first blunder if not in console mode
                 }
             }
         }
     }
-    
+
     if analysis.mistakes > 0 {
-        println!("\nMistakes (losing 100-{} centipawns): {}", threshold, analysis.mistakes);
+        println!(
+            "\nMistakes (losing 100-{} centipawns): {}",
+            threshold, analysis.mistakes
+        );
     }
-    
+
     if analysis.inaccuracies > 0 {
-        println!("Inaccuracies (losing 50-100 centipawns): {}", analysis.inaccuracies);
+        println!(
+            "Inaccuracies (losing 50-100 centipawns): {}",
+            analysis.inaccuracies
+        );
     }
-    
-    println!("\nOverall accuracy: {:.1}%", 
-        ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64) * 100.0);
-    
+
+    println!(
+        "\nOverall accuracy: {:.1}%",
+        ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64)
+            * 100.0
+    );
+
     Ok(())
 }
 
@@ -445,24 +503,27 @@ fn annotate_game(
     _input: &PathBuf,
     _output: &PathBuf,
     _depth: u8,
-    _verbose: bool
+    _verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Annotating game...");
     println!("Note: Full annotation implementation needed");
-    
+
     // In real implementation:
     // 1. Parse input game file
     // 2. Analyze each move
     // 3. Add quality annotations (!, ?, ??, !!!)
     // 4. Save annotated game to output file
-    
+
     Ok(())
 }
 
-fn save_analysis(output: &PathBuf, analysis: &GameAnalysis) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs::File;
+fn save_analysis(
+    output: &PathBuf,
+    analysis: &GameAnalysis,
+) -> Result<(), Box<dyn std::error::Error>> {
     use serde_json;
-    
+    use std::fs::File;
+
     #[derive(serde::Serialize)]
     struct AnalysisResult {
         total_moves: usize,
@@ -476,7 +537,7 @@ fn save_analysis(output: &PathBuf, analysis: &GameAnalysis) -> Result<(), Box<dy
         best_move: Option<String>,
         moves: Vec<MoveAnalysis>,
     }
-    
+
     #[derive(serde::Serialize)]
     struct MoveAnalysis {
         move_number: usize,
@@ -484,7 +545,7 @@ fn save_analysis(output: &PathBuf, analysis: &GameAnalysis) -> Result<(), Box<dy
         quality: String,
         annotation: String,
     }
-    
+
     let result = AnalysisResult {
         total_moves: analysis.total_moves,
         excellent_moves: analysis.excellent_moves,
@@ -492,21 +553,33 @@ fn save_analysis(output: &PathBuf, analysis: &GameAnalysis) -> Result<(), Box<dy
         inaccuracies: analysis.inaccuracies,
         mistakes: analysis.mistakes,
         blunders: analysis.blunders,
-        accuracy_percent: ((analysis.excellent_moves + analysis.good_moves) as f64 / analysis.total_moves as f64) * 100.0,
-        worst_move: analysis.worst_move.as_ref().map(|(n, m, _)| format!("Move #{}: {}", n, m)),
-        best_move: analysis.best_move.as_ref().map(|(n, m, _)| format!("Move #{}: {}", n, m)),
-        moves: analysis.move_analyses.iter().map(|(num, mv, q)| MoveAnalysis {
-            move_number: *num,
-            move_: mv.clone(),
-            quality: q.name(),
-            annotation: q.to_string(),
-        }).collect(),
+        accuracy_percent: ((analysis.excellent_moves + analysis.good_moves) as f64
+            / analysis.total_moves as f64)
+            * 100.0,
+        worst_move: analysis
+            .worst_move
+            .as_ref()
+            .map(|(n, m, _)| format!("Move #{}: {}", n, m)),
+        best_move: analysis
+            .best_move
+            .as_ref()
+            .map(|(n, m, _)| format!("Move #{}: {}", n, m)),
+        moves: analysis
+            .move_analyses
+            .iter()
+            .map(|(num, mv, q)| MoveAnalysis {
+                move_number: *num,
+                move_: mv.clone(),
+                quality: q.name(),
+                annotation: q.to_string(),
+            })
+            .collect(),
     };
-    
+
     let file = File::create(output)?;
     serde_json::to_writer_pretty(file, &result)?;
-    
+
     println!("Analysis saved to {:?}", output);
-    
+
     Ok(())
 }

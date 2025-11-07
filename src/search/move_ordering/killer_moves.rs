@@ -1,5 +1,5 @@
 //! Killer moves management
-//! 
+//!
 //! This module contains the killer moves heuristic implementation.
 //! Killer moves are moves that caused a beta cutoff at the same depth
 //! in a sibling node, and are likely to be good moves in similar positions.
@@ -33,7 +33,7 @@ impl Default for KillerConfig {
 }
 
 /// Killer move manager
-/// 
+///
 /// Manages killer moves organized by depth and provides methods for
 /// adding, retrieving, and managing killer moves.
 #[derive(Debug, Clone)]
@@ -65,42 +65,47 @@ impl KillerMoveManager {
     }
 
     /// Add a killer move for the current depth
-    /// 
+    ///
     /// This method stores a move that caused a beta cutoff, making it
     /// a candidate for early consideration in future searches at the same depth.
-    /// 
+    ///
     /// # Arguments
     /// * `move_` - The move to add as a killer move
     /// * `moves_equal` - Function to check if two moves are equal
     /// * `max_killer_moves_per_depth` - Maximum number of killer moves per depth
-    /// 
+    ///
     /// # Returns
     /// True if the move was added (not a duplicate), false otherwise
-    pub fn add_killer_move<F>(&mut self, move_: Move, moves_equal: F, max_killer_moves_per_depth: usize) -> bool
+    pub fn add_killer_move<F>(
+        &mut self,
+        move_: Move,
+        moves_equal: F,
+        max_killer_moves_per_depth: usize,
+    ) -> bool
     where
         F: Fn(&Move, &Move) -> bool,
     {
         let depth = self.current_depth;
-        
+
         // Check if this move is already a killer move at this depth
         let is_duplicate = if let Some(killer_list) = self.killer_moves.get(&depth) {
             killer_list.iter().any(|killer| moves_equal(killer, &move_))
         } else {
             false
         };
-        
+
         if !is_duplicate {
             // Get or create the killer moves list for this depth
             let killer_list = self.killer_moves.entry(depth).or_insert_with(Vec::new);
-            
+
             // Add the new killer move
             killer_list.push(move_);
-            
+
             // Limit the number of killer moves per depth
             if killer_list.len() > max_killer_moves_per_depth {
                 killer_list.remove(0); // Remove oldest killer move
             }
-            
+
             true
         } else {
             false
@@ -108,11 +113,11 @@ impl KillerMoveManager {
     }
 
     /// Check if a move is a killer move at the current depth
-    /// 
+    ///
     /// # Arguments
     /// * `move_` - The move to check
     /// * `moves_equal` - Function to check if two moves are equal
-    /// 
+    ///
     /// # Returns
     /// True if the move is a killer move at the current depth, false otherwise
     pub fn is_killer_move<F>(&self, move_: &Move, moves_equal: F) -> bool
@@ -120,7 +125,7 @@ impl KillerMoveManager {
         F: Fn(&Move, &Move) -> bool,
     {
         let depth = self.current_depth;
-        
+
         if let Some(killer_list) = self.killer_moves.get(&depth) {
             killer_list.iter().any(|killer| moves_equal(killer, move_))
         } else {
@@ -151,7 +156,7 @@ impl KillerMoveManager {
     }
 
     /// Set the maximum number of killer moves per depth
-    /// 
+    ///
     /// Trims existing killer move lists if necessary.
     pub fn set_max_killer_moves_per_depth(&mut self, max_moves: usize) {
         for killer_list in self.killer_moves.values_mut() {
@@ -190,10 +195,10 @@ impl Default for KillerMoveManager {
 }
 
 /// Score a move that matches a killer move
-/// 
+///
 /// Killer moves get high priority to encourage trying moves that
 /// caused beta cutoffs in previous searches at the same depth.
-/// 
+///
 /// # Arguments
 /// * `killer_move_weight` - Weight for killer moves
 pub fn score_killer_move(killer_move_weight: i32) -> i32 {

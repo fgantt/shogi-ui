@@ -20,21 +20,21 @@
 //! }
 //! ```
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Cached pattern recognition result
 #[derive(Debug, Clone, Copy)]
 pub struct CachedPatternResult {
     /// Tactical pattern score
-    pub tactical_score: (i32, i32),  // (mg, eg)
-    
+    pub tactical_score: (i32, i32), // (mg, eg)
+
     /// Positional pattern score
     pub positional_score: (i32, i32),
-    
+
     /// Endgame pattern score
     pub endgame_score: (i32, i32),
-    
+
     /// Age of entry (for LRU eviction)
     pub age: u64,
 }
@@ -43,16 +43,16 @@ pub struct CachedPatternResult {
 pub struct PatternCache {
     /// Cache storage
     cache: HashMap<u64, CachedPatternResult>,
-    
+
     /// Maximum cache size
     max_size: usize,
-    
+
     /// Current age counter (for LRU)
     age_counter: u64,
-    
+
     /// Cache statistics
     stats: PatternCacheStats,
-    
+
     /// Configuration
     config: PatternCacheConfig,
 }
@@ -103,14 +103,14 @@ impl PatternCache {
 
         if let Some(mut result) = self.cache.get(&position_hash).copied() {
             self.stats.hits += 1;
-            
+
             // Update age for LRU (touch entry)
             if self.config.enable_lru_touch {
                 result.age = self.age_counter;
                 self.age_counter += 1;
                 self.cache.insert(position_hash, result);
             }
-            
+
             Some(result)
         } else {
             self.stats.misses += 1;
@@ -186,7 +186,7 @@ impl PatternCache {
     /// Resize cache
     pub fn resize(&mut self, new_size: usize) {
         self.max_size = new_size;
-        
+
         // Evict entries if needed
         while self.cache.len() > self.max_size {
             self.evict_lru();
@@ -210,13 +210,13 @@ impl Default for PatternCache {
 pub struct PatternCacheConfig {
     /// Maximum cache size
     pub max_size: usize,
-    
+
     /// Enable LRU touch on lookup
     pub enable_lru_touch: bool,
-    
+
     /// Enable incremental updates
     pub enable_incremental_updates: bool,
-    
+
     /// Auto-clear threshold (clear when usage > threshold)
     pub auto_clear_threshold: f64,
 }
@@ -227,7 +227,7 @@ impl Default for PatternCacheConfig {
             max_size: 100_000,
             enable_lru_touch: true,
             enable_incremental_updates: true,
-            auto_clear_threshold: 0.95,  // Clear at 95% full
+            auto_clear_threshold: 0.95, // Clear at 95% full
         }
     }
 }
@@ -237,25 +237,25 @@ impl Default for PatternCacheConfig {
 pub struct PatternCacheStats {
     /// Number of lookups
     pub lookups: u64,
-    
+
     /// Number of hits
     pub hits: u64,
-    
+
     /// Number of misses
     pub misses: u64,
-    
+
     /// Number of stores
     pub stores: u64,
-    
+
     /// Number of evictions
     pub evictions: u64,
-    
+
     /// Number of invalidations
     pub invalidations: u64,
-    
+
     /// Number of clears
     pub clears: u64,
-    
+
     /// Total entries cleared
     pub total_cleared: u64,
 }
@@ -280,10 +280,10 @@ impl PatternCacheStats {
 pub struct IncrementalPatternTracker {
     /// Last position hash
     last_position_hash: Option<u64>,
-    
+
     /// Last pattern results
     last_results: Option<CachedPatternResult>,
-    
+
     /// Enable incremental updates
     enabled: bool,
 }
@@ -346,19 +346,19 @@ mod tests {
     #[test]
     fn test_cache_store_and_lookup() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(12345, result);
-        
+
         let retrieved = cache.lookup(12345);
         assert!(retrieved.is_some());
-        
+
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.tactical_score, (50, 30));
         assert_eq!(retrieved.positional_score, (40, 25));
@@ -367,21 +367,21 @@ mod tests {
     #[test]
     fn test_cache_hit_miss() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(12345, result);
-        
+
         // Hit
         let _ = cache.lookup(12345);
         assert_eq!(cache.stats().hits, 1);
         assert_eq!(cache.stats().misses, 0);
-        
+
         // Miss
         let _ = cache.lookup(99999);
         assert_eq!(cache.stats().hits, 1);
@@ -391,45 +391,45 @@ mod tests {
     #[test]
     fn test_cache_hit_rate() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(1, result);
         cache.store(2, result);
-        
-        let _ = cache.lookup(1);  // Hit
-        let _ = cache.lookup(2);  // Hit
-        let _ = cache.lookup(3);  // Miss
-        let _ = cache.lookup(4);  // Miss
-        
+
+        let _ = cache.lookup(1); // Hit
+        let _ = cache.lookup(2); // Hit
+        let _ = cache.lookup(3); // Miss
+        let _ = cache.lookup(4); // Miss
+
         assert_eq!(cache.hit_rate(), 0.5);
     }
 
     #[test]
     fn test_cache_eviction() {
         let mut cache = PatternCache::new(3);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(1, result);
         cache.store(2, result);
         cache.store(3, result);
-        
+
         assert_eq!(cache.size(), 3);
-        
+
         // This should trigger eviction
         cache.store(4, result);
-        
+
         assert_eq!(cache.size(), 3);
         assert_eq!(cache.stats().evictions, 1);
     }
@@ -437,22 +437,22 @@ mod tests {
     #[test]
     fn test_cache_clear() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(1, result);
         cache.store(2, result);
         cache.store(3, result);
-        
+
         assert_eq!(cache.size(), 3);
-        
+
         cache.clear();
-        
+
         assert_eq!(cache.size(), 0);
         assert_eq!(cache.stats().clears, 1);
         assert_eq!(cache.stats().total_cleared, 3);
@@ -461,17 +461,17 @@ mod tests {
     #[test]
     fn test_cache_invalidation() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(12345, result);
         assert_eq!(cache.size(), 1);
-        
+
         cache.invalidate(12345);
         assert_eq!(cache.size(), 0);
         assert_eq!(cache.stats().invalidations, 1);
@@ -480,20 +480,20 @@ mod tests {
     #[test]
     fn test_cache_resize() {
         let mut cache = PatternCache::new(5);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         for i in 0..5 {
             cache.store(i, result);
         }
-        
+
         assert_eq!(cache.size(), 5);
-        
+
         // Resize to smaller
         cache.resize(3);
         assert_eq!(cache.max_size(), 3);
@@ -503,37 +503,37 @@ mod tests {
     #[test]
     fn test_cache_usage_percent() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         for i in 0..50 {
             cache.store(i, result);
         }
-        
+
         assert_eq!(cache.usage_percent(), 50.0);
     }
 
     #[test]
     fn test_incremental_tracker() {
         let mut tracker = IncrementalPatternTracker::new();
-        
+
         assert!(!tracker.can_update_incrementally(123));
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         tracker.update(123, result);
         assert!(tracker.can_update_incrementally(456));
-        
+
         let last = tracker.last_results();
         assert!(last.is_some());
     }
@@ -541,28 +541,28 @@ mod tests {
     #[test]
     fn test_incremental_tracker_clear() {
         let mut tracker = IncrementalPatternTracker::new();
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         tracker.update(123, result);
         tracker.clear();
-        
+
         assert!(!tracker.can_update_incrementally(456));
     }
 
     #[test]
     fn test_stats_hit_rate_percent() {
         let mut stats = PatternCacheStats::default();
-        
+
         stats.lookups = 10;
         stats.hits = 7;
         stats.misses = 3;
-        
+
         assert_eq!(stats.hit_rate_percent(), 70.0);
         assert_eq!(stats.miss_rate_percent(), 30.0);
     }
@@ -570,27 +570,27 @@ mod tests {
     #[test]
     fn test_lru_eviction_order() {
         let mut cache = PatternCache::new(3);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(1, result);
         cache.store(2, result);
         cache.store(3, result);
-        
+
         // Access entry 1 (update its age)
         let _ = cache.lookup(1);
-        
+
         // Store new entry (should evict 2, the oldest untouched)
         cache.store(4, result);
-        
+
         // Entry 1 should still be there (was recently accessed)
         assert!(cache.lookup(1).is_some());
-        
+
         // Entry 2 might be evicted
         assert_eq!(cache.size(), 3);
     }
@@ -606,22 +606,22 @@ mod tests {
     #[test]
     fn test_reset_statistics() {
         let mut cache = PatternCache::new(100);
-        
+
         let result = CachedPatternResult {
             tactical_score: (50, 30),
             positional_score: (40, 25),
             endgame_score: (20, 35),
             age: 0,
         };
-        
+
         cache.store(1, result);
         let _ = cache.lookup(1);
-        
+
         assert!(cache.stats().stores > 0);
         assert!(cache.stats().lookups > 0);
-        
+
         cache.reset_stats();
-        
+
         assert_eq!(cache.stats().stores, 0);
         assert_eq!(cache.stats().lookups, 0);
     }

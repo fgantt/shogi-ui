@@ -1,7 +1,6 @@
-
-use std::io::{self, BufRead, Write};
 use crate::ShogiEngine;
 use num_cpus;
+use std::io::{self, BufRead, Write};
 
 pub struct UsiHandler {
     engine: ShogiEngine,
@@ -45,7 +44,7 @@ impl UsiHandler {
         crate::debug_utils::trace_log("USI_GO", "Starting go command processing");
         crate::debug_utils::set_search_start_time();
         crate::debug_utils::start_timing("go_command_parsing");
-        
+
         let mut btime = 0;
         let mut wtime = 0;
         let mut byoyomi = 0;
@@ -55,34 +54,49 @@ impl UsiHandler {
             match parts[i] {
                 "btime" => {
                     if i + 1 < parts.len() {
-                        btime = parts[i+1].parse().unwrap_or(0);
+                        btime = parts[i + 1].parse().unwrap_or(0);
                         i += 2;
-                    } else { i += 1; }
-                },
+                    } else {
+                        i += 1;
+                    }
+                }
                 "wtime" => {
                     if i + 1 < parts.len() {
-                        wtime = parts[i+1].parse().unwrap_or(0);
+                        wtime = parts[i + 1].parse().unwrap_or(0);
                         i += 2;
+                    } else {
+                        i += 1;
                     }
-                    else { i += 1; }
-                },
+                }
                 "byoyomi" => {
                     if i + 1 < parts.len() {
-                        byoyomi = parts[i+1].parse().unwrap_or(0);
+                        byoyomi = parts[i + 1].parse().unwrap_or(0);
                         i += 2;
-                    } else { i += 1; }
-                },
+                    } else {
+                        i += 1;
+                    }
+                }
                 _ => i += 1,
             }
         }
 
         crate::debug_utils::end_timing("go_command_parsing", "USI_GO");
-        crate::debug_utils::trace_log("USI_GO", &format!("Parsed time controls: btime={}ms wtime={}ms byoyomi={}ms", btime, wtime, byoyomi));
+        crate::debug_utils::trace_log(
+            "USI_GO",
+            &format!(
+                "Parsed time controls: btime={}ms wtime={}ms byoyomi={}ms",
+                btime, wtime, byoyomi
+            ),
+        );
 
         let time_to_use = if byoyomi > 0 {
             byoyomi
         } else {
-            let time_for_player = if self.engine.current_player == crate::types::Player::Black { btime } else { wtime };
+            let time_for_player = if self.engine.current_player == crate::types::Player::Black {
+                btime
+            } else {
+                wtime
+            };
             if time_for_player > 0 {
                 time_for_player / 40 // Use a fraction of the remaining time
             } else {
@@ -90,11 +104,19 @@ impl UsiHandler {
             }
         };
 
-        crate::debug_utils::log_decision("USI_GO", "Time allocation", 
-            &format!("Player: {:?}, Allocated time: {}ms", self.engine.current_player, time_to_use), 
-            Some(time_to_use as i32));
+        crate::debug_utils::log_decision(
+            "USI_GO",
+            "Time allocation",
+            &format!(
+                "Player: {:?}, Allocated time: {}ms",
+                self.engine.current_player, time_to_use
+            ),
+            Some(time_to_use as i32),
+        );
 
-        self.engine.stop_flag.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.engine
+            .stop_flag
+            .store(false, std::sync::atomic::Ordering::Relaxed);
 
         crate::debug_utils::start_timing("best_move_search");
         let best_move = self.engine.get_best_move(
@@ -105,7 +127,10 @@ impl UsiHandler {
         crate::debug_utils::end_timing("best_move_search", "USI_GO");
 
         if let Some(mv) = best_move {
-            crate::debug_utils::trace_log("USI_GO", &format!("Best move found: {}", mv.to_usi_string()));
+            crate::debug_utils::trace_log(
+                "USI_GO",
+                &format!("Best move found: {}", mv.to_usi_string()),
+            );
             vec![format!("bestmove {}", mv.to_usi_string())]
         } else {
             crate::debug_utils::trace_log("USI_GO", "No legal moves found, resigning");

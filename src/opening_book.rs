@@ -1,7 +1,7 @@
+use crate::types::{Move, PieceType, Player, Position};
+use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use lru::LruCache;
-use crate::types::{Move, Position, Player, PieceType};
 
 /// Enhanced book move with comprehensive metadata
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -170,7 +170,7 @@ impl<'de> Deserialize<'de> for OpeningBook {
         }
 
         let data = OpeningBookData::deserialize(deserializer)?;
-        
+
         Ok(OpeningBook {
             positions: data.positions,
             lazy_positions: data.lazy_positions,
@@ -311,7 +311,7 @@ impl PositionEntry {
     /// Get a random move weighted by move weights
     pub fn get_random_move(&self) -> Option<&BookMove> {
         use rand::Rng;
-        
+
         let total_weight: u32 = self.moves.iter().map(|m| m.weight).sum();
         if total_weight == 0 || self.moves.is_empty() {
             return None;
@@ -319,14 +319,14 @@ impl PositionEntry {
 
         let mut rng = rand::thread_rng();
         let mut random_value = rng.gen_range(0..total_weight);
-        
+
         for book_move in &self.moves {
             if random_value < book_move.weight {
                 return Some(book_move);
             }
             random_value -= book_move.weight;
         }
-        
+
         self.moves.first()
     }
 }
@@ -401,19 +401,19 @@ impl OpeningBook {
     /// Get all moves for a position
     pub fn get_moves(&mut self, fen: &str) -> Option<Vec<BookMove>> {
         let hash = self.hash_fen(fen);
-        
+
         // First check cache
         if let Some(entry) = self.position_cache.get(&hash) {
             return Some(entry.moves.clone());
         }
-        
+
         // Check regular positions
         if let Some(entry) = self.positions.get(&hash) {
             // Add to cache for future access
             self.position_cache.put(hash, entry.clone());
             return Some(entry.moves.clone());
         }
-        
+
         // Check lazy positions and load if found
         if self.lazy_positions.contains_key(&hash) {
             if let Ok(()) = self.load_lazy_position(hash) {
@@ -424,7 +424,7 @@ impl OpeningBook {
                 }
             }
         }
-        
+
         None
     }
 
@@ -432,14 +432,14 @@ impl OpeningBook {
     pub fn get_best_move(&mut self, fen: &str) -> Option<Move> {
         let hash = self.hash_fen(fen);
         let player = self.determine_player_from_fen(fen);
-        
+
         // First check cache
         if let Some(entry) = self.position_cache.get(&hash) {
             if let Some(book_move) = entry.get_best_move() {
                 return Some(book_move.to_engine_move(player));
             }
         }
-        
+
         // Check regular positions
         if let Some(entry) = self.positions.get(&hash) {
             // Add to cache for future access
@@ -448,7 +448,7 @@ impl OpeningBook {
                 return Some(book_move.to_engine_move(player));
             }
         }
-        
+
         // Check lazy positions and load if found
         if self.lazy_positions.contains_key(&hash) {
             if let Ok(()) = self.load_lazy_position(hash) {
@@ -461,7 +461,7 @@ impl OpeningBook {
                 }
             }
         }
-        
+
         None
     }
 
@@ -469,14 +469,14 @@ impl OpeningBook {
     pub fn get_random_move(&mut self, fen: &str) -> Option<Move> {
         let hash = self.hash_fen(fen);
         let player = self.determine_player_from_fen(fen);
-        
+
         // First check cache
         if let Some(entry) = self.position_cache.get(&hash) {
             if let Some(book_move) = entry.get_random_move() {
                 return Some(book_move.to_engine_move(player));
             }
         }
-        
+
         // Check regular positions
         if let Some(entry) = self.positions.get(&hash) {
             // Add to cache for future access
@@ -485,7 +485,7 @@ impl OpeningBook {
                 return Some(book_move.to_engine_move(player));
             }
         }
-        
+
         // Check lazy positions and load if found
         if self.lazy_positions.contains_key(&hash) {
             if let Ok(()) = self.load_lazy_position(hash) {
@@ -498,7 +498,7 @@ impl OpeningBook {
                 }
             }
         }
-        
+
         None
     }
 
@@ -506,7 +506,9 @@ impl OpeningBook {
     pub fn get_moves_with_metadata(&self, fen: &str) -> Option<Vec<(BookMove, Move)>> {
         if let Some(entry) = self.positions.get(&self.hash_fen(fen)) {
             let player = self.determine_player_from_fen(fen);
-            let moves: Vec<(BookMove, Move)> = entry.moves.iter()
+            let moves: Vec<(BookMove, Move)> = entry
+                .moves
+                .iter()
                 .map(|book_move| (book_move.clone(), book_move.to_engine_move(player)))
                 .collect();
             return Some(moves);
@@ -519,13 +521,13 @@ impl OpeningBook {
         if let Some(lazy_entry) = self.lazy_positions.remove(&hash) {
             // Parse the binary data to get the moves
             let moves = self.parse_moves_from_binary(&lazy_entry.moves_data)?;
-            
+
             // Create a regular position entry
             let position_entry = PositionEntry {
                 fen: lazy_entry.fen,
                 moves,
             };
-            
+
             // Move to regular positions
             self.positions.insert(hash, position_entry);
         }
@@ -536,15 +538,15 @@ impl OpeningBook {
     fn parse_moves_from_binary(&self, data: &[u8]) -> Result<Vec<BookMove>, OpeningBookError> {
         let mut reader = binary_format::BinaryReader::new(data.to_vec());
         let mut moves = Vec::new();
-        
+
         // Read move count
         let move_count = reader.read_u32()? as usize;
-        
+
         // Read each move
         for _ in 0..move_count {
             moves.push(reader.read_book_move()?);
         }
-        
+
         Ok(moves)
     }
 
@@ -559,19 +561,23 @@ impl OpeningBook {
     }
 
     /// Add a position entry to lazy storage (for rarely accessed positions)
-    pub fn add_lazy_position(&mut self, fen: String, moves: Vec<BookMove>) -> Result<(), OpeningBookError> {
+    pub fn add_lazy_position(
+        &mut self,
+        fen: String,
+        moves: Vec<BookMove>,
+    ) -> Result<(), OpeningBookError> {
         let hash = self.hash_fen(&fen);
-        
+
         // Serialize moves to binary data
         let moves_data = self.serialize_moves_to_binary(&moves)?;
-        
+
         let lazy_entry = LazyPositionEntry {
             fen,
             moves_data,
             move_count: moves.len() as u32,
             loaded: false,
         };
-        
+
         self.total_moves += moves.len();
         self.lazy_positions.insert(hash, lazy_entry);
         self.metadata.position_count = self.positions.len() + self.lazy_positions.len();
@@ -583,15 +589,15 @@ impl OpeningBook {
     fn serialize_moves_to_binary(&self, moves: &[BookMove]) -> Result<Box<[u8]>, OpeningBookError> {
         let writer = binary_format::BinaryWriter::new();
         let mut bytes = Vec::new();
-        
+
         // Write move count
         bytes.extend_from_slice(&(moves.len() as u32).to_le_bytes());
-        
+
         // Write each move
         for book_move in moves {
             bytes.extend_from_slice(&writer.write_book_move(book_move)?);
         }
-        
+
         Ok(bytes.into_boxed_slice())
     }
 
@@ -632,25 +638,29 @@ impl OpeningBook {
         // Clear existing positions to free memory
         self.positions.clear();
         self.position_cache.clear();
-        
+
         // Set up streaming parameters
         self.metadata.streaming_enabled = true;
         self.metadata.chunk_size = chunk_size;
     }
 
     /// Load a chunk of positions from binary data (for streaming)
-    pub fn load_chunk(&mut self, chunk_data: &[u8], _chunk_offset: u64) -> Result<usize, OpeningBookError> {
+    pub fn load_chunk(
+        &mut self,
+        chunk_data: &[u8],
+        _chunk_offset: u64,
+    ) -> Result<usize, OpeningBookError> {
         let mut reader = binary_format::BinaryReader::new(chunk_data.to_vec());
         let mut loaded_count = 0;
-        
+
         // Read chunk header
         let chunk_header = reader.read_chunk_header()?;
-        
+
         // Load positions from this chunk
         for _ in 0..chunk_header.position_count {
             if let Ok((fen, moves)) = reader.read_position_entry() {
                 let hash = self.hash_fen(&fen);
-                
+
                 // Store in lazy positions to save memory
                 if let Ok(moves_data) = self.serialize_moves_to_binary(&moves) {
                     let lazy_entry = LazyPositionEntry {
@@ -664,7 +674,7 @@ impl OpeningBook {
                 }
             }
         }
-        
+
         Ok(loaded_count)
     }
 
@@ -673,21 +683,24 @@ impl OpeningBook {
         (
             self.positions.len(),      // Loaded positions
             self.lazy_positions.len(), // Lazy positions
-            self.position_cache.len()  // Cached positions
+            self.position_cache.len(), // Cached positions
         )
     }
 
     /// Get detailed memory usage statistics
     pub fn get_memory_usage(&self) -> MemoryUsageStats {
         let loaded_positions_size = self.positions.len() * std::mem::size_of::<PositionEntry>();
-        let lazy_positions_size = self.lazy_positions.values()
+        let lazy_positions_size = self
+            .lazy_positions
+            .values()
             .map(|entry| entry.moves_data.len() + std::mem::size_of::<LazyPositionEntry>())
             .sum::<usize>();
         let cache_size = self.position_cache.len() * std::mem::size_of::<PositionEntry>();
         let temp_buffer_size = self.temp_buffer.capacity();
-        
-        let total_size = loaded_positions_size + lazy_positions_size + cache_size + temp_buffer_size;
-        
+
+        let total_size =
+            loaded_positions_size + lazy_positions_size + cache_size + temp_buffer_size;
+
         MemoryUsageStats {
             loaded_positions: self.positions.len(),
             loaded_positions_size,
@@ -708,25 +721,26 @@ impl OpeningBook {
     /// Optimize memory usage based on current patterns
     pub fn optimize_memory_usage(&mut self) -> MemoryOptimizationResult {
         let mut optimizations = Vec::new();
-        
+
         // Check if we should enable streaming mode
         let memory_usage = self.get_memory_usage();
-        if memory_usage.total_size > 50 * 1024 * 1024 { // 50MB threshold
+        if memory_usage.total_size > 50 * 1024 * 1024 {
+            // 50MB threshold
             self.enable_streaming_mode(1024 * 1024); // 1MB chunks
             optimizations.push("Enabled streaming mode for large opening book".to_string());
         }
-        
+
         // Clear cache if it's too large
         if self.position_cache.len() > 1000 {
             self.position_cache.clear();
             optimizations.push("Cleared LRU cache to free memory".to_string());
         }
-        
+
         // Suggest lazy loading for rarely accessed positions
         if self.positions.len() > 10000 && self.lazy_positions.len() < self.positions.len() / 2 {
             optimizations.push("Consider moving more positions to lazy loading".to_string());
         }
-        
+
         MemoryOptimizationResult {
             optimizations_applied: optimizations.len(),
             optimizations,
@@ -737,54 +751,59 @@ impl OpeningBook {
     /// Benchmark hash functions and return performance statistics
     pub fn benchmark_hash_functions(&self, test_fens: &[&str]) -> Vec<(String, u64, u64)> {
         let mut results = Vec::new();
-        
+
         for fen in test_fens {
             let start = std::time::Instant::now();
             let _hash1 = self.hash_fen_fnv1a(fen);
             let fnv1a_time = start.elapsed().as_nanos() as u64;
-            
+
             let start = std::time::Instant::now();
             let _hash2 = self.hash_fen_simple(fen);
             let simple_time = start.elapsed().as_nanos() as u64;
-            
+
             let start = std::time::Instant::now();
             let _hash3 = self.hash_fen_bitwise(fen);
             let bitwise_time = start.elapsed().as_nanos() as u64;
-            
+
             results.push(("FNV-1a".to_string(), fnv1a_time, 0));
             results.push(("Simple".to_string(), simple_time, 0));
             results.push(("Bitwise".to_string(), bitwise_time, 0));
         }
-        
+
         results
     }
 
     /// Convert opening book to binary format
     pub fn to_binary(&self) -> Result<Box<[u8]>, OpeningBookError> {
         let mut writer = binary_format::BinaryWriter::new();
-        writer.write_opening_book(self).map(|vec| vec.into_boxed_slice())
+        writer
+            .write_opening_book(self)
+            .map(|vec| vec.into_boxed_slice())
     }
 
     /// Validate the opening book integrity
     pub fn validate(&self) -> Result<(), OpeningBookError> {
         // Check if book is loaded
         if !self.loaded {
-            return Err(OpeningBookError::BinaryFormatError("Opening book not loaded".to_string()));
+            return Err(OpeningBookError::BinaryFormatError(
+                "Opening book not loaded".to_string(),
+            ));
         }
 
         // Validate metadata consistency
         if self.metadata.position_count != self.positions.len() {
-            return Err(OpeningBookError::BinaryFormatError(
-                format!("Position count mismatch: metadata={}, actual={}", 
-                    self.metadata.position_count, self.positions.len())
-            ));
+            return Err(OpeningBookError::BinaryFormatError(format!(
+                "Position count mismatch: metadata={}, actual={}",
+                self.metadata.position_count,
+                self.positions.len()
+            )));
         }
 
         if self.metadata.move_count != self.total_moves {
-            return Err(OpeningBookError::BinaryFormatError(
-                format!("Move count mismatch: metadata={}, actual={}", 
-                    self.metadata.move_count, self.total_moves)
-            ));
+            return Err(OpeningBookError::BinaryFormatError(format!(
+                "Move count mismatch: metadata={}, actual={}",
+                self.metadata.move_count, self.total_moves
+            )));
         }
 
         // Validate each position entry
@@ -799,30 +818,34 @@ impl OpeningBook {
                 // Validate positions are within bounds
                 if let Some(from) = book_move.from {
                     if !from.is_valid() {
-                        return Err(OpeningBookError::InvalidMove(
-                            format!("Invalid from position in move {}: {:?}", i, from)
-                        ));
+                        return Err(OpeningBookError::InvalidMove(format!(
+                            "Invalid from position in move {}: {:?}",
+                            i, from
+                        )));
                     }
                 }
 
                 if !book_move.to.is_valid() {
-                    return Err(OpeningBookError::InvalidMove(
-                        format!("Invalid to position in move {}: {:?}", i, book_move.to)
-                    ));
+                    return Err(OpeningBookError::InvalidMove(format!(
+                        "Invalid to position in move {}: {:?}",
+                        i, book_move.to
+                    )));
                 }
 
                 // Validate weight is reasonable
                 if book_move.weight > 10000 {
-                    return Err(OpeningBookError::InvalidMove(
-                        format!("Weight too high in move {}: {}", i, book_move.weight)
-                    ));
+                    return Err(OpeningBookError::InvalidMove(format!(
+                        "Weight too high in move {}: {}",
+                        i, book_move.weight
+                    )));
                 }
 
                 // Validate evaluation is reasonable
                 if book_move.evaluation.abs() > 10000 {
-                    return Err(OpeningBookError::InvalidMove(
-                        format!("Evaluation too extreme in move {}: {}", i, book_move.evaluation)
-                    ));
+                    return Err(OpeningBookError::InvalidMove(format!(
+                        "Evaluation too extreme in move {}: {}",
+                        i, book_move.evaluation
+                    )));
                 }
             }
         }
@@ -841,23 +864,23 @@ impl OpeningBook {
     fn hash_fen_fnv1a(&self, fen: &str) -> u64 {
         let mut hash: u64 = 0xcbf29ce484222325; // FNV offset basis
         let prime: u64 = 0x100000001b3; // FNV prime
-        
+
         for &byte in fen.as_bytes() {
             hash ^= byte as u64;
             hash = hash.wrapping_mul(prime);
         }
-        
+
         hash
     }
 
     /// Alternative hash function using a simple but fast algorithm
     fn hash_fen_simple(&self, fen: &str) -> u64 {
         let mut hash: u64 = 5381;
-        
+
         for &byte in fen.as_bytes() {
             hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
         }
-        
+
         hash
     }
 
@@ -865,12 +888,12 @@ impl OpeningBook {
     fn hash_fen_bitwise(&self, fen: &str) -> u64 {
         let mut hash: u64 = 0;
         let mut i = 0;
-        
+
         for &byte in fen.as_bytes() {
             hash ^= (byte as u64) << (i % 56);
             i += 1;
         }
-        
+
         hash
     }
 
@@ -891,9 +914,14 @@ impl OpeningBook {
     }
 
     /// Convert book move to engine move with proper move properties
-    pub fn convert_book_move_to_engine_move(&self, book_move: &BookMove, player: Player, board: &crate::bitboards::BitboardBoard) -> Move {
+    pub fn convert_book_move_to_engine_move(
+        &self,
+        book_move: &BookMove,
+        player: Player,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> Move {
         let mut engine_move = book_move.to_engine_move(player);
-        
+
         // Determine if this is a capture move
         if let Some(_from) = book_move.from {
             if let Some(piece) = board.get_piece(book_move.to) {
@@ -901,15 +929,20 @@ impl OpeningBook {
                 engine_move.captured_piece = Some(piece.clone());
             }
         }
-        
+
         // Determine if this move gives check (simplified heuristic)
         engine_move.gives_check = self.does_move_give_check(&engine_move, board, player);
-        
+
         engine_move
     }
 
     /// Check if a move gives check (simplified heuristic)
-    fn does_move_give_check(&self, _move: &Move, _board: &crate::bitboards::BitboardBoard, _player: Player) -> bool {
+    fn does_move_give_check(
+        &self,
+        _move: &Move,
+        _board: &crate::bitboards::BitboardBoard,
+        _player: Player,
+    ) -> bool {
         // This is a simplified implementation
         // In a full implementation, this would check if the move attacks the opponent's king
         false
@@ -938,7 +971,7 @@ impl OpeningBookBuilder {
     /// Add a single move to a position
     pub fn add_move_to_position(mut self, fen: String, book_move: BookMove) -> Self {
         let hash = self.book.hash_fen(&fen);
-        
+
         if let Some(entry) = self.book.positions.get_mut(&hash) {
             entry.add_move(book_move);
             self.book.total_moves += 1;
@@ -955,7 +988,12 @@ impl OpeningBookBuilder {
     }
 
     /// Set metadata
-    pub fn with_metadata(mut self, version: u32, created_at: Option<String>, updated_at: Option<String>) -> Self {
+    pub fn with_metadata(
+        mut self,
+        version: u32,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+    ) -> Self {
         self.book.metadata.version = version;
         self.book.metadata.created_at = created_at;
         self.book.metadata.updated_at = updated_at;
@@ -1002,7 +1040,7 @@ impl BookMoveBuilder {
             piece_type: None,
             is_drop: false,
             is_promotion: false,
-            weight: 100, // Default weight
+            weight: 100,   // Default weight
             evaluation: 0, // Default evaluation
             opening_name: None,
             move_notation: None,
@@ -1067,8 +1105,12 @@ impl BookMoveBuilder {
 
     /// Build the book move
     pub fn build(self) -> Result<BookMove, OpeningBookError> {
-        let to = self.to.ok_or_else(|| OpeningBookError::InvalidMove("Missing destination position".to_string()))?;
-        let piece_type = self.piece_type.ok_or_else(|| OpeningBookError::InvalidMove("Missing piece type".to_string()))?;
+        let to = self.to.ok_or_else(|| {
+            OpeningBookError::InvalidMove("Missing destination position".to_string())
+        })?;
+        let piece_type = self
+            .piece_type
+            .ok_or_else(|| OpeningBookError::InvalidMove("Missing piece type".to_string()))?;
 
         Ok(BookMove {
             from: self.from,
@@ -1093,14 +1135,14 @@ impl Default for BookMoveBuilder {
 /// Binary format implementation for opening books
 pub mod binary_format {
     use super::*;
-    use std::io::{Read, Cursor};
+    use std::io::{Cursor, Read};
 
     /// Magic number for Shogi Binary Opening Book format
     const MAGIC_NUMBER: [u8; 4] = *b"SBOB";
-    
+
     /// Current format version
     const FORMAT_VERSION: u32 = 1;
-    
+
     /// Binary format header
     #[derive(Debug, Clone)]
     pub struct BinaryHeader {
@@ -1138,7 +1180,7 @@ pub mod binary_format {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            
+
             Self {
                 magic: MAGIC_NUMBER,
                 version: FORMAT_VERSION,
@@ -1166,43 +1208,67 @@ pub mod binary_format {
         /// Read header from bytes
         pub fn from_bytes(data: &[u8]) -> Result<Self, OpeningBookError> {
             if data.len() < 48 {
-                return Err(OpeningBookError::BinaryFormatError("Insufficient data for header".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Insufficient data for header".to_string(),
+                ));
             }
 
             let mut cursor = Cursor::new(data);
             let mut magic = [0u8; 4];
-            cursor.read_exact(&mut magic).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read magic: {}", e)))?;
-            
+            cursor.read_exact(&mut magic).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read magic: {}", e))
+            })?;
+
             if magic != MAGIC_NUMBER {
-                return Err(OpeningBookError::BinaryFormatError("Invalid magic number".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Invalid magic number".to_string(),
+                ));
             }
 
             let mut version_bytes = [0u8; 4];
-            cursor.read_exact(&mut version_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read version: {}", e)))?;
+            cursor.read_exact(&mut version_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read version: {}", e))
+            })?;
             let version = u32::from_le_bytes(version_bytes);
 
             if version != FORMAT_VERSION {
-                return Err(OpeningBookError::BinaryFormatError(format!("Unsupported version: {}", version)));
+                return Err(OpeningBookError::BinaryFormatError(format!(
+                    "Unsupported version: {}",
+                    version
+                )));
             }
 
             let mut entry_count_bytes = [0u8; 8];
-            cursor.read_exact(&mut entry_count_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read entry count: {}", e)))?;
+            cursor.read_exact(&mut entry_count_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read entry count: {}", e))
+            })?;
             let entry_count = u64::from_le_bytes(entry_count_bytes);
 
             let mut hash_table_size_bytes = [0u8; 8];
-            cursor.read_exact(&mut hash_table_size_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read hash table size: {}", e)))?;
+            cursor.read_exact(&mut hash_table_size_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!(
+                    "Failed to read hash table size: {}",
+                    e
+                ))
+            })?;
             let hash_table_size = u64::from_le_bytes(hash_table_size_bytes);
 
             let mut total_moves_bytes = [0u8; 8];
-            cursor.read_exact(&mut total_moves_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read total moves: {}", e)))?;
+            cursor.read_exact(&mut total_moves_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read total moves: {}", e))
+            })?;
             let total_moves = u64::from_le_bytes(total_moves_bytes);
 
             let mut created_at_bytes = [0u8; 8];
-            cursor.read_exact(&mut created_at_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read created at: {}", e)))?;
+            cursor.read_exact(&mut created_at_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read created at: {}", e))
+            })?;
             let created_at = u64::from_le_bytes(created_at_bytes);
 
             let mut updated_at_bytes = [0u8; 8];
-            cursor.read_exact(&mut updated_at_bytes).map_err(|e| OpeningBookError::BinaryFormatError(format!("Failed to read updated at: {}", e)))?;
+            cursor.read_exact(&mut updated_at_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Failed to read updated at: {}", e))
+            })?;
             let updated_at = u64::from_le_bytes(updated_at_bytes);
 
             Ok(Self {
@@ -1220,19 +1286,24 @@ pub mod binary_format {
     impl BinaryWriter {
         /// Create a new writer
         pub fn new() -> Self {
-            Self {
-                buffer: Vec::new(),
-            }
+            Self { buffer: Vec::new() }
         }
 
         /// Write opening book to binary format
-        pub fn write_opening_book(&mut self, book: &OpeningBook) -> Result<Vec<u8>, OpeningBookError> {
+        pub fn write_opening_book(
+            &mut self,
+            book: &OpeningBook,
+        ) -> Result<Vec<u8>, OpeningBookError> {
             self.buffer.clear();
-            
+
             // Calculate hash table size (next power of 2 >= entry_count)
             let entry_count = book.positions.len() as u64;
-            let hash_table_size = if entry_count == 0 { 0 } else { entry_count.next_power_of_two() };
-            
+            let hash_table_size = if entry_count == 0 {
+                0
+            } else {
+                entry_count.next_power_of_two()
+            };
+
             // Create header
             let header = BinaryHeader::new(entry_count, hash_table_size, book.total_moves as u64);
             self.buffer.extend_from_slice(&header.to_bytes());
@@ -1241,7 +1312,7 @@ pub mod binary_format {
             let mut hash_table = Vec::with_capacity(hash_table_size as usize);
             let mut position_entries: Vec<Box<[u8]>> = Vec::new();
             let mut current_offset = 48 + (hash_table_size * 16) as usize; // Header + hash table
-            
+
             // Handle empty book case
             if entry_count == 0 {
                 return Ok(self.buffer.clone());
@@ -1256,20 +1327,22 @@ pub mod binary_format {
                 let entry_bytes = self.write_position_entry(entry)?;
                 let entry_len = entry_bytes.len();
                 position_entries.push(entry_bytes);
-                
+
                 // Add to hash table
                 hash_table.push(HashTableEntry {
                     position_hash: *hash,
                     entry_offset: current_offset as u64,
                 });
-                
+
                 current_offset += entry_len;
             }
 
             // Write hash table
             for entry in &hash_table {
-                self.buffer.extend_from_slice(&entry.position_hash.to_le_bytes());
-                self.buffer.extend_from_slice(&entry.entry_offset.to_le_bytes());
+                self.buffer
+                    .extend_from_slice(&entry.position_hash.to_le_bytes());
+                self.buffer
+                    .extend_from_slice(&entry.entry_offset.to_le_bytes());
             }
 
             // Pad hash table to size (only if we have entries to pad)
@@ -1288,29 +1361,32 @@ pub mod binary_format {
         }
 
         /// Write a position entry to bytes
-        fn write_position_entry(&self, entry: &PositionEntry) -> Result<Box<[u8]>, OpeningBookError> {
+        fn write_position_entry(
+            &self,
+            entry: &PositionEntry,
+        ) -> Result<Box<[u8]>, OpeningBookError> {
             let mut bytes = Vec::new();
-            
+
             // Write FEN string
             let fen_bytes = entry.fen.as_bytes();
             bytes.extend_from_slice(&(fen_bytes.len() as u32).to_le_bytes());
             bytes.extend_from_slice(fen_bytes);
-            
+
             // Write move count
             bytes.extend_from_slice(&(entry.moves.len() as u32).to_le_bytes());
-            
+
             // Write moves
             for book_move in &entry.moves {
                 bytes.extend_from_slice(&self.write_book_move(book_move)?);
             }
-            
+
             Ok(bytes.into_boxed_slice())
         }
 
         /// Write a book move to bytes
         pub fn write_book_move(&self, book_move: &BookMove) -> Result<Box<[u8]>, OpeningBookError> {
             let mut bytes = Vec::with_capacity(24); // Fixed size for book move
-            
+
             // From position (2 bytes: row << 8 | col, or 0xFFFF for None)
             let from_bytes = if let Some(from) = book_move.from {
                 ((from.row as u16) << 8 | from.col as u16).to_le_bytes()
@@ -1318,26 +1394,30 @@ pub mod binary_format {
                 [0xFF, 0xFF]
             };
             bytes.extend_from_slice(&from_bytes);
-            
+
             // To position (2 bytes: row << 8 | col)
             let to_bytes = ((book_move.to.row as u16) << 8 | book_move.to.col as u16).to_le_bytes();
             bytes.extend_from_slice(&to_bytes);
-            
+
             // Piece type (1 byte)
             bytes.push(book_move.piece_type.to_u8());
-            
+
             // Flags (1 byte: bit 0 = is_drop, bit 1 = is_promotion)
             let mut flags = 0u8;
-            if book_move.is_drop { flags |= 0x01; }
-            if book_move.is_promotion { flags |= 0x02; }
+            if book_move.is_drop {
+                flags |= 0x01;
+            }
+            if book_move.is_promotion {
+                flags |= 0x02;
+            }
             bytes.push(flags);
-            
+
             // Weight (4 bytes)
             bytes.extend_from_slice(&book_move.weight.to_le_bytes());
-            
+
             // Evaluation (4 bytes)
             bytes.extend_from_slice(&book_move.evaluation.to_le_bytes());
-            
+
             // Opening name length and data (4 bytes + variable)
             if let Some(ref name) = book_move.opening_name {
                 let name_bytes = name.as_bytes();
@@ -1346,7 +1426,7 @@ pub mod binary_format {
             } else {
                 bytes.extend_from_slice(&0u32.to_le_bytes());
             }
-            
+
             // Move notation length and data (4 bytes + variable)
             if let Some(ref notation) = book_move.move_notation {
                 let notation_bytes = notation.as_bytes();
@@ -1355,7 +1435,7 @@ pub mod binary_format {
             } else {
                 bytes.extend_from_slice(&0u32.to_le_bytes());
             }
-            
+
             Ok(bytes.into_boxed_slice())
         }
     }
@@ -1374,11 +1454,11 @@ pub mod binary_format {
             // Read header
             let header = BinaryHeader::from_bytes(&self.data[0..48])?;
             self.position = 48;
-            
+
             // Read hash table
             let hash_table_size = header.hash_table_size as usize;
             let mut hash_table = Vec::with_capacity(hash_table_size);
-            
+
             // Handle empty book case
             if hash_table_size == 0 {
                 return Ok(OpeningBook {
@@ -1399,7 +1479,7 @@ pub mod binary_format {
                     },
                 });
             }
-            
+
             for _ in 0..hash_table_size {
                 let position_hash = self.read_u64()?;
                 let entry_offset = self.read_u64()?;
@@ -1408,23 +1488,23 @@ pub mod binary_format {
                     entry_offset,
                 });
             }
-            
+
             // Read position entries
             let mut positions = HashMap::new();
             let mut total_moves = 0;
-            
+
             for entry in &hash_table {
                 if entry.position_hash == 0 && entry.entry_offset == 0 {
                     continue; // Skip empty hash table slots
                 }
-                
+
                 self.position = entry.entry_offset as usize;
                 let (fen, moves) = self.read_position_entry()?;
                 total_moves += moves.len();
-                
+
                 positions.insert(entry.position_hash, PositionEntry { fen, moves });
             }
-            
+
             let position_count = positions.len();
             Ok(OpeningBook {
                 positions,
@@ -1445,36 +1525,37 @@ pub mod binary_format {
             })
         }
 
-    /// Read chunk header for streaming
-    pub fn read_chunk_header(&mut self) -> Result<ChunkHeader, OpeningBookError> {
-        let position_count = self.read_u32()? as usize;
-        let chunk_offset = self.read_u64()?;
-        let chunk_size = self.read_u32()? as usize;
-        
-        Ok(ChunkHeader {
-            position_count,
-            chunk_offset,
-            chunk_size,
-        })
-    }
+        /// Read chunk header for streaming
+        pub fn read_chunk_header(&mut self) -> Result<ChunkHeader, OpeningBookError> {
+            let position_count = self.read_u32()? as usize;
+            let chunk_offset = self.read_u64()?;
+            let chunk_size = self.read_u32()? as usize;
 
-    /// Read a position entry
-    pub fn read_position_entry(&mut self) -> Result<(String, Vec<BookMove>), OpeningBookError> {
+            Ok(ChunkHeader {
+                position_count,
+                chunk_offset,
+                chunk_size,
+            })
+        }
+
+        /// Read a position entry
+        pub fn read_position_entry(&mut self) -> Result<(String, Vec<BookMove>), OpeningBookError> {
             // Read FEN string
             let fen_len = self.read_u32()? as usize;
             let fen_bytes = self.read_bytes(fen_len)?;
-            let fen = String::from_utf8(fen_bytes)
-                .map_err(|e| OpeningBookError::BinaryFormatError(format!("Invalid UTF-8 in FEN: {}", e)))?;
-            
+            let fen = String::from_utf8(fen_bytes).map_err(|e| {
+                OpeningBookError::BinaryFormatError(format!("Invalid UTF-8 in FEN: {}", e))
+            })?;
+
             // Read move count
             let move_count = self.read_u32()? as usize;
-            
+
             // Read moves
             let mut moves = Vec::with_capacity(move_count);
             for _ in 0..move_count {
                 moves.push(self.read_book_move()?);
             }
-            
+
             Ok((fen, moves))
         }
 
@@ -1490,52 +1571,57 @@ pub mod binary_format {
                     (from_bytes & 0xFF) as u8,
                 ))
             };
-            
+
             // Read to position
             let to_bytes = self.read_u16()?;
-            let to = Position::new(
-                ((to_bytes >> 8) & 0xFF) as u8,
-                (to_bytes & 0xFF) as u8,
-            );
-            
+            let to = Position::new(((to_bytes >> 8) & 0xFF) as u8, (to_bytes & 0xFF) as u8);
+
             // Read piece type
             let piece_type_byte = self.read_u8()?;
             let piece_type = PieceType::from_u8(piece_type_byte);
-            
+
             // Read flags
             let flags = self.read_u8()?;
             let is_drop = (flags & 0x01) != 0;
             let is_promotion = (flags & 0x02) != 0;
-            
+
             // Read weight
             let weight = self.read_u32()?;
-            
+
             // Read evaluation
             let evaluation = self.read_i32()?;
-            
+
             // Read opening name
             let name_len = self.read_u32()? as usize;
             let opening_name = if name_len > 0 {
                 let name_bytes = self.read_bytes(name_len)?;
-                Some(String::from_utf8(name_bytes)
-                    .map_err(|e| OpeningBookError::BinaryFormatError(format!("Invalid UTF-8 in opening name: {}", e)))?)
+                Some(String::from_utf8(name_bytes).map_err(|e| {
+                    OpeningBookError::BinaryFormatError(format!(
+                        "Invalid UTF-8 in opening name: {}",
+                        e
+                    ))
+                })?)
             } else {
                 None
             };
-            
+
             // Read move notation
             let notation_len = self.read_u32()? as usize;
             let move_notation = if notation_len > 0 {
                 let notation_bytes = self.read_bytes(notation_len)?;
-                Some(String::from_utf8(notation_bytes)
-                    .map_err(|e| OpeningBookError::BinaryFormatError(format!("Invalid UTF-8 in move notation: {}", e)))?)
+                Some(String::from_utf8(notation_bytes).map_err(|e| {
+                    OpeningBookError::BinaryFormatError(format!(
+                        "Invalid UTF-8 in move notation: {}",
+                        e
+                    ))
+                })?)
             } else {
                 None
             };
-            
+
             Ok(BookMove {
-            from,
-            to,
+                from,
+                to,
                 piece_type,
                 is_drop,
                 is_promotion,
@@ -1549,7 +1635,9 @@ pub mod binary_format {
         /// Helper methods for reading primitive types
         fn read_u8(&mut self) -> Result<u8, OpeningBookError> {
             if self.position >= self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let value = self.data[self.position];
             self.position += 1;
@@ -1558,7 +1646,9 @@ pub mod binary_format {
 
         fn read_u16(&mut self) -> Result<u16, OpeningBookError> {
             if self.position + 1 >= self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let bytes = [self.data[self.position], self.data[self.position + 1]];
             self.position += 2;
@@ -1567,7 +1657,9 @@ pub mod binary_format {
 
         pub fn read_u32(&mut self) -> Result<u32, OpeningBookError> {
             if self.position + 3 >= self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let bytes = [
                 self.data[self.position],
@@ -1581,7 +1673,9 @@ pub mod binary_format {
 
         fn read_u64(&mut self) -> Result<u64, OpeningBookError> {
             if self.position + 7 >= self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let bytes = [
                 self.data[self.position],
@@ -1599,7 +1693,9 @@ pub mod binary_format {
 
         fn read_i32(&mut self) -> Result<i32, OpeningBookError> {
             if self.position + 3 >= self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let bytes = [
                 self.data[self.position],
@@ -1613,7 +1709,9 @@ pub mod binary_format {
 
         fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>, OpeningBookError> {
             if self.position + len > self.data.len() {
-                return Err(OpeningBookError::BinaryFormatError("Unexpected end of data".to_string()));
+                return Err(OpeningBookError::BinaryFormatError(
+                    "Unexpected end of data".to_string(),
+                ));
             }
             let bytes = self.data[self.position..self.position + len].to_vec();
             self.position += len;
@@ -1635,8 +1733,9 @@ pub mod coordinate_utils {
     /// Convert USI coordinate string to Position
     /// Format: "1a", "5e", "9i" etc. (file + rank)
     pub fn string_to_position(coord: &str) -> Result<Position, OpeningBookError> {
-        Position::from_usi_string(coord)
-            .map_err(|e| OpeningBookError::InvalidMove(format!("Invalid USI coordinate '{}': {}", coord, e)))
+        Position::from_usi_string(coord).map_err(|e| {
+            OpeningBookError::InvalidMove(format!("Invalid USI coordinate '{}': {}", coord, e))
+        })
     }
 
     /// Convert Position to USI coordinate string
@@ -1648,7 +1747,8 @@ pub mod coordinate_utils {
 
     /// Parse piece type from string
     pub fn parse_piece_type(piece_str: &str) -> Result<PieceType, OpeningBookError> {
-        PieceType::from_str(piece_str)
-            .ok_or_else(|| OpeningBookError::InvalidMove(format!("Invalid piece type: {}", piece_str)))
+        PieceType::from_str(piece_str).ok_or_else(|| {
+            OpeningBookError::InvalidMove(format!("Invalid piece type: {}", piece_str))
+        })
     }
 }

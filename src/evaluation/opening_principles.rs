@@ -30,8 +30,8 @@
 //! let score = evaluator.evaluate_opening(&board, Player::Black, move_count);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 /// Opening principle evaluator
@@ -113,7 +113,12 @@ impl OpeningPrincipleEvaluator {
     /// Evaluate piece development in opening
     ///
     /// Pieces should be developed quickly in the opening
-    fn evaluate_development(&self, board: &BitboardBoard, player: Player, move_count: u32) -> TaperedScore {
+    fn evaluate_development(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        move_count: u32,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
@@ -139,7 +144,11 @@ impl OpeningPrincipleEvaluator {
     }
 
     /// Evaluate major piece development
-    fn evaluate_major_piece_development(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_major_piece_development(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let start_row = if player == Player::Black { 8 } else { 0 };
 
@@ -164,7 +173,11 @@ impl OpeningPrincipleEvaluator {
     }
 
     /// Evaluate minor piece development
-    fn evaluate_minor_piece_development(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_minor_piece_development(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let start_row = if player == Player::Black { 8 } else { 0 };
 
@@ -221,7 +234,11 @@ impl OpeningPrincipleEvaluator {
     /// Evaluate center control in opening
     ///
     /// Center control is critical in the opening
-    fn evaluate_center_control_opening(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_center_control_opening(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
@@ -245,11 +262,11 @@ impl OpeningPrincipleEvaluator {
                 if row == 4 && col == 4 {
                     continue; // Already counted
                 }
-                
+
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let value = self.get_opening_center_value(piece.piece_type) * 2 / 3;
-                    
+
                     if piece.player == player {
                         mg_score += value;
                         eg_score += value / 3;
@@ -286,7 +303,7 @@ impl OpeningPrincipleEvaluator {
     /// Building a solid defensive structure is important
     fn evaluate_castle_formation(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let mut mg_score = 0;
-        
+
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -299,9 +316,10 @@ impl OpeningPrincipleEvaluator {
 
         // 2. Gold and silver near king (traditional defense)
         let golds_near_king = self.count_pieces_near_king(board, king_pos, player, PieceType::Gold);
-        let silvers_near_king = self.count_pieces_near_king(board, king_pos, player, PieceType::Silver);
-        
-        mg_score += golds_near_king * 25;   // Golds are excellent defenders
+        let silvers_near_king =
+            self.count_pieces_near_king(board, king_pos, player, PieceType::Silver);
+
+        mg_score += golds_near_king * 25; // Golds are excellent defenders
         mg_score += silvers_near_king * 22; // Silvers also good
 
         // 3. Pawn shield in front of king
@@ -324,7 +342,13 @@ impl OpeningPrincipleEvaluator {
     }
 
     /// Count pieces near king (within 2 squares)
-    fn count_pieces_near_king(&self, board: &BitboardBoard, king_pos: Position, player: Player, piece_type: PieceType) -> i32 {
+    fn count_pieces_near_king(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        piece_type: PieceType,
+    ) -> i32 {
         let mut count = 0;
 
         for dr in -2..=2 {
@@ -373,7 +397,12 @@ impl OpeningPrincipleEvaluator {
     // =======================================================================
 
     /// Evaluate tempo (maintaining initiative)
-    fn evaluate_tempo(&self, board: &BitboardBoard, player: Player, move_count: u32) -> TaperedScore {
+    fn evaluate_tempo(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        move_count: u32,
+    ) -> TaperedScore {
         let mut mg_score = 0;
 
         // Basic tempo bonus (player to move has advantage)
@@ -431,7 +460,12 @@ impl OpeningPrincipleEvaluator {
     /// Evaluate opening-specific penalties
     ///
     /// Penalize common opening mistakes
-    fn evaluate_opening_penalties(&self, board: &BitboardBoard, player: Player, move_count: u32) -> TaperedScore {
+    fn evaluate_opening_penalties(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        move_count: u32,
+    ) -> TaperedScore {
         let mut mg_penalty = 0;
 
         // Early in opening (first 10 moves)
@@ -440,12 +474,14 @@ impl OpeningPrincipleEvaluator {
             // (This would require move history, so we skip for now)
 
             // 2. Penalty for undeveloped major pieces
-            let rooks_developed = self.find_pieces(board, player, PieceType::Rook)
+            let rooks_developed = self
+                .find_pieces(board, player, PieceType::Rook)
                 .iter()
                 .filter(|p| p.row != if player == Player::Black { 8 } else { 0 })
                 .count();
-            
-            let bishops_developed = self.find_pieces(board, player, PieceType::Bishop)
+
+            let bishops_developed = self
+                .find_pieces(board, player, PieceType::Bishop)
                 .iter()
                 .filter(|p| p.row != if player == Player::Black { 8 } else { 0 })
                 .count();
@@ -461,7 +497,7 @@ impl OpeningPrincipleEvaluator {
             // 3. Penalty for king moving too early (without castling)
             if let Some(king_pos) = self.find_king_position(board, player) {
                 let start_row = if player == Player::Black { 8 } else { 0 };
-                
+
                 if king_pos.row != start_row && !self.is_castle_position(king_pos, player) {
                     mg_penalty += 40; // Big penalty for early king moves
                 }
@@ -491,7 +527,12 @@ impl OpeningPrincipleEvaluator {
     }
 
     /// Find all pieces of a specific type
-    fn find_pieces(&self, board: &BitboardBoard, player: Player, piece_type: PieceType) -> Vec<Position> {
+    fn find_pieces(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        piece_type: PieceType,
+    ) -> Vec<Position> {
         let mut pieces = Vec::new();
         for row in 0..9 {
             for col in 0..9 {
@@ -573,7 +614,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_development(&board, Player::Black, 5);
-        
+
         // Starting position has no development
         assert_eq!(score.mg, 0);
     }
@@ -584,7 +625,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_center_control_opening(&board, Player::Black);
-        
+
         // Starting position is symmetric
         assert!(score.mg.abs() < 50);
     }
@@ -595,7 +636,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_castle_formation(&board, Player::Black);
-        
+
         // Starting position has some defensive structure
         assert!(score.mg > 0);
     }
@@ -606,7 +647,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_tempo(&board, Player::Black, 5);
-        
+
         // Should have base tempo bonus
         assert!(score.mg >= 10);
     }
@@ -617,7 +658,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_opening_penalties(&board, Player::Black, 5);
-        
+
         // Starting position shouldn't have major penalties
         assert!(score.mg >= -50);
     }
@@ -628,7 +669,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let count = evaluator.count_developed_pieces(&board, Player::Black);
-        
+
         // Starting position has no developed pieces
         assert_eq!(count, 0);
     }
@@ -636,7 +677,7 @@ mod tests {
     #[test]
     fn test_is_castle_position() {
         let evaluator = OpeningPrincipleEvaluator::new();
-        
+
         // Black castle positions
         assert!(evaluator.is_castle_position(Position::new(8, 1), Player::Black));
         assert!(evaluator.is_castle_position(Position::new(7, 7), Player::Black));
@@ -646,7 +687,7 @@ mod tests {
     #[test]
     fn test_opening_center_values() {
         let evaluator = OpeningPrincipleEvaluator::new();
-        
+
         assert_eq!(evaluator.get_opening_center_value(PieceType::Bishop), 40);
         assert_eq!(evaluator.get_opening_center_value(PieceType::Knight), 35);
         assert_eq!(evaluator.get_opening_center_value(PieceType::Pawn), 20);
@@ -658,7 +699,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_opening(&board, Player::Black, 5);
-        
+
         // Should have some positive opening evaluation
         assert!(score.mg > 0);
     }
@@ -708,7 +749,7 @@ mod tests {
 
         // Early game (move 5)
         let early_score = evaluator.evaluate_opening(&board, Player::Black, 5);
-        
+
         // Later (move 20)
         let late_score = evaluator.evaluate_opening(&board, Player::Black, 20);
 
@@ -731,4 +772,3 @@ mod tests {
         assert_eq!(minor.mg, 0);
     }
 }
-

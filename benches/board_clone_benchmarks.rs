@@ -1,7 +1,7 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, SamplingMode};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{CapturedPieces, Player};
 use shogi_engine::moves::MoveGenerator;
+use shogi_engine::types::{CapturedPieces, Player};
 
 fn bench_board_cloning(c: &mut Criterion) {
     let mut group = c.benchmark_group("board_clone");
@@ -13,11 +13,15 @@ fn bench_board_cloning(c: &mut Criterion) {
     let mg = MoveGenerator::new();
     let legal = mg.generate_legal_moves(&board, player, &captured);
 
-    group.bench_with_input(BenchmarkId::new("BitboardBoard::clone", legal.len()), &legal.len(), |b, _| {
-        b.iter(|| {
-            let _b2 = board.clone();
-        });
-    });
+    group.bench_with_input(
+        BenchmarkId::new("BitboardBoard::clone", legal.len()),
+        &legal.len(),
+        |b, _| {
+            b.iter(|| {
+                let _b2 = board.clone();
+            });
+        },
+    );
 
     group.bench_function("CapturedPieces::clone", |b| {
         b.iter(|| {
@@ -43,5 +47,3 @@ fn bench_board_cloning(c: &mut Criterion) {
 
 criterion_group!(benches, bench_board_cloning);
 criterion_main!(benches);
-
-

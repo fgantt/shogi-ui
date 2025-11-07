@@ -1,12 +1,11 @@
-/// Opening Book JSON to Binary Converter
-/// 
-/// This module provides functionality to convert the existing JSON opening book
-/// format to the new binary format, with enhanced move analysis and weight assignment.
-
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use crate::opening_book::*;
 use crate::types::*;
+/// Opening Book JSON to Binary Converter
+///
+/// This module provides functionality to convert the existing JSON opening book
+/// format to the new binary format, with enhanced move analysis and weight assignment.
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// JSON format structures for parsing the existing opening book
 #[derive(Debug, Deserialize, Serialize)]
@@ -38,9 +37,9 @@ pub struct MigrationStats {
 
 #[derive(Debug, Clone)]
 pub struct WeightDistribution {
-    pub high: usize,    // 800+
-    pub medium: usize,  // 500-799
-    pub low: usize,     // <500
+    pub high: usize,   // 800+
+    pub medium: usize, // 500-799
+    pub low: usize,    // <500
 }
 
 /// Opening book converter with enhanced analysis
@@ -75,9 +74,13 @@ impl OpeningBookConverter {
     }
 
     /// Convert JSON opening book to binary format
-    pub fn convert_from_json(&self, json_data: &str) -> Result<(OpeningBook, MigrationStats), OpeningBookError> {
-        let openings: Vec<JsonOpening> = serde_json::from_str(json_data)
-            .map_err(|e| OpeningBookError::JsonParseError(format!("Failed to parse JSON: {}", e)))?;
+    pub fn convert_from_json(
+        &self,
+        json_data: &str,
+    ) -> Result<(OpeningBook, MigrationStats), OpeningBookError> {
+        let openings: Vec<JsonOpening> = serde_json::from_str(json_data).map_err(|e| {
+            OpeningBookError::JsonParseError(format!("Failed to parse JSON: {}", e))
+        })?;
 
         let mut book = OpeningBook::new();
         let mut stats = MigrationStats {
@@ -95,25 +98,28 @@ impl OpeningBookConverter {
         for opening in openings {
             for (fen, moves) in opening.moves {
                 let converted_moves = self.convert_moves(&moves, &opening.name, &fen)?;
-                
+
                 if !converted_moves.is_empty() {
                     // Update statistics before moving the moves
                     stats.total_positions += 1;
                     stats.total_moves += moves.len();
-                    *stats.opening_counts.entry(opening.name.clone()).or_insert(0) += moves.len();
-                    
+                    *stats
+                        .opening_counts
+                        .entry(opening.name.clone())
+                        .or_insert(0) += moves.len();
+
                     // Update piece type and weight statistics
                     for book_move in &converted_moves {
                         let piece_type_str = format!("{:?}", book_move.piece_type);
                         *stats.piece_type_counts.entry(piece_type_str).or_insert(0) += 1;
-                        
+
                         match book_move.weight {
                             800..=1000 => stats.weight_distribution.high += 1,
                             500..=799 => stats.weight_distribution.medium += 1,
                             _ => stats.weight_distribution.low += 1,
                         }
                     }
-                    
+
                     book.add_position(fen.clone(), converted_moves);
                 }
             }
@@ -127,7 +133,12 @@ impl OpeningBookConverter {
     }
 
     /// Convert JSON moves to BookMoves
-    fn convert_moves(&self, moves: &[JsonMove], opening_name: &str, fen: &str) -> Result<Vec<BookMove>, OpeningBookError> {
+    fn convert_moves(
+        &self,
+        moves: &[JsonMove],
+        opening_name: &str,
+        fen: &str,
+    ) -> Result<Vec<BookMove>, OpeningBookError> {
         let mut converted_moves = Vec::new();
 
         for (i, json_move) in moves.iter().enumerate() {
@@ -139,7 +150,13 @@ impl OpeningBookConverter {
     }
 
     /// Convert a single JSON move to BookMove
-    fn convert_move(&self, json_move: &JsonMove, opening_name: &str, fen: &str, _move_index: usize) -> Result<BookMove, OpeningBookError> {
+    fn convert_move(
+        &self,
+        json_move: &JsonMove,
+        opening_name: &str,
+        fen: &str,
+        _move_index: usize,
+    ) -> Result<BookMove, OpeningBookError> {
         // Handle drop moves
         let (from, is_drop) = if json_move.from == "drop" {
             (None, true)
@@ -149,7 +166,7 @@ impl OpeningBookConverter {
         };
 
         let to = coordinate_utils::string_to_position(&json_move.to)?;
-        
+
         // Determine piece type
         let piece_type = if !json_move.piece_type.is_empty() {
             coordinate_utils::parse_piece_type(&json_move.piece_type)?
@@ -178,7 +195,12 @@ impl OpeningBookConverter {
     }
 
     /// Determine piece type from move context
-    fn determine_piece_type(&self, json_move: &JsonMove, opening_name: &str, _fen: &str) -> Result<PieceType, OpeningBookError> {
+    fn determine_piece_type(
+        &self,
+        json_move: &JsonMove,
+        opening_name: &str,
+        _fen: &str,
+    ) -> Result<PieceType, OpeningBookError> {
         // Use heuristics based on opening patterns and move characteristics
         match opening_name {
             "Aggressive Rook" => {
@@ -187,7 +209,7 @@ impl OpeningBookConverter {
                 } else {
                     Ok(PieceType::Pawn)
                 }
-            },
+            }
             "Yagura" => {
                 if json_move.from == "69" || json_move.to == "78" {
                     Ok(PieceType::Gold)
@@ -196,21 +218,21 @@ impl OpeningBookConverter {
                 } else {
                     Ok(PieceType::Pawn)
                 }
-            },
+            }
             "Kakugawari (Bishop Exchange)" => {
                 if json_move.from == "22" || json_move.to == "88" {
                     Ok(PieceType::Bishop)
                 } else {
                     Ok(PieceType::Pawn)
                 }
-            },
+            }
             "Shikenbisya (Fourth File Rook)" => {
                 if json_move.from == "28" || json_move.to == "58" {
                     Ok(PieceType::Rook)
                 } else {
                     Ok(PieceType::Pawn)
                 }
-            },
+            }
             _ => {
                 // Default heuristic based on move pattern
                 if json_move.from.starts_with("2") || json_move.from.starts_with("8") {
@@ -226,35 +248,39 @@ impl OpeningBookConverter {
 
     /// Calculate move weight based on opening and move characteristics
     fn calculate_weight(&self, json_move: &JsonMove, opening_name: &str) -> u32 {
-        let base_weight = self.opening_weights.get(opening_name).copied().unwrap_or(500);
-        
+        let base_weight = self
+            .opening_weights
+            .get(opening_name)
+            .copied()
+            .unwrap_or(500);
+
         let mut weight = base_weight;
-        
+
         // Adjust for promotion
         if json_move.promote {
             weight += 100;
         }
-        
+
         // Adjust for drop moves
         if json_move.from == "drop" {
             weight += 50;
         }
-        
+
         // Adjust for specific opening patterns
         match opening_name {
             "Aggressive Rook" => {
                 if json_move.from.starts_with("2") {
                     weight += 50;
                 }
-            },
+            }
             "Yagura" => {
                 if json_move.from == "77" || json_move.from == "69" {
                     weight += 50;
                 }
-            },
+            }
             _ => {}
         }
-        
+
         weight.min(1000)
     }
 
@@ -262,21 +288,21 @@ impl OpeningBookConverter {
     fn calculate_evaluation(&self, json_move: &JsonMove, opening_name: &str) -> i32 {
         let move_type = self.classify_move_type(json_move, opening_name);
         let base_eval = self.evaluation_scores.get(&move_type).copied().unwrap_or(0);
-        
+
         let mut evaluation = base_eval;
-        
+
         // Adjust for opening
         match opening_name {
             "Aggressive Rook" | "Yagura" => evaluation += 5,
             "Kakugawari (Bishop Exchange)" => evaluation += 10,
             _ => {}
         }
-        
+
         // Adjust for promotion
         if json_move.promote {
             evaluation += 15;
         }
-        
+
         evaluation
     }
 
@@ -286,29 +312,29 @@ impl OpeningBookConverter {
         if json_move.from == "drop" {
             return "tactical".to_string();
         }
-        
+
         // Check for promotion
         if json_move.promote {
             return "tactical".to_string();
         }
-        
+
         // Check for central moves
         let central_squares = ["44", "45", "54", "55"];
         if central_squares.contains(&json_move.to.as_str()) {
             return "central_control".to_string();
         }
-        
+
         // Check for king safety moves
         let king_safety_moves = ["77", "78", "87", "88"];
         if king_safety_moves.contains(&json_move.to.as_str()) {
             return "king_safety".to_string();
         }
-        
+
         // Check for development moves
         if opening_name == "Yagura" || opening_name == "Aggressive Rook" {
             return "development".to_string();
         }
-        
+
         "positional".to_string()
     }
 
@@ -343,22 +369,22 @@ impl OpeningBookConverter {
         if pos.len() != 2 {
             return "".to_string();
         }
-        
+
         let col = pos.chars().nth(0).unwrap_or('1');
         let row = pos.chars().nth(1).unwrap_or('1');
-        
+
         format!("{}{}", col, (b'a' + (row as u8 - b'1')) as char)
     }
 
     /// Generate migration report
     pub fn generate_report(&self, stats: &MigrationStats) -> String {
         let mut report = Vec::new();
-        
+
         report.push("=== Opening Book Migration Report ===".to_string());
         report.push(format!("Total Positions: {}", stats.total_positions));
         report.push(format!("Total Moves: {}", stats.total_moves));
         report.push("".to_string());
-        
+
         report.push("Opening Distribution:".to_string());
         let mut opening_vec: Vec<_> = stats.opening_counts.iter().collect();
         opening_vec.sort_by(|a, b| b.1.cmp(a.1));
@@ -366,7 +392,7 @@ impl OpeningBookConverter {
             report.push(format!("  {}: {} moves", opening, count));
         }
         report.push("".to_string());
-        
+
         report.push("Piece Type Distribution:".to_string());
         let mut piece_vec: Vec<_> = stats.piece_type_counts.iter().collect();
         piece_vec.sort_by(|a, b| b.1.cmp(a.1));
@@ -374,12 +400,21 @@ impl OpeningBookConverter {
             report.push(format!("  {}: {} moves", piece_type, count));
         }
         report.push("".to_string());
-        
+
         report.push("Weight Distribution:".to_string());
-        report.push(format!("  High (800+): {} moves", stats.weight_distribution.high));
-        report.push(format!("  Medium (500-799): {} moves", stats.weight_distribution.medium));
-        report.push(format!("  Low (<500): {} moves", stats.weight_distribution.low));
-        
+        report.push(format!(
+            "  High (800+): {} moves",
+            stats.weight_distribution.high
+        ));
+        report.push(format!(
+            "  Medium (500-799): {} moves",
+            stats.weight_distribution.medium
+        ));
+        report.push(format!(
+            "  Low (<500): {} moves",
+            stats.weight_distribution.low
+        ));
+
         report.join("\n")
     }
 }
@@ -397,7 +432,7 @@ mod tests {
     #[test]
     fn test_coordinate_conversion() {
         let converter = OpeningBookConverter::new();
-        
+
         // Test valid coordinates
         assert_eq!(converter.position_to_usi("27"), "2g");
         assert_eq!(converter.position_to_usi("11"), "1a");
@@ -407,14 +442,14 @@ mod tests {
     #[test]
     fn test_move_classification() {
         let converter = OpeningBookConverter::new();
-        
+
         let json_move = JsonMove {
             from: "27".to_string(),
             to: "26".to_string(),
             promote: false,
             piece_type: "".to_string(),
         };
-        
+
         let move_type = converter.classify_move_type(&json_move, "Aggressive Rook");
         assert_eq!(move_type, "development");
     }
@@ -422,14 +457,14 @@ mod tests {
     #[test]
     fn test_weight_calculation() {
         let converter = OpeningBookConverter::new();
-        
+
         let json_move = JsonMove {
             from: "27".to_string(),
             to: "26".to_string(),
             promote: false,
             piece_type: "".to_string(),
         };
-        
+
         let weight = converter.calculate_weight(&json_move, "Aggressive Rook");
         assert!(weight >= 850); // Base weight for Aggressive Rook
     }

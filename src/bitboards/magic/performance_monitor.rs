@@ -1,11 +1,11 @@
 //! Performance monitoring and automatic optimization for magic bitboards
-//! 
+//!
 //! This module provides runtime performance monitoring and adaptive optimization
 //! for magic bitboard operations.
 
-use std::time::Duration;
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Performance monitor for magic bitboard operations
 #[derive(Clone)]
@@ -46,9 +46,10 @@ impl PerformanceMonitor {
         if !self.enabled.load(Ordering::Relaxed) {
             return;
         }
-        
+
         self.total_lookups.fetch_add(1, Ordering::Relaxed);
-        self.total_lookup_time_ns.fetch_add(duration.as_nanos() as u64, Ordering::Relaxed);
+        self.total_lookup_time_ns
+            .fetch_add(duration.as_nanos() as u64, Ordering::Relaxed);
     }
 
     /// Record a cache hit
@@ -56,7 +57,7 @@ impl PerformanceMonitor {
         if !self.enabled.load(Ordering::Relaxed) {
             return;
         }
-        
+
         self.cache_hits.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -65,7 +66,7 @@ impl PerformanceMonitor {
         if !self.enabled.load(Ordering::Relaxed) {
             return;
         }
-        
+
         self.cache_misses.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -75,7 +76,7 @@ impl PerformanceMonitor {
         let total_time_ns = self.total_lookup_time_ns.load(Ordering::Relaxed);
         let cache_hits = self.cache_hits.load(Ordering::Relaxed);
         let cache_misses = self.cache_misses.load(Ordering::Relaxed);
-        
+
         MonitorStats {
             total_lookups,
             average_lookup_time: if total_lookups > 0 {
@@ -148,14 +149,14 @@ impl MonitorStats {
         // Performance is optimal if:
         // 1. Average lookup time < 100ns
         // 2. Cache hit rate > 80% (if caching is used)
-        self.average_lookup_time.as_nanos() < 100 &&
-        (self.cache_hit_rate > 0.8 || self.cache_hits + self.cache_misses == 0)
+        self.average_lookup_time.as_nanos() < 100
+            && (self.cache_hit_rate > 0.8 || self.cache_hits + self.cache_misses == 0)
     }
 
     /// Get performance grade
     pub fn grade(&self) -> PerformanceGrade {
         let lookup_time_ns = self.average_lookup_time.as_nanos();
-        
+
         if lookup_time_ns < 50 {
             PerformanceGrade::Excellent
         } else if lookup_time_ns < 100 {
@@ -171,10 +172,10 @@ impl MonitorStats {
 /// Performance grade
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PerformanceGrade {
-    Excellent,  // < 50ns average
-    Good,       // < 100ns average
-    Fair,       // < 500ns average
-    Poor,       // >= 500ns average
+    Excellent, // < 50ns average
+    Good,      // < 100ns average
+    Fair,      // < 500ns average
+    Poor,      // >= 500ns average
 }
 
 /// Adaptive optimizer that adjusts settings based on performance
@@ -197,34 +198,34 @@ impl AdaptiveOptimizer {
     /// Check if optimization should be triggered
     pub fn should_optimize(&self) -> bool {
         let stats = self.monitor.stats();
-        
+
         // Optimize if:
         // 1. We have enough data
         // 2. Performance is below threshold
-        stats.total_lookups > self.check_interval &&
-        stats.average_lookup_time > self.optimization_threshold
+        stats.total_lookups > self.check_interval
+            && stats.average_lookup_time > self.optimization_threshold
     }
 
     /// Get optimization recommendations
     pub fn recommendations(&self) -> Vec<OptimizationRecommendation> {
         let stats = self.monitor.stats();
         let mut recommendations = Vec::new();
-        
+
         // Check cache performance
         if stats.cache_misses > stats.cache_hits && stats.cache_hits + stats.cache_misses > 1000 {
             recommendations.push(OptimizationRecommendation::IncreaseCacheSize);
         }
-        
+
         // Check lookup time
         if stats.average_lookup_time.as_nanos() > 500 {
             recommendations.push(OptimizationRecommendation::OptimizeLookupAlgorithm);
         }
-        
+
         // Check if caching would help
         if stats.cache_hits + stats.cache_misses == 0 && stats.total_lookups > 10_000 {
             recommendations.push(OptimizationRecommendation::EnableCaching);
         }
-        
+
         recommendations
     }
 }
@@ -248,7 +249,7 @@ mod tests {
     fn test_performance_monitor_creation() {
         let monitor = PerformanceMonitor::new();
         assert!(monitor.is_enabled());
-        
+
         let stats = monitor.stats();
         assert_eq!(stats.total_lookups, 0);
     }
@@ -256,10 +257,10 @@ mod tests {
     #[test]
     fn test_record_lookup() {
         let monitor = PerformanceMonitor::new();
-        
+
         monitor.record_lookup(Duration::from_nanos(50));
         monitor.record_lookup(Duration::from_nanos(60));
-        
+
         let stats = monitor.stats();
         assert_eq!(stats.total_lookups, 2);
         assert!(stats.average_lookup_time.as_nanos() > 0);
@@ -268,11 +269,11 @@ mod tests {
     #[test]
     fn test_cache_tracking() {
         let monitor = PerformanceMonitor::new();
-        
+
         monitor.record_cache_hit();
         monitor.record_cache_hit();
         monitor.record_cache_miss();
-        
+
         let stats = monitor.stats();
         assert_eq!(stats.cache_hits, 2);
         assert_eq!(stats.cache_misses, 1);
@@ -282,14 +283,14 @@ mod tests {
     #[test]
     fn test_monitor_enable_disable() {
         let monitor = PerformanceMonitor::new();
-        
+
         monitor.record_lookup(Duration::from_nanos(100));
         assert_eq!(monitor.stats().total_lookups, 1);
-        
+
         monitor.disable();
         monitor.record_lookup(Duration::from_nanos(100));
         assert_eq!(monitor.stats().total_lookups, 1); // Should not increase
-        
+
         monitor.enable();
         monitor.record_lookup(Duration::from_nanos(100));
         assert_eq!(monitor.stats().total_lookups, 2); // Should increase
@@ -298,10 +299,10 @@ mod tests {
     #[test]
     fn test_performance_grade() {
         let monitor = PerformanceMonitor::new();
-        
+
         monitor.record_lookup(Duration::from_nanos(30));
         let stats = monitor.stats();
-        
+
         assert_eq!(stats.grade(), PerformanceGrade::Excellent);
     }
 
@@ -309,14 +310,14 @@ mod tests {
     fn test_adaptive_optimizer() {
         let monitor = PerformanceMonitor::new();
         let optimizer = AdaptiveOptimizer::new(monitor.clone());
-        
+
         // Record poor performance
         for _ in 0..20_000 {
             monitor.record_lookup(Duration::from_nanos(600));
         }
-        
+
         assert!(optimizer.should_optimize(), "Should trigger optimization");
-        
+
         let recommendations = optimizer.recommendations();
         assert!(!recommendations.is_empty(), "Should have recommendations");
     }

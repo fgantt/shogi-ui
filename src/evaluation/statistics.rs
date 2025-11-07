@@ -123,7 +123,8 @@ impl EvaluationStatistics {
 
     /// Generate comprehensive report
     pub fn generate_report(&self) -> StatisticsReport {
-        let session_duration = self.session_start
+        let session_duration = self
+            .session_start
             .map(|start| start.elapsed())
             .unwrap_or(Duration::from_secs(0));
 
@@ -194,8 +195,16 @@ pub struct ScoreStatistics {
 impl ScoreStatistics {
     fn record(&mut self, score: i32) {
         self.sum += score as i64;
-        self.min = if self.count == 0 { score } else { self.min.min(score) };
-        self.max = if self.count == 0 { score } else { self.max.max(score) };
+        self.min = if self.count == 0 {
+            score
+        } else {
+            self.min.min(score)
+        };
+        self.max = if self.count == 0 {
+            score
+        } else {
+            self.max.max(score)
+        };
         self.count += 1;
 
         // Update distribution
@@ -218,7 +227,7 @@ pub struct PhaseStatistics {
     /// Total phase sum
     sum: i64,
     /// Phase distribution
-    opening_count: u64,    // phase >= 192
+    opening_count: u64, // phase >= 192
     middlegame_count: u64, // 64 <= phase < 192
     endgame_count: u64,    // phase < 64
     /// Detailed distribution (26 buckets, 10 phase units each)
@@ -337,7 +346,7 @@ impl PerformanceMetrics {
     fn record_timing(&mut self, duration_ns: u64) {
         self.total_time_ns += duration_ns;
         self.timing_count += 1;
-        
+
         if self.timing_count == 1 {
             self.min_time_ns = duration_ns;
             self.max_time_ns = duration_ns;
@@ -396,8 +405,16 @@ impl std::fmt::Display for StatisticsReport {
         writeln!(f)?;
         writeln!(f, "Session Overview:")?;
         writeln!(f, "  Total Evaluations: {}", self.evaluation_count)?;
-        writeln!(f, "  Session Duration: {:.2} seconds", self.session_duration_secs)?;
-        writeln!(f, "  Throughput: {:.0} evals/sec", self.evaluations_per_second)?;
+        writeln!(
+            f,
+            "  Session Duration: {:.2} seconds",
+            self.session_duration_secs
+        )?;
+        writeln!(
+            f,
+            "  Throughput: {:.0} evals/sec",
+            self.evaluations_per_second
+        )?;
         writeln!(f)?;
         writeln!(f, "Score Statistics:")?;
         writeln!(f, "  Average Score: {:.2}", self.score_stats.average())?;
@@ -406,19 +423,47 @@ impl std::fmt::Display for StatisticsReport {
         writeln!(f)?;
         writeln!(f, "Phase Distribution:")?;
         writeln!(f, "  Average Phase: {:.2}", self.phase_stats.average())?;
-        writeln!(f, "  Opening (≥192): {:.1}%", self.phase_stats.opening_percentage())?;
-        writeln!(f, "  Middlegame (64-191): {:.1}%", self.phase_stats.middlegame_percentage())?;
-        writeln!(f, "  Endgame (<64): {:.1}%", self.phase_stats.endgame_percentage())?;
+        writeln!(
+            f,
+            "  Opening (≥192): {:.1}%",
+            self.phase_stats.opening_percentage()
+        )?;
+        writeln!(
+            f,
+            "  Middlegame (64-191): {:.1}%",
+            self.phase_stats.middlegame_percentage()
+        )?;
+        writeln!(
+            f,
+            "  Endgame (<64): {:.1}%",
+            self.phase_stats.endgame_percentage()
+        )?;
         writeln!(f)?;
         writeln!(f, "Accuracy Metrics:")?;
-        writeln!(f, "  Mean Absolute Error: {:.2}", self.accuracy_metrics.mean_absolute_error())?;
-        writeln!(f, "  Root Mean Squared Error: {:.2}", self.accuracy_metrics.root_mean_squared_error())?;
+        writeln!(
+            f,
+            "  Mean Absolute Error: {:.2}",
+            self.accuracy_metrics.mean_absolute_error()
+        )?;
+        writeln!(
+            f,
+            "  Root Mean Squared Error: {:.2}",
+            self.accuracy_metrics.root_mean_squared_error()
+        )?;
         writeln!(f)?;
         writeln!(f, "Performance Metrics:")?;
-        writeln!(f, "  Average Time: {:.2} μs", self.performance_metrics.average_time_us())?;
+        writeln!(
+            f,
+            "  Average Time: {:.2} μs",
+            self.performance_metrics.average_time_us()
+        )?;
         writeln!(f, "  Min Time: {} ns", self.performance_metrics.min_time_ns)?;
         writeln!(f, "  Max Time: {} ns", self.performance_metrics.max_time_ns)?;
-        writeln!(f, "  Throughput: {:.0} evals/sec", self.performance_metrics.throughput_per_second())?;
+        writeln!(
+            f,
+            "  Throughput: {:.0} evals/sec",
+            self.performance_metrics.throughput_per_second()
+        )?;
         Ok(())
     }
 }
@@ -437,12 +482,12 @@ mod tests {
     #[test]
     fn test_enable_disable() {
         let mut stats = EvaluationStatistics::new();
-        
+
         assert!(!stats.is_enabled());
-        
+
         stats.enable();
         assert!(stats.is_enabled());
-        
+
         stats.disable();
         assert!(!stats.is_enabled());
     }
@@ -462,7 +507,7 @@ mod tests {
     #[test]
     fn test_score_statistics() {
         let mut score_stats = ScoreStatistics::default();
-        
+
         score_stats.record(100);
         score_stats.record(200);
         score_stats.record(150);
@@ -475,15 +520,15 @@ mod tests {
     #[test]
     fn test_phase_statistics() {
         let mut phase_stats = PhaseStatistics::default();
-        
+
         // Opening
         phase_stats.record(256);
         phase_stats.record(200);
-        
+
         // Middlegame
         phase_stats.record(128);
         phase_stats.record(100);
-        
+
         // Endgame
         phase_stats.record(32);
         phase_stats.record(10);
@@ -497,7 +542,7 @@ mod tests {
     #[test]
     fn test_accuracy_metrics() {
         let mut accuracy = AccuracyMetrics::default();
-        
+
         accuracy.record(100, 110); // Error: -10
         accuracy.record(200, 190); // Error: +10
         accuracy.record(150, 150); // Error: 0
@@ -509,7 +554,7 @@ mod tests {
     #[test]
     fn test_performance_metrics() {
         let mut perf = PerformanceMetrics::default();
-        
+
         perf.record_timing(1000);
         perf.record_timing(1500);
         perf.record_timing(1200);
@@ -529,7 +574,7 @@ mod tests {
         stats.record_timing(1000);
 
         let report = stats.generate_report();
-        
+
         assert_eq!(report.evaluation_count, 1);
         assert!(report.enabled);
     }
@@ -543,7 +588,7 @@ mod tests {
 
         let json = stats.export_json();
         assert!(json.is_ok());
-        
+
         let json_str = json.unwrap();
         assert!(json_str.contains("evaluation_count"));
     }
@@ -621,4 +666,3 @@ mod tests {
         assert!(display.contains("Phase Distribution"));
     }
 }
-

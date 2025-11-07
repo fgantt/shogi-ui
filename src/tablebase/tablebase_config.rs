@@ -1,5 +1,5 @@
 //! Configuration management for the tablebase system
-//! 
+//!
 //! This module provides configuration structures and management for
 //! the tablebase system, including solver-specific settings and
 //! performance tuning options.
@@ -117,12 +117,12 @@ impl TablebaseConfig {
 
     /// Load configuration from a JSON file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
-        
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {}", e))?;
+
         let config: TablebaseConfig = serde_json::from_str(&content)
             .map_err(|e| format!("Failed to parse config file: {}", e))?;
-        
+
         config.validate()?;
         Ok(config)
     }
@@ -130,21 +130,20 @@ impl TablebaseConfig {
     /// Save configuration to a JSON file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         self.validate()?;
-        
+
         let content = serde_json::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        
-        fs::write(path, content)
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
-        
+
+        fs::write(path, content).map_err(|e| format!("Failed to write config file: {}", e))?;
+
         Ok(())
     }
 
     /// Load configuration from a JSON string
     pub fn from_json(json: &str) -> Result<Self, String> {
-        let config: TablebaseConfig = serde_json::from_str(json)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        
+        let config: TablebaseConfig =
+            serde_json::from_str(json).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
         config.validate()?;
         Ok(config)
     }
@@ -152,7 +151,7 @@ impl TablebaseConfig {
     /// Convert configuration to JSON string
     pub fn to_json(&self) -> Result<String, String> {
         self.validate()?;
-        
+
         serde_json::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize to JSON: {}", e))
     }
@@ -221,7 +220,8 @@ impl SolverConfig {
     /// Merge with another solver configuration
     pub fn merge_with(&mut self, other: &SolverConfig) {
         self.king_gold_vs_king.merge_with(&other.king_gold_vs_king);
-        self.king_silver_vs_king.merge_with(&other.king_silver_vs_king);
+        self.king_silver_vs_king
+            .merge_with(&other.king_silver_vs_king);
         self.king_rook_vs_king.merge_with(&other.king_rook_vs_king);
     }
 }
@@ -531,8 +531,8 @@ impl Default for MemoryConfig {
         Self {
             enable_monitoring: true,
             max_memory_bytes: 50 * 1024 * 1024, // 50MB default
-            warning_threshold: 0.7, // 70%
-            critical_threshold: 0.9, // 90%
+            warning_threshold: 0.7,             // 70%
+            critical_threshold: 0.9,            // 90%
             enable_auto_eviction: true,
             check_interval_ms: 1000, // 1 second
             enable_logging: false,
@@ -546,8 +546,8 @@ impl MemoryConfig {
         Self {
             enable_monitoring: true,
             max_memory_bytes: 10 * 1024 * 1024, // 10MB
-            warning_threshold: 0.5, // 50%
-            critical_threshold: 0.8, // 80%
+            warning_threshold: 0.5,             // 50%
+            critical_threshold: 0.8,            // 80%
             enable_auto_eviction: true,
             check_interval_ms: 500, // 0.5 seconds
             enable_logging: true,
@@ -559,8 +559,8 @@ impl MemoryConfig {
         Self {
             enable_monitoring: false,
             max_memory_bytes: 200 * 1024 * 1024, // 200MB
-            warning_threshold: 0.8, // 80%
-            critical_threshold: 0.95, // 95%
+            warning_threshold: 0.8,              // 80%
+            critical_threshold: 0.95,            // 95%
             enable_auto_eviction: true,
             check_interval_ms: 5000, // 5 seconds
             enable_logging: false,
@@ -570,13 +570,13 @@ impl MemoryConfig {
     /// Create a WASM memory-constrained configuration
     pub fn wasm_memory_constrained() -> Self {
         Self {
-            enable_monitoring: false, // Disable in WASM
+            enable_monitoring: false,          // Disable in WASM
             max_memory_bytes: 8 * 1024 * 1024, // 8MB for WASM
-            warning_threshold: 0.6, // 60%
-            critical_threshold: 0.8, // 80%
+            warning_threshold: 0.6,            // 60%
+            critical_threshold: 0.8,           // 80%
             enable_auto_eviction: true,
             check_interval_ms: 2000, // 2 seconds
-            enable_logging: false, // Disable in WASM
+            enable_logging: false,   // Disable in WASM
         }
     }
 
@@ -790,7 +790,13 @@ impl TablebaseStats {
     }
 
     /// Record a probe with timing information
-    pub fn record_probe(&mut self, cache_hit: bool, solver_hit: bool, solver_name: Option<&str>, probe_time_ms: u64) {
+    pub fn record_probe(
+        &mut self,
+        cache_hit: bool,
+        solver_hit: bool,
+        solver_name: Option<&str>,
+        probe_time_ms: u64,
+    ) {
         self.total_probes += 1;
         self.total_probe_time_ms += probe_time_ms;
         self.average_probe_time_ms = self.total_probe_time_ms as f64 / self.total_probes as f64;
@@ -870,7 +876,10 @@ impl TablebaseStats {
         let mut percentages = HashMap::new();
         if self.solver_hits > 0 {
             for (solver, hits) in &self.solver_breakdown {
-                percentages.insert(solver.clone(), (*hits as f64 / self.solver_hits as f64) * 100.0);
+                percentages.insert(
+                    solver.clone(),
+                    (*hits as f64 / self.solver_hits as f64) * 100.0,
+                );
             }
         }
         percentages
@@ -1035,7 +1044,7 @@ mod tests {
     #[test]
     fn test_tablebase_stats_record_probe() {
         let mut stats = TablebaseStats::new();
-        
+
         // Record a cache hit
         stats.record_probe(true, false, None, 5);
         assert_eq!(stats.total_probes, 1);
@@ -1061,10 +1070,10 @@ mod tests {
         let mut stats = TablebaseStats::new();
         stats.record_probe(true, true, Some("KingGoldVsKing"), 5);
         stats.record_probe(false, false, None, 10);
-        
+
         assert_eq!(stats.total_probes, 2);
         assert!(!stats.solver_breakdown.is_empty());
-        
+
         stats.reset();
         assert_eq!(stats.total_probes, 0);
         assert_eq!(stats.cache_hits, 0);
@@ -1079,7 +1088,7 @@ mod tests {
         let mut stats = TablebaseStats::new();
         stats.record_probe(true, false, None, 5);
         stats.record_probe(false, true, Some("KingGoldVsKing"), 10);
-        
+
         let summary = stats.performance_summary();
         assert!(summary.contains("Total Probes: 2"));
         assert!(summary.contains("Cache Hit Rate: 50.00%"));
@@ -1090,13 +1099,13 @@ mod tests {
     #[test]
     fn test_tablebase_config_json_serialization() {
         let config = TablebaseConfig::performance_optimized();
-        
+
         // Test JSON serialization
         let json = config.to_json().unwrap();
         assert!(json.contains("enabled"));
         assert!(json.contains("cache_size"));
         assert!(json.contains("performance"));
-        
+
         // Test JSON deserialization
         let parsed_config = TablebaseConfig::from_json(&json).unwrap();
         assert_eq!(config.enabled, parsed_config.enabled);
@@ -1111,9 +1120,9 @@ mod tests {
         override_config.cache_size = 20000;
         override_config.max_depth = 15;
         override_config.solvers.king_gold_vs_king.enabled = false;
-        
+
         base_config.merge_with(&override_config);
-        
+
         assert_eq!(base_config.cache_size, 20000);
         assert_eq!(base_config.max_depth, 15);
         assert!(!base_config.solvers.king_gold_vs_king.enabled);
@@ -1125,17 +1134,17 @@ mod tests {
         let mut config = TablebaseConfig::default();
         config.cache_size = 0;
         assert!(config.validate().is_err());
-        
+
         // Test invalid max depth
         let mut config = TablebaseConfig::default();
         config.max_depth = 0;
         assert!(config.validate().is_err());
-        
+
         // Test invalid confidence threshold
         let mut config = TablebaseConfig::default();
         config.confidence_threshold = 1.5;
         assert!(config.validate().is_err());
-        
+
         config.confidence_threshold = -0.1;
         assert!(config.validate().is_err());
     }
@@ -1147,9 +1156,9 @@ mod tests {
         override_config.enabled = false;
         override_config.max_moves_to_mate = 50;
         override_config.priority = 200;
-        
+
         base_config.merge_with(&override_config);
-        
+
         assert!(!base_config.enabled);
         assert_eq!(base_config.max_moves_to_mate, 50);
         assert_eq!(base_config.priority, 200);
@@ -1162,9 +1171,9 @@ mod tests {
         override_config.enable_monitoring = false;
         override_config.eviction_strategy = EvictionStrategy::LRU;
         override_config.max_probe_time_ms = 500;
-        
+
         base_config.merge_with(&override_config);
-        
+
         assert!(!base_config.enable_monitoring);
         assert_eq!(base_config.eviction_strategy, EvictionStrategy::LRU);
         assert_eq!(base_config.max_probe_time_ms, 500);

@@ -1,5 +1,5 @@
 //! Cache management for move ordering
-//! 
+//!
 //! This module contains cache structures, eviction policies, and cache
 //! management methods for the move ordering system.
 
@@ -77,7 +77,7 @@ impl Default for CacheConfig {
 }
 
 /// Move ordering cache manager
-/// 
+///
 /// Manages the move ordering result cache with support for multiple eviction policies.
 /// Task 3.0: Enhanced with LRU, depth-preferred, and hybrid eviction policies.
 #[derive(Debug, Clone)]
@@ -99,7 +99,7 @@ impl MoveOrderingCacheManager {
     }
 
     /// Get a cached entry for a key
-    /// 
+    ///
     /// Returns a mutable reference to the cache entry if found, updating LRU tracking.
     pub fn get_mut(&mut self, key: &(u64, u8)) -> Option<&mut MoveOrderingCacheEntry> {
         if let Some(entry) = self.cache.get_mut(key) {
@@ -113,7 +113,7 @@ impl MoveOrderingCacheManager {
     }
 
     /// Insert a new cache entry
-    /// 
+    ///
     /// Inserts a new entry into the cache, evicting an entry if necessary.
     /// Returns the evicted key if an eviction occurred.
     /// Updates last_access to current lru_access_counter.
@@ -128,7 +128,7 @@ impl MoveOrderingCacheManager {
         // Update last_access to current counter
         self.lru_access_counter += 1;
         entry.last_access = self.lru_access_counter;
-        
+
         // If cache has room, just insert
         if self.cache.len() < max_size {
             self.cache.insert(key, entry);
@@ -147,7 +147,7 @@ impl MoveOrderingCacheManager {
     }
 
     /// Evict an entry from the cache based on the eviction policy
-    /// 
+    ///
     /// Returns the key of the entry to evict, or None if cache is empty.
     pub fn evict_entry(
         &self,
@@ -167,7 +167,7 @@ impl MoveOrderingCacheManager {
                 // LRU: Remove least recently used entry (lowest last_access)
                 let mut lru_key = None;
                 let mut lru_access = u64::MAX;
-                
+
                 for (key, entry) in &self.cache {
                     if entry.last_access < lru_access {
                         lru_access = entry.last_access;
@@ -180,7 +180,7 @@ impl MoveOrderingCacheManager {
                 // Depth-preferred: Remove entry with lowest depth
                 let mut min_depth_key = None;
                 let mut min_depth = u8::MAX;
-                
+
                 for (key, entry) in &self.cache {
                     if entry.depth < min_depth {
                         min_depth = entry.depth;
@@ -193,30 +193,38 @@ impl MoveOrderingCacheManager {
                 // Hybrid: Combine LRU and depth-preferred
                 let lru_weight = hybrid_lru_weight;
                 let depth_weight = 1.0 - lru_weight;
-                
+
                 // Normalize LRU: older = lower score (more likely to evict)
-                let max_access = self.cache.values()
+                let max_access = self
+                    .cache
+                    .values()
                     .map(|e| e.last_access)
                     .max()
                     .unwrap_or(1);
-                let min_access = self.cache.values()
+                let min_access = self
+                    .cache
+                    .values()
                     .map(|e| e.last_access)
                     .min()
                     .unwrap_or(1);
                 let access_range = (max_access - min_access).max(1) as f32;
-                
+
                 // Normalize depth: lower depth = lower score (more likely to evict)
-                let max_depth = self.cache.values()
+                let max_depth = self
+                    .cache
+                    .values()
                     .map(|e| e.depth as f32)
                     .fold(0.0, f32::max);
-                let min_depth = self.cache.values()
+                let min_depth = self
+                    .cache
+                    .values()
                     .map(|e| e.depth as f32)
                     .fold(u8::MAX as f32, f32::min);
                 let depth_range = (max_depth - min_depth).max(1.0);
-                
+
                 let mut evict_key = None;
                 let mut evict_score = f32::MAX;
-                
+
                 for (key, entry) in &self.cache {
                     // LRU score: normalized to 0.0 (oldest) .. 1.0 (newest)
                     let lru_score = if access_range > 0.0 {
@@ -224,23 +232,24 @@ impl MoveOrderingCacheManager {
                     } else {
                         0.5
                     };
-                    
+
                     // Depth score: normalized to 0.0 (shallowest) .. 1.0 (deepest)
                     let depth_score = if depth_range > 0.0 {
                         (entry.depth as f32 - min_depth) / depth_range
                     } else {
                         0.5
                     };
-                    
+
                     // Combined score: lower = more likely to evict
-                    let combined_score = depth_weight * (1.0 - depth_score) + lru_weight * lru_score;
-                    
+                    let combined_score =
+                        depth_weight * (1.0 - depth_score) + lru_weight * lru_score;
+
                     if combined_score < evict_score {
                         evict_score = combined_score;
                         evict_key = Some(*key);
                     }
                 }
-                
+
                 evict_key
             }
         }
@@ -290,7 +299,7 @@ impl MoveOrderingCacheManager {
     }
 
     /// Get cache entry (for testing)
-    /// 
+    ///
     /// This method is primarily for testing purposes to verify cache contents.
     pub fn get(&self, key: &(u64, u8)) -> Option<&MoveOrderingCacheEntry> {
         self.cache.get(key)
@@ -307,4 +316,3 @@ impl Default for MoveOrderingCacheManager {
         Self::new()
     }
 }
-

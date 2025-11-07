@@ -1,9 +1,9 @@
 //! Optimization algorithms for automated tuning
-//! 
+//!
 //! This module provides various optimization algorithms for tuning
 //! evaluation function parameters using training data. It implements
 //! Texel's tuning method and other advanced optimization techniques.
-//! 
+//!
 //! Supported algorithms:
 //! - Gradient Descent with momentum
 //! - Adam optimizer with adaptive learning rates
@@ -11,10 +11,12 @@
 //! - Genetic Algorithm for non-convex optimization
 //! - Regularization (L1 and L2) to prevent overfitting
 
-use super::types::{TrainingPosition, OptimizationMethod, TuningConfig, ValidationResults, FoldResult};
+use super::types::{
+    FoldResult, OptimizationMethod, TrainingPosition, TuningConfig, ValidationResults,
+};
 use crate::types::NUM_EVAL_FEATURES;
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use serde::{Serialize, Deserialize};
 
 /// Texel's tuning method implementation
 pub struct TexelTuner {
@@ -58,7 +60,7 @@ struct AdamState {
     beta1: f64,
     beta2: f64,
     epsilon: f64,
-    t: usize,    // Time step
+    t: usize, // Time step
 }
 
 /// LBFGS optimizer state
@@ -98,7 +100,7 @@ impl TexelTuner {
         k_factor: f64,
     ) -> Self {
         let weights = initial_weights.unwrap_or_else(|| vec![1.0; NUM_EVAL_FEATURES]);
-        
+
         Self {
             positions,
             weights,
@@ -127,7 +129,7 @@ impl TexelTuner {
         early_stopping_patience: usize,
     ) -> Self {
         let weights = initial_weights.unwrap_or_else(|| vec![1.0; NUM_EVAL_FEATURES]);
-        
+
         Self {
             positions,
             weights,
@@ -265,7 +267,7 @@ impl TexelTuner {
     fn apply_regularization(&mut self) {
         for i in 0..self.weights.len() {
             let weight = self.weights[i];
-            
+
             // L1 regularization (Lasso)
             if self.regularization_l1 > 0.0 {
                 if weight > self.regularization_l1 {
@@ -276,7 +278,7 @@ impl TexelTuner {
                     self.weights[i] = 0.0;
                 }
             }
-            
+
             // L2 regularization (Ridge)
             if self.regularization_l2 > 0.0 {
                 self.weights[i] *= 1.0 - self.learning_rate * self.regularization_l2;
@@ -317,16 +319,16 @@ impl AdamState {
         for i in 0..weights.len() {
             // Update biased first moment estimate
             self.m[i] = self.beta1 * self.m[i] + (1.0 - self.beta1) * gradients[i];
-            
+
             // Update biased second moment estimate
             self.v[i] = self.beta2 * self.v[i] + (1.0 - self.beta2) * gradients[i] * gradients[i];
-            
+
             // Compute bias-corrected first moment estimate
             let m_hat = self.m[i] / (1.0 - beta1_t);
-            
+
             // Compute bias-corrected second moment estimate
             let v_hat = self.v[i] / (1.0 - beta2_t);
-            
+
             // Update weights
             weights[i] -= learning_rate * m_hat / (v_hat.sqrt() + self.epsilon);
         }
@@ -346,7 +348,13 @@ impl LBFGSState {
     }
 
     /// Update LBFGS state with new position and gradient
-    fn update(&mut self, weights: &[f64], gradients: &[f64], prev_weights: &[f64], prev_gradients: &[f64]) {
+    fn update(
+        &mut self,
+        weights: &[f64],
+        gradients: &[f64],
+        prev_weights: &[f64],
+        prev_gradients: &[f64],
+    ) {
         if self.s.len() >= self.m {
             self.s.remove(0);
             self.y.remove(0);
@@ -354,11 +362,24 @@ impl LBFGSState {
         }
 
         // Calculate position and gradient differences
-        let s_diff: Vec<f64> = weights.iter().zip(prev_weights.iter()).map(|(w, p)| w - p).collect();
-        let y_diff: Vec<f64> = gradients.iter().zip(prev_gradients.iter()).map(|(g, p)| g - p).collect();
+        let s_diff: Vec<f64> = weights
+            .iter()
+            .zip(prev_weights.iter())
+            .map(|(w, p)| w - p)
+            .collect();
+        let y_diff: Vec<f64> = gradients
+            .iter()
+            .zip(prev_gradients.iter())
+            .map(|(g, p)| g - p)
+            .collect();
 
         // Calculate rho (scaling factor)
-        let rho = 1.0 / s_diff.iter().zip(y_diff.iter()).map(|(s, y)| s * y).sum::<f64>();
+        let rho = 1.0
+            / s_diff
+                .iter()
+                .zip(y_diff.iter())
+                .map(|(s, y)| s * y)
+                .sum::<f64>();
 
         self.s.push(s_diff);
         self.y.push(y_diff);
@@ -372,9 +393,14 @@ impl LBFGSState {
 
         // Two-loop recursion
         for i in (0..self.s.len()).rev() {
-            let alpha_i = self.rho[i] * self.s[i].iter().zip(q.iter()).map(|(s, q)| s * q).sum::<f64>();
+            let alpha_i = self.rho[i]
+                * self.s[i]
+                    .iter()
+                    .zip(q.iter())
+                    .map(|(s, q)| s * q)
+                    .sum::<f64>();
             self.alpha.push(alpha_i);
-            
+
             for j in 0..q.len() {
                 q[j] -= alpha_i * self.y[i][j];
             }
@@ -383,10 +409,13 @@ impl LBFGSState {
         // Apply scaling
         if !self.s.is_empty() {
             let last_idx = self.s.len() - 1;
-            let gamma = self.s[last_idx].iter().zip(self.y[last_idx].iter())
-                .map(|(s, y)| s * y).sum::<f64>() / 
-                self.y[last_idx].iter().map(|y| y * y).sum::<f64>();
-            
+            let gamma = self.s[last_idx]
+                .iter()
+                .zip(self.y[last_idx].iter())
+                .map(|(s, y)| s * y)
+                .sum::<f64>()
+                / self.y[last_idx].iter().map(|y| y * y).sum::<f64>();
+
             for q_val in &mut q {
                 *q_val *= gamma;
             }
@@ -394,8 +423,13 @@ impl LBFGSState {
 
         // Second loop
         for (i, &alpha_i) in self.alpha.iter().rev().enumerate() {
-            let beta = self.rho[i] * self.y[i].iter().zip(q.iter()).map(|(y, q)| y * q).sum::<f64>();
-            
+            let beta = self.rho[i]
+                * self.y[i]
+                    .iter()
+                    .zip(q.iter())
+                    .map(|(y, q)| y * q)
+                    .sum::<f64>();
+
             for j in 0..q.len() {
                 q[j] += (alpha_i - beta) * self.s[i][j];
             }
@@ -410,9 +444,14 @@ impl LBFGSState {
 
 impl GeneticAlgorithmState {
     /// Create new genetic algorithm state
-    fn new(population_size: usize, num_weights: usize, mutation_rate: f64, crossover_rate: f64) -> Self {
+    fn new(
+        population_size: usize,
+        num_weights: usize,
+        mutation_rate: f64,
+        crossover_rate: f64,
+    ) -> Self {
         let mut population = Vec::with_capacity(population_size);
-        
+
         // Initialize random population
         for _ in 0..population_size {
             let mut individual = Vec::with_capacity(num_weights);
@@ -441,12 +480,20 @@ impl GeneticAlgorithmState {
     }
 
     /// Calculate fitness for an individual
-    fn calculate_fitness(&self, weights: &[f64], positions: &[TrainingPosition], k_factor: f64) -> f64 {
+    fn calculate_fitness(
+        &self,
+        weights: &[f64],
+        positions: &[TrainingPosition],
+        k_factor: f64,
+    ) -> f64 {
         let mut total_error = 0.0;
 
         for position in positions {
-            let predicted = weights.iter().zip(position.features.iter())
-                .map(|(w, f)| w * f).sum::<f64>();
+            let predicted = weights
+                .iter()
+                .zip(position.features.iter())
+                .map(|(w, f)| w * f)
+                .sum::<f64>();
             let predicted_prob = 1.0 / (1.0 + (-k_factor * predicted).exp());
             let error = position.result - predicted_prob;
             total_error += error * error;
@@ -460,7 +507,11 @@ impl GeneticAlgorithmState {
     fn evolve(&mut self) {
         // Sort by fitness (descending)
         let mut indices: Vec<usize> = (0..self.population_size).collect();
-        indices.sort_by(|a, b| self.fitness_scores[*b].partial_cmp(&self.fitness_scores[*a]).unwrap());
+        indices.sort_by(|a, b| {
+            self.fitness_scores[*b]
+                .partial_cmp(&self.fitness_scores[*a])
+                .unwrap()
+        });
 
         // Create new population
         let mut new_population = Vec::with_capacity(self.population_size);
@@ -475,10 +526,8 @@ impl GeneticAlgorithmState {
             let parent1_idx = self.tournament_selection();
             let parent2_idx = self.tournament_selection();
 
-            let (child1, child2) = self.crossover(
-                &self.population[parent1_idx],
-                &self.population[parent2_idx]
-            );
+            let (child1, child2) =
+                self.crossover(&self.population[parent1_idx], &self.population[parent2_idx]);
 
             new_population.push(self.mutate(child1));
             if new_population.len() < self.population_size {
@@ -494,14 +543,14 @@ impl GeneticAlgorithmState {
     fn tournament_selection(&self) -> usize {
         let tournament_size = 3;
         let mut best_idx = rand::random::<usize>() % self.population_size;
-        
+
         for _ in 1..tournament_size {
             let candidate_idx = rand::random::<usize>() % self.population_size;
             if self.fitness_scores[candidate_idx] > self.fitness_scores[best_idx] {
                 best_idx = candidate_idx;
             }
         }
-        
+
         best_idx
     }
 
@@ -536,9 +585,13 @@ impl GeneticAlgorithmState {
 
     /// Get best individual
     fn get_best_individual(&self) -> &[f64] {
-        let best_idx = self.fitness_scores.iter().enumerate()
+        let best_idx = self
+            .fitness_scores
+            .iter()
+            .enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .unwrap().0;
+            .unwrap()
+            .0;
         &self.population[best_idx]
     }
 }
@@ -561,20 +614,34 @@ impl Optimizer {
     pub fn optimize(&self, positions: &[TrainingPosition]) -> Result<OptimizationResults, String> {
         // Default k_factor for all methods
         let k_factor = 1.0;
-        
+
         match self.method {
             OptimizationMethod::GradientDescent { learning_rate } => {
                 self.gradient_descent_optimize(positions, learning_rate, 0.9, k_factor)
-            },
-            OptimizationMethod::Adam { learning_rate, beta1: _, beta2: _, epsilon: _ } => {
-                self.adam_optimize(positions, learning_rate, k_factor)
-            },
-            OptimizationMethod::LBFGS { memory_size, max_iterations } => {
-                self.lbfgs_optimize(positions, memory_size, max_iterations, k_factor)
-            },
-            OptimizationMethod::GeneticAlgorithm { population_size, mutation_rate, crossover_rate, max_generations } => {
-                self.genetic_algorithm_optimize(positions, population_size, mutation_rate, crossover_rate, max_generations, k_factor)
-            },
+            }
+            OptimizationMethod::Adam {
+                learning_rate,
+                beta1: _,
+                beta2: _,
+                epsilon: _,
+            } => self.adam_optimize(positions, learning_rate, k_factor),
+            OptimizationMethod::LBFGS {
+                memory_size,
+                max_iterations,
+            } => self.lbfgs_optimize(positions, memory_size, max_iterations, k_factor),
+            OptimizationMethod::GeneticAlgorithm {
+                population_size,
+                mutation_rate,
+                crossover_rate,
+                max_generations,
+            } => self.genetic_algorithm_optimize(
+                positions,
+                population_size,
+                mutation_rate,
+                crossover_rate,
+                max_generations,
+                k_factor,
+            ),
         }
     }
 
@@ -620,7 +687,8 @@ impl Optimizer {
         let early_stopping_patience = 50;
 
         for iteration in 0..max_iterations {
-            let (error, gradients) = self.calculate_error_and_gradients(&weights, positions, k_factor);
+            let (error, gradients) =
+                self.calculate_error_and_gradients(&weights, positions, k_factor);
             error_history.push(error);
 
             // Check for convergence
@@ -685,14 +753,20 @@ impl Optimizer {
         let convergence_threshold = 1e-6;
 
         for iteration in 0..max_iterations {
-            let (error, gradients) = self.calculate_error_and_gradients(&weights, positions, k_factor);
+            let (error, gradients) =
+                self.calculate_error_and_gradients(&weights, positions, k_factor);
             error_history.push(error);
 
             // Check for NaN or infinite values
             if !error.is_finite() {
                 return Ok(OptimizationResults {
                     optimized_weights: prev_weights,
-                    final_error: error_history.iter().filter(|e| e.is_finite()).last().unwrap_or(&0.0).abs(),
+                    final_error: error_history
+                        .iter()
+                        .filter(|e| e.is_finite())
+                        .last()
+                        .unwrap_or(&0.0)
+                        .abs(),
                     iterations: iteration,
                     convergence_reason: ConvergenceReason::MaxIterations,
                     optimization_time: start_time.elapsed(),
@@ -703,12 +777,17 @@ impl Optimizer {
             if iteration > 0 {
                 lbfgs_state.update(&weights, &gradients, &prev_weights, &prev_gradients);
                 lbfgs_state.apply_update(&mut weights, &gradients, learning_rate);
-                
+
                 // Check if weights became NaN or infinite
                 if weights.iter().any(|w| !w.is_finite()) {
                     return Ok(OptimizationResults {
                         optimized_weights: prev_weights,
-                        final_error: error_history.iter().filter(|e| e.is_finite()).last().unwrap_or(&0.0).abs(),
+                        final_error: error_history
+                            .iter()
+                            .filter(|e| e.is_finite())
+                            .last()
+                            .unwrap_or(&0.0)
+                            .abs(),
                         iterations: iteration,
                         convergence_reason: ConvergenceReason::MaxIterations,
                         optimization_time: start_time.elapsed(),
@@ -739,7 +818,12 @@ impl Optimizer {
 
         Ok(OptimizationResults {
             optimized_weights: weights,
-            final_error: error_history.iter().filter(|e| e.is_finite()).last().unwrap_or(&0.0).abs(),
+            final_error: error_history
+                .iter()
+                .filter(|e| e.is_finite())
+                .last()
+                .unwrap_or(&0.0)
+                .abs(),
             iterations: max_iterations,
             convergence_reason: ConvergenceReason::MaxIterations,
             optimization_time: start_time.elapsed(),
@@ -758,14 +842,23 @@ impl Optimizer {
         k_factor: f64,
     ) -> Result<OptimizationResults, String> {
         let start_time = Instant::now();
-        let mut ga_state = GeneticAlgorithmState::new(population_size, NUM_EVAL_FEATURES, mutation_rate, crossover_rate);
+        let mut ga_state = GeneticAlgorithmState::new(
+            population_size,
+            NUM_EVAL_FEATURES,
+            mutation_rate,
+            crossover_rate,
+        );
         let mut error_history = Vec::new();
         // Use the provided max_generations parameter
         let convergence_threshold = 1e-6;
 
         for generation in 0..max_generations {
             ga_state.evaluate_fitness(positions, k_factor);
-            let best_fitness = ga_state.fitness_scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let best_fitness = ga_state
+                .fitness_scores
+                .iter()
+                .cloned()
+                .fold(f64::NEG_INFINITY, f64::max);
             let best_error = -best_fitness; // Convert fitness back to error
             error_history.push(best_error);
 
@@ -804,8 +897,11 @@ impl Optimizer {
         let mut gradients = vec![0.0; weights.len()];
 
         for position in positions {
-            let predicted = weights.iter().zip(position.features.iter())
-                .map(|(w, f)| w * f).sum::<f64>();
+            let predicted = weights
+                .iter()
+                .zip(position.features.iter())
+                .map(|(w, f)| w * f)
+                .sum::<f64>();
             let predicted_prob = 1.0 / (1.0 + (-k_factor * predicted).exp());
             let error = position.result - predicted_prob;
             total_error += error * error;
@@ -828,16 +924,15 @@ impl Optimizer {
     }
 
     /// Validate optimized weights using cross-validation
-    pub fn validate(
-        &self,
-        positions: &[TrainingPosition],
-        weights: &[f64],
-    ) -> ValidationResults {
+    pub fn validate(&self, positions: &[TrainingPosition], weights: &[f64]) -> ValidationResults {
         // Calculate validation error
         let mut total_error = 0.0;
         for position in positions {
-            let predicted = weights.iter().zip(position.features.iter())
-                .map(|(w, f)| w * f).sum::<f64>();
+            let predicted = weights
+                .iter()
+                .zip(position.features.iter())
+                .map(|(w, f)| w * f)
+                .sum::<f64>();
             let predicted_prob = 1.0 / (1.0 + (-1.0 * predicted).exp()); // Default k_factor
             let error = position.result - predicted_prob;
             total_error += error * error;
@@ -860,8 +955,8 @@ impl Optimizer {
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::{OptimizationMethod, TrainingPosition};
     use super::*;
-    use super::super::types::{TrainingPosition, OptimizationMethod};
     use crate::types::Player;
 
     #[test]
@@ -883,7 +978,7 @@ mod tests {
     fn test_texel_tuner_creation() {
         let positions = vec![];
         let tuner = TexelTuner::new(positions, None, 1.0);
-        
+
         assert_eq!(tuner.get_weights().len(), NUM_EVAL_FEATURES);
         assert_eq!(tuner.k_factor, 1.0);
     }
@@ -893,7 +988,7 @@ mod tests {
         let positions = vec![];
         let initial_weights = vec![2.0; NUM_EVAL_FEATURES];
         let tuner = TexelTuner::new(positions, Some(initial_weights.clone()), 1.5);
-        
+
         assert_eq!(tuner.get_weights(), &initial_weights);
         assert_eq!(tuner.k_factor, 1.5);
     }
@@ -901,19 +996,9 @@ mod tests {
     #[test]
     fn test_texel_tuner_with_params() {
         let positions = vec![];
-        let tuner = TexelTuner::with_params(
-            positions,
-            None,
-            1.0,
-            0.01,
-            0.9,
-            0.001,
-            0.001,
-            500,
-            1e-5,
-            25,
-        );
-        
+        let tuner =
+            TexelTuner::with_params(positions, None, 1.0, 0.01, 0.9, 0.001, 0.001, 500, 1e-5, 25);
+
         assert_eq!(tuner.learning_rate, 0.01);
         assert_eq!(tuner.momentum, 0.9);
         assert_eq!(tuner.regularization_l1, 0.001);
@@ -927,13 +1012,13 @@ mod tests {
     fn test_sigmoid_function() {
         let positions = vec![];
         let tuner = TexelTuner::new(positions, None, 1.0);
-        
+
         // Test sigmoid at 0
         assert!((tuner.sigmoid(0.0) - 0.5).abs() < 1e-10);
-        
+
         // Test sigmoid at positive infinity
         assert!(tuner.sigmoid(f64::INFINITY) > 0.9);
-        
+
         // Test sigmoid at negative infinity
         assert!(tuner.sigmoid(f64::NEG_INFINITY) < 0.1);
     }
@@ -942,11 +1027,11 @@ mod tests {
     fn test_sigmoid_derivative() {
         let positions = vec![];
         let tuner = TexelTuner::new(positions, None, 1.0);
-        
+
         let x = 0.0;
         let _s = tuner.sigmoid(x);
         let derivative = tuner.sigmoid_derivative(x);
-        
+
         // At x=0, sigmoid derivative should be k_factor * s * (1-s) = 1.0 * 0.5 * 0.5 = 0.25
         assert!((derivative - 0.25).abs() < 1e-10);
     }
@@ -957,21 +1042,14 @@ mod tests {
         features[0] = 1.0;
         features[1] = 2.0;
         features[2] = 3.0;
-        
-        let position = TrainingPosition::new(
-            features,
-            0.5,
-            128,
-            true,
-            10,
-            Player::White,
-        );
-        
+
+        let position = TrainingPosition::new(features, 0.5, 128, true, 10, Player::White);
+
         let positions = vec![position];
         let tuner = TexelTuner::new(positions, None, 1.0);
-        
+
         let score = tuner.calculate_position_score(&tuner.positions[0]);
-        
+
         // With weights [1.0, 1.0, 1.0] and features [1.0, 2.0, 3.0]
         // Score should be 1.0 * 1.0 + 1.0 * 2.0 + 1.0 * 3.0 = 6.0
         assert!((score - 6.0).abs() < 1e-10);
@@ -987,11 +1065,14 @@ mod tests {
             optimization_time: Duration::from_secs(1),
             error_history: vec![0.1, 0.05, 0.001],
         };
-        
+
         assert_eq!(results.optimized_weights.len(), 3);
         assert_eq!(results.final_error, 0.001);
         assert_eq!(results.iterations, 100);
-        assert!(matches!(results.convergence_reason, ConvergenceReason::Converged));
+        assert!(matches!(
+            results.convergence_reason,
+            ConvergenceReason::Converged
+        ));
         assert_eq!(results.error_history.len(), 3);
     }
 
@@ -1003,14 +1084,14 @@ mod tests {
             ConvergenceReason::EarlyStopping,
             ConvergenceReason::GradientNorm,
         ];
-        
+
         assert_eq!(reasons.len(), 4);
     }
 
     #[test]
     fn test_adam_state_creation() {
         let state = AdamState::new(10);
-        
+
         assert_eq!(state.m.len(), 10);
         assert_eq!(state.v.len(), 10);
         assert_eq!(state.beta1, 0.9);
@@ -1022,7 +1103,7 @@ mod tests {
     #[test]
     fn test_lbfgs_state_creation() {
         let state = LBFGSState::new(5, 10);
-        
+
         assert_eq!(state.m, 5);
         assert!(state.s.is_empty());
         assert!(state.y.is_empty());
@@ -1032,7 +1113,7 @@ mod tests {
     #[test]
     fn test_genetic_algorithm_state_creation() {
         let state = GeneticAlgorithmState::new(50, 10, 0.1, 0.8);
-        
+
         assert_eq!(state.population.len(), 50);
         assert_eq!(state.fitness_scores.len(), 50);
         assert_eq!(state.generation, 0);
@@ -1049,10 +1130,10 @@ mod tests {
             learning_rate: 0.01,
         };
         let optimizer = Optimizer::new(method);
-        
+
         let result = optimizer.optimize(&positions);
         assert!(result.is_ok());
-        
+
         let results = result.unwrap();
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
@@ -1069,10 +1150,10 @@ mod tests {
             epsilon: 1e-8,
         };
         let optimizer = Optimizer::new(method);
-        
+
         let result = optimizer.optimize(&positions);
         assert!(result.is_ok());
-        
+
         let results = result.unwrap();
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
@@ -1087,10 +1168,10 @@ mod tests {
             max_iterations: 100,
         };
         let optimizer = Optimizer::new(method);
-        
+
         let result = optimizer.optimize(&positions);
         assert!(result.is_ok());
-        
+
         let results = result.unwrap();
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
@@ -1107,10 +1188,10 @@ mod tests {
             max_generations: 50,
         };
         let optimizer = Optimizer::new(method);
-        
+
         let result = optimizer.optimize(&positions);
         assert!(result.is_ok());
-        
+
         let results = result.unwrap();
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
@@ -1122,10 +1203,10 @@ mod tests {
         let positions = create_test_positions();
         let method = OptimizationMethod::default();
         let optimizer = Optimizer::new(method);
-        
+
         let weights = vec![1.0; NUM_EVAL_FEATURES];
         let validation_results = optimizer.validate(&positions, &weights);
-        
+
         // Validation should return some results
         assert!(validation_results.mean_error >= 0.0);
     }
@@ -1135,13 +1216,13 @@ mod tests {
         let positions = create_test_positions();
         let method = OptimizationMethod::default();
         let optimizer = Optimizer::new(method);
-        
+
         let weights = vec![1.0; NUM_EVAL_FEATURES];
         let (error, gradients) = optimizer.calculate_error_and_gradients(&weights, &positions, 1.0);
-        
+
         assert!(error >= 0.0);
         assert_eq!(gradients.len(), NUM_EVAL_FEATURES);
-        
+
         // All gradients should be finite
         for gradient in gradients {
             assert!(gradient.is_finite());
@@ -1152,13 +1233,13 @@ mod tests {
     fn create_test_positions() -> Vec<TrainingPosition> {
         let mut features1 = vec![0.0; NUM_EVAL_FEATURES];
         features1[0] = 1.0;
-        
+
         let mut features2 = vec![0.0; NUM_EVAL_FEATURES];
         features2[1] = 1.0;
-        
+
         let mut features3 = vec![0.0; NUM_EVAL_FEATURES];
         features3[2] = 1.0;
-        
+
         vec![
             TrainingPosition::new(
                 features1,

@@ -15,8 +15,8 @@
 //! let ordered_moves = integrator.order_moves_by_patterns(&board, &moves, player);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 
 /// Pattern-based search integrator
 pub struct PatternSearchIntegrator {
@@ -147,16 +147,12 @@ impl PatternSearchIntegrator {
     }
 
     /// Evaluate patterns in quiescence search
-    pub fn evaluate_in_quiescence(
-        &mut self,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> i32 {
+    pub fn evaluate_in_quiescence(&mut self, board: &BitboardBoard, player: Player) -> i32 {
         self.stats.quiescence_evals += 1;
 
         // In quiescence, only evaluate tactical patterns
         // Look for immediate tactical threats or opportunities
-        
+
         let mut score = 0;
 
         // Check for hanging pieces
@@ -202,22 +198,22 @@ impl Default for PatternSearchIntegrator {
 pub struct PatternSearchConfig {
     /// Bonus for fork-creating moves
     pub fork_bonus: i32,
-    
+
     /// Bonus for moves to center
     pub center_move_bonus: i32,
-    
+
     /// Bonus for activity-improving moves
     pub activity_bonus: i32,
-    
+
     /// Bonus for captures
     pub capture_bonus: i32,
-    
+
     /// Bonus for promotions
     pub promotion_bonus: i32,
-    
+
     /// Minimum depth for pattern-based pruning
     pub min_depth_for_pruning: u8,
-    
+
     /// Pruning margin
     pub pruning_margin: i32,
 }
@@ -259,12 +255,12 @@ mod tests {
     fn test_move_ordering() {
         let mut integrator = PatternSearchIntegrator::new();
         let board = BitboardBoard::new();
-        
+
         // Create some test moves
         let moves = vec![];
-        
+
         let ordered = integrator.order_moves_by_patterns(&board, &moves, Player::Black);
-        
+
         assert_eq!(integrator.stats().move_orderings, 1);
         assert_eq!(ordered.len(), 0);
     }
@@ -272,7 +268,7 @@ mod tests {
     #[test]
     fn test_central_move_detection() {
         let integrator = PatternSearchIntegrator::new();
-        
+
         let central_move = Move {
             from: Some(Position::new(6, 4)),
             to: Position::new(4, 4),
@@ -282,9 +278,9 @@ mod tests {
             is_capture: false,
             is_drop: false,
         };
-        
+
         assert!(integrator.is_central_move(&central_move));
-        
+
         let edge_move = Move {
             from: Some(Position::new(6, 0)),
             to: Position::new(4, 0),
@@ -294,7 +290,7 @@ mod tests {
             is_capture: false,
             is_drop: false,
         };
-        
+
         assert!(!integrator.is_central_move(&edge_move));
     }
 
@@ -302,16 +298,10 @@ mod tests {
     fn test_pruning_decision() {
         let mut integrator = PatternSearchIntegrator::new();
         let board = BitboardBoard::new();
-        
+
         // Shallow depth - should consider pruning
-        let should_prune = integrator.should_prune_by_patterns(
-            &board,
-            Player::Black,
-            2,
-            100,
-            150,
-        );
-        
+        let should_prune = integrator.should_prune_by_patterns(&board, Player::Black, 2, 100, 150);
+
         assert_eq!(integrator.stats().prune_checks, 1);
     }
 
@@ -319,23 +309,23 @@ mod tests {
     fn test_quiescence_evaluation() {
         let mut integrator = PatternSearchIntegrator::new();
         let board = BitboardBoard::new();
-        
+
         let score = integrator.evaluate_in_quiescence(&board, Player::Black);
-        
+
         assert_eq!(integrator.stats().quiescence_evals, 1);
-        assert_eq!(score, 0);  // Starting position is quiet
+        assert_eq!(score, 0); // Starting position is quiet
     }
 
     #[test]
     fn test_statistics_tracking() {
         let mut integrator = PatternSearchIntegrator::new();
         let board = BitboardBoard::new();
-        
+
         // Trigger various operations
         let _ = integrator.order_moves_by_patterns(&board, &[], Player::Black);
         let _ = integrator.should_prune_by_patterns(&board, Player::Black, 2, 100, 150);
         let _ = integrator.evaluate_in_quiescence(&board, Player::Black);
-        
+
         let stats = integrator.stats();
         assert_eq!(stats.move_orderings, 1);
         assert_eq!(stats.prune_checks, 1);
@@ -346,9 +336,9 @@ mod tests {
     fn test_reset_statistics() {
         let mut integrator = PatternSearchIntegrator::new();
         let board = BitboardBoard::new();
-        
+
         let _ = integrator.order_moves_by_patterns(&board, &[], Player::Black);
-        
+
         integrator.reset_stats();
         assert_eq!(integrator.stats().move_orderings, 0);
     }

@@ -1,11 +1,11 @@
 //! Magic bitboard-based sliding piece move generation
-//! 
+//!
 //! This module provides optimized move generation for sliding pieces (rook, bishop)
 //! using magic bitboards for maximum performance.
 
-use crate::types::{PieceType, Position, Player, Move};
-use crate::types::MagicTable;
 use crate::bitboards::BitboardBoard;
+use crate::types::MagicTable;
+use crate::types::{Move, PieceType, Player, Position};
 
 // Simple immutable lookup engine
 #[derive(Clone)]
@@ -24,7 +24,7 @@ impl SimpleLookupEngine {
 }
 
 /// Magic-based sliding move generator
-/// 
+///
 /// This is a stateless generator that uses magic bitboards for fast move generation.
 /// Metrics are tracked externally to maintain immutability.
 #[derive(Clone)]
@@ -53,7 +53,7 @@ impl SlidingMoveGenerator {
     }
 
     /// Generate moves for a sliding piece using magic bitboards
-    /// 
+    ///
     /// This is a pure function with no side effects, making it safe for immutable usage.
     pub fn generate_sliding_moves(
         &self,
@@ -77,7 +77,7 @@ impl SlidingMoveGenerator {
         for target_square in 0..81 {
             if (attacks & (1u128 << target_square)) != 0 {
                 let target_pos = Position::from_index(target_square as u8);
-                
+
                 // Check if target square is occupied by own piece
                 if board.is_occupied_by_player(target_pos, player) {
                     continue;
@@ -93,7 +93,7 @@ impl SlidingMoveGenerator {
     }
 
     /// Generate moves for promoted sliding pieces
-    /// 
+    ///
     /// This is a pure function with no side effects, making it safe for immutable usage.
     pub fn generate_promoted_sliding_moves(
         &self,
@@ -117,7 +117,7 @@ impl SlidingMoveGenerator {
         for target_square in 0..81 {
             if (attacks & (1u128 << target_square)) != 0 {
                 let target_pos = Position::from_index(target_square as u8);
-                
+
                 // Check if target square is occupied by own piece
                 if board.is_occupied_by_player(target_pos, player) {
                     continue;
@@ -133,7 +133,7 @@ impl SlidingMoveGenerator {
     }
 
     /// Generate moves for multiple sliding pieces in batch
-    /// 
+    ///
     /// This is a pure function with no side effects, making it safe for immutable usage.
     pub fn generate_sliding_moves_batch(
         &self,
@@ -157,7 +157,7 @@ impl SlidingMoveGenerator {
             for target_square in 0..81 {
                 if (attacks & (1u128 << target_square)) != 0 {
                     let target_pos = Position::from_index(target_square as u8);
-                    
+
                     // Check if target square is occupied by own piece
                     if board.is_occupied_by_player(target_pos, player) {
                         continue;
@@ -212,7 +212,7 @@ mod tests {
     fn test_sliding_move_generator_creation() {
         let magic_table = MagicTable::default();
         let generator = SlidingMoveGenerator::new(magic_table);
-        
+
         assert!(generator.is_magic_enabled());
     }
 
@@ -220,7 +220,7 @@ mod tests {
     fn test_sliding_move_generator_with_settings() {
         let magic_table = MagicTable::default();
         let generator = SlidingMoveGenerator::with_settings(magic_table, false);
-        
+
         assert!(!generator.is_magic_enabled());
     }
 
@@ -228,9 +228,9 @@ mod tests {
     fn test_magic_enabled_toggle() {
         let magic_table = MagicTable::default();
         let generator = SlidingMoveGenerator::new(magic_table.clone());
-        
+
         assert!(generator.is_magic_enabled());
-        
+
         let generator_disabled = SlidingMoveGenerator::with_settings(magic_table, false);
         assert!(!generator_disabled.is_magic_enabled());
     }
@@ -239,10 +239,10 @@ mod tests {
     fn test_basic_functionality() {
         let magic_table = MagicTable::default();
         let generator = SlidingMoveGenerator::new(magic_table.clone());
-        
+
         // Test basic functionality
         assert!(generator.is_magic_enabled());
-        
+
         let generator_disabled = SlidingMoveGenerator::with_settings(magic_table, false);
         assert!(!generator_disabled.is_magic_enabled());
     }
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn test_magic_bitboard_flags() {
         let flags = MagicBitboardFlags::default();
-        
+
         assert!(flags.magic_enabled);
         assert!(flags.batch_processing);
         assert!(flags.prefetching);

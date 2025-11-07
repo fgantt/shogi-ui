@@ -1,12 +1,12 @@
 //! Performance profiling and monitoring for the tablebase system
-//! 
+//!
 //! This module provides comprehensive performance profiling capabilities
 //! for monitoring tablebase operations, identifying bottlenecks, and
 //! optimizing performance.
 
+use crate::time_utils::TimeSource;
 use std::collections::HashMap;
 use std::time::Duration;
-use crate::time_utils::TimeSource;
 
 /// Performance metrics for a specific operation
 #[derive(Debug, Clone)]
@@ -45,14 +45,14 @@ impl PerformanceMetrics {
     pub fn record_call(&mut self, duration: Duration) {
         self.call_count += 1;
         self.total_time += duration;
-        
+
         if duration < self.min_time {
             self.min_time = duration;
         }
         if duration > self.max_time {
             self.max_time = duration;
         }
-        
+
         self.average_time = self.total_time / self.call_count as u32;
         self.update_std_deviation();
     }
@@ -204,7 +204,8 @@ impl TablebaseProfiler {
         }
 
         let phase_name = self.current_phase.take().unwrap();
-        let duration = Duration::from_millis(self.phase_start_time.take().unwrap().elapsed_ms() as u64);
+        let duration =
+            Duration::from_millis(self.phase_start_time.take().unwrap().elapsed_ms() as u64);
 
         // Record the phase
         if let Some(operation_name) = &self.current_operation {
@@ -258,7 +259,10 @@ impl TablebaseProfiler {
     }
 
     /// Get the most expensive operations
-    pub fn get_most_expensive_operations(&self, count: usize) -> Vec<(&String, &PerformanceMetrics)> {
+    pub fn get_most_expensive_operations(
+        &self,
+        count: usize,
+    ) -> Vec<(&String, &PerformanceMetrics)> {
         let mut operations: Vec<_> = self.metrics.iter().collect();
         operations.sort_by(|a, b| b.1.total_time.cmp(&a.1.total_time));
         operations.truncate(count);
@@ -274,7 +278,10 @@ impl TablebaseProfiler {
     }
 
     /// Get the most frequently called operations
-    pub fn get_most_frequent_operations(&self, count: usize) -> Vec<(&String, &PerformanceMetrics)> {
+    pub fn get_most_frequent_operations(
+        &self,
+        count: usize,
+    ) -> Vec<(&String, &PerformanceMetrics)> {
         let mut operations: Vec<_> = self.metrics.iter().collect();
         operations.sort_by(|a, b| b.1.call_count.cmp(&a.1.call_count));
         operations.truncate(count);
@@ -288,9 +295,13 @@ impl TablebaseProfiler {
         }
 
         // Remove metrics with the lowest call counts
-        let mut operations: Vec<_> = self.metrics.iter().map(|(k, v)| (k.clone(), v.call_count)).collect();
+        let mut operations: Vec<_> = self
+            .metrics
+            .iter()
+            .map(|(k, v)| (k.clone(), v.call_count))
+            .collect();
         operations.sort_by(|a, b| a.1.cmp(&b.1));
-        
+
         let to_remove = operations.len() - self.max_metrics + 1;
         for (operation_name, _) in operations.iter().take(to_remove) {
             self.metrics.remove(operation_name);
@@ -310,7 +321,12 @@ impl TablebaseProfiler {
     pub fn get_memory_usage(&self) -> usize {
         // Estimate memory usage
         self.metrics.len() * std::mem::size_of::<PerformanceMetrics>()
-            + self.metrics.values().map(|m| m.phase_times.len()).sum::<usize>() * 64
+            + self
+                .metrics
+                .values()
+                .map(|m| m.phase_times.len())
+                .sum::<usize>()
+                * 64
     }
 }
 
@@ -393,12 +409,12 @@ mod tests {
     #[test]
     fn test_performance_metrics() {
         let mut metrics = PerformanceMetrics::new();
-        
+
         // Record some calls
         metrics.record_call(Duration::from_millis(10));
         metrics.record_call(Duration::from_millis(20));
         metrics.record_call(Duration::from_millis(30));
-        
+
         assert_eq!(metrics.call_count, 3);
         assert_eq!(metrics.total_time, Duration::from_millis(60));
         assert_eq!(metrics.average_time, Duration::from_millis(20));
@@ -409,12 +425,12 @@ mod tests {
     #[test]
     fn test_profiler_operations() {
         let mut profiler = TablebaseProfiler::new();
-        
+
         // Test operation profiling
         profiler.start_operation("test_operation".to_string());
         thread::sleep(Duration::from_millis(10));
         profiler.end_operation();
-        
+
         let metrics = profiler.get_metrics("test_operation").unwrap();
         assert_eq!(metrics.call_count, 1);
         assert!(metrics.total_time >= Duration::from_millis(10));
@@ -423,19 +439,19 @@ mod tests {
     #[test]
     fn test_phase_profiling() {
         let mut profiler = TablebaseProfiler::new();
-        
+
         profiler.start_operation("test_operation".to_string());
-        
+
         profiler.start_phase("phase1".to_string());
         thread::sleep(Duration::from_millis(5));
         profiler.end_phase();
-        
+
         profiler.start_phase("phase2".to_string());
         thread::sleep(Duration::from_millis(5));
         profiler.end_phase();
-        
+
         profiler.end_operation();
-        
+
         let metrics = profiler.get_metrics("test_operation").unwrap();
         assert_eq!(metrics.phase_times.len(), 2);
         assert!(metrics.phase_times.contains_key("phase1"));
@@ -445,14 +461,14 @@ mod tests {
     #[test]
     fn test_operation_profiler() {
         let mut profiler = TablebaseProfiler::new();
-        
+
         {
             let mut op_profiler = OperationProfiler::new(&mut profiler, "test_op".to_string());
             op_profiler.start_phase("phase1".to_string());
             thread::sleep(Duration::from_millis(5));
             op_profiler.end_phase();
         }
-        
+
         let metrics = profiler.get_metrics("test_op").unwrap();
         assert_eq!(metrics.call_count, 1);
         assert!(metrics.phase_times.contains_key("phase1"));

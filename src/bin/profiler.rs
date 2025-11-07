@@ -12,8 +12,7 @@ use std::time::Instant;
 
 // Access global search metrics exposed by the engine
 use shogi_engine::search::search_engine::{
-    snapshot_and_reset_metrics as snapshot_tt_ybwc_metrics,
-    GLOBAL_NODES_SEARCHED,
+    snapshot_and_reset_metrics as snapshot_tt_ybwc_metrics, GLOBAL_NODES_SEARCHED,
 };
 
 #[derive(Parser, Debug)]
@@ -134,7 +133,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Capture metrics
     let nodes = GLOBAL_NODES_SEARCHED.load(std::sync::atomic::Ordering::Relaxed);
-    let nps = if elapsed_ms > 0 { nodes.saturating_mul(1000) / elapsed_ms } else { 0 };
+    let nps = if elapsed_ms > 0 {
+        nodes.saturating_mul(1000) / elapsed_ms
+    } else {
+        0
+    };
     let m = snapshot_tt_ybwc_metrics();
 
     let cache_hit_rate = if m.tt_try_reads > 0 {
@@ -145,13 +148,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut recommendations: Vec<String> = Vec::new();
     if cache_hit_rate < 0.20 {
-        recommendations.push("Low TT hit rate detected (<20%). Consider increasing hash size.".to_string());
+        recommendations
+            .push("Low TT hit rate detected (<20%). Consider increasing hash size.".to_string());
     }
     if nps < 50_000 {
-        recommendations.push("Low nodes-per-second. Reduce depth or adjust pruning parameters.".to_string());
+        recommendations
+            .push("Low nodes-per-second. Reduce depth or adjust pruning parameters.".to_string());
     }
     if m.ybwc_trigger_opportunities > 0 && m.ybwc_triggered == 0 {
-        recommendations.push("YBWC opportunities observed but not triggered; review YBWC thresholds.".to_string());
+        recommendations.push(
+            "YBWC opportunities observed but not triggered; review YBWC thresholds.".to_string(),
+        );
     }
 
     let report = ProfilerReport {
@@ -207,7 +214,11 @@ fn compare_reports(file1: &PathBuf, file2: &PathBuf) -> Result<(), Box<dyn std::
     let r1: ProfilerReport = serde_json::from_slice(&std::fs::read(file1)?)?;
     let r2: ProfilerReport = serde_json::from_slice(&std::fs::read(file2)?)?;
 
-    println!("Comparing profiles:\n  A: {}\n  B: {}", file1.display(), file2.display());
+    println!(
+        "Comparing profiles:\n  A: {}\n  B: {}",
+        file1.display(),
+        file2.display()
+    );
     println!("================================================");
     println!(
         "Time (ms):       {:>10}  -> {:>10}  ({:+})",
@@ -227,9 +238,12 @@ fn compare_reports(file1: &PathBuf, file2: &PathBuf) -> Result<(), Box<dyn std::
         r2.nps,
         (r2.nps as i64 - r1.nps as i64)
     );
-    println!("TT hit rate (%): {:>10.2} -> {:>10.2} ({:+.2})", r1.cache_hit_rate * 100.0, r2.cache_hit_rate * 100.0, (r2.cache_hit_rate - r1.cache_hit_rate) * 100.0);
+    println!(
+        "TT hit rate (%): {:>10.2} -> {:>10.2} ({:+.2})",
+        r1.cache_hit_rate * 100.0,
+        r2.cache_hit_rate * 100.0,
+        (r2.cache_hit_rate - r1.cache_hit_rate) * 100.0
+    );
 
     Ok(())
 }
-
-

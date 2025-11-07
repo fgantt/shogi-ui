@@ -17,8 +17,8 @@
 //! let positional_score = analyzer.evaluate_position(&board, Player::Black);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 /// Positional pattern analyzer
@@ -109,18 +109,35 @@ impl PositionalPatternAnalyzer {
 
         // Define center (3x3 core)
         let center_squares = [
-            (3, 3), (3, 4), (3, 5),
-            (4, 3), (4, 4), (4, 5),
-            (5, 3), (5, 4), (5, 5),
+            (3, 3),
+            (3, 4),
+            (3, 5),
+            (4, 3),
+            (4, 4),
+            (4, 5),
+            (5, 3),
+            (5, 4),
+            (5, 5),
         ];
 
         // Define extended center (5x5)
         let extended_center = [
-            (2, 2), (2, 3), (2, 4), (2, 5), (2, 6),
-            (3, 2), (3, 6),
-            (4, 2), (4, 6),
-            (5, 2), (5, 6),
-            (6, 2), (6, 3), (6, 4), (6, 5), (6, 6),
+            (2, 2),
+            (2, 3),
+            (2, 4),
+            (2, 5),
+            (2, 6),
+            (3, 2),
+            (3, 6),
+            (4, 2),
+            (4, 6),
+            (5, 2),
+            (5, 6),
+            (6, 2),
+            (6, 3),
+            (6, 4),
+            (6, 5),
+            (6, 6),
         ];
 
         // Evaluate core center occupation
@@ -164,7 +181,7 @@ impl PositionalPatternAnalyzer {
     /// Get value of piece in center
     fn get_center_piece_value(&self, piece_type: PieceType, is_core: bool) -> (i32, i32) {
         let multiplier = if is_core { 1 } else { 1 };
-        
+
         match piece_type {
             PieceType::Knight => (30 * multiplier, 15 * multiplier),
             PieceType::Silver => (25 * multiplier, 20 * multiplier),
@@ -177,9 +194,14 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Count pawns controlling center squares
-    fn count_pawn_center_control(&self, board: &BitboardBoard, player: Player, center: &[(u8, u8)]) -> i32 {
+    fn count_pawn_center_control(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        center: &[(u8, u8)],
+    ) -> i32 {
         let mut count = 0;
-        
+
         for &(row, col) in center {
             let pos = Position::new(row, col);
             if let Some(piece) = board.get_piece(pos) {
@@ -188,7 +210,7 @@ impl PositionalPatternAnalyzer {
                 }
             }
         }
-        
+
         count
     }
 
@@ -224,7 +246,13 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if a square is an outpost for a piece
-    fn is_outpost(&self, board: &BitboardBoard, pos: Position, piece_type: PieceType, player: Player) -> bool {
+    fn is_outpost(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> bool {
         // Outposts are typically:
         // 1. In or near enemy territory
         // 2. Protected by own pawns
@@ -232,9 +260,9 @@ impl PositionalPatternAnalyzer {
 
         // Check if in advanced position
         let is_advanced = if player == Player::Black {
-            pos.row <= 5  // Advanced for Black
+            pos.row <= 5 // Advanced for Black
         } else {
-            pos.row >= 3  // Advanced for White
+            pos.row >= 3 // Advanced for White
         };
 
         if !is_advanced {
@@ -248,7 +276,10 @@ impl PositionalPatternAnalyzer {
         let enemy_pawn_threat = self.is_under_enemy_pawn_threat(board, pos, player);
 
         // Knights and Silvers make best outposts
-        let is_good_piece = matches!(piece_type, PieceType::Knight | PieceType::Silver | PieceType::Gold);
+        let is_good_piece = matches!(
+            piece_type,
+            PieceType::Knight | PieceType::Silver | PieceType::Gold
+        );
 
         has_pawn_support && !enemy_pawn_threat && is_good_piece
     }
@@ -256,7 +287,7 @@ impl PositionalPatternAnalyzer {
     /// Check if position has pawn support
     fn has_pawn_support(&self, board: &BitboardBoard, pos: Position, player: Player) -> bool {
         let support_offsets = if player == Player::Black {
-            [(1, -1), (1, 1)]  // Pawns behind and diagonal
+            [(1, -1), (1, 1)] // Pawns behind and diagonal
         } else {
             [(-1, -1), (-1, 1)]
         };
@@ -279,10 +310,15 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if under enemy pawn threat
-    fn is_under_enemy_pawn_threat(&self, board: &BitboardBoard, pos: Position, player: Player) -> bool {
+    fn is_under_enemy_pawn_threat(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+    ) -> bool {
         let opponent = player.opposite();
         let threat_offsets = if player == Player::Black {
-            [(-1, -1), (-1, 1)]  // Enemy pawns from above
+            [(-1, -1), (-1, 1)] // Enemy pawns from above
         } else {
             [(1, -1), (1, 1)]
         };
@@ -305,7 +341,12 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Get value of an outpost
-    fn get_outpost_value(&self, piece_type: PieceType, pos: Position, player: Player) -> (i32, i32) {
+    fn get_outpost_value(
+        &self,
+        piece_type: PieceType,
+        pos: Position,
+        player: Player,
+    ) -> (i32, i32) {
         let base_value = match piece_type {
             PieceType::Knight => (60, 40),
             PieceType::Silver => (50, 45),
@@ -357,10 +398,15 @@ impl PositionalPatternAnalyzer {
         let mut squares = Vec::new();
 
         // Squares around king area
-        let king_area_rows = if player == Player::Black { 6..=8 } else { 0..=2 };
+        let king_area_rows = if player == Player::Black {
+            6..=8
+        } else {
+            0..=2
+        };
 
         for row in king_area_rows {
-            for col in 3..=5 {  // Central files
+            for col in 3..=5 {
+                // Central files
                 squares.push(Position::new(row, col));
             }
         }
@@ -375,7 +421,12 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if square can be defended by pawn
-    fn can_be_defended_by_pawn(&self, board: &BitboardBoard, pos: Position, player: Player) -> bool {
+    fn can_be_defended_by_pawn(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+    ) -> bool {
         let pawn_files = [-1, 0, 1];
 
         for dc in pawn_files {
@@ -399,14 +450,25 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if square is controlled by opponent
-    fn is_controlled_by_opponent(&self, board: &BitboardBoard, pos: Position, opponent: Player) -> bool {
+    fn is_controlled_by_opponent(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        opponent: Player,
+    ) -> bool {
         // Check if any opponent piece attacks this square
         for row in 0..9 {
             for col in 0..9 {
                 let check_pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(check_pos) {
                     if piece.player == opponent {
-                        if self.piece_attacks_square(board, check_pos, pos, piece.piece_type, opponent) {
+                        if self.piece_attacks_square(
+                            board,
+                            check_pos,
+                            pos,
+                            piece.piece_type,
+                            opponent,
+                        ) {
                             return true;
                         }
                     }
@@ -418,7 +480,14 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if piece at from_pos can attack to_pos
-    fn piece_attacks_square(&self, _board: &BitboardBoard, from_pos: Position, to_pos: Position, piece_type: PieceType, player: Player) -> bool {
+    fn piece_attacks_square(
+        &self,
+        _board: &BitboardBoard,
+        from_pos: Position,
+        to_pos: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> bool {
         let dr = (to_pos.row as i8 - from_pos.row as i8).abs();
         let dc = (to_pos.col as i8 - from_pos.col as i8).abs();
 
@@ -426,10 +495,12 @@ impl PositionalPatternAnalyzer {
             PieceType::Pawn => {
                 let forward = if player == Player::Black { -1 } else { 1 };
                 from_pos.row as i8 + forward == to_pos.row as i8 && from_pos.col == to_pos.col
-            },
+            }
             PieceType::Knight => dr == 2 && dc == 1,
             PieceType::King | PieceType::Gold | PieceType::Silver => dr <= 1 && dc <= 1,
-            PieceType::Rook | PieceType::PromotedRook => from_pos.row == to_pos.row || from_pos.col == to_pos.col,
+            PieceType::Rook | PieceType::PromotedRook => {
+                from_pos.row == to_pos.row || from_pos.col == to_pos.col
+            }
             PieceType::Bishop | PieceType::PromotedBishop => dr == dc,
             _ => false,
         }
@@ -463,7 +534,12 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Get activity score for a piece
-    fn get_piece_activity_score(&self, pos: Position, piece_type: PieceType, player: Player) -> (i32, i32) {
+    fn get_piece_activity_score(
+        &self,
+        pos: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> (i32, i32) {
         // Pieces are more active when advanced
         let advancement = if player == Player::Black {
             8 - pos.row
@@ -472,8 +548,12 @@ impl PositionalPatternAnalyzer {
         };
 
         let activity_bonus = match piece_type {
-            PieceType::Rook | PieceType::PromotedRook => (advancement as i32 * 3, advancement as i32 * 4),
-            PieceType::Bishop | PieceType::PromotedBishop => (advancement as i32 * 2, advancement as i32 * 3),
+            PieceType::Rook | PieceType::PromotedRook => {
+                (advancement as i32 * 3, advancement as i32 * 4)
+            }
+            PieceType::Bishop | PieceType::PromotedBishop => {
+                (advancement as i32 * 2, advancement as i32 * 3)
+            }
             PieceType::Silver => (advancement as i32 * 2, advancement as i32 * 2),
             PieceType::Gold => (advancement as i32 * 1, advancement as i32 * 2),
             _ => (0, 0),
@@ -495,7 +575,7 @@ impl PositionalPatternAnalyzer {
 
         let advantage = player_squares - opponent_squares;
         let mg_score = advantage * self.config.space_advantage_bonus;
-        let eg_score = advantage * self.config.space_advantage_bonus / 3;  // Less important in endgame
+        let eg_score = advantage * self.config.space_advantage_bonus / 3; // Less important in endgame
 
         TaperedScore::new_tapered(mg_score, eg_score)
     }
@@ -530,7 +610,7 @@ impl PositionalPatternAnalyzer {
 
         let tempo_advantage = developed.saturating_sub(opp_developed);
         let mg_score = tempo_advantage as i32 * self.config.tempo_bonus;
-        let eg_score = 0;  // Tempo not relevant in endgame
+        let eg_score = 0; // Tempo not relevant in endgame
 
         TaperedScore::new_tapered(mg_score, eg_score)
     }
@@ -547,12 +627,15 @@ impl PositionalPatternAnalyzer {
                     if piece.player == player {
                         // Consider piece developed if not on starting row
                         match piece.piece_type {
-                            PieceType::Rook | PieceType::Bishop | PieceType::Gold | PieceType::Silver => {
+                            PieceType::Rook
+                            | PieceType::Bishop
+                            | PieceType::Gold
+                            | PieceType::Silver => {
                                 if pos.row != start_row {
                                     count += 1;
                                 }
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -588,7 +671,7 @@ pub struct PositionalConfig {
     pub enable_piece_activity: bool,
     pub enable_space_advantage: bool,
     pub enable_tempo: bool,
-    
+
     // Bonus/penalty values
     pub pawn_center_bonus: i32,
     pub weak_square_penalty: i32,
@@ -605,7 +688,7 @@ impl Default for PositionalConfig {
             enable_piece_activity: true,
             enable_space_advantage: true,
             enable_tempo: true,
-            
+
             pawn_center_bonus: 25,
             weak_square_penalty: 40,
             space_advantage_bonus: 2,
@@ -624,7 +707,7 @@ pub struct PositionalStats {
     pub activity_checks: u64,
     pub space_checks: u64,
     pub tempo_checks: u64,
-    
+
     pub outposts_found: u64,
     pub weak_squares_found: u64,
 }
@@ -644,7 +727,7 @@ mod tests {
     fn test_center_control_evaluation() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
-        
+
         let score = analyzer.evaluate_center_control(&board, Player::Black);
         assert_eq!(analyzer.stats().center_control_checks, 1);
     }
@@ -653,7 +736,7 @@ mod tests {
     fn test_outpost_detection() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
-        
+
         let score = analyzer.evaluate_outposts(&board, Player::Black);
         assert!(score.mg >= 0);
     }
@@ -662,7 +745,7 @@ mod tests {
     fn test_evaluate_position() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
-        
+
         let score = analyzer.evaluate_position(&board, Player::Black);
         assert_eq!(analyzer.stats().evaluations, 1);
     }
@@ -671,9 +754,9 @@ mod tests {
     fn test_statistics_tracking() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
-        
+
         analyzer.evaluate_position(&board, Player::Black);
-        
+
         let stats = analyzer.stats();
         assert!(stats.center_control_checks >= 1);
         assert!(stats.outpost_checks >= 1);

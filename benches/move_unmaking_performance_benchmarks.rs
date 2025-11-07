@@ -1,17 +1,17 @@
 //! Performance benchmarks comparing board cloning vs move unmaking
-//! 
+//!
 //! These benchmarks measure the performance improvement from using move unmaking
 //! instead of board cloning in the search engine.
-//! 
+//!
 //! Target improvement: 10-30% speedup
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, SamplingMode};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode};
 use shogi_engine::{
     bitboards::{BitboardBoard, MoveInfo},
-    types::{CapturedPieces, Player, Move},
+    moves::MoveGenerator,
     search::SearchEngine,
     time_utils::TimeSource,
-    moves::MoveGenerator,
+    types::{CapturedPieces, Move, Player},
 };
 
 fn create_test_position() -> (BitboardBoard, CapturedPieces, Player) {
@@ -25,14 +25,14 @@ fn create_test_position() -> (BitboardBoard, CapturedPieces, Player) {
 fn bench_single_move_unmake(c: &mut Criterion) {
     let mut group = c.benchmark_group("single_move_unmake");
     group.sampling_mode(SamplingMode::Auto);
-    
+
     let (mut board, mut captured, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured);
-    
+
     if !moves.is_empty() {
         let test_move = &moves[0];
-        
+
         // Benchmark: make_move_with_info + unmake_move
         group.bench_function("make_unmake", |b| {
             b.iter(|| {
@@ -48,7 +48,7 @@ fn bench_single_move_unmake(c: &mut Criterion) {
                 }
             });
         });
-        
+
         // Benchmark: clone + make_move (old method)
         group.bench_function("clone_make", |b| {
             b.iter(|| {
@@ -58,7 +58,7 @@ fn bench_single_move_unmake(c: &mut Criterion) {
             });
         });
     }
-    
+
     group.finish();
 }
 
@@ -66,14 +66,14 @@ fn bench_single_move_unmake(c: &mut Criterion) {
 fn bench_multiple_moves_unmake(c: &mut Criterion) {
     let mut group = c.benchmark_group("multiple_moves_unmake");
     group.sampling_mode(SamplingMode::Auto);
-    
+
     let (mut board, mut captured, mut player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured);
-    
+
     if moves.len() >= 5 {
         let test_moves: Vec<&Move> = moves.iter().take(5).collect();
-        
+
         // Benchmark: make_unmake method
         group.bench_function("make_unmake_5_moves", |b| {
             b.iter(|| {
@@ -81,7 +81,7 @@ fn bench_multiple_moves_unmake(c: &mut Criterion) {
                 let mut move_history: Vec<MoveInfo> = Vec::new();
                 let mut current_player = player;
                 let mut current_captured = captured.clone();
-                
+
                 for move_ in &test_moves {
                     let move_info = test_board.make_move_with_info(move_);
                     if let Some(ref captured_piece) = move_info.captured_piece {
@@ -90,7 +90,7 @@ fn bench_multiple_moves_unmake(c: &mut Criterion) {
                     move_history.push(move_info);
                     current_player = current_player.opposite();
                 }
-                
+
                 // Unmake in reverse
                 while let Some(move_info) = move_history.pop() {
                     current_player = current_player.opposite();
@@ -101,7 +101,7 @@ fn bench_multiple_moves_unmake(c: &mut Criterion) {
                 }
             });
         });
-        
+
         // Benchmark: clone method
         group.bench_function("clone_5_moves", |b| {
             b.iter(|| {
@@ -112,7 +112,7 @@ fn bench_multiple_moves_unmake(c: &mut Criterion) {
             });
         });
     }
-    
+
     group.finish();
 }
 
@@ -120,10 +120,10 @@ fn bench_multiple_moves_unmake(c: &mut Criterion) {
 fn bench_search_with_unmaking(c: &mut Criterion) {
     let mut group = c.benchmark_group("search_performance");
     group.sampling_mode(SamplingMode::Auto);
-    
+
     let (mut board, captured, player) = create_test_position();
     let mut engine = SearchEngine::new(None, 16);
-    
+
     // Benchmark search at different depths
     for depth in [1, 2, 3] {
         group.bench_with_input(
@@ -145,7 +145,7 @@ fn bench_search_with_unmaking(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -153,13 +153,15 @@ fn bench_search_with_unmaking(c: &mut Criterion) {
 fn bench_move_types_unmake(c: &mut Criterion) {
     let mut group = c.benchmark_group("move_types_unmake");
     group.sampling_mode(SamplingMode::Auto);
-    
+
     let (mut board, mut captured, player) = create_test_position();
     let move_generator = MoveGenerator::new();
     let moves = move_generator.generate_legal_moves(&board, player, &captured);
-    
+
     // Normal moves
-    let normal_move = moves.iter().find(|m| !m.is_capture && !m.is_promotion && m.from.is_some());
+    let normal_move = moves
+        .iter()
+        .find(|m| !m.is_capture && !m.is_promotion && m.from.is_some());
     if let Some(move_) = normal_move {
         group.bench_function("normal_move", |b| {
             b.iter(|| {
@@ -169,7 +171,7 @@ fn bench_move_types_unmake(c: &mut Criterion) {
             });
         });
     }
-    
+
     // Capture moves
     let capture_move = moves.iter().find(|m| m.is_capture);
     if let Some(move_) = capture_move {
@@ -188,7 +190,7 @@ fn bench_move_types_unmake(c: &mut Criterion) {
             });
         });
     }
-    
+
     // Promotion moves
     let promotion_move = moves.iter().find(|m| m.is_promotion);
     if let Some(move_) = promotion_move {
@@ -200,7 +202,7 @@ fn bench_move_types_unmake(c: &mut Criterion) {
             });
         });
     }
-    
+
     group.finish();
 }
 

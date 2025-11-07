@@ -15,11 +15,11 @@
 //! - Overhead should be <2% of search time
 //! - Enhanced classification should provide better position type detection
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, LMRConfig, PositionClassificationConfig},
+    search::SearchEngine,
+    types::{CapturedPieces, LMRConfig, Player, PositionClassificationConfig},
 };
 use std::time::Duration;
 
@@ -50,51 +50,47 @@ fn benchmark_basic_vs_enhanced_classification(c: &mut Criterion) {
     let mut group = c.benchmark_group("basic_vs_enhanced_classification");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test across different depths
     for depth in [3, 4, 5, 6] {
-        group.bench_with_input(
-            BenchmarkId::new("depth", depth),
-            &depth,
-            |b, &depth| {
-                b.iter(|| {
-                    let mut engine_basic = create_test_engine_basic_classification();
-                    let mut engine_enhanced = create_test_engine_enhanced_classification();
-                    
-                    engine_basic.reset_lmr_stats();
-                    engine_enhanced.reset_lmr_stats();
-                    
-                    let mut board_mut = board.clone();
-                    let result_basic = engine_basic.search_at_depth_legacy(
-                        black_box(&mut board_mut),
-                        black_box(&captured_pieces),
-                        player,
-                        depth,
-                        1000,
-                    );
-                    
-                    let mut board_mut = board.clone();
-                    let result_enhanced = engine_enhanced.search_at_depth_legacy(
-                        black_box(&mut board_mut),
-                        black_box(&captured_pieces),
-                        player,
-                        depth,
-                        1000,
-                    );
-                    
-                    let stats_basic = engine_basic.get_lmr_stats().clone();
-                    let stats_enhanced = engine_enhanced.get_lmr_stats().clone();
-                    
-                    black_box((result_basic, result_enhanced, stats_basic, stats_enhanced))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("depth", depth), &depth, |b, &depth| {
+            b.iter(|| {
+                let mut engine_basic = create_test_engine_basic_classification();
+                let mut engine_enhanced = create_test_engine_enhanced_classification();
+
+                engine_basic.reset_lmr_stats();
+                engine_enhanced.reset_lmr_stats();
+
+                let mut board_mut = board.clone();
+                let result_basic = engine_basic.search_at_depth_legacy(
+                    black_box(&mut board_mut),
+                    black_box(&captured_pieces),
+                    player,
+                    depth,
+                    1000,
+                );
+
+                let mut board_mut = board.clone();
+                let result_enhanced = engine_enhanced.search_at_depth_legacy(
+                    black_box(&mut board_mut),
+                    black_box(&captured_pieces),
+                    player,
+                    depth,
+                    1000,
+                );
+
+                let stats_basic = engine_basic.get_lmr_stats().clone();
+                let stats_enhanced = engine_enhanced.get_lmr_stats().clone();
+
+                black_box((result_basic, result_enhanced, stats_basic, stats_enhanced))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -103,19 +99,19 @@ fn benchmark_classification_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("classification_overhead");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     group.bench_function("overhead_measurement", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_enhanced_classification();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let _result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -123,15 +119,15 @@ fn benchmark_classification_overhead(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
             let classification_stats = stats.classification_stats.clone();
-            
+
             black_box((elapsed, stats, classification_stats))
         });
     });
-    
+
     group.finish();
 }
 
@@ -140,16 +136,16 @@ fn benchmark_classification_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("classification_effectiveness");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     group.bench_function("effectiveness_measurement", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_enhanced_classification();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let _result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -158,20 +154,27 @@ fn benchmark_classification_effectiveness(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let stats = engine.get_lmr_stats().clone();
             let classification_stats = stats.classification_stats.clone();
-            
+
             // Calculate effectiveness metrics
             let tactical_ratio = classification_stats.tactical_ratio();
             let quiet_ratio = classification_stats.quiet_ratio();
             let efficiency = stats.efficiency();
             let cutoff_rate = stats.cutoff_rate();
-            
-            black_box((stats, classification_stats, tactical_ratio, quiet_ratio, efficiency, cutoff_rate))
+
+            black_box((
+                stats,
+                classification_stats,
+                tactical_ratio,
+                quiet_ratio,
+                efficiency,
+                cutoff_rate,
+            ))
         });
     });
-    
+
     group.finish();
 }
 
@@ -180,11 +183,11 @@ fn benchmark_classification_thresholds(c: &mut Criterion) {
     let mut group = c.benchmark_group("classification_thresholds");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test different threshold configurations
     let threshold_configs = vec![
         ("default", PositionClassificationConfig::default()),
@@ -201,36 +204,32 @@ fn benchmark_classification_thresholds(c: &mut Criterion) {
             c
         }),
     ];
-    
+
     for (name, config) in threshold_configs {
-        group.bench_with_input(
-            BenchmarkId::new("threshold", name),
-            &config,
-            |b, config| {
-                b.iter(|| {
-                    let mut engine = create_test_engine_enhanced_classification();
-                    let mut lmr_config = engine.get_lmr_config().clone();
-                    lmr_config.classification_config = config.clone();
-                    engine.update_lmr_config(lmr_config).unwrap();
-                    engine.reset_lmr_stats();
-                    
-                    let mut board_mut = board.clone();
-                    let result = engine.search_at_depth_legacy(
-                        black_box(&mut board_mut),
-                        black_box(&captured_pieces),
-                        player,
-                        5, // Fixed depth
-                        1000,
-                    );
-                    
-                    let stats = engine.get_lmr_stats().clone();
-                    let classification_stats = stats.classification_stats.clone();
-                    black_box((result, stats, classification_stats))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("threshold", name), &config, |b, config| {
+            b.iter(|| {
+                let mut engine = create_test_engine_enhanced_classification();
+                let mut lmr_config = engine.get_lmr_config().clone();
+                lmr_config.classification_config = config.clone();
+                engine.update_lmr_config(lmr_config).unwrap();
+                engine.reset_lmr_stats();
+
+                let mut board_mut = board.clone();
+                let result = engine.search_at_depth_legacy(
+                    black_box(&mut board_mut),
+                    black_box(&captured_pieces),
+                    player,
+                    5, // Fixed depth
+                    1000,
+                );
+
+                let stats = engine.get_lmr_stats().clone();
+                let classification_stats = stats.classification_stats.clone();
+                black_box((result, stats, classification_stats))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -239,19 +238,19 @@ fn benchmark_comprehensive_classification_analysis(c: &mut Criterion) {
     let mut group = c.benchmark_group("comprehensive_classification_analysis");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     group.bench_function("comprehensive_analysis", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_enhanced_classification();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -259,18 +258,18 @@ fn benchmark_comprehensive_classification_analysis(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
             let classification_stats = stats.classification_stats.clone();
-            
+
             // Comprehensive metrics
             let tactical_ratio = classification_stats.tactical_ratio();
             let quiet_ratio = classification_stats.quiet_ratio();
             let efficiency = stats.efficiency();
             let cutoff_rate = stats.cutoff_rate();
             let research_rate = stats.research_rate();
-            
+
             black_box((
                 result,
                 elapsed,
@@ -284,7 +283,7 @@ fn benchmark_comprehensive_classification_analysis(c: &mut Criterion) {
             ))
         });
     });
-    
+
     group.finish();
 }
 
@@ -293,19 +292,19 @@ fn benchmark_performance_regression_validation(c: &mut Criterion) {
     let mut group = c.benchmark_group("classification_performance_regression");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     group.bench_function("regression_validation", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_enhanced_classification();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let _result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -313,22 +312,25 @@ fn benchmark_performance_regression_validation(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
-            
+
             // Validate performance requirements
             // Overhead should be <2% (would need baseline comparison)
             // For now, just track the elapsed time
             let overhead_percentage = 0.5; // Placeholder - actual measurement would compare with/without
-            
+
             // Requirement: overhead < 2%
-            assert!(overhead_percentage < 2.0, "Classification overhead exceeds 2%");
-            
+            assert!(
+                overhead_percentage < 2.0,
+                "Classification overhead exceeds 2%"
+            );
+
             black_box((elapsed, stats, overhead_percentage))
         });
     });
-    
+
     group.finish();
 }
 
@@ -343,4 +345,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

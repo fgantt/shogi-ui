@@ -4,12 +4,15 @@
 //! Extracts positions with tactical patterns (forks, pins, skewers, etc.) and creates training puzzles.
 
 use clap::{Parser, Subcommand};
-use shogi_engine::{ShogiEngine, kif_parser::KifGame, types::Player, evaluation::tactical_patterns::TacticalPatternRecognizer};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
+use shogi_engine::{
+    evaluation::tactical_patterns::TacticalPatternRecognizer, kif_parser::KifGame, types::Player,
+    ShogiEngine,
+};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -136,10 +139,10 @@ impl PuzzleGenerator {
         let mut puzzle_id = 1;
 
         println!("Analyzing game with {} moves", game.moves.len());
-        
+
         // Reset to starting position
         self.engine = ShogiEngine::new();
-        
+
         // Analyze each position in the game for tactical patterns
         for (move_num, kif_move) in game.moves.iter().enumerate() {
             // Check if this position has interesting tactical patterns
@@ -156,13 +159,15 @@ impl PuzzleGenerator {
                     puzzle_id += 1;
                 }
             }
-            
-            // Apply the move to move to the next position  
+
+            // Apply the move to move to the next position
             if let Some(usi_move) = &kif_move.usi_move {
                 use shogi_engine::{bitboards::BitboardBoard, types::Move};
                 let fen = self.engine.get_fen();
                 if let Ok((board, _, _)) = BitboardBoard::from_fen(&fen) {
-                    if let Ok(mv) = Move::from_usi_string(usi_move, self.engine.current_player(), &board) {
+                    if let Ok(mv) =
+                        Move::from_usi_string(usi_move, self.engine.current_player(), &board)
+                    {
                         let _applied = self.engine.apply_move(&mv);
                     }
                 }
@@ -183,25 +188,28 @@ impl PuzzleGenerator {
         // Get current board position
         use shogi_engine::bitboards::BitboardBoard;
         let fen = self.engine.get_fen();
-        
+
         // Parse board from FEN
         if let Ok((_board, player, _)) = BitboardBoard::from_fen(&fen) {
             // Analyze tactical patterns for current player
             let mut patterns_detected = Vec::new();
-            
+
             // Check for forks
             // In a real implementation, we would evaluate the position
             // and detect actual tactical patterns using the recognizer
-            
+
             // For now, we'll simulate detection
             if let Some(pattern) = self.simulate_pattern_detection(player) {
                 patterns_detected.push(pattern);
             }
-            
+
             // Return first detected pattern, or simulate one
             patterns_detected.first().cloned().or_else(|| {
-                let all_patterns = vec!["fork", "pin", "skewer", "discovered_attack", "knight_fork"];
-                all_patterns.choose(&mut thread_rng()).map(|s| s.to_string())
+                let all_patterns =
+                    vec!["fork", "pin", "skewer", "discovered_attack", "knight_fork"];
+                all_patterns
+                    .choose(&mut thread_rng())
+                    .map(|s| s.to_string())
             })
         } else {
             // Fallback to simulated pattern
@@ -209,7 +217,7 @@ impl PuzzleGenerator {
             patterns.choose(&mut thread_rng()).map(|s| s.to_string())
         }
     }
-    
+
     /// Simulate pattern detection (placeholder for real implementation)
     #[allow(dead_code)]
     fn simulate_pattern_detection(&mut self, _player: Player) -> Option<String> {
@@ -217,7 +225,7 @@ impl PuzzleGenerator {
         // 1. Use TacticalPatternRecognizer to analyze position
         // 2. Check which tactical patterns are present
         // 3. Return the most significant pattern
-        
+
         let patterns = vec!["fork", "pin", "skewer", "discovered_attack", "knight_fork"];
         patterns.choose(&mut thread_rng()).map(|s| s.to_string())
     }
@@ -234,17 +242,17 @@ impl PuzzleGenerator {
         // Get current position
         let position_sfen = self.engine.get_fen();
         let current_player = self.engine.current_player();
-        
+
         // Find the solution (best move)
         let solution_move = self.engine.get_best_move(4, 3000, None)?;
         let solution = vec![solution_move.to_usi_string()];
-        
+
         // Calculate difficulty based on position evaluation
         let difficulty = self.calculate_difficulty(pattern_type.clone());
-        
+
         // Calculate rating (simple estimation based on pattern complexity)
         let rating = self.calculate_rating(pattern_type.clone(), difficulty.clone());
-        
+
         // Create puzzle
         Some(Puzzle {
             id: puzzle_id.to_string(),
@@ -314,7 +322,7 @@ impl PuzzleGenerator {
         // 2. Play through each game
         // 3. Detect tactical patterns at each position
         // 4. Create puzzles from interesting positions
-        
+
         let mut puzzles = Vec::new();
         let puzzle_count = count.unwrap_or(50);
 
@@ -328,7 +336,8 @@ impl PuzzleGenerator {
                     2 => "skewer",
                     3 => "discovered_attack",
                     _ => "knight_fork",
-                }.to_string()
+                }
+                .to_string()
             };
 
             let _difficulty = if i % 3 == 0 {
@@ -367,10 +376,14 @@ impl PuzzleGenerator {
     }
 
     /// Save puzzles to JSON file
-    fn save_puzzles(&self, output: &PathBuf, puzzles: &[Puzzle]) -> Result<(), Box<dyn std::error::Error>> {
-        use std::fs::File;
+    fn save_puzzles(
+        &self,
+        output: &PathBuf,
+        puzzles: &[Puzzle],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         use serde_json;
-        
+        use std::fs::File;
+
         #[derive(Serialize)]
         struct PuzzleCollection {
             puzzles: Vec<Puzzle>,
@@ -386,9 +399,9 @@ impl PuzzleGenerator {
 
         let file = File::create(output)?;
         serde_json::to_writer_pretty(file, &collection)?;
-        
+
         println!("Saved {} puzzles to {:?}", puzzles.len(), output);
-        
+
         Ok(())
     }
 }
@@ -397,11 +410,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Extract { input, output, count }) => {
+        Some(Commands::Extract {
+            input,
+            output,
+            count,
+        }) => {
             let mut generator = PuzzleGenerator::new();
             generator.extract_puzzles(input, output, *count, None, cli.verbose)?;
         }
-        Some(Commands::ByPattern { pattern, count, output }) => {
+        Some(Commands::ByPattern {
+            pattern,
+            count,
+            output,
+        }) => {
             let mut generator = PuzzleGenerator::new();
             let puzzles = generator.extract_puzzles(
                 &cli.input,
@@ -418,7 +439,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => {
             let mut generator = PuzzleGenerator::new();
             let target_count = cli.count.unwrap_or(50);
-            
+
             let puzzles = if let Some(pattern) = &cli.pattern {
                 generator.extract_puzzles(
                     &cli.input,
@@ -436,17 +457,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     cli.verbose,
                 )?
             };
-            
+
             println!("\n=== Puzzle Generation Summary ===");
             println!("Generated: {} puzzles", puzzles.len());
             println!("Saved to: {:?}", cli.output);
-            
+
             // Print puzzle types breakdown
             let mut type_counts = HashMap::new();
             for puzzle in &puzzles {
                 *type_counts.entry(&puzzle.pattern_type).or_insert(0) += 1;
             }
-            
+
             println!("\nPuzzle Types:");
             for (pattern, count) in type_counts {
                 println!("  {}: {}", pattern, count);
@@ -459,19 +480,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn verify_puzzles(input: &PathBuf, _verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("Verifying puzzles from: {:?}", input);
-    
+
     // In real implementation, we would:
     // 1. Load puzzle file
     // 2. For each puzzle, verify the solution
     // 3. Check that the position is solvable
     // 4. Report any invalid puzzles
-    
+
     println!("Puzzle verification not yet fully implemented");
-    
+
     Ok(())
 }
 
 // Note: Need to add `rand` dependency for the thread_rng() call
 // Add this to Cargo.toml dependencies if not already present
 // rand = "0.8"
-

@@ -16,8 +16,8 @@
 //! let weights = system.optimize_weights(&training_data);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -25,13 +25,13 @@ use std::collections::HashMap;
 pub struct AdvancedPatternSystem {
     /// Machine learning configuration
     ml_config: MLConfig,
-    
+
     /// Dynamic selector
     selector: DynamicPatternSelector,
-    
+
     /// Pattern explainer
     explainer: PatternExplainer,
-    
+
     /// Analytics engine
     analytics: PatternAnalytics,
 }
@@ -55,14 +55,14 @@ impl AdvancedPatternSystem {
 
         // Simplified ML weight optimization
         // Full implementation would use gradient descent or other ML techniques
-        let weights = vec![1.0; 8];  // 8 pattern types
-        
+        let weights = vec![1.0; 8]; // 8 pattern types
+
         for position in training_data {
             // Adjust weights based on position evaluation error
             // This is a placeholder for actual ML training
             let _ = position;
         }
-        
+
         weights
     }
 
@@ -72,7 +72,11 @@ impl AdvancedPatternSystem {
     }
 
     /// Explain detected patterns
-    pub fn explain_patterns(&self, board: &BitboardBoard, player: Player) -> Vec<PatternExplanation> {
+    pub fn explain_patterns(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> Vec<PatternExplanation> {
         self.explainer.explain(board, player)
     }
 
@@ -93,13 +97,13 @@ impl Default for AdvancedPatternSystem {
 pub struct MLConfig {
     /// Enable ML weight optimization
     pub enabled: bool,
-    
+
     /// Learning rate
     pub learning_rate: f32,
-    
+
     /// Training iterations
     pub iterations: usize,
-    
+
     /// Regularization factor
     pub regularization: f32,
 }
@@ -107,7 +111,7 @@ pub struct MLConfig {
 impl Default for MLConfig {
     fn default() -> Self {
         Self {
-            enabled: false,  // Disabled by default
+            enabled: false, // Disabled by default
             learning_rate: 0.01,
             iterations: 1000,
             regularization: 0.001,
@@ -119,10 +123,10 @@ impl Default for MLConfig {
 pub struct TrainingPosition {
     /// Board position
     pub board: BitboardBoard,
-    
+
     /// Player to evaluate
     pub player: Player,
-    
+
     /// Expected evaluation
     pub expected_eval: i32,
 }
@@ -151,9 +155,9 @@ impl DynamicPatternSelector {
                 enable_positional: true,
                 enable_endgame: false,
                 weights: vec![1.0, 1.0, 1.2, 0.8, 1.0, 0.5, 0.5, 0.2],
-            }
+            },
         );
-        
+
         self.position_patterns.insert(
             PositionType::Middlegame,
             PatternSelection {
@@ -161,9 +165,9 @@ impl DynamicPatternSelector {
                 enable_positional: true,
                 enable_endgame: false,
                 weights: vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5],
-            }
+            },
         );
-        
+
         self.position_patterns.insert(
             PositionType::Endgame,
             PatternSelection {
@@ -171,7 +175,7 @@ impl DynamicPatternSelector {
                 enable_positional: false,
                 enable_endgame: true,
                 weights: vec![0.8, 1.2, 0.8, 0.6, 1.0, 0.7, 0.5, 1.5],
-            }
+            },
         );
     }
 
@@ -185,7 +189,8 @@ impl DynamicPatternSelector {
             PositionType::Endgame
         };
 
-        self.position_patterns.get(&position_type)
+        self.position_patterns
+            .get(&position_type)
             .cloned()
             .unwrap_or_default()
     }
@@ -235,10 +240,18 @@ impl PatternExplainer {
     }
 
     fn initialize_templates(&mut self) {
-        self.templates.insert("fork".to_string(), "Double attack on {targets}".to_string());
-        self.templates.insert("pin".to_string(), "Piece pinned to {target}".to_string());
-        self.templates.insert("outpost".to_string(), "Strong piece on {square}".to_string());
-        self.templates.insert("center".to_string(), "Controls center with {pieces}".to_string());
+        self.templates
+            .insert("fork".to_string(), "Double attack on {targets}".to_string());
+        self.templates
+            .insert("pin".to_string(), "Piece pinned to {target}".to_string());
+        self.templates.insert(
+            "outpost".to_string(),
+            "Strong piece on {square}".to_string(),
+        );
+        self.templates.insert(
+            "center".to_string(),
+            "Controls center with {pieces}".to_string(),
+        );
     }
 
     fn explain(&self, _board: &BitboardBoard, _player: Player) -> Vec<PatternExplanation> {
@@ -252,13 +265,13 @@ impl PatternExplainer {
 pub struct PatternExplanation {
     /// Pattern name
     pub pattern_name: String,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Value contribution
     pub value: i32,
-    
+
     /// Squares involved
     pub squares: Vec<Position>,
 }
@@ -267,10 +280,10 @@ pub struct PatternExplanation {
 pub struct PatternAnalytics {
     /// Pattern frequency counts
     frequency: HashMap<String, u64>,
-    
+
     /// Pattern value distribution
     value_distribution: HashMap<String, Vec<i32>>,
-    
+
     /// Pattern correlation matrix (reserved for future use)
     #[allow(dead_code)]
     correlations: HashMap<(String, String), f32>,
@@ -288,7 +301,7 @@ impl PatternAnalytics {
     /// Record pattern occurrence
     pub fn record_pattern(&mut self, pattern_name: &str, value: i32) {
         *self.frequency.entry(pattern_name.to_string()).or_insert(0) += 1;
-        
+
         self.value_distribution
             .entry(pattern_name.to_string())
             .or_insert_with(Vec::new)
@@ -337,36 +350,36 @@ impl PatternVisualizer {
     /// Create ASCII visualization of patterns
     pub fn visualize_board(board: &BitboardBoard, patterns: &[PatternExplanation]) -> String {
         let mut output = String::new();
-        
+
         // Board header
         output.push_str("  a b c d e f g h i\n");
-        
+
         // Board rows
         for row in 0..9 {
             output.push_str(&format!("{} ", 9 - row));
-            
+
             for col in 0..9 {
                 let pos = Position::new(row, col);
-                
+
                 if let Some(_piece) = board.get_piece(pos) {
                     // Check if this square is involved in a pattern
                     let in_pattern = patterns.iter().any(|p| p.squares.contains(&pos));
-                    
+
                     if in_pattern {
-                        output.push('*');  // Highlight pattern squares
+                        output.push('*'); // Highlight pattern squares
                     } else {
                         output.push('.');
                     }
                 } else {
                     output.push('.');
                 }
-                
+
                 output.push(' ');
             }
-            
+
             output.push('\n');
         }
-        
+
         output
     }
 }
@@ -392,11 +405,11 @@ mod tests {
     fn test_dynamic_pattern_selection() {
         let system = AdvancedPatternSystem::new();
         let board = BitboardBoard::new();
-        
+
         // Opening phase (high game phase)
         let selection = system.select_patterns(&board, 200);
         assert!(selection.enable_positional);
-        
+
         // Endgame phase (low game phase)
         let selection = system.select_patterns(&board, 30);
         assert!(selection.enable_endgame);
@@ -406,9 +419,9 @@ mod tests {
     fn test_pattern_explainer() {
         let system = AdvancedPatternSystem::new();
         let board = BitboardBoard::new();
-        
+
         let explanations = system.explain_patterns(&board, Player::Black);
-        
+
         // Should return explanations (may be empty for starting position)
         assert!(explanations.len() >= 0);
     }
@@ -416,11 +429,11 @@ mod tests {
     #[test]
     fn test_pattern_analytics_recording() {
         let mut analytics = PatternAnalytics::new();
-        
+
         analytics.record_pattern("fork", 100);
         analytics.record_pattern("fork", 120);
         analytics.record_pattern("pin", 80);
-        
+
         assert_eq!(analytics.get_frequency("fork"), 2);
         assert_eq!(analytics.get_frequency("pin"), 1);
         assert_eq!(analytics.get_average_value("fork"), 110.0);
@@ -429,11 +442,11 @@ mod tests {
     #[test]
     fn test_pattern_analytics_stats() {
         let mut analytics = PatternAnalytics::new();
-        
+
         analytics.record_pattern("fork", 100);
         analytics.record_pattern("pin", 80);
         analytics.record_pattern("outpost", 60);
-        
+
         let stats = analytics.get_stats();
         assert_eq!(stats.total_patterns, 3);
         assert_eq!(stats.unique_patterns, 3);
@@ -443,12 +456,12 @@ mod tests {
     fn test_pattern_visualizer() {
         let board = BitboardBoard::new();
         let patterns = vec![];
-        
+
         let visualization = PatternVisualizer::visualize_board(&board, &patterns);
-        
+
         // Should contain board header
         assert!(visualization.contains("a b c d e f g h i"));
-        
+
         // Should contain row numbers
         assert!(visualization.contains("9"));
         assert!(visualization.contains("1"));
@@ -457,12 +470,12 @@ mod tests {
     #[test]
     fn test_optimize_weights() {
         let mut system = AdvancedPatternSystem::new();
-        
+
         // Create empty training data
         let training_data = vec![];
-        
+
         let weights = system.optimize_weights(&training_data);
-        
+
         // Should return empty vector when ML disabled
         assert_eq!(weights.len(), 0);
     }
@@ -471,10 +484,10 @@ mod tests {
     fn test_ml_enabled_weights() {
         let mut system = AdvancedPatternSystem::new();
         system.ml_config.enabled = true;
-        
+
         let training_data = vec![];
         let weights = system.optimize_weights(&training_data);
-        
+
         // Should return weights when ML enabled
         assert_eq!(weights.len(), 8);
     }
@@ -482,17 +495,17 @@ mod tests {
     #[test]
     fn test_position_type_selection() {
         let selector = DynamicPatternSelector::new();
-        
+
         // Opening
         let opening_selection = selector.select(&BitboardBoard::new(), 200);
         assert!(opening_selection.enable_positional);
         assert!(!opening_selection.enable_endgame);
-        
+
         // Middlegame
         let middlegame_selection = selector.select(&BitboardBoard::new(), 128);
         assert!(opening_selection.enable_tactical);
         assert!(opening_selection.enable_positional);
-        
+
         // Endgame
         let endgame_selection = selector.select(&BitboardBoard::new(), 30);
         assert!(endgame_selection.enable_endgame);
@@ -501,16 +514,16 @@ mod tests {
     #[test]
     fn test_pattern_weights_by_phase() {
         let selector = DynamicPatternSelector::new();
-        
+
         let opening = selector.select(&BitboardBoard::new(), 200);
         let endgame = selector.select(&BitboardBoard::new(), 30);
-        
+
         // Weights should differ by phase
         assert_ne!(opening.weights, endgame.weights);
-        
+
         // Opening should emphasize positional patterns (index 2 = king safety)
         assert!(opening.weights[2] >= 1.0);
-        
+
         // Endgame should emphasize endgame patterns (index 7)
         assert!(endgame.weights[7] >= 1.0);
     }
@@ -518,7 +531,7 @@ mod tests {
     #[test]
     fn test_analytics_empty() {
         let analytics = PatternAnalytics::new();
-        
+
         assert_eq!(analytics.get_frequency("fork"), 0);
         assert_eq!(analytics.get_average_value("fork"), 0.0);
     }
@@ -526,15 +539,15 @@ mod tests {
     #[test]
     fn test_analytics_multiple_recordings() {
         let mut analytics = PatternAnalytics::new();
-        
+
         for i in 0..100 {
             analytics.record_pattern("test_pattern", i);
         }
-        
+
         assert_eq!(analytics.get_frequency("test_pattern"), 100);
-        
+
         let avg = analytics.get_average_value("test_pattern");
-        assert!((avg - 49.5).abs() < 1.0);  // Average of 0..99
+        assert!((avg - 49.5).abs() < 1.0); // Average of 0..99
     }
 
     #[test]
@@ -543,9 +556,13 @@ mod tests {
             pattern_name: "Fork".to_string(),
             description: "Knight forks king and rook".to_string(),
             value: 150,
-            squares: vec![Position::new(4, 4), Position::new(3, 2), Position::new(3, 6)],
+            squares: vec![
+                Position::new(4, 4),
+                Position::new(3, 2),
+                Position::new(3, 6),
+            ],
         };
-        
+
         assert_eq!(explanation.pattern_name, "Fork");
         assert_eq!(explanation.value, 150);
         assert_eq!(explanation.squares.len(), 3);

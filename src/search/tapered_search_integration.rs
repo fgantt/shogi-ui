@@ -24,8 +24,8 @@
 //! let can_prune = enhancer.should_prune(phase, depth, score, beta);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use std::collections::HashMap;
 
 /// Tapered search enhancer
@@ -64,14 +64,14 @@ impl TaperedSearchEnhancer {
     /// Track game phase at current search node
     pub fn track_phase(&mut self, board: &BitboardBoard) -> i32 {
         let hash = self.compute_phase_hash(board);
-        
+
         if let Some(&phase) = self.phase_cache.get(&hash) {
             return phase;
         }
 
         let phase = self.calculate_phase(board);
         self.phase_cache.insert(hash, phase);
-        
+
         // Track phase transitions
         if let Some(last) = self.last_phase {
             if self.is_phase_transition(last, phase) {
@@ -79,7 +79,7 @@ impl TaperedSearchEnhancer {
             }
         }
         self.last_phase = Some(phase);
-        
+
         phase
     }
 
@@ -143,7 +143,7 @@ impl TaperedSearchEnhancer {
         let margin = self.get_pruning_margin(category, depth);
 
         let can_prune = score - margin >= beta;
-        
+
         if can_prune {
             self.stats.phase_aware_prunes += 1;
         }
@@ -174,7 +174,9 @@ impl TaperedSearchEnhancer {
             PhaseCategory::Opening => {
                 // Prioritize development in opening
                 match piece_type {
-                    PieceType::Knight | PieceType::Silver | PieceType::Bishop | PieceType::Rook => 100,
+                    PieceType::Knight | PieceType::Silver | PieceType::Bishop | PieceType::Rook => {
+                        100
+                    }
                     PieceType::Gold => 50,
                     _ => 0,
                 }
@@ -210,7 +212,11 @@ impl TaperedSearchEnhancer {
         match category {
             PhaseCategory::Opening => {
                 // Minimal extensions in opening
-                if is_check { 1 } else { 0 }
+                if is_check {
+                    1
+                } else {
+                    0
+                }
             }
             PhaseCategory::Middlegame => {
                 // Moderate extensions in middlegame
@@ -253,7 +259,7 @@ impl TaperedSearchEnhancer {
     /// Compute hash for phase caching (material-based)
     fn compute_phase_hash(&self, board: &BitboardBoard) -> u64 {
         let mut hash = 0u64;
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -358,7 +364,7 @@ mod tests {
 
         // Opening - more conservative pruning
         let can_prune_opening = enhancer.should_prune(256, 3, 500, 100);
-        
+
         // Endgame - more aggressive pruning
         let can_prune_endgame = enhancer.should_prune(32, 3, 300, 100);
 
@@ -473,4 +479,3 @@ mod tests {
         assert!(middlegame_margin > endgame_margin);
     }
 }
-

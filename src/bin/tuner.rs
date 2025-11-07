@@ -1,20 +1,20 @@
 //! Shogi Engine Tuning Binary
-//! 
+//!
 //! This binary provides a command-line interface for automated evaluation tuning
 //! using various optimization algorithms and validation methods.
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
-use std::time::Instant;
 use shogi_engine::tuning::{
-    types::{
-        TuningConfig, OptimizationMethod, ValidationConfig, 
-        PositionFilter, PerformanceConfig, TuningResults
-    },
     data_processor::DataProcessor,
     optimizer::Optimizer,
+    types::{
+        OptimizationMethod, PerformanceConfig, PositionFilter, TuningConfig, TuningResults,
+        ValidationConfig,
+    },
     validator::Validator,
 };
+use std::path::PathBuf;
+use std::time::Instant;
 
 /// Shogi Engine Automated Tuning Tool
 #[derive(Parser, Debug)]
@@ -167,8 +167,10 @@ fn run_tuning(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     let optimization_result = optimizer.optimize(&positions)?;
 
     if cli.verbose {
-        println!("Optimization completed in {:.2} seconds", 
-                optimization_result.optimization_time.as_secs_f64());
+        println!(
+            "Optimization completed in {:.2} seconds",
+            optimization_result.optimization_time.as_secs_f64()
+        );
         println!("Final error: {:.6}", optimization_result.final_error);
         println!("Iterations: {}", optimization_result.iterations);
     }
@@ -183,7 +185,10 @@ fn run_tuning(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
 
     if cli.verbose {
         println!("Validation completed");
-        println!("Mean validation error: {:.6}", validation_results.mean_error);
+        println!(
+            "Mean validation error: {:.6}",
+            validation_results.mean_error
+        );
         println!("Standard deviation: {:.6}", validation_results.std_error);
     }
 
@@ -195,7 +200,10 @@ fn run_tuning(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         start_time.elapsed().as_secs_f64(),
         optimization_result.iterations,
         optimization_result.final_error,
-        matches!(optimization_result.convergence_reason, shogi_engine::tuning::optimizer::ConvergenceReason::Converged),
+        matches!(
+            optimization_result.convergence_reason,
+            shogi_engine::tuning::optimizer::ConvergenceReason::Converged
+        ),
     );
 
     // Save results
@@ -206,7 +214,10 @@ fn run_tuning(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("Tuning completed successfully!");
-    println!("Total time: {:.2} seconds", start_time.elapsed().as_secs_f64());
+    println!(
+        "Total time: {:.2} seconds",
+        start_time.elapsed().as_secs_f64()
+    );
     println!("Final error: {:.6}", optimization_result.final_error);
     println!("Validation error: {:.6}", validation_results.mean_error);
 
@@ -235,8 +246,10 @@ fn run_validation(cli: &Cli, folds: u32) -> Result<(), Box<dyn std::error::Error
     if cli.verbose {
         println!("  Fold details:");
         for fold in &validation_results.fold_results {
-            println!("    Fold {}: error={:.6}, samples={}", 
-                    fold.fold_number, fold.validation_error, fold.sample_count);
+            println!(
+                "    Fold {}: error={:.6}, samples={}",
+                fold.fold_number, fold.validation_error, fold.sample_count
+            );
         }
     }
 
@@ -244,11 +257,14 @@ fn run_validation(cli: &Cli, folds: u32) -> Result<(), Box<dyn std::error::Error
 }
 
 /// Generate synthetic test data
-fn generate_synthetic_data(count: usize, output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_synthetic_data(
+    count: usize,
+    output: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use serde_json;
     use shogi_engine::tuning::validator::SyntheticDataGenerator;
     use shogi_engine::types::NUM_EVAL_FEATURES;
     use std::fs::File;
-    use serde_json;
 
     if count == 0 {
         return Err("Count must be greater than 0".into());
@@ -269,7 +285,7 @@ fn generate_synthetic_data(count: usize, output: PathBuf) -> Result<(), Box<dyn 
 
 /// Run optimization algorithm benchmark
 fn run_benchmark(_cli: &Cli, iterations: u32) -> Result<(), Box<dyn std::error::Error>> {
-    use shogi_engine::tuning::validator::{SyntheticDataGenerator, PerformanceBenchmark};
+    use shogi_engine::tuning::validator::{PerformanceBenchmark, SyntheticDataGenerator};
     use shogi_engine::types::NUM_EVAL_FEATURES;
 
     println!("Running optimization benchmark...");
@@ -282,24 +298,56 @@ fn run_benchmark(_cli: &Cli, iterations: u32) -> Result<(), Box<dyn std::error::
 
     // Test different optimization methods
     let methods = [
-        ("Gradient Descent", OptimizationMethod::GradientDescent { learning_rate: 0.01 }),
-        ("Adam", OptimizationMethod::Adam { learning_rate: 0.001, beta1: 0.9, beta2: 0.999, epsilon: 1e-8 }),
-        ("LBFGS", OptimizationMethod::LBFGS { memory_size: 10, max_iterations: iterations as usize }),
-        ("Genetic Algorithm", OptimizationMethod::GeneticAlgorithm { population_size: 50, mutation_rate: 0.1, crossover_rate: 0.8, max_generations: iterations as usize }),
+        (
+            "Gradient Descent",
+            OptimizationMethod::GradientDescent {
+                learning_rate: 0.01,
+            },
+        ),
+        (
+            "Adam",
+            OptimizationMethod::Adam {
+                learning_rate: 0.001,
+                beta1: 0.9,
+                beta2: 0.999,
+                epsilon: 1e-8,
+            },
+        ),
+        (
+            "LBFGS",
+            OptimizationMethod::LBFGS {
+                memory_size: 10,
+                max_iterations: iterations as usize,
+            },
+        ),
+        (
+            "Genetic Algorithm",
+            OptimizationMethod::GeneticAlgorithm {
+                population_size: 50,
+                mutation_rate: 0.1,
+                crossover_rate: 0.8,
+                max_generations: iterations as usize,
+            },
+        ),
     ];
 
     for (name, method) in methods.iter() {
         println!("Benchmarking {}...", name);
-        
+
         let start_time = Instant::now();
         let optimizer = Optimizer::new(method.clone());
-        
+
         match optimizer.optimize(&positions) {
             Ok(result) => {
                 let elapsed = start_time.elapsed();
                 benchmark.record_timing(name, elapsed.as_secs_f64());
-                
-                println!("  {}: {:.3}s, error: {:.6}", name, elapsed.as_secs_f64(), result.final_error);
+
+                println!(
+                    "  {}: {:.3}s, error: {:.6}",
+                    name,
+                    elapsed.as_secs_f64(),
+                    result.final_error
+                );
             }
             Err(e) => {
                 println!("  {}: Failed - {}", name, e);
@@ -317,22 +365,24 @@ fn run_benchmark(_cli: &Cli, iterations: u32) -> Result<(), Box<dyn std::error::
 fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::Error>> {
     // Parse optimization method
     let optimization_method = match cli.method.as_str() {
-        "gradient-descent" => OptimizationMethod::GradientDescent { learning_rate: 0.01 },
-        "adam" => OptimizationMethod::Adam { 
-            learning_rate: 0.001, 
-            beta1: 0.9, 
-            beta2: 0.999, 
-            epsilon: 1e-8 
+        "gradient-descent" => OptimizationMethod::GradientDescent {
+            learning_rate: 0.01,
         },
-        "lbfgs" => OptimizationMethod::LBFGS { 
-            memory_size: 10, 
-            max_iterations: cli.iterations as usize 
+        "adam" => OptimizationMethod::Adam {
+            learning_rate: 0.001,
+            beta1: 0.9,
+            beta2: 0.999,
+            epsilon: 1e-8,
         },
-        "genetic" => OptimizationMethod::GeneticAlgorithm { 
-            population_size: 50, 
-            mutation_rate: 0.1, 
-            crossover_rate: 0.8, 
-            max_generations: cli.iterations as usize 
+        "lbfgs" => OptimizationMethod::LBFGS {
+            memory_size: 10,
+            max_iterations: cli.iterations as usize,
+        },
+        "genetic" => OptimizationMethod::GeneticAlgorithm {
+            population_size: 50,
+            mutation_rate: 0.1,
+            crossover_rate: 0.8,
+            max_generations: cli.iterations as usize,
         },
         _ => return Err(format!("Unknown optimization method: {}", cli.method).into()),
     };
@@ -383,8 +433,8 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
 
 /// Load dataset from file
 fn load_dataset(
-    dataset_path: &PathBuf, 
-    _data_processor: &DataProcessor
+    dataset_path: &PathBuf,
+    _data_processor: &DataProcessor,
 ) -> Result<Vec<shogi_engine::tuning::types::TrainingPosition>, Box<dyn std::error::Error>> {
     use std::fs::File;
     use std::io::BufReader;
@@ -393,7 +443,8 @@ fn load_dataset(
     let reader = BufReader::new(file);
 
     // Try to determine file format from extension
-    let extension = dataset_path.extension()
+    let extension = dataset_path
+        .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("")
         .to_lowercase();
@@ -401,7 +452,7 @@ fn load_dataset(
     match extension.as_str() {
         "json" => {
             // Load as JSON format
-            let positions: Vec<shogi_engine::tuning::types::TrainingPosition> = 
+            let positions: Vec<shogi_engine::tuning::types::TrainingPosition> =
                 serde_json::from_reader(reader)?;
             Ok(positions)
         }
@@ -410,19 +461,17 @@ fn load_dataset(
             // In a real implementation, these would be parsed
             Err(format!("Format '{}' not yet supported", extension).into())
         }
-        _ => {
-            Err(format!("Unknown file format: {}", extension).into())
-        }
+        _ => Err(format!("Unknown file format: {}", extension).into()),
     }
 }
 
 /// Save tuning results to file
 fn save_results(
-    output_path: &PathBuf, 
-    results: &TuningResults
+    output_path: &PathBuf,
+    results: &TuningResults,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs::File;
     use serde_json;
+    use std::fs::File;
 
     let file = File::create(output_path)?;
     serde_json::to_writer_pretty(file, results)?;
@@ -439,10 +488,14 @@ mod tests {
     fn test_cli_parsing() {
         let args = vec![
             "tuner",
-            "--dataset", "test.json",
-            "--output", "weights.json",
-            "--method", "adam",
-            "--iterations", "100",
+            "--dataset",
+            "test.json",
+            "--output",
+            "weights.json",
+            "--method",
+            "adam",
+            "--iterations",
+            "100",
         ];
 
         let cli = Cli::try_parse_from(args).unwrap();
@@ -479,10 +532,13 @@ mod tests {
     fn test_validation_command() {
         let args = vec![
             "tuner",
-            "--dataset", "test.json",
-            "--output", "weights.json",
+            "--dataset",
+            "test.json",
+            "--output",
+            "weights.json",
             "validate",
-            "--folds", "3",
+            "--folds",
+            "3",
         ];
 
         let cli = Cli::try_parse_from(args).unwrap();
@@ -493,11 +549,15 @@ mod tests {
     fn test_generate_command() {
         let args = vec![
             "tuner",
-            "--dataset", "test.json",
-            "--output", "weights.json",
+            "--dataset",
+            "test.json",
+            "--output",
+            "weights.json",
             "generate",
-            "--count", "500",
-            "--output", "synthetic.json",
+            "--count",
+            "500",
+            "--output",
+            "synthetic.json",
         ];
 
         let cli = Cli::try_parse_from(args).unwrap();
@@ -514,14 +574,20 @@ mod tests {
     fn test_benchmark_command() {
         let args = vec![
             "tuner",
-            "--dataset", "test.json",
-            "--output", "weights.json",
+            "--dataset",
+            "test.json",
+            "--output",
+            "weights.json",
             "benchmark",
-            "--iterations", "50",
+            "--iterations",
+            "50",
         ];
 
         let cli = Cli::try_parse_from(args).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Benchmark { iterations: 50 })));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Benchmark { iterations: 50 })
+        ));
     }
 
     #[test]
@@ -553,12 +619,12 @@ mod tests {
         };
 
         let config = create_tuning_config(&cli).unwrap();
-        
+
         // Test default values
         assert_eq!(config.validation_config.validation_split, 0.2);
         assert_eq!(config.validation_config.stratified, false);
         assert_eq!(config.validation_config.random_seed, Some(42));
-        
+
         // Test position filter defaults
         assert_eq!(config.position_filter.min_rating, Some(1800));
         assert_eq!(config.position_filter.min_move_number, 10);

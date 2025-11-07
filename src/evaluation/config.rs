@@ -26,10 +26,10 @@
 //! assert!(config.validate().is_ok());
 //! ```
 
-use crate::types::*;
 use crate::evaluation::material::MaterialEvaluationConfig;
-use crate::evaluation::phase_transition::{PhaseTransitionConfig, InterpolationMethod};
+use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransitionConfig};
 use crate::evaluation::position_features::PositionFeatureConfig;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -38,19 +38,19 @@ use std::path::Path;
 pub struct TaperedEvalConfig {
     /// Enable or disable tapered evaluation globally
     pub enabled: bool,
-    
+
     /// Configuration for material evaluation
     pub material: MaterialEvaluationConfig,
-    
+
     /// Configuration for phase transitions
     pub phase_transition: PhaseTransitionConfig,
-    
+
     /// Configuration for position features
     pub position_features: PositionFeatureConfig,
-    
+
     /// Configuration for tapered evaluation base settings
     pub base: TaperedEvaluationConfig,
-    
+
     /// Evaluation weights for combining components
     pub weights: EvaluationWeights,
 }
@@ -60,22 +60,22 @@ pub struct TaperedEvalConfig {
 pub struct EvaluationWeights {
     /// Weight for material evaluation (typically 1.0)
     pub material_weight: f32,
-    
+
     /// Weight for piece-square tables
     pub position_weight: f32,
-    
+
     /// Weight for king safety
     pub king_safety_weight: f32,
-    
+
     /// Weight for pawn structure
     pub pawn_structure_weight: f32,
-    
+
     /// Weight for mobility
     pub mobility_weight: f32,
-    
+
     /// Weight for center control
     pub center_control_weight: f32,
-    
+
     /// Weight for development
     pub development_weight: f32,
 }
@@ -99,7 +99,7 @@ impl TaperedEvalConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create a configuration with tapered evaluation disabled
     pub fn disabled() -> Self {
         Self {
@@ -111,7 +111,7 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
         }
     }
-    
+
     /// Create a configuration optimized for performance
     pub fn performance_optimized() -> Self {
         Self {
@@ -136,7 +136,7 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
         }
     }
-    
+
     /// Create a configuration optimized for strength (accuracy over speed)
     pub fn strength_optimized() -> Self {
         Self {
@@ -169,7 +169,7 @@ impl TaperedEvalConfig {
             },
         }
     }
-    
+
     /// Create a configuration optimized for memory usage
     pub fn memory_optimized() -> Self {
         Self {
@@ -194,69 +194,76 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
         }
     }
-    
+
     /// Load configuration from a JSON file
     pub fn load_from_json<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
-        let config: Self = serde_json::from_str(&content)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
-        
+        let content =
+            std::fs::read_to_string(path).map_err(|e| ConfigError::IoError(e.to_string()))?;
+
+        let config: Self =
+            serde_json::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))?;
+
         config.validate()?;
         Ok(config)
     }
-    
+
     /// Save configuration to a JSON file
     pub fn save_to_json<P: AsRef<Path>>(&self, path: P) -> Result<(), ConfigError> {
         let content = serde_json::to_string_pretty(self)
             .map_err(|e| ConfigError::SerializeError(e.to_string()))?;
-        
-        std::fs::write(path, content)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
+
+        std::fs::write(path, content).map_err(|e| ConfigError::IoError(e.to_string()))?;
+
         Ok(())
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Validate weights are in reasonable ranges
         if self.weights.material_weight < 0.0 || self.weights.material_weight > 10.0 {
             return Err(ConfigError::InvalidWeight("material_weight".to_string()));
         }
-        
+
         if self.weights.position_weight < 0.0 || self.weights.position_weight > 10.0 {
             return Err(ConfigError::InvalidWeight("position_weight".to_string()));
         }
-        
+
         if self.weights.king_safety_weight < 0.0 || self.weights.king_safety_weight > 10.0 {
             return Err(ConfigError::InvalidWeight("king_safety_weight".to_string()));
         }
-        
+
         if self.weights.pawn_structure_weight < 0.0 || self.weights.pawn_structure_weight > 10.0 {
-            return Err(ConfigError::InvalidWeight("pawn_structure_weight".to_string()));
+            return Err(ConfigError::InvalidWeight(
+                "pawn_structure_weight".to_string(),
+            ));
         }
-        
+
         if self.weights.mobility_weight < 0.0 || self.weights.mobility_weight > 10.0 {
             return Err(ConfigError::InvalidWeight("mobility_weight".to_string()));
         }
-        
+
         if self.weights.center_control_weight < 0.0 || self.weights.center_control_weight > 10.0 {
-            return Err(ConfigError::InvalidWeight("center_control_weight".to_string()));
+            return Err(ConfigError::InvalidWeight(
+                "center_control_weight".to_string(),
+            ));
         }
-        
+
         if self.weights.development_weight < 0.0 || self.weights.development_weight > 10.0 {
             return Err(ConfigError::InvalidWeight("development_weight".to_string()));
         }
-        
+
         // Validate sigmoid steepness
-        if self.phase_transition.sigmoid_steepness < 1.0 || self.phase_transition.sigmoid_steepness > 20.0 {
-            return Err(ConfigError::InvalidParameter("sigmoid_steepness must be between 1.0 and 20.0".to_string()));
+        if self.phase_transition.sigmoid_steepness < 1.0
+            || self.phase_transition.sigmoid_steepness > 20.0
+        {
+            return Err(ConfigError::InvalidParameter(
+                "sigmoid_steepness must be between 1.0 and 20.0".to_string(),
+            ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Update a specific weight at runtime
     pub fn update_weight(&mut self, weight_name: &str, value: f32) -> Result<(), ConfigError> {
         match weight_name {
@@ -269,15 +276,15 @@ impl TaperedEvalConfig {
             "development" => self.weights.development_weight = value,
             _ => return Err(ConfigError::UnknownWeight(weight_name.to_string())),
         }
-        
+
         // Validate the new weight
         if value < 0.0 || value > 10.0 {
             return Err(ConfigError::InvalidWeight(weight_name.to_string()));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get a weight value by name
     pub fn get_weight(&self, weight_name: &str) -> Option<f32> {
         match weight_name {
@@ -291,7 +298,7 @@ impl TaperedEvalConfig {
             _ => None,
         }
     }
-    
+
     /// Enable or disable specific features
     pub fn set_feature_enabled(&mut self, feature: &str, enabled: bool) {
         match feature {
@@ -304,7 +311,7 @@ impl TaperedEvalConfig {
             _ => {}
         }
     }
-    
+
     /// Get list of all configurable weights
     pub fn list_weights(&self) -> Vec<(&str, f32)> {
         vec![
@@ -391,7 +398,10 @@ mod tests {
     fn test_performance_optimized() {
         let config = TaperedEvalConfig::performance_optimized();
         assert!(config.enabled);
-        assert_eq!(config.phase_transition.default_method, InterpolationMethod::Linear);
+        assert_eq!(
+            config.phase_transition.default_method,
+            InterpolationMethod::Linear
+        );
         assert!(!config.position_features.enable_mobility); // Disabled for speed
     }
 
@@ -399,7 +409,10 @@ mod tests {
     fn test_strength_optimized() {
         let config = TaperedEvalConfig::strength_optimized();
         assert!(config.enabled);
-        assert_eq!(config.phase_transition.default_method, InterpolationMethod::Smoothstep);
+        assert_eq!(
+            config.phase_transition.default_method,
+            InterpolationMethod::Smoothstep
+        );
         assert!(config.position_features.enable_mobility); // Enabled for accuracy
     }
 
@@ -421,7 +434,7 @@ mod tests {
     fn test_validate_invalid_weight() {
         let mut config = TaperedEvalConfig::default();
         config.weights.material_weight = -1.0; // Invalid
-        
+
         assert!(config.validate().is_err());
     }
 
@@ -429,7 +442,7 @@ mod tests {
     fn test_validate_weight_too_large() {
         let mut config = TaperedEvalConfig::default();
         config.weights.mobility_weight = 15.0; // Too large
-        
+
         assert!(config.validate().is_err());
     }
 
@@ -437,17 +450,17 @@ mod tests {
     fn test_validate_invalid_sigmoid() {
         let mut config = TaperedEvalConfig::default();
         config.phase_transition.sigmoid_steepness = 0.5; // Too small
-        
+
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn test_update_weight() {
         let mut config = TaperedEvalConfig::default();
-        
+
         assert!(config.update_weight("material", 1.5).is_ok());
         assert_eq!(config.weights.material_weight, 1.5);
-        
+
         assert!(config.update_weight("king_safety", 0.8).is_ok());
         assert_eq!(config.weights.king_safety_weight, 0.8);
     }
@@ -455,10 +468,10 @@ mod tests {
     #[test]
     fn test_update_weight_invalid() {
         let mut config = TaperedEvalConfig::default();
-        
+
         // Invalid weight value
         assert!(config.update_weight("material", -1.0).is_err());
-        
+
         // Unknown weight name
         assert!(config.update_weight("unknown", 1.0).is_err());
     }
@@ -466,7 +479,7 @@ mod tests {
     #[test]
     fn test_get_weight() {
         let config = TaperedEvalConfig::default();
-        
+
         assert_eq!(config.get_weight("material"), Some(1.0));
         assert_eq!(config.get_weight("mobility"), Some(0.6));
         assert_eq!(config.get_weight("unknown"), None);
@@ -475,11 +488,11 @@ mod tests {
     #[test]
     fn test_set_feature_enabled() {
         let mut config = TaperedEvalConfig::default();
-        
+
         assert!(config.position_features.enable_mobility);
         config.set_feature_enabled("mobility", false);
         assert!(!config.position_features.enable_mobility);
-        
+
         assert!(config.material.include_hand_pieces);
         config.set_feature_enabled("hand_pieces", false);
         assert!(!config.material.include_hand_pieces);
@@ -489,7 +502,7 @@ mod tests {
     fn test_list_weights() {
         let config = TaperedEvalConfig::default();
         let weights = config.list_weights();
-        
+
         assert_eq!(weights.len(), 7);
         assert_eq!(weights[0].0, "material");
         assert_eq!(weights[0].1, 1.0);
@@ -498,11 +511,11 @@ mod tests {
     #[test]
     fn test_serialization() {
         let config = TaperedEvalConfig::default();
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&config);
         assert!(json.is_ok());
-        
+
         // Deserialize back
         let deserialized: Result<TaperedEvalConfig, _> = serde_json::from_str(&json.unwrap());
         assert!(deserialized.is_ok());
@@ -513,14 +526,14 @@ mod tests {
     fn test_config_clone() {
         let config1 = TaperedEvalConfig::default();
         let config2 = config1.clone();
-        
+
         assert_eq!(config1, config2);
     }
 
     #[test]
     fn test_weights_default() {
         let weights = EvaluationWeights::default();
-        
+
         assert_eq!(weights.material_weight, 1.0);
         assert_eq!(weights.position_weight, 1.0);
         assert!(weights.mobility_weight > 0.0);
@@ -530,17 +543,17 @@ mod tests {
     #[test]
     fn test_runtime_weight_update() {
         let mut config = TaperedEvalConfig::default();
-        
+
         // Update multiple weights
         assert!(config.update_weight("material", 1.2).is_ok());
         assert!(config.update_weight("position", 0.9).is_ok());
         assert!(config.update_weight("king_safety", 1.1).is_ok());
-        
+
         // Verify changes
         assert_eq!(config.weights.material_weight, 1.2);
         assert_eq!(config.weights.position_weight, 0.9);
         assert_eq!(config.weights.king_safety_weight, 1.1);
-        
+
         // Configuration should still be valid
         assert!(config.validate().is_ok());
     }
@@ -548,14 +561,14 @@ mod tests {
     #[test]
     fn test_feature_toggles() {
         let mut config = TaperedEvalConfig::default();
-        
+
         // Disable all features
         config.set_feature_enabled("king_safety", false);
         config.set_feature_enabled("pawn_structure", false);
         config.set_feature_enabled("mobility", false);
         config.set_feature_enabled("center_control", false);
         config.set_feature_enabled("development", false);
-        
+
         // Verify all disabled
         assert!(!config.position_features.enable_king_safety);
         assert!(!config.position_features.enable_pawn_structure);
@@ -569,7 +582,9 @@ mod tests {
         // All preset configs should be valid
         assert!(TaperedEvalConfig::default().validate().is_ok());
         assert!(TaperedEvalConfig::disabled().validate().is_ok());
-        assert!(TaperedEvalConfig::performance_optimized().validate().is_ok());
+        assert!(TaperedEvalConfig::performance_optimized()
+            .validate()
+            .is_ok());
         assert!(TaperedEvalConfig::strength_optimized().validate().is_ok());
         assert!(TaperedEvalConfig::memory_optimized().validate().is_ok());
     }
@@ -578,13 +593,12 @@ mod tests {
     fn test_config_equality() {
         let config1 = TaperedEvalConfig::default();
         let config2 = TaperedEvalConfig::default();
-        
+
         assert_eq!(config1, config2);
-        
+
         let mut config3 = TaperedEvalConfig::default();
         config3.weights.material_weight = 1.5;
-        
+
         assert_ne!(config1, config3);
     }
 }
-

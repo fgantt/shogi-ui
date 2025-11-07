@@ -1,5 +1,5 @@
 //! PV (Principal Variation) move ordering
-//! 
+//!
 //! This module contains PV move ordering implementation.
 //! PV moves are the best moves from previous searches and are given
 //! the highest priority in move ordering.
@@ -8,7 +8,7 @@ use crate::types::*;
 use std::collections::HashMap;
 
 /// PV move ordering manager
-/// 
+///
 /// Manages PV move cache and provides methods for retrieving and updating PV moves.
 /// PV moves are cached by position hash for fast lookup.
 /// Task 11.0: Enhanced with multiple PV moves and previous iteration support
@@ -153,16 +153,19 @@ impl PVOrdering {
 
     /// Store PV move from sibling node
     /// Task 11.4: Stores PV moves discovered in sibling search nodes
-    /// 
+    ///
     /// Sibling nodes are nodes at the same depth in the search tree.
     /// When exploring one node, the PV from other sibling nodes can be useful.
     pub fn store_sibling_pv(&mut self, parent_hash: u64, sibling_pv_move: Move) {
-        let siblings = self.sibling_pv_moves.entry(parent_hash).or_insert_with(Vec::new);
-        
+        let siblings = self
+            .sibling_pv_moves
+            .entry(parent_hash)
+            .or_insert_with(Vec::new);
+
         // Only store if not already present
         if !siblings.iter().any(|m| moves_equal(m, &sibling_pv_move)) {
             siblings.push(sibling_pv_move);
-            
+
             // Limit number of sibling PV moves per parent
             if siblings.len() > self.max_pv_moves_per_position {
                 siblings.remove(0); // Remove oldest
@@ -189,16 +192,23 @@ impl PVOrdering {
     /// Get memory usage estimate for cache
     /// Task 11.0/11.4: Updated to include all PV caches (multiple, previous iteration, sibling)
     pub fn cache_memory_bytes(&self) -> usize {
-        let single_pv = self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>());
-        let depth_pv = self.pv_moves.len() * (std::mem::size_of::<u8>() + std::mem::size_of::<Move>());
-        let multiple_pv = self.multiple_pv_cache.iter()
+        let single_pv = self.pv_move_cache.len()
+            * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>());
+        let depth_pv =
+            self.pv_moves.len() * (std::mem::size_of::<u8>() + std::mem::size_of::<Move>());
+        let multiple_pv = self
+            .multiple_pv_cache
+            .iter()
             .map(|(_, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
             .sum::<usize>();
-        let previous_pv = self.previous_iteration_pv.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Move>());
-        let sibling_pv = self.sibling_pv_moves.iter()
+        let previous_pv = self.previous_iteration_pv.len()
+            * (std::mem::size_of::<u64>() + std::mem::size_of::<Move>());
+        let sibling_pv = self
+            .sibling_pv_moves
+            .iter()
             .map(|(_, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
             .sum::<usize>();
-        
+
         single_pv + depth_pv + multiple_pv + previous_pv + sibling_pv
     }
 
@@ -225,21 +235,21 @@ impl Default for PVOrdering {
 }
 
 /// Score a PV move
-/// 
+///
 /// PV moves get the highest priority weight to ensure they are tried first.
 pub fn score_pv_move(pv_move_weight: i32) -> i32 {
     pv_move_weight
 }
 
 /// Check if two moves are equal
-/// 
+///
 /// Helper function to compare moves for PV matching.
 pub fn moves_equal(a: &Move, b: &Move) -> bool {
-    a.from == b.from && 
-    a.to == b.to && 
-    a.piece_type == b.piece_type && 
-    a.player == b.player &&
-    a.is_promotion == b.is_promotion
+    a.from == b.from
+        && a.to == b.to
+        && a.piece_type == b.piece_type
+        && a.player == b.player
+        && a.is_promotion == b.is_promotion
 }
 
 // ==================== Task 11.0: PV Statistics ====================
@@ -305,7 +315,9 @@ impl PVMoveStatistics {
     /// Calculate previous iteration PV effectiveness
     pub fn previous_iteration_effectiveness(&self) -> f64 {
         if self.previous_iteration_pv_hits > 0 {
-            (self.previous_iteration_best_move_count as f64 / self.previous_iteration_pv_hits as f64) * 100.0
+            (self.previous_iteration_best_move_count as f64
+                / self.previous_iteration_pv_hits as f64)
+                * 100.0
         } else {
             0.0
         }

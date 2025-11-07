@@ -1,5 +1,5 @@
 //! Performance Monitoring and Analysis Tools for Automated Tuning
-//! 
+//!
 //! This module provides comprehensive tools for monitoring training progress,
 //! analyzing performance metrics, generating reports, and managing long-running
 //! optimization processes.
@@ -13,7 +13,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
-use super::types::{PerformanceConfig, TuningResults, ValidationResults, OptimizationMethod};
+use super::types::{OptimizationMethod, PerformanceConfig, TuningResults, ValidationResults};
 
 /// Verbosity levels for logging
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,18 +181,22 @@ impl TuningProfiler {
     pub fn record_memory_usage(&self, bytes: usize) {
         let mut metrics = self.metrics.lock().unwrap();
         metrics.memory_usage_bytes = bytes;
-        
+
         let mut snapshots = self.memory_snapshots.lock().unwrap();
         snapshots.push((Instant::now(), bytes));
-        
+
         // Keep only last 1000 snapshots to prevent memory bloat
         if snapshots.len() > 1000 {
             let keep_count = 1000;
             let remove_count = snapshots.len() - keep_count;
             snapshots.drain(0..remove_count);
         }
-        
-        debug!("Memory usage: {} bytes ({:.2} MB)", bytes, bytes as f64 / 1_048_576.0);
+
+        debug!(
+            "Memory usage: {} bytes ({:.2} MB)",
+            bytes,
+            bytes as f64 / 1_048_576.0
+        );
     }
 
     /// Record iteration completion
@@ -200,13 +204,13 @@ impl TuningProfiler {
         let mut metrics = self.metrics.lock().unwrap();
         metrics.iterations_completed = iteration;
         metrics.final_error = error;
-        
+
         let mut error_history = self.error_history.lock().unwrap();
         error_history.push(error);
-        
+
         let mut iteration_times = self.iteration_times.lock().unwrap();
         iteration_times.push(iteration_time);
-        
+
         // Calculate convergence rate
         if error_history.len() > 1 {
             let recent_errors = &error_history[error_history.len().saturating_sub(10)..];
@@ -215,23 +219,23 @@ impl TuningProfiler {
                 metrics.convergence_rate = total_reduction / recent_errors.len() as f64;
             }
         }
-        
+
         // Calculate average error reduction
         if error_history.len() > 1 {
             let total_reduction = error_history[0] - error;
             metrics.avg_error_reduction = total_reduction / iteration as f64;
         }
-        
+
         // Check if we need to create a checkpoint before dropping locks
         let should_checkpoint = iteration % self.checkpoint_frequency == 0;
-        
+
         // Drop all locks before calling create_checkpoint
         drop(metrics);
         drop(error_history);
         drop(iteration_times);
-        
+
         self.log_iteration(iteration, error, iteration_time);
-        
+
         if should_checkpoint {
             let _ = self.create_checkpoint(iteration, error, None, None);
         }
@@ -246,11 +250,18 @@ impl TuningProfiler {
         optimization_method: Option<OptimizationMethod>,
     ) -> Result<(), std::io::Error> {
         let checkpoint_data = CheckpointData {
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             iteration,
             weights: weights.unwrap_or_default(),
             current_error: error,
-            optimization_method: optimization_method.unwrap_or(OptimizationMethod::GradientDescent { learning_rate: 0.01 }),
+            optimization_method: optimization_method.unwrap_or(
+                OptimizationMethod::GradientDescent {
+                    learning_rate: 0.01,
+                },
+            ),
             metrics: self.metrics.lock().unwrap().clone(),
             validation_results: None,
         };
@@ -267,7 +278,7 @@ impl TuningProfiler {
 
         self.last_checkpoint = Some(Instant::now());
         info!("Checkpoint created at iteration {}", iteration);
-        
+
         Ok(())
     }
 
@@ -284,24 +295,24 @@ impl TuningProfiler {
         let metrics = self.metrics.lock().unwrap();
         let error_history = self.error_history.lock().unwrap();
         let iteration_times = self.iteration_times.lock().unwrap();
-        
+
         let current_iteration = metrics.iterations_completed;
         let current_error = metrics.final_error;
         let initial_error = error_history.first().copied().unwrap_or(current_error);
-        
+
         let progress_percentage = if let Some(total) = self.config.max_iterations {
             current_iteration as f64 / total as f64
         } else {
             0.0
         };
-        
+
         let avg_time_per_iteration = if !iteration_times.is_empty() {
             let total_time: Duration = iteration_times.iter().sum();
             total_time / iteration_times.len() as u32
         } else {
             Duration::ZERO
         };
-        
+
         let eta_seconds = if !iteration_times.is_empty() {
             if let Some(total) = self.config.max_iterations {
                 let remaining = total.saturating_sub(current_iteration);
@@ -312,7 +323,7 @@ impl TuningProfiler {
         } else {
             None
         };
-        
+
         ProgressInfo {
             current_iteration,
             total_iterations: self.config.max_iterations,
@@ -328,7 +339,7 @@ impl TuningProfiler {
     pub fn generate_statistical_analysis(&self) -> StatisticalAnalysis {
         let error_history = self.error_history.lock().unwrap();
         let metrics = self.metrics.lock().unwrap();
-        
+
         if error_history.is_empty() {
             return StatisticalAnalysis {
                 mean_error: 0.0,
@@ -340,32 +351,39 @@ impl TuningProfiler {
                 stability_metric: 0.0,
             };
         }
-        
+
         let mean_error = error_history.iter().sum::<f64>() / error_history.len() as f64;
-        let variance = error_history.iter()
+        let variance = error_history
+            .iter()
             .map(|&x| (x - mean_error).powi(2))
-            .sum::<f64>() / error_history.len() as f64;
+            .sum::<f64>()
+            / error_history.len() as f64;
         let error_std_dev = variance.sqrt();
-        
+
         let min_error = error_history.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max_error = error_history.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        
+        let max_error = error_history
+            .iter()
+            .cloned()
+            .fold(f64::NEG_INFINITY, f64::max);
+
         let initial_error = error_history[0];
         let final_error = metrics.final_error;
         let improvement_percentage = ((initial_error - final_error) / initial_error) * 100.0;
-        
+
         // Calculate convergence speed (iterations to reach 90% of improvement)
         let target_error = initial_error - (initial_error - final_error) * 0.9;
         let convergence_speed = error_history.iter().position(|&x| x <= target_error);
-        
+
         // Calculate stability metric (error variance in last 10% of iterations)
         let last_10_percent = error_history.len() / 10;
         let last_errors = &error_history[error_history.len().saturating_sub(last_10_percent)..];
         let last_mean = last_errors.iter().sum::<f64>() / last_errors.len() as f64;
-        let stability_metric = last_errors.iter()
+        let stability_metric = last_errors
+            .iter()
             .map(|&x| (x - last_mean).powi(2))
-            .sum::<f64>() / last_errors.len() as f64;
-        
+            .sum::<f64>()
+            / last_errors.len() as f64;
+
         StatisticalAnalysis {
             mean_error,
             error_std_dev,
@@ -382,7 +400,7 @@ impl TuningProfiler {
         let metrics = self.metrics.lock().unwrap();
         let analysis = self.generate_statistical_analysis();
         let progress = self.get_progress();
-        
+
         format!(
             "=== PERFORMANCE REPORT ===\n\
              Training Duration: {:.2} seconds\n\
@@ -429,20 +447,28 @@ impl TuningProfiler {
             metrics.memory_usage_bytes as f64 / 1_048_576.0,
             metrics.convergence_rate,
             metrics.avg_error_reduction,
-            analysis.convergence_speed.map_or("N/A".to_string(), |s| format!("{} iterations", s)),
+            analysis
+                .convergence_speed
+                .map_or("N/A".to_string(), |s| format!("{} iterations", s)),
             analysis.stability_metric,
             analysis.mean_error,
             analysis.error_std_dev,
             analysis.min_error,
             analysis.max_error,
             results.converged,
-            progress.eta_seconds.map_or("N/A".to_string(), |eta| format!("{:.1}s", eta)),
+            progress
+                .eta_seconds
+                .map_or("N/A".to_string(), |eta| format!("{:.1}s", eta)),
             progress.progress_percentage * 100.0
         )
     }
 
     /// Save performance report to file
-    pub fn save_report<P: AsRef<Path>>(&self, path: P, results: &TuningResults) -> Result<(), std::io::Error> {
+    pub fn save_report<P: AsRef<Path>>(
+        &self,
+        path: P,
+        results: &TuningResults,
+    ) -> Result<(), std::io::Error> {
         let report = self.generate_report(results);
         let mut file = File::create(path)?;
         file.write_all(report.as_bytes())?;
@@ -453,8 +479,10 @@ impl TuningProfiler {
     fn log_iteration(&self, iteration: usize, error: f64, iteration_time: Duration) {
         if self.config.enable_logging {
             let progress = self.get_progress();
-            let eta_str = progress.eta_seconds.map_or("N/A".to_string(), |eta| format!("{:.1}s", eta));
-            
+            let eta_str = progress
+                .eta_seconds
+                .map_or("N/A".to_string(), |eta| format!("{:.1}s", eta));
+
             info!(
                 "Iteration {}: Error = {:.6}, Time = {:?}, ETA = {}",
                 iteration, error, iteration_time, eta_str
@@ -473,13 +501,15 @@ impl TuningProfiler {
     /// Detect performance regression
     pub fn detect_performance_regression(&self, baseline_metrics: &PerformanceMetrics) -> bool {
         let current_metrics = self.metrics.lock().unwrap();
-        
+
         // Check if convergence rate is significantly worse
-        let convergence_regression = current_metrics.convergence_rate < baseline_metrics.convergence_rate * 0.5;
-        
+        let convergence_regression =
+            current_metrics.convergence_rate < baseline_metrics.convergence_rate * 0.5;
+
         // Check if memory usage is significantly higher
-        let memory_regression = current_metrics.memory_usage_bytes > baseline_metrics.memory_usage_bytes * 2;
-        
+        let memory_regression =
+            current_metrics.memory_usage_bytes > baseline_metrics.memory_usage_bytes * 2;
+
         convergence_regression || memory_regression
     }
 
@@ -521,7 +551,10 @@ pub struct OperationTimer {
 
 impl OperationTimer {
     fn new(operation: String, start_time: Instant) -> Self {
-        Self { operation, start_time }
+        Self {
+            operation,
+            start_time,
+        }
     }
 
     /// Stop the timer and return the duration
@@ -541,15 +574,15 @@ pub fn init_logging(log_level: LogLevel) {
         LogLevel::Debug => "debug",
         LogLevel::Trace => "trace",
     };
-    
+
     std::env::set_var("RUST_LOG", level_str);
     env_logger::init();
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::{OptimizationMethod, PerformanceConfig};
     use super::*;
-    use super::super::types::{PerformanceConfig, OptimizationMethod};
 
     #[test]
     fn test_tuning_profiler_creation() {
@@ -570,12 +603,12 @@ mod tests {
     fn test_metrics_recording() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         profiler.record_feature_extraction_time(Duration::from_secs(1));
         profiler.record_optimization_time(Duration::from_secs(2));
         profiler.record_validation_time(Duration::from_secs(1));
         profiler.record_memory_usage(1024 * 1024); // 1 MB
-        
+
         let metrics = profiler.get_metrics();
         assert_eq!(metrics.feature_extraction_time, Duration::from_secs(1));
         assert_eq!(metrics.optimization_time, Duration::from_secs(2));
@@ -587,11 +620,11 @@ mod tests {
     fn test_iteration_recording() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         profiler.record_iteration(1, 1.0, Duration::from_millis(100));
         profiler.record_iteration(2, 0.8, Duration::from_millis(90));
         profiler.record_iteration(3, 0.6, Duration::from_millis(80));
-        
+
         let metrics = profiler.get_metrics();
         assert_eq!(metrics.iterations_completed, 3);
         assert_eq!(metrics.final_error, 0.6);
@@ -602,12 +635,12 @@ mod tests {
     fn test_progress_calculation() {
         let mut config = PerformanceConfig::default();
         config.max_iterations = Some(100);
-        
+
         let mut profiler = TuningProfiler::new(config);
-        
+
         profiler.record_iteration(25, 0.5, Duration::from_millis(100));
         profiler.record_iteration(50, 0.3, Duration::from_millis(90));
-        
+
         let progress = profiler.get_progress();
         assert_eq!(progress.current_iteration, 50);
         assert_eq!(progress.total_iterations, Some(100));
@@ -619,14 +652,14 @@ mod tests {
     fn test_statistical_analysis() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         // Record decreasing error values
         profiler.record_iteration(1, 1.0, Duration::from_millis(100));
         profiler.record_iteration(2, 0.8, Duration::from_millis(90));
         profiler.record_iteration(3, 0.6, Duration::from_millis(80));
         profiler.record_iteration(4, 0.4, Duration::from_millis(70));
         profiler.record_iteration(5, 0.2, Duration::from_millis(60));
-        
+
         let analysis = profiler.generate_statistical_analysis();
         assert_eq!(analysis.min_error, 0.2);
         assert_eq!(analysis.max_error, 1.0);
@@ -638,21 +671,28 @@ mod tests {
     fn test_checkpoint_creation_and_loading() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         profiler.record_iteration(10, 0.5, Duration::from_millis(100));
-        
+
         // Create checkpoint
         let weights = vec![1.0, 2.0, 3.0];
-        let method = OptimizationMethod::Adam { learning_rate: 0.01, beta1: 0.9, beta2: 0.999, epsilon: 1e-8 };
-        profiler.create_checkpoint(10, 0.5, Some(weights.clone()), Some(method)).unwrap();
-        
+        let method = OptimizationMethod::Adam {
+            learning_rate: 0.01,
+            beta1: 0.9,
+            beta2: 0.999,
+            epsilon: 1e-8,
+        };
+        profiler
+            .create_checkpoint(10, 0.5, Some(weights.clone()), Some(method))
+            .unwrap();
+
         // Load checkpoint from the default location
         let checkpoint_path = Path::new("checkpoints/checkpoint_iter_10.json");
         let loaded_checkpoint = TuningProfiler::load_checkpoint(checkpoint_path).unwrap();
         assert_eq!(loaded_checkpoint.iteration, 10);
         assert_eq!(loaded_checkpoint.current_error, 0.5);
         assert_eq!(loaded_checkpoint.weights, weights);
-        
+
         // Clean up
         let _ = std::fs::remove_dir_all("checkpoints");
     }
@@ -661,7 +701,7 @@ mod tests {
     fn test_performance_regression_detection() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         let baseline_metrics = PerformanceMetrics {
             feature_extraction_time: Duration::ZERO,
             optimization_time: Duration::ZERO,
@@ -672,12 +712,12 @@ mod tests {
             final_error: 0.0,
             avg_error_reduction: 0.0,
         };
-        
+
         // Record poor performance
         profiler.record_iteration(1, 1.0, Duration::from_millis(100));
         profiler.record_iteration(2, 0.9, Duration::from_millis(100));
         profiler.record_memory_usage(3 * 1024 * 1024); // 3 MB (3x baseline)
-        
+
         let regression_detected = profiler.detect_performance_regression(&baseline_metrics);
         assert!(regression_detected);
     }
@@ -686,12 +726,12 @@ mod tests {
     fn test_profiler_reset() {
         let config = PerformanceConfig::default();
         let mut profiler = TuningProfiler::new(config);
-        
+
         profiler.record_iteration(5, 0.5, Duration::from_millis(100));
         profiler.record_memory_usage(1024 * 1024);
-        
+
         profiler.reset();
-        
+
         let metrics = profiler.get_metrics();
         assert_eq!(metrics.iterations_completed, 0);
         assert_eq!(metrics.memory_usage_bytes, 0);

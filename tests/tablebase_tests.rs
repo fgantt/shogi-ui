@@ -1,18 +1,18 @@
 //! Comprehensive unit tests for the tablebase system
-//! 
+//!
 //! This module contains unit tests for all tablebase components including
 //! core data structures, solvers, caching, configuration, and statistics.
 
-use shogi_engine::tablebase::{
-    MicroTablebase, TablebaseResult, TablebaseOutcome, TablebaseStats,
-    TablebaseConfig, PositionCache
-};
-use shogi_engine::tablebase::tablebase_config::{
-    SolverConfig, KingGoldConfig, PerformanceConfig, EvictionStrategy
-};
-use shogi_engine::tablebase::position_cache::CacheConfig;
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{CapturedPieces, Player, Position, PieceType, Piece, Move};
+use shogi_engine::tablebase::position_cache::CacheConfig;
+use shogi_engine::tablebase::tablebase_config::{
+    EvictionStrategy, KingGoldConfig, PerformanceConfig, SolverConfig,
+};
+use shogi_engine::tablebase::{
+    MicroTablebase, PositionCache, TablebaseConfig, TablebaseOutcome, TablebaseResult,
+    TablebaseStats,
+};
+use shogi_engine::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
 
 /// Test core tablebase data structures
 mod core_tests {
@@ -94,7 +94,7 @@ mod stats_tests {
     #[test]
     fn test_tablebase_stats_recording() {
         let mut stats = TablebaseStats::new();
-        
+
         // Record a cache hit
         stats.record_probe(true, false, None, 5);
         assert_eq!(stats.total_probes, 1);
@@ -118,7 +118,7 @@ mod stats_tests {
     #[test]
     fn test_tablebase_stats_hit_rates() {
         let mut stats = TablebaseStats::new();
-        
+
         // Record some probes
         stats.record_probe(true, false, None, 5); // Cache hit
         stats.record_probe(false, true, Some("KingGoldVsKing"), 10); // Solver hit
@@ -134,10 +134,10 @@ mod stats_tests {
         let mut stats = TablebaseStats::new();
         stats.record_probe(true, true, Some("KingGoldVsKing"), 5);
         stats.record_probe(false, false, None, 10);
-        
+
         assert_eq!(stats.total_probes, 2);
         assert!(!stats.solver_breakdown.is_empty());
-        
+
         stats.reset();
         assert_eq!(stats.total_probes, 0);
         assert_eq!(stats.cache_hits, 0);
@@ -152,7 +152,7 @@ mod stats_tests {
         let mut stats = TablebaseStats::new();
         stats.record_probe(true, false, None, 5);
         stats.record_probe(false, true, Some("KingGoldVsKing"), 10);
-        
+
         let summary = stats.performance_summary();
         assert!(summary.contains("Total Probes: 2"));
         assert!(summary.contains("Cache Hit Rate: 50.00%"));
@@ -486,17 +486,17 @@ mod performance_tests {
         let player = Player::Black;
 
         let start = Instant::now();
-        
+
         // Perform multiple probes
         for _ in 0..100 {
             tablebase.probe(&board, player, &captured_pieces);
         }
-        
+
         let duration = start.elapsed();
-        
+
         // Should complete in reasonable time (less than 1 second)
         assert!(duration.as_millis() < 1000);
-        
+
         println!("100 tablebase probes took: {:?}", duration);
     }
 
@@ -509,7 +509,7 @@ mod performance_tests {
         let result = TablebaseResult::draw();
 
         let start = Instant::now();
-        
+
         // Perform many cache operations
         for i in 0..1000 {
             let test_board = board.clone();
@@ -518,16 +518,16 @@ mod performance_tests {
                 // This would require set_piece method which might not exist
                 // For now, just use the same board
             }
-            
+
             cache.put(&test_board, player, &captured_pieces, result.clone());
             let _ = cache.get(&test_board, player, &captured_pieces);
         }
-        
+
         let duration = start.elapsed();
-        
+
         // Should complete in reasonable time
         assert!(duration.as_millis() < 1000);
-        
+
         println!("1000 cache operations took: {:?}", duration);
     }
 
@@ -573,7 +573,7 @@ mod regression_tests {
     #[test]
     fn test_known_winning_positions() {
         let mut tablebase = MicroTablebase::new();
-        
+
         // Test positions that should always be winning for Black
         let winning_positions = vec![
             // King + Gold vs King positions
@@ -595,7 +595,7 @@ mod regression_tests {
     #[test]
     fn test_known_draw_positions() {
         let mut tablebase = MicroTablebase::new();
-        
+
         // Test positions that might be draws
         let draw_positions = vec![
             // Positions with pieces too far apart
@@ -639,9 +639,12 @@ mod regression_tests {
 
     // Helper function to create King + Gold vs King positions
     fn create_king_gold_vs_king_position(
-        _king_row: u8, _king_col: u8,
-        _gold_row: u8, _gold_col: u8,
-        _white_king_row: u8, _white_king_col: u8
+        _king_row: u8,
+        _king_col: u8,
+        _gold_row: u8,
+        _gold_col: u8,
+        _white_king_row: u8,
+        _white_king_col: u8,
     ) -> (BitboardBoard, CapturedPieces, Player) {
         // For now, just return an empty board since set_piece doesn't exist
         let board = BitboardBoard::empty();

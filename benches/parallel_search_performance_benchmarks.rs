@@ -18,11 +18,15 @@
 // SHOGI_BENCH_DEPTHS=3 SHOGI_BENCH_THREADS=1,4 SHOGI_SILENT_BENCH=1 \
 // cargo bench --bench parallel_search_performance_benchmarks
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput, SamplingMode, BenchmarkId};
+use criterion::{
+    criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
+};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{CapturedPieces, Player};
 use shogi_engine::moves::MoveGenerator;
-use shogi_engine::search::search_engine::{SearchEngine, IterativeDeepening, snapshot_and_reset_metrics};
+use shogi_engine::search::search_engine::{
+    snapshot_and_reset_metrics, IterativeDeepening, SearchEngine,
+};
+use shogi_engine::types::{CapturedPieces, Player};
 
 fn bench_root_search(c: &mut Criterion) {
     // Silence USI info output during benches to avoid measurement distortion
@@ -58,70 +62,126 @@ fn bench_root_search(c: &mut Criterion) {
     let depths_env = std::env::var("SHOGI_BENCH_DEPTHS").ok();
     let depths: Vec<u8> = depths_env
         .as_deref()
-        .map(|s| s.split(',').filter_map(|p| p.trim().parse::<u8>().ok()).collect())
+        .map(|s| {
+            s.split(',')
+                .filter_map(|p| p.trim().parse::<u8>().ok())
+                .collect()
+        })
         .filter(|v: &Vec<u8>| !v.is_empty())
         .unwrap_or_else(|| vec![3u8, 5u8, 6u8, 7u8, 8u8]);
 
     let threads_env = std::env::var("SHOGI_BENCH_THREADS").ok();
     let thread_counts: Vec<usize> = threads_env
         .as_deref()
-        .map(|s| s.split(',').filter_map(|p| p.trim().parse::<usize>().ok()).collect())
+        .map(|s| {
+            s.split(',')
+                .filter_map(|p| p.trim().parse::<usize>().ok())
+                .collect()
+        })
         .filter(|v: &Vec<usize>| !v.is_empty())
         .unwrap_or_else(|| vec![1usize, 2, 4, 8]);
 
     // Config overrides for YBWC/TT gating
-    let ybwc_min_depth: u8 = std::env::var("SHOGI_YBWC_MIN_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(6);
+    let ybwc_min_depth: u8 = std::env::var("SHOGI_YBWC_MIN_DEPTH")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(6);
     let (ybwc_shallow, ybwc_mid, ybwc_deep) = {
         if let Ok(cfg) = std::env::var("SHOGI_YBWC_SCALING") {
             let parts: Vec<_> = cfg.split(',').collect();
             if parts.len() == 3 {
-                if let (Ok(a), Ok(b), Ok(c)) = (parts[0].trim().parse::<usize>(), parts[1].trim().parse::<usize>(), parts[2].trim().parse::<usize>()) {
+                if let (Ok(a), Ok(b), Ok(c)) = (
+                    parts[0].trim().parse::<usize>(),
+                    parts[1].trim().parse::<usize>(),
+                    parts[2].trim().parse::<usize>(),
+                ) {
                     (a, b, c)
-                } else { (6, 4, 2) }
-            } else { (6, 4, 2) }
-        } else { (6, 4, 2) }
+                } else {
+                    (6, 4, 2)
+                }
+            } else {
+                (6, 4, 2)
+            }
+        } else {
+            (6, 4, 2)
+        }
     };
-    let ybwc_branch: usize = std::env::var("SHOGI_YBWC_BRANCH").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
-    let ybwc_max_siblings: usize = std::env::var("SHOGI_YBWC_MAX_SIBLINGS").ok().and_then(|v| v.parse().ok()).unwrap_or(6);
+    let ybwc_branch: usize = std::env::var("SHOGI_YBWC_BRANCH")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let ybwc_max_siblings: usize = std::env::var("SHOGI_YBWC_MAX_SIBLINGS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(6);
     let (tt_exact_only_max_depth_value, tt_min_store_depth, tt_buffer_flush_threshold) = {
         if let Ok(cfg) = std::env::var("SHOGI_TT_GATING") {
             let parts: Vec<_> = cfg.split(',').collect();
             if parts.len() == 3 {
-                if let (Ok(a), Ok(b), Ok(c)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<usize>()) {
+                if let (Ok(a), Ok(b), Ok(c)) = (
+                    parts[0].trim().parse::<u8>(),
+                    parts[1].trim().parse::<u8>(),
+                    parts[2].trim().parse::<usize>(),
+                ) {
                     (a, b, c)
-                } else { (8, 9, 512) }
-            } else { (8, 9, 512) }
-        } else { (8, 9, 512) }
+                } else {
+                    (8, 9, 512)
+                }
+            } else {
+                (8, 9, 512)
+            }
+        } else {
+            (8, 9, 512)
+        }
     };
 
     // Test across depths and thread counts
     for &depth in &depths {
         for &threads in &thread_counts {
-            group.bench_with_input(BenchmarkId::new(format!("depth{}", depth), threads), &threads, |b, &t| {
-                b.iter(|| {
-                    // New engine per iteration to avoid cross-benchmark state
-                    let mut engine = SearchEngine::new(None, 16);
-                    // Enable deeper parallelism (YBWC) for benchmark
-                    engine.set_ybwc(true, ybwc_min_depth);
-                    engine.set_ybwc_branch(ybwc_branch);
-                    engine.set_ybwc_max_siblings(ybwc_max_siblings);
-                    engine.set_ybwc_scaling(ybwc_shallow, ybwc_mid, ybwc_deep);
-                    engine.set_tt_gating(tt_exact_only_max_depth_value, tt_min_store_depth, tt_buffer_flush_threshold);
-                    let time_limit = if let Ok(ms) = std::env::var("SHOGI_BENCH_TIME_MS") { ms.parse::<u64>().unwrap_or(1000) as u32 } else {
-                        // Per-depth env overrides
-                        let key = format!("SHOGI_BENCH_TIME_MS_{}", depth);
-                        if let Ok(msd) = std::env::var(key) { msd.parse::<u64>().unwrap_or(0) as u32 } else {
-                            match depth { 3 => 600, 5 => 1000, 6 => 1200, 7 => 1500, 8 => 2000, _ => 1000 }
-                        }
-                    };
-                    let mut id = if t > 1 {
-                        IterativeDeepening::new_with_threads(depth, time_limit, None, t)
-                    } else {
-                        IterativeDeepening::new(depth, time_limit, None)
-                    };
-                    let _ = id.search(&mut engine, &board, &captured, player);
-                });
-            });
+            group.bench_with_input(
+                BenchmarkId::new(format!("depth{}", depth), threads),
+                &threads,
+                |b, &t| {
+                    b.iter(|| {
+                        // New engine per iteration to avoid cross-benchmark state
+                        let mut engine = SearchEngine::new(None, 16);
+                        // Enable deeper parallelism (YBWC) for benchmark
+                        engine.set_ybwc(true, ybwc_min_depth);
+                        engine.set_ybwc_branch(ybwc_branch);
+                        engine.set_ybwc_max_siblings(ybwc_max_siblings);
+                        engine.set_ybwc_scaling(ybwc_shallow, ybwc_mid, ybwc_deep);
+                        engine.set_tt_gating(
+                            tt_exact_only_max_depth_value,
+                            tt_min_store_depth,
+                            tt_buffer_flush_threshold,
+                        );
+                        let time_limit = if let Ok(ms) = std::env::var("SHOGI_BENCH_TIME_MS") {
+                            ms.parse::<u64>().unwrap_or(1000) as u32
+                        } else {
+                            // Per-depth env overrides
+                            let key = format!("SHOGI_BENCH_TIME_MS_{}", depth);
+                            if let Ok(msd) = std::env::var(key) {
+                                msd.parse::<u64>().unwrap_or(0) as u32
+                            } else {
+                                match depth {
+                                    3 => 600,
+                                    5 => 1000,
+                                    6 => 1200,
+                                    7 => 1500,
+                                    8 => 2000,
+                                    _ => 1000,
+                                }
+                            }
+                        };
+                        let mut id = if t > 1 {
+                            IterativeDeepening::new_with_threads(depth, time_limit, None, t)
+                        } else {
+                            IterativeDeepening::new(depth, time_limit, None)
+                        };
+                        let _ = id.search(&mut engine, &board, &captured, player);
+                    });
+                },
+            );
         }
     }
 
@@ -150,5 +210,3 @@ fn bench_root_search(c: &mut Criterion) {
 
 criterion_group!(benches, bench_root_search);
 criterion_main!(benches);
-
-

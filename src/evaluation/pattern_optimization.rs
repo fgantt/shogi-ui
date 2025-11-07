@@ -15,19 +15,19 @@
 //! let patterns = detector.detect_patterns_fast(&board, player);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use std::collections::HashMap;
 
 /// Optimized pattern detector using bitboards and lookup tables
 pub struct OptimizedPatternDetector {
     /// Pre-computed attack lookup tables
     attack_tables: AttackLookupTables,
-    
+
     /// Pattern lookup tables (reserved for future use)
     #[allow(dead_code)]
     pattern_tables: PatternLookupTables,
-    
+
     /// Performance statistics
     stats: OptimizationStats,
 }
@@ -43,7 +43,11 @@ impl OptimizedPatternDetector {
     }
 
     /// Detect patterns using optimized algorithms
-    pub fn detect_patterns_fast(&mut self, board: &BitboardBoard, player: Player) -> FastPatternResult {
+    pub fn detect_patterns_fast(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> FastPatternResult {
         self.stats.fast_detections += 1;
 
         let start = std::time::Instant::now();
@@ -65,15 +69,18 @@ impl OptimizedPatternDetector {
     fn detect_fork_fast(&self, board: &BitboardBoard, player: Player) -> bool {
         // Use attack tables to quickly check for forks
         // Simplified implementation - full version would use bitboard operations
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
                         // Check if piece attacks 2+ enemy pieces
-                        let attacks = self.attack_tables.get_attacks(pos, piece.piece_type, player);
-                        let enemy_count = attacks.iter()
+                        let attacks = self
+                            .attack_tables
+                            .get_attacks(pos, piece.piece_type, player);
+                        let enemy_count = attacks
+                            .iter()
                             .filter(|&&attack_pos| {
                                 if let Some(target) = board.get_piece(attack_pos) {
                                     target.player != player
@@ -82,7 +89,7 @@ impl OptimizedPatternDetector {
                                 }
                             })
                             .count();
-                        
+
                         if enemy_count >= 2 {
                             return true;
                         }
@@ -90,7 +97,7 @@ impl OptimizedPatternDetector {
                 }
             }
         }
-        
+
         false
     }
 
@@ -109,7 +116,7 @@ impl OptimizedPatternDetector {
     /// Fast center control evaluation
     fn evaluate_center_fast(&self, board: &BitboardBoard, player: Player) -> i32 {
         let mut score = 0;
-        
+
         // Check center squares (3-5, 3-5)
         for row in 3..=5 {
             for col in 3..=5 {
@@ -123,7 +130,7 @@ impl OptimizedPatternDetector {
                 }
             }
         }
-        
+
         score
     }
 
@@ -179,9 +186,14 @@ impl AttackLookupTables {
         }
     }
 
-    fn compute_attacks(&self, pos: Position, piece_type: PieceType, player: Player) -> Vec<Position> {
+    fn compute_attacks(
+        &self,
+        pos: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> Vec<Position> {
         let mut attacks = Vec::new();
-        
+
         match piece_type {
             PieceType::Knight => {
                 let moves = if player == Player::Black {
@@ -189,19 +201,19 @@ impl AttackLookupTables {
                 } else {
                     vec![(2, -1), (2, 1)]
                 };
-                
+
                 for (dr, dc) in moves {
                     let new_row = pos.row as i8 + dr;
                     let new_col = pos.col as i8 + dc;
-                    
+
                     if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                         attacks.push(Position::new(new_row as u8, new_col as u8));
                     }
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
-        
+
         attacks
     }
 }
@@ -235,7 +247,7 @@ pub struct FastPatternResult {
 pub struct OptimizationStats {
     /// Number of fast detections
     pub fast_detections: u64,
-    
+
     /// Total time spent in nanoseconds
     pub total_time_ns: u64,
 }
@@ -243,11 +255,11 @@ pub struct OptimizationStats {
 /// Memory-optimized pattern storage
 ///
 /// Uses compact representation to reduce memory footprint
-#[repr(C, align(64))]  // Cache line alignment
+#[repr(C, align(64))] // Cache line alignment
 pub struct CompactPatternStorage {
     /// Packed pattern flags (1 bit per pattern type)
     pattern_flags: u8,
-    
+
     /// Compact scores (i16 instead of i32 for memory efficiency)
     tactical_mg: i16,
     tactical_eg: i16,
@@ -313,9 +325,9 @@ mod tests {
     fn test_fast_pattern_detection() {
         let mut detector = OptimizedPatternDetector::new();
         let board = BitboardBoard::new();
-        
+
         let result = detector.detect_patterns_fast(&board, Player::Black);
-        
+
         assert_eq!(detector.stats().fast_detections, 1);
     }
 
@@ -323,9 +335,9 @@ mod tests {
     fn test_attack_lookup_tables() {
         let tables = AttackLookupTables::new();
         let pos = Position::new(4, 4);
-        
+
         let attacks = tables.get_attacks(pos, PieceType::Knight, Player::Black);
-        
+
         // Knight at (4,4) should have 2 attacks for Black
         assert_eq!(attacks.len(), 2);
     }
@@ -333,10 +345,10 @@ mod tests {
     #[test]
     fn test_compact_storage() {
         let mut storage = CompactPatternStorage::new();
-        
-        storage.set_pattern(0);  // Fork
-        storage.set_pattern(2);  // Outpost
-        
+
+        storage.set_pattern(0); // Fork
+        storage.set_pattern(2); // Outpost
+
         assert!(storage.has_pattern(0));
         assert!(!storage.has_pattern(1));
         assert!(storage.has_pattern(2));
@@ -345,9 +357,9 @@ mod tests {
     #[test]
     fn test_compact_storage_scores() {
         let mut storage = CompactPatternStorage::new();
-        
+
         storage.set_tactical_score(150, 90);
-        
+
         let (mg, eg) = storage.get_tactical_score();
         assert_eq!(mg, 150);
         assert_eq!(eg, 90);
@@ -356,13 +368,13 @@ mod tests {
     #[test]
     fn test_compact_storage_clamping() {
         let mut storage = CompactPatternStorage::new();
-        
+
         // Test clamping of large values
         storage.set_tactical_score(100000, -100000);
-        
+
         let (mg, eg) = storage.get_tactical_score();
-        assert_eq!(mg, 32767);   // Clamped to i16::MAX
-        assert_eq!(eg, -32768);  // Clamped to i16::MIN
+        assert_eq!(mg, 32767); // Clamped to i16::MAX
+        assert_eq!(eg, -32768); // Clamped to i16::MIN
     }
 
     #[test]
@@ -376,12 +388,12 @@ mod tests {
     fn test_average_time_calculation() {
         let mut detector = OptimizedPatternDetector::new();
         let board = BitboardBoard::new();
-        
+
         // Run multiple detections
         for _ in 0..10 {
             let _ = detector.detect_patterns_fast(&board, Player::Black);
         }
-        
+
         let avg_time = detector.avg_time_ns();
         assert!(avg_time > 0);
     }
@@ -389,10 +401,10 @@ mod tests {
     #[test]
     fn test_memory_alignment() {
         use std::mem;
-        
+
         // Verify cache line alignment
         assert_eq!(mem::align_of::<CompactPatternStorage>(), 64);
-        
+
         // Verify compact size
         let size = mem::size_of::<CompactPatternStorage>();
         assert!(size <= 64, "CompactPatternStorage should fit in cache line");

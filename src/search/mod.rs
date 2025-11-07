@@ -1,141 +1,160 @@
-pub mod zobrist;
-pub mod transposition_table;
-pub mod search_engine;
 pub mod board_trait;
+pub mod parallel_search;
+pub mod search_engine;
 pub mod shogi_hash;
 pub mod shogi_position_tests;
-pub mod parallel_search;
+pub mod transposition_table;
+pub mod zobrist;
 pub use parallel_search::{
-    ParallelSearchConfig, ParallelSearchEngine, ThreadLocalSearchContext,
-    WorkUnit, WorkStealingQueue, WorkDistributionStats
+    ParallelSearchConfig, ParallelSearchEngine, ThreadLocalSearchContext, WorkDistributionStats,
+    WorkStealingQueue, WorkUnit,
 };
-pub mod transposition_config;
-pub mod replacement_policies;
-pub mod cache_management;
-pub mod thread_safe_table;
-pub mod performance_optimization;
-pub mod performance_benchmarks;
-pub mod error_handling;
 pub mod advanced_statistics;
-pub mod search_integration;
+pub mod cache_management;
+pub mod comprehensive_tests;
+pub mod error_handling;
 pub mod move_ordering;
 pub mod move_ordering_integration;
 pub mod move_ordering_tests;
-pub mod comprehensive_tests;
-pub mod test_runner;
+pub mod performance_benchmarks;
+pub mod performance_optimization;
+pub mod replacement_policies;
+pub mod search_integration;
 pub mod search_integration_tests;
 pub mod tapered_search_integration;
+pub mod test_runner;
+pub mod thread_safe_table;
+pub mod transposition_config;
 
 // Configuration and tuning modules
-pub mod runtime_configuration;
 pub mod adaptive_configuration;
-pub mod performance_tuning;
 pub mod configuration_templates;
+pub mod performance_tuning;
+pub mod runtime_configuration;
 
 // WASM compatibility modules removed - no longer needed
 
 // Advanced features modules
-pub mod multi_level_transposition_table;
-pub mod compressed_entry_storage;
-pub mod predictive_prefetching;
-pub mod ml_replacement_policies;
-pub mod dynamic_table_sizing;
 pub mod advanced_cache_warming;
+pub mod compressed_entry_storage;
+pub mod dynamic_table_sizing;
+pub mod ml_replacement_policies;
+pub mod multi_level_transposition_table;
+pub mod predictive_prefetching;
 
 // Re-export commonly used types and functions
-pub use zobrist::*;
-pub use transposition_table::TranspositionTable;
-pub use search_engine::*;
+pub use advanced_statistics::{
+    AdvancedStatisticsManager, CollisionMonitor, DetailedCacheStats, HitRateByDepth,
+    PerformanceTrendAnalyzer, StatisticsExporter,
+};
 pub use board_trait::*;
+pub use cache_management::*;
+pub use comprehensive_tests::{
+    ComprehensiveTestResults, ComprehensiveTestSuite, KnownPosition, PerformanceTargets, TestConfig,
+};
+pub use error_handling::{
+    ComprehensiveErrorHandler, ErrorLogger, ErrorRecoveryManager, GracefulDegradationHandler,
+    TranspositionError, TranspositionResult,
+};
+pub use move_ordering::{
+    AdvancedCacheWarming, AdvancedFeatureFlags, AdvancedFeatureStatus, AdvancedFeatures,
+    AllocationEvent, AllocationStats, AllocationType, Bottleneck, BottleneckAnalysis,
+    BottleneckCategory, BottleneckSeverity, CacheConfig, CacheHitRates, CachePerformance,
+    CacheSizes, CacheStats, CacheWarmingParameters, CacheWarmingPerformance, CacheWarmingStrategy,
+    CacheWarmingType, DebugConfig, DynamicWeightAdjuster, ErrorHandler, ErrorLogEntry,
+    ErrorSeverity, FragmentationStats, GamePhase, HeuristicEffectiveness, HeuristicPerformance,
+    HeuristicPreferences, HeuristicStats, HistoryConfig, HotPathStats, KillerConfig, MLModelType,
+    MLParameters, MachineLearningModel, MemoryBreakdown, MemoryCleanupReport, MemoryLeakReport,
+    MemoryLeakWarning, MemoryPool, MemoryPoolSizes, MemoryPressureLevel, MemoryStats,
+    MemoryThresholdStatus, MemoryThresholds, MemoryTracker, MemoryUsage, MemoryUsageBreakdown,
+    MemoryUsageTrend, MoveOrdering, MoveOrderingConfig, MoveOrderingError, MoveOrderingResult,
+    MovePattern, OperationTiming, OrderingStats, OrderingStrategy, OrderingWeights,
+    PerformanceChartData, PerformanceConfig, PerformanceStats, PerformanceSummary,
+    PerformanceTracker, PerformanceTrend, PerformanceTrendAnalysis, PositionContext,
+    PositionSpecificStrategies, PredictionExample, PredictionModel, PredictionModelType,
+    PredictionParameters, PredictiveOrdering, PriorityAdjustments, StatisticsExport,
+    ThreadingSupport, TimingBreakdown, TimingStats, TrainingExample, TrendAnalysis, TrendDirection,
+    WeightAdjustment,
+};
+pub use move_ordering_integration::{
+    MoveOrderingHints, MoveOrderingStats, TranspositionMoveOrderer,
+};
+pub use move_ordering_tests::{MoveOrderingBenchmarks, MoveOrderingTestSuite, TestResults};
+pub use performance_benchmarks::{
+    BenchmarkComparison, BenchmarkResults as PerformanceBenchmarkResults, PerformanceBenchmarks,
+};
+pub use performance_optimization::{
+    CacheAlignedAllocator, HotPathOptimizer, OptimizedEntryPacker, OptimizedHashMapper,
+    PrefetchManager,
+};
+pub use replacement_policies::*;
+pub use search_engine::*;
+pub use search_integration::{EnhancedSearchEngine, SearchStats};
 pub use shogi_hash::*;
 pub use shogi_position_tests::*;
-pub use transposition_config::*;
-pub use replacement_policies::*;
-pub use cache_management::*;
-pub use thread_safe_table::{ThreadSafeTranspositionTable, ThreadSafetyMode, ThreadSafeStatsSnapshot};
-pub use performance_optimization::{OptimizedHashMapper, CacheAlignedAllocator, PrefetchManager, OptimizedEntryPacker, HotPathOptimizer};
-pub use performance_benchmarks::{PerformanceBenchmarks, BenchmarkResults as PerformanceBenchmarkResults, BenchmarkComparison};
-pub use error_handling::{TranspositionError, TranspositionResult, ComprehensiveErrorHandler, ErrorLogger, GracefulDegradationHandler, ErrorRecoveryManager};
-pub use advanced_statistics::{AdvancedStatisticsManager, DetailedCacheStats, HitRateByDepth, CollisionMonitor, StatisticsExporter, PerformanceTrendAnalyzer};
-pub use search_integration::{EnhancedSearchEngine, SearchStats};
-pub use move_ordering::{
-    MoveOrdering, OrderingStats, OrderingWeights, MemoryUsage, MoveOrderingConfig,
-    CacheConfig, KillerConfig, HistoryConfig, PerformanceConfig, DebugConfig,
-    HotPathStats, PerformanceStats, CacheSizes, BottleneckAnalysis, Bottleneck,
-    BottleneckCategory, BottleneckSeverity, HeuristicStats, HeuristicPerformance,
-    TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats,
-    FragmentationStats, CacheStats, CachePerformance, StatisticsExport,
-    PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness,
-    MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis,
-    TrendDirection, MoveOrderingError, MoveOrderingResult, ErrorSeverity,
-    ErrorLogEntry, ErrorHandler, MemoryPool, MemoryPoolSizes, MemoryTracker,
-    MemoryUsageBreakdown, AllocationEvent, AllocationType, MemoryThresholds,
-    MemoryThresholdStatus, MemoryLeakWarning, MemoryLeakReport, MemoryCleanupReport,
-    MemoryPressureLevel, AdvancedFeatures, PositionSpecificStrategies, OrderingStrategy,
-    PriorityAdjustments, HeuristicPreferences, GamePhase, MachineLearningModel,
-    MLModelType, MLParameters, TrainingExample, PositionContext, DynamicWeightAdjuster,
-    WeightAdjustment, PerformanceTracker, PerformanceTrend, ThreadingSupport,
-    PredictiveOrdering, PredictionModel, PredictionModelType, PredictionParameters,
-    PredictionExample, MovePattern, AdvancedCacheWarming, CacheWarmingStrategy,
-    CacheWarmingType, CacheWarmingParameters, CacheWarmingPerformance,
-    AdvancedFeatureFlags, AdvancedFeatureStatus
+pub use test_runner::{
+    run_all_tests, run_test_categories, OutputFormat, TestCategory, TestExecutionResult,
+    TestRunner, TestRunnerConfig,
 };
-pub use move_ordering_integration::{TranspositionMoveOrderer, MoveOrderingStats, MoveOrderingHints};
-pub use move_ordering_tests::{MoveOrderingTestSuite, MoveOrderingBenchmarks, TestResults};
-pub use comprehensive_tests::{ComprehensiveTestSuite, ComprehensiveTestResults, TestConfig, PerformanceTargets, KnownPosition};
-pub use test_runner::{TestRunner, TestRunnerConfig, TestCategory, OutputFormat, TestExecutionResult, run_all_tests, run_test_categories};
+pub use thread_safe_table::{
+    ThreadSafeStatsSnapshot, ThreadSafeTranspositionTable, ThreadSafetyMode,
+};
+pub use transposition_config::*;
+pub use transposition_table::TranspositionTable;
+pub use zobrist::*;
 
 // Configuration and tuning re-exports
 pub use runtime_configuration::{
-    RuntimeConfigurationManager, PerformanceMetrics, ConfigurationUpdateStrategy,
-    ConfigurationValidationResult, PerformanceImpact, ConfigurationBuilder
+    ConfigurationBuilder, ConfigurationUpdateStrategy, ConfigurationValidationResult,
+    PerformanceImpact, PerformanceMetrics, RuntimeConfigurationManager,
 };
 
 pub use adaptive_configuration::{
-    AdaptiveConfigurationManager, AdaptationRule, AdaptationCondition, AdaptationAction,
-    AdaptationState, AdaptationMode
+    AdaptationAction, AdaptationCondition, AdaptationMode, AdaptationRule, AdaptationState,
+    AdaptiveConfigurationManager,
 };
 
 pub use performance_tuning::{
-    PerformanceTuningManager, PerformanceProfiler, PerformanceCounters, MemorySnapshot,
-    PerformanceTargets as TuningPerformanceTargets, TuningRecommendation, TuningAction, TuningSession, TuningReport
+    MemorySnapshot, PerformanceCounters, PerformanceProfiler,
+    PerformanceTargets as TuningPerformanceTargets, PerformanceTuningManager, TuningAction,
+    TuningRecommendation, TuningReport, TuningSession,
 };
 
 pub use configuration_templates::{
-    ConfigurationTemplateManager, ConfigurationTemplate, TemplateMetadata, TemplateCategory,
-    PerformanceProfile, MemoryRequirements, ConfigurationValidator, ValidationRule,
-    ValidationResult, ValidationSeverity, PerformanceBenchmark, BenchmarkResults
+    BenchmarkResults, ConfigurationTemplate, ConfigurationTemplateManager, ConfigurationValidator,
+    MemoryRequirements, PerformanceBenchmark, PerformanceProfile, TemplateCategory,
+    TemplateMetadata, ValidationResult, ValidationRule, ValidationSeverity,
 };
 
 // WASM compatibility re-exports removed - no longer needed
 
 // Advanced features re-exports
 pub use multi_level_transposition_table::{
-    MultiLevelTranspositionTable, MultiLevelConfig, MultiLevelStats, LevelStats,
-    LevelConfig, MemoryAllocationStrategy
+    LevelConfig, LevelStats, MemoryAllocationStrategy, MultiLevelConfig, MultiLevelStats,
+    MultiLevelTranspositionTable,
 };
 
 pub use compressed_entry_storage::{
-    CompressedEntryStorage, CompressionConfig, CompressionStats, CompressedEntry,
-    CompressionMetadata, CompressionAlgorithm
+    CompressedEntry, CompressedEntryStorage, CompressionAlgorithm, CompressionConfig,
+    CompressionMetadata, CompressionStats,
 };
 
 pub use predictive_prefetching::{
-    PredictivePrefetcher, PrefetchConfig, PrefetchStats, PrefetchPrediction,
-    PredictionMetadata, PrefetchStrategy
+    PredictionMetadata, PredictivePrefetcher, PrefetchConfig, PrefetchPrediction, PrefetchStats,
+    PrefetchStrategy,
 };
 
 pub use ml_replacement_policies::{
-    MLReplacementPolicy, MLReplacementConfig, MLReplacementContext, MLReplacementDecision,
-    MLAlgorithm, ReplacementAction, PositionFeatures, AccessPatternInfo, TemporalInfo
+    AccessPatternInfo, MLAlgorithm, MLReplacementConfig, MLReplacementContext,
+    MLReplacementDecision, MLReplacementPolicy, PositionFeatures, ReplacementAction, TemporalInfo,
 };
 
 pub use dynamic_table_sizing::{
-    DynamicTableSizer, DynamicSizingConfig, ResizeDecision, ResizeReason,
-    AccessPatternAnalysis, DynamicSizingStats
+    AccessPatternAnalysis, DynamicSizingConfig, DynamicSizingStats, DynamicTableSizer,
+    ResizeDecision, ResizeReason,
 };
 
 pub use advanced_cache_warming::{
-    AdvancedCacheWarmer, CacheWarmingConfig, WarmingSession, WarmingResults,
-    WarmingStrategy, WarmingEntry, WarmingEntryType, PositionAnalysis
+    AdvancedCacheWarmer, CacheWarmingConfig, PositionAnalysis, WarmingEntry, WarmingEntryType,
+    WarmingResults, WarmingSession, WarmingStrategy,
 };

@@ -1,13 +1,13 @@
 //! Integration tests for the tablebase system
-//! 
+//!
 //! This module contains integration tests that verify the tablebase system
 //! works correctly with the search engine and other components.
 
-use shogi_engine::tablebase::{MicroTablebase, TablebaseResult, TablebaseOutcome, TablebaseConfig};
-use shogi_engine::tablebase::tablebase_config::{SolverConfig, KingGoldConfig};
-use shogi_engine::{ShogiEngine};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::types::{CapturedPieces, Player, Position, PieceType, Piece, Move};
+use shogi_engine::tablebase::tablebase_config::{KingGoldConfig, SolverConfig};
+use shogi_engine::tablebase::{MicroTablebase, TablebaseConfig, TablebaseOutcome, TablebaseResult};
+use shogi_engine::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
+use shogi_engine::ShogiEngine;
 
 /// Test tablebase integration with search engine
 mod search_engine_integration {
@@ -30,7 +30,7 @@ mod search_engine_integration {
 
         // Test basic search
         let best_move = engine.get_best_move(1, 1000, None, None);
-        
+
         // Verify we got a valid move
         if let Some(move_) = best_move {
             assert!(move_.from.is_some() || move_.is_drop());
@@ -56,7 +56,7 @@ mod search_engine_integration {
 
         // Test search without tablebase
         let best_move = engine.get_best_move(1, 1000, None, None);
-        
+
         // Should still work but without tablebase
         if let Some(move_) = best_move {
             assert!(move_.from.is_some() || move_.is_drop());
@@ -95,15 +95,15 @@ mod configuration_tests {
     #[test]
     fn test_tablebase_configuration() {
         let mut config = TablebaseConfig::default();
-        
+
         // Test default configuration
         assert!(config.solvers.king_gold_vs_king.enabled);
         assert_eq!(config.cache_size, 10000);
-        
+
         // Test configuration modification
         config.solvers.king_gold_vs_king.enabled = false;
         config.cache_size = 5000;
-        
+
         let tablebase = MicroTablebase::with_config(config);
         assert_eq!(tablebase.solver_count(), 0); // King+Gold solver disabled
     }
@@ -113,8 +113,11 @@ mod configuration_tests {
         let config = TablebaseConfig::default();
         let json = config.to_json().unwrap();
         let loaded_config = TablebaseConfig::from_json(&json).unwrap();
-        
-        assert_eq!(config.solvers.king_gold_vs_king.enabled, loaded_config.solvers.king_gold_vs_king.enabled);
+
+        assert_eq!(
+            config.solvers.king_gold_vs_king.enabled,
+            loaded_config.solvers.king_gold_vs_king.enabled
+        );
         assert_eq!(config.cache_size, loaded_config.cache_size);
     }
 }
@@ -147,7 +150,7 @@ mod caching_tests {
         let mut config = TablebaseConfig::default();
         config.cache_size = 2; // Very small cache
         let mut tablebase = MicroTablebase::with_config(config);
-        
+
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
@@ -175,15 +178,15 @@ mod performance_tests {
         let player = Player::Black;
 
         let start = Instant::now();
-        
+
         // Perform multiple probes
         for _ in 0..100 {
             tablebase.probe(&board, player, &captured_pieces);
         }
-        
+
         let duration = start.elapsed();
         let stats = tablebase.get_stats();
-        
+
         // Verify performance is reasonable (should be very fast for empty board)
         assert!(duration.as_millis() < 1000); // Less than 1 second for 100 probes
         assert!(stats.average_probe_time_ms < 1.0); // Less than 1ms per probe on average
@@ -203,7 +206,7 @@ mod performance_tests {
 
         let stats = tablebase.get_stats();
         assert!(stats.total_probes >= 1000);
-        
+
         // Cache should not grow beyond reasonable limits
         assert!(stats.cache_hits + stats.solver_hits <= 1000);
     }
@@ -223,7 +226,7 @@ mod error_handling_tests {
         // Test with empty board (should not crash)
         let _result = tablebase.probe(&board, player, &captured_pieces);
         // Result might be None for unsupported positions, which is fine
-        
+
         let stats = tablebase.get_stats();
         assert!(stats.total_probes >= 0);
     }
@@ -238,13 +241,13 @@ mod error_handling_tests {
         // Perform some probes
         tablebase.probe(&board, player, &captured_pieces);
         tablebase.probe(&board, player, &captured_pieces);
-        
+
         let stats_before = tablebase.get_stats();
         assert!(stats_before.total_probes > 0);
-        
+
         // Reset stats
         tablebase.reset_stats();
-        
+
         let stats_after = tablebase.get_stats();
         assert_eq!(stats_after.total_probes, 0);
         assert_eq!(stats_after.cache_hits, 0);

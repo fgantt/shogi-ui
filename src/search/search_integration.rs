@@ -1,18 +1,18 @@
 //! Search algorithm integration with transposition table
-//! 
+//!
 //! This module provides the integration between the search algorithm and the
 //! advanced transposition table system, including proper flag handling,
 //! best move storage, and performance optimizations.
 
-use crate::types::*;
 use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
-use crate::search::thread_safe_table::{ThreadSafeTranspositionTable, ThreadSafeStatsSnapshot};
-use crate::search::transposition_config::TranspositionConfig;
-use crate::search::shogi_hash::*;
-use crate::search::error_handling::{TranspositionResult, ComprehensiveErrorHandler};
 use crate::search::advanced_statistics::AdvancedStatisticsManager;
+use crate::search::error_handling::{ComprehensiveErrorHandler, TranspositionResult};
+use crate::search::shogi_hash::*;
+use crate::search::thread_safe_table::{ThreadSafeStatsSnapshot, ThreadSafeTranspositionTable};
+use crate::search::transposition_config::TranspositionConfig;
+use crate::types::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -54,8 +54,8 @@ impl EnhancedSearchEngine {
         let hash_calculator = ShogiHashHandler::new(1000); // Max history length
         let error_handler = Arc::new(ComprehensiveErrorHandler::new());
         let stats_manager = Arc::new(AdvancedStatisticsManager::new(
-            config.table_size, 
-            20 // Max depth
+            config.table_size,
+            20, // Max depth
         ));
         let evaluator = PositionEvaluator::new();
         let move_generator = MoveGenerator::new();
@@ -90,9 +90,9 @@ impl EnhancedSearchEngine {
         drop(stats);
 
         // Calculate position hash for transposition table lookup
-        let position_hash = self.hash_calculator.get_position_hash(
-            board, player, captured_pieces
-        );
+        let position_hash = self
+            .hash_calculator
+            .get_position_hash(board, player, captured_pieces);
 
         // === TRANSPOSITION TABLE PROBING ===
         if let Some(tt_entry) = self.probe_transposition_table(position_hash, depth)? {
@@ -101,23 +101,32 @@ impl EnhancedSearchEngine {
             drop(stats);
 
             // Update statistics
-            self.stats_manager.record_probe(depth, true, start_time.elapsed().as_micros() as f64);
+            self.stats_manager
+                .record_probe(depth, true, start_time.elapsed().as_micros() as f64);
 
             return Ok(self.handle_tt_entry(tt_entry, alpha, beta)?);
         }
 
         // Record miss in statistics
-        self.stats_manager.record_probe(depth, false, start_time.elapsed().as_micros() as f64);
+        self.stats_manager
+            .record_probe(depth, false, start_time.elapsed().as_micros() as f64);
 
         // === TERMINAL NODE CHECK ===
         if depth == 0 {
             return Ok(self.quiescence_search_with_tt(
-                board, captured_pieces, player, alpha, beta, time_limit_ms
+                board,
+                captured_pieces,
+                player,
+                alpha,
+                beta,
+                time_limit_ms,
             )?);
         }
 
         // === MOVE GENERATION ===
-        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
+        let legal_moves = self
+            .move_generator
+            .generate_legal_moves(board, player, captured_pieces);
         if legal_moves.is_empty() {
             let is_check = board.is_king_in_check(player, captured_pieces);
             return Ok(if is_check { -100000 } else { 0 });
@@ -139,20 +148,20 @@ impl EnhancedSearchEngine {
             // Create board copy and make move
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
-            
+
             if let Some(captured_piece) = new_board.make_move(mv) {
                 new_captured.add_piece(captured_piece.piece_type, captured_piece.player);
             }
-            
+
             // Recursive search with negated bounds
             let score = -self.negamax_with_tt(
-                &mut new_board, 
-                &new_captured, 
-                player.opposite(), 
-                depth - 1, 
-                -beta, 
-                -alpha, 
-                time_limit_ms
+                &mut new_board,
+                &new_captured,
+                player.opposite(),
+                depth - 1,
+                -beta,
+                -alpha,
+                time_limit_ms,
             )?;
 
             // Update best move and score
@@ -172,18 +181,12 @@ impl EnhancedSearchEngine {
             }
 
             // Update statistics
-            self.stats_manager.record_store(start_time.elapsed().as_micros() as f64, false);
+            self.stats_manager
+                .record_store(start_time.elapsed().as_micros() as f64, false);
         }
 
         // === TRANSPOSITION TABLE STORAGE ===
-        self.store_transposition_table(
-            position_hash,
-            best_score,
-            depth,
-            alpha,
-            beta,
-            best_move
-        )?;
+        self.store_transposition_table(position_hash, best_score, depth, alpha, beta, best_move)?;
 
         let mut stats = self.search_stats.lock().unwrap();
         stats.tt_stores += 1;
@@ -264,7 +267,7 @@ impl EnhancedSearchEngine {
     ) -> TranspositionResult<Vec<Move>> {
         // First, try to get best move from transposition table
         let mut ordered_moves = Vec::from(moves);
-        
+
         // Look for the best move from TT
         if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
             if let Some(tt_best_move) = entry.best_move {
@@ -277,7 +280,7 @@ impl EnhancedSearchEngine {
 
         // Additional move ordering heuristics can be added here
         // For now, we'll use the TT hint and keep the rest in original order
-        
+
         Ok(ordered_moves)
     }
 
@@ -292,15 +295,17 @@ impl EnhancedSearchEngine {
         time_limit_ms: u32,
     ) -> TranspositionResult<i32> {
         let start_time = Instant::now();
-        
+
         // Check time limit
         if start_time.elapsed().as_millis() > time_limit_ms as u128 {
             return Ok(self.evaluator.evaluate(board, player, captured_pieces));
         }
 
         // Generate only capturing moves for quiescence
-        let capture_moves = self.move_generator.generate_quiescence_moves(board, player, captured_pieces);
-        
+        let capture_moves =
+            self.move_generator
+                .generate_quiescence_moves(board, player, captured_pieces);
+
         if capture_moves.is_empty() {
             return Ok(self.evaluator.evaluate(board, player, captured_pieces));
         }
@@ -317,18 +322,18 @@ impl EnhancedSearchEngine {
             // Create board copy and make move
             let mut new_board = board.clone();
             let mut new_captured = captured_pieces.clone();
-            
+
             if let Some(captured_piece) = new_board.make_move(mv) {
                 new_captured.add_piece(captured_piece.piece_type, captured_piece.player);
             }
-            
+
             let score = -self.quiescence_search_with_tt(
                 &mut new_board,
                 &new_captured,
                 player.opposite(),
                 -beta,
                 -alpha,
-                time_limit_ms
+                time_limit_ms,
             )?;
 
             if score > best_score {
@@ -362,17 +367,20 @@ impl EnhancedSearchEngine {
 
         for _ in 0..max_depth {
             let position_hash = self.hash_calculator.get_position_hash(
-                &current_board, current_player, &current_captured
+                &current_board,
+                current_player,
+                &current_captured,
             );
 
             if let Some(entry) = self.transposition_table.probe(position_hash, 255) {
                 if let Some(best_move) = entry.best_move {
                     pv.push(best_move.clone());
-                    
+
                     // Make the move to continue the PV
                     let captured = current_board.make_move(&best_move);
                     if let Some(captured_piece) = captured {
-                        current_captured.add_piece(captured_piece.piece_type, captured_piece.player);
+                        current_captured
+                            .add_piece(captured_piece.piece_type, captured_piece.player);
                     }
                     current_player = current_player.opposite();
                 } else {
@@ -389,12 +397,12 @@ impl EnhancedSearchEngine {
     /// Clear transposition table
     pub fn clear_transposition_table(&mut self) {
         self.transposition_table.clear();
-        
+
         // Reset statistics
         let mut stats = self.search_stats.lock().unwrap();
         *stats = SearchStats::default();
         drop(stats);
-        
+
         self.stats_manager.clear_all();
     }
 
@@ -409,18 +417,25 @@ impl EnhancedSearchEngine {
     }
 
     /// Get advanced statistics report
-    pub fn get_advanced_stats(&self) -> crate::search::advanced_statistics::ComprehensiveStatisticsReport {
+    pub fn get_advanced_stats(
+        &self,
+    ) -> crate::search::advanced_statistics::ComprehensiveStatisticsReport {
         self.stats_manager.get_comprehensive_report()
     }
 
     /// Export statistics in various formats
-    pub fn export_statistics(&self, format: crate::search::advanced_statistics::ExportFormat) -> crate::search::advanced_statistics::ExportedStatistics {
-        let exporter = crate::search::advanced_statistics::StatisticsExporter::new(format.clone(), true);
+    pub fn export_statistics(
+        &self,
+        format: crate::search::advanced_statistics::ExportFormat,
+    ) -> crate::search::advanced_statistics::ExportedStatistics {
+        let exporter =
+            crate::search::advanced_statistics::StatisticsExporter::new(format.clone(), true);
         let report = self.stats_manager.get_comprehensive_report();
-        
+
         crate::search::advanced_statistics::ExportedStatistics {
             cache_stats: exporter.export_cache_stats(&report.cache_stats),
-            hit_rates: exporter.export_hit_rates(&crate::search::advanced_statistics::HitRateByDepth::new(20)),
+            hit_rates: exporter
+                .export_hit_rates(&crate::search::advanced_statistics::HitRateByDepth::new(20)),
             collision_stats: exporter.export_collision_stats(&report.collision_stats),
             trends: format!(
                 r#"{{
@@ -434,9 +449,15 @@ impl EnhancedSearchEngine {
     "data_points_count": {},
     "time_span_seconds": {}
 }}"#,
-                report.trends.hit_rate_trend, report.trends.probe_time_trend, report.trends.store_time_trend,
-                report.trends.occupancy_trend, report.trends.hit_rate_volatility, report.trends.probe_time_volatility,
-                report.trends.performance_score, report.trends.data_points_count, report.trends.time_span_seconds
+                report.trends.hit_rate_trend,
+                report.trends.probe_time_trend,
+                report.trends.store_time_trend,
+                report.trends.occupancy_trend,
+                report.trends.hit_rate_volatility,
+                report.trends.probe_time_volatility,
+                report.trends.performance_score,
+                report.trends.data_points_count,
+                report.trends.time_span_seconds
             ),
             format,
         }
@@ -449,7 +470,7 @@ impl EnhancedSearchEngine {
         self.error_handler.logger().log_error_with_context(
             crate::search::error_handling::ErrorSeverity::Info,
             "Transposition table configuration updated".to_string(),
-            format!("New config: {:?}", config)
+            format!("New config: {:?}", config),
         );
         Ok(())
     }
@@ -468,7 +489,7 @@ impl EnhancedSearchEngine {
 
         for depth in 1..=max_depth {
             let start_time = Instant::now();
-            
+
             // Perform search at current depth
             let score = self.negamax_with_tt(
                 board,
@@ -519,7 +540,7 @@ mod tests {
     fn test_transposition_table_integration() {
         let config = TranspositionConfig::debug_config();
         let mut engine = EnhancedSearchEngine::new(config).unwrap();
-        
+
         // Test basic operations
         engine.clear_transposition_table();
         let stats = engine.get_tt_stats();
@@ -531,7 +552,7 @@ mod tests {
     fn test_search_statistics() {
         let config = TranspositionConfig::debug_config();
         let engine = EnhancedSearchEngine::new(config).unwrap();
-        
+
         let stats = engine.get_search_stats();
         assert_eq!(stats.total_nodes, 0);
         assert_eq!(stats.tt_hits, 0);
@@ -541,10 +562,10 @@ mod tests {
     fn test_principal_variation() {
         let config = TranspositionConfig::debug_config();
         let mut engine = EnhancedSearchEngine::new(config).unwrap();
-        
+
         let board = BitboardBoard::new();
         let captured = CapturedPieces::new();
-        
+
         let pv = engine.get_principal_variation(&board, &captured, Player::Black, 5);
         assert!(pv.is_ok());
         let pv = pv.unwrap();
@@ -555,14 +576,13 @@ mod tests {
     fn test_iterative_deepening() {
         let config = TranspositionConfig::debug_config();
         let mut engine = EnhancedSearchEngine::new(config).unwrap();
-        
+
         let mut board = BitboardBoard::new();
         let captured = CapturedPieces::new();
-        
-        let result = engine.iterative_deepening_search(
-            &mut board, &captured, Player::Black, 3, 1000
-        );
-        
+
+        let result =
+            engine.iterative_deepening_search(&mut board, &captured, Player::Black, 3, 1000);
+
         assert!(result.is_ok());
         let (score, pv) = result.unwrap();
         assert!(score >= -100000 && score <= 100000);

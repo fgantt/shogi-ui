@@ -1,9 +1,9 @@
 //! Position complexity analysis for adaptive solver selection
-//! 
+//!
 //! This module provides tools for analyzing the complexity of chess positions
 //! to help select the most appropriate endgame solver.
 
-use crate::{BitboardBoard, Player, Position, PieceType, CapturedPieces};
+use crate::{BitboardBoard, CapturedPieces, PieceType, Player, Position};
 
 /// Position complexity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,10 +119,15 @@ impl PositionAnalyzer {
     }
 
     /// Analyze a position and return complexity information
-    pub fn analyze_position(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> PositionAnalysis {
+    pub fn analyze_position(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> PositionAnalysis {
         // Generate cache key
         let cache_key = self.generate_cache_key(board, player, captured_pieces);
-        
+
         // Check cache first
         if let Some(cached_analysis) = self.analysis_cache.get(&cache_key) {
             return cached_analysis.clone();
@@ -130,46 +135,51 @@ impl PositionAnalyzer {
 
         // Perform analysis
         let analysis = self.perform_analysis(board, player, captured_pieces);
-        
+
         // Cache the result
         if self.analysis_cache.len() >= self.max_cache_size {
             self.evict_oldest_analysis();
         }
         self.analysis_cache.insert(cache_key, analysis.clone());
-        
+
         analysis
     }
 
     /// Perform the actual position analysis
-    fn perform_analysis(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> PositionAnalysis {
+    fn perform_analysis(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> PositionAnalysis {
         let mut analysis = PositionAnalysis::new();
-        
+
         // Count pieces
         analysis.piece_count = self.count_pieces(board);
         analysis.attacking_pieces = self.count_attacking_pieces(board, player);
         analysis.defending_pieces = self.count_defending_pieces(board, player);
-        
+
         // Analyze king safety
         analysis.king_safety = self.analyze_king_safety(board, player);
-        
+
         // Analyze material balance
         analysis.material_balance = self.analyze_material_balance(board, captured_pieces);
-        
+
         // Analyze mobility
         analysis.mobility = self.analyze_mobility(board, player);
-        
+
         // Determine if endgame
         analysis.is_endgame = self.is_endgame_position(board, captured_pieces);
-        
+
         // Determine if tactical
         analysis.is_tactical = self.is_tactical_position(board, player);
-        
+
         // Calculate overall complexity
         analysis.complexity = self.calculate_complexity(&analysis);
-        
+
         // Recommend solver priority
         analysis.recommended_solver_priority = self.recommend_solver_priority(&analysis);
-        
+
         analysis
     }
 
@@ -190,14 +200,14 @@ impl PositionAnalyzer {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let mut count = 0;
-        
+
         // Count non-king pieces (kings are defensive)
         for (piece_idx, piece_bitboard) in pieces[player_idx].iter().enumerate() {
             if piece_idx != PieceType::King.to_u8() as usize {
                 count += crate::types::count_bits(*piece_bitboard);
             }
         }
-        
+
         count as u8
     }
 
@@ -205,11 +215,11 @@ impl PositionAnalyzer {
     fn count_defending_pieces(&self, board: &BitboardBoard, player: Player) -> u8 {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
-        
+
         // Count king and defensive pieces
         let king_bitboard = pieces[player_idx][PieceType::King.to_u8() as usize];
         let king_count = crate::types::count_bits(king_bitboard);
-        
+
         king_count as u8
     }
 
@@ -220,11 +230,11 @@ impl PositionAnalyzer {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let king_bitboard = pieces[player_idx][PieceType::King.to_u8() as usize];
-        
+
         if king_bitboard == 0 {
             return -1000; // No king = very unsafe
         }
-        
+
         // Basic safety based on king position
         let king_pos = crate::types::get_lsb(king_bitboard);
         if let Some(pos) = king_pos {
@@ -246,10 +256,14 @@ impl PositionAnalyzer {
     }
 
     /// Analyze material balance
-    fn analyze_material_balance(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> i32 {
+    fn analyze_material_balance(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let pieces = board.get_pieces();
         let mut balance = 0;
-        
+
         // Count material on board
         for (player_idx, player_pieces) in pieces.iter().enumerate() {
             let multiplier = if player_idx == 0 { 1 } else { -1 }; // Black positive, White negative
@@ -259,32 +273,37 @@ impl PositionAnalyzer {
                 balance += (count as i32 * value) * multiplier;
             }
         }
-        
+
         // Add captured pieces
         for piece_type in [
-            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
-            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
         ] {
             let black_captured = captured_pieces.count(piece_type, Player::Black);
             let white_captured = captured_pieces.count(piece_type, Player::White);
             let value = self.get_piece_value(piece_type.to_u8());
             balance += (black_captured as i32 - white_captured as i32) * value;
         }
-        
+
         balance
     }
 
     /// Get piece value for material calculation
     fn get_piece_value(&self, piece_type: u8) -> i32 {
         match piece_type {
-            0 => 1,   // Pawn
-            1 => 3,   // Lance
-            2 => 3,   // Knight
-            3 => 5,   // Silver
-            4 => 6,   // Gold
-            5 => 8,   // Bishop
-            6 => 10,  // Rook
-            7 => 0,   // King (not counted in material)
+            0 => 1,  // Pawn
+            1 => 3,  // Lance
+            2 => 3,  // Knight
+            3 => 5,  // Silver
+            4 => 6,  // Gold
+            5 => 8,  // Bishop
+            6 => 10, // Rook
+            7 => 0,  // King (not counted in material)
             _ => 0,
         }
     }
@@ -296,12 +315,12 @@ impl PositionAnalyzer {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let mut mobility = 0;
-        
+
         for piece_bitboard in pieces[player_idx].iter() {
             let count = crate::types::count_bits(*piece_bitboard);
             mobility += count * 8; // Estimate 8 moves per piece
         }
-        
+
         mobility as u8
     }
 
@@ -309,7 +328,7 @@ impl PositionAnalyzer {
     fn is_endgame_position(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> bool {
         let piece_count = self.count_pieces(board);
         let total_captured = self.count_captured_pieces(captured_pieces);
-        
+
         // Endgame if few pieces on board or many pieces captured
         piece_count <= 6 || total_captured >= 20
     }
@@ -318,8 +337,13 @@ impl PositionAnalyzer {
     fn count_captured_pieces(&self, captured_pieces: &CapturedPieces) -> u8 {
         let mut total = 0;
         for piece_type in [
-            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
-            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
         ] {
             total += captured_pieces.count(piece_type, Player::Black);
             total += captured_pieces.count(piece_type, Player::White);
@@ -338,28 +362,28 @@ impl PositionAnalyzer {
     /// Calculate overall position complexity
     fn calculate_complexity(&self, analysis: &PositionAnalysis) -> PositionComplexity {
         let mut complexity_score = 0;
-        
+
         // Piece count factor
         complexity_score += analysis.piece_count as i32 * 2;
-        
+
         // Attacking pieces factor
         complexity_score += analysis.attacking_pieces as i32 * 3;
-        
+
         // Tactical factor
         if analysis.is_tactical {
             complexity_score += 10;
         }
-        
+
         // Endgame factor (endgames are generally simpler)
         if analysis.is_endgame {
             complexity_score -= 5;
         }
-        
+
         // King safety factor
         if analysis.king_safety < 50 {
             complexity_score += 5;
         }
-        
+
         // Determine complexity level
         match complexity_score {
             0..=5 => PositionComplexity::VerySimple,
@@ -382,12 +406,17 @@ impl PositionAnalyzer {
     }
 
     /// Generate cache key for position
-    fn generate_cache_key(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> u64 {
+    fn generate_cache_key(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash board state
         let pieces = board.get_pieces();
         for player_pieces in pieces.iter() {
@@ -395,19 +424,28 @@ impl PositionAnalyzer {
                 piece_bitboard.hash(&mut hasher);
             }
         }
-        
+
         // Hash player
         player.hash(&mut hasher);
-        
+
         // Hash captured pieces
         for piece_type in [
-            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
-            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
         ] {
-            captured_pieces.count(piece_type, Player::Black).hash(&mut hasher);
-            captured_pieces.count(piece_type, Player::White).hash(&mut hasher);
+            captured_pieces
+                .count(piece_type, Player::Black)
+                .hash(&mut hasher);
+            captured_pieces
+                .count(piece_type, Player::White)
+                .hash(&mut hasher);
         }
-        
+
         hasher.finish()
     }
 

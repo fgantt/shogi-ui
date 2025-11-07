@@ -17,8 +17,8 @@
 //! suite.run_all_tests();
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 
 /// Comprehensive pattern test suite
 pub struct PatternTestSuite {
@@ -45,11 +45,11 @@ impl PatternTestSuite {
     /// Run unit tests for all pattern types
     pub fn run_unit_tests(&mut self) -> bool {
         self.results.unit_tests_run += 1;
-        
+
         // All unit tests are in the individual modules
         // This is a placeholder for collecting results
         self.results.unit_tests_passed += 1;
-        
+
         true
     }
 
@@ -59,7 +59,7 @@ impl PatternTestSuite {
 
         // Test pattern combination
         let board = BitboardBoard::new();
-        let _ = board;  // Use board to test patterns together
+        let _ = board; // Use board to test patterns together
 
         self.results.integration_tests_passed += 1;
         true
@@ -82,7 +82,7 @@ impl PatternTestSuite {
 
         // Validate against known positions
         let test_positions = self.get_test_positions();
-        
+
         for position in test_positions {
             if self.validate_position_evaluation(position) {
                 self.results.accuracy_tests_passed += 1;
@@ -105,13 +105,11 @@ impl PatternTestSuite {
 
     /// Get test positions for validation
     fn get_test_positions(&self) -> Vec<TestPosition> {
-        vec![
-            TestPosition {
-                board: BitboardBoard::new(),
-                player: Player::Black,
-                expected_patterns: vec!["center_control".to_string()],
-            },
-        ]
+        vec![TestPosition {
+            board: BitboardBoard::new(),
+            player: Player::Black,
+            expected_patterns: vec!["center_control".to_string()],
+        }]
     }
 
     /// Validate position evaluation
@@ -128,11 +126,26 @@ impl PatternTestSuite {
     /// Print test summary
     pub fn print_summary(&self) {
         println!("Pattern Recognition Test Suite Results:");
-        println!("  Unit Tests: {}/{}", self.results.unit_tests_passed, self.results.unit_tests_run);
-        println!("  Integration Tests: {}/{}", self.results.integration_tests_passed, self.results.integration_tests_run);
-        println!("  Performance Tests: {}/{}", self.results.performance_tests_passed, self.results.performance_tests_run);
-        println!("  Accuracy Tests: {}/{}", self.results.accuracy_tests_passed, self.results.accuracy_tests_run);
-        println!("  Regression Tests: {}/{}", self.results.regression_tests_passed, self.results.regression_tests_run);
+        println!(
+            "  Unit Tests: {}/{}",
+            self.results.unit_tests_passed, self.results.unit_tests_run
+        );
+        println!(
+            "  Integration Tests: {}/{}",
+            self.results.integration_tests_passed, self.results.integration_tests_run
+        );
+        println!(
+            "  Performance Tests: {}/{}",
+            self.results.performance_tests_passed, self.results.performance_tests_run
+        );
+        println!(
+            "  Accuracy Tests: {}/{}",
+            self.results.accuracy_tests_passed, self.results.accuracy_tests_run
+        );
+        println!(
+            "  Regression Tests: {}/{}",
+            self.results.regression_tests_passed, self.results.regression_tests_run
+        );
     }
 }
 
@@ -255,7 +268,7 @@ mod tests {
         results.unit_tests_passed = 9;
         results.integration_tests_run = 5;
         results.integration_tests_passed = 5;
-        
+
         assert_eq!(results.total_run(), 15);
         assert_eq!(results.total_passed(), 14);
         assert!((results.pass_rate() - 0.9333).abs() < 0.01);
@@ -265,7 +278,7 @@ mod tests {
     fn test_results_pass_rate() {
         let results = TestResults::default();
         assert_eq!(results.pass_rate(), 0.0);
-        
+
         let mut results = TestResults::default();
         results.unit_tests_run = 100;
         results.unit_tests_passed = 95;

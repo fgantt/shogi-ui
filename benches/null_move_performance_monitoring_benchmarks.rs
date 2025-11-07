@@ -11,16 +11,16 @@
 //! - Comparison benchmarks (NMP enabled vs disabled)
 //! - Automated performance reports
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use shogi_engine::{
-    search::SearchEngine,
-    bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, NullMoveConfig},
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use serde_json;
-use std::time::Duration as StdDuration;
+use shogi_engine::{
+    bitboards::BitboardBoard,
+    search::SearchEngine,
+    types::{CapturedPieces, NullMoveConfig, Player},
+};
 use std::fs;
 use std::path::Path as StdPath;
+use std::time::Duration as StdDuration;
 
 /// Performance metrics for a single benchmark run
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -67,7 +67,10 @@ impl Default for PerformanceBaseline {
 }
 
 /// Save metrics to JSON file for historical tracking
-fn save_metrics(metrics: &PerformanceMetrics, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn save_metrics(
+    metrics: &PerformanceMetrics,
+    file_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Load existing metrics if file exists
     let mut all_metrics: Vec<PerformanceMetrics> = if StdPath::new(file_path).exists() {
         let content = fs::read_to_string(file_path)?;
@@ -75,24 +78,26 @@ fn save_metrics(metrics: &PerformanceMetrics, file_path: &str) -> Result<(), Box
     } else {
         Vec::new()
     };
-    
+
     // Add new metrics
     all_metrics.push(metrics.clone());
-    
+
     // Keep only last 100 entries to prevent file from growing too large
     if all_metrics.len() > 100 {
         all_metrics = all_metrics[all_metrics.len() - 100..].to_vec();
     }
-    
+
     // Save to file
     let json = serde_json::to_string_pretty(&all_metrics)?;
     fs::write(file_path, json)?;
-    
+
     Ok(())
 }
 
 /// Load metrics history
-fn load_metrics_history(file_path: &str) -> Result<Vec<PerformanceMetrics>, Box<dyn std::error::Error>> {
+fn load_metrics_history(
+    file_path: &str,
+) -> Result<Vec<PerformanceMetrics>, Box<dyn std::error::Error>> {
     if StdPath::new(file_path).exists() {
         let content = fs::read_to_string(file_path)?;
         Ok(serde_json::from_str(&content)?)
@@ -108,17 +113,16 @@ fn create_test_engine_with_config(config: NullMoveConfig) -> SearchEngine {
     engine
 }
 
-
 /// Benchmark NMP enabled vs disabled comparison
 fn benchmark_nmp_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_comparison");
     group.measurement_time(StdDuration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test configurations
     let configurations = vec![
         ("disabled", {
@@ -152,7 +156,7 @@ fn benchmark_nmp_comparison(c: &mut Criterion) {
             config
         }),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configurations {
             group.bench_with_input(
@@ -162,7 +166,7 @@ fn benchmark_nmp_comparison(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_null_move_stats();
-                        
+
                         let start = std::time::Instant::now();
                         let mut board_mut = board.clone();
                         let result = engine.search_at_depth_legacy(
@@ -173,17 +177,17 @@ fn benchmark_nmp_comparison(c: &mut Criterion) {
                             1000,
                         );
                         let elapsed = start.elapsed();
-                        
+
                         let stats = engine.get_null_move_stats().clone();
                         let nodes = engine.get_nodes_searched();
-                        
+
                         black_box((result, elapsed, nodes, stats))
                     });
                 },
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -192,20 +196,20 @@ fn benchmark_nmp_by_position_type(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_by_position_type");
     group.measurement_time(StdDuration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Test with default configuration
     let config = NullMoveConfig::default();
-    
+
     group.bench_function("initial_position", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_config(config.clone());
             engine.reset_null_move_stats();
-            
+
             let start = std::time::Instant::now();
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
@@ -216,14 +220,14 @@ fn benchmark_nmp_by_position_type(c: &mut Criterion) {
                 1000,
             );
             let elapsed = start.elapsed();
-            
+
             let stats = engine.get_null_move_stats().clone();
             let nodes = engine.get_nodes_searched();
-            
+
             black_box((result, elapsed, nodes, stats))
         });
     });
-    
+
     group.finish();
 }
 
@@ -232,12 +236,12 @@ fn benchmark_nmp_regression_testing(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_regression_testing");
     group.measurement_time(StdDuration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let config = NullMoveConfig::default();
-    
+
     // Test at different depths to ensure consistent performance
     for depth in [3, 4, 5] {
         group.bench_with_input(
@@ -247,7 +251,7 @@ fn benchmark_nmp_regression_testing(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_config(config.clone());
                     engine.reset_null_move_stats();
-                    
+
                     let start = std::time::Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -258,12 +262,12 @@ fn benchmark_nmp_regression_testing(c: &mut Criterion) {
                         1000,
                     );
                     let elapsed = start.elapsed();
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     let nodes = engine.get_nodes_searched();
                     let cutoff_rate = stats.cutoff_rate();
                     let efficiency = stats.efficiency();
-                    
+
                     // Regression checks (only fail in CI, not in normal benchmarks)
                     if std::env::var("NMP_REGRESSION_TEST").is_ok() {
                         let baseline = PerformanceBaseline::default();
@@ -288,33 +292,32 @@ fn benchmark_nmp_regression_testing(c: &mut Criterion) {
                             baseline.max_search_time_ms
                         );
                     }
-                    
+
                     black_box((result, elapsed, nodes, cutoff_rate, efficiency))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
-
 
 /// Benchmark comprehensive NMP performance monitoring
 fn benchmark_comprehensive_nmp_monitoring(c: &mut Criterion) {
     let mut group = c.benchmark_group("comprehensive_nmp_monitoring");
     group.measurement_time(StdDuration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let config = NullMoveConfig::default();
-    
+
     group.bench_function("full_monitoring", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_config(config.clone());
             engine.reset_null_move_stats();
-            
+
             let start = std::time::Instant::now();
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
@@ -325,10 +328,10 @@ fn benchmark_comprehensive_nmp_monitoring(c: &mut Criterion) {
                 1000,
             );
             let elapsed = start.elapsed();
-            
+
             let stats = engine.get_null_move_stats().clone();
             let nodes = engine.get_nodes_searched();
-            
+
             // Collect comprehensive metrics
             let metrics = PerformanceMetrics {
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -351,16 +354,16 @@ fn benchmark_comprehensive_nmp_monitoring(c: &mut Criterion) {
                 disabled_king_activity_endgame: stats.disabled_king_activity_endgame,
                 disabled_zugzwang: stats.disabled_zugzwang,
             };
-            
+
             // Save metrics if directory is set
             if let Ok(metrics_dir) = std::env::var("NMP_METRICS_DIR") {
                 let _ = save_metrics(&metrics, &format!("{}/nmp_metrics.json", metrics_dir));
             }
-            
+
             black_box((result, metrics))
         });
     });
-    
+
     group.finish();
 }
 
@@ -373,4 +376,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

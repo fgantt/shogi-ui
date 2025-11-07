@@ -18,52 +18,55 @@
 //! - Board state is cloned for each thread
 //! - Move generators and evaluators are thread-local
 
-use std::sync::{Arc, RwLock, Mutex, atomic::{AtomicBool, AtomicU64, Ordering}};
-use std::collections::VecDeque;
-use std::time::Duration;
-use rayon::{ThreadPool, ThreadPoolBuilder, prelude::*};
-use std::env;
-use crate::search::ThreadSafeTranspositionTable;
 use crate::bitboards::BitboardBoard;
-use crate::types::{Player, CapturedPieces, Move};
-use crate::moves::MoveGenerator;
 use crate::evaluation::PositionEvaluator;
+use crate::moves::MoveGenerator;
 use crate::search::search_engine::SearchEngine;
 use crate::search::search_engine::GLOBAL_NODES_SEARCHED;
+use crate::search::ThreadSafeTranspositionTable;
 use crate::time_utils::TimeSource;
-use std::thread;
+use crate::types::{CapturedPieces, Move, Player};
 use num_cpus;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
+use std::collections::VecDeque;
+use std::env;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex, RwLock,
+};
+use std::thread;
+use std::time::Duration;
 
 /// Represents a unit of work (search task) to be executed by a worker thread.
 #[derive(Clone)]
 pub struct WorkUnit {
     /// Board state after applying the move.
     pub board: BitboardBoard,
-    
+
     /// Captured pieces after applying the move.
     pub captured_pieces: CapturedPieces,
-    
+
     /// Move to search at this node.
     pub move_to_search: Move,
-    
+
     /// Search depth remaining.
     pub depth: u8,
-    
+
     /// Alpha bound for alpha-beta pruning.
     pub alpha: i32,
-    
+
     /// Beta bound for alpha-beta pruning.
     pub beta: i32,
-    
+
     /// Score from parent node (used for YBWC synchronization).
     pub parent_score: i32,
-    
+
     /// Player to move at this position.
     pub player: Player,
-    
+
     /// Time limit for this search in milliseconds.
     pub time_limit_ms: u32,
-    
+
     /// Whether this is the first (oldest) move at a node (YBWC).
     pub is_oldest_brother: bool,
 }
@@ -82,7 +85,7 @@ pub struct WorkUnit {
 pub struct WorkStealingQueue {
     /// The underlying deque protected by a mutex.
     queue: Arc<Mutex<VecDeque<WorkUnit>>>,
-    
+
     /// Statistics for this queue.
     stats: Arc<WorkQueueStats>,
 }
@@ -92,10 +95,10 @@ pub struct WorkStealingQueue {
 struct WorkQueueStats {
     /// Number of items pushed to this queue.
     pushes: AtomicU64,
-    
+
     /// Number of items popped from this queue.
     pops: AtomicU64,
-    
+
     /// Number of items stolen from this queue.
     steals: AtomicU64,
     /// Total nanoseconds spent waiting on the queue lock
@@ -113,7 +116,7 @@ impl WorkStealingQueue {
             stats: Arc::new(WorkQueueStats::default()),
         }
     }
-    
+
     /// Push a work unit to the back of the queue (owner thread operation).
     /// Push a work unit to the back of the queue.
     ///
@@ -139,7 +142,7 @@ impl WorkStealingQueue {
             }
         }
     }
-    
+
     /// Pop a work unit from the front of the queue (owner thread operation).
     /// Pop a work unit from the front of the queue.
     /// Returns `None` if the queue is empty.
@@ -172,7 +175,7 @@ impl WorkStealingQueue {
             }
         }
     }
-    
+
     /// Steal a work unit from the back of the queue (other thread operation).
     /// Attempt to steal a work unit from the back of the queue.
     /// Returns `None` when the queue is empty or lock acquisition fails.
@@ -185,7 +188,7 @@ impl WorkStealingQueue {
         }
         None
     }
-    
+
     /// Check if the queue is empty.
     pub fn is_empty(&self) -> bool {
         if let Ok(queue) = self.queue.lock() {
@@ -193,7 +196,7 @@ impl WorkStealingQueue {
         }
         true
     }
-    
+
     /// Get the number of items in the queue.
     pub fn len(&self) -> usize {
         if let Ok(queue) = self.queue.lock() {
@@ -201,7 +204,7 @@ impl WorkStealingQueue {
         }
         0
     }
-    
+
     /// Get statistics for this queue.
     pub fn get_stats(&self) -> (u64, u64, u64, u64, u64) {
         (
@@ -238,16 +241,16 @@ impl Default for WorkStealingQueue {
 pub struct WorkDistributionStats {
     /// Total work units processed per thread.
     pub work_units_per_thread: Vec<u64>,
-    
+
     /// Total steal count per thread.
     pub steal_count_per_thread: Vec<u64>,
-    
+
     /// Total number of work units processed.
     pub total_work_units: u64,
-    
+
     /// Maximum work units processed by any thread.
     pub max_work_units: u64,
-    
+
     /// Minimum work units processed by any thread.
     pub min_work_units: u64,
 }
@@ -263,7 +266,7 @@ impl WorkDistributionStats {
             min_work_units: 0,
         }
     }
-    
+
     /// Get the work distribution ratio (max/min).
     pub fn distribution_ratio(&self) -> f64 {
         if self.min_work_units == 0 {
@@ -278,10 +281,10 @@ impl WorkDistributionStats {
 pub struct ParallelSearchConfig {
     /// Number of threads to use for parallel search (1-32).
     pub num_threads: usize,
-    
+
     /// Minimum depth at which to activate parallel search.
     pub min_depth_parallel: u8,
-    
+
     /// Whether parallel search is enabled.
     pub enable_parallel: bool,
 }
@@ -314,7 +317,7 @@ impl ParallelSearchConfig {
             enable_parallel: num_threads > 1,
         }
     }
-    
+
     /// Set the number of threads, clamping to valid range (1-32).
     pub fn set_num_threads(&mut self, num_threads: usize) {
         self.num_threads = num_threads.clamp(1, 32);
@@ -330,19 +333,19 @@ impl ParallelSearchConfig {
 pub struct ThreadLocalSearchContext {
     /// Thread-local board state (cloned from root position).
     board: BitboardBoard,
-    
+
     /// Thread-local move generator.
     move_generator: MoveGenerator,
-    
+
     /// Thread-local position evaluator.
     evaluator: PositionEvaluator,
-    
+
     /// Thread-local history table for move ordering.
     history_table: [[i32; 9]; 9],
-    
+
     /// Thread-local killer moves (2 slots per depth).
     killer_moves: [Option<Move>; 2],
-    
+
     /// Thread-local search engine instance.
     search_engine: SearchEngine,
 }
@@ -373,17 +376,17 @@ impl ThreadLocalSearchContext {
             search_engine: SearchEngine::new(stop_flag, hash_size_mb),
         }
     }
-    
+
     /// Get mutable reference to the thread-local board.
     pub fn board_mut(&mut self) -> &mut BitboardBoard {
         &mut self.board
     }
-    
+
     /// Get reference to the thread-local board.
     pub fn board(&self) -> &BitboardBoard {
         &self.board
     }
-    
+
     /// Get mutable reference to the thread-local search engine.
     pub fn search_engine_mut(&mut self) -> &mut SearchEngine {
         &mut self.search_engine
@@ -394,7 +397,7 @@ impl ThreadLocalSearchContext {
 pub struct YBWCSync {
     /// Whether the oldest brother (first move) has completed.
     oldest_complete: Arc<AtomicBool>,
-    
+
     /// Result from the oldest brother search (score).
     oldest_score: Arc<Mutex<Option<i32>>>,
 }
@@ -406,7 +409,7 @@ impl YBWCSync {
             oldest_score: Arc::new(Mutex::new(None)),
         }
     }
-    
+
     /// Mark oldest brother as complete and store its score.
     fn mark_complete(&self, score: i32) {
         if let Ok(mut s) = self.oldest_score.lock() {
@@ -414,24 +417,24 @@ impl YBWCSync {
         }
         self.oldest_complete.store(true, Ordering::Release);
     }
-    
+
     /// Check if oldest brother is complete.
     fn is_complete(&self) -> bool {
         self.oldest_complete.load(Ordering::Acquire)
     }
-    
+
     /// Wait for oldest brother to complete (with timeout).
     fn wait_for_complete(&self, timeout_ms: u32) -> Option<i32> {
         let timeout = Duration::from_millis(timeout_ms as u64);
         let start = std::time::Instant::now();
-        
+
         while !self.is_complete() {
             if start.elapsed() > timeout {
                 return None;
             }
             std::thread::yield_now();
         }
-        
+
         if let Ok(score) = self.oldest_score.lock() {
             *score
         } else {
@@ -447,19 +450,19 @@ impl YBWCSync {
 pub struct ParallelSearchEngine {
     /// Thread pool for managing worker threads.
     thread_pool: ThreadPool,
-    
+
     /// Parallel search configuration.
     config: ParallelSearchConfig,
-    
+
     /// Shared transposition table accessible by all threads.
     transposition_table: Arc<RwLock<ThreadSafeTranspositionTable>>,
-    
+
     /// Shared stop flag for interrupting search across all threads.
     stop_flag: Option<Arc<AtomicBool>>,
-    
+
     /// Work queues for each thread (for work-stealing).
     work_queues: Vec<Arc<WorkStealingQueue>>,
-    
+
     /// Work distribution statistics.
     work_stats: Arc<Mutex<WorkDistributionStats>>,
 }
@@ -495,19 +498,18 @@ impl ParallelSearchEngine {
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
-        
+
         // For now, we'll create a placeholder transposition table.
         // This will be replaced with the actual shared TT from SearchEngine in later checkpoints.
         let tt_config = crate::search::TranspositionConfig::performance_optimized();
-        let transposition_table = Arc::new(RwLock::new(
-            ThreadSafeTranspositionTable::new(tt_config)
-        ));
-        
+        let transposition_table =
+            Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(tt_config)));
+
         let num_threads = config.num_threads;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
-        
+
         Ok(Self {
             thread_pool,
             config,
@@ -517,7 +519,7 @@ impl ParallelSearchEngine {
             work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
         })
     }
-    
+
     /// Create a new parallel search engine with stop flag.
     ///
     /// # Arguments
@@ -531,7 +533,10 @@ impl ParallelSearchEngine {
     /// Create a new engine with an optional external stop flag.
     ///
     /// When the stop flag is set, workers observe it and stop after current work.
-    pub fn new_with_stop_flag(config: ParallelSearchConfig, stop_flag: Option<Arc<AtomicBool>>) -> Result<Self, String> {
+    pub fn new_with_stop_flag(
+        config: ParallelSearchConfig,
+        stop_flag: Option<Arc<AtomicBool>>,
+    ) -> Result<Self, String> {
         if env::var("SHOGI_FORCE_POOL_FAIL").ok().as_deref() == Some("1") {
             return Err("Forced pool failure via SHOGI_FORCE_POOL_FAIL".to_string());
         }
@@ -543,17 +548,16 @@ impl ParallelSearchEngine {
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
-        
+
         let tt_config = crate::search::TranspositionConfig::performance_optimized();
-        let transposition_table = Arc::new(RwLock::new(
-            ThreadSafeTranspositionTable::new(tt_config)
-        ));
-        
+        let transposition_table =
+            Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(tt_config)));
+
         let num_threads = config.num_threads;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
-        
+
         Ok(Self {
             thread_pool,
             config,
@@ -563,17 +567,17 @@ impl ParallelSearchEngine {
             work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
         })
     }
-    
+
     /// Get the number of threads configured for this engine.
     pub fn num_threads(&self) -> usize {
         self.config.num_threads
     }
-    
+
     /// Check if parallel search is enabled.
     pub fn is_parallel_enabled(&self) -> bool {
         self.config.enable_parallel
     }
-    
+
     /// Create a thread-local search context for a worker thread.
     ///
     /// # Arguments
@@ -589,14 +593,20 @@ impl ParallelSearchEngine {
         player: Player,
         hash_size_mb: usize,
     ) -> ThreadLocalSearchContext {
-        ThreadLocalSearchContext::new(board, captured_pieces, player, self.stop_flag.clone(), hash_size_mb)
+        ThreadLocalSearchContext::new(
+            board,
+            captured_pieces,
+            player,
+            self.stop_flag.clone(),
+            hash_size_mb,
+        )
     }
-    
+
     /// Get reference to the shared transposition table.
     pub fn transposition_table(&self) -> &Arc<RwLock<ThreadSafeTranspositionTable>> {
         &self.transposition_table
     }
-    
+
     /// Create a new parallel search engine with a shared transposition table.
     ///
     /// # Arguments
@@ -627,12 +637,12 @@ impl ParallelSearchEngine {
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
-        
+
         let num_threads = config.num_threads;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
-        
+
         Ok(Self {
             thread_pool,
             config,
@@ -642,7 +652,7 @@ impl ParallelSearchEngine {
             work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
         })
     }
-    
+
     /// Perform parallel search on root-level moves.
     ///
     /// This method parallelizes the search across all root moves,
@@ -676,7 +686,7 @@ impl ParallelSearchEngine {
         if moves.is_empty() {
             return None;
         }
-        
+
         // Combined, per-search stop flag (aggregates engine stop and time limit)
         let search_stop = Arc::new(AtomicBool::new(false));
         // If engine-level stop is already set, respect it
@@ -685,7 +695,7 @@ impl ParallelSearchEngine {
                 search_stop.store(true, Ordering::Relaxed);
             }
         }
-        
+
         // Use thread pool to parallelize search across moves, while streaming results
         let hash_size_mb = 16; // Default hash size, will be configurable later
         let (tx, rx) = std::sync::mpsc::channel::<(Move, i32, String)>();
@@ -735,11 +745,20 @@ impl ParallelSearchEngine {
                 }
                 let elapsed = bench_start.elapsed().as_millis() as u64;
                 let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
-                let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
+                let nps = if elapsed > 0 {
+                    nodes.saturating_mul(1000) / (elapsed as u64)
+                } else {
+                    0
+                };
                 // Get actual seldepth (selective depth) - the maximum depth reached
                 // If seldepth wasn't updated during search (shouldn't happen), use depth as fallback
-                let seldepth_raw = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
-                let seldepth = if seldepth_raw == 0 { depth } else { seldepth_raw.max(depth) };
+                let seldepth_raw =
+                    crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                let seldepth = if seldepth_raw == 0 {
+                    depth
+                } else {
+                    seldepth_raw.max(depth)
+                };
                 // Emit real USI info line with score and PV (skip during silent benches)
                 if std::env::var("SHOGI_SILENT_BENCH").is_err() {
                     if !best_pv.is_empty() {
@@ -860,11 +879,11 @@ impl ParallelSearchEngine {
         if let Some((ref best_move, ref best_score)) = result {
             use crate::search::shogi_hash::ShogiHashHandler;
             use crate::{TranspositionEntry, TranspositionFlag};
-            
+
             // Calculate root position hash
             let hash_calculator = ShogiHashHandler::new_default();
             let position_hash = hash_calculator.get_position_hash(board, player, captured_pieces);
-            
+
             // Determine flag based on score vs alpha/beta
             let flag = if *best_score <= alpha {
                 TranspositionFlag::UpperBound
@@ -873,66 +892,86 @@ impl ParallelSearchEngine {
             } else {
                 TranspositionFlag::Exact
             };
-            
+
             // Create TT entry with best_move stored (critical for PV building)
             let entry = TranspositionEntry::new_with_age(
                 *best_score,
                 depth,
                 flag,
                 Some(best_move.clone()),
-                position_hash
+                position_hash,
             );
-            
+
             // Store in shared TT
             if let Ok(mut tt) = self.transposition_table.write() {
                 tt.store(entry);
             }
-            
+
             // IMPORTANT: Before building PV from root, we need to ensure all worker threads
             // have flushed their TT buffers. However, worker threads are already done at this point.
             // The issue might be that some positions along the PV simply weren't searched deeply enough,
             // or their TT entries don't have best_move. We've already fixed storing best_move,
             // so if PV is still short, it likely means the search depth itself is limited.
-            
+
             // Now rebuild the full PV from the root position using the shared TT
             // This ensures we get the complete PV chain, not just from child positions
-            let seldepth = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+            let seldepth =
+                crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
             let pv_depth = if seldepth > 0 { seldepth } else { depth };
-            
+
             // Create a temporary search engine context to build PV from root
             let mut temp_context = ThreadLocalSearchContext::new(
                 board,
                 captured_pieces,
                 player,
                 self.stop_flag.clone(),
-                16
+                16,
             );
-            temp_context.search_engine_mut().set_shared_transposition_table(self.transposition_table.clone());
-            
+            temp_context
+                .search_engine_mut()
+                .set_shared_transposition_table(self.transposition_table.clone());
+
             // Build full PV from root position - try multiple times if first attempt is short
             // This helps if there's a race condition with TT writes
-            let mut full_pv = temp_context.search_engine_mut()
-                .get_pv_for_reporting(board, captured_pieces, player, pv_depth);
-            
+            let mut full_pv = temp_context.search_engine_mut().get_pv_for_reporting(
+                board,
+                captured_pieces,
+                player,
+                pv_depth,
+            );
+
             // If PV is shorter than expected, try building again after a brief delay
             // to allow any remaining TT writes to flush
             if full_pv.len() < (depth as usize).min(10) {
                 std::thread::sleep(std::time::Duration::from_millis(5));
-                full_pv = temp_context.search_engine_mut()
-                    .get_pv_for_reporting(board, captured_pieces, player, pv_depth);
+                full_pv = temp_context.search_engine_mut().get_pv_for_reporting(
+                    board,
+                    captured_pieces,
+                    player,
+                    pv_depth,
+                );
             }
-            
+
             // Emit final info line with the complete PV if we have at least 2 moves
             if full_pv.len() >= 2 && std::env::var("SHOGI_SILENT_BENCH").is_err() {
                 let elapsed = bench_start.elapsed().as_millis() as u64;
                 let nodes = GLOBAL_NODES_SEARCHED.load(Ordering::Relaxed);
-                let nps = if elapsed > 0 { nodes.saturating_mul(1000) / (elapsed as u64) } else { 0 };
-                let seldepth_final = if seldepth == 0 { depth } else { seldepth.max(depth) };
-                let pv_string: String = full_pv.iter()
+                let nps = if elapsed > 0 {
+                    nodes.saturating_mul(1000) / (elapsed as u64)
+                } else {
+                    0
+                };
+                let seldepth_final = if seldepth == 0 {
+                    depth
+                } else {
+                    seldepth.max(depth)
+                };
+                let pv_string: String = full_pv
+                    .iter()
                     .map(|m| m.to_usi_string())
                     .collect::<Vec<String>>()
                     .join(" ");
-                
+
                 if !pv_string.is_empty() {
                     println!(
                         "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
@@ -962,14 +1001,16 @@ impl ParallelSearchEngine {
         let elapsed_ns = (elapsed_ms as u64) * 1_000_000u64;
         let sync_overhead_pct = if elapsed_ns > 0 {
             (total_lock_wait_ns as f64 / elapsed_ns as f64) * 100.0
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         crate::debug_utils::debug_log(&format!(
             "PARALLEL_PROF: pushes={}, pops={}, steals={}, lock_wait_ns={}, poison_recoveries={}, sync_overhead~{:.2}%",
             total_pushes, total_pops, total_steals, total_lock_wait_ns, total_poison_recoveries, sync_overhead_pct
         ));
         result
     }
-    
+
     /// Aggregate search results from all threads and find the best move.
     ///
     /// # Arguments
@@ -983,7 +1024,7 @@ impl ParallelSearchEngine {
     fn aggregate_results(&self, results: Vec<Option<(Move, i32)>>) -> Option<(Move, i32)> {
         let mut best_move: Option<Move> = None;
         let mut best_score = i32::MIN;
-        
+
         for result in results {
             if let Some((mv, score)) = result {
                 if score > best_score {
@@ -992,10 +1033,10 @@ impl ParallelSearchEngine {
                 }
             }
         }
-        
+
         best_move.map(|mv| (mv, best_score))
     }
-    
+
     /// Search a single move using thread-local context.
     ///
     /// # Arguments
@@ -1029,7 +1070,7 @@ impl ParallelSearchEngine {
                 return None;
             }
         }
-        
+
         // Perform search
         let mut test_board = board.clone();
         if let Some((_, score)) = context.search_engine_mut().search_at_depth(
@@ -1046,7 +1087,7 @@ impl ParallelSearchEngine {
             None
         }
     }
-    
+
     /// Distribute work units to threads based on YBWC principles.
     ///
     /// Creates work units for each move, with the first move marked as "oldest brother"
@@ -1079,16 +1120,16 @@ impl ParallelSearchEngine {
     ) -> (Vec<WorkUnit>, YBWCSync) {
         let mut work_units = Vec::new();
         let ybwc_sync = YBWCSync::new();
-        
+
         for (idx, mv) in moves.iter().enumerate() {
             // Clone board and apply move
             let mut test_board = board.clone();
             let mut test_captured = captured_pieces.clone();
-            
+
             if let Some(captured) = test_board.make_move(mv) {
                 test_captured.add_piece(captured.piece_type, player);
             }
-            
+
             let work_unit = WorkUnit {
                 board: test_board,
                 captured_pieces: test_captured,
@@ -1101,13 +1142,13 @@ impl ParallelSearchEngine {
                 time_limit_ms,
                 is_oldest_brother: idx == 0, // First move is oldest brother
             };
-            
+
             work_units.push(work_unit);
         }
-        
+
         (work_units, ybwc_sync)
     }
-    
+
     /// Worker thread loop that processes work units and steals when idle.
     ///
     /// This method implements the core work-stealing logic:
@@ -1133,7 +1174,7 @@ impl ParallelSearchEngine {
         context: &mut ThreadLocalSearchContext,
     ) -> Option<(Move, i32)> {
         let mut current_work = work_unit;
-        
+
         loop {
             // Check stop flag
             if let Some(ref stop_flag) = self.stop_flag {
@@ -1141,7 +1182,7 @@ impl ParallelSearchEngine {
                     return None;
                 }
             }
-            
+
             // If we have work, process it
             if let Some(work) = current_work.take() {
                 // If this is oldest brother, we process immediately
@@ -1155,7 +1196,7 @@ impl ParallelSearchEngine {
                         }
                     }
                 }
-                
+
                 // Perform search
                 let mut test_board = work.board.clone();
                 if let Some((_, score)) = context.search_engine_mut().search_at_depth(
@@ -1168,14 +1209,14 @@ impl ParallelSearchEngine {
                     work.beta,
                 ) {
                     let final_score = -score; // Negate for parent perspective
-                    
+
                     // If oldest brother, mark sync as complete
                     if work.is_oldest_brother {
                         if let Some(ref sync) = ybwc_sync {
                             sync.mark_complete(final_score);
                         }
                     }
-                    
+
                     // Update statistics
                     if let Ok(mut stats) = self.work_stats.lock() {
                         if thread_id < stats.work_units_per_thread.len() {
@@ -1183,11 +1224,11 @@ impl ParallelSearchEngine {
                             stats.total_work_units += 1;
                         }
                     }
-                    
+
                     return Some((work.move_to_search, final_score));
                 }
             }
-            
+
             // No work in hand, try to get work from queue
             if thread_id < self.work_queues.len() {
                 // Try to pop from own queue first
@@ -1195,7 +1236,7 @@ impl ParallelSearchEngine {
                     current_work = Some(work);
                     continue;
                 }
-                
+
                 // Try to steal from other threads
                 for (idx, queue) in self.work_queues.iter().enumerate() {
                     if idx != thread_id {
@@ -1211,7 +1252,7 @@ impl ParallelSearchEngine {
                         }
                     }
                 }
-                
+
                 // If still no work found, yield and try again
                 if current_work.is_none() {
                     std::thread::yield_now();
@@ -1227,15 +1268,20 @@ impl ParallelSearchEngine {
             }
         }
     }
-    
+
     /// Get work distribution statistics.
     pub fn get_work_stats(&self) -> Option<WorkDistributionStats> {
         if let Ok(stats) = self.work_stats.lock() {
             let work_units = stats.work_units_per_thread.clone();
             let steal_count = stats.steal_count_per_thread.clone();
             let max_work = work_units.iter().max().copied().unwrap_or(0);
-            let min_work = work_units.iter().filter(|&&x| x > 0).min().copied().unwrap_or(0);
-            
+            let min_work = work_units
+                .iter()
+                .filter(|&&x| x > 0)
+                .min()
+                .copied()
+                .unwrap_or(0);
+
             Some(WorkDistributionStats {
                 work_units_per_thread: work_units,
                 steal_count_per_thread: steal_count,
@@ -1248,4 +1294,3 @@ impl ParallelSearchEngine {
         }
     }
 }
-

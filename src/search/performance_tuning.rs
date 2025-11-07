@@ -1,14 +1,14 @@
 //! Performance tuning system for transposition tables
-//! 
+//!
 //! This module provides comprehensive performance tuning capabilities including
 //! automatic parameter optimization, performance profiling, and tuning recommendations.
 
-use crate::search::transposition_config::*;
-use crate::search::runtime_configuration::{PerformanceMetrics as RuntimePerformanceMetrics, *};
 use crate::search::adaptive_configuration::*;
-use std::sync::{Arc, Mutex};
+use crate::search::runtime_configuration::{PerformanceMetrics as RuntimePerformanceMetrics, *};
+use crate::search::transposition_config::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
+use std::sync::{Arc, Mutex};
 
 /// Performance tuning manager
 pub struct PerformanceTuningManager {
@@ -108,13 +108,26 @@ pub enum TuningAction {
     /// Adjust table size
     AdjustTableSize { new_size: usize, reason: String },
     /// Change replacement policy
-    ChangeReplacementPolicy { new_policy: ReplacementPolicy, reason: String },
+    ChangeReplacementPolicy {
+        new_policy: ReplacementPolicy,
+        reason: String,
+    },
     /// Enable/disable feature
-    ToggleFeature { feature: String, enabled: bool, reason: String },
+    ToggleFeature {
+        feature: String,
+        enabled: bool,
+        reason: String,
+    },
     /// Use template
-    UseTemplate { template_name: String, reason: String },
+    UseTemplate {
+        template_name: String,
+        reason: String,
+    },
     /// Custom configuration
-    CustomConfiguration { config: TranspositionConfig, reason: String },
+    CustomConfiguration {
+        config: TranspositionConfig,
+        reason: String,
+    },
 }
 
 /// Tuning session record
@@ -143,9 +156,11 @@ pub struct TuningSession {
 impl PerformanceTuningManager {
     /// Create a new performance tuning manager
     pub fn new(initial_config: TranspositionConfig) -> Self {
-        let adaptive_manager = Arc::new(Mutex::new(AdaptiveConfigurationManager::new(initial_config.clone())));
+        let adaptive_manager = Arc::new(Mutex::new(AdaptiveConfigurationManager::new(
+            initial_config.clone(),
+        )));
         let profiler = Arc::new(Mutex::new(PerformanceProfiler::new()));
-        
+
         let mut manager = Self {
             adaptive_manager,
             profiler,
@@ -153,17 +168,17 @@ impl PerformanceTuningManager {
             tuning_history: Vec::new(),
             performance_targets: PerformanceTargets::default(),
         };
-        
+
         // Generate initial recommendations
         manager.generate_initial_recommendations();
-        
+
         manager
     }
-    
+
     /// Generate initial tuning recommendations
     fn generate_initial_recommendations(&mut self) {
         self.recommendations.clear();
-        
+
         // Recommendation 1: Enable statistics for monitoring
         self.recommendations.push(TuningRecommendation {
             id: "enable_statistics".to_string(),
@@ -178,7 +193,7 @@ impl PerformanceTuningManager {
             priority: 8,
             confidence: 1.0,
         });
-        
+
         // Recommendation 2: Use power-of-two table size
         self.recommendations.push(TuningRecommendation {
             id: "power_of_two_size".to_string(),
@@ -192,7 +207,7 @@ impl PerformanceTuningManager {
             priority: 7,
             confidence: 0.9,
         });
-        
+
         // Recommendation 3: Enable cache line alignment
         self.recommendations.push(TuningRecommendation {
             id: "cache_line_alignment".to_string(),
@@ -208,18 +223,24 @@ impl PerformanceTuningManager {
             confidence: 0.8,
         });
     }
-    
+
     /// Start a new tuning session
     pub fn start_tuning_session(&mut self) -> String {
-        let session_id = format!("session_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
-        
+        let session_id = format!(
+            "session_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
         let adaptive_manager = self.adaptive_manager.lock().unwrap();
         let runtime_manager = adaptive_manager.get_runtime_manager();
         let runtime_manager = runtime_manager.lock().unwrap();
-        
+
         let initial_config = runtime_manager.get_active_config();
         let performance_before = runtime_manager.get_performance_metrics();
-        
+
         let session = TuningSession {
             session_id: session_id.clone(),
             start_time: std::time::SystemTime::now(),
@@ -231,121 +252,122 @@ impl PerformanceTuningManager {
             applied_recommendations: Vec::new(),
             overall_improvement: None,
         };
-        
+
         self.tuning_history.push(session);
         session_id
     }
-    
+
     /// End a tuning session
     pub fn end_tuning_session(&mut self, session_id: &str) -> Result<f64, String> {
-        let session = self.tuning_history.iter_mut()
+        let session = self
+            .tuning_history
+            .iter_mut()
             .find(|s| s.session_id == session_id)
             .ok_or_else(|| "Session not found".to_string())?;
-        
+
         if session.end_time.is_some() {
             return Err("Session already ended".to_string());
         }
-        
+
         session.end_time = Some(std::time::SystemTime::now());
-        
+
         let adaptive_manager = self.adaptive_manager.lock().unwrap();
         let runtime_manager = adaptive_manager.get_runtime_manager();
         let runtime_manager = runtime_manager.lock().unwrap();
-        
+
         let final_config = runtime_manager.get_active_config();
         let performance_after = runtime_manager.get_performance_metrics();
         let performance_before = session.performance_before.clone();
-        
+
         session.final_config = final_config;
         session.performance_after = Some(performance_after.clone());
-        
+
         // Calculate improvement after releasing session borrow
         let improvement = {
             let _ = session;
             self.calculate_performance_improvement(&performance_before, &performance_after)
         };
-        
+
         // Re-acquire session to set improvement
-        let session = self.tuning_history.iter_mut()
+        let session = self
+            .tuning_history
+            .iter_mut()
             .find(|s| s.session_id == session_id)
             .ok_or("Session not found")?;
         session.overall_improvement = Some(improvement);
-        
+
         Ok(session.overall_improvement.unwrap_or(0.0))
     }
-    
+
     /// Apply a tuning recommendation
     pub fn apply_recommendation(&mut self, recommendation_id: &str) -> Result<(), String> {
-        let recommendation = self.recommendations.iter()
+        let recommendation = self
+            .recommendations
+            .iter()
             .find(|r| r.id == recommendation_id)
             .ok_or_else(|| "Recommendation not found".to_string())?;
-        
+
         let adaptive_manager = self.adaptive_manager.lock().unwrap();
         let runtime_manager = adaptive_manager.get_runtime_manager();
         let mut runtime_manager = runtime_manager.lock().unwrap();
-        
+
         let current_config = runtime_manager.get_active_config();
         let new_config = match &recommendation.action {
-            TuningAction::AdjustTableSize { new_size, .. } => {
-                TranspositionConfig {
-                    table_size: *new_size,
+            TuningAction::AdjustTableSize { new_size, .. } => TranspositionConfig {
+                table_size: *new_size,
+                ..current_config
+            },
+            TuningAction::ChangeReplacementPolicy { new_policy, .. } => TranspositionConfig {
+                replacement_policy: new_policy.clone(),
+                ..current_config
+            },
+            TuningAction::ToggleFeature {
+                feature, enabled, ..
+            } => match feature.as_str() {
+                "statistics" => TranspositionConfig {
+                    enable_statistics: *enabled,
                     ..current_config
-                }
-            }
-            TuningAction::ChangeReplacementPolicy { new_policy, .. } => {
-                TranspositionConfig {
-                    replacement_policy: new_policy.clone(),
+                },
+                "memory_mapping" => TranspositionConfig {
+                    enable_memory_mapping: *enabled,
                     ..current_config
-                }
-            }
-            TuningAction::ToggleFeature { feature, enabled, .. } => {
-                match feature.as_str() {
-                    "statistics" => TranspositionConfig {
-                        enable_statistics: *enabled,
-                        ..current_config
-                    },
-                    "memory_mapping" => TranspositionConfig {
-                        enable_memory_mapping: *enabled,
-                        ..current_config
-                    },
-                    "prefetching" => TranspositionConfig {
-                        enable_prefetching: *enabled,
-                        ..current_config
-                    },
-                    _ => return Err(format!("Unknown feature: {}", feature)),
-                }
-            }
-            TuningAction::UseTemplate { template_name, .. } => {
-                runtime_manager.get_template(template_name)
-                    .ok_or_else(|| format!("Template '{}' not found", template_name))?
-                    .clone()
-            }
-            TuningAction::CustomConfiguration { config, .. } => {
-                config.clone()
-            }
+                },
+                "prefetching" => TranspositionConfig {
+                    enable_prefetching: *enabled,
+                    ..current_config
+                },
+                _ => return Err(format!("Unknown feature: {}", feature)),
+            },
+            TuningAction::UseTemplate { template_name, .. } => runtime_manager
+                .get_template(template_name)
+                .ok_or_else(|| format!("Template '{}' not found", template_name))?
+                .clone(),
+            TuningAction::CustomConfiguration { config, .. } => config.clone(),
         };
-        
+
         runtime_manager.update_config(new_config, ConfigurationUpdateStrategy::Immediate)?;
-        
+
         // Record applied recommendation
         if let Some(session) = self.tuning_history.last_mut() {
-            session.applied_recommendations.push(recommendation_id.to_string());
+            session
+                .applied_recommendations
+                .push(recommendation_id.to_string());
         }
-        
+
         Ok(())
     }
-    
+
     /// Generate performance-based recommendations
     pub fn generate_performance_recommendations(&mut self) -> Vec<TuningRecommendation> {
         let mut new_recommendations = Vec::new();
-        
+
         let adaptive_manager = self.adaptive_manager.lock().unwrap();
         let runtime_manager = adaptive_manager.get_runtime_manager();
         let runtime_manager = runtime_manager.lock().unwrap();
-        
+
         let current_config = runtime_manager.get_active_config();
         let metrics = runtime_manager.get_performance_metrics();
-        
+
         // Low hit rate recommendation
         if metrics.hit_rate < self.performance_targets.target_hit_rate {
             new_recommendations.push(TuningRecommendation {
@@ -362,7 +384,7 @@ impl PerformanceTuningManager {
                 confidence: 0.8,
             });
         }
-        
+
         // High collision rate recommendation
         if metrics.collision_rate > self.performance_targets.target_collision_rate {
             new_recommendations.push(TuningRecommendation {
@@ -379,7 +401,7 @@ impl PerformanceTuningManager {
                 confidence: 0.7,
             });
         }
-        
+
         // High memory usage recommendation
         if metrics.memory_usage_bytes > self.performance_targets.max_memory_usage_bytes {
             new_recommendations.push(TuningRecommendation {
@@ -397,7 +419,7 @@ impl PerformanceTuningManager {
                 confidence: 0.9,
             });
         }
-        
+
         // Slow operation recommendation
         if metrics.avg_operation_time_us > self.performance_targets.target_operation_time_us {
             new_recommendations.push(TuningRecommendation {
@@ -414,51 +436,57 @@ impl PerformanceTuningManager {
                 confidence: 0.8,
             });
         }
-        
+
         new_recommendations
     }
-    
+
     /// Calculate performance improvement percentage
-    fn calculate_performance_improvement(&self, before: &RuntimePerformanceMetrics, after: &RuntimePerformanceMetrics) -> f64 {
+    fn calculate_performance_improvement(
+        &self,
+        before: &RuntimePerformanceMetrics,
+        after: &RuntimePerformanceMetrics,
+    ) -> f64 {
         // Weighted improvement calculation
         let hit_rate_improvement = (after.hit_rate - before.hit_rate) * 100.0;
-        let speed_improvement = (before.avg_operation_time_us - after.avg_operation_time_us) / before.avg_operation_time_us * 100.0;
+        let speed_improvement = (before.avg_operation_time_us - after.avg_operation_time_us)
+            / before.avg_operation_time_us
+            * 100.0;
         let collision_improvement = (before.collision_rate - after.collision_rate) * 100.0;
-        
+
         // Weighted average (hit rate is most important)
         hit_rate_improvement * 0.5 + speed_improvement * 0.3 + collision_improvement * 0.2
     }
-    
+
     /// Get current recommendations
     pub fn get_recommendations(&self) -> Vec<TuningRecommendation> {
         self.recommendations.clone()
     }
-    
+
     /// Get tuning history
     pub fn get_tuning_history(&self) -> Vec<TuningSession> {
         self.tuning_history.clone()
     }
-    
+
     /// Set performance targets
     pub fn set_performance_targets(&mut self, targets: PerformanceTargets) {
         self.performance_targets = targets;
     }
-    
+
     /// Get performance targets
     pub fn get_performance_targets(&self) -> PerformanceTargets {
         self.performance_targets.clone()
     }
-    
+
     /// Get performance profiler
     pub fn get_profiler(&self) -> Arc<Mutex<PerformanceProfiler>> {
         self.profiler.clone()
     }
-    
+
     /// Get adaptive configuration manager
     pub fn get_adaptive_manager(&self) -> Arc<Mutex<AdaptiveConfigurationManager>> {
         self.adaptive_manager.clone()
     }
-    
+
     /// Export tuning report
     pub fn export_tuning_report(&self) -> Result<String, String> {
         let report = TuningReport {
@@ -467,7 +495,7 @@ impl PerformanceTuningManager {
             performance_targets: self.performance_targets.clone(),
             generated_at: std::time::SystemTime::now(),
         };
-        
+
         serde_json::to_string_pretty(&report)
             .map_err(|e| format!("Failed to serialize tuning report: {}", e))
     }
@@ -496,48 +524,48 @@ impl PerformanceProfiler {
             enabled: false,
         }
     }
-    
+
     /// Enable or disable profiling
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
-    
+
     /// Record operation timing
     pub fn record_operation(&mut self, operation: &str, duration_us: u64) {
         if !self.enabled {
             return;
         }
-        
+
         self.operation_timings
             .entry(operation.to_string())
             .or_insert_with(Vec::new)
             .push(duration_us);
-        
+
         self.performance_counters.total_operations += 1;
     }
-    
+
     /// Record memory snapshot
     pub fn record_memory_snapshot(&mut self, memory_usage_bytes: u64, available_memory_bytes: u64) {
         if !self.enabled {
             return;
         }
-        
+
         let snapshot = MemorySnapshot {
             timestamp: std::time::SystemTime::now(),
             memory_usage_bytes,
             peak_memory_bytes: memory_usage_bytes, // Simplified
             available_memory_bytes,
         };
-        
+
         self.memory_snapshots.push(snapshot);
     }
-    
+
     /// Increment performance counter
     pub fn increment_counter(&mut self, counter: &str) {
         if !self.enabled {
             return;
         }
-        
+
         match counter {
             "cache_hits" => self.performance_counters.cache_hits += 1,
             "cache_misses" => self.performance_counters.cache_misses += 1,
@@ -548,7 +576,7 @@ impl PerformanceProfiler {
             _ => {} // Unknown counter
         }
     }
-    
+
     /// Get average operation time
     pub fn get_average_operation_time(&self, operation: &str) -> Option<f64> {
         self.operation_timings.get(operation).and_then(|timings| {
@@ -559,17 +587,17 @@ impl PerformanceProfiler {
             }
         })
     }
-    
+
     /// Get performance counters
     pub fn get_performance_counters(&self) -> PerformanceCounters {
         self.performance_counters.clone()
     }
-    
+
     /// Get memory snapshots
     pub fn get_memory_snapshots(&self) -> Vec<MemorySnapshot> {
         self.memory_snapshots.clone()
     }
-    
+
     /// Clear all profiling data
     pub fn clear_data(&mut self) {
         self.operation_timings.clear();
@@ -593,45 +621,45 @@ impl Default for PerformanceTargets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_performance_tuning_manager_creation() {
         let config = TranspositionConfig::default();
         let manager = PerformanceTuningManager::new(config);
-        
+
         assert!(!manager.get_recommendations().is_empty());
         assert_eq!(manager.get_performance_targets().target_hit_rate, 0.35);
     }
-    
+
     #[test]
     fn test_tuning_session_management() {
         let config = TranspositionConfig::default();
         let mut manager = PerformanceTuningManager::new(config);
-        
+
         let session_id = manager.start_tuning_session();
         assert!(!session_id.is_empty());
-        
+
         assert!(manager.end_tuning_session(&session_id).is_ok());
     }
-    
+
     #[test]
     fn test_performance_profiler() {
         let mut profiler = PerformanceProfiler::new();
         profiler.set_enabled(true);
-        
+
         profiler.record_operation("store", 100);
         profiler.record_operation("store", 120);
-        
+
         let avg_time = profiler.get_average_operation_time("store");
         assert!(avg_time.is_some());
         assert_eq!(avg_time.unwrap(), 110.0);
     }
-    
+
     #[test]
     fn test_performance_recommendations() {
         let config = TranspositionConfig::default();
         let mut manager = PerformanceTuningManager::new(config);
-        
+
         let recommendations = manager.generate_performance_recommendations();
         // Should generate recommendations based on current performance
         assert!(recommendations.len() >= 0);

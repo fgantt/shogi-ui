@@ -76,7 +76,12 @@ impl AdvancedInterpolator {
     }
 
     /// Multi-phase interpolation (opening/middlegame/endgame)
-    pub fn interpolate_multi_phase(&self, score: TaperedScore, phase: i32, position_type: PositionType) -> i32 {
+    pub fn interpolate_multi_phase(
+        &self,
+        score: TaperedScore,
+        phase: i32,
+        position_type: PositionType,
+    ) -> i32 {
         let boundaries = self.get_phase_boundaries(position_type);
 
         if phase >= boundaries.opening_threshold {
@@ -84,7 +89,14 @@ impl AdvancedInterpolator {
             self.interpolate_segment(score, phase, boundaries.opening_threshold, 256, 0.8, 0.2)
         } else if phase >= boundaries.endgame_threshold {
             // Middlegame - blend MG and EG
-            self.interpolate_segment(score, phase, boundaries.endgame_threshold, boundaries.opening_threshold, 0.0, 1.0)
+            self.interpolate_segment(
+                score,
+                phase,
+                boundaries.endgame_threshold,
+                boundaries.opening_threshold,
+                0.0,
+                1.0,
+            )
         } else {
             // Endgame - use mostly endgame values
             self.interpolate_segment(score, phase, 0, boundaries.endgame_threshold, 0.2, 0.8)
@@ -92,7 +104,15 @@ impl AdvancedInterpolator {
     }
 
     /// Interpolate within a segment
-    fn interpolate_segment(&self, score: TaperedScore, phase: i32, min_phase: i32, max_phase: i32, mg_bias: f64, eg_bias: f64) -> i32 {
+    fn interpolate_segment(
+        &self,
+        score: TaperedScore,
+        phase: i32,
+        min_phase: i32,
+        max_phase: i32,
+        mg_bias: f64,
+        eg_bias: f64,
+    ) -> i32 {
         let range = (max_phase - min_phase) as f64;
         if range <= 0.0 {
             return score.interpolate(phase);
@@ -125,10 +145,15 @@ impl AdvancedInterpolator {
     }
 
     /// Adaptive interpolation based on position characteristics
-    pub fn interpolate_adaptive(&self, score: TaperedScore, phase: i32, characteristics: &PositionCharacteristics) -> i32 {
+    pub fn interpolate_adaptive(
+        &self,
+        score: TaperedScore,
+        phase: i32,
+        characteristics: &PositionCharacteristics,
+    ) -> i32 {
         // Adjust phase based on position characteristics
         let adjusted_phase = self.adjust_phase(phase, characteristics);
-        
+
         // Select interpolation method based on characteristics
         if characteristics.complexity > 0.7 {
             // High complexity - use spline for smoother transitions
@@ -165,9 +190,15 @@ impl AdvancedInterpolator {
     }
 
     /// Bezier curve interpolation
-    pub fn interpolate_bezier(&self, score: TaperedScore, phase: i32, control1: f64, control2: f64) -> i32 {
+    pub fn interpolate_bezier(
+        &self,
+        score: TaperedScore,
+        phase: i32,
+        control1: f64,
+        control2: f64,
+    ) -> i32 {
         let t = (phase as f64 / 256.0).clamp(0.0, 1.0);
-        
+
         // Cubic Bezier with control points
         let p0 = 0.0;
         let p1 = control1;
@@ -220,10 +251,10 @@ impl Default for AdvancedInterpolationConfig {
         Self {
             use_spline: false,
             control_points: vec![
-                (0.0, 0.0),   // Endgame start
-                (0.33, 0.3),  // Early middlegame
-                (0.66, 0.7),  // Late middlegame
-                (1.0, 1.0),   // Opening
+                (0.0, 0.0),  // Endgame start
+                (0.33, 0.3), // Early middlegame
+                (0.66, 0.7), // Late middlegame
+                (1.0, 1.0),  // Opening
             ],
             default_boundaries: PhaseBoundaries::default(),
             enable_adaptive: false,
@@ -301,11 +332,11 @@ impl SplineCoefficients {
         }
 
         let mut segments = Vec::new();
-        
+
         for i in 0..points.len() - 1 {
             let (x0, y0) = points[i];
             let (x1, y1) = points[i + 1];
-            
+
             // Simple cubic segment (can be enhanced with natural splines)
             segments.push(SplineSegment {
                 x_start: x0,
@@ -328,10 +359,10 @@ impl SplineCoefficients {
             if t >= segment.x_start && t <= segment.x_end {
                 let local_t = (t - segment.x_start) / (segment.x_end - segment.x_start);
                 let interpolation_factor = segment.evaluate(local_t);
-                
+
                 let mg_weight = 1.0 - interpolation_factor;
                 let eg_weight = interpolation_factor;
-                
+
                 return (score.mg as f64 * mg_weight + score.eg as f64 * eg_weight) as i32;
             }
         }
@@ -373,12 +404,12 @@ mod tests {
     fn test_spline_interpolation() {
         let mut config = AdvancedInterpolationConfig::default();
         config.use_spline = true;
-        
+
         let interpolator = AdvancedInterpolator::with_config(config);
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = interpolator.interpolate_spline(score, 128);
-        
+
         // Should be between mg and eg
         assert!(result >= 100 && result <= 200);
     }
@@ -387,23 +418,25 @@ mod tests {
     fn test_multi_phase_interpolation() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         // Opening
-        let opening_result = interpolator.interpolate_multi_phase(score, 256, PositionType::Standard);
+        let opening_result =
+            interpolator.interpolate_multi_phase(score, 256, PositionType::Standard);
         assert!(opening_result >= 100);
-        
+
         // Endgame
-        let endgame_result = interpolator.interpolate_multi_phase(score, 32, PositionType::Standard);
+        let endgame_result =
+            interpolator.interpolate_multi_phase(score, 32, PositionType::Standard);
         assert!(endgame_result <= 200);
     }
 
     #[test]
     fn test_phase_boundaries() {
         let interpolator = AdvancedInterpolator::new();
-        
+
         let tactical = interpolator.get_phase_boundaries(PositionType::Tactical);
         let positional = interpolator.get_phase_boundaries(PositionType::Positional);
-        
+
         // Tactical positions should have different boundaries
         assert_ne!(tactical.opening_threshold, positional.opening_threshold);
     }
@@ -412,30 +445,30 @@ mod tests {
     fn test_adaptive_interpolation() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let characteristics = PositionCharacteristics {
             material_reduction: 0.5,
             complexity: 0.6,
             king_safety: 0.8,
         };
-        
+
         let result = interpolator.interpolate_adaptive(score, 128, &characteristics);
-        
+
         assert!(result >= 100 && result <= 200);
     }
 
     #[test]
     fn test_phase_adjustment() {
         let interpolator = AdvancedInterpolator::new();
-        
+
         let high_reduction = PositionCharacteristics {
             material_reduction: 0.8,
             complexity: 0.5,
             king_safety: 0.5,
         };
-        
+
         let adjusted = interpolator.adjust_phase(128, &high_reduction);
-        
+
         // Should reduce phase (closer to endgame)
         assert!(adjusted < 128);
     }
@@ -444,9 +477,9 @@ mod tests {
     fn test_bezier_interpolation() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = interpolator.interpolate_bezier(score, 128, 0.33, 0.67);
-        
+
         assert!(result >= 100 && result <= 200);
     }
 
@@ -454,13 +487,11 @@ mod tests {
     fn test_custom_interpolation() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
-        let custom_fn = |mg: i32, eg: i32, t: f64| {
-            ((mg as f64 * (1.0 - t) + eg as f64 * t) as i32)
-        };
-        
+
+        let custom_fn = |mg: i32, eg: i32, t: f64| ((mg as f64 * (1.0 - t) + eg as f64 * t) as i32);
+
         let result = interpolator.interpolate_custom(score, 128, custom_fn);
-        
+
         assert!(result >= 100 && result <= 200);
     }
 
@@ -468,14 +499,14 @@ mod tests {
     fn test_spline_coefficients() {
         let points = vec![(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)];
         let spline = SplineCoefficients::new(&points);
-        
+
         assert_eq!(spline.segments.len(), 2);
     }
 
     #[test]
     fn test_position_characteristics_default() {
         let characteristics = PositionCharacteristics::default();
-        
+
         assert_eq!(characteristics.material_reduction, 0.0);
         assert_eq!(characteristics.complexity, 0.5);
         assert_eq!(characteristics.king_safety, 1.0);
@@ -484,7 +515,7 @@ mod tests {
     #[test]
     fn test_phase_boundaries_default() {
         let boundaries = PhaseBoundaries::default();
-        
+
         assert_eq!(boundaries.opening_threshold, 192);
         assert_eq!(boundaries.endgame_threshold, 64);
     }
@@ -492,7 +523,7 @@ mod tests {
     #[test]
     fn test_config_default() {
         let config = AdvancedInterpolationConfig::default();
-        
+
         assert!(!config.use_spline);
         assert_eq!(config.control_points.len(), 4);
     }
@@ -501,9 +532,9 @@ mod tests {
     fn test_multi_phase_opening() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = interpolator.interpolate_multi_phase(score, 256, PositionType::Standard);
-        
+
         // In opening, should favor middlegame
         assert!(result < 150);
     }
@@ -512,9 +543,9 @@ mod tests {
     fn test_multi_phase_endgame() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = interpolator.interpolate_multi_phase(score, 10, PositionType::Standard);
-        
+
         // In endgame, should favor endgame values
         assert!(result > 150);
     }
@@ -523,11 +554,11 @@ mod tests {
     fn test_bezier_endpoints() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         // At phase 256 (opening), should be close to mg
         let opening = interpolator.interpolate_bezier(score, 256, 0.33, 0.67);
         assert!((opening - 100).abs() < 10);
-        
+
         // At phase 0 (endgame), should be close to eg
         let endgame = interpolator.interpolate_bezier(score, 0, 0.33, 0.67);
         assert!((endgame - 200).abs() < 10);
@@ -537,17 +568,16 @@ mod tests {
     fn test_adaptive_high_complexity() {
         let interpolator = AdvancedInterpolator::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let high_complexity = PositionCharacteristics {
             material_reduction: 0.3,
             complexity: 0.9,
             king_safety: 0.5,
         };
-        
+
         let result = interpolator.interpolate_adaptive(score, 128, &high_complexity);
-        
+
         // Should produce a valid result
         assert!(result >= 100 && result <= 200);
     }
 }
-

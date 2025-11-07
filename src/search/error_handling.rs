@@ -1,5 +1,5 @@
 //! Error handling for transposition table operations
-//! 
+//!
 //! This module provides comprehensive error handling, graceful degradation,
 //! error recovery mechanisms, and logging for all transposition table operations.
 
@@ -113,13 +113,13 @@ impl ErrorLogEntry {
             stack_trace: None,
         }
     }
-    
+
     /// Add context to the error entry
     pub fn with_context(mut self, context: String) -> Self {
         self.context = Some(context);
         self
     }
-    
+
     /// Add stack trace to the error entry
     pub fn with_stack_trace(mut self, stack_trace: String) -> Self {
         self.stack_trace = Some(stack_trace);
@@ -156,12 +156,12 @@ impl ErrorLogger {
             counters: Arc::new(Mutex::new(ErrorCounters::default())),
         }
     }
-    
+
     /// Log an error entry
     pub fn log(&self, entry: ErrorLogEntry) {
         let mut entries = self.entries.lock().unwrap();
         let mut counters = self.counters.lock().unwrap();
-        
+
         // Update counters
         match entry.severity {
             ErrorSeverity::Info => counters.info_count += 1,
@@ -170,26 +170,31 @@ impl ErrorLogger {
             ErrorSeverity::Critical => counters.critical_count += 1,
         }
         counters.total_count += 1;
-        
+
         // Add entry and maintain size limit
         entries.push(entry);
         if entries.len() > self.max_entries {
             entries.remove(0);
         }
     }
-    
+
     /// Log an error with severity and message
     pub fn log_error(&self, severity: ErrorSeverity, message: String) {
         let entry = ErrorLogEntry::new(severity, message);
         self.log(entry);
     }
-    
+
     /// Log an error with context
-    pub fn log_error_with_context(&self, severity: ErrorSeverity, message: String, context: String) {
+    pub fn log_error_with_context(
+        &self,
+        severity: ErrorSeverity,
+        message: String,
+        context: String,
+    ) {
         let entry = ErrorLogEntry::new(severity, message).with_context(context);
         self.log(entry);
     }
-    
+
     /// Get recent error entries
     pub fn get_recent_entries(&self, count: usize) -> Vec<ErrorLogEntry> {
         let entries = self.entries.lock().unwrap();
@@ -200,12 +205,12 @@ impl ErrorLogger {
         };
         entries[start..].to_vec()
     }
-    
+
     /// Get error counters
     pub fn get_counters(&self) -> ErrorCounters {
         self.counters.lock().unwrap().clone()
     }
-    
+
     /// Clear all log entries
     pub fn clear(&self) {
         let mut entries = self.entries.lock().unwrap();
@@ -213,22 +218,28 @@ impl ErrorLogger {
         let mut counters = self.counters.lock().unwrap();
         *counters = ErrorCounters::default();
     }
-    
+
     /// Export error log to string
     pub fn export_log(&self) -> String {
         let entries = self.entries.lock().unwrap();
         let counters = self.counters.lock().unwrap();
-        
+
         let mut output = String::new();
         output.push_str(&format!("=== Transposition Table Error Log ===\n"));
         output.push_str(&format!("Total Errors: {}\n", counters.total_count));
-        output.push_str(&format!("Info: {}, Warning: {}, Error: {}, Critical: {}\n\n", 
-            counters.info_count, counters.warning_count, 
-            counters.error_count, counters.critical_count));
-        
+        output.push_str(&format!(
+            "Info: {}, Warning: {}, Error: {}, Critical: {}\n\n",
+            counters.info_count,
+            counters.warning_count,
+            counters.error_count,
+            counters.critical_count
+        ));
+
         for entry in entries.iter() {
-            output.push_str(&format!("[{}] {:?}: {}\n", 
-                entry.timestamp, entry.severity, entry.message));
+            output.push_str(&format!(
+                "[{}] {:?}: {}\n",
+                entry.timestamp, entry.severity, entry.message
+            ));
             if let Some(context) = &entry.context {
                 output.push_str(&format!("  Context: {}\n", context));
             }
@@ -237,7 +248,7 @@ impl ErrorLogger {
             }
             output.push('\n');
         }
-        
+
         output
     }
 }
@@ -287,12 +298,12 @@ impl GracefulDegradationHandler {
             timeouts: Arc::new(Mutex::new(OperationTimeouts::default())),
         }
     }
-    
+
     /// Get current degradation level
     pub fn get_degradation_level(&self) -> u32 {
         self.degradation_level.load(Ordering::Acquire)
     }
-    
+
     /// Increase degradation level
     pub fn increase_degradation(&self) {
         let current = self.degradation_level.load(Ordering::Acquire);
@@ -301,11 +312,11 @@ impl GracefulDegradationHandler {
             self.logger.log_error_with_context(
                 ErrorSeverity::Warning,
                 "Degradation level increased".to_string(),
-                format!("New level: {}", current + 1)
+                format!("New level: {}", current + 1),
             );
         }
     }
-    
+
     /// Decrease degradation level
     pub fn decrease_degradation(&self) {
         let current = self.degradation_level.load(Ordering::Acquire);
@@ -314,20 +325,20 @@ impl GracefulDegradationHandler {
             self.logger.log_error_with_context(
                 ErrorSeverity::Info,
                 "Degradation level decreased".to_string(),
-                format!("New level: {}", current - 1)
+                format!("New level: {}", current - 1),
             );
         }
     }
-    
+
     /// Reset degradation level
     pub fn reset_degradation(&self) {
         self.degradation_level.store(0, Ordering::Release);
         self.logger.log_error(
             ErrorSeverity::Info,
-            "Degradation level reset to normal".to_string()
+            "Degradation level reset to normal".to_string(),
         );
     }
-    
+
     /// Get fallback configuration based on degradation level
     pub fn get_fallback_config(&self) -> TranspositionConfig {
         let level = self.get_degradation_level() as usize;
@@ -337,7 +348,7 @@ impl GracefulDegradationHandler {
             self.fallback_configs.last().unwrap().clone()
         }
     }
-    
+
     /// Check if operation should timeout
     pub fn should_timeout(&self, operation: &str, start_time: std::time::Instant) -> bool {
         let timeouts = self.timeouts.lock().unwrap();
@@ -348,10 +359,10 @@ impl GracefulDegradationHandler {
             "table_clear" => timeouts.table_clear_ms,
             _ => 1000, // Default timeout
         };
-        
+
         start_time.elapsed().as_millis() > timeout_ms as u128
     }
-    
+
     /// Handle operation error with graceful degradation
     pub fn handle_error(&self, error: TranspositionError) -> TranspositionResult<()> {
         let severity = match error {
@@ -365,14 +376,14 @@ impl GracefulDegradationHandler {
             TranspositionError::InvalidInput(_) => ErrorSeverity::Warning,
             TranspositionError::Timeout(_) => ErrorSeverity::Warning,
         };
-        
+
         self.logger.log_error(severity, error.to_string());
-        
+
         // Increase degradation level for critical errors
         if severity >= ErrorSeverity::Error {
             self.increase_degradation();
         }
-        
+
         // For critical errors, return the error
         if severity >= ErrorSeverity::Critical {
             Err(error)
@@ -399,10 +410,10 @@ pub struct ErrorRecoveryManager {
 pub trait ErrorRecoveryStrategy: Send + Sync {
     /// Check if this strategy can handle the error
     fn can_handle(&self, error: &TranspositionError) -> bool;
-    
+
     /// Attempt to recover from the error
     fn recover(&self, error: &TranspositionError) -> TranspositionResult<()>;
-    
+
     /// Get strategy name
     fn name(&self) -> &str;
 }
@@ -414,16 +425,16 @@ impl ErrorRecoveryStrategy for MemoryAllocationRecovery {
     fn can_handle(&self, error: &TranspositionError) -> bool {
         matches!(error, TranspositionError::MemoryAllocationFailed(_))
     }
-    
+
     fn recover(&self, _error: &TranspositionError) -> TranspositionResult<()> {
         // Force garbage collection (if available)
         // In Rust, we can't force GC, but we can suggest it
         std::hint::black_box(());
-        
+
         // Return success to allow retry
         Ok(())
     }
-    
+
     fn name(&self) -> &str {
         "Memory Allocation Recovery"
     }
@@ -436,12 +447,12 @@ impl ErrorRecoveryStrategy for ConfigurationRecovery {
     fn can_handle(&self, error: &TranspositionError) -> bool {
         matches!(error, TranspositionError::InvalidConfiguration(_))
     }
-    
+
     fn recover(&self, _error: &TranspositionError) -> TranspositionResult<()> {
         // Return success to allow fallback configuration
         Ok(())
     }
-    
+
     fn name(&self) -> &str {
         "Configuration Recovery"
     }
@@ -454,7 +465,7 @@ impl ErrorRecoveryManager {
             Box::new(MemoryAllocationRecovery),
             Box::new(ConfigurationRecovery),
         ];
-        
+
         Self {
             logger,
             strategies,
@@ -462,11 +473,11 @@ impl ErrorRecoveryManager {
             successful_recoveries: AtomicU64::new(0),
         }
     }
-    
+
     /// Attempt to recover from an error
     pub fn attempt_recovery(&self, error: &TranspositionError) -> TranspositionResult<()> {
         self.recovery_attempts.fetch_add(1, Ordering::Relaxed);
-        
+
         for strategy in &self.strategies {
             if strategy.can_handle(error) {
                 match strategy.recover(error) {
@@ -475,7 +486,7 @@ impl ErrorRecoveryManager {
                         self.logger.log_error_with_context(
                             ErrorSeverity::Info,
                             format!("Successfully recovered using {}", strategy.name()),
-                            error.to_string()
+                            error.to_string(),
                         );
                         return Ok(());
                     }
@@ -483,29 +494,29 @@ impl ErrorRecoveryManager {
                         self.logger.log_error_with_context(
                             ErrorSeverity::Warning,
                             format!("Recovery failed using {}", strategy.name()),
-                            recovery_error.to_string()
+                            recovery_error.to_string(),
                         );
                     }
                 }
             }
         }
-        
+
         self.logger.log_error_with_context(
             ErrorSeverity::Error,
             "No recovery strategy found for error".to_string(),
-            error.to_string()
+            error.to_string(),
         );
-        
+
         Err(error.clone())
     }
-    
+
     /// Get recovery statistics
     pub fn get_recovery_stats(&self) -> RecoveryStats {
         RecoveryStats {
             total_attempts: self.recovery_attempts.load(Ordering::Acquire),
             successful_recoveries: self.successful_recoveries.load(Ordering::Relaxed),
             recovery_rate: if self.recovery_attempts.load(Ordering::Acquire) > 0 {
-                self.successful_recoveries.load(Ordering::Relaxed) as f64 
+                self.successful_recoveries.load(Ordering::Relaxed) as f64
                     / self.recovery_attempts.load(Ordering::Acquire) as f64
             } else {
                 0.0
@@ -538,40 +549,40 @@ impl ComprehensiveErrorHandler {
         let logger = Arc::new(ErrorLogger::new(1000));
         let degradation_handler = Arc::new(GracefulDegradationHandler::new(Arc::clone(&logger)));
         let recovery_manager = Arc::new(ErrorRecoveryManager::new(Arc::clone(&logger)));
-        
+
         Self {
             logger,
             degradation_handler,
             recovery_manager,
         }
     }
-    
+
     /// Handle an error with full error handling pipeline
     pub fn handle_error(&self, error: TranspositionError) -> TranspositionResult<()> {
         // First, attempt recovery
         if let Ok(()) = self.recovery_manager.attempt_recovery(&error) {
             return Ok(());
         }
-        
+
         // If recovery fails, handle with graceful degradation
         self.degradation_handler.handle_error(error)
     }
-    
+
     /// Get error logger
     pub fn logger(&self) -> Arc<ErrorLogger> {
         Arc::clone(&self.logger)
     }
-    
+
     /// Get graceful degradation handler
     pub fn degradation_handler(&self) -> Arc<GracefulDegradationHandler> {
         Arc::clone(&self.degradation_handler)
     }
-    
+
     /// Get error recovery manager
     pub fn recovery_manager(&self) -> Arc<ErrorRecoveryManager> {
         Arc::clone(&self.recovery_manager)
     }
-    
+
     /// Get comprehensive error statistics
     pub fn get_error_stats(&self) -> ErrorStatistics {
         ErrorStatistics {
@@ -599,101 +610,101 @@ impl Default for ComprehensiveErrorHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_error_logger() {
         let logger = ErrorLogger::new(100);
-        
+
         // Log some errors
         logger.log_error(ErrorSeverity::Info, "Test info message".to_string());
         logger.log_error(ErrorSeverity::Warning, "Test warning message".to_string());
         logger.log_error(ErrorSeverity::Error, "Test error message".to_string());
-        
+
         // Check counters
         let counters = logger.get_counters();
         assert_eq!(counters.info_count, 1);
         assert_eq!(counters.warning_count, 1);
         assert_eq!(counters.error_count, 1);
         assert_eq!(counters.total_count, 3);
-        
+
         // Check recent entries
         let recent = logger.get_recent_entries(2);
         assert_eq!(recent.len(), 2);
         assert_eq!(recent[0].severity, ErrorSeverity::Warning);
         assert_eq!(recent[1].severity, ErrorSeverity::Error);
     }
-    
+
     #[test]
     fn test_graceful_degradation() {
         let logger = Arc::new(ErrorLogger::new(100));
         let handler = GracefulDegradationHandler::new(logger);
-        
+
         // Test initial state
         assert_eq!(handler.get_degradation_level(), 0);
-        
+
         // Test degradation increase
         handler.increase_degradation();
         assert_eq!(handler.get_degradation_level(), 1);
-        
+
         // Test degradation decrease
         handler.decrease_degradation();
         assert_eq!(handler.get_degradation_level(), 0);
-        
+
         // Test reset
         handler.increase_degradation();
         handler.increase_degradation();
         handler.reset_degradation();
         assert_eq!(handler.get_degradation_level(), 0);
     }
-    
+
     #[test]
     fn test_error_recovery() {
         let logger = Arc::new(ErrorLogger::new(100));
         let manager = ErrorRecoveryManager::new(logger);
-        
+
         // Test memory allocation recovery
         let memory_error = TranspositionError::MemoryAllocationFailed("Test".to_string());
         assert!(manager.attempt_recovery(&memory_error).is_ok());
-        
+
         // Test configuration recovery
         let config_error = TranspositionError::InvalidConfiguration("Test".to_string());
         assert!(manager.attempt_recovery(&config_error).is_ok());
-        
+
         // Test unknown error
         let unknown_error = TranspositionError::Timeout("Test".to_string());
         assert!(manager.attempt_recovery(&unknown_error).is_err());
-        
+
         // Check stats
         let stats = manager.get_recovery_stats();
         assert_eq!(stats.total_attempts, 3);
         assert_eq!(stats.successful_recoveries, 2);
         assert!((stats.recovery_rate - 0.6666666666666666).abs() < 0.01);
     }
-    
+
     #[test]
     fn test_comprehensive_error_handler() {
         let handler = ComprehensiveErrorHandler::new();
-        
+
         // Test error handling
         let error = TranspositionError::MemoryAllocationFailed("Test".to_string());
         assert!(handler.handle_error(error).is_ok());
-        
+
         // Test error statistics
         let stats = handler.get_error_stats();
         assert!(stats.recovery_stats.total_attempts > 0);
         assert!(stats.recovery_stats.successful_recoveries > 0);
     }
-    
+
     #[test]
     fn test_error_export() {
         let logger = ErrorLogger::new(10);
-        
+
         logger.log_error_with_context(
             ErrorSeverity::Error,
             "Test error".to_string(),
-            "Test context".to_string()
+            "Test context".to_string(),
         );
-        
+
         let export = logger.export_log();
         assert!(export.contains("Transposition Table Error Log"));
         assert!(export.contains("Test error"));

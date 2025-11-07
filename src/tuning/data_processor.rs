@@ -1,24 +1,27 @@
 //! Data processing pipeline for automated tuning
-//! 
+//!
 //! This module handles loading, parsing, and filtering game databases
 //! to extract training positions for the tuning process. It supports
 //! multiple game formats and provides comprehensive filtering and
 //! deduplication capabilities.
-//! 
+//!
 //! Supported formats:
 //! - KIF (Japanese Shogi notation)
 //! - CSA (Computer Shogi Association format)
 //! - PGN (Portable Game Notation)
 //! - Custom JSON format
 
-use super::types::{GameRecord, TrainingPosition, PositionFilter, GameResult, TimeControl};
 use super::feature_extractor::FeatureExtractor;
-use crate::{BitboardBoard, types::{Player, CapturedPieces, Move}};
+use super::types::{GameRecord, GameResult, PositionFilter, TimeControl, TrainingPosition};
+use crate::{
+    types::{CapturedPieces, Move, Player},
+    BitboardBoard,
+};
+use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use serde_json;
 
 /// Data processor for game databases
 pub struct DataProcessor {
@@ -65,7 +68,7 @@ impl DataProcessor {
     }
 
     /// Create a new data processor with progress callback
-    pub fn with_progress_callback<F>(filter: PositionFilter, callback: F) -> Self 
+    pub fn with_progress_callback<F>(filter: PositionFilter, callback: F) -> Self
     where
         F: Fn(f64) + Send + Sync + 'static,
     {
@@ -79,7 +82,7 @@ impl DataProcessor {
     /// Process a game record and extract training positions
     pub fn process_game(&self, game_record: &GameRecord) -> Vec<TrainingPosition> {
         let mut positions = Vec::new();
-        
+
         // Skip if game doesn't meet rating criteria
         if let Some(min_rating) = self.filter.min_rating {
             if let Some(avg_rating) = game_record.average_rating() {
@@ -88,7 +91,7 @@ impl DataProcessor {
                 }
             }
         }
-        
+
         if let Some(max_rating) = self.filter.max_rating {
             if let Some(avg_rating) = game_record.average_rating() {
                 if avg_rating > max_rating {
@@ -110,7 +113,9 @@ impl DataProcessor {
 
         for (move_index, move_) in game_record.moves.iter().enumerate() {
             // Check move number filter
-            if move_number < self.filter.min_move_number || move_number > self.filter.max_move_number {
+            if move_number < self.filter.min_move_number
+                || move_number > self.filter.max_move_number
+            {
                 // Still make the move but don't extract position
                 if board.make_move(move_).is_none() {
                     break; // Invalid move, stop processing
@@ -134,8 +139,10 @@ impl DataProcessor {
             }
 
             // Extract position features
-            let features = self.feature_extractor.extract_features(&board, player, &captured_pieces);
-            
+            let features =
+                self.feature_extractor
+                    .extract_features(&board, player, &captured_pieces);
+
             // Validate features
             if let Err(_) = self.feature_extractor.validate_features(&features) {
                 if board.make_move(move_).is_none() {
@@ -153,14 +160,8 @@ impl DataProcessor {
             let result = game_record.result.to_score_for_player(player);
 
             // Create training position
-            let position = TrainingPosition::new(
-                features,
-                result,
-                game_phase,
-                is_quiet,
-                move_number,
-                player,
-            );
+            let position =
+                TrainingPosition::new(features, result, game_phase, is_quiet, move_number, player);
 
             positions.push(position);
 
@@ -168,7 +169,7 @@ impl DataProcessor {
             if board.make_move(move_).is_none() {
                 break; // Invalid move, stop processing
             }
-            
+
             // Update captured pieces (simplified)
             if move_.captured_piece.is_some() {
                 if let Some(captured_piece) = move_.captured_piece {
@@ -185,7 +186,8 @@ impl DataProcessor {
             if positions.len() > max_positions {
                 // Keep positions evenly distributed throughout the game
                 let step = positions.len() / max_positions;
-                positions = positions.into_iter()
+                positions = positions
+                    .into_iter()
                     .enumerate()
                     .filter(|(i, _)| i % step == 0)
                     .map(|(_, pos)| pos)
@@ -200,7 +202,7 @@ impl DataProcessor {
     /// Load games from a dataset file
     pub fn load_dataset(&self, path: &str) -> Result<Vec<GameRecord>, String> {
         let path = Path::new(path);
-        
+
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("json") => self.load_json_dataset(path),
             Some("kif") => self.load_kif_dataset(path),
@@ -215,7 +217,12 @@ impl DataProcessor {
     // ============================================================================
 
     /// Check if a position is quiet (no captures in recent moves)
-    fn is_quiet_position(&self, _board: &BitboardBoard, _captured_pieces: &CapturedPieces, _move_index: usize) -> bool {
+    fn is_quiet_position(
+        &self,
+        _board: &BitboardBoard,
+        _captured_pieces: &CapturedPieces,
+        _move_index: usize,
+    ) -> bool {
         // Simplified quiet position detection
         // In a real implementation, this would track the last N moves
         true // For now, consider all positions as quiet
@@ -237,21 +244,19 @@ impl DataProcessor {
 
     /// Load games from JSON format
     fn load_json_dataset(&self, path: &Path) -> Result<Vec<GameRecord>, String> {
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let reader = BufReader::new(file);
-        let games: Vec<GameRecord> = serde_json::from_reader(reader)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        
+        let games: Vec<GameRecord> =
+            serde_json::from_reader(reader).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
         Ok(games)
     }
 
     /// Load games from KIF format (Japanese Shogi notation)
     fn load_kif_dataset(&self, path: &Path) -> Result<Vec<GameRecord>, String> {
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let reader = BufReader::new(file);
         let mut games = Vec::new();
         let mut current_game = GameRecord::new(
@@ -259,22 +264,23 @@ impl DataProcessor {
             GameResult::Draw,
             TimeControl::new(600, 10), // Default time control
         );
-        
+
         let mut in_game = false;
-        
+
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
             let line = line.trim();
-            
+
             if line.is_empty() {
                 if in_game && !current_game.moves.is_empty() {
                     games.push(current_game.clone());
-                    current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+                    current_game =
+                        GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
                 }
                 in_game = false;
                 continue;
             }
-            
+
             // Parse game header
             if line.starts_with("開始日時:") {
                 current_game.date = Some(line[6..].to_string());
@@ -298,7 +304,10 @@ impl DataProcessor {
                 }
                 current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
                 in_game = false;
-            } else if !line.starts_with("手数") && !line.starts_with("先手") && !line.starts_with("後手") {
+            } else if !line.starts_with("手数")
+                && !line.starts_with("先手")
+                && !line.starts_with("後手")
+            {
                 // Parse move (simplified)
                 if let Some(move_) = self.parse_kif_move(line) {
                     current_game.moves.push(move_);
@@ -306,39 +315,35 @@ impl DataProcessor {
                 }
             }
         }
-        
+
         if !current_game.moves.is_empty() {
             games.push(current_game);
         }
-        
+
         Ok(games)
     }
 
     /// Load games from CSA format (Computer Shogi Association)
     fn load_csa_dataset(&self, path: &Path) -> Result<Vec<GameRecord>, String> {
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let reader = BufReader::new(file);
         let mut games = Vec::new();
-        let mut current_game = GameRecord::new(
-            vec![],
-            GameResult::Draw,
-            TimeControl::new(600, 10),
-        );
-        
+        let mut current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
             let line = line.trim();
-            
+
             if line.is_empty() {
                 if !current_game.moves.is_empty() {
                     games.push(current_game.clone());
-                    current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+                    current_game =
+                        GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
                 }
                 continue;
             }
-            
+
             // Parse CSA header
             if line.starts_with("N+") || line.starts_with("N-") {
                 // Player names
@@ -358,48 +363,44 @@ impl DataProcessor {
                 }
             }
         }
-        
+
         if !current_game.moves.is_empty() {
             games.push(current_game);
         }
-        
+
         Ok(games)
     }
 
     /// Load games from PGN format
     fn load_pgn_dataset(&self, path: &Path) -> Result<Vec<GameRecord>, String> {
         // PGN is primarily for chess, but we can support a simplified version
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let reader = BufReader::new(file);
         let mut games = Vec::new();
-        let mut current_game = GameRecord::new(
-            vec![],
-            GameResult::Draw,
-            TimeControl::new(600, 10),
-        );
-        
+        let mut current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+
         let mut in_headers = true;
-        
+
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Failed to read line: {}", e))?;
             let line = line.trim();
-            
+
             if line.is_empty() {
                 if !current_game.moves.is_empty() {
                     games.push(current_game.clone());
-                    current_game = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+                    current_game =
+                        GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
                 }
                 in_headers = true;
                 continue;
             }
-            
+
             if in_headers {
                 if line.starts_with("[") && line.ends_with("]") {
                     // Parse header
                     if line.starts_with("[Result ") {
-                        let result_str = line[8..line.len()-1].trim_matches('"');
+                        let result_str = line[8..line.len() - 1].trim_matches('"');
                         current_game.result = match result_str {
                             "1-0" => GameResult::WhiteWin,
                             "0-1" => GameResult::BlackWin,
@@ -421,11 +422,11 @@ impl DataProcessor {
                 }
             }
         }
-        
+
         if !current_game.moves.is_empty() {
             games.push(current_game);
         }
-        
+
         Ok(games)
     }
 
@@ -451,25 +452,27 @@ impl DataProcessor {
     }
 
     /// Save processed training data to binary format
-    pub fn save_training_data(&self, positions: &[TrainingPosition], path: &str) -> Result<(), String> {
-        let file = File::create(path)
-            .map_err(|e| format!("Failed to create file: {}", e))?;
-        
+    pub fn save_training_data(
+        &self,
+        positions: &[TrainingPosition],
+        path: &str,
+    ) -> Result<(), String> {
+        let file = File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+
         serde_json::to_writer(file, positions)
             .map_err(|e| format!("Failed to serialize data: {}", e))?;
-        
+
         Ok(())
     }
 
     /// Load processed training data from binary format
     pub fn load_training_data(&self, path: &str) -> Result<Vec<TrainingPosition>, String> {
-        let file = File::open(path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let reader = BufReader::new(file);
         let positions: Vec<TrainingPosition> = serde_json::from_reader(reader)
             .map_err(|e| format!("Failed to deserialize data: {}", e))?;
-        
+
         Ok(positions)
     }
 }
@@ -517,9 +520,7 @@ impl GameDatabase {
 
     /// Recalculate database statistics
     fn recalculate_stats(&mut self) {
-        self.total_positions = self.games.iter()
-            .map(|game| game.move_count())
-            .sum();
+        self.total_positions = self.games.iter().map(|game| game.move_count()).sum();
     }
 }
 
@@ -535,19 +536,19 @@ impl PositionSelector {
     /// Select positions from a game record
     pub fn select_positions(&mut self, game_record: &GameRecord) -> Vec<TrainingPosition> {
         let positions = Vec::new();
-        
+
         // Apply filters
         if !self.passes_rating_filter(game_record) {
             return positions;
         }
-        
+
         if !self.passes_move_number_filter() {
             return positions;
         }
-        
+
         // Extract positions (simplified)
         // In a real implementation, this would replay the game and extract positions
-        
+
         positions
     }
 
@@ -560,7 +561,7 @@ impl PositionSelector {
                 }
             }
         }
-        
+
         if let Some(max_rating) = self.filter.max_rating {
             if let Some(avg_rating) = game_record.average_rating() {
                 if avg_rating > max_rating {
@@ -568,11 +569,11 @@ impl PositionSelector {
                 }
             }
         }
-        
+
         if self.filter.high_rated_only && !game_record.is_high_rated() {
             return false;
         }
-        
+
         true
     }
 
@@ -602,8 +603,8 @@ impl Default for GameDatabase {
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::{GameResult, PositionFilter, TimeControl};
     use super::*;
-    use super::super::types::{GameResult, TimeControl, PositionFilter};
 
     #[test]
     fn test_data_processor_creation() {
@@ -618,7 +619,7 @@ mod tests {
         let _processor = DataProcessor::with_progress_callback(filter, |_progress| {
             // Progress callback function
         });
-        
+
         // Test that processor was created successfully
         assert!(true);
     }
@@ -627,13 +628,9 @@ mod tests {
     fn test_game_processing() {
         let filter = PositionFilter::default();
         let processor = DataProcessor::new(filter);
-        
-        let game_record = GameRecord::new(
-            vec![],
-            GameResult::Draw,
-            TimeControl::new(600, 10),
-        );
-        
+
+        let game_record = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
+
         let positions = processor.process_game(&game_record);
         assert_eq!(positions.len(), 0);
     }
@@ -643,17 +640,13 @@ mod tests {
         let mut filter = PositionFilter::default();
         filter.min_rating = Some(2000);
         filter.max_rating = Some(2500);
-        
+
         let processor = DataProcessor::new(filter);
-        
-        let mut game_record = GameRecord::new(
-            vec![],
-            GameResult::Draw,
-            TimeControl::new(600, 10),
-        );
+
+        let mut game_record = GameRecord::new(vec![], GameResult::Draw, TimeControl::new(600, 10));
         game_record.white_rating = Some(2200);
         game_record.black_rating = Some(2300);
-        
+
         let positions = processor.process_game(&game_record);
         assert_eq!(positions.len(), 0);
     }
@@ -662,7 +655,7 @@ mod tests {
     fn test_dataset_loading_unsupported_format() {
         let filter = PositionFilter::default();
         let processor = DataProcessor::new(filter);
-        
+
         let result = processor.load_dataset("test.unsupported");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Unsupported file format"));
@@ -678,12 +671,12 @@ mod tests {
     #[test]
     fn test_game_database_add_games() {
         let mut database = GameDatabase::new();
-        
+
         let games = vec![
             GameRecord::new(vec![], GameResult::WhiteWin, TimeControl::new(600, 10)),
             GameRecord::new(vec![], GameResult::BlackWin, TimeControl::new(600, 10)),
         ];
-        
+
         database.add_games(games);
         assert_eq!(database.game_count(), 2);
     }
@@ -699,9 +692,9 @@ mod tests {
     fn test_position_deduplication() {
         let filter = PositionFilter::default();
         let mut selector = PositionSelector::new(filter);
-        
+
         let position_hash = "test_position_hash";
-        
+
         assert!(!selector.is_duplicate_position(position_hash));
         assert!(selector.is_duplicate_position(position_hash));
     }
@@ -716,7 +709,7 @@ mod tests {
             processing_time: 5.5,
             memory_usage_mb: 128.0,
         };
-        
+
         assert_eq!(progress.games_processed, 10);
         assert_eq!(progress.total_games, 100);
         assert_eq!(progress.positions_extracted, 500);
@@ -729,10 +722,10 @@ mod tests {
     fn test_game_phase_calculation() {
         let filter = PositionFilter::default();
         let processor = DataProcessor::new(filter);
-        
+
         let phase = processor.calculate_game_phase(10, 50);
         assert!(phase >= 0 && phase <= 256);
-        
+
         let early_phase = processor.calculate_game_phase(5, 50);
         let late_phase = processor.calculate_game_phase(45, 50);
         assert!(early_phase < late_phase);

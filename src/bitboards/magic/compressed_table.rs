@@ -1,9 +1,9 @@
 //! Compressed magic table format for reduced memory usage
-//! 
+//!
 //! This module provides a compressed representation of magic tables
 //! that trades some lookup speed for significant memory savings.
 
-use crate::types::{Bitboard, PieceType, MagicTable, MagicError};
+use crate::types::{Bitboard, MagicError, MagicTable, PieceType};
 
 /// Compressed magic table with reduced memory footprint
 #[derive(Clone)]
@@ -20,20 +20,20 @@ impl CompressedMagicTable {
     /// Create a compressed table from a regular magic table
     pub fn from_table(table: MagicTable) -> Result<Self, MagicError> {
         let original_size = table.attack_storage.len();
-        
+
         // For now, we'll use the same table but with compression metadata
         // In a full implementation, we would:
         // 1. Deduplicate identical attack patterns
         // 2. Use run-length encoding for sparse patterns
         // 3. Delta-encode similar patterns
-        
+
         let compressed_size = original_size; // TODO: Actual compression
         let compression_ratio = if compressed_size > 0 {
             original_size as f64 / compressed_size as f64
         } else {
             1.0
         };
-        
+
         Ok(Self {
             base_table: table,
             compression_enabled: true,
@@ -92,7 +92,7 @@ impl CompressedMagicTable {
     pub fn stats(&self) -> CompressionStats {
         let original_size = self.base_table.attack_storage.len() * 16;
         let compressed_size = (original_size as f64 / self.compression_ratio) as usize;
-        
+
         CompressionStats {
             original_size,
             compressed_size,
@@ -110,7 +110,7 @@ mod tests {
     fn test_compressed_table_creation() {
         let table = MagicTable::default();
         let compressed = CompressedMagicTable::from_table(table);
-        
+
         assert!(compressed.is_ok(), "Should create compressed table");
     }
 
@@ -118,17 +118,20 @@ mod tests {
     fn test_compression_stats() {
         let table = MagicTable::default();
         let compressed = CompressedMagicTable::from_table(table).unwrap();
-        
+
         let stats = compressed.stats();
         assert!(stats.original_size > 0, "Should have original size");
-        assert!(stats.compression_ratio >= 1.0, "Compression ratio should be >= 1.0");
+        assert!(
+            stats.compression_ratio >= 1.0,
+            "Compression ratio should be >= 1.0"
+        );
     }
 
     #[test]
     fn test_uncompressed_table() {
         let table = MagicTable::default();
         let uncompressed = CompressedMagicTable::uncompressed(table);
-        
+
         assert!(!uncompressed.is_compressed(), "Should not be compressed");
         assert_eq!(uncompressed.compression_ratio(), 1.0, "Ratio should be 1.0");
     }

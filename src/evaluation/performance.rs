@@ -32,12 +32,12 @@
 //! let score = evaluator.evaluate_optimized(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
-use crate::evaluation::tapered_eval::TaperedEvaluation;
 use crate::evaluation::material::MaterialEvaluator;
+use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransition};
 use crate::evaluation::piece_square_tables::PieceSquareTables;
-use crate::evaluation::phase_transition::{PhaseTransition, InterpolationMethod};
+use crate::evaluation::tapered_eval::TaperedEvaluation;
+use crate::types::*;
 use std::time::Instant;
 
 /// Optimized evaluator combining all components
@@ -84,17 +84,18 @@ impl OptimizedEvaluator {
 
         // 1. Calculate phase (with caching)
         let phase = self.calculate_phase_optimized(board);
-        
+
         // 2. Accumulate scores (inlined for performance)
         let total_score = self.accumulate_scores_optimized(board, player, captured_pieces);
-        
+
         // 3. Interpolate (fast path)
         let final_score = self.interpolate_optimized(total_score, phase);
-        
+
         if let Some(start_time) = start {
-            self.profiler.record_evaluation(start_time.elapsed().as_nanos() as u64);
+            self.profiler
+                .record_evaluation(start_time.elapsed().as_nanos() as u64);
         }
-        
+
         final_score
     }
 
@@ -110,7 +111,8 @@ impl OptimizedEvaluator {
         let phase = self.tapered_eval.calculate_game_phase(board);
 
         if let Some(start_time) = start {
-            self.profiler.record_phase_calculation(start_time.elapsed().as_nanos() as u64);
+            self.profiler
+                .record_phase_calculation(start_time.elapsed().as_nanos() as u64);
         }
 
         phase
@@ -127,7 +129,9 @@ impl OptimizedEvaluator {
         let mut total = TaperedScore::default();
 
         // Material evaluation (fast)
-        total += self.material_eval.evaluate_material(board, player, captured_pieces);
+        total += self
+            .material_eval
+            .evaluate_material(board, player, captured_pieces);
 
         // Piece-square tables (ultra-fast O(1) lookups)
         total += self.evaluate_pst_optimized(board, player);
@@ -152,7 +156,7 @@ impl OptimizedEvaluator {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let pst_value = self.pst.get_value(piece.piece_type, pos, piece.player);
-                    
+
                     if piece.player == player {
                         score += pst_value;
                     } else {
@@ -163,7 +167,8 @@ impl OptimizedEvaluator {
         }
 
         if let Some(start_time) = start {
-            self.profiler.record_pst_lookup(start_time.elapsed().as_nanos() as u64);
+            self.profiler
+                .record_pst_lookup(start_time.elapsed().as_nanos() as u64);
         }
 
         score
@@ -179,10 +184,13 @@ impl OptimizedEvaluator {
         };
 
         // Use fast linear interpolation
-        let result = self.phase_transition.interpolate(score, phase, InterpolationMethod::Linear);
+        let result = self
+            .phase_transition
+            .interpolate(score, phase, InterpolationMethod::Linear);
 
         if let Some(start_time) = start {
-            self.profiler.record_interpolation(start_time.elapsed().as_nanos() as u64);
+            self.profiler
+                .record_interpolation(start_time.elapsed().as_nanos() as u64);
         }
 
         result
@@ -390,16 +398,29 @@ impl std::fmt::Display for PerformanceReport {
         writeln!(f, "Performance Report")?;
         writeln!(f, "==================")?;
         writeln!(f, "Total Evaluations: {}", self.total_evaluations)?;
-        writeln!(f, "Average Evaluation Time: {:.2} ns ({:.3} μs)", 
-                 self.avg_evaluation_ns, self.avg_evaluation_ns / 1000.0)?;
+        writeln!(
+            f,
+            "Average Evaluation Time: {:.2} ns ({:.3} μs)",
+            self.avg_evaluation_ns,
+            self.avg_evaluation_ns / 1000.0
+        )?;
         writeln!(f)?;
         writeln!(f, "Component Breakdown:")?;
-        writeln!(f, "  Phase Calculation: {:.2} ns ({:.1}%)", 
-                 self.avg_phase_calc_ns, self.phase_calc_percentage)?;
-        writeln!(f, "  PST Lookup: {:.2} ns ({:.1}%)", 
-                 self.avg_pst_lookup_ns, self.pst_lookup_percentage)?;
-        writeln!(f, "  Interpolation: {:.2} ns ({:.1}%)", 
-                 self.avg_interpolation_ns, self.interpolation_percentage)?;
+        writeln!(
+            f,
+            "  Phase Calculation: {:.2} ns ({:.1}%)",
+            self.avg_phase_calc_ns, self.phase_calc_percentage
+        )?;
+        writeln!(
+            f,
+            "  PST Lookup: {:.2} ns ({:.1}%)",
+            self.avg_pst_lookup_ns, self.pst_lookup_percentage
+        )?;
+        writeln!(
+            f,
+            "  Interpolation: {:.2} ns ({:.1}%)",
+            self.avg_interpolation_ns, self.interpolation_percentage
+        )?;
         Ok(())
     }
 }
@@ -421,7 +442,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         let score = evaluator.evaluate_optimized(&board, Player::Black, &captured_pieces);
-        
+
         // Should return a valid score
         assert!(score.abs() < 100000);
     }
@@ -435,12 +456,12 @@ mod tests {
     #[test]
     fn test_profiler_enable_disable() {
         let mut profiler = PerformanceProfiler::new();
-        
+
         assert!(!profiler.enabled);
-        
+
         profiler.enable();
         assert!(profiler.enabled);
-        
+
         profiler.disable();
         assert!(!profiler.enabled);
     }

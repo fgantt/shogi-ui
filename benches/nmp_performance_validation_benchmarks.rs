@@ -8,10 +8,10 @@
 //! These benchmarks compare NMP enabled vs disabled across different position types
 //! and verify that actual metrics meet expected thresholds.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
+    search::SearchEngine,
     types::{CapturedPieces, Player},
 };
 use std::time::{Duration, Instant};
@@ -36,11 +36,11 @@ fn validate_nmp_performance_improvements(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_performance_validation");
     group.measurement_time(Duration::from_secs(30));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test at different depths
     for depth in [3, 4, 5, 6] {
         // Compare NMP enabled vs disabled
@@ -54,7 +54,7 @@ fn validate_nmp_performance_improvements(c: &mut Criterion) {
                     config.enabled = true;
                     engine.update_null_move_config(config).unwrap();
                     engine.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -65,15 +65,15 @@ fn validate_nmp_performance_improvements(c: &mut Criterion) {
                         5000,
                     );
                     let elapsed = start.elapsed();
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     let nodes = engine.get_nodes_searched();
-                    
+
                     black_box((result, elapsed, nodes, stats))
                 });
             },
         );
-        
+
         group.bench_with_input(
             BenchmarkId::new("nmp_disabled", depth),
             &depth,
@@ -84,7 +84,7 @@ fn validate_nmp_performance_improvements(c: &mut Criterion) {
                     config.enabled = false;
                     engine.update_null_move_config(config).unwrap();
                     engine.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -95,16 +95,16 @@ fn validate_nmp_performance_improvements(c: &mut Criterion) {
                         5000,
                     );
                     let elapsed = start.elapsed();
-                    
+
                     let stats = engine.get_null_move_stats().clone();
                     let nodes = engine.get_nodes_searched();
-                    
+
                     black_box((result, elapsed, nodes, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -113,21 +113,23 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_nodes_reduction");
     group.measurement_time(Duration::from_secs(30));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     let mut comparisons = Vec::new();
-    
+
     // Test with NMP enabled
     let mut engine_enabled = SearchEngine::new(None, 16);
     let mut config_enabled = engine_enabled.get_null_move_config().clone();
     config_enabled.enabled = true;
-    engine_enabled.update_null_move_config(config_enabled).unwrap();
+    engine_enabled
+        .update_null_move_config(config_enabled)
+        .unwrap();
     engine_enabled.reset_null_move_stats();
-    
+
     let start = Instant::now();
     let mut board_enabled = board.clone();
     let _result_enabled = engine_enabled.search_at_depth_legacy(
@@ -140,14 +142,16 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
     let time_enabled = start.elapsed().as_secs_f64() * 1000.0;
     let nodes_enabled = engine_enabled.get_nodes_searched();
     let stats_enabled = engine_enabled.get_null_move_stats().clone();
-    
+
     // Test with NMP disabled
     let mut engine_disabled = SearchEngine::new(None, 16);
     let mut config_disabled = engine_disabled.get_null_move_config().clone();
     config_disabled.enabled = false;
-    engine_disabled.update_null_move_config(config_disabled).unwrap();
+    engine_disabled
+        .update_null_move_config(config_disabled)
+        .unwrap();
     engine_disabled.reset_null_move_stats();
-    
+
     let start = Instant::now();
     let mut board_disabled = board.clone();
     let _result_disabled = engine_disabled.search_at_depth_legacy(
@@ -159,14 +163,14 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
     );
     let time_disabled = start.elapsed().as_secs_f64() * 1000.0;
     let nodes_disabled = engine_disabled.get_nodes_searched();
-    
+
     // Calculate reduction percentage
     let nodes_reduction = if nodes_disabled > 0 {
         ((nodes_disabled - nodes_enabled) as f64 / nodes_disabled as f64) * 100.0
     } else {
         0.0
     };
-    
+
     let comparison = PerformanceComparison {
         position_type: "initial".to_string(),
         depth,
@@ -179,9 +183,9 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
         cutoff_rate: stats_enabled.cutoff_rate(),
         efficiency: stats_enabled.efficiency(),
     };
-    
+
     comparisons.push(comparison);
-    
+
     // Validate target: 20-40% reduction
     if std::env::var("NMP_VALIDATION_TEST").is_ok() {
         let reduction = nodes_reduction;
@@ -192,7 +196,7 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
             reduction
         );
     }
-    
+
     // Benchmark with criterion
     group.bench_function("enabled", |b| {
         b.iter(|| {
@@ -201,7 +205,7 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
             config.enabled = true;
             engine.update_null_move_config(config).unwrap();
             engine.reset_null_move_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -214,7 +218,7 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
             black_box((result, nodes))
         });
     });
-    
+
     group.bench_function("disabled", |b| {
         b.iter(|| {
             let mut engine = SearchEngine::new(None, 16);
@@ -222,7 +226,7 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
             config.enabled = false;
             engine.update_null_move_config(config).unwrap();
             engine.reset_null_move_stats();
-            
+
             let mut board_mut = board.clone();
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
@@ -235,7 +239,7 @@ fn benchmark_nodes_reduction(c: &mut Criterion) {
             black_box((result, nodes))
         });
     });
-    
+
     group.finish();
 }
 
@@ -244,12 +248,12 @@ fn benchmark_depth_increase(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_depth_increase");
     group.measurement_time(Duration::from_secs(30));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let time_limit_ms = 2000;
-    
+
     // Test at different base depths
     for base_depth in [3, 4, 5] {
         // With NMP enabled, search at base_depth + 1 to see if we can reach deeper
@@ -263,7 +267,7 @@ fn benchmark_depth_increase(c: &mut Criterion) {
                     config.enabled = true;
                     engine.update_null_move_config(config).unwrap();
                     engine.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -275,12 +279,12 @@ fn benchmark_depth_increase(c: &mut Criterion) {
                     );
                     let elapsed = start.elapsed();
                     let nodes = engine.get_nodes_searched();
-                    
+
                     black_box((result, elapsed, nodes))
                 });
             },
         );
-        
+
         // Without NMP, search at base_depth
         group.bench_with_input(
             BenchmarkId::new("disabled", base_depth),
@@ -292,7 +296,7 @@ fn benchmark_depth_increase(c: &mut Criterion) {
                     config.enabled = false;
                     engine.update_null_move_config(config).unwrap();
                     engine.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
@@ -304,13 +308,13 @@ fn benchmark_depth_increase(c: &mut Criterion) {
                     );
                     let elapsed = start.elapsed();
                     let nodes = engine.get_nodes_searched();
-                    
+
                     black_box((result, elapsed, nodes))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -319,17 +323,17 @@ fn benchmark_position_types(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_by_position_type");
     group.measurement_time(Duration::from_secs(30));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     let position_types = vec![
         ("initial", board.clone()),
         // Additional position types can be added here
     ];
-    
+
     for (position_name, test_board) in position_types {
         // With NMP enabled
         group.bench_function(&format!("{}_{}", position_name, "enabled"), |b| {
@@ -339,7 +343,7 @@ fn benchmark_position_types(c: &mut Criterion) {
                 config.enabled = true;
                 engine.update_null_move_config(config).unwrap();
                 engine.reset_null_move_stats();
-                
+
                 let start = Instant::now();
                 let mut board_mut = test_board.clone();
                 let result = engine.search_at_depth_legacy(
@@ -352,11 +356,11 @@ fn benchmark_position_types(c: &mut Criterion) {
                 let elapsed = start.elapsed();
                 let nodes = engine.get_nodes_searched();
                 let stats = engine.get_null_move_stats().clone();
-                
+
                 black_box((result, elapsed, nodes, stats))
             });
         });
-        
+
         // With NMP disabled
         group.bench_function(&format!("{}_{}", position_name, "disabled"), |b| {
             b.iter(|| {
@@ -365,7 +369,7 @@ fn benchmark_position_types(c: &mut Criterion) {
                 config.enabled = false;
                 engine.update_null_move_config(config).unwrap();
                 engine.reset_null_move_stats();
-                
+
                 let start = Instant::now();
                 let mut board_mut = test_board.clone();
                 let result = engine.search_at_depth_legacy(
@@ -378,12 +382,12 @@ fn benchmark_position_types(c: &mut Criterion) {
                 let elapsed = start.elapsed();
                 let nodes = engine.get_nodes_searched();
                 let stats = engine.get_null_move_stats().clone();
-                
+
                 black_box((result, elapsed, nodes, stats))
             });
         });
     }
-    
+
     group.finish();
 }
 
@@ -392,11 +396,11 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
     let mut group = c.benchmark_group("nmp_comprehensive_validation");
     group.measurement_time(Duration::from_secs(30));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Measure all key metrics
     for depth in [4, 5] {
         group.bench_with_input(
@@ -477,7 +481,7 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -490,4 +494,3 @@ criterion_group!(
     benchmark_comprehensive_validation
 );
 criterion_main!(benches);
-

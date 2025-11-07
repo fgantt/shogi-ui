@@ -25,25 +25,19 @@
 //! let score = evaluator.evaluate(&board, player, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::{
-    tapered_eval::TaperedEvaluation,
-    material::MaterialEvaluator,
-    piece_square_tables::PieceSquareTables,
-    phase_transition::PhaseTransition,
-    position_features::PositionFeatureEvaluator,
-    endgame_patterns::EndgamePatternEvaluator,
-    opening_principles::OpeningPrincipleEvaluator,
-    statistics::EvaluationStatistics,
-    performance::OptimizedEvaluator,
-    tactical_patterns::TacticalPatternRecognizer,
-    positional_patterns::PositionalPatternAnalyzer,
-    pattern_cache::PatternCache,
+    endgame_patterns::EndgamePatternEvaluator, material::MaterialEvaluator,
+    opening_principles::OpeningPrincipleEvaluator, pattern_cache::PatternCache,
+    performance::OptimizedEvaluator, phase_transition::PhaseTransition,
+    piece_square_tables::PieceSquareTables, position_features::PositionFeatureEvaluator,
+    positional_patterns::PositionalPatternAnalyzer, statistics::EvaluationStatistics,
+    tactical_patterns::TacticalPatternRecognizer, tapered_eval::TaperedEvaluation,
 };
+use crate::types::*;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Instant;
-use std::cell::RefCell;
 
 /// Integrated tapered evaluator
 pub struct IntegratedEvaluator {
@@ -131,7 +125,9 @@ impl IntegratedEvaluator {
             let hash = self.compute_position_hash(board, player);
             if let Some(cached) = self.eval_cache.borrow().get(&hash).copied() {
                 if self.statistics.borrow().is_enabled() {
-                    self.statistics.borrow_mut().record_evaluation(cached.score, cached.phase);
+                    self.statistics
+                        .borrow_mut()
+                        .record_evaluation(cached.score, cached.phase);
                 }
                 return cached.score;
             }
@@ -144,7 +140,7 @@ impl IntegratedEvaluator {
         if let Some(start_time) = start {
             let duration = start_time.elapsed().as_nanos() as u64;
             self.statistics.borrow_mut().record_timing(duration);
-            
+
             if self.config.enable_phase_cache {
                 let phase = self.calculate_phase_cached(board);
                 self.statistics.borrow_mut().record_evaluation(score, phase);
@@ -169,7 +165,10 @@ impl IntegratedEvaluator {
 
         // Material
         if self.config.components.material {
-            total += self.material_eval.borrow_mut().evaluate_material(board, player, captured_pieces);
+            total +=
+                self.material_eval
+                    .borrow_mut()
+                    .evaluate_material(board, player, captured_pieces);
         }
 
         // Piece-square tables
@@ -179,43 +178,77 @@ impl IntegratedEvaluator {
 
         // Position features
         if self.config.components.position_features {
-            total += self.position_features.borrow_mut().evaluate_king_safety(board, player);
-            total += self.position_features.borrow_mut().evaluate_pawn_structure(board, player);
-            total += self.position_features.borrow_mut().evaluate_mobility(board, player, captured_pieces);
-            total += self.position_features.borrow_mut().evaluate_center_control(board, player);
-            total += self.position_features.borrow_mut().evaluate_development(board, player);
+            total += self
+                .position_features
+                .borrow_mut()
+                .evaluate_king_safety(board, player);
+            total += self
+                .position_features
+                .borrow_mut()
+                .evaluate_pawn_structure(board, player);
+            total += self.position_features.borrow_mut().evaluate_mobility(
+                board,
+                player,
+                captured_pieces,
+            );
+            total += self
+                .position_features
+                .borrow_mut()
+                .evaluate_center_control(board, player);
+            total += self
+                .position_features
+                .borrow_mut()
+                .evaluate_development(board, player);
         }
 
         // Opening principles (if in opening)
         if self.config.components.opening_principles && phase >= 192 {
-            total += self.opening_principles.borrow_mut().evaluate_opening(board, player, 0);
+            total += self
+                .opening_principles
+                .borrow_mut()
+                .evaluate_opening(board, player, 0);
         }
 
         // Endgame patterns (if in endgame)
         if self.config.components.endgame_patterns && phase < 64 {
-            total += self.endgame_patterns.borrow_mut().evaluate_endgame(board, player, captured_pieces);
+            total +=
+                self.endgame_patterns
+                    .borrow_mut()
+                    .evaluate_endgame(board, player, captured_pieces);
         }
 
         // Tactical patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.tactical_patterns {
-            total += self.tactical_patterns.borrow_mut().evaluate_tactics(board, player);
+            total += self
+                .tactical_patterns
+                .borrow_mut()
+                .evaluate_tactics(board, player);
         }
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.positional_patterns {
-            total += self.positional_patterns.borrow_mut().evaluate_position(board, player);
+            total += self
+                .positional_patterns
+                .borrow_mut()
+                .evaluate_position(board, player);
         }
 
         // Interpolate to final score
-        let final_score = self.phase_transition.borrow_mut().interpolate_default(total, phase);
+        let final_score = self
+            .phase_transition
+            .borrow_mut()
+            .interpolate_default(total, phase);
 
         // Cache if enabled
         if self.config.enable_eval_cache {
             let hash = self.compute_position_hash(board, player);
-            self.eval_cache.borrow_mut().insert(hash, CachedEvaluation {
-                score: final_score,
-                phase,
-            });
+            self.eval_cache.borrow_mut().insert(
+                hash,
+                CachedEvaluation {
+                    score: final_score,
+                    phase,
+                },
+            );
         }
 
         final_score
@@ -230,7 +263,7 @@ impl IntegratedEvaluator {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let pst_value = self.pst.get_value(piece.piece_type, pos, piece.player);
-                    
+
                     if piece.player == player {
                         score += pst_value;
                     } else {
@@ -250,7 +283,7 @@ impl IntegratedEvaluator {
         }
 
         let hash = self.compute_phase_hash(board);
-        
+
         if let Some(&phase) = self.phase_cache.borrow().get(&hash) {
             return phase;
         }
@@ -264,7 +297,7 @@ impl IntegratedEvaluator {
     fn compute_position_hash(&self, board: &BitboardBoard, player: Player) -> u64 {
         // Simple hash - in production, use Zobrist hashing
         let mut hash = 0u64;
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -285,7 +318,7 @@ impl IntegratedEvaluator {
     /// Compute phase hash (material-based)
     fn compute_phase_hash(&self, board: &BitboardBoard) -> u64 {
         let mut hash = 0u64;
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -333,7 +366,7 @@ impl IntegratedEvaluator {
     /// Update configuration
     pub fn set_config(&mut self, config: IntegratedEvaluationConfig) {
         self.config = config;
-        
+
         // Recreate optimized evaluator if needed
         if self.config.use_optimized_path && self.optimized_eval.is_none() {
             self.optimized_eval = Some(OptimizedEvaluator::new());
@@ -473,7 +506,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
-        
+
         // Should return a valid score
         assert!(score.abs() < 100000);
     }
@@ -486,7 +519,7 @@ mod tests {
 
         // First evaluation
         let score1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
-        
+
         // Second evaluation (should be cached)
         let score2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
@@ -552,12 +585,12 @@ mod tests {
     #[test]
     fn test_config_update() {
         let mut evaluator = IntegratedEvaluator::new();
-        
+
         let mut config = IntegratedEvaluationConfig::default();
         config.use_optimized_path = false;
-        
+
         evaluator.set_config(config);
-        
+
         assert!(!evaluator.config.use_optimized_path);
         assert!(evaluator.optimized_eval.is_none());
     }
@@ -612,7 +645,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_pst(&board, Player::Black);
-        
+
         // Should have some PST value
         assert!(score.mg != 0 || score.eg != 0);
     }
@@ -655,4 +688,3 @@ mod tests {
         assert!(score.abs() < 100000);
     }
 }
-

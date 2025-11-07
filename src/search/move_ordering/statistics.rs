@@ -1,12 +1,12 @@
 //! Statistics tracking for move ordering
-//! 
+//!
 //! This module contains structures and methods for tracking performance
 //! metrics and statistics for the move ordering system.
 
 // Statistics structures - no external dependencies needed
 
 /// Performance statistics for move ordering
-/// 
+///
 /// Tracks various metrics to monitor the effectiveness and performance
 /// of the move ordering system.
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -796,7 +796,12 @@ impl EnhancedStatistics {
         Self {
             move_type_distribution: MoveTypeDistribution::default(),
             depth_specific_stats: DepthSpecificStats {
-                stats_by_depth: (0..21).map(|d| DepthStats { depth: d, ..Default::default() }).collect(),
+                stats_by_depth: (0..21)
+                    .map(|d| DepthStats {
+                        depth: d,
+                        ..Default::default()
+                    })
+                    .collect(),
             },
             game_phase_stats: GamePhaseStats::default(),
             overall_effectiveness: 0.0,
@@ -845,8 +850,9 @@ impl EnhancedStatistics {
             if let Some(index) = best_move_index {
                 // Update running average of best move index
                 let total = depth_stats.moves_ordered;
-                depth_stats.best_move_index_avg = 
-                    (depth_stats.best_move_index_avg * (total - 1) as f64 + index as f64) / total as f64;
+                depth_stats.best_move_index_avg =
+                    (depth_stats.best_move_index_avg * (total - 1) as f64 + index as f64)
+                        / total as f64;
             }
         }
 
@@ -856,15 +862,17 @@ impl EnhancedStatistics {
             crate::types::GamePhase::Middlegame => &mut self.game_phase_stats.middlegame,
             crate::types::GamePhase::Endgame => &mut self.game_phase_stats.endgame,
         };
-        
+
         phase_stats.moves_ordered += moves.len() as u64;
         let total = phase_stats.moves_ordered;
-        phase_stats.avg_ordering_time_us = 
-            (phase_stats.avg_ordering_time_us * (total - 1) as f64 + ordering_time_us as f64) / total as f64;
-        
+        phase_stats.avg_ordering_time_us = (phase_stats.avg_ordering_time_us * (total - 1) as f64
+            + ordering_time_us as f64)
+            / total as f64;
+
         if let Some(index) = best_move_index {
-            phase_stats.best_move_index_avg = 
-                (phase_stats.best_move_index_avg * (total - 1) as f64 + index as f64) / total as f64;
+            phase_stats.best_move_index_avg =
+                (phase_stats.best_move_index_avg * (total - 1) as f64 + index as f64)
+                    / total as f64;
         }
     }
 
@@ -875,29 +883,40 @@ impl EnhancedStatistics {
         // - Average best move index across all depths (lower is better)
         // - Cache hit rates
         // - Heuristic effectiveness
-        
-        let avg_best_move_index: f64 = self.depth_specific_stats.stats_by_depth.iter()
+
+        let avg_best_move_index: f64 = self
+            .depth_specific_stats
+            .stats_by_depth
+            .iter()
             .filter(|s| s.moves_ordered > 0)
             .map(|s| s.best_move_index_avg)
-            .sum::<f64>() / self.depth_specific_stats.stats_by_depth.iter()
-            .filter(|s| s.moves_ordered > 0)
-            .count().max(1) as f64;
-        
+            .sum::<f64>()
+            / self
+                .depth_specific_stats
+                .stats_by_depth
+                .iter()
+                .filter(|s| s.moves_ordered > 0)
+                .count()
+                .max(1) as f64;
+
         // Normalize: index 0 = 100%, index 10+ = 0%
         let index_score = ((10.0 - avg_best_move_index.min(10.0)) / 10.0 * 100.0).max(0.0);
-        
+
         self.overall_effectiveness = index_score;
     }
 
     /// Get statistics summary
     pub fn get_summary(&self) -> StatisticsSummary {
         StatisticsSummary {
-            total_moves: self.move_type_distribution.captures 
-                + self.move_type_distribution.promotions 
+            total_moves: self.move_type_distribution.captures
+                + self.move_type_distribution.promotions
                 + self.move_type_distribution.quiet_moves,
             capture_percentage: if self.move_type_distribution.captures > 0 {
-                (self.move_type_distribution.captures as f64 / 
-                 (self.move_type_distribution.captures + self.move_type_distribution.quiet_moves).max(1) as f64) * 100.0
+                (self.move_type_distribution.captures as f64
+                    / (self.move_type_distribution.captures
+                        + self.move_type_distribution.quiet_moves)
+                        .max(1) as f64)
+                    * 100.0
             } else {
                 0.0
             },
@@ -916,4 +935,3 @@ pub struct StatisticsSummary {
     /// Overall effectiveness score (0-100)
     pub overall_effectiveness: f64,
 }
-

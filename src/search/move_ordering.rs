@@ -1,40 +1,40 @@
 //! Move Ordering System
-//! 
+//!
 //! This module provides the core move ordering functionality for the Shogi engine.
 //! It implements various heuristics to prioritize moves for better alpha-beta pruning.
-//! 
+//!
 //! # Features
-//! 
+//!
 //! - **Basic Move Ordering Structure**: Core framework for move ordering
 //! - **Statistics Tracking**: Performance metrics and hit rates
 //! - **Memory Usage Tracking**: Monitor memory consumption
 //! - **Configuration System**: Flexible weights and settings
 //! - **Move Scoring Infrastructure**: Foundation for various heuristics
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```rust
 //! use shogi_engine::search::move_ordering::{MoveOrdering, OrderingStats, OrderingWeights};
 //! use shogi_engine::types::{Move, Player};
 //! use shogi_engine::bitboards::BitboardBoard;
-//! 
+//!
 //! // Create move orderer with default configuration
 //! let mut orderer = MoveOrdering::new();
-//! 
+//!
 //! // Order moves for a position
 //! let moves = vec![/* your moves */];
 //! let ordered_moves = orderer.order_moves(&moves);
-//! 
+//!
 //! // Get performance statistics
 //! let stats = orderer.get_stats();
 //! println!("Total moves ordered: {}", stats.total_moves_ordered);
 //! ```
 
-use crate::types::*;
 use crate::time_utils::TimeSource;
+use crate::types::*;
 use std::collections::HashMap;
-use std::ptr;
 use std::fmt;
+use std::ptr;
 
 // Task 6.0: Include extracted modules
 #[path = "move_ordering/statistics.rs"]
@@ -55,33 +55,66 @@ mod counter_moves;
 #[path = "move_ordering/pv_ordering.rs"]
 mod pv_ordering;
 
-pub use pv_ordering::{PVOrdering, score_pv_move as score_pv_move_helper, moves_equal as moves_equal_helper, PVMoveStatistics};
+pub use pv_ordering::{
+    moves_equal as moves_equal_helper, score_pv_move as score_pv_move_helper, PVMoveStatistics,
+    PVOrdering,
+};
 
 #[path = "move_ordering/capture_ordering.rs"]
 mod capture_ordering;
 
-pub use capture_ordering::{score_capture_move as score_capture_move_helper, score_promotion_move as score_promotion_move_helper, score_capture_move_inline as score_capture_move_inline_helper, score_promotion_move_inline as score_promotion_move_inline_helper, calculate_mvv_lva_score, get_capture_bonus, get_attacker_bonus};
+pub use capture_ordering::{
+    calculate_mvv_lva_score, get_attacker_bonus, get_capture_bonus,
+    score_capture_move as score_capture_move_helper,
+    score_capture_move_inline as score_capture_move_inline_helper,
+    score_promotion_move as score_promotion_move_helper,
+    score_promotion_move_inline as score_promotion_move_inline_helper,
+};
 
 #[path = "move_ordering/see_calculation.rs"]
 mod see_calculation;
 
-pub use see_calculation::{calculate_see_internal as calculate_see_internal_helper, score_see_move as score_see_move_helper, find_attackers_defenders as find_attackers_defenders_helper, piece_attacks_square as piece_attacks_square_helper, SEECache, SEECacheEntry, SEECacheStats};
+pub use see_calculation::{
+    calculate_see_internal as calculate_see_internal_helper,
+    find_attackers_defenders as find_attackers_defenders_helper,
+    piece_attacks_square as piece_attacks_square_helper, score_see_move as score_see_move_helper,
+    SEECache, SEECacheEntry, SEECacheStats,
+};
 
 // Re-export statistics structures
 // Note: PerformanceStats and StatisticsExport remain in main file (depend on MemoryUsage/MoveOrderingConfig)
-pub use statistics::{OrderingStats, HotPathStats, HeuristicStats, HeuristicPerformance, TimingStats, OperationTiming, MemoryStats, MemoryBreakdown, AllocationStats, FragmentationStats, CacheStats, CachePerformance, CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity, PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection, AdvancedIntegrationStats, TTIntegrationStats, PerformanceTuningResult, PerformanceMonitoringReport, AutoOptimizationResult, PerformanceSnapshot, PerformanceComparison, TuningRecommendation, TuningCategory, TuningPriority, MoveTypeDistribution, DepthSpecificStats, DepthStats, GamePhaseStats, PhaseStats, EnhancedStatistics, StatisticsSummary};
+pub use statistics::{
+    AdvancedIntegrationStats, AllocationStats, AutoOptimizationResult, Bottleneck,
+    BottleneckAnalysis, BottleneckCategory, BottleneckSeverity, CacheHitRates, CachePerformance,
+    CacheSizes, CacheStats, DepthSpecificStats, DepthStats, EnhancedStatistics, FragmentationStats,
+    GamePhaseStats, HeuristicEffectiveness, HeuristicPerformance, HeuristicStats, HotPathStats,
+    MemoryBreakdown, MemoryStats, MemoryUsageTrend, MoveTypeDistribution, OperationTiming,
+    OrderingStats, PerformanceChartData, PerformanceComparison, PerformanceMonitoringReport,
+    PerformanceSnapshot, PerformanceSummary, PerformanceTrendAnalysis, PerformanceTuningResult,
+    PhaseStats, StatisticsSummary, TTIntegrationStats, TimingBreakdown, TimingStats, TrendAnalysis,
+    TrendDirection, TuningCategory, TuningPriority, TuningRecommendation,
+};
 
 // Re-export cache structures
-pub use cache::{CacheEvictionPolicy, MoveOrderingCacheEntry, CacheConfig, MoveOrderingCacheManager};
+pub use cache::{
+    CacheConfig, CacheEvictionPolicy, MoveOrderingCacheEntry, MoveOrderingCacheManager,
+};
 
 // Re-export killer moves structures
-pub use killer_moves::{KillerConfig, KillerMoveManager, score_killer_move as score_killer_move_helper};
+pub use killer_moves::{
+    score_killer_move as score_killer_move_helper, KillerConfig, KillerMoveManager,
+};
 
 // Re-export counter-moves structures
-pub use counter_moves::{CounterMoveConfig, CounterMoveManager, score_counter_move as score_counter_move_helper};
+pub use counter_moves::{
+    score_counter_move as score_counter_move_helper, CounterMoveConfig, CounterMoveManager,
+};
 
 // Re-export history heuristic structures
-pub use history_heuristic::{HistoryEntry, HistoryConfig, HistoryHeuristicManager, score_history_move as score_history_move_helper};
+pub use history_heuristic::{
+    score_history_move as score_history_move_helper, HistoryConfig, HistoryEntry,
+    HistoryHeuristicManager,
+};
 
 // ==================== Error Handling Types ====================
 
@@ -171,7 +204,6 @@ pub struct ParallelSearchConfig {
 
 // AdvancedIntegrationStats moved to statistics module
 
-
 /// Error severity levels
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorSeverity {
@@ -229,7 +261,12 @@ impl Default for ErrorHandler {
 
 impl ErrorHandler {
     /// Log an error entry
-    pub fn log_error(&mut self, error: MoveOrderingError, severity: ErrorSeverity, context: String) {
+    pub fn log_error(
+        &mut self,
+        error: MoveOrderingError,
+        severity: ErrorSeverity,
+        context: String,
+    ) {
         let entry = ErrorLogEntry {
             timestamp: std::time::SystemTime::now(),
             error,
@@ -264,10 +301,12 @@ impl ErrorHandler {
     /// Check if errors indicate system instability
     pub fn is_system_unstable(&self) -> bool {
         let recent_errors = self.get_recent_errors(10);
-        let critical_count = recent_errors.iter()
+        let critical_count = recent_errors
+            .iter()
             .filter(|e| e.severity == ErrorSeverity::Critical)
             .count();
-        let high_count = recent_errors.iter()
+        let high_count = recent_errors
+            .iter()
             .filter(|e| e.severity == ErrorSeverity::High)
             .count();
 
@@ -500,8 +539,8 @@ impl Default for MemoryThresholds {
     fn default() -> Self {
         Self {
             warning_threshold: 10 * 1024 * 1024,  // 10 MB
-            critical_threshold: 50 * 1024 * 1024,  // 50 MB
-            max_memory: 100 * 1024 * 1024,         // 100 MB
+            critical_threshold: 50 * 1024 * 1024, // 50 MB
+            max_memory: 100 * 1024 * 1024,        // 100 MB
         }
     }
 }
@@ -521,7 +560,12 @@ impl Default for MemoryTracker {
 
 impl MemoryTracker {
     /// Record a memory allocation event
-    pub fn record_allocation(&mut self, allocation_type: AllocationType, size: usize, component: String) {
+    pub fn record_allocation(
+        &mut self,
+        allocation_type: AllocationType,
+        size: usize,
+        component: String,
+    ) {
         let event = AllocationEvent {
             timestamp: std::time::SystemTime::now(),
             allocation_type,
@@ -542,7 +586,12 @@ impl MemoryTracker {
     }
 
     /// Record a memory deallocation event
-    pub fn record_deallocation(&mut self, allocation_type: AllocationType, size: usize, component: String) {
+    pub fn record_deallocation(
+        &mut self,
+        allocation_type: AllocationType,
+        size: usize,
+        component: String,
+    ) {
         let event = AllocationEvent {
             timestamp: std::time::SystemTime::now(),
             allocation_type,
@@ -582,9 +631,11 @@ impl MemoryTracker {
             }
         }
 
-        usage.total_memory = usage.struct_memory + usage.cache_memory + 
-                           usage.pool_memory + usage.statistics_memory + 
-                           usage.error_handler_memory;
+        usage.total_memory = usage.struct_memory
+            + usage.cache_memory
+            + usage.pool_memory
+            + usage.statistics_memory
+            + usage.error_handler_memory;
 
         // Update peak usage if current usage is higher
         if usage.total_memory > self.peak_usage.total_memory {
@@ -608,7 +659,7 @@ impl MemoryTracker {
 
         for event in &self.allocation_history {
             let key = (event.allocation_type.clone(), event.component.clone());
-            
+
             if event.is_deallocation {
                 allocations.remove(&key);
             } else {
@@ -619,7 +670,8 @@ impl MemoryTracker {
         // Report potential leaks
         for ((allocation_type, component), event) in allocations {
             if let Ok(duration) = now.duration_since(event.timestamp) {
-                if duration.as_secs() > 60 { // Consider it a leak if allocated more than 1 minute ago
+                if duration.as_secs() > 60 {
+                    // Consider it a leak if allocated more than 1 minute ago
                     warnings.push(MemoryLeakWarning {
                         allocation_type,
                         component,
@@ -1376,18 +1428,16 @@ impl Default for PredictionModel {
 impl Default for AdvancedCacheWarming {
     fn default() -> Self {
         Self {
-            strategies: vec![
-                CacheWarmingStrategy {
-                    name: "Common Positions".to_string(),
-                    strategy_type: CacheWarmingType::PrecomputeCommon,
-                    parameters: CacheWarmingParameters {
-                        depth: 2,
-                        time_limit_ms: 1000,
-                        memory_limit_mb: 50,
-                    },
-                    effectiveness: 0.0,
+            strategies: vec![CacheWarmingStrategy {
+                name: "Common Positions".to_string(),
+                strategy_type: CacheWarmingType::PrecomputeCommon,
+                parameters: CacheWarmingParameters {
+                    depth: 2,
+                    time_limit_ms: 1000,
+                    memory_limit_mb: 50,
                 },
-            ],
+                effectiveness: 0.0,
+            }],
             enabled: false,
             performance: CacheWarmingPerformance::default(),
         }
@@ -1431,7 +1481,7 @@ pub struct AdvancedFeatureStatus {
 }
 
 /// Core move ordering system
-/// 
+///
 /// This struct provides the fundamental move ordering functionality,
 /// including basic sorting, statistics tracking, memory management,
 /// and Principal Variation (PV) move ordering.
@@ -1533,12 +1583,12 @@ pub struct StatisticsExport {
     pub cache_sizes: CacheSizes,
 }
 
-// PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness, 
+// PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness,
 // MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection
 // moved to statistics module
 
 /// Comprehensive configuration system for move ordering
-/// 
+///
 /// This struct contains all configuration options for the move ordering system,
 /// including weights, cache settings, and behavioral parameters.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1562,7 +1612,7 @@ pub struct MoveOrderingConfig {
 }
 
 /// Configuration weights for move ordering heuristics
-/// 
+///
 /// Allows fine-tuning of different move ordering strategies
 /// to optimize performance for specific positions or game phases.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1709,10 +1759,10 @@ impl Default for OrderingWeights {
             position_value_weight: 75,
             tactical_weight: 300,
             quiet_weight: 25,
-            pv_move_weight: 10000, // Highest priority for PV moves
-            killer_move_weight: 5000, // High priority for killer moves
-            history_weight: 2500, // Medium-high priority for history moves
-            see_weight: 2000, // High priority for SEE moves
+            pv_move_weight: 10000,     // Highest priority for PV moves
+            killer_move_weight: 5000,  // High priority for killer moves
+            history_weight: 2500,      // Medium-high priority for history moves
+            see_weight: 2000,          // High priority for SEE moves
             counter_move_weight: 3000, // Medium-high priority for counter-moves
         }
     }
@@ -1737,15 +1787,15 @@ impl Default for PerformanceConfig {
 impl Default for LearningConfig {
     fn default() -> Self {
         Self {
-            enable_learning: false, // Task 5.0: Disabled by default
-            learning_rate: 0.1, // Task 5.0: 10% adjustment per update
-            learning_frequency: 100, // Task 5.0: Update every 100 games/moves
-            min_games_for_learning: 10, // Task 5.0: Minimum 10 games before learning
-            min_effectiveness_diff: 0.05, // Task 5.0: 5% minimum difference to trigger adjustment
+            enable_learning: false,         // Task 5.0: Disabled by default
+            learning_rate: 0.1,             // Task 5.0: 10% adjustment per update
+            learning_frequency: 100,        // Task 5.0: Update every 100 games/moves
+            min_games_for_learning: 10,     // Task 5.0: Minimum 10 games before learning
+            min_effectiveness_diff: 0.05,   // Task 5.0: 5% minimum difference to trigger adjustment
             max_weight_change_percent: 0.2, // Task 5.0: Maximum 20% change per adjustment
-            enable_weight_bounds: true, // Task 5.0: Enable weight bounds by default
-            min_weight: 0, // Task 5.0: Minimum weight (non-negative)
-            max_weight: 20000, // Task 5.0: Maximum weight (reasonable upper bound)
+            enable_weight_bounds: true,     // Task 5.0: Enable weight bounds by default
+            min_weight: 0,                  // Task 5.0: Minimum weight (non-negative)
+            max_weight: 20000,              // Task 5.0: Maximum weight (reasonable upper bound)
         }
     }
 }
@@ -1801,10 +1851,14 @@ impl MoveOrderingConfig {
         if self.learning_config.learning_rate < 0.0 || self.learning_config.learning_rate > 1.0 {
             errors.push("Learning rate must be between 0.0 and 1.0".to_string());
         }
-        if self.learning_config.min_effectiveness_diff < 0.0 || self.learning_config.min_effectiveness_diff > 1.0 {
+        if self.learning_config.min_effectiveness_diff < 0.0
+            || self.learning_config.min_effectiveness_diff > 1.0
+        {
             errors.push("Minimum effectiveness difference must be between 0.0 and 1.0".to_string());
         }
-        if self.learning_config.max_weight_change_percent < 0.0 || self.learning_config.max_weight_change_percent > 1.0 {
+        if self.learning_config.max_weight_change_percent < 0.0
+            || self.learning_config.max_weight_change_percent > 1.0
+        {
             errors.push("Maximum weight change percent must be between 0.0 and 1.0".to_string());
         }
         if self.learning_config.enable_weight_bounds {
@@ -1824,18 +1878,25 @@ impl MoveOrderingConfig {
         if self.cache_config.max_cache_size == 0 {
             errors.push("Max cache size must be greater than 0".to_string());
         }
-        if self.cache_config.cache_warming_ratio < 0.0 || self.cache_config.cache_warming_ratio > 1.0 {
+        if self.cache_config.cache_warming_ratio < 0.0
+            || self.cache_config.cache_warming_ratio > 1.0
+        {
             errors.push("Cache warming ratio must be between 0.0 and 1.0".to_string());
         }
-        if self.cache_config.optimization_hit_rate_threshold < 0.0 || self.cache_config.optimization_hit_rate_threshold > 100.0 {
-            errors.push("Optimization hit rate threshold must be between 0.0 and 100.0".to_string());
+        if self.cache_config.optimization_hit_rate_threshold < 0.0
+            || self.cache_config.optimization_hit_rate_threshold > 100.0
+        {
+            errors
+                .push("Optimization hit rate threshold must be between 0.0 and 100.0".to_string());
         }
 
         // Validate killer configuration
         if self.killer_config.max_killer_moves_per_depth == 0 {
             errors.push("Max killer moves per depth must be greater than 0".to_string());
         }
-        if self.killer_config.killer_aging_factor < 0.0 || self.killer_config.killer_aging_factor > 1.0 {
+        if self.killer_config.killer_aging_factor < 0.0
+            || self.killer_config.killer_aging_factor > 1.0
+        {
             errors.push("Killer aging factor must be between 0.0 and 1.0".to_string());
         }
 
@@ -1843,7 +1904,9 @@ impl MoveOrderingConfig {
         if self.counter_move_config.max_counter_moves == 0 {
             errors.push("Max counter-moves must be greater than 0".to_string());
         }
-        if self.counter_move_config.counter_move_aging_factor < 0.0 || self.counter_move_config.counter_move_aging_factor > 1.0 {
+        if self.counter_move_config.counter_move_aging_factor < 0.0
+            || self.counter_move_config.counter_move_aging_factor > 1.0
+        {
             errors.push("Counter-move aging factor must be between 0.0 and 1.0".to_string());
         }
 
@@ -1851,7 +1914,9 @@ impl MoveOrderingConfig {
         if self.history_config.max_history_score == 0 {
             errors.push("Max history score must be greater than 0".to_string());
         }
-        if self.history_config.history_aging_factor < 0.0 || self.history_config.history_aging_factor > 1.0 {
+        if self.history_config.history_aging_factor < 0.0
+            || self.history_config.history_aging_factor > 1.0
+        {
             errors.push("History aging factor must be between 0.0 and 1.0".to_string());
         }
         if self.history_config.aging_frequency == 0 {
@@ -1881,7 +1946,7 @@ impl MoveOrderingConfig {
     /// Create a configuration optimized for performance
     pub fn performance_optimized() -> Self {
         let mut config = Self::default();
-        
+
         // Optimize cache settings
         config.cache_config.max_cache_size = 5000;
         config.cache_config.enable_cache_warming = true;
@@ -1912,7 +1977,7 @@ impl MoveOrderingConfig {
     /// Create a configuration optimized for debugging
     pub fn debug_optimized() -> Self {
         let mut config = Self::default();
-        
+
         // Smaller cache for debugging
         config.cache_config.max_cache_size = 500;
         config.cache_config.enable_cache_warming = false;
@@ -1937,7 +2002,7 @@ impl MoveOrderingConfig {
     /// Create a configuration optimized for memory usage
     pub fn memory_optimized() -> Self {
         let mut config = Self::default();
-        
+
         // Minimal cache settings
         config.cache_config.max_cache_size = 100;
         config.cache_config.enable_cache_warming = false;
@@ -2034,7 +2099,9 @@ impl MoveOrderingConfig {
                 max_weight: other.learning_config.max_weight,
             },
             performance_config: PerformanceConfig {
-                enable_performance_monitoring: other.performance_config.enable_performance_monitoring,
+                enable_performance_monitoring: other
+                    .performance_config
+                    .enable_performance_monitoring,
                 monitoring_interval_ms: other.performance_config.monitoring_interval_ms,
                 enable_memory_tracking: other.performance_config.enable_memory_tracking,
                 memory_warning_threshold: other.performance_config.memory_warning_threshold,
@@ -2065,7 +2132,7 @@ impl MoveOrderingConfig {
 }
 
 /// Memory usage tracking for move ordering
-/// 
+///
 /// Monitors memory consumption to ensure efficient resource usage
 /// and detect potential memory leaks.
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -2105,20 +2172,23 @@ impl MoveOrdering {
             move_score_cache: HashMap::new(),
             fast_score_cache: Vec::with_capacity(64), // Small L1 cache for hot scores
             transposition_table: ptr::null(),
-            hash_calculator: crate::search::ShogiHashHandler::new(config.cache_config.max_cache_size),
+            hash_calculator: crate::search::ShogiHashHandler::new(
+                config.cache_config.max_cache_size,
+            ),
             pv_ordering: PVOrdering::new(),
             cache_manager: MoveOrderingCacheManager::new(), // Task 6.0: use MoveOrderingCacheManager
             killer_move_manager: KillerMoveManager::new(),
             counter_move_manager: CounterMoveManager::new(),
             history_manager: HistoryHeuristicManager::new(),
             heuristic_effectiveness: HashMap::new(), // Task 5.0: Initialize heuristic effectiveness tracking
-            weight_change_history: Vec::new(), // Task 5.0: Initialize weight change history
-            learning_update_counter: 0, // Task 5.0: Initialize learning update counter
+            weight_change_history: Vec::new(),       // Task 5.0: Initialize weight change history
+            learning_update_counter: 0,              // Task 5.0: Initialize learning update counter
             history_update_counter: 0,
-            pattern_integrator: crate::evaluation::pattern_search_integration::PatternSearchIntegrator::new(),
+            pattern_integrator:
+                crate::evaluation::pattern_search_integration::PatternSearchIntegrator::new(),
             see_cache: SEECache::new(config.cache_config.max_see_cache_size),
             move_score_pool: Vec::with_capacity(256), // Pre-allocate for common move lists
-            move_pool: Vec::with_capacity(256), // Pre-allocate for common move lists
+            move_pool: Vec::with_capacity(256),       // Pre-allocate for common move lists
             error_handler: ErrorHandler::default(),
             memory_pool: MemoryPool::default(),
             memory_tracker: MemoryTracker::default(),
@@ -2146,7 +2216,7 @@ impl MoveOrdering {
     }
 
     /// Order moves using basic sorting heuristics
-    /// 
+    ///
     /// This is the core method that takes a list of moves and returns them
     /// ordered by priority using various heuristics.
     pub fn order_moves(&mut self, moves: &[Move]) -> MoveOrderingResult<Vec<Move>> {
@@ -2155,7 +2225,7 @@ impl MoveOrdering {
         }
 
         let start_time = TimeSource::now();
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -2188,7 +2258,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -2202,11 +2272,11 @@ impl MoveOrdering {
     }
 
     /// Score a move using comprehensive heuristics (optimized hot path)
-    /// 
+    ///
     /// Combines all available heuristics to assign a score to each move,
     /// which determines its priority in the ordering. This is the main
     /// scoring method that integrates all move evaluation strategies.
-    /// 
+    ///
     /// PERFORMANCE OPTIMIZATION: Inlined critical scoring functions
     /// and reduced function call overhead for hot path operations.
     pub fn score_move(&mut self, move_: &Move) -> MoveOrderingResult<i32> {
@@ -2220,16 +2290,17 @@ impl MoveOrdering {
         let move_hash = self.get_move_hash_fast(move_);
         self.stats.hot_path_stats.hash_time_us += hash_start.elapsed_ms() as u64 * 1000;
         self.stats.hot_path_stats.hash_calculations += 1;
-        
+
         let cache_start = TimeSource::now();
-        
+
         // OPTIMIZATION: Check fast cache first (L1 cache simulation)
         for &(hash, score) in &self.fast_score_cache {
             if hash == move_hash {
                 self.stats.cache_hits += 1;
                 self.stats.hot_path_stats.cache_lookups += 1;
                 self.stats.hot_path_stats.cache_time_us += cache_start.elapsed_ms() as u64 * 1000;
-                self.stats.hot_path_stats.score_move_time_us += start_time.elapsed_ms() as u64 * 1000;
+                self.stats.hot_path_stats.score_move_time_us +=
+                    start_time.elapsed_ms() as u64 * 1000;
                 return Ok(score);
             }
         }
@@ -2238,12 +2309,12 @@ impl MoveOrdering {
         if let Some(&cached_score) = self.move_score_cache.get(&move_hash) {
             self.stats.cache_hits += 1;
             self.stats.hot_path_stats.cache_lookups += 1;
-            
+
             // OPTIMIZATION: Promote to fast cache if frequently accessed
             if self.fast_score_cache.len() < 64 {
                 self.fast_score_cache.push((move_hash, cached_score));
             }
-            
+
             self.stats.hot_path_stats.cache_time_us += cache_start.elapsed_ms() as u64 * 1000;
             self.stats.hot_path_stats.score_move_time_us += start_time.elapsed_ms() as u64 * 1000;
             return Ok(cached_score);
@@ -2261,20 +2332,26 @@ impl MoveOrdering {
             let capture_score = self.score_capture_move_inline(move_);
             score += capture_score;
             capture_score
-        } else { 0 };
+        } else {
+            0
+        };
 
         // 2. Promotion scoring (high priority for strategic moves)
         let score_promotion = if move_.is_promotion {
             let promotion_score = self.score_promotion_move_inline(move_);
             score += promotion_score;
             promotion_score
-        } else { 0 };
+        } else {
+            0
+        };
 
         // 3. Tactical scoring (checks, threats, etc.)
         let score_tactical = if move_.gives_check {
             score += self.config.weights.tactical_weight;
             self.config.weights.tactical_weight
-        } else { 0 };
+        } else {
+            0
+        };
 
         // 4. Piece value scoring (base piece values) - inlined for performance
         let score_piece = move_.piece_type.base_value() / 20; // Scaled down for move ordering
@@ -2292,7 +2369,9 @@ impl MoveOrdering {
         let score_quiet = if !move_.is_capture && !move_.is_promotion && !move_.gives_check {
             score += self.config.weights.quiet_weight;
             self.config.weights.quiet_weight
-        } else { 0 };
+        } else {
+            0
+        };
 
         // Cache the score (with size limit)
         if self.move_score_cache.len() < self.config.cache_config.max_cache_size {
@@ -2302,10 +2381,10 @@ impl MoveOrdering {
         // OPTIMIZATION: Update profiling statistics
         let total_time = start_time.elapsed_ms() as u64 * 1000;
         let cache_time = cache_start.elapsed_ms() as u64 * 1000;
-        
+
         self.stats.hot_path_stats.cache_time_us += cache_time;
         self.stats.hot_path_stats.score_move_time_us += total_time;
-        
+
         // Update detailed timing statistics
         self.record_timing("move_scoring", total_time);
         self.record_timing("cache", cache_time);
@@ -2317,13 +2396,22 @@ impl MoveOrdering {
         self.update_heuristic_stats("piece_value", true, score_piece);
         self.update_heuristic_stats("position", true, score_position);
         self.update_heuristic_stats("development", true, score_development);
-        self.update_heuristic_stats("quiet", !move_.is_capture && !move_.is_promotion && !move_.gives_check, score_quiet);
+        self.update_heuristic_stats(
+            "quiet",
+            !move_.is_capture && !move_.is_promotion && !move_.gives_check,
+            score_quiet,
+        );
 
         Ok(score)
     }
 
     /// Update heuristic performance statistics
-    fn update_heuristic_stats(&mut self, heuristic_name: &str, applied: bool, score_contribution: i32) {
+    fn update_heuristic_stats(
+        &mut self,
+        heuristic_name: &str,
+        applied: bool,
+        score_contribution: i32,
+    ) {
         if !applied {
             return;
         }
@@ -2345,7 +2433,7 @@ impl MoveOrdering {
 
         heuristic_stats.applications += 1;
         heuristic_stats.total_score_contribution += score_contribution as i64;
-        heuristic_stats.avg_score_contribution = 
+        heuristic_stats.avg_score_contribution =
             heuristic_stats.total_score_contribution as f64 / heuristic_stats.applications as f64;
     }
 
@@ -2386,8 +2474,9 @@ impl MoveOrdering {
 
         timing_stats.total_time_us += duration_us;
         timing_stats.operation_count += 1;
-        timing_stats.avg_time_us = timing_stats.total_time_us as f64 / timing_stats.operation_count as f64;
-        
+        timing_stats.avg_time_us =
+            timing_stats.total_time_us as f64 / timing_stats.operation_count as f64;
+
         if timing_stats.min_time_us == 0 || duration_us < timing_stats.min_time_us {
             timing_stats.min_time_us = duration_us;
         }
@@ -2415,33 +2504,45 @@ impl MoveOrdering {
 
         cache_stats.current_size = size;
         cache_stats.max_size = max_size;
-        cache_stats.utilization = if max_size > 0 { (size as f64 / max_size as f64) * 100.0 } else { 0.0 };
-        
+        cache_stats.utilization = if max_size > 0 {
+            (size as f64 / max_size as f64) * 100.0
+        } else {
+            0.0
+        };
+
         let total_attempts = cache_stats.hits + cache_stats.misses;
-        cache_stats.hit_rate = if total_attempts > 0 { (cache_stats.hits as f64 / total_attempts as f64) * 100.0 } else { 0.0 };
+        cache_stats.hit_rate = if total_attempts > 0 {
+            (cache_stats.hits as f64 / total_attempts as f64) * 100.0
+        } else {
+            0.0
+        };
     }
 
     /// Update memory usage statistics
     #[allow(dead_code)] // Kept for future use and debugging
     fn update_memory_stats(&mut self) {
         let current_usage = MemoryBreakdown {
-            move_score_cache_bytes: self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
-            fast_cache_bytes: self.fast_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
+            move_score_cache_bytes: self.move_score_cache.len()
+                * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
+            fast_cache_bytes: self.fast_score_cache.len()
+                * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
             pv_cache_bytes: self.pv_ordering.cache_memory_bytes(), // Task 6.0: use PVOrdering module
             killer_moves_bytes: self.killer_move_manager.memory_bytes(), // Task 6.0: use KillerMoveManager
             history_table_bytes: self.history_manager.memory_bytes(), // Task 6.0: use HistoryHeuristicManager
             see_cache_bytes: self.see_cache.memory_bytes(), // Task 6.0: use SEECache module
-            object_pools_bytes: self.move_score_pool.capacity() * (std::mem::size_of::<(i32, usize)>()) + self.move_pool.capacity() * (std::mem::size_of::<Move>()),
+            object_pools_bytes: self.move_score_pool.capacity()
+                * (std::mem::size_of::<(i32, usize)>())
+                + self.move_pool.capacity() * (std::mem::size_of::<Move>()),
             total_bytes: 0,
         };
 
-        let total_bytes = current_usage.move_score_cache_bytes + 
-                         current_usage.fast_cache_bytes + 
-                         current_usage.pv_cache_bytes + 
-                         current_usage.killer_moves_bytes + 
-                         current_usage.history_table_bytes + 
-                         current_usage.see_cache_bytes + 
-                         current_usage.object_pools_bytes;
+        let total_bytes = current_usage.move_score_cache_bytes
+            + current_usage.fast_cache_bytes
+            + current_usage.pv_cache_bytes
+            + current_usage.killer_moves_bytes
+            + current_usage.history_table_bytes
+            + current_usage.see_cache_bytes
+            + current_usage.object_pools_bytes;
 
         let mut current_usage = current_usage;
         current_usage.total_bytes = total_bytes;
@@ -2455,11 +2556,15 @@ impl MoveOrdering {
     }
 
     /// Score a move using Static Exchange Evaluation (SEE)
-    /// 
+    ///
     /// SEE evaluates the material gain/loss from a sequence of captures
     /// starting with the given move. This provides a more accurate assessment
     /// of capture moves than simple piece values.
-    pub fn score_see_move(&mut self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> MoveOrderingResult<i32> {
+    pub fn score_see_move(
+        &mut self,
+        move_: &Move,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> MoveOrderingResult<i32> {
         // Validate the move first
         self.validate_move(move_)?;
 
@@ -2469,27 +2574,31 @@ impl MoveOrdering {
 
         let see_value = self.calculate_see(move_, board)?;
         let see_score = (see_value * self.config.weights.see_weight) / 1000;
-        
+
         // Update statistics
         self.stats.see_calculations += 1;
-        
+
         Ok(see_score)
     }
 
     /// Calculate Static Exchange Evaluation (SEE) for a move (optimized)
-    /// 
+    ///
     /// This method simulates the sequence of captures that would follow
     /// the given move and returns the net material gain/loss.
-    /// 
+    ///
     /// PERFORMANCE OPTIMIZATION: Fast cache key generation and optimized lookup.
-    pub fn calculate_see(&mut self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> MoveOrderingResult<i32> {
+    pub fn calculate_see(
+        &mut self,
+        move_: &Move,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> MoveOrderingResult<i32> {
         let start_time = TimeSource::now();
-        
+
         // OPTIMIZATION: Fast cache key generation using bit manipulation
         if self.config.cache_config.enable_see_cache {
             let from_pos = move_.from.unwrap_or(Position::new(0, 0));
             let cache_key = (from_pos, move_.to);
-            
+
             // OPTIMIZATION: Use direct hash lookup (Task 6.0: use SEECache module)
             if let Some(cached_value) = self.see_cache.get(from_pos, move_.to) {
                 self.stats.see_cache_hits += 1;
@@ -2500,7 +2609,7 @@ impl MoveOrdering {
         }
 
         let see_value = calculate_see_internal_helper(move_, board); // Task 6.0: use see_calculation module
-        
+
         // Cache the result if enabled (Task 7.0: enhanced with eviction tracking)
         if self.config.cache_config.enable_see_cache {
             let cache_key = (move_.from.unwrap_or(Position::new(0, 0)), move_.to);
@@ -2513,14 +2622,14 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.see_calculation_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_see_calculation_time_us = 
+        self.stats.avg_see_calculation_time_us =
             self.stats.see_calculation_time_us as f64 / self.stats.see_calculations as f64;
 
         Ok(see_value)
     }
 
     /// Internal SEE calculation implementation (Task 6.0: now delegates to module)
-    /// 
+    ///
     /// This method delegates to the see_calculation module's calculate_see_internal.
     /// The actual implementation has been extracted to the module for better organization.
     fn calculate_see_internal(&self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> i32 {
@@ -2528,17 +2637,24 @@ impl MoveOrdering {
     }
 
     /// Find all attackers and defenders of a given square (Task 6.0: now delegates to module)
-    /// 
+    ///
     /// This method delegates to the see_calculation module's find_attackers_defenders.
     /// The actual implementation has been extracted to the module for better organization.
-    fn find_attackers_defenders(&self, square: Position, board: &crate::bitboards::BitboardBoard) -> (Vec<(Position, crate::types::Piece)>, Vec<(Position, crate::types::Piece)>) {
+    fn find_attackers_defenders(
+        &self,
+        square: Position,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> (
+        Vec<(Position, crate::types::Piece)>,
+        Vec<(Position, crate::types::Piece)>,
+    ) {
         let all_attackers = find_attackers_defenders_helper(square, board); // Task 6.0: use see_calculation module
-        // Return all attackers with their positions; the caller will separate by player
+                                                                            // Return all attackers with their positions; the caller will separate by player
         (all_attackers, Vec::new())
     }
-    
+
     /// Internal helper to check if a specific piece attacks a square
-    /// 
+    ///
     /// This duplicates the logic from BitboardBoard::piece_attacks_square
     /// since that method is private.
     fn piece_attacks_square_internal(
@@ -2549,7 +2665,7 @@ impl MoveOrdering {
         board: &crate::bitboards::BitboardBoard,
     ) -> bool {
         let player = piece.player;
-        
+
         // Early bounds check
         if from_pos.row >= 9 || from_pos.col >= 9 || target_pos.row >= 9 || target_pos.col >= 9 {
             return false;
@@ -2557,16 +2673,24 @@ impl MoveOrdering {
 
         match piece.piece_type {
             crate::types::PieceType::Pawn => {
-                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == crate::types::Player::Black {
+                    1
+                } else {
+                    -1
+                };
                 let new_row = from_pos.row as i8 + dir;
                 if new_row >= 0 && new_row < 9 {
                     let attack_pos = Position::new(new_row as u8, from_pos.col);
                     return attack_pos == target_pos;
                 }
                 false
-            },
+            }
             crate::types::PieceType::Knight => {
-                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == crate::types::Player::Black {
+                    1
+                } else {
+                    -1
+                };
                 let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
                 for (dr, dc) in move_offsets.iter() {
                     let new_row = from_pos.row as i8 + dr;
@@ -2579,51 +2703,55 @@ impl MoveOrdering {
                     }
                 }
                 false
-            },
+            }
             crate::types::PieceType::Lance => {
-                let dir: i8 = if player == crate::types::Player::Black { 1 } else { -1 };
+                let dir: i8 = if player == crate::types::Player::Black {
+                    1
+                } else {
+                    -1
+                };
                 self.check_ray_attack_internal(from_pos, target_pos, (dir, 0), board)
-            },
+            }
             crate::types::PieceType::Rook => {
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
-            },
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
+            }
             crate::types::PieceType::Bishop => {
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
-            },
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
+            }
             crate::types::PieceType::PromotedBishop => {
                 // Bishop + King moves
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board) ||
-                self.check_king_attack_internal(from_pos, target_pos, player)
-            },
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
+                    || self.check_king_attack_internal(from_pos, target_pos, player)
+            }
             crate::types::PieceType::PromotedRook => {
                 // Rook + King moves
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board) ||
-                self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board) ||
-                self.check_king_attack_internal(from_pos, target_pos, player)
-            },
-            crate::types::PieceType::Silver | 
-            crate::types::PieceType::Gold | 
-            crate::types::PieceType::King | 
-            crate::types::PieceType::PromotedPawn | 
-            crate::types::PieceType::PromotedLance | 
-            crate::types::PieceType::PromotedKnight | 
-            crate::types::PieceType::PromotedSilver => {
+                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board)
+                    || self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
+                    || self.check_king_attack_internal(from_pos, target_pos, player)
+            }
+            crate::types::PieceType::Silver
+            | crate::types::PieceType::Gold
+            | crate::types::PieceType::King
+            | crate::types::PieceType::PromotedPawn
+            | crate::types::PieceType::PromotedLance
+            | crate::types::PieceType::PromotedKnight
+            | crate::types::PieceType::PromotedSilver => {
                 self.check_king_attack_internal(from_pos, target_pos, player)
             }
         }
     }
-    
+
     /// Check if a ray from from_pos in direction (dr, dc) hits target_pos
     fn check_ray_attack_internal(
         &self,
@@ -2634,32 +2762,32 @@ impl MoveOrdering {
     ) -> bool {
         let (dr, dc) = direction;
         let mut current_pos = from_pos;
-        
+
         loop {
             let new_row = current_pos.row as i8 + dr;
             let new_col = current_pos.col as i8 + dc;
-            
+
             // Out of bounds
             if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
                 break;
             }
-            
+
             current_pos = Position::new(new_row as u8, new_col as u8);
-            
+
             // Found target
             if current_pos == target_pos {
                 return true;
             }
-            
+
             // Blocked by a piece
             if board.is_square_occupied(current_pos) {
                 break;
             }
         }
-        
+
         false
     }
-    
+
     /// Check if a king-like piece attacks target_pos
     fn check_king_attack_internal(
         &self,
@@ -2669,19 +2797,23 @@ impl MoveOrdering {
     ) -> bool {
         let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
         let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
-        
+
         // King attacks adjacent squares (including diagonals)
         row_diff <= 1 && col_diff <= 1 && (row_diff != 0 || col_diff != 0)
     }
 
     /// Find the least valuable attacker in a list
-    /// 
+    ///
     /// This method finds the piece with the lowest value that can
     /// participate in the exchange sequence.
-    fn find_least_valuable_attacker(&self, attackers: &[crate::types::Piece], player: Player) -> Option<usize> {
+    fn find_least_valuable_attacker(
+        &self,
+        attackers: &[crate::types::Piece],
+        player: Player,
+    ) -> Option<usize> {
         let mut min_value = i32::MAX;
         let mut min_index = None;
-        
+
         for (index, attacker) in attackers.iter().enumerate() {
             if attacker.player == player {
                 let value = attacker.piece_type.base_value();
@@ -2691,20 +2823,23 @@ impl MoveOrdering {
                 }
             }
         }
-        
+
         min_index
     }
 
     /// Find a piece in a list by piece type and player
-    fn find_piece_in_list(&self, pieces: &[crate::types::Piece], target: &crate::types::Piece) -> Option<usize> {
-        pieces.iter().position(|piece| 
-            piece.piece_type == target.piece_type &&
-            piece.player == target.player
-        )
+    fn find_piece_in_list(
+        &self,
+        pieces: &[crate::types::Piece],
+        target: &crate::types::Piece,
+    ) -> Option<usize> {
+        pieces.iter().position(|piece| {
+            piece.piece_type == target.piece_type && piece.player == target.player
+        })
     }
 
     /// Score a capture move
-    /// 
+    ///
     /// Captures are generally high-priority moves that should be tried early.
     /// The score is based on the value of the captured piece.
     #[allow(dead_code)] // Kept for debugging and future use
@@ -2714,11 +2849,11 @@ impl MoveOrdering {
         }
 
         let mut score = self.config.weights.capture_weight;
-        
+
         // Add value of captured piece
         if let Some(captured) = &move_.captured_piece {
             score += captured.piece_type.base_value();
-            
+
             // Bonus for capturing higher-value pieces
             match captured.piece_type {
                 PieceType::King => score += 1000,
@@ -2762,7 +2897,7 @@ impl MoveOrdering {
     }
 
     /// Score a promotion move
-    /// 
+    ///
     /// Promotions are strategic moves that can significantly change
     /// the value and capabilities of a piece.
     #[allow(dead_code)] // Kept for debugging and future use
@@ -2772,10 +2907,10 @@ impl MoveOrdering {
         }
 
         let mut score = self.config.weights.promotion_weight;
-        
+
         // Add promotion value
         score += move_.promotion_value();
-        
+
         // Bonus for promoting to more valuable pieces
         match move_.piece_type {
             PieceType::Pawn => score += 200, // Pawn to Gold is very valuable
@@ -2803,7 +2938,7 @@ impl MoveOrdering {
     }
 
     /// Score a tactical move
-    /// 
+    ///
     /// Tactical moves include checks, threats, and other forcing moves
     /// that can lead to immediate tactical advantages.
     #[allow(dead_code)] // Kept for debugging and future use
@@ -2813,7 +2948,7 @@ impl MoveOrdering {
         // Check bonus
         if move_.gives_check {
             score += self.config.weights.tactical_weight;
-            
+
             // Bonus for different types of checks
             match move_.piece_type {
                 PieceType::Pawn => score += 50, // Pawn checks are often surprising
@@ -2841,7 +2976,7 @@ impl MoveOrdering {
     }
 
     /// Score piece value
-    /// 
+    ///
     /// Base scoring based on the intrinsic value of the piece being moved.
     /// Generally, more valuable pieces should be moved with more consideration.
     #[allow(dead_code)] // Kept for debugging and future use
@@ -2851,7 +2986,7 @@ impl MoveOrdering {
     }
 
     /// Score position value comprehensively
-    /// 
+    ///
     /// Evaluates the positional value of the move, including center control,
     /// king safety, piece activity, and other positional factors.
     /// Task 8.0: Simplified - removed calls to unimplemented stub functions
@@ -2859,7 +2994,7 @@ impl MoveOrdering {
     fn score_position_value_comprehensive(&self, move_: &Move) -> i32 {
         // Center control scoring
         self.score_position_value(&move_.to) * self.config.weights.position_value_weight / 100
-        
+
         // Task 8.0: Removed calls to unimplemented stubs:
         // - score_king_safety() - returns 0
         // - score_piece_activity() - returns 0
@@ -2867,26 +3002,28 @@ impl MoveOrdering {
     }
 
     /// Score development move
-    /// 
+    ///
     /// Evaluates how well the move develops the piece toward better positions,
     /// increases mobility, or improves piece coordination.
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_development_move(&self, move_: &Move) -> i32 {
         if let Some(from) = move_.from {
-            let mut score = self.score_development_value(from, move_.to) * self.config.weights.development_weight / 100;
-            
+            let mut score = self.score_development_value(from, move_.to)
+                * self.config.weights.development_weight
+                / 100;
+
             // Bonus for moving from back rank (development)
             if from.row <= 2 {
                 score += 20;
             }
-            
+
             // Bonus for moving toward center
             let center_distance_from = self.distance_to_center(from);
             let center_distance_to = self.distance_to_center(move_.to);
             if center_distance_to < center_distance_from {
                 score += 15;
             }
-            
+
             score
         } else {
             0
@@ -2894,7 +3031,7 @@ impl MoveOrdering {
     }
 
     /// Score quiet move
-    /// 
+    ///
     /// Evaluates quiet (non-capturing, non-promoting) moves based on
     /// positional considerations and strategic value.
     /// Task 8.0: Simplified - removed calls to unimplemented stub functions
@@ -2906,7 +3043,7 @@ impl MoveOrdering {
 
         // Base quiet move weight
         self.config.weights.quiet_weight
-        
+
         // Task 8.0: Removed calls to unimplemented stubs:
         // - score_mobility_improvement() - returns 0
         // - score_coordination_improvement() - returns 0
@@ -2923,7 +3060,7 @@ impl MoveOrdering {
     // These can be re-added when position analysis is available
 
     /// Calculate distance to center
-    /// 
+    ///
     /// Returns the Manhattan distance from a position to the center of the board.
     #[allow(dead_code)] // Kept for debugging and future use
     fn distance_to_center(&self, position: Position) -> i32 {
@@ -2933,32 +3070,32 @@ impl MoveOrdering {
     }
 
     /// Calculate position value for move scoring
-    /// 
+    ///
     /// Higher values for positions closer to the center of the board,
     /// which are generally more valuable in Shogi.
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_position_value(&self, position: &Position) -> i32 {
         let center_row = 4.0; // Middle row of 9x9 board
         let center_col = 4.0; // Middle column of 9x9 board
-        
+
         let row_diff = (position.row as f64 - center_row).abs();
         let col_diff = (position.col as f64 - center_col).abs();
-        
+
         let distance_from_center = row_diff + col_diff;
-        
+
         // Closer to center = higher score
         (8.0 - distance_from_center) as i32
     }
 
     /// Calculate development value for move scoring
-    /// 
+    ///
     /// Rewards moves that develop pieces toward the center
     /// or improve piece activity.
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_development_value(&self, from: Position, to: Position) -> i32 {
         let from_center_dist = self.distance_from_center(from);
         let to_center_dist = self.distance_from_center(to);
-        
+
         // Reward moving closer to center
         if to_center_dist < from_center_dist {
             1
@@ -2974,10 +3111,10 @@ impl MoveOrdering {
     fn distance_from_center(&self, position: Position) -> f64 {
         let center_row = 4.0;
         let center_col = 4.0;
-        
+
         let row_diff = position.row as f64 - center_row;
         let col_diff = position.col as f64 - center_col;
-        
+
         (row_diff * row_diff + col_diff * col_diff).sqrt()
     }
 
@@ -2985,31 +3122,33 @@ impl MoveOrdering {
     #[allow(dead_code)] // Kept for debugging and future use
     fn get_move_hash(&self, move_: &Move) -> u64 {
         let mut hash = 0u64;
-        
+
         hash = hash.wrapping_mul(31).wrapping_add(move_.to.row as u64);
         hash = hash.wrapping_mul(31).wrapping_add(move_.to.col as u64);
-        
+
         if let Some(from) = move_.from {
             hash = hash.wrapping_mul(31).wrapping_add(from.row as u64);
             hash = hash.wrapping_mul(31).wrapping_add(from.col as u64);
         }
-        
+
         hash = hash.wrapping_mul(31).wrapping_add(move_.piece_type as u64);
         hash = hash.wrapping_mul(31).wrapping_add(move_.player as u64);
-        
+
         hash
     }
 
     /// Fast hash calculation for move caching (optimized hot path)
-    /// 
+    ///
     /// Uses bit manipulation for maximum performance in the hot scoring path.
     fn get_move_hash_fast(&self, move_: &Move) -> u64 {
         // OPTIMIZATION: Use bit manipulation instead of arithmetic operations
         let from = move_.from.map(|pos| pos.to_u8() as u64).unwrap_or(0);
         let to = move_.to.to_u8() as u64;
         let piece_type = move_.piece_type.to_u8() as u64;
-        let flags = (move_.is_promotion as u64) | ((move_.is_capture as u64) << 1) | ((move_.gives_check as u64) << 2);
-        
+        let flags = (move_.is_promotion as u64)
+            | ((move_.is_capture as u64) << 1)
+            | ((move_.gives_check as u64) << 2);
+
         // Combine using bit shifts for maximum performance
         from << 32 | to << 24 | piece_type << 16 | flags << 8
     }
@@ -3020,7 +3159,7 @@ impl MoveOrdering {
             // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
             let victim_value = captured_piece.piece_type.base_value();
             let attacker_value = move_.piece_type.base_value();
-            
+
             // Scale the score based on the exchange value
             let exchange_value = victim_value - attacker_value;
             self.config.weights.capture_weight + exchange_value / 10
@@ -3034,13 +3173,13 @@ impl MoveOrdering {
         if move_.is_promotion {
             // Base promotion bonus
             let mut score = self.config.weights.promotion_weight;
-            
+
             // Bonus for promoting to center squares
             let center_distance = self.get_center_distance_fast(move_.to);
             if center_distance <= 1 {
                 score += 50;
             }
-            
+
             score
         } else {
             0
@@ -3050,18 +3189,18 @@ impl MoveOrdering {
     /// Fast position value calculation (optimized for hot path)
     fn score_position_value_fast(&self, move_: &Move) -> i32 {
         let mut score = 0i32;
-        
+
         // Center control bonus
         let center_distance = self.get_center_distance_fast(move_.to);
         if center_distance <= 2 {
             score += (3 - center_distance as i32) * 25;
         }
-        
+
         // Edge penalty
         if move_.to.row == 0 || move_.to.row == 8 || move_.to.col == 0 || move_.to.col == 8 {
             score -= 20;
         }
-        
+
         score
     }
 
@@ -3074,39 +3213,57 @@ impl MoveOrdering {
                 return self.config.weights.development_weight / 2;
             }
         }
-        
+
         0
     }
 
     /// Fast center distance calculation (optimized for hot path)
     fn get_center_distance_fast(&self, pos: Position) -> u8 {
         // Distance from center (4,4) using Manhattan distance
-        let dr = if pos.row > 4 { pos.row - 4 } else { 4 - pos.row };
-        let dc = if pos.col > 4 { pos.col - 4 } else { 4 - pos.col };
+        let dr = if pos.row > 4 {
+            pos.row - 4
+        } else {
+            4 - pos.row
+        };
+        let dc = if pos.col > 4 {
+            pos.col - 4
+        } else {
+            4 - pos.col
+        };
         dr + dc
     }
 
     /// Update memory usage statistics
     fn update_memory_usage(&mut self) {
         // Calculate current memory usage
-        let move_score_cache_memory = self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
+        let move_score_cache_memory =
+            self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
         let pv_cache_memory = self.pv_ordering.cache_memory_bytes(); // Task 6.0: use PVOrdering module
         let killer_moves_memory = self.killer_move_manager.memory_bytes(); // Task 6.0: use KillerMoveManager
         let history_table_memory = self.history_manager.memory_bytes(); // Task 6.0: use HistoryHeuristicManager
         let see_cache_memory = self.see_cache.memory_bytes(); // Task 6.0: use SEECache module
         let struct_memory = std::mem::size_of::<Self>();
-        
-        self.memory_usage.current_bytes = move_score_cache_memory + pv_cache_memory + killer_moves_memory + history_table_memory + see_cache_memory + struct_memory;
-        self.memory_usage.peak_bytes = self.memory_usage.peak_bytes.max(self.memory_usage.current_bytes);
-        
+
+        self.memory_usage.current_bytes = move_score_cache_memory
+            + pv_cache_memory
+            + killer_moves_memory
+            + history_table_memory
+            + see_cache_memory
+            + struct_memory;
+        self.memory_usage.peak_bytes = self
+            .memory_usage
+            .peak_bytes
+            .max(self.memory_usage.current_bytes);
+
         // Update statistics
         self.stats.memory_usage_bytes = self.memory_usage.current_bytes;
         self.stats.peak_memory_usage_bytes = self.memory_usage.peak_bytes;
-        
+
         // Update cache hit rate
         let total_cache_attempts = self.stats.cache_hits + self.stats.cache_misses;
         if total_cache_attempts > 0 {
-            self.stats.cache_hit_rate = (self.stats.cache_hits as f64 / total_cache_attempts as f64) * 100.0;
+            self.stats.cache_hit_rate =
+                (self.stats.cache_hits as f64 / total_cache_attempts as f64) * 100.0;
         }
     }
 
@@ -3119,7 +3276,6 @@ impl MoveOrdering {
     pub fn get_memory_usage(&self) -> &MemoryUsage {
         &self.memory_usage
     }
-
 
     /// Set individual heuristic weights for fine-tuning
     pub fn set_capture_weight(&mut self, weight: i32) {
@@ -3179,13 +3335,13 @@ impl MoveOrdering {
     pub fn set_config(&mut self, config: MoveOrderingConfig) -> Result<(), Vec<String>> {
         // Validate the new configuration
         config.validate()?;
-        
+
         // Update configuration
         self.config = config;
-        
+
         // Apply configuration changes
         self.apply_configuration_changes();
-        
+
         Ok(())
     }
 
@@ -3208,7 +3364,9 @@ impl MoveOrdering {
             return;
         }
 
-        let entry = self.heuristic_effectiveness.entry(heuristic_name.to_string())
+        let entry = self
+            .heuristic_effectiveness
+            .entry(heuristic_name.to_string())
             .or_insert_with(|| HeuristicEffectivenessMetrics {
                 hit_rate: 0.0,
                 cutoff_count: 0,
@@ -3260,9 +3418,12 @@ impl MoveOrdering {
         let mut adjustments_made = 0;
 
         // Calculate average effectiveness score
-        let avg_effectiveness: f64 = self.heuristic_effectiveness.values()
+        let avg_effectiveness: f64 = self
+            .heuristic_effectiveness
+            .values()
             .map(|m| m.effectiveness_score)
-            .sum::<f64>() / self.heuristic_effectiveness.len().max(1) as f64;
+            .sum::<f64>()
+            / self.heuristic_effectiveness.len().max(1) as f64;
 
         // Extract learning config values to avoid borrow checker issues
         let learning_rate = self.config.learning_config.learning_rate;
@@ -3274,29 +3435,35 @@ impl MoveOrdering {
 
         // Adjust weights for each heuristic based on effectiveness
         // Collect heuristic names and effectiveness differences first to avoid borrow conflicts
-        let adjustments: Vec<(String, f64, f64)> = self.heuristic_effectiveness.iter()
+        let adjustments: Vec<(String, f64, f64)> = self
+            .heuristic_effectiveness
+            .iter()
             .filter_map(|(heuristic_name, metrics)| {
                 let effectiveness_diff = metrics.effectiveness_score - avg_effectiveness;
-                
+
                 // Only adjust if effectiveness difference is significant
                 if effectiveness_diff.abs() < min_effectiveness_diff as f64 {
                     return None;
                 }
-                
-                Some((heuristic_name.clone(), metrics.effectiveness_score, effectiveness_diff))
+
+                Some((
+                    heuristic_name.clone(),
+                    metrics.effectiveness_score,
+                    effectiveness_diff,
+                ))
             })
             .collect();
-        
+
         // Now apply adjustments (no longer borrowing heuristic_effectiveness)
         for (heuristic_name, effectiveness_score, effectiveness_diff) in adjustments {
             // Determine which weight to adjust
             if let Some(weight_ref) = self.get_weight_ref_mut(&heuristic_name) {
                 // Get the old weight value
                 let old_weight = *weight_ref;
-                
+
                 // Calculate new weight
                 let mut new_weight = old_weight;
-                
+
                 // Adjust weight based on effectiveness
                 // Positive effectiveness_diff -> increase weight
                 // Negative effectiveness_diff -> decrease weight
@@ -3309,8 +3476,7 @@ impl MoveOrdering {
 
                 // Apply weight bounds if enabled
                 if enable_weight_bounds {
-                    new_weight = new_weight.max(min_weight)
-                        .min(max_weight);
+                    new_weight = new_weight.max(min_weight).min(max_weight);
                 }
 
                 // Only update if weight actually changed
@@ -3324,7 +3490,10 @@ impl MoveOrdering {
                         weight_name: heuristic_name.clone(),
                         old_weight,
                         new_weight,
-                        reason: format!("Effectiveness: {:.2} (avg: {:.2})", effectiveness_score, avg_effectiveness),
+                        reason: format!(
+                            "Effectiveness: {:.2} (avg: {:.2})",
+                            effectiveness_score, avg_effectiveness
+                        ),
                         timestamp: self.history_update_counter,
                     });
 
@@ -3393,12 +3562,17 @@ impl MoveOrdering {
     }
 
     /// Get heuristic effectiveness metrics (Task 5.0)
-    pub fn get_heuristic_effectiveness(&self, heuristic_name: &str) -> Option<&HeuristicEffectivenessMetrics> {
+    pub fn get_heuristic_effectiveness(
+        &self,
+        heuristic_name: &str,
+    ) -> Option<&HeuristicEffectivenessMetrics> {
         self.heuristic_effectiveness.get(heuristic_name)
     }
 
     /// Get all heuristic effectiveness metrics (Task 5.0)
-    pub fn get_all_heuristic_effectiveness(&self) -> &HashMap<String, HeuristicEffectivenessMetrics> {
+    pub fn get_all_heuristic_effectiveness(
+        &self,
+    ) -> &HashMap<String, HeuristicEffectivenessMetrics> {
         &self.heuristic_effectiveness
     }
 
@@ -3415,7 +3589,6 @@ impl MoveOrdering {
         self.stats.weight_adjustments = 0;
         self.stats.learning_effectiveness = 0.0;
     }
-
 
     /// Reset configuration to default values
     pub fn reset_config_to_default(&mut self) {
@@ -3440,31 +3613,36 @@ impl MoveOrdering {
         }
 
         // Update killer move limits if needed (Task 6.0: use KillerMoveManager)
-        self.killer_move_manager.set_max_killer_moves_per_depth(self.config.killer_config.max_killer_moves_per_depth);
+        self.killer_move_manager
+            .set_max_killer_moves_per_depth(self.config.killer_config.max_killer_moves_per_depth);
 
         // Update history table if needed (Task 6.0: use HistoryHeuristicManager)
         if self.config.history_config.enable_score_clamping {
-            self.history_manager.clamp_history_scores(self.config.history_config.max_history_score);
+            self.history_manager
+                .clamp_history_scores(self.config.history_config.max_history_score);
         }
 
         self.update_memory_usage();
     }
 
     /// Optimize move scoring performance
-    /// 
+    ///
     /// This method can be called to optimize the move scoring system
     /// based on current performance statistics.
     pub fn optimize_performance(&mut self) {
         // Adjust cache size based on hit rate
         let hit_rate = self.get_cache_hit_rate();
         if hit_rate > 80.0 && self.config.cache_config.max_cache_size < 5000 {
-            self.config.cache_config.max_cache_size = (self.config.cache_config.max_cache_size * 3) / 2; // 1.5x
+            self.config.cache_config.max_cache_size =
+                (self.config.cache_config.max_cache_size * 3) / 2; // 1.5x
         } else if hit_rate < 20.0 && self.config.cache_config.max_cache_size > 100 {
-            self.config.cache_config.max_cache_size = (self.config.cache_config.max_cache_size * 4) / 5; // 0.8x
+            self.config.cache_config.max_cache_size =
+                (self.config.cache_config.max_cache_size * 4) / 5; // 0.8x
         }
 
         // Clear cache if it's too large and hit rate is low
-        if self.move_score_cache.len() > self.config.cache_config.max_cache_size && hit_rate < 30.0 {
+        if self.move_score_cache.len() > self.config.cache_config.max_cache_size && hit_rate < 30.0
+        {
             self.move_score_cache.clear();
         }
 
@@ -3472,23 +3650,25 @@ impl MoveOrdering {
     }
 
     /// Get cache hit rate
-    /// 
+    ///
     /// Returns the current cache hit rate percentage.
     pub fn get_cache_hit_rate(&self) -> f64 {
         if self.stats.cache_hits + self.stats.cache_misses > 0 {
-            (self.stats.cache_hits as f64 / (self.stats.cache_hits + self.stats.cache_misses) as f64) * 100.0
+            (self.stats.cache_hits as f64
+                / (self.stats.cache_hits + self.stats.cache_misses) as f64)
+                * 100.0
         } else {
             0.0
         }
     }
 
     /// Set cache size for performance tuning
-    /// 
+    ///
     /// Adjusts the maximum cache size based on memory constraints
     /// and performance requirements.
     pub fn set_cache_size(&mut self, size: usize) {
         self.config.cache_config.max_cache_size = size;
-        
+
         // Trim cache if it's larger than new size
         if self.move_score_cache.len() > size {
             let mut keys_to_remove: Vec<u64> = Vec::new();
@@ -3501,7 +3681,7 @@ impl MoveOrdering {
                 self.move_score_cache.remove(&key);
             }
         }
-        
+
         self.update_memory_usage();
     }
 
@@ -3511,17 +3691,20 @@ impl MoveOrdering {
     }
 
     /// Warm up the cache with common moves
-    /// 
+    ///
     /// This method can be used to pre-populate the cache with
     /// frequently occurring moves to improve performance.
     pub fn warm_up_cache(&mut self, moves: &[Move]) {
-        for move_ in moves.iter().take(self.config.cache_config.max_cache_size / 2) {
+        for move_ in moves
+            .iter()
+            .take(self.config.cache_config.max_cache_size / 2)
+        {
             let _ = self.score_move(move_);
         }
     }
 
     /// Get comprehensive move scoring statistics
-    /// 
+    ///
     /// Returns detailed statistics about move scoring performance.
     pub fn get_scoring_stats(&self) -> (u64, u64, f64, u64, usize, usize) {
         (
@@ -3530,7 +3713,7 @@ impl MoveOrdering {
             self.get_cache_hit_rate(),
             self.stats.cache_misses,
             self.get_cache_size(),
-            self.get_max_cache_size()
+            self.get_max_cache_size(),
         )
     }
 
@@ -3570,17 +3753,22 @@ impl MoveOrdering {
 
     /// Get cache statistics
     pub fn get_cache_stats(&self) -> (u64, u64, f64) {
-        (self.stats.cache_hits, self.stats.cache_misses, self.stats.cache_hit_rate)
+        (
+            self.stats.cache_hits,
+            self.stats.cache_misses,
+            self.stats.cache_hit_rate,
+        )
     }
 
     /// Set maximum cache size
     pub fn set_max_cache_size(&mut self, max_size: usize) {
         self.config.cache_config.max_cache_size = max_size;
-        
+
         // Trim cache if necessary
         if self.move_score_cache.len() > max_size {
             let excess = self.move_score_cache.len() - max_size;
-            let keys_to_remove: Vec<u64> = self.move_score_cache.keys().take(excess).copied().collect();
+            let keys_to_remove: Vec<u64> =
+                self.move_score_cache.keys().take(excess).copied().collect();
             for key in keys_to_remove {
                 self.move_score_cache.remove(&key);
             }
@@ -3605,24 +3793,32 @@ impl MoveOrdering {
     }
 
     /// Score a move that matches the PV move from transposition table
-    /// 
+    ///
     /// PV moves get the highest priority score to ensure they are tried first.
     pub fn score_pv_move(&mut self, _move_: &Move) -> i32 {
         score_pv_move_helper(self.config.weights.pv_move_weight) // Task 6.0: use pv_ordering module
     }
 
     /// Get the PV move for a given position from the transposition table
-    /// 
+    ///
     /// This method queries the transposition table to find the best move
     /// for the current position and caches the result for performance.
-    pub fn get_pv_move(&mut self, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Option<Move> {
+    pub fn get_pv_move(
+        &mut self,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Option<Move> {
         if self.transposition_table.is_null() {
             return None;
         }
 
         // Calculate position hash
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-        
+        let position_hash = self
+            .hash_calculator
+            .get_position_hash(board, player, captured_pieces);
+
         // Check cache first (Task 6.0: use PVOrdering module)
         if let Some(cached_move) = self.pv_ordering.get_cached_pv_move(position_hash) {
             if cached_move.is_some() {
@@ -3635,11 +3831,9 @@ impl MoveOrdering {
 
         // Query transposition table
         self.stats.tt_lookups += 1;
-        
+
         // Safe access to transposition table
-        let tt_entry = unsafe {
-            (*self.transposition_table).probe(position_hash, depth)
-        };
+        let tt_entry = unsafe { (*self.transposition_table).probe(position_hash, depth) };
 
         let pv_move = if let Some(entry) = tt_entry {
             self.stats.tt_hits += 1;
@@ -3650,8 +3844,12 @@ impl MoveOrdering {
         };
 
         // Cache the result (Task 6.0: use PVOrdering module)
-        if !self.pv_ordering.is_cache_full(self.config.cache_config.max_cache_size) {
-            self.pv_ordering.cache_pv_move(position_hash, pv_move.clone());
+        if !self
+            .pv_ordering
+            .is_cache_full(self.config.cache_config.max_cache_size)
+        {
+            self.pv_ordering
+                .cache_pv_move(position_hash, pv_move.clone());
         }
 
         // Update PV move statistics
@@ -3664,24 +3862,35 @@ impl MoveOrdering {
         // Update PV move hit rate
         let total_pv_attempts = self.stats.pv_move_hits + self.stats.pv_move_misses;
         if total_pv_attempts > 0 {
-            self.stats.pv_move_hit_rate = (self.stats.pv_move_hits as f64 / total_pv_attempts as f64) * 100.0;
+            self.stats.pv_move_hit_rate =
+                (self.stats.pv_move_hits as f64 / total_pv_attempts as f64) * 100.0;
         }
 
         pv_move
     }
 
     /// Update the PV move for a position in the transposition table
-    /// 
+    ///
     /// This method stores the best move found during search back into
     /// the transposition table for future reference.
-    pub fn update_pv_move(&mut self, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, best_move: Move, score: i32) {
+    pub fn update_pv_move(
+        &mut self,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+        best_move: Move,
+        score: i32,
+    ) {
         if self.transposition_table.is_null() {
             return;
         }
 
         // Calculate position hash
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-        
+        let position_hash = self
+            .hash_calculator
+            .get_position_hash(board, player, captured_pieces);
+
         // Create transposition table entry
         let entry = TranspositionEntry {
             score,
@@ -3690,25 +3899,30 @@ impl MoveOrdering {
             best_move: Some(best_move.clone()),
             hash_key: position_hash,
             age: 0, // Will be set by the transposition table
-            source: crate::types::EntrySource::MainSearch,  // Task 7.0.3: Default to MainSearch
+            source: crate::types::EntrySource::MainSearch, // Task 7.0.3: Default to MainSearch
         };
 
         // Store in transposition table
         unsafe {
             if let Some(tt_ref) = self.transposition_table.as_ref() {
-                let tt_mut = tt_ref as *const crate::search::ThreadSafeTranspositionTable as *mut crate::search::ThreadSafeTranspositionTable;
+                let tt_mut = tt_ref as *const crate::search::ThreadSafeTranspositionTable
+                    as *mut crate::search::ThreadSafeTranspositionTable;
                 (*tt_mut).store(entry);
             }
         }
 
         // Update cache (Task 6.0: use PVOrdering module)
-        if !self.pv_ordering.is_cache_full(self.config.cache_config.max_cache_size) {
-            self.pv_ordering.cache_pv_move(position_hash, Some(best_move));
+        if !self
+            .pv_ordering
+            .is_cache_full(self.config.cache_config.max_cache_size)
+        {
+            self.pv_ordering
+                .cache_pv_move(position_hash, Some(best_move));
         }
     }
 
     /// Clear the PV move cache
-    /// 
+    ///
     /// This method clears all cached PV moves, typically called
     /// when starting a new search or when memory needs to be freed.
     pub fn clear_pv_move_cache(&mut self) {
@@ -3721,10 +3935,17 @@ impl MoveOrdering {
     }
 
     /// Check if a move matches the PV move for a position
-    /// 
+    ///
     /// This method determines if a given move is the PV move
     /// stored in the transposition table for the current position.
-    pub fn is_pv_move(&mut self, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, move_: &Move) -> bool {
+    pub fn is_pv_move(
+        &mut self,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+        move_: &Move,
+    ) -> bool {
         if let Some(pv_move) = self.get_pv_move(board, captured_pieces, player, depth) {
             self.moves_equal(&pv_move, move_)
         } else {
@@ -3733,23 +3954,30 @@ impl MoveOrdering {
     }
 
     /// Compare two moves for equality (Task 6.0: now uses module helper)
-    /// 
+    ///
     /// This method delegates to the pv_ordering module's moves_equal function.
     fn moves_equal(&self, a: &Move, b: &Move) -> bool {
         moves_equal_helper(a, b) // Task 6.0: use pv_ordering module
     }
 
     /// Order moves with PV move prioritization
-    /// 
+    ///
     /// This enhanced version of order_moves prioritizes PV moves from
     /// the transposition table, giving them the highest priority.
-    pub fn order_moves_with_pv(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    pub fn order_moves_with_pv(
+        &mut self,
+        moves: &[Move],
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
 
         let start_time = TimeSource::now();
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -3770,7 +3998,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -3780,7 +4008,7 @@ impl MoveOrdering {
     }
 
     /// Score a move with PV move consideration
-    /// 
+    ///
     /// This method scores a move, giving highest priority to PV moves
     /// and falling back to regular move scoring for other moves.
     fn score_move_with_pv(&mut self, move_: &Move, pv_move: &Option<Move>) -> i32 {
@@ -3796,7 +4024,7 @@ impl MoveOrdering {
     }
 
     /// Get PV move statistics
-    /// 
+    ///
     /// Returns statistics about PV move usage and effectiveness.
     pub fn get_pv_stats(&self) -> (u64, u64, f64, u64, u64) {
         (
@@ -3804,12 +4032,12 @@ impl MoveOrdering {
             self.stats.pv_move_misses,
             self.stats.pv_move_hit_rate,
             self.stats.tt_lookups,
-            self.stats.tt_hits
+            self.stats.tt_hits,
         )
     }
 
     /// Get transposition table hit rate
-    /// 
+    ///
     /// Returns the hit rate for transposition table lookups.
     pub fn get_tt_hit_rate(&self) -> f64 {
         if self.stats.tt_lookups > 0 {
@@ -3822,7 +4050,7 @@ impl MoveOrdering {
     // ==================== Killer Move Heuristic Methods ====================
 
     /// Set the current search depth for killer move management
-    /// 
+    ///
     /// This method should be called at the beginning of each search depth
     /// to ensure killer moves are properly organized by depth.
     pub fn set_current_depth(&mut self, depth: u8) {
@@ -3835,7 +4063,7 @@ impl MoveOrdering {
     }
 
     /// Score a move that matches a killer move
-    /// 
+    ///
     /// Killer moves get high priority to encourage trying moves that
     /// caused beta cutoffs in previous searches at the same depth.
     pub fn score_killer_move(&mut self, _move_: &Move) -> i32 {
@@ -3843,7 +4071,7 @@ impl MoveOrdering {
     }
 
     /// Add a killer move for the current depth
-    /// 
+    ///
     /// This method stores a move that caused a beta cutoff, making it
     /// a candidate for early consideration in future searches at the same depth.
     pub fn add_killer_move(&mut self, move_: Move) {
@@ -3852,24 +4080,25 @@ impl MoveOrdering {
             moves_equal_helper,
             self.config.killer_config.max_killer_moves_per_depth,
         );
-        
+
         if was_added {
             self.stats.killer_moves_stored += 1;
         }
-        
+
         self.update_memory_usage();
     }
 
     /// Check if a move is a killer move at the current depth
-    /// 
+    ///
     /// This method determines if a given move is stored as a killer move
     /// for the current search depth.
     pub fn is_killer_move(&mut self, move_: &Move) -> bool {
-        self.killer_move_manager.is_killer_move(move_, moves_equal_helper)
+        self.killer_move_manager
+            .is_killer_move(move_, moves_equal_helper)
     }
 
     /// Get all killer moves for a specific depth
-    /// 
+    ///
     /// Returns a reference to the killer moves list for the given depth,
     /// or None if no killer moves exist for that depth.
     pub fn get_killer_moves(&self, depth: u8) -> Option<&Vec<Move>> {
@@ -3877,7 +4106,7 @@ impl MoveOrdering {
     }
 
     /// Get all killer moves for the current depth
-    /// 
+    ///
     /// Returns a reference to the killer moves list for the current depth,
     /// or None if no killer moves exist for the current depth.
     pub fn get_current_killer_moves(&self) -> Option<&Vec<Move>> {
@@ -3885,7 +4114,7 @@ impl MoveOrdering {
     }
 
     /// Clear killer moves for a specific depth
-    /// 
+    ///
     /// This method removes all killer moves stored for the given depth.
     pub fn clear_killer_moves_for_depth(&mut self, depth: u8) {
         self.killer_move_manager.clear_killer_moves_for_depth(depth);
@@ -3893,7 +4122,7 @@ impl MoveOrdering {
     }
 
     /// Clear all killer moves
-    /// 
+    ///
     /// This method removes all killer moves from all depths.
     pub fn clear_all_killer_moves(&mut self) {
         self.killer_move_manager.clear_all_killer_moves();
@@ -3905,12 +4134,13 @@ impl MoveOrdering {
     }
 
     /// Set the maximum number of killer moves per depth
-    /// 
+    ///
     /// This method allows configuration of how many killer moves
     /// are stored for each search depth.
     pub fn set_max_killer_moves_per_depth(&mut self, max_moves: usize) {
         self.config.killer_config.max_killer_moves_per_depth = max_moves;
-        self.killer_move_manager.set_max_killer_moves_per_depth(max_moves);
+        self.killer_move_manager
+            .set_max_killer_moves_per_depth(max_moves);
         self.update_memory_usage();
     }
 
@@ -3920,23 +4150,25 @@ impl MoveOrdering {
     }
 
     /// Get killer move statistics
-    /// 
+    ///
     /// Returns statistics about killer move usage and effectiveness.
     pub fn get_killer_move_stats(&self) -> (u64, u64, f64, u64) {
         (
             self.stats.killer_move_hits,
             self.stats.killer_move_misses,
             self.stats.killer_move_hit_rate,
-            self.stats.killer_moves_stored
+            self.stats.killer_moves_stored,
         )
     }
 
     /// Get killer move hit rate
-    /// 
+    ///
     /// Returns the hit rate for killer move lookups.
     pub fn get_killer_move_hit_rate(&self) -> f64 {
         if self.stats.killer_move_hits + self.stats.killer_move_misses > 0 {
-            (self.stats.killer_move_hits as f64 / (self.stats.killer_move_hits + self.stats.killer_move_misses) as f64) * 100.0
+            (self.stats.killer_move_hits as f64
+                / (self.stats.killer_move_hits + self.stats.killer_move_misses) as f64)
+                * 100.0
         } else {
             0.0
         }
@@ -3945,10 +4177,10 @@ impl MoveOrdering {
     // ==================== Counter-Move Heuristic Methods ====================
 
     /// Add a counter-move for an opponent's move
-    /// 
+    ///
     /// This method stores a move that refuted (caused a cutoff against) an opponent's move.
     /// Counter-moves are used to prioritize moves that were successful against specific opponent moves.
-    /// 
+    ///
     /// # Arguments
     /// * `opponent_move` - The opponent's move that was refuted
     /// * `counter_move` - The move that refuted the opponent's move
@@ -3963,19 +4195,19 @@ impl MoveOrdering {
             moves_equal_helper,
             self.config.counter_move_config.max_counter_moves,
         );
-        
+
         if was_added {
             self.stats.counter_moves_stored += 1;
         }
-        
+
         self.update_memory_usage();
     }
 
     /// Score a move that matches a counter-move for the opponent's last move
-    /// 
+    ///
     /// Counter-moves get medium-high priority to encourage trying moves that
     /// refuted opponent moves in previous searches.
-    /// 
+    ///
     /// # Arguments
     /// * `move_` - The move to score
     /// * `opponent_last_move` - The opponent's last move (if available)
@@ -3984,20 +4216,23 @@ impl MoveOrdering {
             return 0;
         }
 
-        if self.counter_move_manager.is_counter_move(move_, opponent_last_move, moves_equal_helper) {
+        if self
+            .counter_move_manager
+            .is_counter_move(move_, opponent_last_move, moves_equal_helper)
+        {
             self.stats.counter_move_hits += 1;
             return score_counter_move_helper(self.config.weights.counter_move_weight);
         }
-        
+
         self.stats.counter_move_misses += 1;
         0
     }
 
     /// Check if a move is a counter-move for the opponent's last move
-    /// 
+    ///
     /// This method determines if a given move is stored as a counter-move
     /// for the opponent's last move.
-    /// 
+    ///
     /// # Arguments
     /// * `move_` - The move to check
     /// * `opponent_last_move` - The opponent's last move (if available)
@@ -4006,14 +4241,15 @@ impl MoveOrdering {
             return false;
         }
 
-        self.counter_move_manager.is_counter_move(move_, opponent_last_move, moves_equal_helper)
+        self.counter_move_manager
+            .is_counter_move(move_, opponent_last_move, moves_equal_helper)
     }
 
     /// Get all counter-moves for an opponent's move
-    /// 
+    ///
     /// Returns a reference to the counter-moves list for the given opponent move,
     /// or None if no counter-moves exist for that opponent move.
-    /// 
+    ///
     /// # Arguments
     /// * `opponent_move` - The opponent's move to get counter-moves for
     pub fn get_counter_moves(&self, opponent_move: &Move) -> Option<&Vec<Move>> {
@@ -4021,15 +4257,16 @@ impl MoveOrdering {
     }
 
     /// Clear all counter-moves for a specific opponent move
-    /// 
+    ///
     /// This method clears all counter-moves stored for the given opponent move.
     pub fn clear_counter_moves_for_opponent_move(&mut self, opponent_move: &Move) {
-        self.counter_move_manager.clear_counter_moves_for_opponent_move(opponent_move);
+        self.counter_move_manager
+            .clear_counter_moves_for_opponent_move(opponent_move);
         self.update_memory_usage();
     }
 
     /// Clear all counter-moves
-    /// 
+    ///
     /// This method clears all counter-moves from the table, typically called
     /// when starting a new search or when memory needs to be freed.
     pub fn clear_all_counter_moves(&mut self) {
@@ -4042,7 +4279,7 @@ impl MoveOrdering {
     }
 
     /// Set maximum counter-moves per opponent move
-    /// 
+    ///
     /// Adjusts the maximum number of counter-moves stored per opponent move.
     pub fn set_max_counter_moves(&mut self, max_moves: usize) {
         self.config.counter_move_config.max_counter_moves = max_moves;
@@ -4056,19 +4293,19 @@ impl MoveOrdering {
     }
 
     /// Get counter-move statistics
-    /// 
+    ///
     /// Returns statistics about counter-move usage and effectiveness.
     pub fn get_counter_move_stats(&self) -> (u64, u64, f64, u64) {
         (
             self.stats.counter_move_hits,
             self.stats.counter_move_misses,
             self.stats.counter_move_hit_rate,
-            self.stats.counter_moves_stored
+            self.stats.counter_moves_stored,
         )
     }
 
     /// Get counter-move hit rate
-    /// 
+    ///
     /// Returns the hit rate for counter-move lookups.
     pub fn get_counter_move_hit_rate(&self) -> f64 {
         let total = self.stats.counter_move_hits + self.stats.counter_move_misses;
@@ -4080,20 +4317,21 @@ impl MoveOrdering {
     }
 
     /// Update counter-move hit rate statistics
-    /// 
+    ///
     /// This method should be called periodically to update the hit rate
     /// based on current hit/miss counts.
     fn update_counter_move_hit_rate(&mut self) {
         let total = self.stats.counter_move_hits + self.stats.counter_move_misses;
         if total > 0 {
-            self.stats.counter_move_hit_rate = (self.stats.counter_move_hits as f64 / total as f64) * 100.0;
+            self.stats.counter_move_hit_rate =
+                (self.stats.counter_move_hits as f64 / total as f64) * 100.0;
         } else {
             self.stats.counter_move_hit_rate = 0.0;
         }
     }
 
     /// Order moves with killer move prioritization
-    /// 
+    ///
     /// This enhanced version of order_moves prioritizes killer moves
     /// from the current search depth, giving them high priority.
     pub fn order_moves_with_killer(&mut self, moves: &[Move]) -> Vec<Move> {
@@ -4102,7 +4340,7 @@ impl MoveOrdering {
         }
 
         let start_time = TimeSource::now();
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -4123,7 +4361,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -4133,12 +4371,15 @@ impl MoveOrdering {
     }
 
     /// Score a move with killer move consideration
-    /// 
+    ///
     /// This method scores a move, giving high priority to killer moves
     /// and falling back to regular move scoring for other moves.
     fn score_move_with_killer(&mut self, move_: &Move, killer_moves: &[Move]) -> i32 {
         // Check if this is a killer move
-        if killer_moves.iter().any(|killer| self.moves_equal(move_, killer)) {
+        if killer_moves
+            .iter()
+            .any(|killer| self.moves_equal(move_, killer))
+        {
             self.stats.killer_move_hits += 1;
             return self.score_killer_move(move_);
         }
@@ -4149,16 +4390,23 @@ impl MoveOrdering {
     }
 
     /// Order moves with both PV and killer move prioritization
-    /// 
+    ///
     /// This method combines PV move and killer move prioritization
     /// for optimal move ordering.
-    pub fn order_moves_with_pv_and_killer(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    pub fn order_moves_with_pv_and_killer(
+        &mut self,
+        moves: &[Move],
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
 
         let start_time = TimeSource::now();
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -4185,7 +4433,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -4195,12 +4443,17 @@ impl MoveOrdering {
     }
 
     /// Score a move with both PV and killer move consideration
-    /// 
+    ///
     /// This method scores a move with the following priority:
     /// 1. PV moves (highest priority)
     /// 2. Killer moves (high priority)
     /// 3. Regular moves (normal priority)
-    fn score_move_with_pv_and_killer(&mut self, move_: &Move, pv_move: &Option<Move>, killer_moves: &[Move]) -> i32 {
+    fn score_move_with_pv_and_killer(
+        &mut self,
+        move_: &Move,
+        pv_move: &Option<Move>,
+        killer_moves: &[Move],
+    ) -> i32 {
         // Check if this is the PV move (highest priority)
         if let Some(ref pv) = pv_move {
             if self.moves_equal(move_, pv) {
@@ -4209,7 +4462,10 @@ impl MoveOrdering {
         }
 
         // Check if this is a killer move (high priority)
-        if killer_moves.iter().any(|killer| self.moves_equal(move_, killer)) {
+        if killer_moves
+            .iter()
+            .any(|killer| self.moves_equal(move_, killer))
+        {
             self.stats.killer_move_hits += 1;
             return self.score_killer_move(move_);
         }
@@ -4223,9 +4479,13 @@ impl MoveOrdering {
 
     /// Determine game phase based on material count
     /// Task 4.0: Helper method for phase-aware history
-    fn determine_game_phase_from_material(&self, board: &crate::bitboards::BitboardBoard) -> crate::types::GamePhase {
+    fn determine_game_phase_from_material(
+        &self,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> crate::types::GamePhase {
         // Task 6.0: Delegate to history manager
-        self.history_manager.determine_game_phase_from_material(board)
+        self.history_manager
+            .determine_game_phase_from_material(board)
     }
 
     /// Get current timestamp for time-based aging
@@ -4236,7 +4496,7 @@ impl MoveOrdering {
     }
 
     /// Score a move using history heuristic
-    /// 
+    ///
     /// Returns a score based on how often this move has been successful
     /// in previous searches.
     /// Task 4.0: Enhanced to support relative history, phase-aware history, and quiet-move-only history
@@ -4247,7 +4507,7 @@ impl MoveOrdering {
             &self.config.history_config,
             current_time,
         );
-        
+
         if history_score > 0 {
             self.stats.history_hits += 1;
             score_history_move_helper(history_score, self.config.weights.history_weight)
@@ -4271,16 +4531,21 @@ impl MoveOrdering {
     }
 
     /// Update history score for a move
-    /// 
+    ///
     /// This method should be called when a move causes a cutoff or
     /// improves the alpha bound during search.
     /// Task 4.0: Enhanced to support relative history, phase-aware history, quiet-move-only history, and time-based aging
-    pub fn update_history_score(&mut self, move_: &Move, depth: u8, board: Option<&crate::bitboards::BitboardBoard>) {
+    pub fn update_history_score(
+        &mut self,
+        move_: &Move,
+        depth: u8,
+        board: Option<&crate::bitboards::BitboardBoard>,
+    ) {
         if let Some(_from) = move_.from {
             // Use safe multiplication to prevent overflow (depth is u8, max value is 255)
             // depth * depth can overflow u8 if depth > 16, so cast to u32 first
             let bonus = ((depth as u32) * (depth as u32)) as u32; // Bonus proportional to depth
-            
+
             // Task 6.0: Delegate to history manager
             self.history_manager.update_history_score(
                 move_,
@@ -4289,48 +4554,46 @@ impl MoveOrdering {
                 &self.config.history_config,
                 board,
             );
-            
+
             self.stats.history_updates += 1;
             self.history_update_counter = self.history_manager.get_history_update_counter();
-            
+
             // Check if automatic aging should be performed
             if self.config.history_config.enable_automatic_aging {
                 if self.history_update_counter % self.config.history_config.aging_frequency == 0 {
                     self.age_history_table();
                 }
             }
-            
+
             self.update_memory_usage();
         }
     }
 
     /// Get history score for a move
-    /// 
+    ///
     /// Returns the current history score for the given move, or 0 if not found.
     /// Task 4.0: Enhanced to support all history table types
     pub fn get_history_score(&mut self, move_: &Move) -> u32 {
         let current_time = self.history_manager.get_time_aging_counter();
-        self.history_manager.get_history_score(
-            move_,
-            &self.config.history_config,
-            current_time,
-        )
+        self.history_manager
+            .get_history_score(move_, &self.config.history_config, current_time)
     }
 
     /// Age the history table to prevent overflow
-    /// 
+    ///
     /// This method reduces all history scores by the aging factor,
     /// helping to prevent overflow and giving more weight to recent moves.
     /// Task 4.0: Enhanced to age all history table types (absolute, relative, quiet, phase-aware)
     pub fn age_history_table(&mut self) {
         // Task 6.0: Delegate to history manager
-        self.history_manager.age_history_table(&self.config.history_config);
+        self.history_manager
+            .age_history_table(&self.config.history_config);
         self.stats.history_aging_operations += 1;
         self.update_memory_usage();
     }
 
     /// Clear the history table
-    /// 
+    ///
     /// This method removes all history entries and resets statistics.
     /// Task 4.0: Enhanced to clear all history table types
     pub fn clear_history_table(&mut self) {
@@ -4345,12 +4608,12 @@ impl MoveOrdering {
     }
 
     /// Set the maximum history score
-    /// 
+    ///
     /// This method configures the maximum value for history scores
     /// to prevent overflow.
     pub fn set_max_history_score(&mut self, max_score: u32) {
         self.config.history_config.max_history_score = max_score;
-        
+
         // Task 6.0: Delegate to history manager
         self.history_manager.clamp_history_scores(max_score);
     }
@@ -4361,7 +4624,7 @@ impl MoveOrdering {
     }
 
     /// Set the history aging factor
-    /// 
+    ///
     /// This method configures how much history scores are reduced
     /// during aging operations (0.0 to 1.0).
     pub fn set_history_aging_factor(&mut self, factor: f32) {
@@ -4374,7 +4637,7 @@ impl MoveOrdering {
     }
 
     /// Get history heuristic statistics
-    /// 
+    ///
     /// Returns comprehensive statistics about history heuristic usage.
     pub fn get_history_stats(&self) -> (u64, u64, f64, u64, u64) {
         (
@@ -4382,23 +4645,25 @@ impl MoveOrdering {
             self.stats.history_misses,
             self.stats.history_hit_rate,
             self.stats.history_updates,
-            self.stats.history_aging_operations
+            self.stats.history_aging_operations,
         )
     }
 
     /// Get history heuristic hit rate
-    /// 
+    ///
     /// Returns the hit rate for history heuristic lookups.
     pub fn get_history_hit_rate(&self) -> f64 {
         if self.stats.history_hits + self.stats.history_misses > 0 {
-            (self.stats.history_hits as f64 / (self.stats.history_hits + self.stats.history_misses) as f64) * 100.0
+            (self.stats.history_hits as f64
+                / (self.stats.history_hits + self.stats.history_misses) as f64)
+                * 100.0
         } else {
             0.0
         }
     }
 
     /// Get history update counter
-    /// 
+    ///
     /// Returns the current value of the history update counter,
     /// which is used for automatic aging.
     pub fn get_history_update_counter(&self) -> u64 {
@@ -4406,7 +4671,7 @@ impl MoveOrdering {
     }
 
     /// Reset history update counter
-    /// 
+    ///
     /// Resets the history update counter to zero.
     /// This is useful for testing or when you want to reset
     /// the automatic aging cycle.
@@ -4417,7 +4682,7 @@ impl MoveOrdering {
     // ==================== SEE Cache Management ====================
 
     /// Clear the SEE cache
-    /// 
+    ///
     /// Removes all entries from the SEE cache, freeing memory
     /// and resetting cache statistics.
     pub fn clear_see_cache(&mut self) {
@@ -4429,14 +4694,14 @@ impl MoveOrdering {
     }
 
     /// Get SEE cache size
-    /// 
+    ///
     /// Returns the current number of entries in the SEE cache.
     pub fn get_see_cache_size(&self) -> usize {
         self.see_cache.len()
     }
 
     /// Get SEE cache hit rate
-    /// 
+    ///
     /// Returns the current SEE cache hit rate percentage.
     pub fn get_see_cache_hit_rate(&self) -> f64 {
         let total_attempts = self.stats.see_cache_hits + self.stats.see_cache_misses;
@@ -4448,23 +4713,23 @@ impl MoveOrdering {
     }
 
     /// Set maximum SEE cache size
-    /// 
+    ///
     /// Adjusts the maximum number of entries in the SEE cache.
     /// If the current cache is larger than the new size, it will be trimmed.
     pub fn set_max_see_cache_size(&mut self, max_size: usize) {
         self.config.cache_config.max_see_cache_size = max_size;
-        
+
         // Task 6.0: SEECache manages its own max size
         // For now, just clear if over limit (can be enhanced with proper resizing)
         if self.see_cache.len() > max_size {
             self.see_cache.clear(); // Simple approach: clear if over limit
         }
-        
+
         self.update_memory_usage();
     }
 
     /// Get SEE statistics
-    /// 
+    ///
     /// Returns comprehensive statistics about SEE calculation performance.
     pub fn get_see_stats(&self) -> (u64, u64, u64, f64, u64, f64) {
         (
@@ -4478,7 +4743,7 @@ impl MoveOrdering {
     }
 
     /// Enable or disable SEE cache
-    /// 
+    ///
     /// Controls whether SEE results are cached for performance optimization.
     pub fn set_see_cache_enabled(&mut self, enabled: bool) {
         self.config.cache_config.enable_see_cache = enabled;
@@ -4490,71 +4755,71 @@ impl MoveOrdering {
     // ==================== Performance Benchmarking ====================
 
     /// Benchmark move scoring performance
-    /// 
+    ///
     /// Returns timing statistics for move scoring operations.
     pub fn benchmark_move_scoring(&mut self, moves: &[Move], iterations: usize) -> (u64, f64) {
         let start_time = TimeSource::now();
-        
+
         for _ in 0..iterations {
             for move_ in moves {
                 self.score_move(move_).unwrap_or(0);
             }
         }
-        
+
         let total_time = start_time.elapsed_ms() as u64 * 1000;
         let avg_time_per_move = total_time as f64 / (moves.len() * iterations) as f64;
-        
+
         (total_time, avg_time_per_move)
     }
 
     /// Benchmark move ordering performance
-    /// 
+    ///
     /// Returns timing statistics for complete move ordering operations.
     pub fn benchmark_move_ordering(&mut self, moves: &[Move], iterations: usize) -> (u64, f64) {
         let start_time = TimeSource::now();
-        
+
         for _ in 0..iterations {
             let _ = self.order_moves(moves);
         }
-        
+
         let total_time = start_time.elapsed_ms() as u64 * 1000;
         let avg_time_per_ordering = total_time as f64 / iterations as f64;
-        
+
         (total_time, avg_time_per_ordering)
     }
 
     /// Benchmark cache performance
-    /// 
+    ///
     /// Returns cache hit rates and timing for cache operations.
     pub fn benchmark_cache_performance(&mut self, moves: &[Move], iterations: usize) -> (f64, u64) {
         let initial_hits = self.stats.cache_hits;
         let initial_misses = self.stats.cache_misses;
-        
+
         let start_time = TimeSource::now();
-        
+
         for _ in 0..iterations {
             for move_ in moves {
                 self.score_move(move_).unwrap_or(0);
             }
         }
-        
+
         let total_time = start_time.elapsed_ms() as u64 * 1000;
-        
+
         let new_hits = self.stats.cache_hits - initial_hits;
         let new_misses = self.stats.cache_misses - initial_misses;
         let total_attempts = new_hits + new_misses;
-        
+
         let hit_rate = if total_attempts > 0 {
             (new_hits as f64 / total_attempts as f64) * 100.0
         } else {
             0.0
         };
-        
+
         (hit_rate, total_time)
     }
 
     /// Get comprehensive performance statistics
-    /// 
+    ///
     /// Returns all performance metrics for analysis and optimization.
     pub fn get_performance_stats(&self) -> PerformanceStats {
         PerformanceStats {
@@ -4568,7 +4833,7 @@ impl MoveOrdering {
                 move_score_cache: self.move_score_cache.len(),
                 fast_cache: self.fast_score_cache.len(),
                 pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
-                see_cache: self.see_cache.len(), // Task 6.0: use SEECache module
+                see_cache: self.see_cache.len(),         // Task 6.0: use SEECache module
                 history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
             },
         }
@@ -4577,12 +4842,14 @@ impl MoveOrdering {
     // ==================== Statistics Export ====================
 
     /// Export comprehensive statistics to JSON format
-    /// 
+    ///
     /// Returns a JSON string containing all performance statistics for analysis.
     pub fn export_statistics_json(&self) -> String {
         let export_data = StatisticsExport {
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default().as_secs(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
             ordering_stats: self.stats.clone(),
             config: self.config.clone(),
             memory_usage: self.memory_usage.clone(),
@@ -4590,7 +4857,7 @@ impl MoveOrdering {
                 move_score_cache: self.move_score_cache.len(),
                 fast_cache: self.fast_score_cache.len(),
                 pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
-                see_cache: self.see_cache.len(), // Task 6.0: use SEECache module
+                see_cache: self.see_cache.len(),         // Task 6.0: use SEECache module
                 history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
             },
         };
@@ -4599,36 +4866,61 @@ impl MoveOrdering {
     }
 
     /// Export statistics to CSV format for spreadsheet analysis
-    /// 
+    ///
     /// Returns CSV data with key performance metrics.
     pub fn export_statistics_csv(&self) -> String {
         let mut csv = String::new();
-        
+
         // Header
         csv.push_str("Metric,Value,Unit\n");
-        
+
         // Basic statistics
-        csv.push_str(&format!("Total Moves Ordered,{},\n", self.stats.total_moves_ordered));
-        csv.push_str(&format!("Average Ordering Time,{:.2},microseconds\n", self.stats.avg_ordering_time_us));
-        csv.push_str(&format!("Cache Hit Rate,{:.2},percent\n", self.stats.cache_hit_rate));
-        csv.push_str(&format!("SEE Cache Hit Rate,{:.2},percent\n", self.get_see_cache_hit_rate()));
-        
+        csv.push_str(&format!(
+            "Total Moves Ordered,{},\n",
+            self.stats.total_moves_ordered
+        ));
+        csv.push_str(&format!(
+            "Average Ordering Time,{:.2},microseconds\n",
+            self.stats.avg_ordering_time_us
+        ));
+        csv.push_str(&format!(
+            "Cache Hit Rate,{:.2},percent\n",
+            self.stats.cache_hit_rate
+        ));
+        csv.push_str(&format!(
+            "SEE Cache Hit Rate,{:.2},percent\n",
+            self.get_see_cache_hit_rate()
+        ));
+
         // Heuristic statistics
-        csv.push_str(&format!("Capture Applications,{},\n", self.stats.heuristic_stats.capture_stats.applications));
-        csv.push_str(&format!("Promotion Applications,{},\n", self.stats.heuristic_stats.promotion_stats.applications));
-        csv.push_str(&format!("Tactical Applications,{},\n", self.stats.heuristic_stats.tactical_stats.applications));
-        
+        csv.push_str(&format!(
+            "Capture Applications,{},\n",
+            self.stats.heuristic_stats.capture_stats.applications
+        ));
+        csv.push_str(&format!(
+            "Promotion Applications,{},\n",
+            self.stats.heuristic_stats.promotion_stats.applications
+        ));
+        csv.push_str(&format!(
+            "Tactical Applications,{},\n",
+            self.stats.heuristic_stats.tactical_stats.applications
+        ));
+
         // Memory statistics
-        csv.push_str(&format!("Current Memory Usage,{:.2},MB\n", 
-            self.memory_usage.current_bytes as f64 / 1_000_000.0));
-        csv.push_str(&format!("Peak Memory Usage,{:.2},MB\n", 
-            self.memory_usage.peak_bytes as f64 / 1_000_000.0));
-        
+        csv.push_str(&format!(
+            "Current Memory Usage,{:.2},MB\n",
+            self.memory_usage.current_bytes as f64 / 1_000_000.0
+        ));
+        csv.push_str(&format!(
+            "Peak Memory Usage,{:.2},MB\n",
+            self.memory_usage.peak_bytes as f64 / 1_000_000.0
+        ));
+
         csv
     }
 
     /// Export performance summary for quick analysis
-    /// 
+    ///
     /// Returns a concise summary of key performance metrics.
     pub fn export_performance_summary(&self) -> PerformanceSummary {
         PerformanceSummary {
@@ -4647,20 +4939,81 @@ impl MoveOrdering {
     /// Get the most effective heuristic based on best move contributions
     fn get_most_effective_heuristic(&self) -> String {
         let heuristics = [
-            ("capture", self.stats.heuristic_stats.capture_stats.best_move_contributions),
-            ("promotion", self.stats.heuristic_stats.promotion_stats.best_move_contributions),
-            ("tactical", self.stats.heuristic_stats.tactical_stats.best_move_contributions),
-            ("piece_value", self.stats.heuristic_stats.piece_value_stats.best_move_contributions),
-            ("position", self.stats.heuristic_stats.position_stats.best_move_contributions),
-            ("development", self.stats.heuristic_stats.development_stats.best_move_contributions),
-            ("quiet", self.stats.heuristic_stats.quiet_stats.best_move_contributions),
-            ("pv", self.stats.heuristic_stats.pv_stats.best_move_contributions),
-            ("killer", self.stats.heuristic_stats.killer_stats.best_move_contributions),
-            ("history", self.stats.heuristic_stats.history_stats.best_move_contributions),
-            ("see", self.stats.heuristic_stats.see_stats.best_move_contributions),
+            (
+                "capture",
+                self.stats
+                    .heuristic_stats
+                    .capture_stats
+                    .best_move_contributions,
+            ),
+            (
+                "promotion",
+                self.stats
+                    .heuristic_stats
+                    .promotion_stats
+                    .best_move_contributions,
+            ),
+            (
+                "tactical",
+                self.stats
+                    .heuristic_stats
+                    .tactical_stats
+                    .best_move_contributions,
+            ),
+            (
+                "piece_value",
+                self.stats
+                    .heuristic_stats
+                    .piece_value_stats
+                    .best_move_contributions,
+            ),
+            (
+                "position",
+                self.stats
+                    .heuristic_stats
+                    .position_stats
+                    .best_move_contributions,
+            ),
+            (
+                "development",
+                self.stats
+                    .heuristic_stats
+                    .development_stats
+                    .best_move_contributions,
+            ),
+            (
+                "quiet",
+                self.stats
+                    .heuristic_stats
+                    .quiet_stats
+                    .best_move_contributions,
+            ),
+            (
+                "pv",
+                self.stats.heuristic_stats.pv_stats.best_move_contributions,
+            ),
+            (
+                "killer",
+                self.stats
+                    .heuristic_stats
+                    .killer_stats
+                    .best_move_contributions,
+            ),
+            (
+                "history",
+                self.stats
+                    .heuristic_stats
+                    .history_stats
+                    .best_move_contributions,
+            ),
+            (
+                "see",
+                self.stats.heuristic_stats.see_stats.best_move_contributions,
+            ),
         ];
 
-        heuristics.iter()
+        heuristics
+            .iter()
             .max_by_key(|(_, contributions)| contributions)
             .map(|(name, _)| name.to_string())
             .unwrap_or_else(|| "none".to_string())
@@ -4669,59 +5022,132 @@ impl MoveOrdering {
     // ==================== Statistics Visualization ====================
 
     /// Generate a text-based performance report
-    /// 
+    ///
     /// Returns a formatted string with performance statistics for console display.
     pub fn generate_performance_report(&self) -> String {
         let mut report = String::new();
-        
+
         // Header
         report.push_str("=== MOVE ORDERING PERFORMANCE REPORT ===\n\n");
-        
+
         // Overall Statistics
         report.push_str("OVERALL PERFORMANCE:\n");
-        report.push_str(&format!("  Total Moves Ordered: {}\n", self.stats.total_moves_ordered));
-        report.push_str(&format!("  Average Ordering Time: {:.2} μs\n", self.stats.avg_ordering_time_us));
-        report.push_str(&format!("  Performance Score: {}/100\n", self.calculate_performance_score()));
+        report.push_str(&format!(
+            "  Total Moves Ordered: {}\n",
+            self.stats.total_moves_ordered
+        ));
+        report.push_str(&format!(
+            "  Average Ordering Time: {:.2} μs\n",
+            self.stats.avg_ordering_time_us
+        ));
+        report.push_str(&format!(
+            "  Performance Score: {}/100\n",
+            self.calculate_performance_score()
+        ));
         report.push_str("\n");
-        
+
         // Cache Performance
         report.push_str("CACHE PERFORMANCE:\n");
-        report.push_str(&format!("  Move Score Cache Hit Rate: {:.1}%\n", self.stats.cache_stats.move_score_cache.hit_rate));
-        report.push_str(&format!("  Fast Cache Hit Rate: {:.1}%\n", self.stats.cache_stats.fast_cache.hit_rate));
-        report.push_str(&format!("  PV Cache Hit Rate: {:.1}%\n", self.stats.cache_stats.pv_cache.hit_rate));
-        report.push_str(&format!("  SEE Cache Hit Rate: {:.1}%\n", self.get_see_cache_hit_rate()));
+        report.push_str(&format!(
+            "  Move Score Cache Hit Rate: {:.1}%\n",
+            self.stats.cache_stats.move_score_cache.hit_rate
+        ));
+        report.push_str(&format!(
+            "  Fast Cache Hit Rate: {:.1}%\n",
+            self.stats.cache_stats.fast_cache.hit_rate
+        ));
+        report.push_str(&format!(
+            "  PV Cache Hit Rate: {:.1}%\n",
+            self.stats.cache_stats.pv_cache.hit_rate
+        ));
+        report.push_str(&format!(
+            "  SEE Cache Hit Rate: {:.1}%\n",
+            self.get_see_cache_hit_rate()
+        ));
         report.push_str("\n");
-        
+
         // Memory Usage
         report.push_str("MEMORY USAGE:\n");
-        report.push_str(&format!("  Current: {:.2} MB\n", self.memory_usage.current_bytes as f64 / 1_000_000.0));
-        report.push_str(&format!("  Peak: {:.2} MB\n", self.memory_usage.peak_bytes as f64 / 1_000_000.0));
+        report.push_str(&format!(
+            "  Current: {:.2} MB\n",
+            self.memory_usage.current_bytes as f64 / 1_000_000.0
+        ));
+        report.push_str(&format!(
+            "  Peak: {:.2} MB\n",
+            self.memory_usage.peak_bytes as f64 / 1_000_000.0
+        ));
         report.push_str("\n");
-        
+
         // Heuristic Effectiveness
         report.push_str("HEURISTIC EFFECTIVENESS:\n");
         let heuristics = [
-            ("Capture", self.stats.heuristic_stats.capture_stats.applications, self.stats.heuristic_stats.capture_stats.best_move_contributions),
-            ("Promotion", self.stats.heuristic_stats.promotion_stats.applications, self.stats.heuristic_stats.promotion_stats.best_move_contributions),
-            ("Tactical", self.stats.heuristic_stats.tactical_stats.applications, self.stats.heuristic_stats.tactical_stats.best_move_contributions),
-            ("PV", self.stats.heuristic_stats.pv_stats.applications, self.stats.heuristic_stats.pv_stats.best_move_contributions),
-            ("Killer", self.stats.heuristic_stats.killer_stats.applications, self.stats.heuristic_stats.killer_stats.best_move_contributions),
-            ("History", self.stats.heuristic_stats.history_stats.applications, self.stats.heuristic_stats.history_stats.best_move_contributions),
+            (
+                "Capture",
+                self.stats.heuristic_stats.capture_stats.applications,
+                self.stats
+                    .heuristic_stats
+                    .capture_stats
+                    .best_move_contributions,
+            ),
+            (
+                "Promotion",
+                self.stats.heuristic_stats.promotion_stats.applications,
+                self.stats
+                    .heuristic_stats
+                    .promotion_stats
+                    .best_move_contributions,
+            ),
+            (
+                "Tactical",
+                self.stats.heuristic_stats.tactical_stats.applications,
+                self.stats
+                    .heuristic_stats
+                    .tactical_stats
+                    .best_move_contributions,
+            ),
+            (
+                "PV",
+                self.stats.heuristic_stats.pv_stats.applications,
+                self.stats.heuristic_stats.pv_stats.best_move_contributions,
+            ),
+            (
+                "Killer",
+                self.stats.heuristic_stats.killer_stats.applications,
+                self.stats
+                    .heuristic_stats
+                    .killer_stats
+                    .best_move_contributions,
+            ),
+            (
+                "History",
+                self.stats.heuristic_stats.history_stats.applications,
+                self.stats
+                    .heuristic_stats
+                    .history_stats
+                    .best_move_contributions,
+            ),
         ];
-        
+
         for (name, applications, contributions) in heuristics {
-            let effectiveness = if applications > 0 { (contributions as f64 / applications as f64) * 100.0 } else { 0.0 };
-            report.push_str(&format!("  {}: {:.1}% effective ({} contributions / {} applications)\n", 
-                name, effectiveness, contributions, applications));
+            let effectiveness = if applications > 0 {
+                (contributions as f64 / applications as f64) * 100.0
+            } else {
+                0.0
+            };
+            report.push_str(&format!(
+                "  {}: {:.1}% effective ({} contributions / {} applications)\n",
+                name, effectiveness, contributions, applications
+            ));
         }
         report.push_str("\n");
-        
+
         // Bottleneck Analysis
         let analysis = self.profile_bottlenecks();
         if !analysis.bottlenecks.is_empty() {
             report.push_str("IDENTIFIED BOTTLENECKS:\n");
             for bottleneck in &analysis.bottlenecks {
-                report.push_str(&format!("  [{}] {}: {}\n", 
+                report.push_str(&format!(
+                    "  [{}] {}: {}\n",
                     match bottleneck.severity {
                         BottleneckSeverity::Critical => "CRITICAL",
                         BottleneckSeverity::High => "HIGH",
@@ -4729,17 +5155,18 @@ impl MoveOrdering {
                         BottleneckSeverity::Low => "LOW",
                     },
                     bottleneck.description,
-                    bottleneck.recommendation));
+                    bottleneck.recommendation
+                ));
             }
         } else {
             report.push_str("No significant bottlenecks identified.\n");
         }
-        
+
         report
     }
 
     /// Generate a performance chart data for visualization
-    /// 
+    ///
     /// Returns data suitable for creating charts and graphs.
     pub fn generate_performance_chart_data(&self) -> PerformanceChartData {
         PerformanceChartData {
@@ -4750,12 +5177,17 @@ impl MoveOrdering {
                 see_cache: self.get_see_cache_hit_rate(),
             },
             heuristic_effectiveness: HeuristicEffectiveness {
-                capture: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.capture_stats),
-                promotion: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.promotion_stats),
-                tactical: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.tactical_stats),
+                capture: self
+                    .calculate_heuristic_effectiveness(&self.stats.heuristic_stats.capture_stats),
+                promotion: self
+                    .calculate_heuristic_effectiveness(&self.stats.heuristic_stats.promotion_stats),
+                tactical: self
+                    .calculate_heuristic_effectiveness(&self.stats.heuristic_stats.tactical_stats),
                 pv: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.pv_stats),
-                killer: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.killer_stats),
-                history: self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.history_stats),
+                killer: self
+                    .calculate_heuristic_effectiveness(&self.stats.heuristic_stats.killer_stats),
+                history: self
+                    .calculate_heuristic_effectiveness(&self.stats.heuristic_stats.history_stats),
             },
             memory_usage_trend: MemoryUsageTrend {
                 current_mb: self.memory_usage.current_bytes as f64 / 1_000_000.0,
@@ -4781,47 +5213,55 @@ impl MoveOrdering {
     }
 
     /// Profile and identify performance bottlenecks
-    /// 
+    ///
     /// Analyzes the current performance statistics to identify optimization opportunities.
     pub fn profile_bottlenecks(&self) -> BottleneckAnalysis {
         let mut bottlenecks = Vec::new();
-        
+
         // Analyze cache performance
         if self.stats.cache_hit_rate < 50.0 {
             bottlenecks.push(Bottleneck {
                 category: BottleneckCategory::Cache,
                 severity: BottleneckSeverity::High,
                 description: format!("Low cache hit rate: {:.1}%", self.stats.cache_hit_rate),
-                recommendation: "Consider increasing cache size or improving cache key generation".to_string(),
+                recommendation: "Consider increasing cache size or improving cache key generation"
+                    .to_string(),
             });
         }
-        
+
         // Analyze hot path performance
         if self.stats.hot_path_stats.score_move_calls > 0 {
-            let avg_score_time = self.stats.hot_path_stats.score_move_time_us as f64 / 
-                               self.stats.hot_path_stats.score_move_calls as f64;
-            
-            if avg_score_time > 100.0 { // More than 100 microseconds per score
+            let avg_score_time = self.stats.hot_path_stats.score_move_time_us as f64
+                / self.stats.hot_path_stats.score_move_calls as f64;
+
+            if avg_score_time > 100.0 {
+                // More than 100 microseconds per score
                 bottlenecks.push(Bottleneck {
                     category: BottleneckCategory::HotPath,
                     severity: BottleneckSeverity::Medium,
                     description: format!("Slow move scoring: {:.1}μs per move", avg_score_time),
-                    recommendation: "Consider inlining more scoring functions or optimizing hash calculation".to_string(),
+                    recommendation:
+                        "Consider inlining more scoring functions or optimizing hash calculation"
+                            .to_string(),
                 });
             }
         }
-        
+
         // Analyze memory usage
-        if self.memory_usage.current_bytes > 10_000_000 { // More than 10MB
+        if self.memory_usage.current_bytes > 10_000_000 {
+            // More than 10MB
             bottlenecks.push(Bottleneck {
                 category: BottleneckCategory::Memory,
                 severity: BottleneckSeverity::Medium,
-                description: format!("High memory usage: {:.1}MB", 
-                                   self.memory_usage.current_bytes as f64 / 1_000_000.0),
-                recommendation: "Consider reducing cache sizes or implementing cache aging".to_string(),
+                description: format!(
+                    "High memory usage: {:.1}MB",
+                    self.memory_usage.current_bytes as f64 / 1_000_000.0
+                ),
+                recommendation: "Consider reducing cache sizes or implementing cache aging"
+                    .to_string(),
             });
         }
-        
+
         // Analyze SEE cache performance
         if self.stats.see_calculations > 0 {
             let see_hit_rate = self.get_see_cache_hit_rate();
@@ -4830,11 +5270,12 @@ impl MoveOrdering {
                     category: BottleneckCategory::SEECache,
                     severity: BottleneckSeverity::Low,
                     description: format!("Low SEE cache hit rate: {:.1}%", see_hit_rate),
-                    recommendation: "Consider enabling SEE cache or increasing SEE cache size".to_string(),
+                    recommendation: "Consider enabling SEE cache or increasing SEE cache size"
+                        .to_string(),
                 });
             }
         }
-        
+
         BottleneckAnalysis {
             bottlenecks,
             overall_score: self.calculate_performance_score(),
@@ -4844,39 +5285,39 @@ impl MoveOrdering {
     /// Calculate overall performance score (0-100)
     fn calculate_performance_score(&self) -> u8 {
         let mut score = 100u8;
-        
+
         // Deduct points for poor cache performance
         if self.stats.cache_hit_rate < 50.0 {
             score = score.saturating_sub(20);
         } else if self.stats.cache_hit_rate < 70.0 {
             score = score.saturating_sub(10);
         }
-        
+
         // Deduct points for slow hot path
         if self.stats.hot_path_stats.score_move_calls > 0 {
-            let avg_score_time = self.stats.hot_path_stats.score_move_time_us as f64 / 
-                               self.stats.hot_path_stats.score_move_calls as f64;
+            let avg_score_time = self.stats.hot_path_stats.score_move_time_us as f64
+                / self.stats.hot_path_stats.score_move_calls as f64;
             if avg_score_time > 100.0 {
                 score = score.saturating_sub(15);
             } else if avg_score_time > 50.0 {
                 score = score.saturating_sub(8);
             }
         }
-        
+
         // Deduct points for high memory usage
         if self.memory_usage.current_bytes > 10_000_000 {
             score = score.saturating_sub(10);
         } else if self.memory_usage.current_bytes > 5_000_000 {
             score = score.saturating_sub(5);
         }
-        
+
         score
     }
 
     // ==================== Performance Trend Analysis ====================
 
     /// Analyze performance trends over time
-    /// 
+    ///
     /// Returns trend analysis data for identifying performance patterns.
     pub fn analyze_performance_trends(&self) -> PerformanceTrendAnalysis {
         PerformanceTrendAnalysis {
@@ -4892,7 +5333,7 @@ impl MoveOrdering {
     fn analyze_cache_efficiency_trend(&self) -> TrendAnalysis {
         let current_hit_rate = self.stats.cache_hit_rate;
         let see_hit_rate = self.get_see_cache_hit_rate();
-        
+
         // Simple trend analysis based on current performance
         let trend_direction = if current_hit_rate > 70.0 && see_hit_rate > 50.0 {
             TrendDirection::Improving
@@ -4905,7 +5346,8 @@ impl MoveOrdering {
         TrendAnalysis {
             direction: trend_direction,
             confidence: self.calculate_trend_confidence(current_hit_rate, see_hit_rate),
-            recommendation: self.generate_cache_trend_recommendation(current_hit_rate, see_hit_rate),
+            recommendation: self
+                .generate_cache_trend_recommendation(current_hit_rate, see_hit_rate),
         }
     }
 
@@ -4913,7 +5355,11 @@ impl MoveOrdering {
     fn analyze_memory_usage_trend(&self) -> TrendAnalysis {
         let current_usage = self.memory_usage.current_bytes as f64 / 1_000_000.0;
         let peak_usage = self.memory_usage.peak_bytes as f64 / 1_000_000.0;
-        let utilization = if peak_usage > 0.0 { (current_usage / peak_usage) * 100.0 } else { 0.0 };
+        let utilization = if peak_usage > 0.0 {
+            (current_usage / peak_usage) * 100.0
+        } else {
+            0.0
+        };
 
         let trend_direction = if utilization > 90.0 {
             TrendDirection::Declining
@@ -4941,8 +5387,9 @@ impl MoveOrdering {
             self.calculate_heuristic_effectiveness(&self.stats.heuristic_stats.history_stats),
         ];
 
-        let avg_effectiveness = effectiveness_scores.iter().sum::<f64>() / effectiveness_scores.len() as f64;
-        
+        let avg_effectiveness =
+            effectiveness_scores.iter().sum::<f64>() / effectiveness_scores.len() as f64;
+
         let trend_direction = if avg_effectiveness > 60.0 {
             TrendDirection::Improving
         } else if avg_effectiveness < 30.0 {
@@ -4962,7 +5409,7 @@ impl MoveOrdering {
     fn analyze_timing_trend(&self) -> TrendAnalysis {
         let avg_scoring_time = self.stats.timing_stats.move_scoring_times.avg_time_us;
         let avg_ordering_time = self.stats.timing_stats.move_ordering_times.avg_time_us;
-        
+
         // Consider good performance if times are reasonable
         let trend_direction = if avg_scoring_time < 50.0 && avg_ordering_time < 100.0 {
             TrendDirection::Improving
@@ -4975,14 +5422,15 @@ impl MoveOrdering {
         TrendAnalysis {
             direction: trend_direction,
             confidence: self.calculate_trend_confidence(avg_scoring_time, avg_ordering_time),
-            recommendation: self.generate_timing_trend_recommendation(avg_scoring_time, avg_ordering_time),
+            recommendation: self
+                .generate_timing_trend_recommendation(avg_scoring_time, avg_ordering_time),
         }
     }
 
     /// Analyze overall performance trends
     fn analyze_overall_performance_trend(&self) -> TrendAnalysis {
         let performance_score = self.calculate_performance_score();
-        
+
         let trend_direction = if performance_score > 80 {
             TrendDirection::Improving
         } else if performance_score < 50 {
@@ -5003,7 +5451,7 @@ impl MoveOrdering {
         // Simple confidence calculation based on metric consistency
         let diff = (metric1 - metric2).abs();
         let max_metric = metric1.max(metric2);
-        
+
         if max_metric == 0.0 {
             0.5
         } else {
@@ -5027,7 +5475,8 @@ impl MoveOrdering {
         if current_mb > peak_mb * 0.9 {
             "High memory usage detected, consider reducing cache sizes".to_string()
         } else if current_mb < peak_mb * 0.5 {
-            "Memory usage is efficient, consider increasing cache sizes for better performance".to_string()
+            "Memory usage is efficient, consider increasing cache sizes for better performance"
+                .to_string()
         } else {
             "Memory usage is within normal range".to_string()
         }
@@ -5045,7 +5494,11 @@ impl MoveOrdering {
     }
 
     /// Generate timing trend recommendations
-    fn generate_timing_trend_recommendation(&self, scoring_time: f64, ordering_time: f64) -> String {
+    fn generate_timing_trend_recommendation(
+        &self,
+        scoring_time: f64,
+        ordering_time: f64,
+    ) -> String {
         if scoring_time > 200.0 {
             "Move scoring is slow, consider optimizing scoring functions".to_string()
         } else if ordering_time > 500.0 {
@@ -5070,9 +5523,15 @@ impl MoveOrdering {
 
     /// Handle errors with appropriate logging and recovery
     #[allow(dead_code)] // Kept for future use and debugging
-    fn handle_error(&mut self, error: MoveOrderingError, severity: ErrorSeverity, context: String) -> MoveOrderingResult<()> {
+    fn handle_error(
+        &mut self,
+        error: MoveOrderingError,
+        severity: ErrorSeverity,
+        context: String,
+    ) -> MoveOrderingResult<()> {
         // Log the error
-        self.error_handler.log_error(error.clone(), severity.clone(), context);
+        self.error_handler
+            .log_error(error.clone(), severity.clone(), context);
 
         // Check if graceful degradation should be applied
         if self.error_handler.graceful_degradation_enabled {
@@ -5141,11 +5600,11 @@ impl MoveOrdering {
     fn reduce_memory_usage(&mut self) {
         // Clear caches
         self.clear_all_caches();
-        
+
         // Shrink object pools
         self.move_score_pool.shrink_to_fit();
         self.move_pool.shrink_to_fit();
-        
+
         // Update memory statistics
         self.update_memory_usage();
     }
@@ -5167,27 +5626,35 @@ impl MoveOrdering {
     fn validate_move(&self, move_: &Move) -> MoveOrderingResult<()> {
         // Check if move has required fields
         if move_.to.row >= 9 || move_.to.col >= 9 {
-            return Err(MoveOrderingError::InvalidMove(
-                format!("Invalid move destination: {:?}", move_.to)
-            ));
+            return Err(MoveOrderingError::InvalidMove(format!(
+                "Invalid move destination: {:?}",
+                move_.to
+            )));
         }
 
         if let Some(from) = move_.from {
             if from.row >= 9 || from.col >= 9 {
-                return Err(MoveOrderingError::InvalidMove(
-                    format!("Invalid move source: {:?}", from)
-                ));
+                return Err(MoveOrderingError::InvalidMove(format!(
+                    "Invalid move source: {:?}",
+                    from
+                )));
             }
         }
 
         // Check piece type validity
         match move_.piece_type {
-            PieceType::Pawn | PieceType::Lance | PieceType::Knight | 
-            PieceType::Silver | PieceType::Gold | PieceType::Bishop | 
-            PieceType::Rook | PieceType::King => Ok(()),
-            _ => Err(MoveOrderingError::InvalidMove(
-                format!("Invalid piece type: {:?}", move_.piece_type)
-            )),
+            PieceType::Pawn
+            | PieceType::Lance
+            | PieceType::Knight
+            | PieceType::Silver
+            | PieceType::Gold
+            | PieceType::Bishop
+            | PieceType::Rook
+            | PieceType::King => Ok(()),
+            _ => Err(MoveOrderingError::InvalidMove(format!(
+                "Invalid piece type: {:?}",
+                move_.piece_type
+            ))),
         }
     }
 
@@ -5240,14 +5707,26 @@ impl MoveOrdering {
 
     /// Record memory allocation
     #[allow(dead_code)] // Kept for future use and debugging
-    fn record_allocation(&mut self, allocation_type: AllocationType, size: usize, component: String) {
-        self.memory_tracker.record_allocation(allocation_type, size, component);
+    fn record_allocation(
+        &mut self,
+        allocation_type: AllocationType,
+        size: usize,
+        component: String,
+    ) {
+        self.memory_tracker
+            .record_allocation(allocation_type, size, component);
     }
 
     /// Record memory deallocation
     #[allow(dead_code)] // Kept for future use and debugging
-    fn record_deallocation(&mut self, allocation_type: AllocationType, size: usize, component: String) {
-        self.memory_tracker.record_deallocation(allocation_type, size, component);
+    fn record_deallocation(
+        &mut self,
+        allocation_type: AllocationType,
+        size: usize,
+        component: String,
+    ) {
+        self.memory_tracker
+            .record_deallocation(allocation_type, size, component);
     }
 
     /// Check for memory leaks
@@ -5281,7 +5760,7 @@ impl MoveOrdering {
         let current_usage = self.get_current_memory_usage();
         let peak_usage = self.get_peak_memory_usage();
         let pool_stats = self.get_memory_pool_stats();
-        
+
         let leak_detected = !warnings.is_empty();
         MemoryLeakReport {
             warnings,
@@ -5321,7 +5800,12 @@ impl MoveOrdering {
     }
 
     /// Determine game phase based on position characteristics
-    pub fn determine_game_phase(&self, move_count: usize, material_balance: i32, tactical_complexity: f64) -> GamePhase {
+    pub fn determine_game_phase(
+        &self,
+        move_count: usize,
+        material_balance: i32,
+        tactical_complexity: f64,
+    ) -> GamePhase {
         // Simple phase determination logic
         if move_count < 20 {
             GamePhase::Opening
@@ -5337,12 +5821,18 @@ impl MoveOrdering {
     }
 
     /// Update game phase and adjust strategy accordingly
-    pub fn update_game_phase(&mut self, move_count: usize, material_balance: i32, tactical_complexity: f64) {
-        let new_phase = self.determine_game_phase(move_count, material_balance, tactical_complexity);
-        
+    pub fn update_game_phase(
+        &mut self,
+        move_count: usize,
+        material_balance: i32,
+        tactical_complexity: f64,
+    ) {
+        let new_phase =
+            self.determine_game_phase(move_count, material_balance, tactical_complexity);
+
         if new_phase != self.advanced_features.position_strategies.current_phase {
             self.advanced_features.position_strategies.current_phase = new_phase;
-            
+
             // Update weights based on new phase
             self.apply_phase_strategy();
         }
@@ -5352,10 +5842,20 @@ impl MoveOrdering {
     fn apply_phase_strategy(&mut self) {
         let strategy = match self.advanced_features.position_strategies.current_phase {
             GamePhase::Opening => &self.advanced_features.position_strategies.opening_strategy,
-            GamePhase::Middlegame => &self.advanced_features.position_strategies.middlegame_strategy,
+            GamePhase::Middlegame => {
+                &self
+                    .advanced_features
+                    .position_strategies
+                    .middlegame_strategy
+            }
             GamePhase::Endgame => &self.advanced_features.position_strategies.endgame_strategy,
             GamePhase::Tactical => &self.advanced_features.position_strategies.tactical_strategy,
-            GamePhase::Positional => &self.advanced_features.position_strategies.positional_strategy,
+            GamePhase::Positional => {
+                &self
+                    .advanced_features
+                    .position_strategies
+                    .positional_strategy
+            }
         };
 
         // Update current weights with phase-specific weights
@@ -5366,11 +5866,31 @@ impl MoveOrdering {
     pub fn score_move_with_strategy(&mut self, move_: &Move) -> MoveOrderingResult<i32> {
         // Get current strategy (clone to avoid borrowing issues)
         let strategy = match self.advanced_features.position_strategies.current_phase {
-            GamePhase::Opening => self.advanced_features.position_strategies.opening_strategy.clone(),
-            GamePhase::Middlegame => self.advanced_features.position_strategies.middlegame_strategy.clone(),
-            GamePhase::Endgame => self.advanced_features.position_strategies.endgame_strategy.clone(),
-            GamePhase::Tactical => self.advanced_features.position_strategies.tactical_strategy.clone(),
-            GamePhase::Positional => self.advanced_features.position_strategies.positional_strategy.clone(),
+            GamePhase::Opening => self
+                .advanced_features
+                .position_strategies
+                .opening_strategy
+                .clone(),
+            GamePhase::Middlegame => self
+                .advanced_features
+                .position_strategies
+                .middlegame_strategy
+                .clone(),
+            GamePhase::Endgame => self
+                .advanced_features
+                .position_strategies
+                .endgame_strategy
+                .clone(),
+            GamePhase::Tactical => self
+                .advanced_features
+                .position_strategies
+                .tactical_strategy
+                .clone(),
+            GamePhase::Positional => self
+                .advanced_features
+                .position_strategies
+                .positional_strategy
+                .clone(),
         };
 
         // Apply strategy-specific scoring
@@ -5381,24 +5901,34 @@ impl MoveOrdering {
     }
 
     /// Apply strategy-specific adjustments to move score
-    fn apply_strategy_adjustments(&self, move_: &Move, base_score: i32, strategy: &OrderingStrategy) -> i32 {
+    fn apply_strategy_adjustments(
+        &self,
+        move_: &Move,
+        base_score: i32,
+        strategy: &OrderingStrategy,
+    ) -> i32 {
         let mut adjusted_score = base_score;
 
         // Apply priority adjustments
         if move_.is_capture {
-            adjusted_score = (adjusted_score as f64 * strategy.priority_adjustments.capture_priority) as i32;
+            adjusted_score =
+                (adjusted_score as f64 * strategy.priority_adjustments.capture_priority) as i32;
         }
         if move_.is_promotion {
-            adjusted_score = (adjusted_score as f64 * strategy.priority_adjustments.promotion_priority) as i32;
+            adjusted_score =
+                (adjusted_score as f64 * strategy.priority_adjustments.promotion_priority) as i32;
         }
         if self.is_development_move(move_) {
-            adjusted_score = (adjusted_score as f64 * strategy.priority_adjustments.development_priority) as i32;
+            adjusted_score =
+                (adjusted_score as f64 * strategy.priority_adjustments.development_priority) as i32;
         }
         if self.is_center_move(move_) {
-            adjusted_score = (adjusted_score as f64 * strategy.priority_adjustments.center_priority) as i32;
+            adjusted_score =
+                (adjusted_score as f64 * strategy.priority_adjustments.center_priority) as i32;
         }
         if self.is_king_safety_move(move_) {
-            adjusted_score = (adjusted_score as f64 * strategy.priority_adjustments.king_safety_priority) as i32;
+            adjusted_score =
+                (adjusted_score as f64 * strategy.priority_adjustments.king_safety_priority) as i32;
         }
 
         adjusted_score
@@ -5410,7 +5940,7 @@ impl MoveOrdering {
         if let Some(from) = move_.from {
             let from_rank = from.row;
             let to_rank = move_.to.row;
-            
+
             // Moving pieces forward (toward center/opponent)
             match move_.piece_type {
                 PieceType::Pawn => to_rank > from_rank,
@@ -5427,7 +5957,7 @@ impl MoveOrdering {
     fn is_center_move(&self, move_: &Move) -> bool {
         let center_files = [3, 4, 5]; // Files d, e, f
         let center_ranks = [3, 4, 5]; // Ranks 4, 5, 6
-        
+
         center_files.contains(&move_.to.col) && center_ranks.contains(&move_.to.row)
     }
 
@@ -5441,8 +5971,9 @@ impl MoveOrdering {
                 if let Some(_from) = move_.from {
                     let king_area_files = [3, 4, 5];
                     let king_area_ranks = [0, 1, 2, 6, 7, 8];
-                    
-                    king_area_files.contains(&move_.to.col) && king_area_ranks.contains(&move_.to.row)
+
+                    king_area_files.contains(&move_.to.col)
+                        && king_area_ranks.contains(&move_.to.row)
                 } else {
                     false
                 }
@@ -5451,15 +5982,21 @@ impl MoveOrdering {
     }
 
     /// Train machine learning model with new data
-    pub fn train_ml_model(&mut self, training_examples: Vec<TrainingExample>) -> MoveOrderingResult<f64> {
+    pub fn train_ml_model(
+        &mut self,
+        training_examples: Vec<TrainingExample>,
+    ) -> MoveOrderingResult<f64> {
         if !self.advanced_features.ml_model.enabled {
             return Err(MoveOrderingError::OperationError(
-                "Machine learning model is not enabled".to_string()
+                "Machine learning model is not enabled".to_string(),
             ));
         }
 
         // Add training examples
-        self.advanced_features.ml_model.training_data.extend(training_examples);
+        self.advanced_features
+            .ml_model
+            .training_data
+            .extend(training_examples);
 
         // Simple training simulation (in real implementation, this would train the actual model)
         let accuracy = self.simulate_ml_training();
@@ -5474,15 +6011,19 @@ impl MoveOrdering {
         let data_size = self.advanced_features.ml_model.training_data.len();
         let base_accuracy = 0.5;
         let improvement = (data_size as f64 / 1000.0).min(0.4);
-        
+
         base_accuracy + improvement
     }
 
     /// Predict move score using machine learning model
-    pub fn predict_move_score(&mut self, _move_: &Move, position_features: Vec<f64>) -> MoveOrderingResult<i32> {
+    pub fn predict_move_score(
+        &mut self,
+        _move_: &Move,
+        position_features: Vec<f64>,
+    ) -> MoveOrderingResult<i32> {
         if !self.advanced_features.ml_model.enabled {
             return Err(MoveOrderingError::OperationError(
-                "Machine learning model is not enabled".to_string()
+                "Machine learning model is not enabled".to_string(),
             ));
         }
 
@@ -5498,7 +6039,7 @@ impl MoveOrdering {
         for (i, feature) in features.iter().enumerate() {
             score += feature * (i as f64 + 1.0) * 100.0;
         }
-        
+
         score as i32
     }
 
@@ -5506,13 +6047,13 @@ impl MoveOrdering {
     pub fn adjust_weights_dynamically(&mut self, performance_score: f64) -> MoveOrderingResult<()> {
         if !self.advanced_features.dynamic_weights.enabled {
             return Err(MoveOrderingError::OperationError(
-                "Dynamic weight adjustment is not enabled".to_string()
+                "Dynamic weight adjustment is not enabled".to_string(),
             ));
         }
 
         let old_weights = self.config.weights.clone();
         let new_weights = self.calculate_optimal_weights(performance_score);
-        
+
         // Record adjustment
         let adjustment = WeightAdjustment {
             timestamp: std::time::SystemTime::now(),
@@ -5522,7 +6063,10 @@ impl MoveOrdering {
             performance_impact: performance_score,
         };
 
-        self.advanced_features.dynamic_weights.adjustment_history.push(adjustment);
+        self.advanced_features
+            .dynamic_weights
+            .adjustment_history
+            .push(adjustment);
         self.advanced_features.dynamic_weights.current_weights = new_weights.clone();
         self.config.weights = new_weights;
 
@@ -5532,7 +6076,7 @@ impl MoveOrdering {
     /// Calculate optimal weights based on performance
     fn calculate_optimal_weights(&self, performance_score: f64) -> OrderingWeights {
         let mut weights = self.config.weights.clone();
-        
+
         // Simple adjustment logic based on performance
         if performance_score > 0.8 {
             // Good performance: increase weights slightly
@@ -5574,7 +6118,11 @@ impl MoveOrdering {
             dynamic_weights: self.advanced_features.dynamic_weights.enabled,
             predictive_ordering: self.advanced_features.predictive_ordering.enabled,
             cache_warming: self.advanced_features.cache_warming.enabled,
-            current_phase: self.advanced_features.position_strategies.current_phase.clone(),
+            current_phase: self
+                .advanced_features
+                .position_strategies
+                .current_phase
+                .clone(),
             ml_accuracy: self.advanced_features.ml_model.accuracy,
             prediction_accuracy: self.advanced_features.predictive_ordering.accuracy,
         }
@@ -5583,29 +6131,31 @@ impl MoveOrdering {
     /// Perform comprehensive memory cleanup
     pub fn cleanup_memory(&mut self) -> MemoryCleanupReport {
         let before_usage = self.get_current_memory_usage().clone();
-        
+
         // Clear all caches
         self.clear_all_caches();
-        
+
         // Clear memory pools
         self.memory_pool.clear_all_pools();
-        
+
         // Clear allocation history
         self.memory_tracker.clear_history();
-        
+
         // Clear error log
         self.error_handler.clear_errors();
-        
+
         // Force garbage collection by shrinking vectors
         self.move_score_cache.shrink_to_fit();
         self.fast_score_cache.shrink_to_fit();
         // Task 6.0: PVOrdering manages its own memory
         // Task 6.0: SEECache manages its own memory
         // Task 6.0: HistoryHeuristicManager manages its own memory (HashMap doesn't have shrink_to_fit)
-        
+
         let after_usage = self.get_current_memory_usage().clone();
-        let memory_freed = before_usage.total_memory.saturating_sub(after_usage.total_memory);
-        
+        let memory_freed = before_usage
+            .total_memory
+            .saturating_sub(after_usage.total_memory);
+
         MemoryCleanupReport {
             before_usage,
             after_usage,
@@ -5615,11 +6165,13 @@ impl MoveOrdering {
         }
     }
 
-
     /// Perform selective memory cleanup based on memory pressure
-    pub fn selective_cleanup(&mut self, pressure_level: MemoryPressureLevel) -> MemoryCleanupReport {
+    pub fn selective_cleanup(
+        &mut self,
+        pressure_level: MemoryPressureLevel,
+    ) -> MemoryCleanupReport {
         let before_usage = self.get_current_memory_usage().clone();
-        
+
         match pressure_level {
             MemoryPressureLevel::Low => {
                 // Only clear old cache entries
@@ -5641,10 +6193,12 @@ impl MoveOrdering {
                 self.cleanup_memory();
             }
         }
-        
+
         let after_usage = self.get_current_memory_usage().clone();
-        let memory_freed = before_usage.total_memory.saturating_sub(after_usage.total_memory);
-        
+        let memory_freed = before_usage
+            .total_memory
+            .saturating_sub(after_usage.total_memory);
+
         MemoryCleanupReport {
             before_usage,
             after_usage,
@@ -5678,7 +6232,7 @@ impl MoveOrdering {
     }
 
     /// Order moves with history heuristic prioritization
-    /// 
+    ///
     /// This enhanced version of order_moves prioritizes moves based on
     /// their history heuristic scores.
     pub fn order_moves_with_history(&mut self, moves: &[Move]) -> Vec<Move> {
@@ -5687,7 +6241,7 @@ impl MoveOrdering {
         }
 
         let start_time = TimeSource::now();
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -5705,7 +6259,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -5715,7 +6269,7 @@ impl MoveOrdering {
     }
 
     /// Score a move with history heuristic consideration
-    /// 
+    ///
     /// This method scores a move, giving priority to moves with
     /// high history scores and falling back to regular move scoring.
     fn score_move_with_history(&mut self, move_: &Move) -> i32 {
@@ -5730,34 +6284,51 @@ impl MoveOrdering {
     }
 
     /// Order moves with PV, killer, and history prioritization
-    /// 
+    ///
     /// This method combines all three prioritization strategies
     /// for optimal move ordering.
-    /// 
+    ///
     /// Task 6.2: Caches ordering results for repeated positions with same move sets
     /// Task 6.4: Accounts for search state (depth, alpha, beta, check status)
     /// Task 3.0: Added iid_move parameter to integrate IID move into advanced ordering
-    pub fn order_moves_with_all_heuristics(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, iid_move: Option<&Move>, opponent_last_move: Option<&Move>) -> Vec<Move> {  // Task 2.6: Added opponent_last_move parameter
+    pub fn order_moves_with_all_heuristics(
+        &mut self,
+        moves: &[Move],
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+        iid_move: Option<&Move>,
+        opponent_last_move: Option<&Move>,
+    ) -> Vec<Move> {
+        // Task 2.6: Added opponent_last_move parameter
         if moves.is_empty() {
             return Vec::new();
         }
 
         let start_time = TimeSource::now();
-        
+
         // Task 6.2: Check cache for move ordering results
         // Task 3.0: Note: Cache doesn't account for IID move, so we skip cache if IID move is present
         // This ensures IID move is properly prioritized even if ordering was cached before
         let skip_cache = iid_move.is_some();
-        
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
+
+        let position_hash = self
+            .hash_calculator
+            .get_position_hash(board, player, captured_pieces);
         let cache_key = (position_hash, depth);
-        
+
         // Check if we have a cached ordering result for this position and depth (Task 6.0: use cache_manager)
         if !skip_cache {
             if let Some(cached_entry) = self.cache_manager.get_mut(&cache_key) {
                 // Verify that cached moves match current moves (moves might differ for same position)
-                if cached_entry.moves.len() == moves.len() && 
-                   cached_entry.moves.iter().zip(moves.iter()).all(|(cached, current)| moves_equal_helper(cached, current)) {
+                if cached_entry.moves.len() == moves.len()
+                    && cached_entry
+                        .moves
+                        .iter()
+                        .zip(moves.iter())
+                        .all(|(cached, current)| moves_equal_helper(cached, current))
+                {
                     // Task 6.0: LRU tracking is handled by cache_manager.get_mut()
                     self.stats.cache_hits += 1;
                     self.stats.total_moves_ordered += moves.len() as u64;
@@ -5765,9 +6336,9 @@ impl MoveOrdering {
                 }
             }
         }
-        
+
         self.stats.cache_misses += 1;
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
         self.stats.moves_sorted += moves.len() as u64;
@@ -5787,8 +6358,22 @@ impl MoveOrdering {
         // Task 3.0: Sort moves by score with all heuristics prioritization, including IID move
         // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
         ordered_moves.sort_by(|a, b| {
-            let score_a = self.score_move_with_all_heuristics(a, iid_move, &pv_move, &killer_moves, opponent_last_move, board);
-            let score_b = self.score_move_with_all_heuristics(b, iid_move, &pv_move, &killer_moves, opponent_last_move, board);
+            let score_a = self.score_move_with_all_heuristics(
+                a,
+                iid_move,
+                &pv_move,
+                &killer_moves,
+                opponent_last_move,
+                board,
+            );
+            let score_b = self.score_move_with_all_heuristics(
+                b,
+                iid_move,
+                &pv_move,
+                &killer_moves,
+                opponent_last_move,
+                board,
+            );
             score_b.cmp(&score_a)
         });
 
@@ -5815,7 +6400,7 @@ impl MoveOrdering {
         // Update timing statistics
         let elapsed_ms = start_time.elapsed_ms();
         self.stats.total_ordering_time_us += elapsed_ms as u64 * 1000; // Convert ms to microseconds
-        self.stats.avg_ordering_time_us = 
+        self.stats.avg_ordering_time_us =
             self.stats.total_ordering_time_us as f64 / self.stats.total_moves_ordered as f64;
 
         // Update memory usage
@@ -5825,7 +6410,7 @@ impl MoveOrdering {
     }
 
     /// Score a move with all heuristics consideration
-    /// 
+    ///
     /// Task 3.0: Updated priority order to include IID move (highest priority)
     /// Task 2.5: Updated priority order to include counter-move heuristic
     /// This method scores a move with the following priority:
@@ -5836,7 +6421,15 @@ impl MoveOrdering {
     /// 5. History moves (medium priority)
     /// 6. SEE moves (for captures - Task 1.0)
     /// 7. Regular moves (normal priority)
-    fn score_move_with_all_heuristics(&mut self, move_: &Move, iid_move: Option<&Move>, pv_move: &Option<Move>, killer_moves: &[Move], opponent_last_move: Option<&Move>, board: &crate::bitboards::BitboardBoard) -> i32 {
+    fn score_move_with_all_heuristics(
+        &mut self,
+        move_: &Move,
+        iid_move: Option<&Move>,
+        pv_move: &Option<Move>,
+        killer_moves: &[Move],
+        opponent_last_move: Option<&Move>,
+        board: &crate::bitboards::BitboardBoard,
+    ) -> i32 {
         // Task 3.0: Check if this is the IID move (highest priority)
         if let Some(iid_mv) = iid_move {
             if self.moves_equal(move_, iid_mv) {
@@ -5844,7 +6437,7 @@ impl MoveOrdering {
                 return i32::MAX;
             }
         }
-        
+
         // Check if this is the PV move (high priority)
         if let Some(ref pv) = pv_move {
             if self.moves_equal(move_, pv) {
@@ -5853,7 +6446,10 @@ impl MoveOrdering {
         }
 
         // Check if this is a killer move (medium-high priority)
-        if killer_moves.iter().any(|killer| self.moves_equal(move_, killer)) {
+        if killer_moves
+            .iter()
+            .any(|killer| self.moves_equal(move_, killer))
+        {
             self.stats.killer_move_hits += 1;
             return self.score_killer_move(move_);
         }
@@ -5892,34 +6488,48 @@ impl MoveOrdering {
     // ==================== Transposition Table Integration ====================
 
     /// Integrate move ordering with transposition table
-    /// 
+    ///
     /// This method enhances move ordering by using transposition table data
     /// to prioritize moves that have been successful in previous searches.
-    pub fn integrate_with_transposition_table(&mut self, tt_entry: Option<&TranspositionEntry>, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> MoveOrderingResult<()> {
+    pub fn integrate_with_transposition_table(
+        &mut self,
+        tt_entry: Option<&TranspositionEntry>,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> MoveOrderingResult<()> {
         if let Some(entry) = tt_entry {
             // Update PV move if we have a best move from the transposition table
             if let Some(ref best_move) = entry.best_move {
-                self.update_pv_move(board, captured_pieces, player, depth, best_move.clone(), entry.score);
+                self.update_pv_move(
+                    board,
+                    captured_pieces,
+                    player,
+                    depth,
+                    best_move.clone(),
+                    entry.score,
+                );
                 self.stats.tt_integration_hits += 1;
-                
+
                 // Update killer moves if this was a cutoff move
                 if entry.is_lower_bound() || entry.is_exact() {
                     self.add_killer_move(best_move.clone());
                 }
-                
+
                 // Update history heuristic based on transposition table results
                 self.update_history_from_tt(best_move, entry.score, depth);
             }
-            
+
             // Update statistics
             self.stats.tt_integration_updates += 1;
         }
-        
+
         Ok(())
     }
 
     /// Use transposition table for PV move identification
-    /// 
+    ///
     /// Retrieves the best move from the transposition table and prioritizes
     /// it in the move ordering.
     pub fn get_pv_move_from_tt(&self, tt_entry: Option<&TranspositionEntry>) -> Option<Move> {
@@ -5927,10 +6537,14 @@ impl MoveOrdering {
     }
 
     /// Update move ordering based on transposition table results
-    /// 
+    ///
     /// This method adjusts move ordering weights and priorities based on
     /// the results found in the transposition table.
-    pub fn update_ordering_from_tt_result(&mut self, tt_entry: &TranspositionEntry, move_result: MoveResult) -> MoveOrderingResult<()> {
+    pub fn update_ordering_from_tt_result(
+        &mut self,
+        tt_entry: &TranspositionEntry,
+        move_result: MoveResult,
+    ) -> MoveOrderingResult<()> {
         match move_result {
             MoveResult::Cutoff => {
                 // This move caused a cutoff, increase its priority
@@ -5939,14 +6553,14 @@ impl MoveOrdering {
                     self.update_history_from_cutoff(best_move, tt_entry.depth);
                 }
                 self.stats.tt_cutoff_updates += 1;
-            },
+            }
             MoveResult::Exact => {
                 // This move has an exact score, use it for PV
                 if let Some(ref best_move) = tt_entry.best_move {
                     self.update_pv_move_from_tt(best_move, tt_entry.score, tt_entry.depth);
                 }
                 self.stats.tt_exact_updates += 1;
-            },
+            }
             MoveResult::Bound => {
                 // This move has a bound, use it for ordering
                 if let Some(ref best_move) = tt_entry.best_move {
@@ -5955,18 +6569,22 @@ impl MoveOrdering {
                 self.stats.tt_bound_updates += 1;
             }
         }
-        
+
         Ok(())
     }
 
     /// Update history heuristic from transposition table data
     fn update_history_from_tt(&mut self, move_: &Move, score: i32, depth: u8) {
         if let (Some(from), Some(to)) = (move_.from, Some(move_.to)) {
-            let history_value = if score > 0 { depth as i32 + 1 } else { -(depth as i32 + 1) };
+            let history_value = if score > 0 {
+                depth as i32 + 1
+            } else {
+                -(depth as i32 + 1)
+            };
             let from_idx = from.row as usize;
             let to_idx = to.row as usize;
             self.simple_history_table[from_idx][to_idx] += history_value;
-            
+
             // Clamp history values to prevent overflow
             let max_history = 10000;
             if self.simple_history_table[from_idx][to_idx] > max_history {
@@ -5974,7 +6592,7 @@ impl MoveOrdering {
             } else if self.simple_history_table[from_idx][to_idx] < -max_history {
                 self.simple_history_table[from_idx][to_idx] = -max_history;
             }
-            
+
             self.stats.history_updates_from_tt += 1;
         }
     }
@@ -5983,7 +6601,7 @@ impl MoveOrdering {
     fn update_killer_move_priority(&mut self, move_: &Move, _depth: u8) {
         // Add to killer moves with higher priority
         self.add_killer_move(move_.clone());
-        
+
         // Update killer move statistics
         self.stats.killer_moves_from_tt += 1;
     }
@@ -5991,8 +6609,9 @@ impl MoveOrdering {
     /// Update PV move from transposition table
     fn update_pv_move_from_tt(&mut self, move_: &Move, _score: i32, depth: u8) {
         // Store as PV move for future reference (Task 6.0: use PVOrdering module)
-        self.pv_ordering.update_pv_move_for_depth(depth, move_.clone());
-        
+        self.pv_ordering
+            .update_pv_move_for_depth(depth, move_.clone());
+
         // Update PV move statistics
         self.stats.pv_moves_from_tt += 1;
     }
@@ -6003,11 +6622,11 @@ impl MoveOrdering {
             TranspositionFlag::LowerBound => {
                 // Lower bound means this move is at least this good
                 self.add_killer_move(move_.clone());
-            },
+            }
             TranspositionFlag::UpperBound => {
                 // Upper bound means this move is at most this good
                 // Don't prioritize it as highly
-            },
+            }
             TranspositionFlag::Exact => {
                 // Exact score, treat as PV move
                 self.update_pv_move_from_tt(move_, 0, depth);
@@ -6044,44 +6663,57 @@ impl MoveOrdering {
     // ==================== Runtime Performance Tuning ====================
 
     /// Tune performance at runtime based on current statistics
-    /// 
+    ///
     /// This method analyzes current performance metrics and automatically
     /// adjusts configuration to optimize performance.
     pub fn tune_performance_runtime(&mut self) -> PerformanceTuningResult {
         let stats = &self.stats;
         let mut adjustments = Vec::new();
         let mut config = self.config.clone();
-        
+
         // Tune cache size based on hit rate
         if stats.cache_hit_rate < 50.0 && config.cache_config.max_cache_size < 500000 {
             let old_size = config.cache_config.max_cache_size;
             config.cache_config.max_cache_size = (config.cache_config.max_cache_size * 3) / 2;
-            adjustments.push(format!("Increased cache size: {} -> {}", old_size, config.cache_config.max_cache_size));
+            adjustments.push(format!(
+                "Increased cache size: {} -> {}",
+                old_size, config.cache_config.max_cache_size
+            ));
         } else if stats.cache_hit_rate > 95.0 && config.cache_config.max_cache_size > 10000 {
             let old_size = config.cache_config.max_cache_size;
             config.cache_config.max_cache_size = (config.cache_config.max_cache_size * 3) / 4;
-            adjustments.push(format!("Decreased cache size: {} -> {}", old_size, config.cache_config.max_cache_size));
+            adjustments.push(format!(
+                "Decreased cache size: {} -> {}",
+                old_size, config.cache_config.max_cache_size
+            ));
         }
-        
+
         // Tune SEE cache size based on hit rate
         if stats.see_cache_hit_rate < 40.0 && config.cache_config.max_see_cache_size < 250000 {
             let old_size = config.cache_config.max_see_cache_size;
-            config.cache_config.max_see_cache_size = (config.cache_config.max_see_cache_size * 3) / 2;
-            adjustments.push(format!("Increased SEE cache size: {} -> {}", old_size, config.cache_config.max_see_cache_size));
+            config.cache_config.max_see_cache_size =
+                (config.cache_config.max_see_cache_size * 3) / 2;
+            adjustments.push(format!(
+                "Increased SEE cache size: {} -> {}",
+                old_size, config.cache_config.max_see_cache_size
+            ));
         }
-        
+
         // Tune history aging frequency based on hit rate
         if stats.history_hit_rate < 20.0 && config.history_config.aging_frequency < 300 {
             let old_freq = config.history_config.aging_frequency;
             config.history_config.aging_frequency += 50;
-            adjustments.push(format!("Increased history aging frequency: {} -> {}", old_freq, config.history_config.aging_frequency));
+            adjustments.push(format!(
+                "Increased history aging frequency: {} -> {}",
+                old_freq, config.history_config.aging_frequency
+            ));
         }
-        
+
         // Apply adjustments
         if !adjustments.is_empty() {
             self.config = config;
         }
-        
+
         PerformanceTuningResult {
             adjustments_made: adjustments.len(),
             adjustments,
@@ -6091,57 +6723,60 @@ impl MoveOrdering {
     }
 
     /// Monitor performance and return recommendations
-    /// 
+    ///
     /// This method analyzes current performance and returns recommendations
     /// for tuning without automatically applying them.
     pub fn monitor_performance(&self) -> PerformanceMonitoringReport {
         let stats = &self.stats;
         let mut recommendations = Vec::new();
         let mut warnings = Vec::new();
-        
+
         // Check cache hit rate
         if stats.cache_hit_rate < 50.0 {
             warnings.push("Low cache hit rate".to_string());
             recommendations.push("Consider increasing cache size".to_string());
         } else if stats.cache_hit_rate > 90.0 {
-            recommendations.push("Excellent cache hit rate - could reduce cache size to save memory".to_string());
+            recommendations.push(
+                "Excellent cache hit rate - could reduce cache size to save memory".to_string(),
+            );
         }
-        
+
         // Check ordering time
         if stats.avg_ordering_time_us > 100.0 {
             warnings.push("High average ordering time".to_string());
             recommendations.push("Consider disabling SEE or increasing cache size".to_string());
         }
-        
+
         // Check memory usage
         if stats.memory_usage_bytes > 20 * 1024 * 1024 {
             warnings.push("High memory usage (> 20 MB)".to_string());
-            recommendations.push("Consider reducing cache sizes or clearing caches periodically".to_string());
+            recommendations
+                .push("Consider reducing cache sizes or clearing caches periodically".to_string());
         }
-        
+
         // Check heuristic effectiveness
         if stats.pv_move_hit_rate < 20.0 {
             warnings.push("Low PV move hit rate".to_string());
             recommendations.push("Ensure PV moves are being updated during search".to_string());
         }
-        
+
         if stats.killer_move_hit_rate < 15.0 {
             warnings.push("Low killer move hit rate".to_string());
             recommendations.push("Ensure killer moves are added at beta cutoffs".to_string());
         }
-        
+
         if stats.history_hit_rate < 15.0 {
             warnings.push("Low history hit rate".to_string());
             recommendations.push("Ensure history is updated for all moves tried".to_string());
         }
-        
+
         // Calculate overall health score (0-100)
         let mut health_score = 100.0;
         health_score -= (50.0 - stats.cache_hit_rate).max(0.0);
         health_score -= (stats.avg_ordering_time_us - 50.0).max(0.0) / 10.0;
         health_score -= (30.0 - stats.pv_move_hit_rate).max(0.0);
         health_score = health_score.max(0.0);
-        
+
         PerformanceMonitoringReport {
             overall_health_score: health_score,
             cache_hit_rate: stats.cache_hit_rate,
@@ -6156,25 +6791,25 @@ impl MoveOrdering {
     }
 
     /// Automatically optimize configuration based on performance
-    /// 
+    ///
     /// This method applies automatic optimizations to improve performance
     /// based on current statistics and usage patterns.
     pub fn auto_optimize(&mut self) -> AutoOptimizationResult {
         let start_stats = self.stats.clone();
         let mut optimizations = Vec::new();
-        
+
         // Adjust weights based on heuristic effectiveness
         let weight_adjustments = self.adjust_weights_based_on_effectiveness_legacy();
         optimizations.extend(weight_adjustments);
-        
+
         // Optimize cache configuration
         let cache_optimizations = self.optimize_cache_configuration();
         optimizations.extend(cache_optimizations);
-        
+
         // Optimize heuristic enablement
         let heuristic_optimizations = self.optimize_heuristic_enablement();
         optimizations.extend(heuristic_optimizations);
-        
+
         AutoOptimizationResult {
             optimizations_applied: optimizations.len(),
             optimizations,
@@ -6195,103 +6830,137 @@ impl MoveOrdering {
     /// Note: Task 5.0 has a new implementation that uses effectiveness-based learning.
     fn adjust_weights_based_on_effectiveness_legacy(&mut self) -> Vec<String> {
         let mut adjustments = Vec::new();
-        
+
         // Adjust PV weight based on hit rate
         if self.stats.pv_move_hit_rate > 40.0 && self.config.weights.pv_move_weight < 12000 {
             self.config.weights.pv_move_weight += 1000;
-            adjustments.push(format!("Increased PV weight to {}", self.config.weights.pv_move_weight));
+            adjustments.push(format!(
+                "Increased PV weight to {}",
+                self.config.weights.pv_move_weight
+            ));
         } else if self.stats.pv_move_hit_rate < 20.0 && self.config.weights.pv_move_weight > 8000 {
             self.config.weights.pv_move_weight -= 500;
-            adjustments.push(format!("Decreased PV weight to {}", self.config.weights.pv_move_weight));
+            adjustments.push(format!(
+                "Decreased PV weight to {}",
+                self.config.weights.pv_move_weight
+            ));
         }
-        
+
         // Adjust killer weight based on hit rate
         if self.stats.killer_move_hit_rate > 30.0 && self.config.weights.killer_move_weight < 6000 {
             self.config.weights.killer_move_weight += 500;
-            adjustments.push(format!("Increased killer weight to {}", self.config.weights.killer_move_weight));
-        } else if self.stats.killer_move_hit_rate < 15.0 && self.config.weights.killer_move_weight > 3000 {
+            adjustments.push(format!(
+                "Increased killer weight to {}",
+                self.config.weights.killer_move_weight
+            ));
+        } else if self.stats.killer_move_hit_rate < 15.0
+            && self.config.weights.killer_move_weight > 3000
+        {
             self.config.weights.killer_move_weight -= 500;
-            adjustments.push(format!("Decreased killer weight to {}", self.config.weights.killer_move_weight));
+            adjustments.push(format!(
+                "Decreased killer weight to {}",
+                self.config.weights.killer_move_weight
+            ));
         }
-        
+
         // Adjust history weight based on hit rate
         if self.stats.history_hit_rate > 40.0 && self.config.weights.history_weight < 400 {
             self.config.weights.history_weight += 50;
-            adjustments.push(format!("Increased history weight to {}", self.config.weights.history_weight));
+            adjustments.push(format!(
+                "Increased history weight to {}",
+                self.config.weights.history_weight
+            ));
         } else if self.stats.history_hit_rate < 15.0 && self.config.weights.history_weight > 50 {
             self.config.weights.history_weight -= 25;
-            adjustments.push(format!("Decreased history weight to {}", self.config.weights.history_weight));
+            adjustments.push(format!(
+                "Decreased history weight to {}",
+                self.config.weights.history_weight
+            ));
         }
-        
+
         adjustments
     }
 
     /// Optimize cache configuration
     fn optimize_cache_configuration(&mut self) -> Vec<String> {
         let mut optimizations = Vec::new();
-        
+
         // Adjust main cache size
         if self.stats.cache_hit_rate < 60.0 && self.config.cache_config.max_cache_size < 500000 {
             let old_size = self.config.cache_config.max_cache_size;
-            self.config.cache_config.max_cache_size = std::cmp::min(
-                self.config.cache_config.max_cache_size * 2,
-                500000
-            );
-            optimizations.push(format!("Increased cache size: {} -> {}", old_size, self.config.cache_config.max_cache_size));
+            self.config.cache_config.max_cache_size =
+                std::cmp::min(self.config.cache_config.max_cache_size * 2, 500000);
+            optimizations.push(format!(
+                "Increased cache size: {} -> {}",
+                old_size, self.config.cache_config.max_cache_size
+            ));
         }
-        
+
         // Adjust SEE cache size
-        if self.stats.see_cache_hit_rate < 50.0 && self.config.cache_config.max_see_cache_size < 250000 {
+        if self.stats.see_cache_hit_rate < 50.0
+            && self.config.cache_config.max_see_cache_size < 250000
+        {
             let old_size = self.config.cache_config.max_see_cache_size;
-            self.config.cache_config.max_see_cache_size = std::cmp::min(
-                self.config.cache_config.max_see_cache_size * 2,
-                250000
-            );
-            optimizations.push(format!("Increased SEE cache size: {} -> {}", old_size, self.config.cache_config.max_see_cache_size));
+            self.config.cache_config.max_see_cache_size =
+                std::cmp::min(self.config.cache_config.max_see_cache_size * 2, 250000);
+            optimizations.push(format!(
+                "Increased SEE cache size: {} -> {}",
+                old_size, self.config.cache_config.max_see_cache_size
+            ));
         }
-        
+
         // Enable auto optimization if caches are effective
         if self.stats.cache_hit_rate > 70.0 && !self.config.cache_config.enable_auto_optimization {
             self.config.cache_config.enable_auto_optimization = true;
             optimizations.push("Enabled automatic cache optimization".to_string());
         }
-        
+
         optimizations
     }
 
     /// Optimize heuristic enablement
     fn optimize_heuristic_enablement(&mut self) -> Vec<String> {
         let mut optimizations = Vec::new();
-        
+
         // Disable SEE cache if it's too slow
-        if self.stats.avg_see_calculation_time_us > 50.0 && self.config.cache_config.enable_see_cache {
+        if self.stats.avg_see_calculation_time_us > 50.0
+            && self.config.cache_config.enable_see_cache
+        {
             self.config.cache_config.enable_see_cache = false;
             optimizations.push("Disabled SEE cache due to high calculation time".to_string());
         }
-        
+
         // Increase max killer moves if hit rate is good
-        if self.stats.killer_move_hit_rate > 30.0 && self.config.killer_config.max_killer_moves_per_depth < 3 {
+        if self.stats.killer_move_hit_rate > 30.0
+            && self.config.killer_config.max_killer_moves_per_depth < 3
+        {
             self.config.killer_config.max_killer_moves_per_depth += 1;
-            optimizations.push(format!("Increased max killer moves to {}", self.config.killer_config.max_killer_moves_per_depth));
+            optimizations.push(format!(
+                "Increased max killer moves to {}",
+                self.config.killer_config.max_killer_moves_per_depth
+            ));
         }
-        
+
         // Adjust history aging frequency
         if self.stats.history_hit_rate < 20.0 && self.config.history_config.aging_frequency < 300 {
             let old_freq = self.config.history_config.aging_frequency;
             self.config.history_config.aging_frequency += 50;
-            optimizations.push(format!("Increased history aging frequency: {} -> {}", old_freq, self.config.history_config.aging_frequency));
+            optimizations.push(format!(
+                "Increased history aging frequency: {} -> {}",
+                old_freq, self.config.history_config.aging_frequency
+            ));
         }
-        
+
         optimizations
     }
 
     /// Get performance tuning recommendations
-    /// 
+    ///
     /// Returns recommendations for improving performance without applying them.
     pub fn get_tuning_recommendations(&self) -> Vec<TuningRecommendation> {
         let mut recommendations = Vec::new();
         let stats = &self.stats;
-        
+
         // Cache size recommendations
         if stats.cache_hit_rate < 60.0 {
             recommendations.push(TuningRecommendation {
@@ -6306,7 +6975,7 @@ impl MoveOrdering {
                 expected_impact: "Improved cache hit rate, faster ordering".to_string(),
             });
         }
-        
+
         // Weight adjustment recommendations
         if stats.pv_move_hit_rate > 40.0 && self.config.weights.pv_move_weight < 12000 {
             recommendations.push(TuningRecommendation {
@@ -6321,7 +6990,7 @@ impl MoveOrdering {
                 expected_impact: "Better move ordering from PV moves".to_string(),
             });
         }
-        
+
         // Performance recommendations
         if stats.avg_ordering_time_us > 100.0 {
             recommendations.push(TuningRecommendation {
@@ -6334,7 +7003,7 @@ impl MoveOrdering {
                 expected_impact: "Faster move ordering".to_string(),
             });
         }
-        
+
         // Memory recommendations
         if stats.memory_usage_bytes > 20 * 1024 * 1024 {
             recommendations.push(TuningRecommendation {
@@ -6347,7 +7016,7 @@ impl MoveOrdering {
                 expected_impact: "Reduced memory footprint".to_string(),
             });
         }
-        
+
         recommendations
     }
 
@@ -6361,12 +7030,15 @@ impl MoveOrdering {
     }
 
     /// Compare performance between two snapshots
-    pub fn compare_performance(before: &PerformanceSnapshot, after: &PerformanceSnapshot) -> PerformanceComparison {
+    pub fn compare_performance(
+        before: &PerformanceSnapshot,
+        after: &PerformanceSnapshot,
+    ) -> PerformanceComparison {
         PerformanceComparison {
             cache_hit_rate_change: after.cache_hit_rate - before.cache_hit_rate,
             ordering_time_change: after.avg_ordering_time_us - before.avg_ordering_time_us,
             memory_usage_change: after.memory_usage_bytes as i64 - before.memory_usage_bytes as i64,
-            is_improved: after.cache_hit_rate > before.cache_hit_rate 
+            is_improved: after.cache_hit_rate > before.cache_hit_rate
                 && after.avg_ordering_time_us < before.avg_ordering_time_us,
         }
     }
@@ -6374,24 +7046,40 @@ impl MoveOrdering {
     // ==================== Advanced Integration ====================
 
     /// Integrate with opening book for enhanced move ordering
-    /// 
+    ///
     /// Uses opening book data to prioritize theoretically strong moves.
-    pub fn integrate_with_opening_book(&mut self, book_moves: &[crate::opening_book::BookMove], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> MoveOrderingResult<()> {
+    pub fn integrate_with_opening_book(
+        &mut self,
+        book_moves: &[crate::opening_book::BookMove],
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> MoveOrderingResult<()> {
         if book_moves.is_empty() {
             return Ok(());
         }
-        
+
         // Get the best book move by weight and evaluation
-        if let Some(best_book_move) = book_moves.iter().max_by(|a, b| {
-            match a.weight.cmp(&b.weight) {
-                std::cmp::Ordering::Equal => a.evaluation.cmp(&b.evaluation),
-                other => other,
-            }
-        }) {
+        if let Some(best_book_move) =
+            book_moves
+                .iter()
+                .max_by(|a, b| match a.weight.cmp(&b.weight) {
+                    std::cmp::Ordering::Equal => a.evaluation.cmp(&b.evaluation),
+                    other => other,
+                })
+        {
             // Convert book move to regular move and set as PV
             let pv_move = best_book_move.to_engine_move(player);
-            self.update_pv_move(board, captured_pieces, player, depth, pv_move, best_book_move.evaluation);
-            
+            self.update_pv_move(
+                board,
+                captured_pieces,
+                player,
+                depth,
+                pv_move,
+                best_book_move.evaluation,
+            );
+
             // Update history for all book moves based on their weights
             for book_move in book_moves {
                 let move_ = book_move.to_engine_move(player);
@@ -6402,17 +7090,24 @@ impl MoveOrdering {
                     self.simple_history_table[from_idx][to_idx] += bonus;
                 }
             }
-            
+
             self.stats.opening_book_integrations += 1;
         }
-        
+
         Ok(())
     }
 
     /// Integrate with endgame tablebase for enhanced move ordering
-    /// 
+    ///
     /// Uses tablebase data to prioritize moves leading to winning positions.
-    pub fn integrate_with_tablebase(&mut self, tablebase_result: &crate::tablebase::TablebaseResult, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> MoveOrderingResult<()> {
+    pub fn integrate_with_tablebase(
+        &mut self,
+        tablebase_result: &crate::tablebase::TablebaseResult,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> MoveOrderingResult<()> {
         // If tablebase provides a best move, use it as PV
         if let Some(ref best_move) = tablebase_result.best_move {
             // Calculate score based on distance to mate
@@ -6425,10 +7120,17 @@ impl MoveOrdering {
             } else {
                 0 // Draw
             };
-            
-            self.update_pv_move(board, captured_pieces, player, depth, best_move.clone(), score);
+
+            self.update_pv_move(
+                board,
+                captured_pieces,
+                player,
+                depth,
+                best_move.clone(),
+                score,
+            );
             self.add_killer_move(best_move.clone());
-            
+
             // Update history with high bonus for tablebase moves
             if let (Some(from), Some(to)) = (best_move.from, Some(best_move.to)) {
                 let from_idx = from.row as usize;
@@ -6436,32 +7138,47 @@ impl MoveOrdering {
                 let bonus = 1000; // High bonus for tablebase-recommended moves
                 self.simple_history_table[from_idx][to_idx] += bonus;
             }
-            
+
             self.stats.tablebase_integrations += 1;
         }
-        
+
         Ok(())
     }
 
     /// Order moves for analysis mode
-    /// 
+    ///
     /// In analysis mode, we want to explore all reasonable moves thoroughly.
-    pub fn order_moves_for_analysis(&mut self, moves: &[Move], board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    pub fn order_moves_for_analysis(
+        &mut self,
+        moves: &[Move],
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
-        
+
         // Use all heuristics but with more balanced weights for exploration
         // Task 3.0: No IID move context for analysis ordering
-        let mut analysis_ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None);
-        
+        let mut analysis_ordered = self.order_moves_with_all_heuristics(
+            moves,
+            board,
+            captured_pieces,
+            player,
+            depth,
+            None,
+            None,
+        );
+
         // In analysis mode, also consider quiet moves more
         analysis_ordered.sort_by(|a, b| {
             let score_a = self.score_move_for_analysis(a);
             let score_b = self.score_move_for_analysis(b);
             score_b.cmp(&score_a)
         });
-        
+
         self.stats.analysis_orderings += 1;
         analysis_ordered
     }
@@ -6470,23 +7187,31 @@ impl MoveOrdering {
     fn score_move_for_analysis(&mut self, move_: &Move) -> i32 {
         // Use regular scoring but with more balanced weights
         let mut score = self.score_move(move_).unwrap_or(0);
-        
+
         // Boost quiet positional moves in analysis
         if !move_.is_capture && !move_.is_promotion {
             score += 50; // Small boost for quiet moves to ensure they're explored
         }
-        
+
         score
     }
 
     /// Adjust move ordering based on time management
-    /// 
+    ///
     /// When time is limited, prioritize faster move evaluation.
-    pub fn order_moves_with_time_management(&mut self, moves: &[Move], time_remaining_ms: u32, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    pub fn order_moves_with_time_management(
+        &mut self,
+        moves: &[Move],
+        time_remaining_ms: u32,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
-        
+
         if time_remaining_ms < 1000 {
             // Low on time - use fast basic ordering
             self.order_moves(moves).unwrap_or_else(|_| moves.to_vec())
@@ -6495,77 +7220,101 @@ impl MoveOrdering {
             self.order_moves_with_pv_and_killer(moves, board, captured_pieces, player, depth)
         } else {
             // Task 3.0: Plenty of time - use all heuristics (no IID move context)
-            self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None)
+            self.order_moves_with_all_heuristics(
+                moves,
+                board,
+                captured_pieces,
+                player,
+                depth,
+                None,
+                None,
+            )
         }
     }
 
     /// Order moves for specific game phase
-    /// 
+    ///
     /// Adjusts move ordering based on game phase (opening, middlegame, endgame).
-    pub fn order_moves_for_game_phase(&mut self, moves: &[Move], game_phase: GamePhase, board: &crate::bitboards::BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8) -> Vec<Move> {
+    pub fn order_moves_for_game_phase(
+        &mut self,
+        moves: &[Move],
+        game_phase: GamePhase,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        depth: u8,
+    ) -> Vec<Move> {
         if moves.is_empty() {
             return Vec::new();
         }
-        
+
         // Temporarily adjust weights for the game phase
         let original_weights = self.config.weights.clone();
-        
+
         match game_phase {
             GamePhase::Opening => {
                 // Prioritize development and center control
                 self.config.weights.development_weight = 500;
                 self.config.weights.center_control_weight = 400;
                 self.config.weights.position_value_weight = 300;
-            },
+            }
             GamePhase::Middlegame => {
                 // Balanced tactical and positional play
                 self.config.weights.tactical_weight = 800;
                 self.config.weights.capture_weight = 1200;
                 self.config.weights.position_value_weight = 400;
-            },
+            }
             GamePhase::Endgame => {
                 // Focus on promotion and piece value
                 self.config.weights.promotion_weight = 1000;
                 self.config.weights.piece_value_weight = 800;
                 self.config.weights.tactical_weight = 600;
-            },
+            }
             GamePhase::Tactical => {
                 // Prioritize forcing moves
                 self.config.weights.capture_weight = 2000;
                 self.config.weights.tactical_weight = 1500;
                 self.config.weights.see_weight = 1200;
-            },
+            }
             GamePhase::Positional => {
                 // Prioritize positional moves
                 self.config.weights.position_value_weight = 800;
                 self.config.weights.center_control_weight = 600;
                 self.config.weights.development_weight = 500;
-            },
+            }
         }
-        
+
         // Task 3.0: Order with adjusted weights (no IID move context)
-        let ordered = self.order_moves_with_all_heuristics(moves, board, captured_pieces, player, depth, None, None);
-        
+        let ordered = self.order_moves_with_all_heuristics(
+            moves,
+            board,
+            captured_pieces,
+            player,
+            depth,
+            None,
+            None,
+        );
+
         // Restore original weights
         self.config.weights = original_weights;
-        
+
         self.stats.phase_specific_orderings += 1;
         ordered
     }
 
     /// Prepare move ordering for parallel search
-    /// 
+    ///
     /// Returns a configuration optimized for parallel/multi-threaded search.
     pub fn prepare_for_parallel_search(&mut self) -> ParallelSearchConfig {
         // For parallel search, we want thread-safe operations
         // and independent move orderers per thread
-        
+
         ParallelSearchConfig {
             config: self.config.clone(),
             thread_safe_caches: false, // Each thread gets its own caches
-            shared_history: true, // History can be shared (read-only during ordering)
-            shared_pv: true, // PV can be shared
-            shared_killers: false, // Killer moves are depth-specific, don't share
+            shared_history: true,      // History can be shared (read-only during ordering)
+            shared_pv: true,           // PV can be shared
+            shared_killers: false,     // Killer moves are depth-specific, don't share
         }
     }
 
@@ -6582,53 +7331,53 @@ impl MoveOrdering {
     // ==================== WASM-Specific Optimizations ====================
 
     /// Get WASM-optimized configuration
-    /// 
+    ///
     /// Returns a configuration optimized for WebAssembly environments
     /// with reduced memory usage and simplified operations.
     #[cfg(target_arch = "wasm32")]
     pub fn wasm_optimized_config() -> MoveOrderingConfig {
         let mut config = MoveOrderingConfig::default();
-        
+
         // Reduce cache sizes for WASM memory constraints
         config.cache_config.max_cache_size = 50000;
         config.cache_config.max_see_cache_size = 25000;
         config.cache_config.enable_auto_optimization = false;
-        
+
         // Limit killer moves for memory efficiency
         config.killer_config.max_killer_moves_per_depth = 2;
-        
+
         // Optimize for WASM performance
         config.performance_config.enable_performance_monitoring = false; // Reduce overhead
-        
+
         config
     }
 
     /// Get native-optimized configuration
-    /// 
+    ///
     /// Returns a configuration optimized for native environments
     /// with larger caches and more features enabled.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn native_optimized_config() -> MoveOrderingConfig {
         let mut config = MoveOrderingConfig::default();
-        
+
         // Larger caches for native environments
         config.cache_config.max_cache_size = 500000;
         config.cache_config.max_see_cache_size = 250000;
         config.cache_config.enable_auto_optimization = true;
-        
+
         // More killer moves for better accuracy
         config.killer_config.max_killer_moves_per_depth = 3;
-        
+
         // Enable all performance features
         config.performance_config.enable_performance_monitoring = true;
         config.performance_config.enable_memory_tracking = true;
         config.performance_config.enable_auto_optimization = true;
-        
+
         config
     }
 
     /// Create WASM-optimized move orderer
-    /// 
+    ///
     /// Creates a move orderer specifically optimized for WASM environments.
     #[cfg(target_arch = "wasm32")]
     pub fn new_wasm_optimized() -> Self {
@@ -6636,7 +7385,7 @@ impl MoveOrdering {
     }
 
     /// Create native-optimized move orderer
-    /// 
+    ///
     /// Creates a move orderer specifically optimized for native environments.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_native_optimized() -> Self {
@@ -6644,7 +7393,7 @@ impl MoveOrdering {
     }
 
     /// Get platform-specific configuration
-    /// 
+    ///
     /// Returns an optimized configuration for the current platform.
     pub fn platform_optimized_config() -> MoveOrderingConfig {
         #[cfg(target_arch = "wasm32")]
@@ -6663,7 +7412,7 @@ impl MoveOrdering {
     }
 
     /// Get memory limits for current platform
-    /// 
+    ///
     /// Returns recommended memory limits based on platform.
     pub fn get_platform_memory_limits() -> PlatformMemoryLimits {
         #[cfg(target_arch = "wasm32")]
@@ -6698,9 +7447,14 @@ impl Default for MoveOrdering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Player, PieceType, Position};
+    use crate::types::{PieceType, Player, Position};
 
-    fn create_test_move(from: Option<Position>, to: Position, piece_type: PieceType, player: Player) -> Move {
+    fn create_test_move(
+        from: Option<Position>,
+        to: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> Move {
         Move {
             from,
             to,
@@ -6752,9 +7506,9 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         )];
-        
+
         let ordered = orderer.order_moves(&moves);
         assert_eq!(ordered.len(), 1);
         assert_eq!(orderer.stats.total_moves_ordered, 1);
@@ -6763,32 +7517,32 @@ mod tests {
     #[test]
     fn test_move_scoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test capture move scoring
         let mut capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         capture_move.is_capture = true;
         capture_move.captured_piece = Some(Piece {
             piece_type: PieceType::Gold,
             player: Player::White,
         });
-        
+
         let score = orderer.score_move(&capture_move);
         assert!(score > 0);
-        
+
         // Test promotion move scoring
         let mut promotion_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(0, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         promotion_move.is_promotion = true;
-        
+
         let promotion_score = orderer.score_move(&promotion_move);
         assert!(promotion_score > 0);
     }
@@ -6796,37 +7550,37 @@ mod tests {
     #[test]
     fn test_position_value_scoring() {
         let orderer = MoveOrdering::new();
-        
+
         let center_position = Position::new(4, 4);
         let edge_position = Position::new(0, 0);
-        
+
         let center_score = orderer.score_position_value(&center_position);
         let edge_score = orderer.score_position_value(&edge_position);
-        
+
         assert!(center_score > edge_score);
     }
 
     #[test]
     fn test_cache_functionality() {
         let mut orderer = MoveOrdering::new();
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // First scoring should be a cache miss
         let _ = orderer.score_move(&move_);
         assert_eq!(orderer.stats.cache_misses, 1);
         assert_eq!(orderer.stats.cache_hits, 0);
-        
+
         // Second scoring should be a cache hit
         let _ = orderer.score_move(&move_);
         assert_eq!(orderer.stats.cache_misses, 1);
         assert_eq!(orderer.stats.cache_hits, 1);
-        
+
         // Cache should contain the move
         assert_eq!(orderer.get_cache_size(), 1);
     }
@@ -6834,18 +7588,28 @@ mod tests {
     #[test]
     fn test_memory_tracking() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no memory usage
         assert_eq!(orderer.memory_usage.current_bytes, 0);
-        
+
         // Add some moves to trigger memory usage
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(2, 2)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                Player::Black,
+            ),
         ];
-        
+
         let _ = orderer.order_moves(&moves);
-        
+
         // Memory usage should be updated
         assert!(orderer.memory_usage.current_bytes > 0);
         assert!(orderer.stats.memory_usage_bytes > 0);
@@ -6855,18 +7619,18 @@ mod tests {
     fn test_cache_size_limit() {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_cache_size(2);
-        
+
         // Add more moves than cache limit
         for i in 0..5 {
             let move_ = create_test_move(
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             let _ = orderer.score_move(&move_);
         }
-        
+
         // Cache should not exceed limit
         assert!(orderer.get_cache_size() <= 2);
     }
@@ -6874,23 +7638,23 @@ mod tests {
     #[test]
     fn test_statistics_reset() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Add some data
         let moves = vec![create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         )];
         let _ = orderer.order_moves(&moves);
-        
+
         // Verify data exists
         assert_eq!(orderer.stats.total_moves_ordered, 1);
         assert!(orderer.get_cache_size() > 0);
-        
+
         // Reset statistics
         orderer.reset_stats();
-        
+
         // Verify reset
         assert_eq!(orderer.stats.total_moves_ordered, 0);
         assert_eq!(orderer.get_cache_size(), 0);
@@ -6906,9 +7670,9 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_pv_move(&move_);
         assert_eq!(score, orderer.config.weights.pv_move_weight);
         assert!(score > 1000); // Should be higher than other move types
@@ -6917,10 +7681,10 @@ mod tests {
     #[test]
     fn test_pv_move_cache_functionality() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no PV moves cached (Task 6.0: use PVOrdering module)
         assert_eq!(orderer.pv_ordering.cache_size(), 0);
-        
+
         // Clear PV move cache
         orderer.clear_pv_move_cache();
         assert_eq!(orderer.pv_ordering.cache_size(), 0);
@@ -6931,31 +7695,31 @@ mod tests {
     #[test]
     fn test_moves_equal_functionality() {
         let orderer = MoveOrdering::new();
-        
+
         let move1 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let move2 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let move3 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(3, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Same moves should be equal
         assert!(orderer.moves_equal(&move1, &move2));
-        
+
         // Different moves should not be equal
         assert!(!orderer.moves_equal(&move1, &move3));
     }
@@ -6963,7 +7727,7 @@ mod tests {
     #[test]
     fn test_pv_move_statistics() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no statistics
         let (hits, misses, hit_rate, tt_lookups, tt_hits) = orderer.get_pv_stats();
         assert_eq!(hits, 0);
@@ -6971,7 +7735,7 @@ mod tests {
         assert_eq!(hit_rate, 0.0);
         assert_eq!(tt_lookups, 0);
         assert_eq!(tt_hits, 0);
-        
+
         // Test transposition table hit rate
         let tt_hit_rate = orderer.get_tt_hit_rate();
         assert_eq!(tt_hit_rate, 0.0);
@@ -6982,14 +7746,25 @@ mod tests {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(2, 2)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                Player::Black,
+            ),
         ];
-        
+
         // Should work even without transposition table (falls back to regular ordering)
-        let ordered = orderer.order_moves_with_pv(&moves, &board, &captured_pieces, Player::Black, 3);
+        let ordered =
+            orderer.order_moves_with_pv(&moves, &board, &captured_pieces, Player::Black, 3);
         assert_eq!(ordered.len(), 2);
     }
 
@@ -7004,7 +7779,7 @@ mod tests {
             ..Default::default()
         };
         let orderer = MoveOrdering::with_config(config);
-        
+
         assert_eq!(orderer.config.weights.pv_move_weight, 50000);
     }
 
@@ -7012,7 +7787,7 @@ mod tests {
     fn test_pv_move_cache_size_limit() {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_cache_size(2);
-        
+
         // Add more entries than cache limit
         for i in 0..5 {
             let hash = i as u64;
@@ -7020,11 +7795,11 @@ mod tests {
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.pv_move_cache.insert(hash, Some(move_));
         }
-        
+
         // Cache should not exceed limit
         assert!(orderer.pv_move_cache.len() <= 2);
     }
@@ -7032,10 +7807,10 @@ mod tests {
     #[test]
     fn test_memory_usage_with_pv_cache() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially minimal memory usage
         let initial_memory = orderer.memory_usage.current_bytes;
-        
+
         // Add some PV moves to cache
         for i in 0..10 {
             let hash = i as u64;
@@ -7043,14 +7818,14 @@ mod tests {
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.pv_move_cache.insert(hash, Some(move_));
         }
-        
+
         // Update memory usage
         orderer.update_memory_usage();
-        
+
         // Memory usage should have increased
         assert!(orderer.memory_usage.current_bytes > initial_memory);
     }
@@ -7064,9 +7839,9 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_killer_move(&move_);
         assert_eq!(score, orderer.config.weights.killer_move_weight);
         assert!(score > 1000); // Should be higher than regular moves
@@ -7076,26 +7851,26 @@ mod tests {
     fn test_killer_move_storage() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let killer_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Initially no killer moves
         assert!(orderer.get_current_killer_moves().is_none());
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Should now have killer moves
         let killer_moves = orderer.get_current_killer_moves();
         assert!(killer_moves.is_some());
         assert_eq!(killer_moves.unwrap().len(), 1);
         assert!(orderer.moves_equal(&killer_moves.unwrap()[0], &killer_move));
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.killer_moves_stored, 1);
     }
@@ -7104,24 +7879,24 @@ mod tests {
     fn test_killer_move_detection() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let killer_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Test killer move detection
         assert!(orderer.is_killer_move(&killer_move));
         assert!(!orderer.is_killer_move(&regular_move));
@@ -7130,33 +7905,33 @@ mod tests {
     #[test]
     fn test_depth_based_killer_move_management() {
         let mut orderer = MoveOrdering::new();
-        
+
         let killer_move_1 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let killer_move_2 = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer moves at different depths
         orderer.set_current_depth(1);
         orderer.add_killer_move(killer_move_1.clone());
-        
+
         orderer.set_current_depth(2);
         orderer.add_killer_move(killer_move_2.clone());
-        
+
         // Check killer moves at depth 1
         orderer.set_current_depth(1);
         assert!(orderer.is_killer_move(&killer_move_1));
         assert!(!orderer.is_killer_move(&killer_move_2));
-        
+
         // Check killer moves at depth 2
         orderer.set_current_depth(2);
         assert!(!orderer.is_killer_move(&killer_move_1));
@@ -7168,18 +7943,18 @@ mod tests {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_killer_moves_per_depth(2);
         orderer.set_current_depth(3);
-        
+
         // Add more killer moves than the limit
         for i in 0..5 {
             let killer_move = create_test_move(
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.add_killer_move(killer_move);
         }
-        
+
         // Should only have 2 killer moves (the limit)
         let killer_moves = orderer.get_current_killer_moves();
         assert!(killer_moves.is_some());
@@ -7190,28 +7965,28 @@ mod tests {
     fn test_killer_move_ordering() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let killer_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Order moves
         let moves = vec![regular_move.clone(), killer_move.clone()];
         let ordered = orderer.order_moves_with_killer(&moves);
-        
+
         // Killer move should be first
         assert_eq!(ordered.len(), 2);
         assert!(orderer.moves_equal(&ordered[0], &killer_move));
@@ -7222,26 +7997,26 @@ mod tests {
     fn test_killer_move_statistics() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         // Initially no statistics
         let (hits, misses, hit_rate, stored) = orderer.get_killer_move_stats();
         assert_eq!(hits, 0);
         assert_eq!(misses, 0);
         assert_eq!(hit_rate, 0.0);
         assert_eq!(stored, 0);
-        
+
         // Add killer move
         let killer_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Test killer move detection (should increment hits)
         assert!(orderer.is_killer_move(&killer_move));
-        
+
         // Statistics should be updated
         let (hits, misses, hit_rate, stored) = orderer.get_killer_move_stats();
         assert!(hits > 0);
@@ -7252,23 +8027,23 @@ mod tests {
     fn test_killer_move_clear_functionality() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         // Add killer moves
         let killer_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Verify killer move is stored
         assert!(orderer.is_killer_move(&killer_move));
         assert!(orderer.get_current_killer_moves().is_some());
-        
+
         // Clear killer moves for current depth
         orderer.clear_killer_moves_for_depth(3);
-        
+
         // Verify killer move is cleared
         assert!(!orderer.is_killer_move(&killer_move));
         assert!(orderer.get_current_killer_moves().is_none());
@@ -7277,41 +8052,41 @@ mod tests {
     #[test]
     fn test_killer_move_clear_all() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Add killer moves at different depths
         orderer.set_current_depth(1);
         let killer_move_1 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         orderer.add_killer_move(killer_move_1.clone());
-        
+
         orderer.set_current_depth(2);
         let killer_move_2 = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
         orderer.add_killer_move(killer_move_2.clone());
-        
+
         // Verify killer moves are stored
         orderer.set_current_depth(1);
         assert!(orderer.is_killer_move(&killer_move_1));
         orderer.set_current_depth(2);
         assert!(orderer.is_killer_move(&killer_move_2));
-        
+
         // Clear all killer moves
         orderer.clear_all_killer_moves();
-        
+
         // Verify all killer moves are cleared
         orderer.set_current_depth(1);
         assert!(!orderer.is_killer_move(&killer_move_1));
         orderer.set_current_depth(2);
         assert!(!orderer.is_killer_move(&killer_move_2));
-        
+
         // Statistics should be reset
         let (hits, misses, hit_rate, stored) = orderer.get_killer_move_stats();
         assert_eq!(hits, 0);
@@ -7324,44 +8099,52 @@ mod tests {
     fn test_pv_and_killer_move_combined_ordering() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let pv_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let killer_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Create test position and board
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
         let depth = 3;
-        
+
         // Store PV move in transposition table
-        orderer.update_pv_move(&board, &captured_pieces, player, depth, pv_move.clone(), 100);
-        
+        orderer.update_pv_move(
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+            pv_move.clone(),
+            100,
+        );
+
         // Order moves with both PV and killer prioritization
         let moves = vec![regular_move.clone(), killer_move.clone(), pv_move.clone()];
-        let ordered = orderer.order_moves_with_pv_and_killer(&moves, &board, &captured_pieces, player, depth);
-        
+        let ordered =
+            orderer.order_moves_with_pv_and_killer(&moves, &board, &captured_pieces, player, depth);
+
         // PV move should be first, killer move second, regular move last
         assert_eq!(ordered.len(), 3);
         assert!(orderer.moves_equal(&ordered[0], &pv_move));
@@ -7380,7 +8163,7 @@ mod tests {
             ..Default::default()
         };
         let orderer = MoveOrdering::with_config(config);
-        
+
         assert_eq!(orderer.config.weights.killer_move_weight, 7500);
         assert_eq!(orderer.get_max_killer_moves_per_depth(), 2);
     }
@@ -7389,9 +8172,9 @@ mod tests {
     fn test_killer_move_max_per_depth_configuration() {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_killer_moves_per_depth(5);
-        
+
         assert_eq!(orderer.get_max_killer_moves_per_depth(), 5);
-        
+
         // Add more moves than the new limit
         orderer.set_current_depth(3);
         for i in 0..10 {
@@ -7399,11 +8182,11 @@ mod tests {
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.add_killer_move(killer_move);
         }
-        
+
         // Should only have 5 killer moves (the new limit)
         let killer_moves = orderer.get_current_killer_moves();
         assert!(killer_moves.is_some());
@@ -7419,29 +8202,29 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
-        
+
         // Add counter-move
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Score counter-move with opponent's last move
         let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
         assert_eq!(score, orderer.config.weights.counter_move_weight);
         assert!(score > 1000); // Should be higher than regular moves
-        
+
         // Score non-counter-move
         let regular_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::White
+            Player::White,
         );
         let score_no_match = orderer.score_counter_move(&regular_move, Some(&opponent_move));
         assert_eq!(score_no_match, 0);
@@ -7450,32 +8233,32 @@ mod tests {
     #[test]
     fn test_counter_move_storage() {
         let mut orderer = MoveOrdering::new();
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
-        
+
         // Initially no counter-moves
         assert!(orderer.get_counter_moves(&opponent_move).is_none());
-        
+
         // Add counter-move
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Should now have counter-moves
         let counter_moves = orderer.get_counter_moves(&opponent_move);
         assert!(counter_moves.is_some());
         assert_eq!(counter_moves.unwrap().len(), 1);
         assert!(orderer.moves_equal(&counter_moves.unwrap()[0], &counter_move));
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.counter_moves_stored, 1);
     }
@@ -7483,29 +8266,29 @@ mod tests {
     #[test]
     fn test_counter_move_detection() {
         let mut orderer = MoveOrdering::new();
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
         let regular_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::White
+            Player::White,
         );
-        
+
         // Add counter-move
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Test counter-move detection
         assert!(orderer.is_counter_move(&counter_move, Some(&opponent_move)));
         assert!(!orderer.is_counter_move(&regular_move, Some(&opponent_move)));
@@ -7516,25 +8299,25 @@ mod tests {
     fn test_counter_move_limit() {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_counter_moves(2);
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add more counter-moves than the limit
         for i in 0..5 {
             let counter_move = create_test_move(
                 Some(Position::new(i, 0)),
                 Position::new(i + 1, 0),
                 PieceType::Pawn,
-                Player::White
+                Player::White,
             );
             orderer.add_counter_move(opponent_move.clone(), counter_move);
         }
-        
+
         // Should only have 2 counter-moves (FIFO order)
         let counter_moves = orderer.get_counter_moves(&opponent_move);
         assert!(counter_moves.is_some());
@@ -7544,29 +8327,29 @@ mod tests {
     #[test]
     fn test_counter_move_duplicate_prevention() {
         let mut orderer = MoveOrdering::new();
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
-        
+
         // Add same counter-move twice
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Should only have one counter-move (no duplicates)
         let counter_moves = orderer.get_counter_moves(&opponent_move);
         assert!(counter_moves.is_some());
         assert_eq!(counter_moves.unwrap().len(), 1);
-        
+
         // Statistics should only count once
         assert_eq!(orderer.stats.counter_moves_stored, 1);
     }
@@ -7574,28 +8357,28 @@ mod tests {
     #[test]
     fn test_counter_move_clear_functionality() {
         let mut orderer = MoveOrdering::new();
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Verify counter-move is stored
         assert!(orderer.is_counter_move(&counter_move, Some(&opponent_move)));
         assert!(orderer.get_counter_moves(&opponent_move).is_some());
-        
+
         // Clear counter-moves for opponent move
         orderer.clear_counter_moves_for_opponent_move(&opponent_move);
-        
+
         // Verify counter-move is cleared
         assert!(!orderer.is_counter_move(&counter_move, Some(&opponent_move)));
         assert!(orderer.get_counter_moves(&opponent_move).is_none());
@@ -7604,39 +8387,39 @@ mod tests {
     #[test]
     fn test_counter_move_clear_all() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Add counter-moves for different opponent moves
         let opponent_move_1 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move_1 = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
         orderer.add_counter_move(opponent_move_1.clone(), counter_move_1.clone());
-        
+
         let opponent_move_2 = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::Black
+            Player::Black,
         );
         let counter_move_2 = create_test_move(
             Some(Position::new(4, 4)),
             Position::new(5, 4),
             PieceType::Rook,
-            Player::White
+            Player::White,
         );
         orderer.add_counter_move(opponent_move_2.clone(), counter_move_2.clone());
-        
+
         // Clear all counter-moves
         orderer.clear_all_counter_moves();
-        
+
         // Verify all counter-moves are cleared
         assert!(!orderer.is_counter_move(&counter_move_1, Some(&opponent_move_1)));
         assert!(!orderer.is_counter_move(&counter_move_2, Some(&opponent_move_2)));
@@ -7648,47 +8431,47 @@ mod tests {
     #[test]
     fn test_counter_move_statistics() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no statistics
         let (hits, misses, hit_rate, stored) = orderer.get_counter_move_stats();
         assert_eq!(hits, 0);
         assert_eq!(misses, 0);
         assert_eq!(hit_rate, 0.0);
         assert_eq!(stored, 0);
-        
+
         // Add counter-move
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Test counter-move detection (should increment hits)
         let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
         assert!(score > 0);
-        
+
         // Statistics should be updated
         let (hits, misses, hit_rate, stored) = orderer.get_counter_move_stats();
         assert!(hits > 0);
         assert!(stored > 0);
-        
+
         // Test miss (should increment misses)
         let regular_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::White
+            Player::White,
         );
         let _score = orderer.score_counter_move(&regular_move, Some(&opponent_move));
-        
+
         // Statistics should be updated
         let (hits, misses, _hit_rate, stored) = orderer.get_counter_move_stats();
         assert!(misses > 0);
@@ -7697,27 +8480,27 @@ mod tests {
     #[test]
     fn test_counter_move_only_for_quiet_moves() {
         let mut orderer = MoveOrdering::new();
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Create a capture move (should not be used as counter-move)
         let mut capture_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
         capture_move.is_capture = true;
-        
+
         // Add counter-move (should be allowed even if it's a capture)
         // But in practice, counter-moves are only added for quiet moves in the search engine
         orderer.add_counter_move(opponent_move.clone(), capture_move.clone());
-        
+
         // Should still be able to retrieve it
         let counter_moves = orderer.get_counter_moves(&opponent_move);
         assert!(counter_moves.is_some());
@@ -7728,26 +8511,26 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.counter_move_config.enable_counter_move = false;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let opponent_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let counter_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::White
+            Player::White,
         );
-        
+
         // Try to add counter-move (should be ignored)
         orderer.add_counter_move(opponent_move.clone(), counter_move.clone());
-        
+
         // Should not be stored
         assert!(orderer.get_counter_moves(&opponent_move).is_none());
-        
+
         // Scoring should return 0
         let score = orderer.score_counter_move(&counter_move, Some(&opponent_move));
         assert_eq!(score, 0);
@@ -7761,35 +8544,84 @@ mod tests {
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::FIFO;
         config.cache_config.max_cache_size = 2;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Create test moves
         let moves1 = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                player,
+            ),
+            create_test_move(
+                Some(Position::new(2, 2)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                player,
+            ),
         ];
         let moves2 = vec![
-            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
-            create_test_move(Some(Position::new(4, 4)), Position::new(5, 4), PieceType::Rook, player),
+            create_test_move(
+                Some(Position::new(3, 3)),
+                Position::new(4, 3),
+                PieceType::Gold,
+                player,
+            ),
+            create_test_move(
+                Some(Position::new(4, 4)),
+                Position::new(5, 4),
+                PieceType::Rook,
+                player,
+            ),
         ];
-        let moves3 = vec![
-            create_test_move(Some(Position::new(5, 5)), Position::new(6, 5), PieceType::Bishop, player),
-        ];
-        
+        let moves3 = vec![create_test_move(
+            Some(Position::new(5, 5)),
+            Position::new(6, 5),
+            PieceType::Bishop,
+            player,
+        )];
+
         // Order moves 1 - should be cached
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
         assert_eq!(orderer.cache_manager.len(), 1);
-        
+
         // Order moves 2 - should be cached
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves2,
+            &board,
+            &captured_pieces,
+            player,
+            4,
+            None,
+            None,
+        );
         assert_eq!(orderer.move_ordering_cache.len(), 2);
-        
+
         // Order moves 3 - should evict first entry (FIFO)
-        let hash3 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 5, None, None);
+        let hash3 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered3 = orderer.order_moves_with_all_heuristics(
+            &moves3,
+            &board,
+            &captured_pieces,
+            player,
+            5,
+            None,
+            None,
+        );
         assert_eq!(orderer.move_ordering_cache.len(), 2);
         assert!(orderer.cache_manager.contains_key(&(hash3, 5)));
     }
@@ -7800,35 +8632,80 @@ mod tests {
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::LRU;
         config.cache_config.max_cache_size = 2;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Create test moves
-        let moves1 = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-        ];
-        let moves2 = vec![
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
-        ];
-        let moves3 = vec![
-            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
-        ];
-        
+        let moves1 = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            player,
+        )];
+        let moves2 = vec![create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            player,
+        )];
+        let moves3 = vec![create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            player,
+        )];
+
         // Order moves 1 - should be cached
-        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
-        
+        let hash1 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
+
         // Order moves 2 - should be cached (different position, so hash will differ)
-        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
-        
+        let hash2 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves2,
+            &board,
+            &captured_pieces,
+            player,
+            4,
+            None,
+            None,
+        );
+
         // Access moves 1 again (update LRU)
-        let _ordered1_again = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
-        
+        let _ordered1_again = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
+
         // Order moves 3 - should evict moves 2 (least recently used)
-        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 5, None, None);
+        let _ordered3 = orderer.order_moves_with_all_heuristics(
+            &moves3,
+            &board,
+            &captured_pieces,
+            player,
+            5,
+            None,
+            None,
+        );
         assert_eq!(orderer.move_ordering_cache.len(), 2);
         assert!(orderer.move_ordering_cache.contains_key(&(hash1, 3))); // moves1 should still be cached
         assert!(!orderer.move_ordering_cache.contains_key(&(hash2, 4))); // moves2 should be evicted
@@ -7840,32 +8717,69 @@ mod tests {
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::DepthPreferred;
         config.cache_config.max_cache_size = 2;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Create test moves
-        let moves1 = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-        ];
-        let moves2 = vec![
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
-        ];
-        let moves3 = vec![
-            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
-        ];
-        
+        let moves1 = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            player,
+        )];
+        let moves2 = vec![create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            player,
+        )];
+        let moves3 = vec![create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            player,
+        )];
+
         // Order moves at depth 5 (deep) - should be cached
-        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 5, None, None);
-        
+        let hash1 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            5,
+            None,
+            None,
+        );
+
         // Order moves at depth 3 (shallow) - should be cached (different position, so hash will differ)
-        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 3, None, None);
-        
+        let hash2 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves2,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
+
         // Order moves at depth 4 (medium) - should evict depth 3 (shallowest)
-        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 4, None, None);
+        let _ordered3 = orderer.order_moves_with_all_heuristics(
+            &moves3,
+            &board,
+            &captured_pieces,
+            player,
+            4,
+            None,
+            None,
+        );
         assert_eq!(orderer.move_ordering_cache.len(), 2);
         assert!(orderer.move_ordering_cache.contains_key(&(hash1, 5))); // depth 5 should still be cached
         assert!(!orderer.move_ordering_cache.contains_key(&(hash2, 3))); // depth 3 should be evicted
@@ -7878,32 +8792,69 @@ mod tests {
         config.cache_config.max_cache_size = 2;
         config.cache_config.hybrid_lru_weight = 0.5; // 50% LRU, 50% depth
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Create test moves
-        let moves1 = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-        ];
-        let moves2 = vec![
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
-        ];
-        let moves3 = vec![
-            create_test_move(Some(Position::new(3, 3)), Position::new(4, 3), PieceType::Gold, player),
-        ];
-        
+        let moves1 = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            player,
+        )];
+        let moves2 = vec![create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            player,
+        )];
+        let moves3 = vec![create_test_move(
+            Some(Position::new(3, 3)),
+            Position::new(4, 3),
+            PieceType::Gold,
+            player,
+        )];
+
         // Order moves at depth 5 (deep) - should be cached
-        let hash1 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 5, None, None);
-        
+        let hash1 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            5,
+            None,
+            None,
+        );
+
         // Order moves at depth 4 (medium) - should be cached (different position, so hash will differ)
-        let hash2 = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
-        
+        let hash2 = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves2,
+            &board,
+            &captured_pieces,
+            player,
+            4,
+            None,
+            None,
+        );
+
         // Order moves at depth 3 (shallow) - should evict based on hybrid policy
-        let _ordered3 = orderer.order_moves_with_all_heuristics(&moves3, &board, &captured_pieces, player, 3, None, None);
+        let _ordered3 = orderer.order_moves_with_all_heuristics(
+            &moves3,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
         assert_eq!(orderer.move_ordering_cache.len(), 2);
         // Depth 5 should likely still be cached (preferred by depth)
         assert!(orderer.move_ordering_cache.contains_key(&(hash1, 5)));
@@ -7914,29 +8865,51 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.cache_config.max_cache_size = 1; // Force evictions
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Initially no evictions
         assert_eq!(orderer.stats.cache_evictions, 0);
         assert_eq!(orderer.stats.cache_evictions_size_limit, 0);
-        
+
         // Create test moves
-        let moves1 = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-        ];
-        let moves2 = vec![
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, player),
-        ];
-        
+        let moves1 = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            player,
+        )];
+        let moves2 = vec![create_test_move(
+            Some(Position::new(2, 2)),
+            Position::new(3, 2),
+            PieceType::Silver,
+            player,
+        )];
+
         // Order moves 1 - should be cached
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves1, &board, &captured_pieces, player, 3, None, None);
-        
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves1,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
+
         // Order moves 2 - should evict moves 1
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves2, &board, &captured_pieces, player, 4, None, None);
-        
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves2,
+            &board,
+            &captured_pieces,
+            player,
+            4,
+            None,
+            None,
+        );
+
         // Statistics should be updated
         assert!(orderer.stats.cache_evictions > 0);
         assert!(orderer.stats.cache_evictions_size_limit > 0);
@@ -7945,29 +8918,50 @@ mod tests {
     #[test]
     fn test_cache_lru_tracking() {
         let mut orderer = MoveOrdering::new();
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, player),
-        ];
-        
+
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            player,
+        )];
+
         // Order moves - should be cached
-        let hash = orderer.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+        let hash = orderer
+            .hash_calculator
+            .get_position_hash(&board, player, &captured_pieces);
         let cache_key = (hash, 3);
-        let _ordered1 = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, 3, None, None);
-        
+        let _ordered1 = orderer.order_moves_with_all_heuristics(
+            &moves,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
+
         // Get initial access counter from entry
         let entry1 = orderer.cache_manager.get(&cache_key).unwrap();
         let initial_access = entry1.last_access;
         let initial_count = entry1.access_count;
         assert!(initial_access > 0);
         assert_eq!(initial_count, 1);
-        
+
         // Access cached entry - should update LRU
-        let _ordered2 = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, 3, None, None);
+        let _ordered2 = orderer.order_moves_with_all_heuristics(
+            &moves,
+            &board,
+            &captured_pieces,
+            player,
+            3,
+            None,
+            None,
+        );
         let entry2 = orderer.move_ordering_cache.get(&cache_key).unwrap();
         assert!(entry2.last_access > initial_access);
         assert_eq!(entry2.access_count, initial_count + 1);
@@ -7978,19 +8972,30 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.cache_config.max_cache_size = 3;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::types::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Add more entries than limit
         for i in 0..5 {
-            let moves = vec![
-                create_test_move(Some(Position::new(i, 0)), Position::new(i + 1, 0), PieceType::Pawn, player),
-            ];
-            let _ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, i as u8, None, None);
+            let moves = vec![create_test_move(
+                Some(Position::new(i, 0)),
+                Position::new(i + 1, 0),
+                PieceType::Pawn,
+                player,
+            )];
+            let _ordered = orderer.order_moves_with_all_heuristics(
+                &moves,
+                &board,
+                &captured_pieces,
+                player,
+                i as u8,
+                None,
+                None,
+            );
         }
-        
+
         // Cache should not exceed limit
         assert!(orderer.move_ordering_cache.len() <= config.cache_config.max_cache_size);
     }
@@ -8001,26 +9006,38 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::FIFO;
         let orderer = MoveOrdering::with_config(config);
-        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::FIFO);
-        
+        assert_eq!(
+            orderer.config.cache_config.cache_eviction_policy,
+            CacheEvictionPolicy::FIFO
+        );
+
         // Test LRU policy
         let mut config = MoveOrderingConfig::default();
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::LRU;
         let orderer = MoveOrdering::with_config(config);
-        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::LRU);
-        
+        assert_eq!(
+            orderer.config.cache_config.cache_eviction_policy,
+            CacheEvictionPolicy::LRU
+        );
+
         // Test depth-preferred policy
         let mut config = MoveOrderingConfig::default();
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::DepthPreferred;
         let orderer = MoveOrdering::with_config(config);
-        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::DepthPreferred);
-        
+        assert_eq!(
+            orderer.config.cache_config.cache_eviction_policy,
+            CacheEvictionPolicy::DepthPreferred
+        );
+
         // Test hybrid policy
         let mut config = MoveOrderingConfig::default();
         config.cache_config.cache_eviction_policy = CacheEvictionPolicy::Hybrid;
         config.cache_config.hybrid_lru_weight = 0.7;
         let orderer = MoveOrdering::with_config(config);
-        assert_eq!(orderer.config.cache_config.cache_eviction_policy, CacheEvictionPolicy::Hybrid);
+        assert_eq!(
+            orderer.config.cache_config.cache_eviction_policy,
+            CacheEvictionPolicy::Hybrid
+        );
         assert_eq!(orderer.config.cache_config.hybrid_lru_weight, 0.7);
     }
 
@@ -8033,16 +9050,16 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Initially no history score
         let score = orderer.score_history_move(&move_);
         assert_eq!(score, 0);
-        
+
         // Add history score
         orderer.update_history_score(&move_, 3, None);
-        
+
         // Should now have history score
         let score = orderer.score_history_move(&move_);
         assert!(score > 0);
@@ -8056,20 +9073,20 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Initially no history score
         assert_eq!(orderer.get_history_score(&move_), 0);
-        
+
         // Update history score
         orderer.update_history_score(&move_, 3, None);
-        
+
         // Should now have history score
         let score = orderer.get_history_score(&move_);
         assert!(score > 0);
         assert_eq!(score, 9); // 3 * 3 = 9
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.history_updates, 1);
     }
@@ -8081,18 +9098,18 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history score multiple times
         orderer.update_history_score(&move_, 2, None);
         orderer.update_history_score(&move_, 3, None);
         orderer.update_history_score(&move_, 4, None);
-        
+
         // Score should accumulate
         let score = orderer.get_history_score(&move_);
         assert_eq!(score, 4 + 9 + 16); // 2*2 + 3*3 + 4*4 = 29
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.history_updates, 3);
     }
@@ -8101,17 +9118,17 @@ mod tests {
     fn test_history_score_max_limit() {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_history_score(100);
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update with large depth to exceed limit
         orderer.update_history_score(&move_, 20, None); // 20*20 = 400
-        
+
         // Score should be capped at max
         let score = orderer.get_history_score(&move_);
         assert_eq!(score, 100);
@@ -8121,25 +9138,25 @@ mod tests {
     fn test_history_table_aging() {
         let mut orderer = MoveOrdering::new();
         orderer.set_history_aging_factor(0.5);
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add history score
         orderer.update_history_score(&move_, 4, None); // 4*4 = 16
         assert_eq!(orderer.get_history_score(&move_), 16);
-        
+
         // Age the table
         orderer.age_history_table();
-        
+
         // Score should be reduced
         let score = orderer.get_history_score(&move_);
         assert_eq!(score, 8); // 16 * 0.5 = 8
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.history_aging_operations, 1);
     }
@@ -8148,21 +9165,21 @@ mod tests {
     fn test_history_table_aging_removes_zero_scores() {
         let mut orderer = MoveOrdering::new();
         orderer.set_history_aging_factor(0.1); // Very aggressive aging
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add small history score
         orderer.update_history_score(&move_, 2, None); // 2*2 = 4
         assert_eq!(orderer.get_history_score(&move_), 4);
-        
+
         // Age the table (should reduce to 0)
         orderer.age_history_table();
-        
+
         // Score should be 0 and entry should be removed
         let score = orderer.get_history_score(&move_);
         assert_eq!(score, 0);
@@ -8171,28 +9188,28 @@ mod tests {
     #[test]
     fn test_history_move_ordering() {
         let mut orderer = MoveOrdering::new();
-        
+
         let history_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add history score to one move
         orderer.update_history_score(&history_move, 3);
-        
+
         // Order moves
         let moves = vec![regular_move.clone(), history_move.clone()];
         let ordered = orderer.order_moves_with_history(&moves);
-        
+
         // History move should be first
         assert_eq!(ordered.len(), 2);
         assert!(orderer.moves_equal(&ordered[0], &history_move));
@@ -8202,7 +9219,7 @@ mod tests {
     #[test]
     fn test_history_statistics() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no statistics
         let (hits, misses, hit_rate, updates, aging_ops) = orderer.get_history_stats();
         assert_eq!(hits, 0);
@@ -8210,29 +9227,29 @@ mod tests {
         assert_eq!(hit_rate, 0.0);
         assert_eq!(updates, 0);
         assert_eq!(aging_ops, 0);
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history score
         orderer.update_history_score(&move_, 3, None);
-        
+
         // Test history move detection (should increment hits)
         orderer.score_history_move(&move_);
-        
+
         // Test non-history move (should increment misses)
         let regular_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
         orderer.score_history_move(&regular_move);
-        
+
         // Statistics should be updated
         let (hits, misses, hit_rate, updates, aging_ops) = orderer.get_history_stats();
         assert_eq!(hits, 1);
@@ -8244,25 +9261,25 @@ mod tests {
     #[test]
     fn test_history_clear_functionality() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Add history scores
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         orderer.update_history_score(&move_, 3, None);
-        
+
         // Verify history score is stored
         assert!(orderer.get_history_score(&move_) > 0);
-        
+
         // Clear history table
         orderer.clear_history_table();
-        
+
         // Verify history score is cleared
         assert_eq!(orderer.get_history_score(&move_), 0);
-        
+
         // Statistics should be reset
         let (hits, misses, hit_rate, updates, aging_ops) = orderer.get_history_stats();
         assert_eq!(hits, 0);
@@ -8279,24 +9296,24 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_relative = true;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move1 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let move2 = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Silver, // Different piece, same from/to
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history for move1
         orderer.update_history_score(&move1, 3, Some(&board));
-        
+
         // Both moves should have history score (relative history uses same from/to)
         let score1 = orderer.get_history_score(&move1);
         let score2 = orderer.get_history_score(&move2);
@@ -8310,31 +9327,31 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_quiet_only = true;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let quiet_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let capture_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
         // Mark as capture
         let mut capture_move = capture_move;
         capture_move.is_capture = true;
-        
+
         // Update history for quiet move
         orderer.update_history_score(&quiet_move, 3, Some(&board));
-        
+
         // Quiet move should have history score
         let quiet_score = orderer.get_history_score(&quiet_move);
         assert!(quiet_score > 0);
-        
+
         // Capture move should not have quiet history score
         let capture_score = orderer.get_history_score(&capture_move);
         // Capture should fall back to absolute history (which is empty)
@@ -8346,27 +9363,32 @@ mod tests {
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_phase_aware = true;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history in opening phase
-        assert_eq!(orderer.history_manager.get_current_game_phase(), crate::types::GamePhase::Opening);
+        assert_eq!(
+            orderer.history_manager.get_current_game_phase(),
+            crate::types::GamePhase::Opening
+        );
         orderer.update_history_score(&move_, 3, Some(&board));
-        
+
         // Should have history score in opening phase
         let score = orderer.get_history_score(&move_);
         assert!(score > 0);
-        
+
         // Switch to endgame phase (simulate by changing material count)
         // Note: This is a simplified test - in practice, phase would be determined by board state
-        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Endgame);
-        
+        orderer
+            .history_manager
+            .set_current_game_phase(crate::types::GamePhase::Endgame);
+
         // Should have history score in endgame phase if it was stored there
         // But initially it's in opening phase, so it might not be found
         // This tests that phase-aware tables are separate
@@ -8381,23 +9403,23 @@ mod tests {
         config.history_config.enable_time_based_aging = true;
         config.history_config.time_aging_decay_factor = 0.9;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history
         orderer.update_history_score(&move_, 3, Some(&board));
         let initial_score = orderer.get_history_score(&move_);
         assert!(initial_score > 0);
-        
+
         // Simulate time passing by incrementing history_update_counter
         orderer.history_update_counter += 100;
-        
+
         // Score should be reduced due to time-based aging
         let aged_score = orderer.get_history_score(&move_);
         assert!(aged_score <= initial_score);
@@ -8411,26 +9433,30 @@ mod tests {
         config.history_config.middlegame_aging_factor = 0.85;
         config.history_config.endgame_aging_factor = 0.95;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history in opening phase
-        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Opening);
+        orderer
+            .history_manager
+            .set_current_game_phase(crate::types::GamePhase::Opening);
         orderer.update_history_score(&move_, 3, Some(&board));
-        
+
         // Age with opening factor
         orderer.age_history_table();
-        
+
         // Switch to endgame and age again
-        orderer.history_manager.set_current_game_phase(crate::types::GamePhase::Endgame);
+        orderer
+            .history_manager
+            .set_current_game_phase(crate::types::GamePhase::Endgame);
         orderer.age_history_table();
-        
+
         // Verify aging occurred
         assert!(orderer.stats.history_aging_operations >= 2);
     }
@@ -8442,19 +9468,19 @@ mod tests {
         config.history_config.enable_relative = true;
         let orderer = MoveOrdering::with_config(config);
         assert!(orderer.config.history_config.enable_relative);
-        
+
         // Test quiet-only history configuration
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_quiet_only = true;
         let orderer = MoveOrdering::with_config(config);
         assert!(orderer.config.history_config.enable_quiet_only);
-        
+
         // Test phase-aware history configuration
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_phase_aware = true;
         let orderer = MoveOrdering::with_config(config);
         assert!(orderer.config.history_config.enable_phase_aware);
-        
+
         // Test time-based aging configuration
         let mut config = MoveOrderingConfig::default();
         config.history_config.enable_time_based_aging = true;
@@ -8471,32 +9497,35 @@ mod tests {
         config.history_config.enable_quiet_only = true;
         config.history_config.enable_phase_aware = true;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history in all tables
         orderer.update_history_score(&move_, 3, Some(&board));
-        
+
         // Verify entries exist (Task 6.0: use HistoryHeuristicManager)
         assert!(!orderer.history_manager.is_absolute_history_empty());
         assert!(!orderer.history_manager.is_relative_history_empty());
         assert!(!orderer.history_manager.is_quiet_history_empty());
-        
+
         // Clear all history
         orderer.clear_history_table();
-        
+
         // Verify all tables are cleared (Task 6.0: use HistoryHeuristicManager)
         assert!(orderer.history_manager.is_absolute_history_empty());
         assert!(orderer.history_manager.is_relative_history_empty());
         assert!(orderer.history_manager.is_quiet_history_empty());
         assert!(orderer.history_manager.is_phase_history_empty());
-        assert_eq!(orderer.history_manager.get_current_game_phase(), crate::types::GamePhase::Opening);
+        assert_eq!(
+            orderer.history_manager.get_current_game_phase(),
+            crate::types::GamePhase::Opening
+        );
         assert_eq!(orderer.history_manager.get_time_aging_counter(), 0);
     }
 
@@ -8507,37 +9536,59 @@ mod tests {
         config.history_config.enable_quiet_only = true;
         config.history_config.history_aging_factor = 0.5;
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history in all tables
         orderer.update_history_score(&move_, 4, Some(&board));
-        
+
         // Get initial scores (Task 6.0: use HistoryHeuristicManager)
         let key = (move_.piece_type, move_.from.unwrap(), move_.to);
         let relative_key = (move_.from.unwrap(), move_.to);
-        let initial_absolute = orderer.history_manager.get_absolute_history_score(key).unwrap_or(0);
-        let initial_relative = orderer.history_manager.get_relative_history_entry(relative_key).map(|e| e.score).unwrap_or(0);
-        let initial_quiet = orderer.history_manager.get_quiet_history_entry(key).map(|e| e.score).unwrap_or(0);
-        
+        let initial_absolute = orderer
+            .history_manager
+            .get_absolute_history_score(key)
+            .unwrap_or(0);
+        let initial_relative = orderer
+            .history_manager
+            .get_relative_history_entry(relative_key)
+            .map(|e| e.score)
+            .unwrap_or(0);
+        let initial_quiet = orderer
+            .history_manager
+            .get_quiet_history_entry(key)
+            .map(|e| e.score)
+            .unwrap_or(0);
+
         assert!(initial_absolute > 0);
         assert!(initial_relative > 0);
         assert!(initial_quiet > 0);
-        
+
         // Age all tables
         orderer.age_history_table();
-        
+
         // Verify scores are reduced (Task 6.0: use HistoryHeuristicManager)
-        let aged_absolute = orderer.history_manager.get_absolute_history_score(key).unwrap_or(0);
-        let aged_relative = orderer.history_manager.get_relative_history_entry(relative_key).map(|e| e.score).unwrap_or(0);
-        let aged_quiet = orderer.history_manager.get_quiet_history_entry(key).map(|e| e.score).unwrap_or(0);
-        
+        let aged_absolute = orderer
+            .history_manager
+            .get_absolute_history_score(key)
+            .unwrap_or(0);
+        let aged_relative = orderer
+            .history_manager
+            .get_relative_history_entry(relative_key)
+            .map(|e| e.score)
+            .unwrap_or(0);
+        let aged_quiet = orderer
+            .history_manager
+            .get_quiet_history_entry(key)
+            .map(|e| e.score)
+            .unwrap_or(0);
+
         assert!(aged_absolute <= initial_absolute);
         assert!(aged_relative <= initial_relative);
         assert!(aged_quiet <= initial_quiet);
@@ -8555,15 +9606,15 @@ mod tests {
             ..Default::default()
         };
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         assert_eq!(orderer.config.weights.history_weight, 3000);
         assert_eq!(orderer.get_max_history_score(), 10000);
         assert_eq!(orderer.get_history_aging_factor(), 0.9);
-        
+
         // Test configuration changes
         orderer.set_max_history_score(5000);
         orderer.set_history_aging_factor(0.8);
-        
+
         assert_eq!(orderer.get_max_history_score(), 5000);
         assert_eq!(orderer.get_history_aging_factor(), 0.8);
     }
@@ -8572,55 +9623,74 @@ mod tests {
     fn test_all_heuristics_combined_ordering() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let pv_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let killer_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         let history_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(4, 4)),
             Position::new(5, 4),
             PieceType::Bishop,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Add history score
         orderer.update_history_score(&history_move, 3);
-        
+
         // Create test position and board
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
         let depth = 3;
-        
+
         // Store PV move in transposition table
-        orderer.update_pv_move(&board, &captured_pieces, player, depth, pv_move.clone(), 100);
-        
+        orderer.update_pv_move(
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+            pv_move.clone(),
+            100,
+        );
+
         // Order moves with all heuristics
-        let moves = vec![regular_move.clone(), history_move.clone(), killer_move.clone(), pv_move.clone()];
+        let moves = vec![
+            regular_move.clone(),
+            history_move.clone(),
+            killer_move.clone(),
+            pv_move.clone(),
+        ];
         // Task 3.0: No IID move context for this test
-        let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
-        
+        let ordered = orderer.order_moves_with_all_heuristics(
+            &moves,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+            None,
+        );
+
         // PV move should be first, killer move second, history move third, regular move last
         assert_eq!(ordered.len(), 4);
         assert!(orderer.moves_equal(&ordered[0], &pv_move));
@@ -8632,7 +9702,7 @@ mod tests {
     #[test]
     fn test_history_with_different_piece_types() {
         let mut orderer = MoveOrdering::new();
-        
+
         let piece_types = vec![
             PieceType::Pawn,
             PieceType::Lance,
@@ -8642,19 +9712,19 @@ mod tests {
             PieceType::Bishop,
             PieceType::Rook,
         ];
-        
+
         // Add history scores for different piece types
         for (i, piece_type) in piece_types.iter().enumerate() {
             let move_ = create_test_move(
                 Some(Position::new(i as u8, 0)),
                 Position::new((i + 1) as u8, 0),
                 *piece_type,
-                Player::Black
+                Player::Black,
             );
             orderer.update_history_score(&move_, 2, None);
             assert!(orderer.get_history_score(&move_) > 0);
         }
-        
+
         // Verify all history scores are stored
         assert_eq!(orderer.stats.history_updates, piece_types.len() as u64);
     }
@@ -8662,29 +9732,29 @@ mod tests {
     #[test]
     fn test_history_with_different_players() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Add history scores for both players
         let black_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let white_move = create_test_move(
             Some(Position::new(7, 7)),
             Position::new(6, 7),
             PieceType::Pawn,
-            Player::White
+            Player::White,
         );
-        
+
         orderer.update_history_score(&black_move, 3);
         orderer.update_history_score(&white_move, 4);
-        
+
         // Both should have history scores
         assert!(orderer.get_history_score(&black_move) > 0);
         assert!(orderer.get_history_score(&white_move) > 0);
-        
+
         // Verify statistics
         assert_eq!(orderer.stats.history_updates, 2);
     }
@@ -8698,12 +9768,12 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_move(&move_);
         assert!(score > 0);
-        
+
         // Verify statistics are updated
         assert_eq!(orderer.stats.scoring_operations, 1);
         assert_eq!(orderer.stats.cache_misses, 1);
@@ -8716,10 +9786,10 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         capture_move.is_capture = true;
-        
+
         let score = orderer.score_move(&capture_move);
         assert!(score >= orderer.config.weights.capture_weight);
     }
@@ -8731,10 +9801,10 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         promotion_move.is_promotion = true;
-        
+
         let score = orderer.score_move(&promotion_move);
         assert!(score >= orderer.config.weights.promotion_weight);
     }
@@ -8746,10 +9816,10 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         tactical_move.gives_check = true;
-        
+
         let score = orderer.score_move(&tactical_move);
         assert!(score >= orderer.config.weights.tactical_weight);
     }
@@ -8757,24 +9827,24 @@ mod tests {
     #[test]
     fn test_piece_value_scoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         let pawn_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let rook_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Rook,
-            Player::Black
+            Player::Black,
         );
-        
+
         let pawn_score = orderer.score_move(&pawn_move);
         let rook_score = orderer.score_move(&rook_move);
-        
+
         // Rook should score higher than pawn due to piece value
         assert!(rook_score > pawn_score);
     }
@@ -8782,24 +9852,24 @@ mod tests {
     #[test]
     fn test_position_value_scoring_comprehensive() {
         let mut orderer = MoveOrdering::new();
-        
+
         let center_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(4, 4), // Center position
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let edge_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(0, 0), // Edge position
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let center_score = orderer.score_move(&center_move);
         let edge_score = orderer.score_move(&edge_move);
-        
+
         // Center move should score higher due to position value
         assert!(center_score > edge_score);
     }
@@ -8807,17 +9877,17 @@ mod tests {
     #[test]
     fn test_development_move_scoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         let development_move = create_test_move(
             Some(Position::new(1, 1)), // Back rank
-            Position::new(3, 1), // Forward
+            Position::new(3, 1),       // Forward
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_move(&development_move);
         assert!(score > 0);
-        
+
         // Should include development bonus
         assert!(score >= orderer.config.weights.development_weight / 100);
     }
@@ -8829,9 +9899,9 @@ mod tests {
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_move(&quiet_move);
         assert!(score >= orderer.config.weights.quiet_weight);
     }
@@ -8843,14 +9913,14 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // First call should miss cache
         let score1 = orderer.score_move(&move_);
         assert_eq!(orderer.stats.cache_misses, 1);
         assert_eq!(orderer.stats.cache_hits, 0);
-        
+
         // Second call should hit cache
         let score2 = orderer.score_move(&move_);
         assert_eq!(score1, score2);
@@ -8861,20 +9931,20 @@ mod tests {
     #[test]
     fn test_heuristic_weight_configuration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test individual weight setters
         orderer.set_capture_weight(2000);
         assert_eq!(orderer.config.weights.capture_weight, 2000);
-        
+
         orderer.set_promotion_weight(1600);
         assert_eq!(orderer.config.weights.promotion_weight, 1600);
-        
+
         orderer.set_tactical_weight(600);
         assert_eq!(orderer.config.weights.tactical_weight, 600);
-        
+
         orderer.set_quiet_weight(50);
         assert_eq!(orderer.config.weights.quiet_weight, 50);
-        
+
         // Test reset to defaults
         orderer.reset_config_to_default();
         assert_eq!(orderer.config.weights.capture_weight, 1000);
@@ -8886,24 +9956,34 @@ mod tests {
     #[test]
     fn test_performance_optimization() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test cache size configuration
         orderer.set_cache_size(500);
         assert_eq!(orderer.get_max_cache_size(), 500);
-        
+
         // Test cache warming
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(2, 2)), Position::new(3, 2), PieceType::Silver, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(2, 2)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                Player::Black,
+            ),
         ];
         orderer.warm_up_cache(&moves);
-        
+
         // Cache should be populated
         assert!(orderer.get_cache_size() > 0);
-        
+
         // Test performance optimization
         orderer.optimize_performance();
-        
+
         // Should still be functional
         assert!(orderer.get_max_cache_size() > 0);
     }
@@ -8915,9 +9995,9 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Initially no statistics
         let (ops, hits, hit_rate, misses, cache_size, max_cache_size) = orderer.get_scoring_stats();
         assert_eq!(ops, 0);
@@ -8926,10 +10006,10 @@ mod tests {
         assert_eq!(misses, 0);
         assert_eq!(cache_size, 0);
         assert!(max_cache_size > 0);
-        
+
         // Score move
         orderer.score_move(&move_);
-        
+
         // Statistics should be updated
         let (ops, hits, hit_rate, misses, cache_size, max_cache_size) = orderer.get_scoring_stats();
         assert_eq!(ops, 1);
@@ -8937,10 +10017,10 @@ mod tests {
         assert_eq!(misses, 1);
         assert_eq!(cache_size, 1);
         assert!(max_cache_size > 0);
-        
+
         // Score same move again (should hit cache)
         orderer.score_move(&move_);
-        
+
         let (ops, hits, hit_rate, misses, cache_size, max_cache_size) = orderer.get_scoring_stats();
         assert_eq!(ops, 2);
         assert_eq!(hits, 1);
@@ -8952,43 +10032,43 @@ mod tests {
     #[test]
     fn test_comprehensive_move_types() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test different move types
         let mut capture_promotion_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         capture_promotion_move.is_capture = true;
         capture_promotion_move.is_promotion = true;
-        
+
         let mut tactical_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
         tactical_move.gives_check = true;
-        
+
         let quiet_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::Black
+            Player::Black,
         );
-        
+
         let capture_score = orderer.score_move(&capture_promotion_move);
         let tactical_score = orderer.score_move(&tactical_move);
         let quiet_score = orderer.score_move(&quiet_move);
-        
+
         // Capture+promotion should score highest
         assert!(capture_score > tactical_score);
         assert!(capture_score > quiet_score);
-        
+
         // Tactical should score higher than quiet
         assert!(tactical_score > quiet_score);
-        
+
         // All scores should be positive
         assert!(capture_score > 0);
         assert!(tactical_score > 0);
@@ -8999,66 +10079,93 @@ mod tests {
     fn test_move_scoring_with_all_heuristics() {
         let mut orderer = MoveOrdering::new();
         orderer.set_current_depth(3);
-        
+
         let pv_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let killer_move = create_test_move(
             Some(Position::new(2, 2)),
             Position::new(3, 2),
             PieceType::Silver,
-            Player::Black
+            Player::Black,
         );
-        
+
         let history_move = create_test_move(
             Some(Position::new(3, 3)),
             Position::new(4, 3),
             PieceType::Gold,
-            Player::Black
+            Player::Black,
         );
-        
+
         let regular_move = create_test_move(
             Some(Position::new(4, 4)),
             Position::new(5, 4),
             PieceType::Bishop,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Add killer move
         orderer.add_killer_move(killer_move.clone());
-        
+
         // Add history score
         orderer.update_history_score(&history_move, 3);
-        
+
         // Create test position and board
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
         let depth = 3;
-        
+
         // Store PV move
-        orderer.update_pv_move(&board, &captured_pieces, player, depth, pv_move.clone(), 100);
-        
+        orderer.update_pv_move(
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+            pv_move.clone(),
+            100,
+        );
+
         // Test scoring with all heuristics
         // Task 3.0: Updated calls to include IID move parameter (None for tests)
-        let pv_score = orderer.score_move_with_all_heuristics(&pv_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let killer_score = orderer.score_move_with_all_heuristics(&killer_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let history_score = orderer.score_move_with_all_heuristics(&history_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
-        let regular_score = orderer.score_move_with_all_heuristics(&regular_move, None, &Some(pv_move.clone()), &[killer_move.clone()]);
-        
+        let pv_score = orderer.score_move_with_all_heuristics(
+            &pv_move,
+            None,
+            &Some(pv_move.clone()),
+            &[killer_move.clone()],
+        );
+        let killer_score = orderer.score_move_with_all_heuristics(
+            &killer_move,
+            None,
+            &Some(pv_move.clone()),
+            &[killer_move.clone()],
+        );
+        let history_score = orderer.score_move_with_all_heuristics(
+            &history_move,
+            None,
+            &Some(pv_move.clone()),
+            &[killer_move.clone()],
+        );
+        let regular_score = orderer.score_move_with_all_heuristics(
+            &regular_move,
+            None,
+            &Some(pv_move.clone()),
+            &[killer_move.clone()],
+        );
+
         // PV should score highest
         assert!(pv_score > killer_score);
         assert!(pv_score > history_score);
         assert!(pv_score > regular_score);
-        
+
         // Killer should score higher than history
         assert!(killer_score > history_score);
         assert!(killer_score > regular_score);
-        
+
         // History should score higher than regular
         assert!(history_score > regular_score);
     }
@@ -9068,26 +10175,26 @@ mod tests {
     #[test]
     fn test_history_update_counter() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially counter should be 0
         assert_eq!(orderer.get_history_update_counter(), 0);
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history score
         orderer.update_history_score(&move_, 3, None);
-        
+
         // Counter should be incremented
         assert_eq!(orderer.get_history_update_counter(), 1);
-        
+
         // Update again
         orderer.update_history_score(&move_, 2, None);
-        
+
         // Counter should be incremented again
         assert_eq!(orderer.get_history_update_counter(), 2);
     }
@@ -9095,31 +10202,31 @@ mod tests {
     #[test]
     fn test_history_update_counter_reset() {
         let mut orderer = MoveOrdering::new();
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history score multiple times
         orderer.update_history_score(&move_, 3, None);
         orderer.update_history_score(&move_, 2, None);
         orderer.update_history_score(&move_, 4, None);
-        
+
         // Counter should be 3
         assert_eq!(orderer.get_history_update_counter(), 3);
-        
+
         // Reset counter
         orderer.reset_history_update_counter();
-        
+
         // Counter should be 0
         assert_eq!(orderer.get_history_update_counter(), 0);
-        
+
         // Update again
         orderer.update_history_score(&move_, 1);
-        
+
         // Counter should be 1
         assert_eq!(orderer.get_history_update_counter(), 1);
     }
@@ -9130,30 +10237,30 @@ mod tests {
         config.history_config.enable_automatic_aging = true;
         config.history_config.aging_frequency = 5; // Age every 5 updates
         config.history_config.history_aging_factor = 0.8;
-        
+
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Update history score 4 times (should not trigger aging)
         for i in 1..=4 {
             orderer.update_history_score(&move_, 3, None);
             assert_eq!(orderer.get_history_update_counter(), i);
         }
-        
+
         // Score should accumulate without aging
         let score = orderer.get_history_score(&move_);
         assert_eq!(score, 4 * 9); // 4 updates * 3*3 = 36
-        
+
         // 5th update should trigger automatic aging
         orderer.update_history_score(&move_, 3, None);
         assert_eq!(orderer.get_history_update_counter(), 5);
-        
+
         // Score should be aged
         let aged_score = orderer.get_history_score(&move_);
         assert!(aged_score < score); // Should be reduced by aging
@@ -9166,20 +10273,20 @@ mod tests {
     fn test_see_move_scoring() {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         let capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Test SEE scoring for capture move
         let see_score = orderer.score_see_move(&capture_move, &board);
-        
+
         // SEE score should be non-negative for capture moves
         assert!(see_score >= 0);
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.see_calculations, 1);
     }
@@ -9188,20 +10295,20 @@ mod tests {
     fn test_see_calculation() {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         let capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Test SEE calculation
         let see_value = orderer.calculate_see(&capture_move, &board);
-        
+
         // SEE value should be calculated
         assert!(see_value >= 0);
-        
+
         // Statistics should be updated
         assert_eq!(orderer.stats.see_calculations, 1);
     }
@@ -9210,27 +10317,27 @@ mod tests {
     fn test_see_cache_functionality() {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         let capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Enable SEE cache
         orderer.set_see_cache_enabled(true);
-        
+
         // First calculation should miss cache
         let see_value1 = orderer.calculate_see(&capture_move, &board);
         assert_eq!(orderer.stats.see_cache_misses, 1);
         assert_eq!(orderer.stats.see_cache_hits, 0);
-        
+
         // Second calculation should hit cache
         let see_value2 = orderer.calculate_see(&capture_move, &board);
         assert_eq!(orderer.stats.see_cache_hits, 1);
         assert_eq!(see_value1, see_value2);
-        
+
         // Cache should have one entry
         assert_eq!(orderer.get_see_cache_size(), 1);
     }
@@ -9238,17 +10345,17 @@ mod tests {
     #[test]
     fn test_see_cache_management() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test cache clearing
         orderer.clear_see_cache();
         assert_eq!(orderer.get_see_cache_size(), 0);
         assert_eq!(orderer.stats.see_cache_hits, 0);
         assert_eq!(orderer.stats.see_cache_misses, 0);
-        
+
         // Test cache size setting
         orderer.set_max_see_cache_size(100);
         assert_eq!(orderer.max_see_cache_size, 100);
-        
+
         // Test cache disabling
         orderer.set_see_cache_enabled(false);
         assert!(!orderer.config.cache_config.enable_see_cache);
@@ -9259,20 +10366,20 @@ mod tests {
     fn test_see_statistics() {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         let capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Perform some SEE calculations
         orderer.calculate_see(&capture_move, &board);
         orderer.calculate_see(&capture_move, &board); // Should hit cache
-        
+
         let (calculations, hits, misses, hit_rate, time_us, avg_time) = orderer.get_see_stats();
-        
+
         assert_eq!(calculations, 2);
         assert_eq!(hits, 1);
         assert_eq!(misses, 1);
@@ -9284,10 +10391,10 @@ mod tests {
     #[test]
     fn test_see_weight_configuration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test default SEE weight
         assert_eq!(orderer.config.weights.see_weight, 2000);
-        
+
         // Test setting SEE weight
         orderer.set_see_weight(3000);
         assert_eq!(orderer.config.weights.see_weight, 3000);
@@ -9296,10 +10403,10 @@ mod tests {
     #[test]
     fn test_see_cache_hit_rate() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially no hits or misses
         assert_eq!(orderer.get_see_cache_hit_rate(), 0.0);
-        
+
         // After some cache operations, hit rate should be calculated
         orderer.set_see_cache_enabled(true);
         let board = crate::bitboards::BitboardBoard::new();
@@ -9307,14 +10414,14 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Miss
         orderer.calculate_see(&capture_move, &board);
         // Hit
         orderer.calculate_see(&capture_move, &board);
-        
+
         let hit_rate = orderer.get_see_cache_hit_rate();
         assert!(hit_rate > 0.0);
         assert!(hit_rate <= 100.0);
@@ -9324,229 +10431,294 @@ mod tests {
     fn test_see_with_non_capture_move() {
         let mut orderer = MoveOrdering::new();
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         let quiet_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // SEE should return 0 for non-capture moves
         let see_score = orderer.score_see_move(&quiet_move, &board);
         assert_eq!(see_score, 0);
-        
+
         let see_value = orderer.calculate_see(&quiet_move, &board);
         assert_eq!(see_value, 0);
     }
 
     // Task 7.7: Comprehensive SEE cache tests
-    
+
     #[test]
     fn test_see_cache_eviction_policy() {
         // Test that cache evicts entries when full
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(3); // Small cache for testing
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Create multiple capture moves
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
-        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
-        let move4 = create_test_move(Some(Position::new(1, 4)), Position::new(2, 4), PieceType::Pawn, Player::Black);
-        
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move3 = create_test_move(
+            Some(Position::new(1, 3)),
+            Position::new(2, 3),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move4 = create_test_move(
+            Some(Position::new(1, 4)),
+            Position::new(2, 4),
+            PieceType::Pawn,
+            Player::Black,
+        );
+
         // Fill cache
         orderer.calculate_see(&move1, &board);
         orderer.calculate_see(&move2, &board);
         orderer.calculate_see(&move3, &board);
-        
+
         assert_eq!(orderer.get_see_cache_size(), 3);
         assert_eq!(orderer.stats.see_cache_evictions, 0);
-        
+
         // Add fourth move - should trigger eviction
         orderer.calculate_see(&move4, &board);
-        
+
         assert_eq!(orderer.get_see_cache_size(), 3); // Cache size stays at max
         assert_eq!(orderer.stats.see_cache_evictions, 1); // One eviction occurred
     }
-    
+
     #[test]
     fn test_see_cache_lru_tracking() {
         // Test that LRU tracking works correctly
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(2); // Small cache
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
-        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
-        
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move3 = create_test_move(
+            Some(Position::new(1, 3)),
+            Position::new(2, 3),
+            PieceType::Pawn,
+            Player::Black,
+        );
+
         // Fill cache with move1 and move2
         orderer.calculate_see(&move1, &board);
         orderer.calculate_see(&move2, &board);
         assert_eq!(orderer.get_see_cache_size(), 2);
-        
+
         // Access move1 again to make it more recent
         orderer.calculate_see(&move1, &board);
         assert_eq!(orderer.stats.see_cache_hits, 1);
-        
+
         // Add move3 - should evict move2 (less recently used)
         orderer.calculate_see(&move3, &board);
         assert_eq!(orderer.get_see_cache_size(), 2);
-        
+
         // move1 should still be in cache (recently accessed)
         orderer.calculate_see(&move1, &board);
         assert_eq!(orderer.stats.see_cache_hits, 2); // Should hit cache
     }
-    
+
     #[test]
     fn test_see_cache_statistics() {
         // Test that cache statistics are tracked correctly
         let mut orderer = MoveOrdering::new();
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
-        
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        );
+
         // First calculation - cache miss
         orderer.calculate_see(&move1, &board);
         assert_eq!(orderer.stats.see_cache_misses, 1);
         assert_eq!(orderer.stats.see_cache_hits, 0);
-        
+
         // Second calculation of same move - cache hit
         orderer.calculate_see(&move1, &board);
         assert_eq!(orderer.stats.see_cache_hits, 1);
         assert_eq!(orderer.stats.see_cache_misses, 1);
-        
+
         // Different move - cache miss
         orderer.calculate_see(&move2, &board);
         assert_eq!(orderer.stats.see_cache_misses, 2);
-        
+
         // Verify cache size
         assert_eq!(orderer.get_see_cache_size(), 2);
-        
+
         // Verify hit rate calculation
         let hit_rate = orderer.get_see_cache_hit_rate();
         assert!(hit_rate > 0.0);
         assert!(hit_rate < 100.0);
     }
-    
+
     #[test]
     fn test_see_cache_utilization() {
         // Test cache utilization tracking
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(10);
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Initially empty
         assert_eq!(orderer.see_cache.utilization(), 0.0);
-        
+
         // Add some entries
         for i in 0..5 {
             let move_ = create_test_move(
                 Some(Position::new(1, i)),
                 Position::new(2, i),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.calculate_see(&move_, &board);
         }
-        
+
         // Utilization should be 50%
         let utilization = orderer.see_cache.utilization();
         assert!((utilization - 50.0).abs() < 0.1);
     }
-    
+
     #[test]
     fn test_see_cache_dynamic_resizing() {
         // Test that cache can be resized and evicts entries if necessary
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(10);
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Fill cache with 10 entries
         for i in 0..10 {
             let move_ = create_test_move(
                 Some(Position::new(1, i % 9)),
                 Position::new(2, i % 9),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.calculate_see(&move_, &board);
         }
-        
+
         assert_eq!(orderer.get_see_cache_size(), 10);
-        
+
         // Resize cache to smaller size
         orderer.see_cache.set_max_size(5);
-        
+
         // Cache should have evicted entries
         assert!(orderer.get_see_cache_size() <= 5);
     }
-    
+
     #[test]
     fn test_see_cache_eviction_tracking() {
         // Test that evictions are properly tracked
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(2);
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Fill cache
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        );
         orderer.calculate_see(&move1, &board);
         orderer.calculate_see(&move2, &board);
-        
+
         assert_eq!(orderer.stats.see_cache_evictions, 0);
-        
+
         // Add third move - should cause eviction
-        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        let move3 = create_test_move(
+            Some(Position::new(1, 3)),
+            Position::new(2, 3),
+            PieceType::Pawn,
+            Player::Black,
+        );
         orderer.calculate_see(&move3, &board);
-        
+
         assert_eq!(orderer.stats.see_cache_evictions, 1);
-        
+
         // Add fourth move - another eviction
-        let move4 = create_test_move(Some(Position::new(1, 4)), Position::new(2, 4), PieceType::Pawn, Player::Black);
+        let move4 = create_test_move(
+            Some(Position::new(1, 4)),
+            Position::new(2, 4),
+            PieceType::Pawn,
+            Player::Black,
+        );
         orderer.calculate_see(&move4, &board);
-        
+
         assert_eq!(orderer.stats.see_cache_evictions, 2);
     }
-    
+
     #[test]
     fn test_see_cache_get_stats() {
         // Test the get_stats() method on SEECache
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(5);
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Add some entries
         for i in 0..3 {
             let move_ = create_test_move(
                 Some(Position::new(1, i)),
                 Position::new(2, i),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.calculate_see(&move_, &board);
         }
-        
+
         // Get stats
         let stats = orderer.see_cache.get_stats();
-        
+
         assert_eq!(stats.size, 3);
         assert_eq!(stats.max_size, 5);
         assert!((stats.utilization - 60.0).abs() < 0.1);
@@ -9554,7 +10726,7 @@ mod tests {
         assert!(stats.avg_accesses_per_entry >= 1.0);
         assert!(stats.memory_bytes > 0);
     }
-    
+
     #[test]
     fn test_see_cache_value_based_eviction() {
         // Test that cache prefers keeping high-value SEE calculations
@@ -9562,22 +10734,37 @@ mod tests {
         let mut orderer = MoveOrdering::new();
         orderer.set_max_see_cache_size(2);
         orderer.set_see_cache_enabled(true);
-        
+
         let board = crate::bitboards::BitboardBoard::new();
-        
+
         // Create moves (cache will store different values for each)
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Pawn, Player::Black);
-        
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        );
+
         orderer.calculate_see(&move1, &board);
         orderer.calculate_see(&move2, &board);
-        
+
         assert_eq!(orderer.get_see_cache_size(), 2);
-        
+
         // Add a third move - eviction should occur
-        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Pawn, Player::Black);
+        let move3 = create_test_move(
+            Some(Position::new(1, 3)),
+            Position::new(2, 3),
+            PieceType::Pawn,
+            Player::Black,
+        );
         orderer.calculate_see(&move3, &board);
-        
+
         // Verify eviction occurred
         assert_eq!(orderer.stats.see_cache_evictions, 1);
         assert_eq!(orderer.get_see_cache_size(), 2);
@@ -9586,13 +10773,13 @@ mod tests {
     #[test]
     fn test_see_cache_size_limits() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Set small cache size
         orderer.set_max_see_cache_size(2);
-        
+
         // Enable cache
         orderer.set_see_cache_enabled(true);
-        
+
         // Cache should not exceed maximum size
         assert!(orderer.get_see_cache_size() <= orderer.max_see_cache_size);
     }
@@ -9603,18 +10790,35 @@ mod tests {
     fn test_multiple_pv_moves_storage() {
         // Test storing and retrieving multiple PV moves
         let mut orderer = MoveOrdering::new();
-        
+
         // Create test moves
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Knight, Player::Black);
-        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Silver, Player::Black);
-        
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Knight,
+            Player::Black,
+        );
+        let move3 = create_test_move(
+            Some(Position::new(1, 3)),
+            Position::new(2, 3),
+            PieceType::Silver,
+            Player::Black,
+        );
+
         let pv_moves = vec![move1.clone(), move2.clone(), move3.clone()];
         let position_hash = 12345u64;
-        
+
         // Store multiple PV moves
-        orderer.pv_ordering.store_multiple_pv_moves(position_hash, pv_moves.clone());
-        
+        orderer
+            .pv_ordering
+            .store_multiple_pv_moves(position_hash, pv_moves.clone());
+
         // Retrieve and verify
         let retrieved = orderer.pv_ordering.get_multiple_pv_moves(position_hash);
         assert!(retrieved.is_some());
@@ -9626,22 +10830,26 @@ mod tests {
         // Test that multiple PV moves are limited to max_pv_moves_per_position
         let mut orderer = MoveOrdering::new();
         orderer.pv_ordering.set_max_pv_moves_per_position(2);
-        
+
         // Create 5 test moves
         let moves: Vec<Move> = (0..5)
-            .map(|i| create_test_move(
-                Some(Position::new(1, i)),
-                Position::new(2, i),
-                PieceType::Pawn,
-                Player::Black
-            ))
+            .map(|i| {
+                create_test_move(
+                    Some(Position::new(1, i)),
+                    Position::new(2, i),
+                    PieceType::Pawn,
+                    Player::Black,
+                )
+            })
             .collect();
-        
+
         let position_hash = 12345u64;
-        
+
         // Store 5 moves but only 2 should be kept
-        orderer.pv_ordering.store_multiple_pv_moves(position_hash, moves);
-        
+        orderer
+            .pv_ordering
+            .store_multiple_pv_moves(position_hash, moves);
+
         let retrieved = orderer.pv_ordering.get_multiple_pv_moves(position_hash);
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().len(), 2); // Only 2 stored
@@ -9651,19 +10859,29 @@ mod tests {
     fn test_previous_iteration_pv() {
         // Test previous iteration PV tracking
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
         let position_hash = 12345u64;
-        
+
         // Cache a PV move
-        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
-        
+        orderer
+            .pv_ordering
+            .cache_pv_move(position_hash, Some(move1.clone()));
+
         // Verify it's in current cache
-        assert!(orderer.pv_ordering.get_cached_pv_move(position_hash).is_some());
-        
+        assert!(orderer
+            .pv_ordering
+            .get_cached_pv_move(position_hash)
+            .is_some());
+
         // Save as previous iteration
         orderer.pv_ordering.save_previous_iteration_pv();
-        
+
         // Verify it's in previous iteration cache
         let prev_pv = orderer.pv_ordering.get_previous_iteration_pv(position_hash);
         assert!(prev_pv.is_some());
@@ -9674,36 +10892,63 @@ mod tests {
     fn test_previous_iteration_pv_clear() {
         // Test clearing previous iteration PV
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
         let position_hash = 12345u64;
-        
+
         // Cache and save to previous iteration
-        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
+        orderer
+            .pv_ordering
+            .cache_pv_move(position_hash, Some(move1.clone()));
         orderer.pv_ordering.save_previous_iteration_pv();
-        
-        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_some());
-        
+
+        assert!(orderer
+            .pv_ordering
+            .get_previous_iteration_pv(position_hash)
+            .is_some());
+
         // Clear previous iteration
         orderer.pv_ordering.clear_previous_iteration();
-        
-        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_none());
+
+        assert!(orderer
+            .pv_ordering
+            .get_previous_iteration_pv(position_hash)
+            .is_none());
     }
 
     #[test]
     fn test_sibling_pv_storage() {
         // Test sibling node PV tracking
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
-        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Knight, Player::Black);
-        
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
+        let move2 = create_test_move(
+            Some(Position::new(1, 2)),
+            Position::new(2, 2),
+            PieceType::Knight,
+            Player::Black,
+        );
+
         let parent_hash = 98765u64;
-        
+
         // Store sibling PV moves
-        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
-        orderer.pv_ordering.store_sibling_pv(parent_hash, move2.clone());
-        
+        orderer
+            .pv_ordering
+            .store_sibling_pv(parent_hash, move1.clone());
+        orderer
+            .pv_ordering
+            .store_sibling_pv(parent_hash, move2.clone());
+
         // Retrieve and verify
         let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
         assert!(siblings.is_some());
@@ -9714,14 +10959,23 @@ mod tests {
     fn test_sibling_pv_deduplication() {
         // Test that duplicate sibling PV moves are not stored
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
         let parent_hash = 98765u64;
-        
+
         // Store same move twice
-        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
-        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
-        
+        orderer
+            .pv_ordering
+            .store_sibling_pv(parent_hash, move1.clone());
+        orderer
+            .pv_ordering
+            .store_sibling_pv(parent_hash, move1.clone());
+
         // Should only have one entry
         let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
         assert!(siblings.is_some());
@@ -9733,20 +10987,20 @@ mod tests {
         // Test that sibling PV moves respect max_pv_moves_per_position limit
         let mut orderer = MoveOrdering::new();
         orderer.pv_ordering.set_max_pv_moves_per_position(2);
-        
+
         let parent_hash = 98765u64;
-        
+
         // Store 4 different sibling PV moves
         for i in 0..4 {
             let move_ = create_test_move(
                 Some(Position::new(1, i)),
                 Position::new(2, i),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.pv_ordering.store_sibling_pv(parent_hash, move_);
         }
-        
+
         // Should only keep max_pv_moves_per_position (2)
         let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
         assert!(siblings.is_some());
@@ -9757,16 +11011,16 @@ mod tests {
     fn test_pv_statistics_tracking() {
         // Test PVMoveStatistics structure
         let mut stats = PVMoveStatistics::new();
-        
+
         // Simulate some PV hits
         stats.primary_pv_hits = 10;
         stats.pv_misses = 5;
         stats.primary_pv_best_move_count = 8;
-        
+
         // Calculate hit rate
         let hit_rate = stats.primary_pv_hit_rate();
         assert!((hit_rate - 66.67).abs() < 0.1); // 10 / (10 + 5) * 100 ≈ 66.67%
-        
+
         // Calculate effectiveness
         let effectiveness = stats.primary_pv_effectiveness();
         assert!((effectiveness - 80.0).abs() < 0.1); // 8 / 10 * 100 = 80%
@@ -9776,18 +11030,27 @@ mod tests {
     fn test_pv_memory_tracking() {
         // Test that PV memory usage is tracked correctly
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
         let position_hash = 12345u64;
-        
+
         // Initial memory
         let initial_memory = orderer.pv_ordering.cache_memory_bytes();
-        
+
         // Store some PV moves
-        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
-        orderer.pv_ordering.store_multiple_pv_moves(position_hash, vec![move1.clone()]);
+        orderer
+            .pv_ordering
+            .cache_pv_move(position_hash, Some(move1.clone()));
+        orderer
+            .pv_ordering
+            .store_multiple_pv_moves(position_hash, vec![move1.clone()]);
         orderer.pv_ordering.save_previous_iteration_pv();
-        
+
         // Memory should increase
         let final_memory = orderer.pv_ordering.cache_memory_bytes();
         assert!(final_memory > initial_memory);
@@ -9797,24 +11060,47 @@ mod tests {
     fn test_pv_clear_operations() {
         // Test that various clear operations work correctly
         let mut orderer = MoveOrdering::new();
-        
-        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+
+        let move1 = create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        );
         let position_hash = 12345u64;
-        
+
         // Add data to all PV caches
-        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
-        orderer.pv_ordering.store_multiple_pv_moves(position_hash, vec![move1.clone()]);
+        orderer
+            .pv_ordering
+            .cache_pv_move(position_hash, Some(move1.clone()));
+        orderer
+            .pv_ordering
+            .store_multiple_pv_moves(position_hash, vec![move1.clone()]);
         orderer.pv_ordering.save_previous_iteration_pv();
-        orderer.pv_ordering.store_sibling_pv(position_hash, move1.clone());
-        
+        orderer
+            .pv_ordering
+            .store_sibling_pv(position_hash, move1.clone());
+
         // Clear all
         orderer.pv_ordering.clear_all();
-        
+
         // Verify all cleared
-        assert!(orderer.pv_ordering.get_cached_pv_move(position_hash).is_none());
-        assert!(orderer.pv_ordering.get_multiple_pv_moves(position_hash).is_none());
-        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_none());
-        assert!(orderer.pv_ordering.get_sibling_pv_moves(position_hash).is_none());
+        assert!(orderer
+            .pv_ordering
+            .get_cached_pv_move(position_hash)
+            .is_none());
+        assert!(orderer
+            .pv_ordering
+            .get_multiple_pv_moves(position_hash)
+            .is_none());
+        assert!(orderer
+            .pv_ordering
+            .get_previous_iteration_pv(position_hash)
+            .is_none());
+        assert!(orderer
+            .pv_ordering
+            .get_sibling_pv_moves(position_hash)
+            .is_none());
     }
 
     // ==================== Performance Optimization Tests ====================
@@ -9826,13 +11112,13 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Test that fast hash calculation works
         let hash = orderer.get_move_hash_fast(&move_);
         assert!(hash > 0);
-        
+
         // Test that hash is deterministic
         let hash2 = orderer.get_move_hash_fast(&move_);
         assert_eq!(hash, hash2);
@@ -9845,21 +11131,21 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Test inline capture scoring
         let capture_score = orderer.score_capture_move_inline(&capture_move);
         assert!(capture_score >= 0);
-        
+
         // Test inline promotion scoring
         let promotion_score = orderer.score_promotion_move_inline(&capture_move);
         assert!(promotion_score >= 0);
-        
+
         // Test fast position scoring
         let position_score = orderer.score_position_value_fast(&capture_move);
         assert!(position_score >= 0);
-        
+
         // Test fast development scoring
         let development_score = orderer.score_development_move_fast(&capture_move);
         assert!(development_score >= 0);
@@ -9869,14 +11155,24 @@ mod tests {
     fn test_object_pooling() {
         let mut orderer = MoveOrdering::new();
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(2, 1)), Position::new(3, 1), PieceType::Pawn, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(2, 1)),
+                Position::new(3, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
         ];
-        
+
         // Test that object pools are used
         let ordered = orderer.order_moves(&moves);
         assert_eq!(ordered.len(), 2);
-        
+
         // Test that pools are returned for reuse
         let ordered2 = orderer.order_moves(&moves);
         assert_eq!(ordered2.len(), 2);
@@ -9889,16 +11185,16 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // First call should populate fast cache
         let score1 = orderer.score_move(&move_);
-        
+
         // Second call should hit fast cache
         let score2 = orderer.score_move(&move_);
         assert_eq!(score1, score2);
-        
+
         // Fast cache should have entries
         assert!(!orderer.fast_score_cache.is_empty());
     }
@@ -9907,20 +11203,30 @@ mod tests {
     fn test_performance_benchmarking() {
         let mut orderer = MoveOrdering::new();
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(2, 1)), Position::new(3, 1), PieceType::Pawn, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(2, 1)),
+                Position::new(3, 1),
+                PieceType::Pawn,
+                Player::Black,
+            ),
         ];
-        
+
         // Test move scoring benchmark
         let (total_time, avg_time) = orderer.benchmark_move_scoring(&moves, 10);
         assert!(total_time > 0);
         assert!(avg_time > 0.0);
-        
+
         // Test move ordering benchmark
         let (total_time_ordering, avg_time_ordering) = orderer.benchmark_move_ordering(&moves, 5);
         assert!(total_time_ordering > 0);
         assert!(avg_time_ordering > 0.0);
-        
+
         // Test cache performance benchmark
         let (hit_rate, cache_time) = orderer.benchmark_cache_performance(&moves, 5);
         assert!(hit_rate >= 0.0);
@@ -9931,14 +11237,17 @@ mod tests {
     #[test]
     fn test_performance_statistics() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Perform some operations to generate statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test performance statistics
         let stats = orderer.get_performance_stats();
         assert!(stats.total_moves_ordered > 0);
@@ -9950,19 +11259,22 @@ mod tests {
     #[test]
     fn test_bottleneck_analysis() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Perform operations to generate performance data
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test bottleneck analysis
         let analysis = orderer.profile_bottlenecks();
         assert!(analysis.overall_score >= 0);
         assert!(analysis.overall_score <= 100);
-        
+
         // Bottlenecks should be identified if performance is poor
         if analysis.overall_score < 80 {
             assert!(!analysis.bottlenecks.is_empty());
@@ -9976,13 +11288,13 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Perform score_move operations to generate hot path data
         orderer.score_move(&move_);
         orderer.score_move(&move_);
-        
+
         // Test hot path statistics
         assert!(orderer.stats.hot_path_stats.score_move_calls > 0);
         assert!(orderer.stats.hot_path_stats.cache_lookups > 0);
@@ -9992,14 +11304,14 @@ mod tests {
     #[test]
     fn test_center_distance_calculation() {
         let orderer = MoveOrdering::new();
-        
+
         // Test center distance calculation
         let center = Position::new(4, 4);
         assert_eq!(orderer.get_center_distance_fast(center), 0);
-        
+
         let corner = Position::new(0, 0);
         assert_eq!(orderer.get_center_distance_fast(corner), 8);
-        
+
         let edge = Position::new(4, 0);
         assert_eq!(orderer.get_center_distance_fast(edge), 4);
     }
@@ -10009,10 +11321,17 @@ mod tests {
     #[test]
     fn test_detailed_statistics_initialization() {
         let orderer = MoveOrdering::new();
-        
+
         // Test that all statistics structures are initialized
         assert_eq!(orderer.stats.heuristic_stats.capture_stats.applications, 0);
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.operation_count, 0);
+        assert_eq!(
+            orderer
+                .stats
+                .timing_stats
+                .move_scoring_times
+                .operation_count,
+            0
+        );
         assert_eq!(orderer.stats.memory_stats.current_usage.total_bytes, 0);
         assert_eq!(orderer.stats.cache_stats.move_score_cache.hits, 0);
     }
@@ -10024,35 +11343,64 @@ mod tests {
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         // Test heuristic statistics tracking
         orderer.update_heuristic_stats("capture", true, 100);
         orderer.update_heuristic_stats("promotion", true, 200);
         orderer.update_heuristic_stats("tactical", true, 50);
-        
+
         assert_eq!(orderer.stats.heuristic_stats.capture_stats.applications, 1);
-        assert_eq!(orderer.stats.heuristic_stats.capture_stats.total_score_contribution, 100);
-        assert_eq!(orderer.stats.heuristic_stats.promotion_stats.applications, 1);
+        assert_eq!(
+            orderer
+                .stats
+                .heuristic_stats
+                .capture_stats
+                .total_score_contribution,
+            100
+        );
+        assert_eq!(
+            orderer.stats.heuristic_stats.promotion_stats.applications,
+            1
+        );
         assert_eq!(orderer.stats.heuristic_stats.tactical_stats.applications, 1);
     }
 
     #[test]
     fn test_timing_statistics_tracking() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test timing statistics recording
         orderer.record_timing("move_scoring", 100);
         orderer.record_timing("move_scoring", 200);
         orderer.record_timing("cache", 50);
-        
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.operation_count, 2);
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.total_time_us, 300);
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.avg_time_us, 150.0);
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.min_time_us, 100);
-        assert_eq!(orderer.stats.timing_stats.move_scoring_times.max_time_us, 200);
-        
+
+        assert_eq!(
+            orderer
+                .stats
+                .timing_stats
+                .move_scoring_times
+                .operation_count,
+            2
+        );
+        assert_eq!(
+            orderer.stats.timing_stats.move_scoring_times.total_time_us,
+            300
+        );
+        assert_eq!(
+            orderer.stats.timing_stats.move_scoring_times.avg_time_us,
+            150.0
+        );
+        assert_eq!(
+            orderer.stats.timing_stats.move_scoring_times.min_time_us,
+            100
+        );
+        assert_eq!(
+            orderer.stats.timing_stats.move_scoring_times.max_time_us,
+            200
+        );
+
         assert_eq!(orderer.stats.timing_stats.cache_times.operation_count, 1);
         assert_eq!(orderer.stats.timing_stats.cache_times.total_time_us, 50);
     }
@@ -10060,17 +11408,17 @@ mod tests {
     #[test]
     fn test_cache_statistics_tracking() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test cache statistics tracking
         orderer.update_cache_stats("move_score_cache", true, 100, 500);
         orderer.update_cache_stats("move_score_cache", false, 101, 500);
         orderer.update_cache_stats("fast_cache", true, 50, 100);
-        
+
         assert_eq!(orderer.stats.cache_stats.move_score_cache.hits, 1);
         assert_eq!(orderer.stats.cache_stats.move_score_cache.misses, 1);
         assert_eq!(orderer.stats.cache_stats.move_score_cache.hit_rate, 50.0);
         assert_eq!(orderer.stats.cache_stats.move_score_cache.utilization, 20.2);
-        
+
         assert_eq!(orderer.stats.cache_stats.fast_cache.hits, 1);
         assert_eq!(orderer.stats.cache_stats.fast_cache.hit_rate, 100.0);
     }
@@ -10078,14 +11426,17 @@ mod tests {
     #[test]
     fn test_statistics_export_json() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test JSON export
         let json_export = orderer.export_statistics_json();
         assert!(!json_export.is_empty());
@@ -10096,14 +11447,17 @@ mod tests {
     #[test]
     fn test_statistics_export_csv() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test CSV export
         let csv_export = orderer.export_statistics_csv();
         assert!(!csv_export.is_empty());
@@ -10115,14 +11469,17 @@ mod tests {
     #[test]
     fn test_performance_summary() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test performance summary
         let summary = orderer.export_performance_summary();
         assert!(summary.total_moves_ordered > 0);
@@ -10134,14 +11491,17 @@ mod tests {
     #[test]
     fn test_performance_report_generation() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test performance report generation
         let report = orderer.generate_performance_report();
         assert!(!report.is_empty());
@@ -10155,14 +11515,17 @@ mod tests {
     #[test]
     fn test_performance_chart_data() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test chart data generation
         let chart_data = orderer.generate_performance_chart_data();
         assert!(chart_data.cache_hit_rates.move_score_cache >= 0.0);
@@ -10175,34 +11538,58 @@ mod tests {
     #[test]
     fn test_performance_trend_analysis() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black),
-        ];
-        
+        let moves = vec![create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 1),
+            PieceType::Pawn,
+            Player::Black,
+        )];
+
         // Generate some statistics
         orderer.score_move(&moves[0]);
         orderer.order_moves(&moves);
-        
+
         // Test trend analysis
         let trend_analysis = orderer.analyze_performance_trends();
         assert!(trend_analysis.cache_efficiency_trend.confidence >= 0.0);
         assert!(trend_analysis.cache_efficiency_trend.confidence <= 1.0);
-        assert!(!trend_analysis.cache_efficiency_trend.recommendation.is_empty());
+        assert!(!trend_analysis
+            .cache_efficiency_trend
+            .recommendation
+            .is_empty());
         assert!(!trend_analysis.memory_usage_trend.recommendation.is_empty());
-        assert!(!trend_analysis.heuristic_effectiveness_trend.recommendation.is_empty());
+        assert!(!trend_analysis
+            .heuristic_effectiveness_trend
+            .recommendation
+            .is_empty());
         assert!(!trend_analysis.timing_trend.recommendation.is_empty());
-        assert!(!trend_analysis.overall_performance_trend.recommendation.is_empty());
+        assert!(!trend_analysis
+            .overall_performance_trend
+            .recommendation
+            .is_empty());
     }
 
     #[test]
     fn test_most_effective_heuristic() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Set up some heuristic statistics
-        orderer.stats.heuristic_stats.capture_stats.best_move_contributions = 10;
-        orderer.stats.heuristic_stats.promotion_stats.best_move_contributions = 5;
-        orderer.stats.heuristic_stats.tactical_stats.best_move_contributions = 15;
-        
+        orderer
+            .stats
+            .heuristic_stats
+            .capture_stats
+            .best_move_contributions = 10;
+        orderer
+            .stats
+            .heuristic_stats
+            .promotion_stats
+            .best_move_contributions = 5;
+        orderer
+            .stats
+            .heuristic_stats
+            .tactical_stats
+            .best_move_contributions = 15;
+
         // Test most effective heuristic identification
         let most_effective = orderer.get_most_effective_heuristic();
         assert_eq!(most_effective, "tactical");
@@ -10212,10 +11599,10 @@ mod tests {
     fn test_heuristic_effectiveness_calculation() {
         let orderer = MoveOrdering::new();
         let mut stats = HeuristicPerformance::default();
-        
+
         stats.applications = 100;
         stats.best_move_contributions = 30;
-        
+
         // Test effectiveness calculation
         let effectiveness = orderer.calculate_heuristic_effectiveness(&stats);
         assert_eq!(effectiveness, 30.0);
@@ -10224,10 +11611,10 @@ mod tests {
     #[test]
     fn test_memory_statistics_update() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test memory statistics update
         orderer.update_memory_stats();
-        
+
         assert!(orderer.stats.memory_stats.current_usage.total_bytes >= 0);
         assert!(orderer.stats.memory_stats.peak_usage.total_bytes >= 0);
     }
@@ -10235,14 +11622,28 @@ mod tests {
     #[test]
     fn test_best_move_contribution_recording() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test best move contribution recording
         orderer.record_best_move_contribution("capture");
         orderer.record_best_move_contribution("capture");
         orderer.record_best_move_contribution("promotion");
-        
-        assert_eq!(orderer.stats.heuristic_stats.capture_stats.best_move_contributions, 2);
-        assert_eq!(orderer.stats.heuristic_stats.promotion_stats.best_move_contributions, 1);
+
+        assert_eq!(
+            orderer
+                .stats
+                .heuristic_stats
+                .capture_stats
+                .best_move_contributions,
+            2
+        );
+        assert_eq!(
+            orderer
+                .stats
+                .heuristic_stats
+                .promotion_stats
+                .best_move_contributions,
+            1
+        );
     }
 
     // ==================== Error Handling Tests ====================
@@ -10251,29 +11652,39 @@ mod tests {
     fn test_error_types() {
         // Test error creation and display
         let invalid_move_error = MoveOrderingError::InvalidMove("Test error".to_string());
-        assert_eq!(format!("{}", invalid_move_error), "Invalid move: Test error");
-        
+        assert_eq!(
+            format!("{}", invalid_move_error),
+            "Invalid move: Test error"
+        );
+
         let cache_error = MoveOrderingError::CacheError("Cache full".to_string());
         assert_eq!(format!("{}", cache_error), "Cache error: Cache full");
-        
+
         let see_error = MoveOrderingError::SEEError("SEE calculation failed".to_string());
-        assert_eq!(format!("{}", see_error), "SEE calculation error: SEE calculation failed");
+        assert_eq!(
+            format!("{}", see_error),
+            "SEE calculation error: SEE calculation failed"
+        );
     }
 
     #[test]
     fn test_error_handler_functionality() {
         let mut error_handler = ErrorHandler::default();
-        
+
         // Test error logging
         let error = MoveOrderingError::InvalidMove("Test error".to_string());
-        error_handler.log_error(error.clone(), ErrorSeverity::Medium, "Test context".to_string());
-        
+        error_handler.log_error(
+            error.clone(),
+            ErrorSeverity::Medium,
+            "Test context".to_string(),
+        );
+
         // Test recent errors retrieval
         let recent_errors = error_handler.get_recent_errors(5);
         assert_eq!(recent_errors.len(), 1);
         assert_eq!(recent_errors[0].error, error);
         assert_eq!(recent_errors[0].severity, ErrorSeverity::Medium);
-        
+
         // Test error log clearing
         error_handler.clear_errors();
         assert_eq!(error_handler.get_recent_errors(5).len(), 0);
@@ -10282,25 +11693,25 @@ mod tests {
     #[test]
     fn test_system_stability_check() {
         let mut error_handler = ErrorHandler::default();
-        
+
         // Test with no errors - should be stable
         assert!(!error_handler.is_system_unstable());
-        
+
         // Test with low severity errors - should still be stable
         for _ in 0..5 {
             error_handler.log_error(
                 MoveOrderingError::InvalidMove("Low severity".to_string()),
                 ErrorSeverity::Low,
-                "Test".to_string()
+                "Test".to_string(),
             );
         }
         assert!(!error_handler.is_system_unstable());
-        
+
         // Test with critical error - should be unstable
         error_handler.log_error(
             MoveOrderingError::MemoryError("Critical memory error".to_string()),
             ErrorSeverity::Critical,
-            "Test".to_string()
+            "Test".to_string(),
         );
         assert!(error_handler.is_system_unstable());
     }
@@ -10308,21 +11719,21 @@ mod tests {
     #[test]
     fn test_move_validation() {
         let orderer = MoveOrdering::new();
-        
+
         // Test valid move
         let valid_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         assert!(orderer.validate_move(&valid_move).is_ok());
-        
+
         // Test invalid destination
         let mut invalid_move = valid_move.clone();
         invalid_move.to = Position::new(10, 10); // Invalid position
         assert!(orderer.validate_move(&invalid_move).is_err());
-        
+
         // Test invalid source
         let mut invalid_move = valid_move.clone();
         invalid_move.from = Some(Position::new(10, 10)); // Invalid position
@@ -10332,19 +11743,19 @@ mod tests {
     #[test]
     fn test_error_handling_in_score_move() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test with invalid move
         let mut invalid_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         invalid_move.to = Position::new(10, 10); // Invalid position
-        
+
         let result = orderer.score_move(&invalid_move);
         assert!(result.is_err());
-        
+
         // Check that error was logged
         let errors = orderer.get_recent_errors(1);
         assert_eq!(errors.len(), 1);
@@ -10354,17 +11765,32 @@ mod tests {
     #[test]
     fn test_error_handling_in_order_moves() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test with mix of valid and invalid moves
         let moves = vec![
-            create_test_move(Some(Position::new(1, 1)), Position::new(2, 2), PieceType::Pawn, Player::Black),
-            create_test_move(Some(Position::new(10, 10)), Position::new(2, 2), PieceType::Pawn, Player::Black), // Invalid
-            create_test_move(Some(Position::new(3, 3)), Position::new(4, 4), PieceType::Rook, Player::Black),
+            create_test_move(
+                Some(Position::new(1, 1)),
+                Position::new(2, 2),
+                PieceType::Pawn,
+                Player::Black,
+            ),
+            create_test_move(
+                Some(Position::new(10, 10)),
+                Position::new(2, 2),
+                PieceType::Pawn,
+                Player::Black,
+            ), // Invalid
+            create_test_move(
+                Some(Position::new(3, 3)),
+                Position::new(4, 4),
+                PieceType::Rook,
+                Player::Black,
+            ),
         ];
-        
+
         let result = orderer.order_moves(&moves);
         assert!(result.is_err());
-        
+
         // Check that error was logged
         let errors = orderer.get_recent_errors(1);
         assert_eq!(errors.len(), 1);
@@ -10374,23 +11800,23 @@ mod tests {
     #[test]
     fn test_graceful_degradation() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Enable graceful degradation
         orderer.error_handler.graceful_degradation_enabled = true;
-        
+
         // Test with low severity error
         let result = orderer.handle_error(
             MoveOrderingError::InvalidMove("Low severity error".to_string()),
             ErrorSeverity::Low,
-            "Test context".to_string()
+            "Test context".to_string(),
         );
         assert!(result.is_ok());
-        
+
         // Test with high severity error
         let result = orderer.handle_error(
             MoveOrderingError::CacheError("Cache error".to_string()),
             ErrorSeverity::High,
-            "Test context".to_string()
+            "Test context".to_string(),
         );
         // Should attempt recovery and succeed
         assert!(result.is_ok());
@@ -10399,49 +11825,53 @@ mod tests {
     #[test]
     fn test_error_recovery_mechanisms() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test cache error recovery
-        let result = orderer.attempt_error_recovery(&MoveOrderingError::CacheError("Test".to_string()));
+        let result =
+            orderer.attempt_error_recovery(&MoveOrderingError::CacheError("Test".to_string()));
         assert!(result.is_ok());
         // Caches should be cleared
         assert!(orderer.move_score_cache.is_empty());
-        
+
         // Test memory error recovery
-        let result = orderer.attempt_error_recovery(&MoveOrderingError::MemoryError("Test".to_string()));
+        let result =
+            orderer.attempt_error_recovery(&MoveOrderingError::MemoryError("Test".to_string()));
         assert!(result.is_ok());
         // Memory usage should be reduced
-        
+
         // Test statistics error recovery
-        let result = orderer.attempt_error_recovery(&MoveOrderingError::StatisticsError("Test".to_string()));
+        let result =
+            orderer.attempt_error_recovery(&MoveOrderingError::StatisticsError("Test".to_string()));
         assert!(result.is_ok());
         // Statistics should be reset
-        
+
         // Test unsupported error recovery
-        let result = orderer.attempt_error_recovery(&MoveOrderingError::InvalidMove("Test".to_string()));
+        let result =
+            orderer.attempt_error_recovery(&MoveOrderingError::InvalidMove("Test".to_string()));
         assert!(result.is_err());
     }
 
     #[test]
     fn test_error_logging_and_reporting() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Log some errors
         orderer.error_handler.log_error(
             MoveOrderingError::InvalidMove("Error 1".to_string()),
             ErrorSeverity::Medium,
-            "Context 1".to_string()
+            "Context 1".to_string(),
         );
-        
+
         orderer.error_handler.log_error(
             MoveOrderingError::CacheError("Error 2".to_string()),
             ErrorSeverity::High,
-            "Context 2".to_string()
+            "Context 2".to_string(),
         );
-        
+
         // Test error retrieval
         let errors = orderer.get_recent_errors(10);
         assert_eq!(errors.len(), 2);
-        
+
         // Test error log clearing
         orderer.clear_error_log();
         assert_eq!(orderer.get_recent_errors(10).len(), 0);
@@ -10450,17 +11880,17 @@ mod tests {
     #[test]
     fn test_error_state_detection() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Initially should not be in error state
         assert!(!orderer.is_in_error_state());
-        
+
         // Add critical error
         orderer.error_handler.log_error(
             MoveOrderingError::MemoryError("Critical error".to_string()),
             ErrorSeverity::Critical,
-            "Test".to_string()
+            "Test".to_string(),
         );
-        
+
         // Should now be in error state
         assert!(orderer.is_in_error_state());
     }
@@ -10470,23 +11900,28 @@ mod tests {
     #[test]
     fn test_memory_pool_functionality() {
         let mut pool = MemoryPool::default();
-        
+
         // Test move vector pool
         let mut vec1 = pool.get_move_vec();
-        vec1.push(create_test_move(Some(Position::new(1, 1)), Position::new(2, 2), PieceType::Pawn, Player::Black));
+        vec1.push(create_test_move(
+            Some(Position::new(1, 1)),
+            Position::new(2, 2),
+            PieceType::Pawn,
+            Player::Black,
+        ));
         pool.return_move_vec(vec1);
-        
+
         let stats = pool.get_pool_stats();
         assert_eq!(stats.move_vec_count, 1);
-        
+
         // Test move score vector pool
         let mut vec2 = pool.get_move_score_vec();
         vec2.push((100, 0));
         pool.return_move_score_vec(vec2);
-        
+
         let stats = pool.get_pool_stats();
         assert_eq!(stats.move_score_vec_count, 1);
-        
+
         // Test pool clearing
         pool.clear_all_pools();
         let stats = pool.get_pool_stats();
@@ -10497,17 +11932,17 @@ mod tests {
     #[test]
     fn test_memory_tracker_functionality() {
         let mut tracker = MemoryTracker::default();
-        
+
         // Test allocation recording
         tracker.record_allocation(AllocationType::MoveVector, 1024, "test".to_string());
         tracker.record_allocation(AllocationType::Cache, 2048, "test".to_string());
-        
+
         let current_usage = tracker.get_current_usage();
         assert!(current_usage.total_memory > 0);
-        
+
         // Test deallocation recording
         tracker.record_deallocation(AllocationType::MoveVector, 1024, "test".to_string());
-        
+
         // Test threshold checking
         let status = tracker.check_thresholds();
         assert_eq!(status, MemoryThresholdStatus::Normal);
@@ -10516,17 +11951,17 @@ mod tests {
     #[test]
     fn test_memory_leak_detection() {
         let mut tracker = MemoryTracker::default();
-        
+
         // Record an allocation without deallocation
         tracker.record_allocation(AllocationType::MoveVector, 1024, "test".to_string());
-        
+
         // Check for leaks (should detect the allocation as potential leak)
         let leaks = tracker.check_for_leaks();
         assert!(!leaks.is_empty());
-        
+
         // Record deallocation
         tracker.record_deallocation(AllocationType::MoveVector, 1024, "test".to_string());
-        
+
         // Check again (should not detect leaks now)
         let leaks = tracker.check_for_leaks();
         assert!(leaks.is_empty());
@@ -10535,16 +11970,16 @@ mod tests {
     #[test]
     fn test_memory_usage_monitoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test initial memory usage
         let initial_usage = orderer.get_current_memory_usage();
         assert!(initial_usage.total_memory >= 0);
-        
+
         // Test memory pool statistics
         let pool_stats = orderer.get_memory_pool_stats();
         assert_eq!(pool_stats.move_vec_count, 0);
         assert_eq!(pool_stats.move_score_vec_count, 0);
-        
+
         // Test memory threshold checking
         let status = orderer.check_memory_thresholds();
         assert_eq!(status, MemoryThresholdStatus::Normal);
@@ -10553,17 +11988,17 @@ mod tests {
     #[test]
     fn test_memory_cleanup() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Get initial memory usage
         let initial_usage = orderer.get_current_memory_usage().clone();
-        
+
         // Perform cleanup
         let cleanup_report = orderer.cleanup_memory();
-        
+
         // Verify cleanup was successful
         assert!(cleanup_report.cleanup_successful);
         assert!(cleanup_report.memory_freed >= 0);
-        
+
         // Verify memory usage decreased or stayed the same
         let final_usage = orderer.get_current_memory_usage();
         assert!(final_usage.total_memory <= initial_usage.total_memory);
@@ -10572,17 +12007,17 @@ mod tests {
     #[test]
     fn test_selective_memory_cleanup() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test different pressure levels
         let low_pressure_report = orderer.selective_cleanup(MemoryPressureLevel::Low);
         assert!(low_pressure_report.cleanup_successful);
-        
+
         let medium_pressure_report = orderer.selective_cleanup(MemoryPressureLevel::Medium);
         assert!(medium_pressure_report.cleanup_successful);
-        
+
         let high_pressure_report = orderer.selective_cleanup(MemoryPressureLevel::High);
         assert!(high_pressure_report.cleanup_successful);
-        
+
         let critical_pressure_report = orderer.selective_cleanup(MemoryPressureLevel::Critical);
         assert!(critical_pressure_report.cleanup_successful);
     }
@@ -10590,10 +12025,10 @@ mod tests {
     #[test]
     fn test_memory_leak_reporting() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Perform leak detection
         let leak_report = orderer.detect_memory_leaks();
-        
+
         // Verify report structure
         assert!(!leak_report.leak_detected || !leak_report.warnings.is_empty());
         assert!(leak_report.current_usage.total_memory >= 0);
@@ -10603,17 +12038,17 @@ mod tests {
     #[test]
     fn test_memory_pool_integration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test memory pool access
         let pool = orderer.get_memory_pool();
         let stats = pool.get_pool_stats();
         assert_eq!(stats.move_vec_count, 0);
-        
+
         // Test mutable access
         let mut pool = orderer.get_memory_pool_mut();
         let vec = pool.get_move_vec();
         pool.return_move_vec(vec);
-        
+
         let stats = pool.get_pool_stats();
         assert_eq!(stats.move_vec_count, 1);
     }
@@ -10621,16 +12056,16 @@ mod tests {
     #[test]
     fn test_memory_tracker_integration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test memory tracker access
         let tracker = orderer.get_memory_tracker();
         let usage = tracker.get_current_usage();
         assert!(usage.total_memory >= 0);
-        
+
         // Test mutable access
         let mut tracker = orderer.get_memory_tracker_mut();
         tracker.record_allocation(AllocationType::MoveVector, 1024, "test".to_string());
-        
+
         let usage = tracker.get_current_usage();
         assert!(usage.total_memory > 0);
     }
@@ -10638,18 +12073,24 @@ mod tests {
     #[test]
     fn test_memory_allocation_history() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test allocation history
         let history = orderer.get_allocation_history();
         assert!(history.is_empty());
-        
+
         // Record some allocations
-        orderer.memory_tracker.record_allocation(AllocationType::MoveVector, 1024, "test".to_string());
-        orderer.memory_tracker.record_allocation(AllocationType::Cache, 2048, "test".to_string());
-        
+        orderer.memory_tracker.record_allocation(
+            AllocationType::MoveVector,
+            1024,
+            "test".to_string(),
+        );
+        orderer
+            .memory_tracker
+            .record_allocation(AllocationType::Cache, 2048, "test".to_string());
+
         let history = orderer.get_allocation_history();
         assert_eq!(history.len(), 2);
-        
+
         // Clear history
         orderer.clear_memory_history();
         let history = orderer.get_allocation_history();
@@ -10659,11 +12100,11 @@ mod tests {
     #[test]
     fn test_memory_leak_detection_control() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test leak detection enable/disable
         orderer.set_leak_detection(false);
         // Should not detect leaks when disabled
-        
+
         orderer.set_leak_detection(true);
         // Should detect leaks when enabled
     }
@@ -10673,20 +12114,20 @@ mod tests {
     #[test]
     fn test_position_specific_strategies() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test game phase determination
         let opening_phase = orderer.determine_game_phase(10, 0, 0.3);
         assert_eq!(opening_phase, GamePhase::Opening);
-        
+
         let endgame_phase = orderer.determine_game_phase(70, 0, 0.3);
         assert_eq!(endgame_phase, GamePhase::Endgame);
-        
+
         let tactical_phase = orderer.determine_game_phase(30, 0, 0.8);
         assert_eq!(tactical_phase, GamePhase::Tactical);
-        
+
         let positional_phase = orderer.determine_game_phase(30, 50, 0.2);
         assert_eq!(positional_phase, GamePhase::Positional);
-        
+
         let middlegame_phase = orderer.determine_game_phase(30, 0, 0.5);
         assert_eq!(middlegame_phase, GamePhase::Middlegame);
     }
@@ -10694,27 +12135,33 @@ mod tests {
     #[test]
     fn test_game_phase_update() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test phase update
         orderer.update_game_phase(10, 0, 0.3);
-        assert_eq!(orderer.advanced_features.position_strategies.current_phase, GamePhase::Opening);
-        
+        assert_eq!(
+            orderer.advanced_features.position_strategies.current_phase,
+            GamePhase::Opening
+        );
+
         orderer.update_game_phase(70, 0, 0.3);
-        assert_eq!(orderer.advanced_features.position_strategies.current_phase, GamePhase::Endgame);
+        assert_eq!(
+            orderer.advanced_features.position_strategies.current_phase,
+            GamePhase::Endgame
+        );
     }
 
     #[test]
     fn test_strategy_scoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test move scoring with strategy
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
-        
+
         let score = orderer.score_move_with_strategy(&move_);
         assert!(score.is_ok());
     }
@@ -10722,31 +12169,31 @@ mod tests {
     #[test]
     fn test_move_classification() {
         let orderer = MoveOrdering::new();
-        
+
         // Test development move
         let development_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         assert!(orderer.is_development_move(&development_move));
-        
+
         // Test center move
         let center_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(4, 4),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         assert!(orderer.is_center_move(&center_move));
-        
+
         // Test king safety move
         let king_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::King,
-            Player::Black
+            Player::Black,
         );
         assert!(orderer.is_king_safety_move(&king_move));
     }
@@ -10754,34 +12201,32 @@ mod tests {
     #[test]
     fn test_machine_learning_model() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Enable ML model
         orderer.advanced_features.ml_model.enabled = true;
-        
+
         // Test training
-        let training_examples = vec![
-            TrainingExample {
-                features: vec![1.0, 2.0, 3.0],
-                target: 100.0,
-                context: PositionContext {
-                    phase: GamePhase::Middlegame,
-                    material_balance: 0,
-                    king_safety: 0,
-                    center_control: 0,
-                },
+        let training_examples = vec![TrainingExample {
+            features: vec![1.0, 2.0, 3.0],
+            target: 100.0,
+            context: PositionContext {
+                phase: GamePhase::Middlegame,
+                material_balance: 0,
+                king_safety: 0,
+                center_control: 0,
             },
-        ];
-        
+        }];
+
         let accuracy = orderer.train_ml_model(training_examples);
         assert!(accuracy.is_ok());
         assert!(accuracy.unwrap() > 0.0);
-        
+
         // Test prediction
         let move_ = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 2),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let features = vec![1.0, 2.0, 3.0];
         let prediction = orderer.predict_move_score(&move_, features);
@@ -10791,22 +12236,26 @@ mod tests {
     #[test]
     fn test_dynamic_weight_adjustment() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Enable dynamic weights
         orderer.advanced_features.dynamic_weights.enabled = true;
-        
+
         // Test weight adjustment
         let result = orderer.adjust_weights_dynamically(0.8);
         assert!(result.is_ok());
-        
+
         // Check that adjustment was recorded
-        assert!(!orderer.advanced_features.dynamic_weights.adjustment_history.is_empty());
+        assert!(!orderer
+            .advanced_features
+            .dynamic_weights
+            .adjustment_history
+            .is_empty());
     }
 
     #[test]
     fn test_advanced_features_control() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test enabling features
         let features = AdvancedFeatureFlags {
             machine_learning: true,
@@ -10815,9 +12264,9 @@ mod tests {
             cache_warming: true,
             position_specific_strategies: true,
         };
-        
+
         orderer.set_advanced_features_enabled(features);
-        
+
         // Test status
         let status = orderer.get_advanced_features_status();
         assert!(status.machine_learning);
@@ -10834,22 +12283,22 @@ mod tests {
         assert_eq!(opening_strategy.name, "Opening");
         assert!(opening_strategy.heuristic_preferences.prefer_development);
         assert!(opening_strategy.heuristic_preferences.prefer_positional);
-        
+
         // Test middlegame strategy
         let middlegame_strategy = OrderingStrategy::middlegame();
         assert_eq!(middlegame_strategy.name, "Middlegame");
         assert!(middlegame_strategy.heuristic_preferences.prefer_tactical);
-        
+
         // Test endgame strategy
         let endgame_strategy = OrderingStrategy::endgame();
         assert_eq!(endgame_strategy.name, "Endgame");
         assert!(endgame_strategy.heuristic_preferences.prefer_endgame);
-        
+
         // Test tactical strategy
         let tactical_strategy = OrderingStrategy::tactical();
         assert_eq!(tactical_strategy.name, "Tactical");
         assert!(tactical_strategy.heuristic_preferences.prefer_tactical);
-        
+
         // Test positional strategy
         let positional_strategy = OrderingStrategy::positional();
         assert_eq!(positional_strategy.name, "Positional");
@@ -10859,15 +12308,18 @@ mod tests {
     #[test]
     fn test_advanced_features_integration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test that advanced features are initialized
         let features = orderer.get_advanced_features();
-        assert_eq!(features.position_strategies.current_phase, GamePhase::Middlegame);
-        
+        assert_eq!(
+            features.position_strategies.current_phase,
+            GamePhase::Middlegame
+        );
+
         // Test mutable access
         let mut features = orderer.get_advanced_features_mut();
         features.ml_model.enabled = true;
-        
+
         // Verify change
         assert!(orderer.advanced_features.ml_model.enabled);
     }
@@ -10875,30 +12327,42 @@ mod tests {
     #[test]
     fn test_priority_adjustments() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test priority adjustments
-        let strategy = &orderer.advanced_features.position_strategies.opening_strategy;
-        
+        let strategy = &orderer
+            .advanced_features
+            .position_strategies
+            .opening_strategy;
+
         // Opening strategy should favor development
         assert!(strategy.priority_adjustments.development_priority > 1.0);
-        
+
         // Test tactical strategy
-        let tactical_strategy = &orderer.advanced_features.position_strategies.tactical_strategy;
+        let tactical_strategy = &orderer
+            .advanced_features
+            .position_strategies
+            .tactical_strategy;
         assert!(tactical_strategy.priority_adjustments.capture_priority > 1.0);
     }
 
     #[test]
     fn test_heuristic_preferences() {
         let orderer = MoveOrdering::new();
-        
+
         // Test opening preferences
-        let opening_strategy = &orderer.advanced_features.position_strategies.opening_strategy;
+        let opening_strategy = &orderer
+            .advanced_features
+            .position_strategies
+            .opening_strategy;
         assert!(opening_strategy.heuristic_preferences.prefer_development);
         assert!(opening_strategy.heuristic_preferences.prefer_positional);
         assert!(!opening_strategy.heuristic_preferences.prefer_tactical);
-        
+
         // Test tactical preferences
-        let tactical_strategy = &orderer.advanced_features.position_strategies.tactical_strategy;
+        let tactical_strategy = &orderer
+            .advanced_features
+            .position_strategies
+            .tactical_strategy;
         assert!(tactical_strategy.heuristic_preferences.prefer_tactical);
         assert!(!tactical_strategy.heuristic_preferences.prefer_development);
     }
@@ -10908,7 +12372,7 @@ mod tests {
     #[test]
     fn test_configuration_creation() {
         let config = MoveOrderingConfig::new();
-        
+
         // Test default values
         assert_eq!(config.weights.capture_weight, 1000);
         assert_eq!(config.cache_config.max_cache_size, 1000);
@@ -10919,10 +12383,10 @@ mod tests {
     #[test]
     fn test_configuration_validation() {
         let mut config = MoveOrderingConfig::new();
-        
+
         // Valid configuration should pass
         assert!(config.validate().is_ok());
-        
+
         // Invalid capture weight should fail
         config.weights.capture_weight = -1;
         let result = config.validate();
@@ -10930,7 +12394,7 @@ mod tests {
         if let Err(errors) = result {
             assert!(errors.iter().any(|e| e.contains("Capture weight")));
         }
-        
+
         // Invalid cache size should fail
         config.weights.capture_weight = 1000; // Fix previous error
         config.cache_config.max_cache_size = 0;
@@ -10944,7 +12408,7 @@ mod tests {
     #[test]
     fn test_performance_optimized_configuration() {
         let config = MoveOrderingConfig::performance_optimized();
-        
+
         // Should have optimized settings
         assert_eq!(config.cache_config.max_cache_size, 5000);
         assert!(config.cache_config.enable_cache_warming);
@@ -10956,7 +12420,7 @@ mod tests {
     #[test]
     fn test_debug_optimized_configuration() {
         let config = MoveOrderingConfig::debug_optimized();
-        
+
         // Should have debug settings
         assert_eq!(config.cache_config.max_cache_size, 500);
         assert!(!config.cache_config.enable_cache_warming);
@@ -10968,7 +12432,7 @@ mod tests {
     #[test]
     fn test_memory_optimized_configuration() {
         let config = MoveOrderingConfig::memory_optimized();
-        
+
         // Should have minimal memory settings
         assert_eq!(config.cache_config.max_cache_size, 100);
         assert!(!config.cache_config.enable_cache_warming);
@@ -10983,13 +12447,13 @@ mod tests {
         let mut override_config = MoveOrderingConfig::new();
         override_config.weights.capture_weight = 2000;
         override_config.cache_config.max_cache_size = 2000;
-        
+
         let merged_config = base_config.merge(&override_config);
-        
+
         // Should use override values
         assert_eq!(merged_config.weights.capture_weight, 2000);
         assert_eq!(merged_config.cache_config.max_cache_size, 2000);
-        
+
         // Should keep other default values
         assert_eq!(merged_config.weights.promotion_weight, 800);
     }
@@ -10999,19 +12463,19 @@ mod tests {
         let mut config = MoveOrderingConfig::new();
         config.weights.capture_weight = 2000;
         config.cache_config.max_cache_size = 500;
-        
+
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         // Should use custom configuration
         assert_eq!(orderer.get_weights().capture_weight, 2000);
         assert_eq!(orderer.get_max_cache_size(), 500);
-        
+
         // Test move scoring with custom weights
         let capture_move = create_test_move(
             Some(Position::new(1, 1)),
             Position::new(2, 1),
             PieceType::Pawn,
-            Player::Black
+            Player::Black,
         );
         let score = orderer.score_move(&capture_move);
         assert!(score >= 2000);
@@ -11020,18 +12484,18 @@ mod tests {
     #[test]
     fn test_configuration_updates() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test weight updates
         orderer.set_capture_weight(3000);
         assert_eq!(orderer.get_weights().capture_weight, 3000);
-        
+
         orderer.set_promotion_weight(2500);
         assert_eq!(orderer.get_weights().promotion_weight, 2500);
-        
+
         // Test cache configuration updates
         orderer.set_cache_size(1500);
         assert_eq!(orderer.get_max_cache_size(), 1500);
-        
+
         // Test killer move configuration updates
         orderer.set_max_killer_moves_per_depth(4);
         assert_eq!(orderer.get_max_killer_moves_per_depth(), 4);
@@ -11041,7 +12505,7 @@ mod tests {
     fn test_configuration_validation_in_move_ordering() {
         let mut invalid_config = MoveOrderingConfig::new();
         invalid_config.weights.capture_weight = -1; // Invalid
-        
+
         let result = MoveOrdering::with_config(invalid_config.clone()).set_config(invalid_config);
         assert!(result.is_err());
     }
@@ -11050,24 +12514,24 @@ mod tests {
     fn test_configuration_application() {
         let mut config = MoveOrderingConfig::new();
         config.cache_config.max_cache_size = 100;
-        
+
         let mut orderer = MoveOrdering::with_config(config);
-        
+
         // Fill cache beyond new limit
         for i in 0..150 {
             let move_ = create_test_move(
                 Some(Position::new(i % 9, i / 9)),
                 Position::new((i + 1) % 9, (i + 1) / 9),
                 PieceType::Pawn,
-                Player::Black
+                Player::Black,
             );
             orderer.score_move(&move_);
         }
-        
+
         // Apply configuration changes (should trim cache)
         let new_config = MoveOrderingConfig::new();
         orderer.set_config(new_config).unwrap();
-        
+
         // Cache should be trimmed to new size
         assert!(orderer.get_cache_size() <= 1000); // Default cache size
     }
@@ -11077,11 +12541,11 @@ mod tests {
         // Test performance optimized constructor
         let perf_orderer = MoveOrdering::performance_optimized();
         assert_eq!(perf_orderer.get_max_cache_size(), 5000);
-        
+
         // Test debug optimized constructor
         let debug_orderer = MoveOrdering::debug_optimized();
         assert_eq!(debug_orderer.get_max_cache_size(), 500);
-        
+
         // Test memory optimized constructor
         let memory_orderer = MoveOrdering::memory_optimized();
         assert_eq!(memory_orderer.get_max_cache_size(), 100);
@@ -11090,14 +12554,14 @@ mod tests {
     #[test]
     fn test_configuration_reset() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Modify configuration
         orderer.set_capture_weight(5000);
         orderer.set_cache_size(2000);
-        
+
         // Reset to defaults
         orderer.reset_config_to_default();
-        
+
         // Should be back to defaults
         assert_eq!(orderer.get_weights().capture_weight, 1000);
         assert_eq!(orderer.get_max_cache_size(), 1000);
@@ -11107,11 +12571,11 @@ mod tests {
     fn test_configuration_getters() {
         let config = MoveOrderingConfig::new();
         let orderer = MoveOrdering::with_config(config);
-        
+
         // Test configuration getter
         let retrieved_config = orderer.get_config();
         assert_eq!(retrieved_config.weights.capture_weight, 1000);
-        
+
         // Test weights getter
         let weights = orderer.get_weights();
         assert_eq!(weights.capture_weight, 1000);
@@ -11128,7 +12592,13 @@ mod tests {
         let depth = 3;
 
         // Test with no transposition table entry
-        let result = orderer.integrate_with_transposition_table(None, &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            None,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         // Test with transposition table entry
@@ -11136,12 +12606,26 @@ mod tests {
             score: 100,
             depth: 3,
             flag: TranspositionFlag::Exact,
-            best_move: Some(Move::new(Some(Position::new(4, 4)), Position::new(4, 3), PieceType::Pawn, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(4, 4)),
+                Position::new(4, 3),
+                PieceType::Pawn,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 12345,
             age: 1,
         };
 
-        let result = orderer.integrate_with_transposition_table(Some(&tt_entry), &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            Some(&tt_entry),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         // Check that statistics were updated
@@ -11153,7 +12637,7 @@ mod tests {
     #[test]
     fn test_pv_move_from_tt() {
         let orderer = MoveOrdering::new();
-        
+
         // Test with no TT entry
         let pv_move = orderer.get_pv_move_from_tt(None);
         assert!(pv_move.is_none());
@@ -11163,7 +12647,15 @@ mod tests {
             score: 50,
             depth: 2,
             flag: TranspositionFlag::LowerBound,
-            best_move: Some(Move::new(Some(Position::new(3, 3)), Position::new(3, 2), PieceType::Silver, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(3, 3)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 67890,
             age: 2,
         };
@@ -11176,12 +12668,20 @@ mod tests {
     #[test]
     fn test_update_ordering_from_tt_result() {
         let mut orderer = MoveOrdering::new();
-        
+
         let tt_entry = TranspositionEntry {
             score: 75,
             depth: 4,
             flag: TranspositionFlag::Exact,
-            best_move: Some(Move::new(Some(Position::new(5, 5)), Position::new(5, 4), PieceType::Gold, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(5, 5)),
+                Position::new(5, 4),
+                PieceType::Gold,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 11111,
             age: 3,
         };
@@ -11215,7 +12715,15 @@ mod tests {
                 score: 100,
                 depth: 4,
                 flag: TranspositionFlag::Exact,
-                best_move: Some(Move::new(Some(Position::new(4, 4)), Position::new(4, 3), PieceType::Pawn, false, false, false, false)),
+                best_move: Some(Move::new(
+                    Some(Position::new(4, 4)),
+                    Position::new(4, 3),
+                    PieceType::Pawn,
+                    false,
+                    false,
+                    false,
+                    false,
+                )),
                 hash_key: 12345,
                 age: 1,
             },
@@ -11223,7 +12731,15 @@ mod tests {
                 score: -50,
                 depth: 3,
                 flag: TranspositionFlag::LowerBound,
-                best_move: Some(Move::new(Some(Position::new(3, 3)), Position::new(3, 2), PieceType::Silver, false, false, false, false)),
+                best_move: Some(Move::new(
+                    Some(Position::new(3, 3)),
+                    Position::new(3, 2),
+                    PieceType::Silver,
+                    false,
+                    false,
+                    false,
+                    false,
+                )),
                 hash_key: 67890,
                 age: 2,
             },
@@ -11231,7 +12747,15 @@ mod tests {
                 score: 25,
                 depth: 2,
                 flag: TranspositionFlag::UpperBound,
-                best_move: Some(Move::new(Some(Position::new(5, 5)), Position::new(5, 4), PieceType::Gold, false, false, false, false)),
+                best_move: Some(Move::new(
+                    Some(Position::new(5, 5)),
+                    Position::new(5, 4),
+                    PieceType::Gold,
+                    false,
+                    false,
+                    false,
+                    false,
+                )),
                 hash_key: 11111,
                 age: 3,
             },
@@ -11240,13 +12764,23 @@ mod tests {
         // Performance test: integrate multiple TT entries
         let start_time = TimeSource::now();
         for entry in &tt_entries {
-            let result = orderer.integrate_with_transposition_table(Some(entry), &board, &captured_pieces, player, depth);
+            let result = orderer.integrate_with_transposition_table(
+                Some(entry),
+                &board,
+                &captured_pieces,
+                player,
+                depth,
+            );
             assert!(result.is_ok());
         }
         let elapsed_ms = start_time.elapsed_ms();
 
         // Verify performance is reasonable (should be fast)
-        assert!(elapsed_ms < 100, "TT integration took {}ms, should be < 100ms", elapsed_ms);
+        assert!(
+            elapsed_ms < 100,
+            "TT integration took {}ms, should be < 100ms",
+            elapsed_ms
+        );
 
         // Verify statistics were updated correctly
         let stats = orderer.get_tt_integration_stats();
@@ -11257,19 +12791,28 @@ mod tests {
     #[test]
     fn test_transposition_table_pv_move_performance() {
         let orderer = MoveOrdering::new();
-        
+
         // Create a large number of TT entries for performance testing
         let mut tt_entries = Vec::new();
         for i in 0..1000 {
             tt_entries.push(TranspositionEntry {
                 score: i as i32,
                 depth: (i % 10) as u8 + 1,
-                flag: if i % 3 == 0 { TranspositionFlag::Exact } else if i % 3 == 1 { TranspositionFlag::LowerBound } else { TranspositionFlag::UpperBound },
+                flag: if i % 3 == 0 {
+                    TranspositionFlag::Exact
+                } else if i % 3 == 1 {
+                    TranspositionFlag::LowerBound
+                } else {
+                    TranspositionFlag::UpperBound
+                },
                 best_move: Some(Move::new(
-                    Some(Position::new((i % 9) as u8 + 1, (i % 9) as u8 + 1)), 
-                    Position::new(((i + 1) % 9) as u8 + 1, ((i + 1) % 9) as u8 + 1), 
-                    PieceType::Pawn, 
-                    false, false, false, false
+                    Some(Position::new((i % 9) as u8 + 1, (i % 9) as u8 + 1)),
+                    Position::new(((i + 1) % 9) as u8 + 1, ((i + 1) % 9) as u8 + 1),
+                    PieceType::Pawn,
+                    false,
+                    false,
+                    false,
+                    false,
                 )),
                 hash_key: i as u64,
                 age: i as u32,
@@ -11287,7 +12830,11 @@ mod tests {
         let elapsed_ms = start_time.elapsed_ms();
 
         // Verify performance is reasonable
-        assert!(elapsed_ms < 50, "PV move extraction took {}ms, should be < 50ms", elapsed_ms);
+        assert!(
+            elapsed_ms < 50,
+            "PV move extraction took {}ms, should be < 50ms",
+            elapsed_ms
+        );
         assert_eq!(pv_moves.len(), 1000);
     }
 
@@ -11304,12 +12851,26 @@ mod tests {
             score: 150,
             depth: 5,
             flag: TranspositionFlag::Exact,
-            best_move: Some(Move::new(Some(Position::new(4, 4)), Position::new(4, 3), PieceType::Pawn, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(4, 4)),
+                Position::new(4, 3),
+                PieceType::Pawn,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 12345,
             age: 1,
         };
 
-        let result = orderer.integrate_with_transposition_table(Some(&exact_entry), &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            Some(&exact_entry),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         let stats = orderer.get_tt_integration_stats();
@@ -11322,12 +12883,26 @@ mod tests {
             score: 75,
             depth: 4,
             flag: TranspositionFlag::LowerBound,
-            best_move: Some(Move::new(Some(Position::new(3, 3)), Position::new(3, 2), PieceType::Silver, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(3, 3)),
+                Position::new(3, 2),
+                PieceType::Silver,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 67890,
             age: 2,
         };
 
-        let result = orderer.integrate_with_transposition_table(Some(&lower_bound_entry), &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            Some(&lower_bound_entry),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         let stats = orderer.get_tt_integration_stats();
@@ -11339,12 +12914,26 @@ mod tests {
             score: -25,
             depth: 3,
             flag: TranspositionFlag::UpperBound,
-            best_move: Some(Move::new(Some(Position::new(5, 5)), Position::new(5, 4), PieceType::Gold, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(5, 5)),
+                Position::new(5, 4),
+                PieceType::Gold,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 11111,
             age: 3,
         };
 
-        let result = orderer.integrate_with_transposition_table(Some(&upper_bound_entry), &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            Some(&upper_bound_entry),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         let stats = orderer.get_tt_integration_stats();
@@ -11388,7 +12977,13 @@ mod tests {
             age: 1,
         };
 
-        let result = orderer.integrate_with_transposition_table(Some(&entry_no_move), &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_transposition_table(
+            Some(&entry_no_move),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         let stats = orderer.get_tt_integration_stats();
@@ -11400,7 +12995,15 @@ mod tests {
             score: 100,
             depth: 2,
             flag: TranspositionFlag::Exact,
-            best_move: Some(Move::new(Some(Position::new(1, 1)), Position::new(1, 2), PieceType::Pawn, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(1, 1)),
+                Position::new(1, 2),
+                PieceType::Pawn,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 11111,
             age: 1,
         };
@@ -11409,13 +13012,33 @@ mod tests {
             score: 200,
             depth: 3,
             flag: TranspositionFlag::LowerBound,
-            best_move: Some(Move::new(Some(Position::new(1, 1)), Position::new(1, 2), PieceType::Pawn, false, false, false, false)),
+            best_move: Some(Move::new(
+                Some(Position::new(1, 1)),
+                Position::new(1, 2),
+                PieceType::Pawn,
+                false,
+                false,
+                false,
+                false,
+            )),
             hash_key: 22222,
             age: 2,
         };
 
-        let result1 = orderer.integrate_with_transposition_table(Some(&entry1), &board, &captured_pieces, player, depth);
-        let result2 = orderer.integrate_with_transposition_table(Some(&entry2), &board, &captured_pieces, player, depth);
+        let result1 = orderer.integrate_with_transposition_table(
+            Some(&entry1),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
+        let result2 = orderer.integrate_with_transposition_table(
+            Some(&entry2),
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result1.is_ok());
         assert!(result2.is_ok());
 
@@ -11445,7 +13068,7 @@ mod tests {
                 Position::new(to_row, to_col),
                 PieceType::Pawn,
                 player,
-                false
+                false,
             ));
         }
 
@@ -11473,24 +13096,51 @@ mod tests {
 
         // Create test moves
         let moves = vec![
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
-            Move::new_move(Position::new(8, 1), Position::new(7, 1), PieceType::Lance, player, false),
-            Move::new_move(Position::new(7, 1), Position::new(6, 3), PieceType::Knight, player, false),
+            Move::new_move(
+                Position::new(6, 4),
+                Position::new(5, 4),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
+            Move::new_move(
+                Position::new(8, 1),
+                Position::new(7, 1),
+                PieceType::Lance,
+                player,
+                false,
+            ),
+            Move::new_move(
+                Position::new(7, 1),
+                Position::new(6, 3),
+                PieceType::Knight,
+                player,
+                false,
+            ),
         ];
 
         // Test 1: Order with PV
-        let ordered_pv = orderer.order_moves_with_pv(&moves, &board, &captured_pieces, player, depth);
+        let ordered_pv =
+            orderer.order_moves_with_pv(&moves, &board, &captured_pieces, player, depth);
         assert_eq!(ordered_pv.len(), moves.len());
 
         // Test 2: Add killer move and order with PV and killer
         orderer.add_killer_move(moves[1].clone());
-        let ordered_both = orderer.order_moves_with_pv_and_killer(&moves, &board, &captured_pieces, player, depth);
+        let ordered_both =
+            orderer.order_moves_with_pv_and_killer(&moves, &board, &captured_pieces, player, depth);
         assert_eq!(ordered_both.len(), moves.len());
 
         // Test 3: Update history and order with all heuristics
         orderer.update_history(&moves[0], true, depth);
         // Task 3.0: No IID move context for this test
-        let ordered_all = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
+        let ordered_all = orderer.order_moves_with_all_heuristics(
+            &moves,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+            None,
+        );
         assert_eq!(ordered_all.len(), moves.len());
 
         // Verify all statistics are updated
@@ -11502,16 +13152,34 @@ mod tests {
     #[test]
     fn test_memory_usage_tracking() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Get initial memory usage
         let initial_memory = orderer.get_current_memory_usage();
         assert!(initial_memory > 0);
 
         // Create moves and order them
         let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-            Move::new_move(Position::new(1, 1), Position::new(2, 1), PieceType::Silver, Player::Black, false),
-            Move::new_move(Position::new(2, 2), Position::new(3, 2), PieceType::Gold, Player::Black, false),
+            Move::new_move(
+                Position::new(0, 0),
+                Position::new(1, 0),
+                PieceType::Pawn,
+                Player::Black,
+                false,
+            ),
+            Move::new_move(
+                Position::new(1, 1),
+                Position::new(2, 1),
+                PieceType::Silver,
+                Player::Black,
+                false,
+            ),
+            Move::new_move(
+                Position::new(2, 2),
+                Position::new(3, 2),
+                PieceType::Gold,
+                Player::Black,
+                false,
+            ),
         ];
 
         for _ in 0..100 {
@@ -11527,7 +13195,10 @@ mod tests {
         assert!(peak_memory >= initial_memory);
 
         // Verify no excessive memory growth (memory leaks)
-        assert!(final_memory < initial_memory * 10, "Potential memory leak detected");
+        assert!(
+            final_memory < initial_memory * 10,
+            "Potential memory leak detected"
+        );
     }
 
     #[test]
@@ -11537,9 +13208,27 @@ mod tests {
         let mut orderer2 = MoveOrdering::new();
 
         let moves = vec![
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, Player::Black, false),
-            Move::new_move(Position::new(8, 1), Position::new(7, 1), PieceType::Lance, Player::Black, false),
-            Move::new_move(Position::new(7, 1), Position::new(6, 3), PieceType::Knight, Player::Black, false),
+            Move::new_move(
+                Position::new(6, 4),
+                Position::new(5, 4),
+                PieceType::Pawn,
+                Player::Black,
+                false,
+            ),
+            Move::new_move(
+                Position::new(8, 1),
+                Position::new(7, 1),
+                PieceType::Lance,
+                Player::Black,
+                false,
+            ),
+            Move::new_move(
+                Position::new(7, 1),
+                Position::new(6, 3),
+                PieceType::Knight,
+                Player::Black,
+                false,
+            ),
         ];
 
         let result1 = orderer1.order_moves(&moves);
@@ -11572,7 +13261,7 @@ mod tests {
                 Position::new((depth + 1) % 9, (depth + 1) % 9),
                 PieceType::Pawn,
                 Player::Black,
-                false
+                false,
             );
             orderer.set_current_depth(depth);
             orderer.add_killer_move(move_);
@@ -11603,11 +13292,29 @@ mod tests {
         // In the opening position, common moves should be ordered
         let moves = vec![
             // P-76 (common opening)
-            Move::new_move(Position::new(6, 6), Position::new(5, 6), PieceType::Pawn, player, false),
+            Move::new_move(
+                Position::new(6, 6),
+                Position::new(5, 6),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
             // P-26
-            Move::new_move(Position::new(6, 1), Position::new(5, 1), PieceType::Pawn, player, false),
+            Move::new_move(
+                Position::new(6, 1),
+                Position::new(5, 1),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
             // P-56
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
+            Move::new_move(
+                Position::new(6, 4),
+                Position::new(5, 4),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
         ];
 
         let result = orderer.order_moves(&moves);
@@ -11617,7 +13324,9 @@ mod tests {
 
         // All moves should be present
         for original_move in &moves {
-            assert!(ordered.iter().any(|m| m.from == original_move.from && m.to == original_move.to));
+            assert!(ordered
+                .iter()
+                .any(|m| m.from == original_move.from && m.to == original_move.to));
         }
     }
 
@@ -11633,15 +13342,34 @@ mod tests {
         // Simulate search tree behavior
         for search_depth in 1..=depth {
             orderer.set_current_depth(search_depth);
-            
+
             // Generate some moves
             let moves = vec![
-                Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
-                Move::new_move(Position::new(7, 1), Position::new(6, 3), PieceType::Knight, player, false),
+                Move::new_move(
+                    Position::new(6, 4),
+                    Position::new(5, 4),
+                    PieceType::Pawn,
+                    player,
+                    false,
+                ),
+                Move::new_move(
+                    Position::new(7, 1),
+                    Position::new(6, 3),
+                    PieceType::Knight,
+                    player,
+                    false,
+                ),
             ];
 
             // Task 3.0: Order moves (no IID move context for this test)
-            let ordered = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, search_depth, None);
+            let ordered = orderer.order_moves_with_all_heuristics(
+                &moves,
+                &board,
+                &captured_pieces,
+                player,
+                search_depth,
+                None,
+            );
             assert!(!ordered.is_empty());
 
             // Simulate finding a good move (update history and killer)
@@ -11659,7 +13387,13 @@ mod tests {
                 hash_key: search_depth as u64 * 12345,
                 age: 1,
             };
-            let _ = orderer.integrate_with_transposition_table(Some(&tt_entry), &board, &captured_pieces, player, search_depth);
+            let _ = orderer.integrate_with_transposition_table(
+                Some(&tt_entry),
+                &board,
+                &captured_pieces,
+                player,
+                search_depth,
+            );
         }
 
         // Verify statistics reflect the search
@@ -11685,7 +13419,7 @@ mod tests {
                 Position::new(((i + 1) % 9) as u8, ((i + 1) / 9 % 9) as u8),
                 PieceType::Pawn,
                 Player::Black,
-                false
+                false,
             ));
         }
 
@@ -11697,7 +13431,11 @@ mod tests {
         let elapsed = start.elapsed_ms();
 
         // Should complete 100 orderings in reasonable time (< 1 second)
-        assert!(elapsed < 1000, "Move ordering took {}ms for 100 iterations, should be < 1000ms", elapsed);
+        assert!(
+            elapsed < 1000,
+            "Move ordering took {}ms for 100 iterations, should be < 1000ms",
+            elapsed
+        );
 
         // Check statistics
         let stats = orderer.get_stats();
@@ -11719,14 +13457,33 @@ mod tests {
 
             // Create moves
             let moves = vec![
-                Move::new_move(Position::new((iteration % 9) as u8, 0), Position::new((iteration % 9) as u8, 1), PieceType::Pawn, player, false),
-                Move::new_move(Position::new(0, (iteration % 9) as u8), Position::new(1, (iteration % 9) as u8), PieceType::Lance, player, false),
+                Move::new_move(
+                    Position::new((iteration % 9) as u8, 0),
+                    Position::new((iteration % 9) as u8, 1),
+                    PieceType::Pawn,
+                    player,
+                    false,
+                ),
+                Move::new_move(
+                    Position::new(0, (iteration % 9) as u8),
+                    Position::new(1, (iteration % 9) as u8),
+                    PieceType::Lance,
+                    player,
+                    false,
+                ),
             ];
 
             // Task 3.0: Order with different methods (no IID move context for this test)
             let _ = orderer.order_moves(&moves);
             let _ = orderer.order_moves_with_pv(&moves, &board, &captured_pieces, player, depth);
-            let _ = orderer.order_moves_with_all_heuristics(&moves, &board, &captured_pieces, player, depth, None);
+            let _ = orderer.order_moves_with_all_heuristics(
+                &moves,
+                &board,
+                &captured_pieces,
+                player,
+                depth,
+                None,
+            );
 
             // Update heuristics
             orderer.add_killer_move(moves[0].clone());
@@ -11739,9 +13496,13 @@ mod tests {
         }
 
         // Verify orderer is still functional
-        let test_moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, player, false),
-        ];
+        let test_moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            player,
+            false,
+        )];
         let result = orderer.order_moves(&test_moves);
         assert!(result.is_ok());
 
@@ -11766,9 +13527,13 @@ mod tests {
     #[test]
     fn test_edge_case_single_move() {
         let mut orderer = MoveOrdering::new();
-        let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-        ];
+        let moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        )];
 
         let result = orderer.order_moves(&moves);
         assert!(result.is_ok());
@@ -11789,7 +13554,7 @@ mod tests {
         orderer.record_heuristic_effectiveness("capture", true);
         orderer.record_heuristic_effectiveness("capture", true);
         orderer.record_heuristic_effectiveness("capture", false);
-        
+
         orderer.record_heuristic_effectiveness("history", true);
         orderer.record_heuristic_effectiveness("history", false);
 
@@ -11832,7 +13597,7 @@ mod tests {
         // Check that weights were adjusted
         let capture_metrics = orderer.get_heuristic_effectiveness("capture").unwrap();
         let history_metrics = orderer.get_heuristic_effectiveness("history").unwrap();
-        
+
         // Capture should have higher effectiveness, so it should get a higher weight
         if capture_metrics.effectiveness_score > history_metrics.effectiveness_score {
             assert!(orderer.config.weights.capture_weight >= initial_capture_weight);
@@ -11959,7 +13724,7 @@ mod tests {
     #[test]
     fn test_learning_configuration() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Test default configuration
         assert!(!orderer.config.learning_config.enable_learning);
         assert_eq!(orderer.config.learning_config.learning_rate, 0.1);
@@ -11979,9 +13744,15 @@ mod tests {
     fn test_regression_history_aging() {
         // Regression test for history aging
         let mut orderer = MoveOrdering::new();
-        
+
         // Add history values
-        let move1 = Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false);
+        let move1 = Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        );
         orderer.update_history(&move1, true, 5);
 
         // Get initial history value
@@ -11995,7 +13766,10 @@ mod tests {
 
         // History value should be reduced after aging
         let aged_value = orderer.get_history_score(&move1);
-        assert!(aged_value < initial_value, "History aging should reduce values");
+        assert!(
+            aged_value < initial_value,
+            "History aging should reduce values"
+        );
     }
 
     // ==================== Performance Tuning Tests ====================
@@ -12003,20 +13777,24 @@ mod tests {
     #[test]
     fn test_runtime_performance_tuning() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Create conditions for tuning
-        let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-        ];
-        
+        let moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        )];
+
         // Run some operations to generate statistics
         for _ in 0..50 {
             let _ = orderer.order_moves(&moves);
         }
-        
+
         // Apply runtime tuning
         let result = orderer.tune_performance_runtime();
-        
+
         // Verify result structure
         assert!(result.adjustments_made >= 0);
         assert!(result.cache_hit_rate_before >= 0.0);
@@ -12026,19 +13804,23 @@ mod tests {
     #[test]
     fn test_performance_monitoring() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Generate some statistics
-        let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-        ];
-        
+        let moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        )];
+
         for _ in 0..20 {
             let _ = orderer.order_moves(&moves);
         }
-        
+
         // Get monitoring report
         let report = orderer.monitor_performance();
-        
+
         // Verify report structure
         assert!(report.overall_health_score >= 0.0 && report.overall_health_score <= 100.0);
         assert!(report.cache_hit_rate >= 0.0);
@@ -12049,20 +13831,32 @@ mod tests {
     #[test]
     fn test_auto_optimization() {
         let mut orderer = MoveOrdering::new();
-        
+
         // Generate statistics
         let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-            Move::new_move(Position::new(1, 1), Position::new(2, 1), PieceType::Silver, Player::Black, false),
+            Move::new_move(
+                Position::new(0, 0),
+                Position::new(1, 0),
+                PieceType::Pawn,
+                Player::Black,
+                false,
+            ),
+            Move::new_move(
+                Position::new(1, 1),
+                Position::new(2, 1),
+                PieceType::Silver,
+                Player::Black,
+                false,
+            ),
         ];
-        
+
         for _ in 0..30 {
             let _ = orderer.order_moves(&moves);
         }
-        
+
         // Apply auto optimization
         let result = orderer.auto_optimize();
-        
+
         // Verify result
         assert!(result.optimizations_applied >= 0);
         assert!(result.performance_before.cache_hit_rate >= 0.0);
@@ -12072,10 +13866,10 @@ mod tests {
     #[test]
     fn test_tuning_recommendations() {
         let orderer = MoveOrdering::new();
-        
+
         // Get recommendations
         let recommendations = orderer.get_tuning_recommendations();
-        
+
         // Verify recommendations structure
         for rec in &recommendations {
             assert!(!rec.description.is_empty());
@@ -12090,15 +13884,15 @@ mod tests {
             avg_ordering_time_us: 80.0,
             memory_usage_bytes: 1000000,
         };
-        
+
         let snapshot2 = PerformanceSnapshot {
             cache_hit_rate: 75.0,
             avg_ordering_time_us: 60.0,
             memory_usage_bytes: 1200000,
         };
-        
+
         let comparison = MoveOrdering::compare_performance(&snapshot1, &snapshot2);
-        
+
         // Verify comparison
         assert_eq!(comparison.cache_hit_rate_change, 15.0);
         assert_eq!(comparison.ordering_time_change, -20.0);
@@ -12112,7 +13906,7 @@ mod tests {
         let board = crate::bitboards::BitboardBoard::new();
         let captured_pieces = crate::CapturedPieces::new();
         let player = Player::Black;
-        
+
         // Set up high PV hit rate scenario
         for i in 0..20 {
             let move_ = Move::new_move(
@@ -12120,16 +13914,16 @@ mod tests {
                 Position::new((i % 9) as u8, 1),
                 PieceType::Pawn,
                 player,
-                false
+                false,
             );
             orderer.update_pv_move(&board, &captured_pieces, player, i % 5, move_, 100);
         }
-        
+
         let initial_weight = orderer.get_weights().pv_move_weight;
-        
+
         // Apply weight adjustment
         let adjustments = orderer.adjust_weights_based_on_effectiveness();
-        
+
         // If PV hit rate is high, weight should increase (or stay same if already max)
         let final_weight = orderer.get_weights().pv_move_weight;
         assert!(final_weight >= initial_weight || initial_weight >= 12000);
@@ -12142,11 +13936,20 @@ mod tests {
         #[cfg(target_arch = "wasm32")]
         {
             let config = MoveOrdering::wasm_optimized_config();
-            
+
             // Verify WASM-specific settings
-            assert!(config.cache_config.max_cache_size <= 100000, "WASM cache should be limited");
-            assert!(config.cache_config.max_see_cache_size <= 50000, "WASM SEE cache should be limited");
-            assert!(config.killer_config.max_killer_moves_per_depth <= 2, "WASM killer moves should be limited");
+            assert!(
+                config.cache_config.max_cache_size <= 100000,
+                "WASM cache should be limited"
+            );
+            assert!(
+                config.cache_config.max_see_cache_size <= 50000,
+                "WASM SEE cache should be limited"
+            );
+            assert!(
+                config.killer_config.max_killer_moves_per_depth <= 2,
+                "WASM killer moves should be limited"
+            );
         }
     }
 
@@ -12155,20 +13958,26 @@ mod tests {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let config = MoveOrdering::native_optimized_config();
-            
+
             // Verify native-specific settings
-            assert!(config.cache_config.max_cache_size >= 100000, "Native cache should be larger");
-            assert!(config.performance_config.enable_performance_monitoring, "Native should enable monitoring");
+            assert!(
+                config.cache_config.max_cache_size >= 100000,
+                "Native cache should be larger"
+            );
+            assert!(
+                config.performance_config.enable_performance_monitoring,
+                "Native should enable monitoring"
+            );
         }
     }
 
     #[test]
     fn test_platform_detection() {
         let is_wasm = MoveOrdering::is_wasm_environment();
-        
+
         #[cfg(target_arch = "wasm32")]
         assert!(is_wasm, "Should detect WASM environment");
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         assert!(!is_wasm, "Should detect native environment");
     }
@@ -12176,24 +13985,36 @@ mod tests {
     #[test]
     fn test_platform_memory_limits() {
         let limits = MoveOrdering::get_platform_memory_limits();
-        
+
         // Verify limits are reasonable
         assert!(limits.max_total_memory_bytes > 0);
         assert!(limits.max_cache_size > 0);
         assert!(limits.max_see_cache_size > 0);
         assert!(limits.recommended_cache_size <= limits.max_cache_size);
         assert!(limits.recommended_see_cache_size <= limits.max_see_cache_size);
-        
+
         #[cfg(target_arch = "wasm32")]
         {
-            assert!(limits.max_total_memory_bytes <= 20 * 1024 * 1024, "WASM memory limit should be conservative");
-            assert!(limits.max_cache_size <= 100000, "WASM cache limit should be conservative");
+            assert!(
+                limits.max_total_memory_bytes <= 20 * 1024 * 1024,
+                "WASM memory limit should be conservative"
+            );
+            assert!(
+                limits.max_cache_size <= 100000,
+                "WASM cache limit should be conservative"
+            );
         }
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
-            assert!(limits.max_total_memory_bytes >= 50 * 1024 * 1024, "Native memory limit should be generous");
-            assert!(limits.max_cache_size >= 100000, "Native cache limit should be generous");
+            assert!(
+                limits.max_total_memory_bytes >= 50 * 1024 * 1024,
+                "Native memory limit should be generous"
+            );
+            assert!(
+                limits.max_cache_size >= 100000,
+                "Native cache limit should be generous"
+            );
         }
     }
 
@@ -12201,16 +14022,20 @@ mod tests {
     fn test_wasm_compatibility_time_source() {
         // Verify TimeSource is being used (WASM-compatible)
         let mut orderer = MoveOrdering::new();
-        
-        let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-        ];
-        
+
+        let moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        )];
+
         // This should not panic on WASM
         for _ in 0..10 {
             let _ = orderer.order_moves(&moves);
         }
-        
+
         // Verify timing statistics are tracked
         let stats = orderer.get_stats();
         assert!(stats.total_ordering_time_us >= 0);
@@ -12220,7 +14045,7 @@ mod tests {
     fn test_wasm_array_indexing() {
         // Verify array indexing is safe for WASM
         let mut orderer = MoveOrdering::new();
-        
+
         // Test with various positions to ensure no index out of bounds
         for row in 0..9 {
             for col in 0..9 {
@@ -12229,14 +14054,14 @@ mod tests {
                     Position::new((row + 1) % 9, (col + 1) % 9),
                     PieceType::Pawn,
                     Player::Black,
-                    false
+                    false,
                 );
-                
+
                 // This should not panic with index out of bounds
                 orderer.update_history_score(&move_, 3, None);
             }
         }
-        
+
         // Verify history table is populated
         let stats = orderer.get_stats();
         assert!(stats.history_updates > 0);
@@ -12245,20 +14070,24 @@ mod tests {
     #[test]
     fn test_platform_optimized_config() {
         let config = MoveOrdering::platform_optimized_config();
-        
+
         // Verify configuration is valid
         assert!(config.cache_config.max_cache_size > 0);
         assert!(config.cache_config.max_see_cache_size > 0);
         assert!(config.killer_config.max_killer_moves_per_depth > 0);
-        
+
         // Create orderer with platform config
         let orderer = MoveOrdering::with_config(config);
-        
+
         // Verify it works
-        let moves = vec![
-            Move::new_move(Position::new(0, 0), Position::new(1, 0), PieceType::Pawn, Player::Black, false),
-        ];
-        
+        let moves = vec![Move::new_move(
+            Position::new(0, 0),
+            Position::new(1, 0),
+            PieceType::Pawn,
+            Player::Black,
+            false,
+        )];
+
         let result = orderer.order_moves(&moves);
         assert!(result.is_ok());
     }
@@ -12274,22 +14103,26 @@ mod tests {
         let depth = 1;
 
         // Create mock book moves
-        let book_moves = vec![
-            crate::opening_book::BookMove {
-                from: Some(Position::new(6, 4)),
-                to: Position::new(5, 4),
-                piece_type: PieceType::Pawn,
-                is_drop: false,
-                is_promotion: false,
-                weight: 800,
-                evaluation: 50,
-                opening_name: Some("Standard Opening".to_string()),
-                move_notation: Some("P-76".to_string()),
-            },
-        ];
+        let book_moves = vec![crate::opening_book::BookMove {
+            from: Some(Position::new(6, 4)),
+            to: Position::new(5, 4),
+            piece_type: PieceType::Pawn,
+            is_drop: false,
+            is_promotion: false,
+            weight: 800,
+            evaluation: 50,
+            opening_name: Some("Standard Opening".to_string()),
+            move_notation: Some("P-76".to_string()),
+        }];
 
         // Integrate with opening book
-        let result = orderer.integrate_with_opening_book(&book_moves, &board, &captured_pieces, player, depth);
+        let result = orderer.integrate_with_opening_book(
+            &book_moves,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert!(result.is_ok());
 
         // Verify statistics
@@ -12312,7 +14145,7 @@ mod tests {
                 Position::new(3, 4),
                 PieceType::King,
                 player,
-                false
+                false,
             )),
             distance_to_mate: Some(5),
             moves_to_mate: Some(5),
@@ -12321,7 +14154,8 @@ mod tests {
         };
 
         // Integrate with tablebase
-        let result = orderer.integrate_with_tablebase(&tb_result, &board, &captured_pieces, player, depth);
+        let result =
+            orderer.integrate_with_tablebase(&tb_result, &board, &captured_pieces, player, depth);
         assert!(result.is_ok());
 
         // Verify statistics
@@ -12338,11 +14172,24 @@ mod tests {
         let depth = 3;
 
         let moves = vec![
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
-            Move::new_move(Position::new(6, 5), Position::new(5, 5), PieceType::Pawn, player, false),
+            Move::new_move(
+                Position::new(6, 4),
+                Position::new(5, 4),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
+            Move::new_move(
+                Position::new(6, 5),
+                Position::new(5, 5),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
         ];
 
-        let ordered = orderer.order_moves_for_analysis(&moves, &board, &captured_pieces, player, depth);
+        let ordered =
+            orderer.order_moves_for_analysis(&moves, &board, &captured_pieces, player, depth);
         assert_eq!(ordered.len(), moves.len());
 
         let adv_stats = orderer.get_advanced_integration_stats();
@@ -12358,15 +14205,41 @@ mod tests {
         let depth = 3;
 
         let moves = vec![
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
-            Move::new_move(Position::new(6, 5), Position::new(5, 5), PieceType::Pawn, player, false),
+            Move::new_move(
+                Position::new(6, 4),
+                Position::new(5, 4),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
+            Move::new_move(
+                Position::new(6, 5),
+                Position::new(5, 5),
+                PieceType::Pawn,
+                player,
+                false,
+            ),
         ];
 
         // Test with different time constraints
-        let ordered_low = orderer.order_moves_with_time_management(&moves, 500, &board, &captured_pieces, player, depth);
+        let ordered_low = orderer.order_moves_with_time_management(
+            &moves,
+            500,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert_eq!(ordered_low.len(), moves.len());
 
-        let ordered_high = orderer.order_moves_with_time_management(&moves, 10000, &board, &captured_pieces, player, depth);
+        let ordered_high = orderer.order_moves_with_time_management(
+            &moves,
+            10000,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
         assert_eq!(ordered_high.len(), moves.len());
     }
 
@@ -12378,14 +14251,39 @@ mod tests {
         let player = Player::Black;
         let depth = 3;
 
-        let moves = vec![
-            Move::new_move(Position::new(6, 4), Position::new(5, 4), PieceType::Pawn, player, false),
-        ];
+        let moves = vec![Move::new_move(
+            Position::new(6, 4),
+            Position::new(5, 4),
+            PieceType::Pawn,
+            player,
+            false,
+        )];
 
         // Test different game phases
-        let _ = orderer.order_moves_for_game_phase(&moves, GamePhase::Opening, &board, &captured_pieces, player, depth);
-        let _ = orderer.order_moves_for_game_phase(&moves, GamePhase::Middlegame, &board, &captured_pieces, player, depth);
-        let _ = orderer.order_moves_for_game_phase(&moves, GamePhase::Endgame, &board, &captured_pieces, player, depth);
+        let _ = orderer.order_moves_for_game_phase(
+            &moves,
+            GamePhase::Opening,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
+        let _ = orderer.order_moves_for_game_phase(
+            &moves,
+            GamePhase::Middlegame,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
+        let _ = orderer.order_moves_for_game_phase(
+            &moves,
+            GamePhase::Endgame,
+            &board,
+            &captured_pieces,
+            player,
+            depth,
+        );
 
         let adv_stats = orderer.get_advanced_integration_stats();
         assert_eq!(adv_stats.phase_specific_orderings, 3);

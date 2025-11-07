@@ -1,10 +1,10 @@
 //! Parallel initialization for magic bitboards
-//! 
+//!
 //! This module provides optimized initialization for magic tables.
 //! Note: Parallel execution requires the rayon dependency which is not currently enabled.
 //! For now, this provides optimized sequential initialization with progress tracking.
 
-use crate::types::{MagicTable, MagicError};
+use crate::types::{MagicError, MagicTable};
 
 // Note: Rayon not available, so we use sequential initialization
 // To enable parallel: add rayon = "1.8" to Cargo.toml dependencies
@@ -36,27 +36,27 @@ impl ParallelInitializer {
     }
 
     /// Set progress callback
-    pub fn with_progress_callback<F>(mut self, callback: F) -> Self 
+    pub fn with_progress_callback<F>(mut self, callback: F) -> Self
     where
-        F: Fn(f64) + Send + Sync + 'static
+        F: Fn(f64) + Send + Sync + 'static,
     {
         self.progress_callback = Some(Box::new(callback));
         self
     }
 
     /// Initialize magic table with progress tracking
-    /// 
+    ///
     /// Note: True parallel initialization requires rayon dependency.
     /// This version provides optimized sequential initialization with progress tracking.
     pub fn initialize_with_progress(&self) -> Result<MagicTable, MagicError> {
         // Create table with progress tracking
         let table = MagicTable::new()?;
-        
+
         // Report 100% complete
         if let Some(ref callback) = self.progress_callback {
             callback(1.0);
         }
-        
+
         Ok(table)
     }
 
@@ -99,11 +99,10 @@ mod tests {
 
     #[test]
     fn test_with_progress_callback() {
-        let initializer = ParallelInitializer::new()
-            .with_progress_callback(|progress| {
-                assert!(progress >= 0.0 && progress <= 1.0);
-            });
-        
+        let initializer = ParallelInitializer::new().with_progress_callback(|progress| {
+            assert!(progress >= 0.0 && progress <= 1.0);
+        });
+
         // Callback is set
         assert!(initializer.progress_callback.is_some());
     }

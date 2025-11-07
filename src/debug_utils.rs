@@ -1,7 +1,7 @@
 // Debug logging utilities for standalone environments
 
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 // Global debug flag - set to false to disable debug logging by default
 // Can be enabled via the USI "debug on" command
@@ -178,8 +178,13 @@ pub fn end_timing(key: &str, feature: &str) {
             if let Some(start_time) = context.remove(key) {
                 let elapsed_ms = (get_current_time_ms() - start_time) as u64;
                 let search_elapsed = get_search_elapsed_ms();
-                trace_log(feature, &format!("{} completed in {}ms (total: {}ms)", 
-                    key, elapsed_ms, search_elapsed));
+                trace_log(
+                    feature,
+                    &format!(
+                        "{} completed in {}ms (total: {}ms)",
+                        key, elapsed_ms, search_elapsed
+                    ),
+                );
             }
         }
     }
@@ -202,10 +207,10 @@ pub fn trace_log(feature: &str, message: &str) {
         // This allows compile-time removal of debug logging
         return;
     }
-    
+
     let search_elapsed = get_search_elapsed_ms();
     let formatted_message = format!("[{}] [{}ms] {}", feature, search_elapsed, message);
-    
+
     // Use the existing debug_log function which already works in WASM
     debug_log(&formatted_message);
 }
@@ -227,10 +232,10 @@ pub fn debug_log(message: &str) {
         // This allows compile-time removal of debug logging
         return;
     }
-    
+
     let search_elapsed = get_search_elapsed_ms();
     let formatted_message = format!("[{}ms] {}", search_elapsed, message);
-    
+
     eprintln!("DEBUG: {}", formatted_message);
 }
 
@@ -250,14 +255,17 @@ pub fn log_decision(feature: &str, decision: &str, reason: &str, value: Option<i
         // When verbose-debug feature is disabled, this function does nothing
         return;
     }
-    
+
     let value_str = if let Some(v) = value {
         format!(" (value: {})", v)
     } else {
         String::new()
     };
-    
-    trace_log(feature, &format!("DECISION: {} - {} {}", decision, reason, value_str));
+
+    trace_log(
+        feature,
+        &format!("DECISION: {} - {} {}", decision, reason, value_str),
+    );
 }
 
 /// Log move evaluation with context
@@ -276,8 +284,11 @@ pub fn log_move_eval(feature: &str, move_str: &str, score: i32, reason: &str) {
         // When verbose-debug feature is disabled, this function does nothing
         return;
     }
-    
-    trace_log(feature, &format!("MOVE_EVAL: {} -> {} ({})", move_str, score, reason));
+
+    trace_log(
+        feature,
+        &format!("MOVE_EVAL: {} -> {} ({})", move_str, score, reason),
+    );
 }
 
 /// Log search statistics
@@ -296,6 +307,12 @@ pub fn log_search_stats(feature: &str, depth: u8, nodes: u64, score: i32, pv: &s
         // When verbose-debug feature is disabled, this function does nothing
         return;
     }
-    
-    trace_log(feature, &format!("SEARCH_STATS: depth={} nodes={} score={} pv={}", depth, nodes, score, pv));
+
+    trace_log(
+        feature,
+        &format!(
+            "SEARCH_STATS: depth={} nodes={} score={} pv={}",
+            depth, nodes, score, pv
+        ),
+    );
 }

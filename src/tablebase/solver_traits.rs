@@ -1,107 +1,119 @@
 //! Traits and interfaces for endgame solvers
-//! 
+//!
 //! This module defines the common interface that all endgame solvers must implement.
 //! It provides a trait-based architecture that allows for easy extension and
 //! modular implementation of different endgame scenarios.
 
-use crate::types::{Player};
+use super::TablebaseResult;
+use crate::types::Player;
 use crate::BitboardBoard;
 use crate::CapturedPieces;
-use super::TablebaseResult;
 
 /// Trait that all endgame solvers must implement
-/// 
+///
 /// This trait provides a common interface for solving specific endgame positions.
 /// Each solver is responsible for recognizing positions it can handle and
 /// providing the optimal move for those positions.
 pub trait EndgameSolver: Send + Sync {
     /// Check if this solver can handle the given position
-    /// 
+    ///
     /// This method should quickly determine if the position matches the
     /// endgame pattern that this solver is designed to handle.
-    /// 
+    ///
     /// # Arguments
     /// * `board` - The current board position
     /// * `player` - The player to move
     /// * `captured_pieces` - The captured pieces for both players
-    /// 
+    ///
     /// # Returns
     /// `true` if this solver can handle the position, `false` otherwise
-    fn can_solve(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> bool;
-    
+    fn can_solve(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool;
+
     /// Solve the position and return the optimal move
-    /// 
+    ///
     /// This method should only be called if `can_solve()` returns `true`.
     /// It should calculate the optimal move for the position and return
     /// a complete `TablebaseResult` with move, outcome, and distance to mate.
-    /// 
+    ///
     /// # Arguments
     /// * `board` - The current board position
     /// * `player` - The player to move
     /// * `captured_pieces` - The captured pieces for both players
-    /// 
+    ///
     /// # Returns
     /// `Some(TablebaseResult)` if the position can be solved, `None` otherwise
-    fn solve(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> Option<TablebaseResult>;
-    
+    fn solve(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TablebaseResult>;
+
     /// Get the solver's priority (higher = more important)
-    /// 
+    ///
     /// When multiple solvers can handle the same position, the one with
     /// the highest priority will be used. This allows for more specific
     /// solvers to take precedence over general ones.
-    /// 
+    ///
     /// # Returns
     /// Priority value (0-255, higher is more important)
     fn priority(&self) -> u8;
-    
+
     /// Get the solver's name for debugging and statistics
-    /// 
+    ///
     /// This name will be used in debug output and statistics tracking.
-    /// 
+    ///
     /// # Returns
     /// A static string containing the solver's name
     fn name(&self) -> &'static str;
-    
+
     /// Check if the solver is enabled
-    /// 
+    ///
     /// This allows solvers to be temporarily disabled without removing
     /// them from the solver list.
-    /// 
+    ///
     /// # Returns
     /// `true` if the solver is enabled, `false` otherwise
     fn is_enabled(&self) -> bool {
         true
     }
-    
+
     /// Get the maximum depth this solver can handle
-    /// 
+    ///
     /// Some solvers may only work for positions within a certain
     /// distance to mate. This method returns the maximum depth
     /// (moves to mate) that this solver can handle.
-    /// 
+    ///
     /// # Returns
     /// Maximum depth, or `None` if there's no limit
     fn max_depth(&self) -> Option<u8> {
         None
     }
-    
+
     /// Get solver-specific configuration
-    /// 
+    ///
     /// This method can be used to provide solver-specific configuration
     /// information for debugging or optimization purposes.
-    /// 
+    ///
     /// # Returns
     /// A string containing configuration information
     fn get_config_info(&self) -> String {
-        format!("{} (priority: {}, enabled: {})", 
-                self.name(), 
-                self.priority(), 
-                self.is_enabled())
+        format!(
+            "{} (priority: {}, enabled: {})",
+            self.name(),
+            self.priority(),
+            self.is_enabled()
+        )
     }
 }
 
 /// Helper trait for common endgame solver functionality
-/// 
+///
 /// This trait provides common helper methods that many endgame solvers
 /// will find useful, such as piece counting and position validation.
 pub trait EndgameSolverHelper {
@@ -117,24 +129,32 @@ pub trait EndgameSolverHelper {
         }
         count
     }
-    
+
     /// Check if there are any captured pieces
     fn has_captured_pieces(&self, captured_pieces: &CapturedPieces) -> bool {
         !captured_pieces.black.is_empty() || !captured_pieces.white.is_empty()
     }
-    
+
     /// Check if the position has exactly the specified number of pieces
     fn has_exact_piece_count(&self, board: &BitboardBoard, count: u8) -> bool {
         self.count_pieces(board) == count
     }
-    
+
     /// Check if the position has no captured pieces and exact piece count
-    fn is_clean_endgame(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces, piece_count: u8) -> bool {
+    fn is_clean_endgame(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        piece_count: u8,
+    ) -> bool {
         !self.has_captured_pieces(captured_pieces) && self.has_exact_piece_count(board, piece_count)
     }
-    
+
     /// Extract all pieces from the board as a vector
-    fn extract_pieces(&self, board: &BitboardBoard) -> Vec<(crate::types::Piece, crate::types::Position)> {
+    fn extract_pieces(
+        &self,
+        board: &BitboardBoard,
+    ) -> Vec<(crate::types::Piece, crate::types::Position)> {
         let mut pieces = Vec::new();
         for row in 0..9 {
             for col in 0..9 {
@@ -145,9 +165,14 @@ pub trait EndgameSolverHelper {
         }
         pieces
     }
-    
+
     /// Find pieces of a specific type and player
-    fn find_pieces(&self, board: &BitboardBoard, piece_type: crate::types::PieceType, player: Player) -> Vec<crate::types::Position> {
+    fn find_pieces(
+        &self,
+        board: &BitboardBoard,
+        piece_type: crate::types::PieceType,
+        player: Player,
+    ) -> Vec<crate::types::Position> {
         let mut positions = Vec::new();
         for row in 0..9 {
             for col in 0..9 {
@@ -160,15 +185,17 @@ pub trait EndgameSolverHelper {
         }
         positions
     }
-    
+
     /// Calculate the Manhattan distance between two positions
     fn manhattan_distance(&self, pos1: crate::types::Position, pos2: crate::types::Position) -> u8 {
         ((pos1.row as i8 - pos2.row as i8).abs() + (pos1.col as i8 - pos2.col as i8).abs()) as u8
     }
-    
+
     /// Calculate the Chebyshev distance (max of row and column differences) between two positions
     fn chebyshev_distance(&self, pos1: crate::types::Position, pos2: crate::types::Position) -> u8 {
-        ((pos1.row as i8 - pos2.row as i8).abs().max((pos1.col as i8 - pos2.col as i8).abs())) as u8
+        ((pos1.row as i8 - pos2.row as i8)
+            .abs()
+            .max((pos1.col as i8 - pos2.col as i8).abs())) as u8
     }
 }
 
@@ -176,48 +203,61 @@ pub trait EndgameSolverHelper {
 impl<T> EndgameSolverHelper for T {}
 
 /// Trait for solvers that can provide additional analysis
-/// 
+///
 /// Some solvers may be able to provide additional analysis beyond just
 /// the optimal move, such as alternative lines or position evaluation.
 pub trait AdvancedEndgameSolver: EndgameSolver {
     /// Get alternative moves for the position
-    /// 
+    ///
     /// This method can provide alternative moves that are also good,
     /// which can be useful for move ordering or analysis.
-    /// 
+    ///
     /// # Arguments
     /// * `board` - The current board position
     /// * `player` - The player to move
     /// * `captured_pieces` - The captured pieces for both players
-    /// 
+    ///
     /// # Returns
     /// Vector of alternative moves with their scores
-    fn get_alternative_moves(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> Vec<(crate::types::Move, i32)> {
+    fn get_alternative_moves(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> Vec<(crate::types::Move, i32)> {
         // Default implementation returns empty vector
         Vec::new()
     }
-    
+
     /// Analyze the position and provide detailed information
-    /// 
+    ///
     /// This method can provide detailed analysis of the position,
     /// including tactical themes, strategic considerations, etc.
-    /// 
+    ///
     /// # Arguments
     /// * `board` - The current board position
     /// * `player` - The player to move
     /// * `captured_pieces` - The captured pieces for both players
-    /// 
+    ///
     /// # Returns
     /// String containing detailed analysis
-    fn analyze_position(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> String {
-        format!("Position analysis by {}: Basic analysis available", self.name())
+    fn analyze_position(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> String {
+        format!(
+            "Position analysis by {}: Basic analysis available",
+            self.name()
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Player, Position, PieceType, Piece, Move};
+    use crate::types::{Move, Piece, PieceType, Player, Position};
     use crate::BitboardBoard;
     use crate::CapturedPieces;
 
@@ -258,11 +298,21 @@ mod tests {
     }
 
     impl EndgameSolver for MockSolver {
-        fn can_solve(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> bool {
+        fn can_solve(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> bool {
             self.can_solve_result
         }
 
-        fn solve(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> Option<TablebaseResult> {
+        fn solve(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> Option<TablebaseResult> {
             self.solve_result.clone()
         }
 
@@ -280,11 +330,21 @@ mod tests {
     }
 
     impl AdvancedEndgameSolver for MockSolver {
-        fn get_alternative_moves(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> Vec<(crate::types::Move, i32)> {
+        fn get_alternative_moves(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> Vec<(crate::types::Move, i32)> {
             vec![]
         }
 
-        fn analyze_position(&self, _board: &BitboardBoard, _player: Player, _captured_pieces: &CapturedPieces) -> String {
+        fn analyze_position(
+            &self,
+            _board: &BitboardBoard,
+            _player: Player,
+            _captured_pieces: &CapturedPieces,
+        ) -> String {
             format!("Mock analysis by {}", self.name)
         }
     }
@@ -304,8 +364,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
         let player = Player::Black;
 
-        let solver = MockSolver::new("TestSolver", 100)
-            .with_can_solve(true);
+        let solver = MockSolver::new("TestSolver", 100).with_can_solve(true);
 
         assert!(solver.can_solve(&board, player, &captured_pieces));
 
@@ -331,8 +390,7 @@ mod tests {
         );
 
         let result = TablebaseResult::win(Some(move_), 5);
-        let solver = MockSolver::new("TestSolver", 100)
-            .with_solve_result(Some(result));
+        let solver = MockSolver::new("TestSolver", 100).with_solve_result(Some(result));
 
         let solve_result = solver.solve(&board, player, &captured_pieces);
         assert!(solve_result.is_some());

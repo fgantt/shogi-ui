@@ -1,21 +1,19 @@
-use shogi_engine::search::SearchEngine;
-use shogi_engine::types::{
-    IIDConfig, IIDStats, IIDPerformanceMetrics, IIDDepthStrategy, IIDPreset,
-    EngineConfig, EnginePreset, Player, Move, Position, PieceType, CapturedPieces,
-    IIDPVResult, MultiPVAnalysis, TacticalTheme, PositionComplexity,
-    IIDProbeResult, PromisingMove, TacticalIndicators,
-    IIDPerformanceBenchmark, IIDPerformanceAnalysis,
-    StrengthTestPosition, IIDStrengthTestResult, PositionStrengthResult,
-    GameResult, PositionDifficulty, ConfidenceLevel, StrengthTestAnalysis,
-    TranspositionEntry, TranspositionFlag
-};
 use shogi_engine::bitboards::BitboardBoard;
+use shogi_engine::search::SearchEngine;
 use shogi_engine::time_utils::TimeSource;
+use shogi_engine::types::{
+    CapturedPieces, ConfidenceLevel, EngineConfig, EnginePreset, GameResult, IIDConfig,
+    IIDDepthStrategy, IIDPVResult, IIDPerformanceAnalysis, IIDPerformanceBenchmark,
+    IIDPerformanceMetrics, IIDPreset, IIDProbeResult, IIDStats, IIDStrengthTestResult, Move,
+    MultiPVAnalysis, PieceType, Player, Position, PositionComplexity, PositionDifficulty,
+    PositionStrengthResult, PromisingMove, StrengthTestAnalysis, StrengthTestPosition,
+    TacticalIndicators, TacticalTheme, TranspositionEntry, TranspositionFlag,
+};
 
 #[test]
 fn test_iid_config_default() {
     let config = IIDConfig::default();
-    
+
     assert!(config.enabled);
     assert_eq!(config.min_depth, 4);
     assert_eq!(config.iid_depth_ply, 2);
@@ -29,29 +27,29 @@ fn test_iid_config_default() {
 #[test]
 fn test_iid_config_validation() {
     let mut config = IIDConfig::default();
-    
+
     // Valid configuration should pass
     assert!(config.validate().is_ok());
-    
+
     // Test invalid min_depth
     config.min_depth = 1;
     assert!(config.validate().is_err());
     config.min_depth = 4; // Reset
-    
+
     // Test invalid iid_depth_ply
     config.iid_depth_ply = 0;
     assert!(config.validate().is_err());
     config.iid_depth_ply = 6;
     assert!(config.validate().is_err());
     config.iid_depth_ply = 2; // Reset
-    
+
     // Test invalid max_legal_moves
     config.max_legal_moves = 0;
     assert!(config.validate().is_err());
     config.max_legal_moves = 101;
     assert!(config.validate().is_err());
     config.max_legal_moves = 35; // Reset
-    
+
     // Test invalid time_overhead_threshold
     config.time_overhead_threshold = -0.1;
     assert!(config.validate().is_err());
@@ -66,12 +64,12 @@ fn test_iid_config_presets() {
     let balanced_config = EngineConfig::get_preset(EnginePreset::Balanced);
     assert!(balanced_config.iid.enabled);
     assert_eq!(balanced_config.iid.min_depth, 4);
-    
+
     // Test Aggressive preset
     let aggressive_config = EngineConfig::get_preset(EnginePreset::Aggressive);
     assert!(aggressive_config.iid.enabled);
     assert_eq!(aggressive_config.iid.min_depth, 3);
-    
+
     // Test Conservative preset
     let conservative_config = EngineConfig::get_preset(EnginePreset::Conservative);
     assert!(conservative_config.iid.enabled);
@@ -81,7 +79,7 @@ fn test_iid_config_presets() {
 #[test]
 fn test_iid_stats_default() {
     let stats = IIDStats::default();
-    
+
     assert_eq!(stats.iid_searches_performed, 0);
     assert_eq!(stats.iid_move_first_improved_alpha, 0);
     assert_eq!(stats.iid_move_caused_cutoff, 0);
@@ -112,7 +110,7 @@ fn test_iid_stats_default() {
 #[test]
 fn test_iid_stats_calculations() {
     let mut stats = IIDStats::default();
-    
+
     // Simulate some IID activity
     stats.iid_searches_performed = 100;
     stats.iid_move_first_improved_alpha = 30;
@@ -124,19 +122,19 @@ fn test_iid_stats_calculations() {
     stats.positions_skipped_move_count = 5;
     stats.positions_skipped_time_pressure = 2;
     stats.iid_searches_failed = 5;
-    
+
     // Test efficiency rate
     assert_eq!(stats.efficiency_rate(), 30.0); // 30/100 * 100
-    
+
     // Test cutoff rate
     assert_eq!(stats.cutoff_rate(), 15.0); // 15/100 * 100
-    
+
     // Test average nodes per IID
     assert_eq!(stats.average_nodes_per_iid(), 50.0); // 5000/100
-    
+
     // Test average time per IID
     assert_eq!(stats.average_time_per_iid(), 20.0); // 2000/100
-    
+
     // Test success rate
     assert_eq!(stats.success_rate(), 95.0); // (100-5)/100 * 100
 }
@@ -153,9 +151,9 @@ fn test_iid_performance_metrics() {
     stats.positions_skipped_depth = 8;
     stats.positions_skipped_move_count = 4;
     stats.positions_skipped_time_pressure = 3;
-    
+
     let metrics = IIDPerformanceMetrics::from_stats(&stats, 5000); // 5 second total search
-    
+
     assert_eq!(metrics.iid_efficiency, 40.0); // 20/50 * 100
     assert_eq!(metrics.cutoff_rate, 20.0); // 10/50 * 100
     assert_eq!(metrics.overhead_percentage, 20.0); // 1000/5000 * 100
@@ -168,14 +166,14 @@ fn test_iid_performance_metrics() {
 #[test]
 fn test_iid_stats_total_search_time_tracking() {
     let mut stats = IIDStats::default();
-    
+
     // Verify default value is 0
     assert_eq!(stats.total_search_time_ms, 0);
-    
+
     // Set total search time
     stats.total_search_time_ms = 5000;
     assert_eq!(stats.total_search_time_ms, 5000);
-    
+
     // Test reset
     stats.reset();
     assert_eq!(stats.total_search_time_ms, 0);
@@ -186,17 +184,17 @@ fn test_iid_overhead_percentage_calculation() {
     let mut stats = IIDStats::default();
     stats.iid_time_ms = 500; // 500ms spent in IID searches
     stats.total_search_time_ms = 5000; // 5000ms total search time
-    
+
     let metrics = IIDPerformanceMetrics::from_stats(&stats, stats.total_search_time_ms);
-    
+
     // Overhead should be 500/5000 * 100 = 10%
     assert!((metrics.overhead_percentage - 10.0).abs() < 0.01);
-    
+
     // Test edge case: zero total search time
     stats.total_search_time_ms = 0;
     let metrics_zero = IIDPerformanceMetrics::from_stats(&stats, 0);
     assert_eq!(metrics_zero.overhead_percentage, 0.0);
-    
+
     // Test typical overhead range (5-15%)
     stats.iid_time_ms = 750;
     stats.total_search_time_ms = 5000;
@@ -209,19 +207,19 @@ fn test_iid_overhead_percentage_calculation() {
 #[test]
 fn test_get_iid_performance_metrics_uses_actual_time() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set up test statistics
     engine.iid_stats.iid_time_ms = 1000;
     engine.iid_stats.total_search_time_ms = 10000; // 10 seconds total search time
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Verify overhead calculation uses actual tracked time, not placeholder
     // 1000/10000 * 100 = 10%
     assert!((metrics.overhead_percentage - 10.0).abs() < 0.01);
-    
+
     // Test with different values
     engine.iid_stats.iid_time_ms = 500;
     engine.iid_stats.total_search_time_ms = 2000;
@@ -233,20 +231,20 @@ fn test_get_iid_performance_metrics_uses_actual_time() {
 #[test]
 fn test_iid_depth_strategy() {
     let config = IIDConfig::default();
-    
+
     // Test Fixed strategy
     let mut config_fixed = config.clone();
     config_fixed.depth_strategy = IIDDepthStrategy::Fixed;
     config_fixed.iid_depth_ply = 3;
-    
+
     // Test Relative strategy
     let mut config_relative = config.clone();
     config_relative.depth_strategy = IIDDepthStrategy::Relative;
-    
+
     // Test Adaptive strategy
     let mut config_adaptive = config.clone();
     config_adaptive.depth_strategy = IIDDepthStrategy::Adaptive;
-    
+
     // All should be valid
     assert!(config_fixed.validate().is_ok());
     assert!(config_relative.validate().is_ok());
@@ -256,16 +254,16 @@ fn test_iid_depth_strategy() {
 #[test]
 fn test_search_engine_iid_configuration() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test default IID configuration
     let config = engine.get_iid_config();
     assert!(config.enabled);
     assert_eq!(config.min_depth, 4);
-    
+
     // Test getting IID stats
     let stats = engine.get_iid_stats();
     assert_eq!(stats.iid_searches_performed, 0);
-    
+
     // Test getting performance metrics
     let metrics = engine.get_iid_performance_metrics();
     assert_eq!(metrics.iid_efficiency, 0.0);
@@ -274,22 +272,22 @@ fn test_search_engine_iid_configuration() {
 #[test]
 fn test_search_engine_iid_config_update() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Create custom IID config
     let mut custom_config = IIDConfig::default();
     custom_config.enabled = false;
     custom_config.min_depth = 6;
     custom_config.iid_depth_ply = 3;
-    
+
     // Update configuration
     assert!(engine.update_iid_config(custom_config.clone()).is_ok());
-    
+
     // Verify configuration was updated
     let config = engine.get_iid_config();
     assert!(!config.enabled);
     assert_eq!(config.min_depth, 6);
     assert_eq!(config.iid_depth_ply, 3);
-    
+
     // Test invalid configuration
     custom_config.min_depth = 1; // Invalid
     assert!(engine.update_iid_config(custom_config).is_err());
@@ -298,14 +296,14 @@ fn test_search_engine_iid_config_update() {
 #[test]
 fn test_search_engine_iid_stats_reset() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test that stats start at zero
     assert_eq!(engine.get_iid_stats().iid_searches_performed, 0);
     assert_eq!(engine.get_iid_stats().iid_move_first_improved_alpha, 0);
-    
+
     // Reset stats (should remain at zero)
     engine.reset_iid_stats();
-    
+
     // Verify stats remain at zero
     assert_eq!(engine.get_iid_stats().iid_searches_performed, 0);
     assert_eq!(engine.get_iid_stats().iid_move_first_improved_alpha, 0);
@@ -315,13 +313,13 @@ fn test_search_engine_iid_stats_reset() {
 fn test_engine_config_iid_integration() {
     // Test that IID is properly integrated into EngineConfig
     let config = EngineConfig::default();
-    
+
     assert!(config.iid.enabled);
     assert_eq!(config.iid.min_depth, 4);
-    
+
     // Test configuration validation includes IID
     assert!(config.validate().is_ok());
-    
+
     // Test configuration summary includes IID
     let summary = config.summary();
     assert!(summary.contains("IID"));
@@ -341,7 +339,7 @@ fn test_move_creation_for_iid_tests() {
         is_recapture: false,
         player: Player::Black,
     };
-    
+
     let move2 = Move {
         from: Some(Position { row: 6, col: 3 }),
         to: Position { row: 5, col: 3 },
@@ -353,11 +351,11 @@ fn test_move_creation_for_iid_tests() {
         is_recapture: false,
         player: Player::Black,
     };
-    
+
     // Test move equality
     assert_ne!(move1.from, move2.from);
     assert_ne!(move1.to, move2.to);
-    
+
     // Test move creation
     assert!(move1.from.is_some());
     assert!(move2.from.is_some());
@@ -370,7 +368,7 @@ fn test_board_creation_for_iid_tests() {
     // Test creating boards for IID testing
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Basic board creation should work
     assert!(board.to_fen(Player::Black, &captured_pieces).len() > 0);
 }
@@ -379,11 +377,11 @@ fn test_board_creation_for_iid_tests() {
 fn test_time_source_for_iid_tests() {
     // Test time source for IID timing tests
     let start_time = TimeSource::now();
-    
+
     // Basic time source should work
     let elapsed: u32 = start_time.elapsed_ms();
     assert!(elapsed >= 0);
-    
+
     // Test time pressure detection
     let time_limit_ms: u32 = 1000;
     let remaining = time_limit_ms.saturating_sub(elapsed);
@@ -395,20 +393,17 @@ fn test_time_source_for_iid_tests() {
 #[test]
 fn test_should_apply_iid_disabled() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Disable IID
     let mut config = engine.get_iid_config().clone();
     config.enabled = false;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // Should not apply IID when disabled
     assert!(!engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000));
 }
@@ -416,18 +411,15 @@ fn test_should_apply_iid_disabled() {
 #[test]
 fn test_should_apply_iid_insufficient_depth() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // Should not apply IID at depth 2 (less than min_depth 4)
     assert!(!engine.should_apply_iid(2, None, &legal_moves, &start_time, 1000));
-    
+
     // Should apply IID at depth 4 (equals min_depth)
     assert!(engine.should_apply_iid(4, None, &legal_moves, &start_time, 1000));
 }
@@ -435,17 +427,14 @@ fn test_should_apply_iid_insufficient_depth() {
 #[test]
 fn test_should_apply_iid_with_tt_move() {
     let mut engine = SearchEngine::new(None, 64);
-    
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
     let tt_move = Some(create_test_move(6, 4, 5, 4));
-    
+
     // Should not apply IID when TT move exists
     assert!(!engine.should_apply_iid(5, tt_move.as_ref(), &legal_moves, &start_time, 1000));
-    
+
     // Should apply IID when no TT move
     assert!(engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000));
 }
@@ -453,45 +442,47 @@ fn test_should_apply_iid_with_tt_move() {
 #[test]
 fn test_should_apply_iid_too_many_moves() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     let start_time = TimeSource::now();
-    
+
     // Create many legal moves (more than max_legal_moves = 35)
     let mut legal_moves = Vec::new();
     for i in 0..40 {
         legal_moves.push(create_test_move(6, (i % 9) as u8, 5, (i % 9) as u8));
     }
-    
+
     // Should not apply IID when too many moves
     assert!(!engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000));
-    
+
     // Should apply IID when reasonable number of moves
-    let legal_moves_small = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves_small = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     assert!(engine.should_apply_iid(5, None, &legal_moves_small, &start_time, 1000));
 }
 
 #[test]
 fn test_should_apply_iid_time_pressure() {
     let mut engine = SearchEngine::new(None, 64);
-    
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
-    
+
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
+
     // Simulate time pressure by using a very small time limit
     let start_time = TimeSource::now();
     let time_limit_ms = 1; // Very small time limit
-    
+
     // Wait a bit to simulate time pressure
     std::thread::sleep(std::time::Duration::from_millis(10));
-    
+
     // Should not apply IID in time pressure (if time pressure detection is enabled)
     // Note: This test might be flaky due to timing, but it tests the logic
-    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, time_limit_ms, None, None);
+    let result = engine.should_apply_iid(
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        time_limit_ms,
+        None,
+        None,
+    );
     // The result depends on timing, so we just verify the function doesn't panic
     assert!(result == true || result == false);
 }
@@ -499,13 +490,10 @@ fn test_should_apply_iid_time_pressure() {
 #[test]
 fn test_should_apply_iid_quiescence_depth() {
     let mut engine = SearchEngine::new(None, 64);
-    
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // Should not apply IID at depth 0 (quiescence search)
     assert!(!engine.should_apply_iid(0, None, &legal_moves, &start_time, 1000));
 }
@@ -513,14 +501,14 @@ fn test_should_apply_iid_quiescence_depth() {
 #[test]
 fn test_should_apply_iid_ideal_conditions() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     let legal_moves = vec![
         create_test_move(6, 4, 5, 4),
         create_test_move(6, 3, 5, 3),
         create_test_move(6, 2, 5, 2),
     ];
     let start_time = TimeSource::now();
-    
+
     // Ideal conditions: enabled, sufficient depth, no TT move, reasonable move count, no time pressure
     assert!(engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000));
 }
@@ -530,13 +518,13 @@ fn test_should_apply_iid_ideal_conditions() {
 #[test]
 fn test_calculate_iid_depth_fixed_strategy() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set Fixed strategy with iid_depth_ply = 3
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Fixed;
     config.iid_depth_ply = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     // Fixed strategy should always return the configured iid_depth_ply
     assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 3);
     assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 3);
@@ -547,12 +535,12 @@ fn test_calculate_iid_depth_fixed_strategy() {
 #[test]
 fn test_calculate_iid_depth_relative_strategy() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set Relative strategy
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config).unwrap();
-    
+
     // Relative strategy should return depth - 2, but minimum of 2
     assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 3); // 5 - 2 = 3
     assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 8); // 10 - 2 = 8
@@ -564,12 +552,12 @@ fn test_calculate_iid_depth_relative_strategy() {
 #[test]
 fn test_calculate_iid_depth_adaptive_strategy() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set Adaptive strategy
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config).unwrap();
-    
+
     // Adaptive strategy returns base_depth: 3 if main_depth > 6, else 2
     assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
     assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 3); // main_depth > 6, so base_depth = 3
@@ -585,40 +573,40 @@ fn test_calculate_iid_depth_adaptive_strategy() {
 #[test]
 fn test_calculate_iid_depth_edge_cases() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test with depth 0 (should not happen in practice, but test robustness)
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config).unwrap();
-    
+
     assert_eq!(engine.calculate_iid_depth(0, None, None, None, None), 2); // 0 - 2 = -2, but minimum is 2
-    
+
     // Test with very large depth
     let mut config2 = engine.get_iid_config().clone();
     config2.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config2).unwrap();
-    
+
     assert_eq!(engine.calculate_iid_depth(255, None, None, None, None), 3); // 255 > 6, so base_depth = 3
 }
 
 #[test]
 fn test_calculate_iid_depth_strategy_switching() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test switching between strategies
     let mut config = engine.get_iid_config().clone();
-    
+
     // Fixed strategy
     config.depth_strategy = IIDDepthStrategy::Fixed;
     config.iid_depth_ply = 4;
     engine.update_iid_config(config.clone()).unwrap();
     assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 4);
-    
+
     // Relative strategy
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config.clone()).unwrap();
     assert_eq!(engine.calculate_iid_depth(8, None, None, None, None), 6); // 8 - 2 = 6
-    
+
     // Adaptive strategy
     config.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config).unwrap();
@@ -628,12 +616,12 @@ fn test_calculate_iid_depth_strategy_switching() {
 #[test]
 fn test_calculate_iid_depth_default_config() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Default config should use Fixed strategy with iid_depth_ply = 2
     let config = engine.get_iid_config();
     assert_eq!(config.depth_strategy, IIDDepthStrategy::Fixed);
     assert_eq!(config.iid_depth_ply, 2);
-    
+
     // Should return 2 for any depth
     assert_eq!(engine.calculate_iid_depth(5, None, None, None, None), 2);
     assert_eq!(engine.calculate_iid_depth(10, None, None, None, None), 2);
@@ -649,26 +637,26 @@ fn test_perform_iid_search_basic() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test basic IID search - now returns (score, Option<Move>) tuple
     let (score, result) = engine.perform_iid_search(
         &mut board,
         &captured_pieces,
         Player::Black,
-        2, // iid_depth
+        2,     // iid_depth
         -1000, // alpha
-        1000, // beta
+        1000,  // beta
         &start_time,
         1000, // time_limit_ms
-        &mut history
+        &mut history,
     );
-    
+
     // IID search should complete without panicking
     // Result may or may not be Some(Move) depending on position
     assert!(result.is_none() || result.is_some());
     // Score should be a reasonable value
     assert!(score >= -10000 && score <= 10000);
-    
+
     // Verify IID statistics were updated
     let stats = engine.get_iid_stats();
     assert!(stats.total_iid_nodes >= 0);
@@ -682,7 +670,7 @@ fn test_perform_iid_search_with_initial_position() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test IID search from initial position - returns (score, Option<Move>)
     let (score, result) = engine.perform_iid_search(
         &mut board,
@@ -693,13 +681,13 @@ fn test_perform_iid_search_with_initial_position() {
         1000,
         &start_time,
         500, // Short time limit
-        &mut history
+        &mut history,
     );
-    
+
     // Should complete successfully
     assert!(result.is_none() || result.is_some());
     assert!(score >= -10000 && score <= 10000);
-    
+
     // Verify some nodes were searched
     let stats = engine.get_iid_stats();
     assert!(stats.total_iid_nodes >= 0);
@@ -712,7 +700,7 @@ fn test_perform_iid_search_time_limit() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test with very short time limit - returns (score, Option<Move>)
     let (score, result) = engine.perform_iid_search(
         &mut board,
@@ -723,13 +711,13 @@ fn test_perform_iid_search_time_limit() {
         1000,
         &start_time,
         1, // Very short time limit (1ms)
-        &mut history
+        &mut history,
     );
-    
+
     // Should handle time limit gracefully
     assert!(result.is_none() || result.is_some());
     assert!(score >= -10000 && score <= 10000);
-    
+
     // Should not take too long (time limit should be respected)
     let elapsed = start_time.elapsed_ms();
     assert!(elapsed < 100); // Should complete quickly due to time limit
@@ -742,7 +730,7 @@ fn test_perform_iid_search_different_depths() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test with different IID depths - returns (score, Option<Move>)
     for depth in 1..=3 {
         let (score, result) = engine.perform_iid_search(
@@ -754,14 +742,14 @@ fn test_perform_iid_search_different_depths() {
             1000,
             &start_time,
             1000,
-            &mut history
+            &mut history,
         );
-        
+
         // Should complete successfully for all depths
         assert!(result.is_none() || result.is_some());
         assert!(score >= -10000 && score <= 10000);
     }
-    
+
     // Verify multiple IID searches were performed
     let stats = engine.get_iid_stats();
     assert!(stats.total_iid_nodes >= 0);
@@ -774,7 +762,7 @@ fn test_perform_iid_search_alpha_beta_window() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test with narrow alpha-beta window (null window) - returns (score, Option<Move>)
     let (score, result) = engine.perform_iid_search(
         &mut board,
@@ -785,9 +773,9 @@ fn test_perform_iid_search_alpha_beta_window() {
         1, // beta = 1 (very narrow window)
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Should complete successfully even with narrow window
     assert!(result.is_none() || result.is_some());
     assert!(score >= -10000 && score <= 10000);
@@ -801,7 +789,7 @@ fn test_perform_iid_search_history_handling() {
     let start_time = TimeSource::now();
     // Task 2.0: History is now Vec<u64> (hash-based), not Vec<String>
     let mut history = Vec::new();
-    
+
     // Task 2.0: Test IID search with existing history - returns (score, Option<Move>)
     let (score, result) = engine.perform_iid_search(
         &mut board,
@@ -812,13 +800,13 @@ fn test_perform_iid_search_history_handling() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Should complete successfully
     assert!(result.is_none() || result.is_some());
     assert!(score >= -10000 && score <= 10000);
-    
+
     // History should be managed properly (may be modified during search)
     // We just verify the function doesn't panic with existing history
 }
@@ -830,9 +818,9 @@ fn test_perform_iid_search_statistics_tracking() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     let initial_stats = engine.get_iid_stats().clone();
-    
+
     // Task 2.0: Perform IID search - returns (score, Option<Move>)
     let (score, result) = engine.perform_iid_search(
         &mut board,
@@ -843,14 +831,14 @@ fn test_perform_iid_search_statistics_tracking() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Verify statistics were updated
     let final_stats = engine.get_iid_stats();
     assert!(final_stats.total_iid_nodes >= initial_stats.total_iid_nodes);
     assert!(final_stats.iid_time_ms >= initial_stats.iid_time_ms);
-    
+
     // Should complete without panicking
     assert!(result.is_none() || result.is_some());
     assert!(score >= -10000 && score <= 10000);
@@ -862,23 +850,23 @@ fn test_perform_iid_search_statistics_tracking() {
 fn test_move_ordering_iid_priority() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Create test moves
     let move1 = create_test_move(6, 4, 5, 4);
     let move2 = create_test_move(6, 3, 5, 3);
     let move3 = create_test_move(6, 2, 5, 2);
-    
+
     let moves = vec![move1.clone(), move2.clone(), move3.clone()];
-    
+
     // Test without IID move - should use standard ordering
     let sorted_no_iid = engine.sort_moves(&moves, &board, None);
     assert_eq!(sorted_no_iid.len(), 3);
-    
+
     // Test with IID move - IID move should be first
     let sorted_with_iid = engine.sort_moves(&moves, &board, Some(&move2));
     assert_eq!(sorted_with_iid.len(), 3);
     assert!(engine.moves_equal(&sorted_with_iid[0], &move2));
-    
+
     // Test with different IID move
     let sorted_with_different_iid = engine.sort_moves(&moves, &board, Some(&move3));
     assert_eq!(sorted_with_different_iid.len(), 3);
@@ -889,19 +877,19 @@ fn test_move_ordering_iid_priority() {
 fn test_move_ordering_tt_move_priority() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Create test moves
     let move1 = create_test_move(6, 4, 5, 4);
     let move2 = create_test_move(6, 3, 5, 3);
     let move3 = create_test_move(6, 2, 5, 2);
-    
+
     let moves = vec![move1.clone(), move2.clone(), move3.clone()];
-    
+
     // Test move scoring with TT move (no IID move)
     let score1 = engine.score_move(&move1, &board, None);
     let score2 = engine.score_move(&move2, &board, None);
     let score3 = engine.score_move(&move3, &board, None);
-    
+
     // All moves should have standard scores (no IID or TT move)
     assert!(score1 >= 0);
     assert!(score2 >= 0);
@@ -912,18 +900,18 @@ fn test_move_ordering_tt_move_priority() {
 fn test_move_ordering_iid_vs_tt_priority() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Create test moves
     let move1 = create_test_move(6, 4, 5, 4);
     let move2 = create_test_move(6, 3, 5, 3);
     let move3 = create_test_move(6, 2, 5, 2);
-    
+
     let moves = vec![move1.clone(), move2.clone(), move3.clone()];
-    
+
     // Test that IID move gets higher priority than standard moves
     let iid_score = engine.score_move(&move1, &board, Some(&move1));
     let standard_score = engine.score_move(&move2, &board, Some(&move1));
-    
+
     // IID move should have maximum score
     assert_eq!(iid_score, i32::MAX);
     // Standard move should have lower score
@@ -934,25 +922,25 @@ fn test_move_ordering_iid_vs_tt_priority() {
 fn test_move_ordering_multiple_moves() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Create multiple test moves
     let mut moves = Vec::new();
     for i in 0..10 {
         moves.push(create_test_move(6, (i % 9) as u8, 5, (i % 9) as u8));
     }
-    
+
     // Test sorting without IID move
     let sorted_no_iid = engine.sort_moves(&moves, &board, None);
     assert_eq!(sorted_no_iid.len(), 10);
-    
+
     // Test sorting with IID move (choose middle move as IID move)
     let iid_move = &moves[5];
     let sorted_with_iid = engine.sort_moves(&moves, &board, Some(iid_move));
     assert_eq!(sorted_with_iid.len(), 10);
-    
+
     // IID move should be first
     assert!(engine.moves_equal(&sorted_with_iid[0], iid_move));
-    
+
     // All other moves should come after
     for i in 1..10 {
         assert!(!engine.moves_equal(&sorted_with_iid[i], iid_move));
@@ -963,12 +951,12 @@ fn test_move_ordering_multiple_moves() {
 fn test_move_ordering_empty_moves() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Test with empty move list
     let empty_moves: Vec<Move> = Vec::new();
     let sorted_empty = engine.sort_moves(&empty_moves, &board, None);
     assert_eq!(sorted_empty.len(), 0);
-    
+
     // Test with empty moves and IID move
     let iid_move = create_test_move(6, 4, 5, 4);
     let sorted_empty_with_iid = engine.sort_moves(&empty_moves, &board, Some(&iid_move));
@@ -979,16 +967,16 @@ fn test_move_ordering_empty_moves() {
 fn test_move_ordering_single_move() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Test with single move
     let single_move = create_test_move(6, 4, 5, 4);
     let moves = vec![single_move.clone()];
-    
+
     // Test without IID move
     let sorted_single = engine.sort_moves(&moves, &board, None);
     assert_eq!(sorted_single.len(), 1);
     assert!(engine.moves_equal(&sorted_single[0], &single_move));
-    
+
     // Test with IID move (same as the single move)
     let sorted_single_with_iid = engine.sort_moves(&moves, &board, Some(&single_move));
     assert_eq!(sorted_single_with_iid.len(), 1);
@@ -999,23 +987,23 @@ fn test_move_ordering_single_move() {
 fn test_move_ordering_consistency() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Create test moves
     let move1 = create_test_move(6, 4, 5, 4);
     let move2 = create_test_move(6, 3, 5, 3);
     let move3 = create_test_move(6, 2, 5, 2);
-    
+
     let moves = vec![move1.clone(), move2.clone(), move3.clone()];
-    
+
     // Test multiple sorts with same IID move should be consistent
     let sorted1 = engine.sort_moves(&moves, &board, Some(&move2));
     let sorted2 = engine.sort_moves(&moves, &board, Some(&move2));
-    
+
     assert_eq!(sorted1.len(), sorted2.len());
     for i in 0..sorted1.len() {
         assert!(engine.moves_equal(&sorted1[i], &sorted2[i]));
     }
-    
+
     // IID move should always be first
     assert!(engine.moves_equal(&sorted1[0], &move2));
     assert!(engine.moves_equal(&sorted2[0], &move2));
@@ -1026,12 +1014,12 @@ fn test_move_ordering_consistency() {
 #[test]
 fn test_iid_config_management_comprehensive() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test initial configuration
     let initial_config = engine.get_iid_config();
     assert!(initial_config.enabled);
     assert_eq!(initial_config.min_depth, 4);
-    
+
     // Test configuration update
     let mut new_config = IIDConfig::default();
     new_config.enabled = false;
@@ -1042,10 +1030,10 @@ fn test_iid_config_management_comprehensive() {
     new_config.depth_strategy = IIDDepthStrategy::Relative;
     new_config.enable_time_pressure_detection = false;
     new_config.enable_adaptive_tuning = true;
-    
+
     // Update configuration
     assert!(engine.update_iid_config(new_config.clone()).is_ok());
-    
+
     // Verify configuration was updated
     let updated_config = engine.get_iid_config();
     assert!(!updated_config.enabled);
@@ -1061,46 +1049,46 @@ fn test_iid_config_management_comprehensive() {
 #[test]
 fn test_iid_config_validation_comprehensive() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test valid configuration
     let valid_config = IIDConfig::default();
     assert!(engine.update_iid_config(valid_config).is_ok());
-    
+
     // Test invalid min_depth (too low)
     let mut invalid_config = IIDConfig::default();
     invalid_config.min_depth = 1;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid iid_depth_ply (too low)
     invalid_config = IIDConfig::default();
     invalid_config.iid_depth_ply = 0;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid iid_depth_ply (too high)
     invalid_config = IIDConfig::default();
     invalid_config.iid_depth_ply = 7;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid max_legal_moves (too low)
     invalid_config = IIDConfig::default();
     invalid_config.max_legal_moves = 0;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid max_legal_moves (too high)
     invalid_config = IIDConfig::default();
     invalid_config.max_legal_moves = 101;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid time_overhead_threshold (negative)
     invalid_config = IIDConfig::default();
     invalid_config.time_overhead_threshold = -0.1;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test invalid time_overhead_threshold (too high)
     invalid_config = IIDConfig::default();
     invalid_config.time_overhead_threshold = 1.1;
     assert!(engine.update_iid_config(invalid_config).is_err());
-    
+
     // Test valid configuration after invalid ones
     let valid_config = IIDConfig::default();
     assert!(engine.update_iid_config(valid_config).is_ok());
@@ -1109,24 +1097,28 @@ fn test_iid_config_validation_comprehensive() {
 #[test]
 fn test_iid_config_preset_management() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test Balanced preset
     let balanced_config = EngineConfig::get_preset(EnginePreset::Balanced);
     assert!(engine.update_engine_config(balanced_config.clone()).is_ok());
     let iid_config = engine.get_iid_config();
     assert!(iid_config.enabled);
     assert_eq!(iid_config.min_depth, 4);
-    
+
     // Test Aggressive preset
     let aggressive_config = EngineConfig::get_preset(EnginePreset::Aggressive);
-    assert!(engine.update_engine_config(aggressive_config.clone()).is_ok());
+    assert!(engine
+        .update_engine_config(aggressive_config.clone())
+        .is_ok());
     let iid_config = engine.get_iid_config();
     assert!(iid_config.enabled);
     assert_eq!(iid_config.min_depth, 3);
-    
+
     // Test Conservative preset
     let conservative_config = EngineConfig::get_preset(EnginePreset::Conservative);
-    assert!(engine.update_engine_config(conservative_config.clone()).is_ok());
+    assert!(engine
+        .update_engine_config(conservative_config.clone())
+        .is_ok());
     let iid_config = engine.get_iid_config();
     assert!(iid_config.enabled);
     assert_eq!(iid_config.min_depth, 5);
@@ -1135,23 +1127,25 @@ fn test_iid_config_preset_management() {
 #[test]
 fn test_iid_config_engine_integration() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test that IID config is part of engine config
     let engine_config = engine.get_engine_config();
     assert!(engine_config.iid.enabled);
-    
+
     // Test updating engine config updates IID config
     let mut new_engine_config = engine_config.clone();
     new_engine_config.iid.enabled = false;
     new_engine_config.iid.min_depth = 8;
-    
-    assert!(engine.update_engine_config(new_engine_config.clone()).is_ok());
-    
+
+    assert!(engine
+        .update_engine_config(new_engine_config.clone())
+        .is_ok());
+
     // Verify IID config was updated
     let updated_iid_config = engine.get_iid_config();
     assert!(!updated_iid_config.enabled);
     assert_eq!(updated_iid_config.min_depth, 8);
-    
+
     // Verify engine config reflects the changes
     let updated_engine_config = engine.get_engine_config();
     assert!(!updated_engine_config.iid.enabled);
@@ -1161,22 +1155,22 @@ fn test_iid_config_engine_integration() {
 #[test]
 fn test_iid_config_validation_error_messages() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test that validation provides meaningful error messages
     let mut invalid_config = IIDConfig::default();
     invalid_config.min_depth = 1;
-    
+
     let result = engine.update_iid_config(invalid_config);
     assert!(result.is_err());
     let error = result.unwrap_err();
     assert!(error.to_string().contains("min_depth") || error.to_string().contains("depth"));
-    
+
     // Test multiple validation errors
     invalid_config = IIDConfig::default();
     invalid_config.min_depth = 1;
     invalid_config.iid_depth_ply = 0;
     invalid_config.max_legal_moves = 0;
-    
+
     let result = engine.update_iid_config(invalid_config);
     assert!(result.is_err());
 }
@@ -1184,7 +1178,7 @@ fn test_iid_config_validation_error_messages() {
 #[test]
 fn test_iid_config_default_values() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test that default configuration has expected values
     let config = engine.get_iid_config();
     assert!(config.enabled);
@@ -1200,28 +1194,37 @@ fn test_iid_config_default_values() {
 #[test]
 fn test_iid_config_clone_and_equality() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test configuration cloning
     let config1 = engine.get_iid_config();
     let config2 = config1.clone();
-    
+
     assert_eq!(config1.enabled, config2.enabled);
     assert_eq!(config1.min_depth, config2.min_depth);
     assert_eq!(config1.iid_depth_ply, config2.iid_depth_ply);
     assert_eq!(config1.max_legal_moves, config2.max_legal_moves);
-    assert_eq!(config1.time_overhead_threshold, config2.time_overhead_threshold);
+    assert_eq!(
+        config1.time_overhead_threshold,
+        config2.time_overhead_threshold
+    );
     assert_eq!(config1.depth_strategy, config2.depth_strategy);
-    assert_eq!(config1.enable_time_pressure_detection, config2.enable_time_pressure_detection);
-    assert_eq!(config1.enable_adaptive_tuning, config2.enable_adaptive_tuning);
+    assert_eq!(
+        config1.enable_time_pressure_detection,
+        config2.enable_time_pressure_detection
+    );
+    assert_eq!(
+        config1.enable_adaptive_tuning,
+        config2.enable_adaptive_tuning
+    );
 }
 
 #[test]
 fn test_iid_config_serialization() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test that configuration can be serialized/deserialized
     let config = engine.get_iid_config();
-    
+
     // This test verifies that the config struct has the necessary derive attributes
     // for serialization (Serialize, Deserialize)
     // If serialization is implemented, we could test JSON serialization here
@@ -1231,18 +1234,18 @@ fn test_iid_config_serialization() {
 #[test]
 fn test_iid_config_statistics_reset_on_update() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate some IID activity (this would normally happen during search)
     // We can't directly modify private stats, but we can test the reset functionality
-    
+
     // Update configuration
     let mut new_config = IIDConfig::default();
     new_config.enabled = false;
     assert!(engine.update_iid_config(new_config).is_ok());
-    
+
     // Reset stats manually to test the functionality
     engine.reset_iid_stats();
-    
+
     // Verify stats are reset
     let stats = engine.get_iid_stats();
     assert_eq!(stats.iid_searches_performed, 0);
@@ -1255,7 +1258,7 @@ fn test_iid_config_statistics_reset_on_update() {
 #[test]
 fn test_iid_statistics_comprehensive_tracking() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test initial statistics state
     let initial_stats = engine.get_iid_stats();
     assert_eq!(initial_stats.iid_searches_performed, 0);
@@ -1263,14 +1266,14 @@ fn test_iid_statistics_comprehensive_tracking() {
     assert_eq!(initial_stats.iid_time_ms, 0);
     assert_eq!(initial_stats.iid_move_first_improved_alpha, 0);
     assert_eq!(initial_stats.iid_move_caused_cutoff, 0);
-    
+
     // Test performance metrics calculation with zero stats
     let metrics = engine.get_iid_performance_metrics();
     assert_eq!(metrics.iid_efficiency, 0.0);
     assert_eq!(metrics.cutoff_rate, 0.0);
     assert_eq!(metrics.success_rate, 0.0); // No searches performed
     assert_eq!(metrics.average_iid_time, 0.0);
-    
+
     // Test statistics reset
     engine.reset_iid_stats();
     let reset_stats = engine.get_iid_stats();
@@ -1284,7 +1287,7 @@ fn test_iid_statistics_comprehensive_tracking() {
 #[test]
 fn test_iid_performance_measurement_fields_default() {
     let stats = IIDStats::default();
-    
+
     // Task 6.2: Verify performance measurement fields default to 0
     assert_eq!(stats.total_nodes_without_iid, 0);
     assert_eq!(stats.total_time_without_iid_ms, 0);
@@ -1300,19 +1303,19 @@ fn test_iid_performance_measurement_fields_default() {
 #[test]
 fn test_iid_nodes_saved_calculation() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate IID search with performance data
     engine.iid_stats.iid_searches_performed = 10;
     engine.iid_stats.iid_move_first_improved_alpha = 5; // 50% efficiency
     engine.iid_stats.total_search_time_ms = 1000;
     engine.iid_stats.iid_time_ms = 100;
     engine.core_search_metrics.total_nodes = 5000;
-    
+
     // Task 6.4: Calculate nodes saved
     engine.update_iid_performance_measurements();
-    
+
     // Verify nodes_saved is calculated
     // With 50% efficiency, we expect some node savings
     assert!(engine.iid_stats.nodes_saved >= 0);
@@ -1322,22 +1325,22 @@ fn test_iid_nodes_saved_calculation() {
 #[test]
 fn test_iid_speedup_calculation() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate IID search with good performance
     engine.iid_stats.iid_searches_performed = 20;
     engine.iid_stats.iid_move_first_improved_alpha = 10; // 50% efficiency
     engine.iid_stats.total_search_time_ms = 1000;
     engine.iid_stats.iid_time_ms = 100;
     engine.core_search_metrics.total_nodes = 10000;
-    
+
     // Task 6.5: Calculate speedup
     engine.update_iid_performance_measurements();
-    
+
     // Verify speedup metrics are calculated
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Speedup should be calculated if time_without_iid > time_with_iid
     if engine.iid_stats.total_time_without_iid_ms > engine.iid_stats.total_search_time_ms {
         assert!(metrics.speedup_percentage >= 0.0);
@@ -1348,23 +1351,23 @@ fn test_iid_speedup_calculation() {
 #[test]
 fn test_iid_correlation_tracking() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate multiple IID searches to build correlation data
     engine.iid_stats.iid_searches_performed = 10;
     engine.iid_stats.iid_move_first_improved_alpha = 5; // 50% efficiency
     engine.iid_stats.total_search_time_ms = 1000;
     engine.iid_stats.iid_time_ms = 100;
     engine.core_search_metrics.total_nodes = 5000;
-    
+
     // Task 6.6: Track correlation
     engine.update_iid_performance_measurements();
-    
+
     // Verify correlation tracking
     if engine.iid_stats.correlation_data_points > 0 {
         assert!(engine.iid_stats.efficiency_speedup_correlation_sum >= 0.0);
-        
+
         let metrics = engine.get_iid_performance_metrics();
         // Correlation should be a reasonable value
         assert!(metrics.efficiency_speedup_correlation >= 0.0);
@@ -1374,32 +1377,32 @@ fn test_iid_correlation_tracking() {
 #[test]
 fn test_iid_performance_metrics_includes_comparison() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set up performance data
     engine.iid_stats.iid_searches_performed = 15;
     engine.iid_stats.iid_move_first_improved_alpha = 8; // ~53% efficiency
     engine.iid_stats.total_search_time_ms = 2000;
     engine.iid_stats.iid_time_ms = 200;
     engine.core_search_metrics.total_nodes = 15000;
-    
+
     // Update performance measurements
     engine.update_iid_performance_measurements();
-    
+
     // Task 6.7: Verify performance comparison metrics are included
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Node reduction percentage should be calculated
     assert!(metrics.node_reduction_percentage >= 0.0);
     assert!(metrics.node_reduction_percentage <= 100.0);
-    
+
     // Speedup percentage should be calculated if applicable
     if engine.iid_stats.total_time_without_iid_ms > 0 {
         assert!(metrics.speedup_percentage >= 0.0);
         assert!(metrics.speedup_percentage <= 100.0);
     }
-    
+
     // Net benefit should be calculated (speedup - overhead)
     // Net benefit can be negative if overhead exceeds speedup
     assert!(metrics.net_benefit_percentage >= -100.0);
@@ -1409,26 +1412,26 @@ fn test_iid_performance_metrics_includes_comparison() {
 #[test]
 fn test_iid_performance_measurement_accuracy_tracking() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate IID searches to build accuracy data
     engine.iid_stats.iid_searches_performed = 5;
     engine.iid_stats.iid_move_first_improved_alpha = 3; // 60% efficiency
     engine.iid_stats.total_search_time_ms = 500;
     engine.iid_stats.iid_time_ms = 50;
     engine.core_search_metrics.total_nodes = 2500;
-    
+
     // Task 6.8: Track performance measurement accuracy
     engine.update_iid_performance_measurements();
-    
+
     // Verify accuracy tracking
     if engine.iid_stats.performance_measurement_samples > 0 {
         assert!(engine.iid_stats.performance_measurement_accuracy_sum >= 0.0);
-        
+
         // Average accuracy should be reasonable (0-100)
-        let avg_accuracy = engine.iid_stats.performance_measurement_accuracy_sum / 
-                          engine.iid_stats.performance_measurement_samples as f64;
+        let avg_accuracy = engine.iid_stats.performance_measurement_accuracy_sum
+            / engine.iid_stats.performance_measurement_samples as f64;
         assert!(avg_accuracy >= 0.0);
         assert!(avg_accuracy <= 100.0);
     }
@@ -1437,17 +1440,17 @@ fn test_iid_performance_measurement_accuracy_tracking() {
 #[test]
 fn test_iid_performance_measurement_with_zero_searches() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // No IID searches performed
     engine.iid_stats.iid_searches_performed = 0;
     engine.core_search_metrics.total_nodes = 1000;
     engine.iid_stats.total_search_time_ms = 500;
-    
+
     // Task 6.0: Should handle zero searches gracefully
     engine.update_iid_performance_measurements();
-    
+
     // Should not crash and should leave fields as default/baseline
     assert_eq!(engine.iid_stats.total_nodes_without_iid, 1000); // Should equal current nodes
     assert_eq!(engine.iid_stats.total_time_without_iid_ms, 500); // Should equal current time
@@ -1458,14 +1461,14 @@ fn test_iid_performance_measurement_with_zero_searches() {
 fn test_iid_performance_metrics_node_reduction_percentage() {
     use crate::types::IIDPerformanceMetrics;
     use crate::types::IIDStats;
-    
+
     // Test node reduction percentage calculation
     let mut stats = IIDStats::default();
     stats.total_nodes_without_iid = 10000;
     stats.nodes_saved = 3000; // 30% reduction
-    
+
     let metrics = IIDPerformanceMetrics::from_stats(&stats, 5000);
-    
+
     // Node reduction should be 3000/10000 * 100 = 30%
     assert!((metrics.node_reduction_percentage - 30.0).abs() < 0.01);
 }
@@ -1474,15 +1477,15 @@ fn test_iid_performance_metrics_node_reduction_percentage() {
 fn test_iid_performance_metrics_net_benefit_calculation() {
     use crate::types::IIDPerformanceMetrics;
     use crate::types::IIDStats;
-    
+
     // Test net benefit calculation (speedup - overhead)
     let mut stats = IIDStats::default();
     stats.total_time_without_iid_ms = 1000;
     stats.total_search_time_ms = 850; // 150ms saved = 15% speedup
     stats.iid_time_ms = 100; // 100ms overhead
-    
+
     let metrics = IIDPerformanceMetrics::from_stats(&stats, stats.total_search_time_ms);
-    
+
     // Speedup: (1000 - 850) / 1000 * 100 = 15%
     // Overhead: 100 / 850 * 100 = ~11.76%
     // Net benefit: 15% - 11.76% = ~3.24%
@@ -1494,9 +1497,9 @@ fn test_iid_performance_metrics_net_benefit_calculation() {
 #[test]
 fn test_iid_performance_measurements_reset() {
     use crate::search::search_engine::SearchEngine;
-    
+
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Set up some performance data
     engine.iid_stats.iid_searches_performed = 10;
     engine.iid_stats.total_nodes_without_iid = 5000;
@@ -1504,10 +1507,10 @@ fn test_iid_performance_measurements_reset() {
     engine.iid_stats.nodes_saved = 1000;
     engine.iid_stats.efficiency_speedup_correlation_sum = 50.0;
     engine.iid_stats.correlation_data_points = 5;
-    
+
     // Reset should clear all fields
     engine.iid_stats.reset();
-    
+
     // Verify all performance measurement fields are reset
     assert_eq!(engine.iid_stats.total_nodes_without_iid, 0);
     assert_eq!(engine.iid_stats.total_time_without_iid_ms, 0);
@@ -1521,7 +1524,7 @@ fn test_iid_performance_measurements_reset() {
 #[test]
 fn test_iid_performance_metrics_calculation() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test metrics calculation with simulated data
     let mut stats = engine.get_iid_stats().clone();
     stats.iid_searches_performed = 100;
@@ -1530,7 +1533,7 @@ fn test_iid_performance_metrics_calculation() {
     stats.total_iid_nodes = 5000;
     stats.iid_time_ms = 2000;
     stats.iid_searches_failed = 5;
-    
+
     // Test efficiency calculation
     assert_eq!(stats.efficiency_rate(), 30.0); // 30/100 * 100
     assert_eq!(stats.cutoff_rate(), 15.0); // 15/100 * 100
@@ -1542,23 +1545,23 @@ fn test_iid_performance_metrics_calculation() {
 #[test]
 fn test_iid_performance_metrics_edge_cases() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test with zero searches
     let mut stats = engine.get_iid_stats().clone();
     stats.iid_searches_performed = 0;
-    
+
     assert_eq!(stats.efficiency_rate(), 0.0);
     assert_eq!(stats.cutoff_rate(), 0.0);
     assert_eq!(stats.average_nodes_per_iid(), 0.0);
     assert_eq!(stats.average_time_per_iid(), 0.0);
-    
+
     // Test with perfect efficiency
     stats.iid_searches_performed = 10;
     stats.iid_move_first_improved_alpha = 10;
     stats.iid_move_caused_cutoff = 10;
     stats.total_iid_nodes = 1000;
     stats.iid_time_ms = 100;
-    
+
     assert_eq!(stats.efficiency_rate(), 100.0);
     assert_eq!(stats.cutoff_rate(), 100.0);
     assert_eq!(stats.average_nodes_per_iid(), 100.0);
@@ -1568,10 +1571,10 @@ fn test_iid_performance_metrics_edge_cases() {
 #[test]
 fn test_iid_skip_statistics_tracking() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test that skip statistics are properly tracked
     let stats = engine.get_iid_stats();
-    
+
     // All skip counters should start at zero
     assert_eq!(stats.positions_skipped_tt_move, 0);
     assert_eq!(stats.positions_skipped_depth, 0);
@@ -1584,7 +1587,7 @@ fn test_iid_skip_statistics_tracking() {
 #[test]
 fn test_iid_performance_metrics_from_stats() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Create test statistics
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 50;
@@ -1596,17 +1599,17 @@ fn test_iid_performance_metrics_from_stats() {
     stats.positions_skipped_depth = 8;
     stats.positions_skipped_move_count = 4;
     stats.positions_skipped_time_pressure = 3;
-    
+
     // Test performance metrics calculation
     let metrics = IIDPerformanceMetrics::from_stats(&stats, 5000); // 5 second total search
-    
+
     assert_eq!(metrics.iid_efficiency, 40.0); // 20/50 * 100
     assert_eq!(metrics.cutoff_rate, 20.0); // 10/50 * 100
     assert_eq!(metrics.overhead_percentage, 20.0); // 1000/5000 * 100
     assert_eq!(metrics.nodes_saved_per_iid, 50.0); // 2500/50
     assert_eq!(metrics.success_rate, 100.0); // No failed searches
     assert_eq!(metrics.average_iid_time, 20.0); // 1000/50
-    
+
     // Test skip rates (calculated as percentages of total skips)
     let total_skips = 15 + 8 + 4 + 3; // 30 total skips
     assert_eq!(metrics.tt_skip_rate, 50.0); // 15/30 * 100
@@ -1618,7 +1621,7 @@ fn test_iid_performance_metrics_from_stats() {
 #[test]
 fn test_iid_performance_metrics_summary() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Create test metrics
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
@@ -1626,9 +1629,9 @@ fn test_iid_performance_metrics_summary() {
     stats.iid_move_caused_cutoff = 15;
     stats.total_iid_nodes = 5000;
     stats.iid_time_ms = 2000;
-    
+
     let metrics = IIDPerformanceMetrics::from_stats(&stats, 10000);
-    
+
     // Test summary generation
     let summary = metrics.summary();
     assert!(summary.contains("IID Performance"));
@@ -1642,40 +1645,43 @@ fn test_iid_performance_metrics_summary() {
 #[test]
 fn test_adaptive_iid_configuration_disabled() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Disable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = false;
     engine.update_iid_config(config).unwrap();
-    
+
     // Get initial configuration
     let initial_config = engine.get_iid_config().clone();
-    
+
     // Try to adapt configuration
     engine.adapt_iid_configuration();
-    
+
     // Configuration should remain unchanged
     let final_config = engine.get_iid_config();
     assert_eq!(initial_config.min_depth, final_config.min_depth);
     assert_eq!(initial_config.iid_depth_ply, final_config.iid_depth_ply);
-    assert_eq!(initial_config.time_overhead_threshold, final_config.time_overhead_threshold);
+    assert_eq!(
+        initial_config.time_overhead_threshold,
+        final_config.time_overhead_threshold
+    );
 }
 
 #[test]
 fn test_adaptive_iid_configuration_insufficient_data() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     engine.update_iid_config(config).unwrap();
-    
+
     // Get initial configuration
     let initial_config = engine.get_iid_config().clone();
-    
+
     // Try to adapt with insufficient data (less than 50 searches)
     engine.adapt_iid_configuration();
-    
+
     // Configuration should remain unchanged
     let final_config = engine.get_iid_config();
     assert_eq!(initial_config.min_depth, final_config.min_depth);
@@ -1685,18 +1691,18 @@ fn test_adaptive_iid_configuration_insufficient_data() {
 #[test]
 fn test_adaptive_iid_configuration_low_efficiency() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     config.min_depth = 4; // Start with depth 4
     engine.update_iid_config(config).unwrap();
-    
+
     // Simulate low efficiency scenario by manually setting stats
     // This would normally be set during actual IID searches
     // For testing, we'll verify the adaptation logic works
     let recommendations = engine.get_iid_adaptation_recommendations();
-    
+
     // Should get recommendation about insufficient data
     assert!(recommendations.len() > 0);
     assert!(recommendations[0].contains("Insufficient data"));
@@ -1705,21 +1711,21 @@ fn test_adaptive_iid_configuration_low_efficiency() {
 #[test]
 fn test_adaptive_iid_configuration_recommendations() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     engine.update_iid_config(config).unwrap();
-    
+
     // Test recommendations with insufficient data
     let recommendations = engine.get_iid_adaptation_recommendations();
     assert!(!recommendations.is_empty());
-    
+
     // Test with adaptive tuning disabled
     let mut config_disabled = engine.get_iid_config().clone();
     config_disabled.enable_adaptive_tuning = false;
     engine.update_iid_config(config_disabled).unwrap();
-    
+
     let recommendations_disabled = engine.get_iid_adaptation_recommendations();
     assert!(recommendations_disabled.is_empty());
 }
@@ -1727,18 +1733,18 @@ fn test_adaptive_iid_configuration_recommendations() {
 #[test]
 fn test_trigger_iid_adaptation() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     engine.update_iid_config(config).unwrap();
-    
+
     // Get initial configuration
     let initial_config = engine.get_iid_config().clone();
-    
+
     // Trigger adaptation
     engine.trigger_iid_adaptation();
-    
+
     // Configuration should remain unchanged due to insufficient data
     let final_config = engine.get_iid_config();
     assert_eq!(initial_config.min_depth, final_config.min_depth);
@@ -1748,7 +1754,7 @@ fn test_trigger_iid_adaptation() {
 #[test]
 fn test_adaptive_configuration_bounds() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test that adaptive configuration respects bounds
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
@@ -1756,12 +1762,12 @@ fn test_adaptive_configuration_bounds() {
     config.iid_depth_ply = 1; // Minimum bound
     config.time_overhead_threshold = 0.05; // Minimum bound
     config.max_legal_moves = 20; // Minimum bound
-    
+
     engine.update_iid_config(config).unwrap();
-    
+
     // Even with low efficiency, configuration should not go below bounds
     engine.adapt_iid_configuration();
-    
+
     let final_config = engine.get_iid_config();
     assert!(final_config.min_depth >= 2);
     assert!(final_config.iid_depth_ply >= 1);
@@ -1772,7 +1778,7 @@ fn test_adaptive_configuration_bounds() {
 #[test]
 fn test_adaptive_configuration_maximum_bounds() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test maximum bounds
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
@@ -1780,12 +1786,12 @@ fn test_adaptive_configuration_maximum_bounds() {
     config.iid_depth_ply = 4; // Maximum bound
     config.time_overhead_threshold = 0.3; // Maximum bound
     config.max_legal_moves = 50; // Maximum bound
-    
+
     engine.update_iid_config(config).unwrap();
-    
+
     // Configuration should not exceed maximum bounds
     engine.adapt_iid_configuration();
-    
+
     let final_config = engine.get_iid_config();
     assert!(final_config.min_depth <= 6);
     assert!(final_config.iid_depth_ply <= 4);
@@ -1800,12 +1806,12 @@ fn test_dynamic_iid_depth_disabled() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Disable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = false;
     // We can't update config in this test since engine is immutable, but we can test the logic
-    
+
     // Test that dynamic depth returns base depth when adaptive tuning is disabled
     // This would be tested in the actual implementation
     assert!(true); // Placeholder - the actual logic is in the implementation
@@ -1816,11 +1822,11 @@ fn test_dynamic_iid_depth_basic() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with base depth 2
     let base_depth = 2;
     let dynamic_depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, base_depth);
-    
+
     // Dynamic depth should be within reasonable bounds
     assert!(dynamic_depth >= 1);
     assert!(dynamic_depth <= 4);
@@ -1831,12 +1837,12 @@ fn test_dynamic_iid_depth_bounds() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with minimum depth
     let min_depth = 1;
     let dynamic_min = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, min_depth);
     assert!(dynamic_min >= 1);
-    
+
     // Test with maximum depth
     let max_depth = 4;
     let dynamic_max = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, max_depth);
@@ -1848,12 +1854,12 @@ fn test_position_complexity_assessment() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test that position complexity assessment works
     // This tests the internal logic indirectly through dynamic depth calculation
     let base_depth = 2;
     let dynamic_depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, base_depth);
-    
+
     // Should return a valid depth
     assert!(dynamic_depth >= 1);
     assert!(dynamic_depth <= 4);
@@ -1864,12 +1870,12 @@ fn test_dynamic_depth_consistency() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test that the same position gives consistent results
     let base_depth = 3;
     let depth1 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, base_depth);
     let depth2 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, base_depth);
-    
+
     assert_eq!(depth1, depth2);
 }
 
@@ -1878,13 +1884,13 @@ fn test_dynamic_depth_different_base_depths() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with different base depths
     let depth1 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 1);
     let depth2 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2);
     let depth3 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 3);
     let depth4 = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 4);
-    
+
     // All should be within bounds
     assert!(depth1 >= 1 && depth1 <= 4);
     assert!(depth2 >= 1 && depth2 <= 4);
@@ -1897,15 +1903,15 @@ fn test_dynamic_depth_edge_cases() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test edge cases
     let depth_zero = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 0);
     let depth_large = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 10);
-    
+
     // Should handle edge cases gracefully
     // Note: depth_zero might be 0 if base_depth was 0, but the function should handle it
     assert!(depth_zero >= 0); // Allow 0 for edge case
-    // The dynamic depth should be capped at 4, but let's be more lenient for testing
+                              // The dynamic depth should be capped at 4, but let's be more lenient for testing
     assert!(depth_large <= 10); // Allow up to 10 for edge case testing
 }
 
@@ -1924,12 +1930,12 @@ fn test_memory_optimized_iid_search_basic() {
         &mut board,
         &captured_pieces,
         Player::Black,
-        2, // iid_depth
+        2,     // iid_depth
         -1000, // alpha
-        1000, // beta
+        1000,  // beta
         &start_time,
         1000, // time_limit_ms
-        &mut history
+        &mut history,
     );
 
     // Should complete without panicking
@@ -1944,7 +1950,7 @@ fn test_board_state_creation() {
 
     // Test board state creation
     let board_state = engine.create_iid_board_state(&board, &captured_pieces);
-    
+
     // Verify board state properties
     assert!(board_state.key > 0); // Should have a valid key
     assert_eq!(board_state.piece_count, 40); // Initial position has 40 pieces
@@ -1961,7 +1967,7 @@ fn test_position_key_calculation() {
     // Test position key calculation
     let key1 = engine.calculate_position_key(&board);
     let key2 = engine.calculate_position_key(&board);
-    
+
     // Same position should produce same key
     assert_eq!(key1, key2);
     assert!(key1 > 0); // Should be non-zero
@@ -1975,7 +1981,7 @@ fn test_material_balance_calculation() {
 
     // Test material balance calculation
     let balance = engine.calculate_material_balance(&board, &captured_pieces);
-    
+
     // Initial position should be balanced
     assert_eq!(balance, 0);
 }
@@ -1987,7 +1993,7 @@ fn test_piece_counting() {
 
     // Test piece counting
     let count = engine.count_pieces(&board);
-    
+
     // Initial position has 40 pieces
     assert_eq!(count, 40);
 }
@@ -1999,11 +2005,11 @@ fn test_king_position_detection() {
 
     // Test king position detection
     let (black_king, white_king) = engine.get_king_positions(&board);
-    
+
     // Both kings should be present in initial position
     assert!(black_king.is_some());
     assert!(white_king.is_some());
-    
+
     // Verify king positions are reasonable
     if let Some(pos) = black_king {
         assert!(pos.row < 9 && pos.col < 9);
@@ -2016,11 +2022,11 @@ fn test_king_position_detection() {
 #[test]
 fn test_memory_usage_tracking() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test memory usage tracking
     let initial_usage = engine.get_memory_usage();
     assert_eq!(initial_usage, 0); // Placeholder implementation
-    
+
     // Test memory tracking
     engine.track_memory_usage(1024);
     // Should not panic
@@ -2044,7 +2050,7 @@ fn test_optimized_vs_standard_iid() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
 
     let optimized_result = engine.perform_iid_search_optimized(
@@ -2056,7 +2062,7 @@ fn test_optimized_vs_standard_iid() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
 
     // Both should complete without panicking
@@ -2070,16 +2076,16 @@ fn test_optimized_vs_standard_iid() {
 #[test]
 fn test_iid_overhead_monitoring_basic() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test basic overhead monitoring
     engine.monitor_iid_overhead(50, 1000); // 5% overhead
     engine.monitor_iid_overhead(200, 1000); // 20% overhead
     engine.monitor_iid_overhead(300, 1000); // 30% overhead
-    
+
     // Get overhead statistics
     let stats = engine.get_iid_overhead_stats();
     assert_eq!(stats.current_threshold, 0.15); // Default threshold
-    
+
     // Should have tracked some overhead data
     assert!(stats.average_overhead >= 0.0);
 }
@@ -2087,12 +2093,12 @@ fn test_iid_overhead_monitoring_basic() {
 #[test]
 fn test_iid_overhead_acceptable_check() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test overhead acceptability checks
-    assert!(engine.is_iid_overhead_acceptable(50, 1000));   // 5% - should be acceptable
-    assert!(engine.is_iid_overhead_acceptable(100, 1000));  // 10% - should be acceptable
+    assert!(engine.is_iid_overhead_acceptable(50, 1000)); // 5% - should be acceptable
+    assert!(engine.is_iid_overhead_acceptable(100, 1000)); // 10% - should be acceptable
     assert!(!engine.is_iid_overhead_acceptable(200, 1000)); // 20% - should not be acceptable (threshold is 15%)
-    
+
     // Edge cases
     assert!(!engine.is_iid_overhead_acceptable(100, 0)); // Zero time limit
 }
@@ -2102,16 +2108,16 @@ fn test_iid_time_estimation() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test time estimation for different depths
     let time_depth_1 = engine.estimate_iid_time(&board, &captured_pieces, 1);
     let time_depth_2 = engine.estimate_iid_time(&board, &captured_pieces, 2);
     let time_depth_3 = engine.estimate_iid_time(&board, &captured_pieces, 3);
-    
+
     // Time should increase with depth
     assert!(time_depth_2 > time_depth_1);
     assert!(time_depth_3 > time_depth_2);
-    
+
     // All estimates should be reasonable (positive and not too large)
     assert!(time_depth_1 > 0);
     assert!(time_depth_1 < 1000); // Less than 1 second
@@ -2120,20 +2126,20 @@ fn test_iid_time_estimation() {
 #[test]
 fn test_overhead_threshold_adjustment() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     config.time_overhead_threshold = 0.15; // 15%
     engine.update_iid_config(config).unwrap();
-    
+
     let initial_threshold = engine.get_iid_config().time_overhead_threshold;
-    
+
     // Simulate high overhead (35%) - should reduce threshold
     engine.monitor_iid_overhead(350, 1000);
-    
+
     let final_threshold = engine.get_iid_config().time_overhead_threshold;
-    
+
     // Threshold should have been reduced
     assert!(final_threshold < initial_threshold);
     assert!(final_threshold >= 0.05); // Should not go below minimum
@@ -2142,20 +2148,20 @@ fn test_overhead_threshold_adjustment() {
 #[test]
 fn test_overhead_threshold_adjustment_low_overhead() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     config.time_overhead_threshold = 0.10; // 10%
     engine.update_iid_config(config).unwrap();
-    
+
     let initial_threshold = engine.get_iid_config().time_overhead_threshold;
-    
+
     // Simulate low overhead (5%) - should increase threshold
     engine.monitor_iid_overhead(50, 1000);
-    
+
     let final_threshold = engine.get_iid_config().time_overhead_threshold;
-    
+
     // Threshold should have been increased
     assert!(final_threshold > initial_threshold);
     assert!(final_threshold <= 0.3); // Should not exceed maximum
@@ -2164,19 +2170,19 @@ fn test_overhead_threshold_adjustment_low_overhead() {
 #[test]
 fn test_overhead_recommendations() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test recommendations with insufficient data
     let recommendations = engine.get_overhead_recommendations();
     assert!(!recommendations.is_empty());
     assert!(recommendations[0].contains("Insufficient data"));
-    
+
     // Simulate some searches to get meaningful recommendations
     for _ in 0..25 {
         engine.monitor_iid_overhead(100, 1000); // 10% overhead
     }
-    
+
     let recommendations_with_data = engine.get_overhead_recommendations();
-    
+
     // Should have some recommendations now
     assert!(!recommendations_with_data.is_empty());
 }
@@ -2184,14 +2190,14 @@ fn test_overhead_recommendations() {
 #[test]
 fn test_overhead_statistics_calculation() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate various overhead scenarios
-    engine.monitor_iid_overhead(50, 1000);   // 5% - low
-    engine.monitor_iid_overhead(150, 1000);  // 15% - medium
-    engine.monitor_iid_overhead(250, 1000);  // 25% - high
-    
+    engine.monitor_iid_overhead(50, 1000); // 5% - low
+    engine.monitor_iid_overhead(150, 1000); // 15% - medium
+    engine.monitor_iid_overhead(250, 1000); // 25% - high
+
     let stats = engine.get_iid_overhead_stats();
-    
+
     // Verify statistics
     assert!(stats.total_searches >= 0);
     assert!(stats.time_pressure_skips >= 0);
@@ -2203,12 +2209,12 @@ fn test_overhead_statistics_calculation() {
 #[test]
 fn test_overhead_monitoring_edge_cases() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Test edge cases
-    engine.monitor_iid_overhead(0, 1000);     // Zero IID time
-    engine.monitor_iid_overhead(1000, 1000);  // 100% overhead
-    engine.monitor_iid_overhead(50, 0);       // Zero total time (should be ignored)
-    
+    engine.monitor_iid_overhead(0, 1000); // Zero IID time
+    engine.monitor_iid_overhead(1000, 1000); // 100% overhead
+    engine.monitor_iid_overhead(50, 0); // Zero total time (should be ignored)
+
     // Should not panic and should handle gracefully
     let stats = engine.get_iid_overhead_stats();
     assert!(stats.total_searches >= 0);
@@ -2217,20 +2223,20 @@ fn test_overhead_monitoring_edge_cases() {
 #[test]
 fn test_move_count_adjustment_based_on_overhead() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Enable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = true;
     config.max_legal_moves = 30;
     engine.update_iid_config(config).unwrap();
-    
+
     let initial_move_count = engine.get_iid_config().max_legal_moves;
-    
+
     // Simulate high overhead (30%) - should reduce move count
     engine.monitor_iid_overhead(300, 1000);
-    
+
     let final_move_count = engine.get_iid_config().max_legal_moves;
-    
+
     // Move count should have been reduced
     assert!(final_move_count < initial_move_count);
     assert!(final_move_count >= 20); // Should not go below minimum
@@ -2239,21 +2245,24 @@ fn test_move_count_adjustment_based_on_overhead() {
 #[test]
 fn test_overhead_monitoring_with_adaptive_tuning_disabled() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Disable adaptive tuning
     let mut config = engine.get_iid_config().clone();
     config.enable_adaptive_tuning = false;
     engine.update_iid_config(config).unwrap();
-    
+
     let initial_config = engine.get_iid_config().clone();
-    
+
     // Simulate high overhead
     engine.monitor_iid_overhead(400, 1000); // 40% overhead
-    
+
     let final_config = engine.get_iid_config();
-    
+
     // Configuration should remain unchanged when adaptive tuning is disabled
-    assert_eq!(initial_config.time_overhead_threshold, final_config.time_overhead_threshold);
+    assert_eq!(
+        initial_config.time_overhead_threshold,
+        final_config.time_overhead_threshold
+    );
     assert_eq!(initial_config.max_legal_moves, final_config.max_legal_moves);
 }
 
@@ -2266,18 +2275,21 @@ fn test_iid_performance_regression_efficiency() {
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Simulate a scenario where efficiency rate is below threshold (< 30%)
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
     stats.iid_move_first_improved_alpha = 25; // 25% efficiency (below 30% threshold)
     engine.iid_stats = stats;
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // This test should fail if efficiency is below 30%
     if metrics.iid_efficiency < 30.0 {
-        panic!("IID performance regression: Efficiency rate {:.2}% is below threshold of 30.0%", metrics.iid_efficiency);
+        panic!(
+            "IID performance regression: Efficiency rate {:.2}% is below threshold of 30.0%",
+            metrics.iid_efficiency
+        );
     }
 }
 
@@ -2286,19 +2298,22 @@ fn test_iid_performance_regression_efficiency() {
 #[should_panic(expected = "IID performance regression")]
 fn test_iid_performance_regression_overhead() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate a scenario where overhead exceeds threshold (> 15%)
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
     stats.iid_time_ms = 2000; // 2 seconds
     stats.total_search_time_ms = 10000; // 10 seconds total (20% overhead, above 15% threshold)
     engine.iid_stats = stats;
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // This test should fail if overhead exceeds 15%
     if metrics.overhead_percentage > 15.0 {
-        panic!("IID performance regression: Overhead {:.2}% exceeds threshold of 15.0%", metrics.overhead_percentage);
+        panic!(
+            "IID performance regression: Overhead {:.2}% exceeds threshold of 15.0%",
+            metrics.overhead_percentage
+        );
     }
 }
 
@@ -2307,18 +2322,21 @@ fn test_iid_performance_regression_overhead() {
 #[should_panic(expected = "IID performance regression")]
 fn test_iid_performance_regression_cutoff() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate a scenario where cutoff rate is below threshold (< 20%)
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
     stats.iid_move_caused_cutoff = 15; // 15% cutoff rate (below 20% threshold)
     engine.iid_stats = stats;
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // This test should fail if cutoff rate is below 20%
     if metrics.cutoff_rate < 20.0 {
-        panic!("IID performance regression: Cutoff rate {:.2}% is below threshold of 20.0%", metrics.cutoff_rate);
+        panic!(
+            "IID performance regression: Cutoff rate {:.2}% is below threshold of 20.0%",
+            metrics.cutoff_rate
+        );
     }
 }
 
@@ -2326,7 +2344,7 @@ fn test_iid_performance_regression_cutoff() {
 #[test]
 fn test_iid_performance_meets_thresholds() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate a scenario where all thresholds are met
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
@@ -2335,20 +2353,32 @@ fn test_iid_performance_meets_thresholds() {
     stats.iid_time_ms = 1000; // 1 second
     stats.total_search_time_ms = 10000; // 10 seconds total (10% overhead, below 15% threshold)
     engine.iid_stats = stats;
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Verify all thresholds are met
-    assert!(metrics.iid_efficiency >= 30.0, "Efficiency rate should be >= 30%, got {:.2}%", metrics.iid_efficiency);
-    assert!(metrics.overhead_percentage <= 15.0, "Overhead should be <= 15%, got {:.2}%", metrics.overhead_percentage);
-    assert!(metrics.cutoff_rate >= 20.0, "Cutoff rate should be >= 20%, got {:.2}%", metrics.cutoff_rate);
+    assert!(
+        metrics.iid_efficiency >= 30.0,
+        "Efficiency rate should be >= 30%, got {:.2}%",
+        metrics.iid_efficiency
+    );
+    assert!(
+        metrics.overhead_percentage <= 15.0,
+        "Overhead should be <= 15%, got {:.2}%",
+        metrics.overhead_percentage
+    );
+    assert!(
+        metrics.cutoff_rate >= 20.0,
+        "Cutoff rate should be >= 20%, got {:.2}%",
+        metrics.cutoff_rate
+    );
 }
 
 /// Task 8.9: Test performance report generation
 #[test]
 fn test_generate_iid_performance_report() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Create test statistics
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 50;
@@ -2363,9 +2393,9 @@ fn test_generate_iid_performance_report() {
     stats.iid_move_extracted_from_tt = 15;
     stats.iid_move_extracted_from_tracked = 35;
     engine.iid_stats = stats;
-    
+
     let report = engine.generate_iid_performance_report();
-    
+
     // Verify report contains expected sections
     assert!(report.contains("IID Performance Report"));
     assert!(report.contains("IID Searches Performed"));
@@ -2380,23 +2410,23 @@ fn test_generate_iid_performance_report() {
 #[test]
 fn test_export_iid_statistics_json() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Create test statistics
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 25;
     stats.iid_time_ms = 500;
     stats.total_search_time_ms = 2500;
     engine.iid_stats = stats;
-    
+
     // Add some overhead history
     engine.monitor_iid_overhead(200, 1000); // 20% overhead
     engine.monitor_iid_overhead(150, 1000); // 15% overhead
-    
+
     let json_result = engine.export_iid_statistics_json();
     assert!(json_result.is_ok());
-    
+
     let json = json_result.unwrap();
-    
+
     // Verify JSON contains expected fields
     assert!(json.contains("iid_searches_performed"));
     assert!(json.contains("iid_time_ms"));
@@ -2410,10 +2440,10 @@ fn test_export_iid_statistics_json() {
 fn test_get_iid_effectiveness_by_position_type() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
-    
+
     // Test that method returns a HashMap (even if empty)
     let effectiveness = engine.get_iid_effectiveness_by_position_type(&board);
-    
+
     // Should return a valid HashMap (may be empty if no data)
     assert!(effectiveness.len() >= 0);
 }
@@ -2422,17 +2452,17 @@ fn test_get_iid_effectiveness_by_position_type() {
 #[test]
 fn test_high_overhead_alert() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate high overhead (>15%)
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 10;
     stats.iid_time_ms = 200; // 200ms
     stats.total_search_time_ms = 1000; // 1000ms total (20% overhead)
     engine.iid_stats = stats;
-    
+
     // The alert should be triggered during monitoring
     engine.monitor_iid_overhead(200, 1000);
-    
+
     // Verify overhead is tracked
     let overhead_stats = engine.get_iid_overhead_stats();
     assert!(overhead_stats.average_overhead > 15.0);
@@ -2442,15 +2472,15 @@ fn test_high_overhead_alert() {
 #[test]
 fn test_low_efficiency_alert() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate low efficiency (<30%)
     let mut stats = IIDStats::default();
     stats.iid_searches_performed = 100;
     stats.iid_move_first_improved_alpha = 20; // 20% efficiency (below 30%)
     engine.iid_stats = stats;
-    
+
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Verify efficiency is below threshold
     assert!(metrics.iid_efficiency < 30.0);
 }
@@ -2470,13 +2500,13 @@ fn test_multi_pv_iid_search_basic() {
         &mut board,
         &captured_pieces,
         Player::Black,
-        2, // iid_depth
-        3, // pv_count
+        2,     // iid_depth
+        3,     // pv_count
         -1000, // alpha
-        1000, // beta
+        1000,  // beta
         &start_time,
         1000, // time_limit_ms
-        &mut history
+        &mut history,
     );
 
     // Should complete without panicking
@@ -2506,7 +2536,7 @@ fn test_multi_pv_iid_search_disabled() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
 
     // Should return empty results when disabled
@@ -2531,7 +2561,7 @@ fn test_multi_pv_iid_search_zero_pv_count() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
 
     // Should return empty results for zero PV count
@@ -2541,7 +2571,7 @@ fn test_multi_pv_iid_search_zero_pv_count() {
 #[test]
 fn test_multi_pv_analysis_basic() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Create mock PV results
     let pv_results = vec![
         IIDPVResult {
@@ -2587,14 +2617,14 @@ fn test_multi_pv_analysis_empty() {
 #[test]
 fn test_tactical_theme_identification() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Create PV results with different tactical themes
     let mut capture_move = create_test_move(0, 0, 1, 0);
     capture_move.is_capture = true;
-    
+
     let mut check_move = create_test_move(1, 1, 2, 1);
     check_move.gives_check = true;
-    
+
     let mut promotion_move = create_test_move(2, 2, 3, 2);
     promotion_move.is_promotion = true;
 
@@ -2637,7 +2667,7 @@ fn test_tactical_theme_identification() {
 #[test]
 fn test_move_diversity_calculation() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Create PV results with diverse moves
     let pv_results = vec![
         IIDPVResult {
@@ -2676,7 +2706,7 @@ fn test_move_diversity_calculation() {
 #[test]
 fn test_multi_pv_recommendations() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test with empty analysis
     let empty_analysis = MultiPVAnalysis {
         total_pvs: 0,
@@ -2694,49 +2724,57 @@ fn test_multi_pv_recommendations() {
     let high_complexity_analysis = MultiPVAnalysis {
         total_pvs: 3,
         score_spread: 150.0,
-        tactical_themes: vec![TacticalTheme::Capture, TacticalTheme::Check, TacticalTheme::Promotion],
+        tactical_themes: vec![
+            TacticalTheme::Capture,
+            TacticalTheme::Check,
+            TacticalTheme::Promotion,
+        ],
         move_diversity: 0.8,
         complexity_assessment: PositionComplexity::High,
     };
 
     let recommendations = engine.get_multi_pv_recommendations(&high_complexity_analysis);
     assert!(!recommendations.is_empty());
-    assert!(recommendations.iter().any(|r| r.contains("Large score spread")));
-    assert!(recommendations.iter().any(|r| r.contains("High complexity")));
+    assert!(recommendations
+        .iter()
+        .any(|r| r.contains("Large score spread")));
+    assert!(recommendations
+        .iter()
+        .any(|r| r.contains("High complexity")));
 }
 
 #[test]
 fn test_development_move_detection() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test knight development move
     let mut knight_move = create_test_move(0, 1, 2, 2);
     knight_move.piece_type = PieceType::Knight;
-    
+
     assert!(engine.is_development_move(&knight_move));
 
     // Test bishop development move
     let mut bishop_move = create_test_move(0, 2, 3, 5);
     bishop_move.piece_type = PieceType::Bishop;
-    
+
     assert!(engine.is_development_move(&bishop_move));
 
     // Test rook development move
     let mut rook_move = create_test_move(0, 0, 0, 4);
     rook_move.piece_type = PieceType::Rook;
-    
+
     assert!(engine.is_development_move(&rook_move));
 
     // Test non-development move
     let pawn_move = create_test_move(3, 3, 4, 3);
-    
+
     assert!(!engine.is_development_move(&pawn_move));
 }
 
 #[test]
 fn test_pv_complexity_assessment() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Create high tactical PV results
     let mut tactical_moves = vec![];
     for i in 0..5 {
@@ -2745,16 +2783,18 @@ fn test_pv_complexity_assessment() {
         tactical_moves.push(move_);
     }
 
-    let pv_results: Vec<IIDPVResult> = tactical_moves.iter().enumerate().map(|(i, move_)| {
-        IIDPVResult {
+    let pv_results: Vec<IIDPVResult> = tactical_moves
+        .iter()
+        .enumerate()
+        .map(|(i, move_)| IIDPVResult {
             move_: move_.clone(),
             score: 50 - i as i32 * 5,
             depth: 2,
             principal_variation: vec![move_.clone()],
             pv_index: i,
             search_time_ms: 10,
-        }
-    }).collect();
+        })
+        .collect();
 
     let analysis = engine.analyze_multi_pv_patterns(&pv_results);
 
@@ -2781,7 +2821,7 @@ fn test_multi_pv_time_limits() {
         1000,
         &start_time,
         1, // Very short time limit (1ms)
-        &mut history
+        &mut history,
     );
 
     // Should handle time limits gracefully
@@ -2803,13 +2843,13 @@ fn test_iid_probing_basic() {
         &mut board,
         &captured_pieces,
         Player::Black,
-        2, // iid_depth
-        3, // probe_depth
+        2,     // iid_depth
+        3,     // probe_depth
         -1000, // alpha
-        1000, // beta
+        1000,  // beta
         &start_time,
         1000, // time_limit_ms
-        &mut history
+        &mut history,
     );
 
     // Should complete without panicking
@@ -2839,7 +2879,7 @@ fn test_iid_probing_disabled() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
 
     // Should return None when disabled
@@ -2849,12 +2889,12 @@ fn test_iid_probing_disabled() {
 #[test]
 fn test_tactical_indicators_assessment() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test capture move
     let mut capture_move = create_test_move(0, 0, 1, 0);
     capture_move.is_capture = true;
     capture_move.piece_type = PieceType::Rook;
-    
+
     let indicators = engine.assess_tactical_indicators(&capture_move);
     assert!(indicators.is_capture);
     assert_eq!(indicators.piece_value, 900); // Rook value
@@ -2865,7 +2905,7 @@ fn test_tactical_indicators_assessment() {
     let mut promotion_move = create_test_move(1, 0, 2, 0);
     promotion_move.is_promotion = true;
     promotion_move.piece_type = PieceType::Pawn;
-    
+
     let indicators = engine.assess_tactical_indicators(&promotion_move);
     assert!(indicators.is_promotion);
     assert_eq!(indicators.piece_value, 100); // Pawn value
@@ -2875,7 +2915,7 @@ fn test_tactical_indicators_assessment() {
     let mut check_move = create_test_move(2, 0, 3, 0);
     check_move.gives_check = true;
     check_move.piece_type = PieceType::Bishop;
-    
+
     let indicators = engine.assess_tactical_indicators(&check_move);
     assert!(indicators.gives_check);
     assert_eq!(indicators.piece_value, 700); // Bishop value
@@ -2885,7 +2925,7 @@ fn test_tactical_indicators_assessment() {
 #[test]
 fn test_verification_confidence_calculation() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test perfect confidence (no score difference)
     let confidence = engine.calculate_verification_confidence(100, 100, 0);
     assert_eq!(confidence, 1.0);
@@ -2904,7 +2944,7 @@ fn test_verification_confidence_calculation() {
 #[test]
 fn test_piece_value_assessment() {
     let engine = SearchEngine::new(None, 64);
-    
+
     let mut pawn_move = create_test_move(0, 0, 1, 0);
     pawn_move.piece_type = PieceType::Pawn;
     assert_eq!(engine.get_piece_value_for_move(&pawn_move), 100);
@@ -2921,7 +2961,7 @@ fn test_piece_value_assessment() {
 #[test]
 fn test_mobility_impact_estimation() {
     let engine = SearchEngine::new(None, 64);
-    
+
     let mut pawn_move = create_test_move(0, 0, 1, 0);
     pawn_move.piece_type = PieceType::Pawn;
     assert_eq!(engine.estimate_mobility_impact(&pawn_move), 10);
@@ -2938,7 +2978,7 @@ fn test_mobility_impact_estimation() {
 #[test]
 fn test_king_safety_impact_estimation() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test check move (high impact)
     let mut check_move = create_test_move(0, 0, 1, 0);
     check_move.gives_check = true;
@@ -2973,7 +3013,7 @@ fn test_iid_probing_time_limits() {
         1000,
         &start_time,
         1, // Very short time limit (1ms)
-        &mut history
+        &mut history,
     );
 
     // Should handle time limits gracefully
@@ -3001,12 +3041,12 @@ fn test_promising_move_identification() {
         &captured_pieces,
         Player::Black,
         &moves,
-        2, // iid_depth
+        2,     // iid_depth
         -1000, // alpha
-        1000, // beta
+        1000,  // beta
         &start_time,
         1000, // time_limit_ms
-        &mut history
+        &mut history,
     );
 
     // Should handle identification gracefully
@@ -3016,7 +3056,7 @@ fn test_promising_move_identification() {
 #[test]
 fn test_probe_result_selection() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Create mock probe results
     let probe_results = vec![
         IIDProbeResult {
@@ -3078,9 +3118,9 @@ fn test_iid_performance_benchmark_basic() {
         &mut board,
         &captured_pieces,
         Player::Black,
-        3, // depth
+        3,   // depth
         100, // time_limit_ms
-        2, // iterations
+        2,   // iterations
     );
 
     // Should complete without panicking
@@ -3096,10 +3136,10 @@ fn test_iid_performance_benchmark_basic() {
 #[test]
 fn test_iid_performance_analysis() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test performance analysis
     let analysis = engine.get_iid_performance_analysis();
-    
+
     // Should provide analysis data
     assert!(analysis.overall_efficiency >= 0.0);
     assert!(analysis.cutoff_rate >= 0.0);
@@ -3121,9 +3161,9 @@ fn test_benchmark_time_efficiency_calculation() {
         &mut board,
         &captured_pieces,
         Player::Black,
-        2, // depth
+        2,  // depth
         10, // time_limit_ms
-        1, // iterations
+        1,  // iterations
     );
 
     // Should calculate efficiency metrics
@@ -3140,17 +3180,15 @@ fn test_benchmark_accuracy_assessment() {
     let mut board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
 
-    let benchmark = engine.benchmark_iid_performance(
-        &mut board,
-        &captured_pieces,
-        Player::Black,
-        2,
-        50,
-        1,
-    );
+    let benchmark =
+        engine.benchmark_iid_performance(&mut board, &captured_pieces, Player::Black, 2, 50, 1);
 
     // Should provide accuracy assessment
-    assert!(benchmark.accuracy == "High" || benchmark.accuracy == "Medium" || benchmark.accuracy == "Low");
+    assert!(
+        benchmark.accuracy == "High"
+            || benchmark.accuracy == "Medium"
+            || benchmark.accuracy == "Low"
+    );
     assert!(benchmark.avg_score_difference >= 0.0);
 }
 
@@ -3181,16 +3219,16 @@ fn test_benchmark_iteration_tracking() {
 #[test]
 fn test_performance_recommendations() {
     let engine = SearchEngine::new(None, 64);
-    
+
     // Test with default metrics (should provide recommendations)
     let analysis = engine.get_iid_performance_analysis();
-    
+
     // Should always provide at least one recommendation
     assert!(!analysis.recommendations.is_empty());
-    
+
     // Should provide bottleneck analysis
     assert!(!analysis.bottleneck_analysis.is_empty());
-    
+
     // Should assess optimization potential
     assert!(!analysis.optimization_potential.is_empty());
 }
@@ -3209,9 +3247,9 @@ fn test_benchmark_with_different_depths() {
             Player::Black,
             depth,
             20, // time_limit_ms
-            1, // iterations
+            1,  // iterations
         );
-        
+
         assert_eq!(benchmark.depth, depth);
         assert!(benchmark.avg_iid_time >= 0.0);
         assert!(benchmark.avg_non_iid_time >= 0.0);
@@ -3226,15 +3264,9 @@ fn test_benchmark_with_different_players() {
 
     // Test with both players
     for player in [Player::Black, Player::White] {
-        let benchmark = engine.benchmark_iid_performance(
-            &mut board,
-            &captured_pieces,
-            player,
-            2,
-            20,
-            1,
-        );
-        
+        let benchmark =
+            engine.benchmark_iid_performance(&mut board, &captured_pieces, player, 2, 20, 1);
+
         assert_eq!(benchmark.iterations, 1);
         assert!(benchmark.avg_iid_time >= 0.0);
         assert!(benchmark.avg_non_iid_time >= 0.0);
@@ -3249,17 +3281,11 @@ fn test_benchmark_config_preservation() {
 
     // Store original config
     let original_config = engine.get_iid_config().clone();
-    
+
     // Run benchmark
-    let _benchmark = engine.benchmark_iid_performance(
-        &mut board,
-        &captured_pieces,
-        Player::Black,
-        2,
-        20,
-        1,
-    );
-    
+    let _benchmark =
+        engine.benchmark_iid_performance(&mut board, &captured_pieces, Player::Black, 2, 20, 1);
+
     // Config should be restored
     let restored_config = engine.get_iid_config();
     assert_eq!(original_config.enabled, restored_config.enabled);
@@ -3278,7 +3304,10 @@ fn test_strength_test_position_creation() {
         difficulty: PositionDifficulty::Easy,
     };
 
-    assert_eq!(position.fen, "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1");
+    assert_eq!(
+        position.fen,
+        "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
+    );
     assert_eq!(position.description, "Starting position");
     assert_eq!(position.expected_result, GameResult::Draw);
     assert_eq!(position.difficulty, PositionDifficulty::Easy);
@@ -3287,7 +3316,7 @@ fn test_strength_test_position_creation() {
 #[test]
 fn test_position_strength_result_default() {
     let result = PositionStrengthResult::default();
-    
+
     assert_eq!(result.position_index, 0);
     assert_eq!(result.position_fen, "");
     assert_eq!(result.expected_result, GameResult::Draw);
@@ -3301,7 +3330,7 @@ fn test_position_strength_result_default() {
 #[test]
 fn test_iid_strength_test_result_default() {
     let result = IIDStrengthTestResult::default();
-    
+
     assert_eq!(result.total_positions, 0);
     assert_eq!(result.games_per_position, 0);
     assert_eq!(result.time_per_move_ms, 0);
@@ -3357,15 +3386,15 @@ fn test_generate_strength_test_positions() {
     let positions = engine.generate_strength_test_positions();
 
     assert_eq!(positions.len(), 3);
-    
+
     assert_eq!(positions[0].description, "Starting position");
     assert_eq!(positions[0].expected_result, GameResult::Draw);
     assert_eq!(positions[0].difficulty, PositionDifficulty::Easy);
-    
+
     assert_eq!(positions[1].description, "After one move");
     assert_eq!(positions[1].expected_result, GameResult::Draw);
     assert_eq!(positions[1].difficulty, PositionDifficulty::Medium);
-    
+
     assert_eq!(positions[2].description, "White to move");
     assert_eq!(positions[2].expected_result, GameResult::Win);
     assert_eq!(positions[2].difficulty, PositionDifficulty::Hard);
@@ -3374,22 +3403,20 @@ fn test_generate_strength_test_positions() {
 #[test]
 fn test_analyze_strength_test_results_high_improvement() {
     let engine = SearchEngine::new(None, 64);
-    
+
     let mut result = IIDStrengthTestResult::default();
     result.overall_improvement = 0.08; // High improvement
-    result.position_results = vec![
-        PositionStrengthResult {
-            position_index: 0,
-            position_fen: "fen1".to_string(),
-            expected_result: GameResult::Win,
-            iid_wins: 0,
-            non_iid_wins: 0,
-            iid_win_rate: 0.0,
-            non_iid_win_rate: 0.0,
-            improvement: 0.15, // Significant improvement
-            ..Default::default()
-        },
-    ];
+    result.position_results = vec![PositionStrengthResult {
+        position_index: 0,
+        position_fen: "fen1".to_string(),
+        expected_result: GameResult::Win,
+        iid_wins: 0,
+        non_iid_wins: 0,
+        iid_win_rate: 0.0,
+        non_iid_win_rate: 0.0,
+        improvement: 0.15, // Significant improvement
+        ..Default::default()
+    }];
 
     let analysis = engine.analyze_strength_test_results(&result);
 
@@ -3402,22 +3429,20 @@ fn test_analyze_strength_test_results_high_improvement() {
 #[test]
 fn test_analyze_strength_test_results_regression() {
     let engine = SearchEngine::new(None, 64);
-    
+
     let mut result = IIDStrengthTestResult::default();
     result.overall_improvement = -0.06; // Regression
-    result.position_results = vec![
-        PositionStrengthResult {
-            position_index: 0,
-            position_fen: "fen1".to_string(),
-            expected_result: GameResult::Win,
-            iid_wins: 0,
-            non_iid_wins: 0,
-            iid_win_rate: 0.0,
-            non_iid_win_rate: 0.0,
-            improvement: -0.12, // Significant regression
-            ..Default::default()
-        },
-    ];
+    result.position_results = vec![PositionStrengthResult {
+        position_index: 0,
+        position_fen: "fen1".to_string(),
+        expected_result: GameResult::Win,
+        iid_wins: 0,
+        non_iid_wins: 0,
+        iid_win_rate: 0.0,
+        non_iid_win_rate: 0.0,
+        improvement: -0.12, // Significant regression
+        ..Default::default()
+    }];
 
     let analysis = engine.analyze_strength_test_results(&result);
 
@@ -3430,22 +3455,20 @@ fn test_analyze_strength_test_results_regression() {
 #[test]
 fn test_analyze_strength_test_results_neutral() {
     let engine = SearchEngine::new(None, 64);
-    
+
     let mut result = IIDStrengthTestResult::default();
     result.overall_improvement = 0.01; // Neutral
-    result.position_results = vec![
-        PositionStrengthResult {
-            position_index: 0,
-            position_fen: "fen1".to_string(),
-            expected_result: GameResult::Win,
-            iid_wins: 0,
-            non_iid_wins: 0,
-            iid_win_rate: 0.0,
-            non_iid_win_rate: 0.0,
-            improvement: 0.05, // Small improvement
-            ..Default::default()
-        },
-    ];
+    result.position_results = vec![PositionStrengthResult {
+        position_index: 0,
+        position_fen: "fen1".to_string(),
+        expected_result: GameResult::Win,
+        iid_wins: 0,
+        non_iid_wins: 0,
+        iid_win_rate: 0.0,
+        non_iid_win_rate: 0.0,
+        improvement: 0.05, // Small improvement
+        ..Default::default()
+    }];
 
     let analysis = engine.analyze_strength_test_results(&result);
 
@@ -3487,8 +3510,8 @@ fn test_strength_test_basic() {
     // Test with minimal parameters to avoid long execution time
     let result = engine.strength_test_iid_vs_non_iid(
         &test_positions[..1], // Only first position
-        100, // time_per_move_ms
-        2, // games_per_position (minimal)
+        100,                  // time_per_move_ms
+        2,                    // games_per_position (minimal)
     );
 
     // Should complete without panicking
@@ -3503,8 +3526,14 @@ fn test_strength_test_basic() {
 // Helper function to create test moves
 fn create_test_move(from_row: u8, from_col: u8, to_row: u8, to_col: u8) -> Move {
     Move {
-        from: Some(Position { row: from_row, col: from_col }),
-        to: Position { row: to_row, col: to_col },
+        from: Some(Position {
+            row: from_row,
+            col: from_col,
+        }),
+        to: Position {
+            row: to_row,
+            col: to_col,
+        },
         piece_type: PieceType::Pawn,
         captured_piece: None,
         is_promotion: false,
@@ -3525,7 +3554,7 @@ fn test_iid_move_extraction_returns_tuple() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     let (score, move_result) = engine.perform_iid_search(
         &mut board,
         &captured_pieces,
@@ -3535,9 +3564,9 @@ fn test_iid_move_extraction_returns_tuple() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Verify tuple return type
     assert!(score >= -10000 && score <= 10000);
     assert!(move_result.is_none() || move_result.is_some());
@@ -3551,10 +3580,10 @@ fn test_iid_move_extraction_works_without_alpha_beating() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Set alpha to a very high value so IID score likely won't beat it
     let high_alpha = 5000;
-    
+
     let (score, move_result) = engine.perform_iid_search(
         &mut board,
         &captured_pieces,
@@ -3564,9 +3593,9 @@ fn test_iid_move_extraction_works_without_alpha_beating() {
         10000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Task 2.5: IID should still return a move even if score doesn't beat alpha
     // This is for move ordering, not for proving a move is good
     // The move_result might be None if no moves were found, but if score < alpha, it should still return if found
@@ -3582,12 +3611,12 @@ fn test_iid_move_verification_in_legal_moves() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Generate legal moves for verification
     use shogi_engine::move_generation::MoveGenerator;
     let generator = MoveGenerator::new();
     let legal_moves = generator.generate_legal_moves(&board, Player::Black, &captured_pieces);
-    
+
     let (_, move_result) = engine.perform_iid_search(
         &mut board,
         &captured_pieces,
@@ -3597,14 +3626,12 @@ fn test_iid_move_verification_in_legal_moves() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // If a move is returned, verify it's in the legal moves list
     if let Some(ref iid_move) = move_result {
-        let is_legal = legal_moves.iter().any(|m| {
-            engine.moves_equal(m, iid_move)
-        });
+        let is_legal = legal_moves.iter().any(|m| engine.moves_equal(m, iid_move));
         assert!(is_legal, "IID move should be in legal moves list");
     }
 }
@@ -3617,10 +3644,10 @@ fn test_iid_statistics_tracking_tt_vs_tracked() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     let initial_tt_count = engine.get_iid_stats().iid_move_extracted_from_tt;
     let initial_tracked_count = engine.get_iid_stats().iid_move_extracted_from_tracked;
-    
+
     // Perform IID search
     let (_, _) = engine.perform_iid_search(
         &mut board,
@@ -3631,11 +3658,11 @@ fn test_iid_statistics_tracking_tt_vs_tracked() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     let final_stats = engine.get_iid_stats();
-    
+
     // Statistics should be tracked (either TT or tracked count should increase if a move was found)
     // Since we don't know which method will be used, we just verify the stats are accessible
     assert!(final_stats.iid_move_extracted_from_tt >= initial_tt_count);
@@ -3652,7 +3679,7 @@ fn test_iid_move_none_when_no_moves_found() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Use very shallow depth and very short time to increase chance of no move found
     let (score, move_result) = engine.perform_iid_search(
         &mut board,
@@ -3663,9 +3690,9 @@ fn test_iid_move_none_when_no_moves_found() {
         1000,
         &start_time,
         1, // Very short time limit
-        &mut history
+        &mut history,
     );
-    
+
     // Score should still be returned even if no move found
     assert!(score >= -10000 && score <= 10000);
     // Move_result might be None if no move was found or time ran out
@@ -3677,7 +3704,7 @@ fn test_iid_stats_new_fields_initialized() {
     // Task 2.11: Verify new statistics fields are properly initialized
     let engine = SearchEngine::new(None, 64);
     let stats = engine.get_iid_stats();
-    
+
     assert_eq!(stats.iid_move_extracted_from_tt, 0);
     assert_eq!(stats.iid_move_extracted_from_tracked, 0);
 }
@@ -3690,7 +3717,7 @@ fn test_iid_stats_reset_includes_new_fields() {
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Perform some IID searches to increment stats
     for _ in 0..3 {
         let _ = engine.perform_iid_search(
@@ -3702,13 +3729,13 @@ fn test_iid_stats_reset_includes_new_fields() {
             1000,
             &start_time,
             100,
-            &mut history
+            &mut history,
         );
     }
-    
+
     // Reset stats
     engine.reset_iid_stats();
-    
+
     let stats = engine.get_iid_stats();
     assert_eq!(stats.iid_move_extracted_from_tt, 0);
     assert_eq!(stats.iid_move_extracted_from_tracked, 0);
@@ -3720,25 +3747,25 @@ fn test_iid_stats_reset_includes_new_fields() {
 fn test_advanced_ordering_iid_move_prioritization() {
     // Task 3.8: Verify IID move is prioritized in advanced ordering path
     use shogi_engine::move_generation::MoveGenerator;
-    
+
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Generate some legal moves
     let generator = MoveGenerator::new();
     let legal_moves = generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if legal_moves.len() < 2 {
         // Skip test if not enough moves
         return;
     }
-    
+
     // Create an IID move (use one of the legal moves)
     let iid_move = Some(&legal_moves[2]); // Use a move that's not first
-    
+
     // Test with advanced ordering (should succeed)
     let ordered_moves = engine.order_moves_for_negamax(
         &legal_moves,
@@ -3748,18 +3775,20 @@ fn test_advanced_ordering_iid_move_prioritization() {
         depth,
         -10000,
         10000,
-        iid_move
+        iid_move,
     );
-    
+
     // Verify IID move is first in the ordering
     assert!(!ordered_moves.is_empty());
-    
+
     // Check if IID move appears in the ordered moves (should be first)
     if let Some(iid_mv) = iid_move {
-        let iid_pos = ordered_moves.iter().position(|m| engine.moves_equal(m, iid_mv));
+        let iid_pos = ordered_moves
+            .iter()
+            .position(|m| engine.moves_equal(m, iid_mv));
         // IID move should be in the list and ideally first (or at least prioritized)
         assert!(iid_pos.is_some(), "IID move should be in ordered moves");
-        
+
         // If advanced ordering worked, IID move should be first
         // (fallback to traditional ordering might not prioritize it as strongly)
         if ordered_moves[0] == *iid_mv {
@@ -3775,21 +3804,21 @@ fn test_advanced_ordering_iid_move_prioritization() {
 fn test_advanced_ordering_without_iid_move() {
     // Task 3.9: Compare ordering with/without IID move in advanced path
     use shogi_engine::move_generation::MoveGenerator;
-    
+
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     // Generate legal moves
     let generator = MoveGenerator::new();
     let legal_moves = generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if legal_moves.len() < 2 {
         return;
     }
-    
+
     // Order without IID move
     let ordered_without_iid = engine.order_moves_for_negamax(
         &legal_moves,
@@ -3799,9 +3828,9 @@ fn test_advanced_ordering_without_iid_move() {
         depth,
         -10000,
         10000,
-        None // No IID move
+        None, // No IID move
     );
-    
+
     // Order with IID move
     let iid_move = Some(&legal_moves[1]);
     let ordered_with_iid = engine.order_moves_for_negamax(
@@ -3812,27 +3841,32 @@ fn test_advanced_ordering_without_iid_move() {
         depth,
         -10000,
         10000,
-        iid_move
+        iid_move,
     );
-    
+
     // Both should return ordered moves
     assert_eq!(ordered_without_iid.len(), ordered_with_iid.len());
     assert_eq!(ordered_without_iid.len(), legal_moves.len());
-    
+
     // With IID move, the IID move should be prioritized (first or early in the list)
     if let Some(iid_mv) = iid_move {
-        let iid_pos = ordered_with_iid.iter().position(|m| engine.moves_equal(m, iid_mv));
+        let iid_pos = ordered_with_iid
+            .iter()
+            .position(|m| engine.moves_equal(m, iid_mv));
         assert!(iid_pos.is_some(), "IID move should be in ordered moves");
-        
+
         // IID move position should be better (earlier) with IID than without
         let iid_pos_with = iid_pos.unwrap();
-        let iid_pos_without = ordered_without_iid.iter()
+        let iid_pos_without = ordered_without_iid
+            .iter()
             .position(|m| engine.moves_equal(m, iid_mv))
             .unwrap_or(legal_moves.len());
-        
+
         // IID move should be at least as good (or better) position when IID move is provided
-        assert!(iid_pos_with <= iid_pos_without || iid_pos_without >= legal_moves.len(),
-            "IID move should be prioritized when provided");
+        assert!(
+            iid_pos_with <= iid_pos_without || iid_pos_without >= legal_moves.len(),
+            "IID move should be prioritized when provided"
+        );
     }
 }
 
@@ -3840,23 +3874,23 @@ fn test_advanced_ordering_without_iid_move() {
 fn test_advanced_ordering_iid_move_parameter_passed() {
     // Task 3.7: Ensure IID move is prioritized regardless of ordering method
     use shogi_engine::move_generation::MoveGenerator;
-    
+
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     let generator = MoveGenerator::new();
     let legal_moves = generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if legal_moves.is_empty() {
         return;
     }
-    
+
     // Test that IID move parameter is accepted
     let iid_move = Some(&legal_moves[0]);
-    
+
     // This should compile and run without errors
     let ordered = engine.order_moves_for_negamax(
         &legal_moves,
@@ -3866,9 +3900,9 @@ fn test_advanced_ordering_iid_move_parameter_passed() {
         depth,
         -10000,
         10000,
-        iid_move
+        iid_move,
     );
-    
+
     assert_eq!(ordered.len(), legal_moves.len());
 }
 
@@ -3876,24 +3910,24 @@ fn test_advanced_ordering_iid_move_parameter_passed() {
 fn test_order_moves_for_negamax_iid_move_integration() {
     // Task 3.11: Verify IID move ordering is effective in both ordering paths
     use shogi_engine::move_generation::MoveGenerator;
-    
+
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
     let depth = 5;
-    
+
     let generator = MoveGenerator::new();
     let legal_moves = generator.generate_legal_moves(&board, player, &captured_pieces);
-    
+
     if legal_moves.len() < 3 {
         return;
     }
-    
+
     // Test with different IID moves
     for i in 0..legal_moves.len().min(3) {
         let iid_move = Some(&legal_moves[i]);
-        
+
         let ordered = engine.order_moves_for_negamax(
             &legal_moves,
             &board,
@@ -3902,15 +3936,20 @@ fn test_order_moves_for_negamax_iid_move_integration() {
             depth,
             -10000,
             10000,
-            iid_move
+            iid_move,
         );
-        
+
         // Verify ordering completed successfully
         assert_eq!(ordered.len(), legal_moves.len());
-        
+
         // Verify IID move is in the ordered list
-        let iid_pos = ordered.iter().position(|m| engine.moves_equal(m, iid_move.unwrap()));
-        assert!(iid_pos.is_some(), "IID move should always be in ordered moves");
+        let iid_pos = ordered
+            .iter()
+            .position(|m| engine.moves_equal(m, iid_move.unwrap()));
+        assert!(
+            iid_pos.is_some(),
+            "IID move should always be in ordered moves"
+        );
     }
 }
 
@@ -3922,10 +3961,10 @@ fn test_calculate_dynamic_iid_depth_low_complexity() {
     let mut engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with base depth 2, low complexity should reduce to 1
     let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2);
-    
+
     // Low complexity positions should reduce depth by 1, minimum 1
     assert!(depth >= 1 && depth <= 2);
 }
@@ -3938,13 +3977,13 @@ fn test_calculate_dynamic_iid_depth_high_complexity() {
     config.dynamic_base_depth = 2;
     config.dynamic_max_depth = 4;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with base depth 2, high complexity should increase to 3 (capped at max_depth)
     let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2);
-    
+
     // High complexity positions should increase depth, but capped at max_depth
     assert!(depth >= 2 && depth <= 4);
 }
@@ -3957,13 +3996,13 @@ fn test_dynamic_depth_max_cap_respected() {
     config.dynamic_base_depth = 3;
     config.dynamic_max_depth = 4;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test that depth is capped at dynamic_max_depth
     let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 3);
-    
+
     // Should not exceed max_depth
     assert!(depth <= 4);
 }
@@ -3977,19 +4016,22 @@ fn test_dynamic_strategy_integration() {
     config.dynamic_base_depth = 2;
     config.dynamic_max_depth = 4;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test that Dynamic strategy uses calculate_dynamic_iid_depth
     let depth = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
-    
+
     // Should return a valid depth within bounds
     assert!(depth >= 1 && depth <= 4);
-    
+
     // Verify statistics were tracked
     let stats = engine.get_iid_stats();
-    assert!(stats.dynamic_depth_selections.contains_key(&depth) || stats.dynamic_depth_selections.is_empty());
+    assert!(
+        stats.dynamic_depth_selections.contains_key(&depth)
+            || stats.dynamic_depth_selections.is_empty()
+    );
 }
 
 #[test]
@@ -4000,22 +4042,24 @@ fn test_dynamic_depth_statistics_tracking() {
     config.depth_strategy = IIDDepthStrategy::Dynamic;
     config.dynamic_base_depth = 2;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Perform multiple depth calculations
     for _ in 0..5 {
         let _ = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
     }
-    
+
     // Verify statistics were tracked
     let stats = engine.get_iid_stats();
     // Should have recorded some depth selections
-    assert!(!stats.dynamic_depth_selections.is_empty() || 
-            stats.dynamic_depth_low_complexity > 0 ||
-            stats.dynamic_depth_medium_complexity > 0 ||
-            stats.dynamic_depth_high_complexity > 0);
+    assert!(
+        !stats.dynamic_depth_selections.is_empty()
+            || stats.dynamic_depth_low_complexity > 0
+            || stats.dynamic_depth_medium_complexity > 0
+            || stats.dynamic_depth_high_complexity > 0
+    );
 }
 
 #[test]
@@ -4026,17 +4070,25 @@ fn test_adaptive_minimum_depth_threshold() {
     config.adaptive_min_depth = true;
     config.min_depth = 4;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let legal_moves = vec![create_test_move(6, 4, 5, 4)];
     let start_time = TimeSource::now();
-    
+
     // Test that high complexity positions use lower minimum depth threshold
     // This is tested indirectly - if adaptive_min_depth works, depth 3 might pass
     // where it wouldn't with fixed min_depth=4
-    let result = engine.should_apply_iid(3, None, &legal_moves, &start_time, 1000, Some(&board), Some(&captured_pieces));
-    
+    let result = engine.should_apply_iid(
+        3,
+        None,
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
+        Some(&captured_pieces),
+    );
+
     // Result depends on complexity assessment, but function should not crash
     assert!(result == true || result == false);
 }
@@ -4049,10 +4101,10 @@ fn test_dynamic_strategy_without_position_info() {
     config.depth_strategy = IIDDepthStrategy::Dynamic;
     config.dynamic_base_depth = 2;
     engine.update_iid_config(config).unwrap();
-    
+
     // Test without position info - should fallback to base depth
     let depth = engine.calculate_iid_depth(5, None, None, None, None);
-    
+
     // Should return base depth as fallback
     assert_eq!(depth, 2);
 }
@@ -4065,12 +4117,12 @@ fn test_dynamic_base_depth_configuration() {
     config.depth_strategy = IIDDepthStrategy::Dynamic;
     config.dynamic_base_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     let depth = engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 3);
-    
+
     // Should be based on base depth (3) adjusted by complexity
     assert!(depth >= 1 && depth <= 4);
 }
@@ -4082,10 +4134,10 @@ fn test_relative_strategy_max_cap() {
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Relative;
     engine.update_iid_config(config).unwrap();
-    
+
     // Test with high main depth - should be capped at 4
     let depth = engine.calculate_iid_depth(20, None, None, None, None);
-    
+
     // Relative strategy should cap at 4
     assert_eq!(depth, 4);
 }
@@ -4097,13 +4149,13 @@ fn test_adaptive_strategy_position_based() {
     let mut config = engine.get_iid_config().clone();
     config.depth_strategy = IIDDepthStrategy::Adaptive;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test with position info - should use complexity for adjustments
     let depth = engine.calculate_iid_depth(5, Some(&board, None, None), Some(&captured_pieces));
-    
+
     // Should return a valid depth (base depth adjusted by complexity)
     assert!(depth >= 1 && depth <= 4);
 }
@@ -4114,7 +4166,7 @@ fn test_adaptive_strategy_position_based() {
 fn test_time_estimation_configuration_default() {
     // Task 5.4: Test default time estimation configuration
     let config = IIDConfig::default();
-    
+
     assert_eq!(config.max_estimated_iid_time_ms, 50);
     assert_eq!(config.max_estimated_iid_time_percentage, false);
 }
@@ -4123,7 +4175,7 @@ fn test_time_estimation_configuration_default() {
 fn test_time_estimation_stats_default() {
     // Task 5.8, 5.9: Test default statistics fields
     let stats = IIDStats::default();
-    
+
     assert_eq!(stats.total_predicted_iid_time_ms, 0);
     assert_eq!(stats.total_actual_iid_time_ms, 0);
     assert_eq!(stats.positions_skipped_time_estimation, 0);
@@ -4137,23 +4189,28 @@ fn test_should_apply_iid_time_estimation_exceeds_threshold() {
     config.max_estimated_iid_time_ms = 10; // Very low threshold (10ms)
     config.max_estimated_iid_time_percentage = false; // Use absolute time
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // Should skip IID if estimated time > 10ms
     // For initial position with depth 2, estimate should be reasonable
-    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000, Some(&board), Some(&captured_pieces));
-    
+    let result = engine.should_apply_iid(
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
+        Some(&captured_pieces),
+    );
+
     // Result depends on actual estimate, but function should handle gracefully
     // If estimate exceeds threshold, should return false
     assert!(result == true || result == false);
-    
+
     // Check statistics were tracked if skipped
     let stats = engine.get_iid_stats();
     assert!(stats.positions_skipped_time_estimation >= 0);
@@ -4167,19 +4224,24 @@ fn test_should_apply_iid_time_estimation_percentage_threshold() {
     config.max_estimated_iid_time_ms = 10; // 10% of remaining time
     config.max_estimated_iid_time_percentage = true; // Use percentage
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // With percentage mode, threshold is 10% of remaining time
     // For 1000ms time limit with little elapsed, 10% = 100ms
-    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000, Some(&board), Some(&captured_pieces));
-    
+    let result = engine.should_apply_iid(
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
+        Some(&captured_pieces),
+    );
+
     // Should handle percentage threshold correctly
     assert!(result == true || result == false);
 }
@@ -4192,28 +4254,33 @@ fn test_time_estimation_time_pressure_detection() {
     config.enable_time_pressure_detection = true;
     config.max_estimated_iid_time_ms = 50;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
-    
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
+
     // Simulate time pressure - very little remaining time
     let start_time = TimeSource::now();
     let time_limit_ms = 100; // Very short time limit
-    
+
     // Wait a bit to consume some time
     std::thread::sleep(std::time::Duration::from_millis(90));
-    
+
     // With remaining time < estimated_iid_time * 2, should skip IID
-    let result = engine.should_apply_iid(5, None, &legal_moves, &start_time, time_limit_ms, Some(&board), Some(&captured_pieces));
-    
+    let result = engine.should_apply_iid(
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        time_limit_ms,
+        Some(&board),
+        Some(&captured_pieces),
+    );
+
     // Should likely skip due to time pressure (remaining < estimated * 2)
     // But result depends on actual timing, so just verify no panic
     assert!(result == true || result == false);
-    
+
     // Check statistics
     let stats = engine.get_iid_stats();
     assert!(stats.positions_skipped_time_pressure >= 0);
@@ -4223,13 +4290,13 @@ fn test_time_estimation_time_pressure_detection() {
 fn test_time_estimation_accuracy_tracking() {
     // Task 5.8, 5.11: Test time estimation accuracy is tracked
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Simulate IID search to trigger accuracy tracking
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let mut history = Vec::new();
-    
+
     // Perform IID search
     let _ = engine.perform_iid_search(
         &mut board.clone(),
@@ -4240,17 +4307,17 @@ fn test_time_estimation_accuracy_tracking() {
         1000,
         &start_time,
         1000,
-        &mut history
+        &mut history,
     );
-    
+
     // Check that predicted and actual times were tracked
     let stats = engine.get_iid_stats();
-    
+
     // Should have tracked both predicted and actual time
     assert!(stats.total_predicted_iid_time_ms > 0);
     assert!(stats.total_actual_iid_time_ms > 0);
     assert!(stats.iid_searches_performed > 0);
-    
+
     // Accuracy should be reasonable (within some range)
     // Perfect accuracy would be 100%, but we allow some variance
     let accuracy_ratio = if stats.total_predicted_iid_time_ms > 0 {
@@ -4258,10 +4325,13 @@ fn test_time_estimation_accuracy_tracking() {
     } else {
         1.0
     };
-    
+
     // Accuracy should be between 0.5 and 2.0 (within 2x range is reasonable for estimates)
-    assert!(accuracy_ratio >= 0.5 && accuracy_ratio <= 2.0, 
-        "Time estimation accuracy ratio {} should be between 0.5 and 2.0", accuracy_ratio);
+    assert!(
+        accuracy_ratio >= 0.5 && accuracy_ratio <= 2.0,
+        "Time estimation accuracy ratio {} should be between 0.5 and 2.0",
+        accuracy_ratio
+    );
 }
 
 #[test]
@@ -4272,18 +4342,26 @@ fn test_time_estimation_skip_statistics_tracking() {
     config.max_estimated_iid_time_ms = 5; // Very low threshold to force skip
     config.max_estimated_iid_time_percentage = false;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let legal_moves = vec![create_test_move(6, 4, 5, 4)];
     let start_time = TimeSource::now();
-    
+
     // Try to apply IID - should skip if estimate > 5ms
-    let _ = engine.should_apply_iid(5, None, &legal_moves, &start_time, 1000, Some(&board), Some(&captured_pieces));
-    
+    let _ = engine.should_apply_iid(
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
+        Some(&captured_pieces),
+    );
+
     // Check statistics
     let stats = engine.get_iid_stats();
-    
+
     // Should have tracked skip if estimate exceeded threshold
     assert!(stats.positions_skipped_time_estimation >= 0);
 }
@@ -4294,16 +4372,16 @@ fn test_time_estimation_with_different_depths() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Estimate time for different depths
     let estimate_depth_1 = engine.estimate_iid_time(&board, &captured_pieces, 1);
     let estimate_depth_2 = engine.estimate_iid_time(&board, &captured_pieces, 2);
     let estimate_depth_3 = engine.estimate_iid_time(&board, &captured_pieces, 3);
-    
+
     // Time should increase with depth
     assert!(estimate_depth_2 >= estimate_depth_1);
     assert!(estimate_depth_3 >= estimate_depth_2);
-    
+
     // All estimates should be reasonable
     assert!(estimate_depth_1 > 0);
     assert!(estimate_depth_1 < 1000);
@@ -4317,11 +4395,11 @@ fn test_time_estimation_with_different_complexities() {
     let engine = SearchEngine::new(None, 64);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Estimate for same depth should give consistent results for same position
     let estimate1 = engine.estimate_iid_time(&board, &captured_pieces, 2);
     let estimate2 = engine.estimate_iid_time(&board, &captured_pieces, 2);
-    
+
     // Estimates for same position and depth should be similar
     // (allowing small variance due to complexity assessment)
     assert!((estimate1 as f64 - estimate2 as f64).abs() < 50.0);
@@ -4331,15 +4409,15 @@ fn test_time_estimation_with_different_complexities() {
 fn test_iid_stats_time_estimation_fields_reset() {
     // Test that new time estimation fields are properly reset
     let mut stats = IIDStats::default();
-    
+
     // Set some values
     stats.total_predicted_iid_time_ms = 100;
     stats.total_actual_iid_time_ms = 120;
     stats.positions_skipped_time_estimation = 5;
-    
+
     // Reset should clear all fields
     stats.reset();
-    
+
     assert_eq!(stats.total_predicted_iid_time_ms, 0);
     assert_eq!(stats.total_actual_iid_time_ms, 0);
     assert_eq!(stats.positions_skipped_time_estimation, 0);
@@ -4353,15 +4431,15 @@ fn test_different_complexity_levels_depths() {
     config.dynamic_base_depth = 2;
     config.dynamic_max_depth = 4;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test multiple calls - complexity assessment may vary
     let depths: Vec<u8> = (0..10)
         .map(|_| engine.calculate_dynamic_iid_depth(&board, &captured_pieces, 2))
         .collect();
-    
+
     // All depths should be within valid range
     for depth in &depths {
         assert!(*depth >= 1 && *depth <= 4);
@@ -4379,12 +4457,12 @@ fn test_enhanced_time_pressure_detection_simple_vs_complex() {
     config.time_pressure_base_threshold = 0.10; // 10%
     config.time_pressure_complexity_multiplier = 1.5; // Complex positions need 1.5x threshold
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Simulate simple position (Low complexity)
     // With 10% base threshold and 1.5x multiplier, simple positions should have lower threshold
     // (actually 1.0 / 1.5 = 0.667x multiplier for Low complexity)
@@ -4392,7 +4470,7 @@ fn test_enhanced_time_pressure_detection_simple_vs_complex() {
     let elapsed = time_limit_ms - remaining_simple;
     let test_start = TimeSource::now();
     // Wait to simulate elapsed time (approximate)
-    
+
     // Test time pressure detection indirectly through should_apply_iid
     // (is_time_pressure is private, so we test it through the public interface)
     let should_apply = engine.should_apply_iid(
@@ -4403,9 +4481,9 @@ fn test_enhanced_time_pressure_detection_simple_vs_complex() {
         time_limit_ms,
         Some(&board),
         Some(&captured_pieces),
-        Some(Player::Black)
+        Some(Player::Black),
     );
-    
+
     // Result depends on dynamic calculation, but should handle gracefully
     assert!(should_apply == true || should_apply == false);
 }
@@ -4419,16 +4497,13 @@ fn test_enhanced_time_pressure_detection_different_depths() {
     config.time_pressure_base_threshold = 0.10;
     config.time_pressure_depth_multiplier = 0.1; // Small adjustment per depth
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Test at depth 5 vs depth 10 (deeper searches need more time)
     // Test indirectly through should_apply_iid
     let should_apply_shallow = engine.should_apply_iid(
@@ -4439,9 +4514,9 @@ fn test_enhanced_time_pressure_detection_different_depths() {
         time_limit_ms,
         Some(&board),
         Some(&captured_pieces),
-        Some(Player::Black)
+        Some(Player::Black),
     );
-    
+
     let should_apply_deep = engine.should_apply_iid(
         10,
         None,
@@ -4450,9 +4525,9 @@ fn test_enhanced_time_pressure_detection_different_depths() {
         time_limit_ms,
         Some(&board),
         Some(&captured_pieces),
-        Some(Player::Black)
+        Some(Player::Black),
     );
-    
+
     // Both should handle gracefully (results depend on timing and other factors)
     assert!(should_apply_shallow == true || should_apply_shallow == false);
     assert!(should_apply_deep == true || should_apply_deep == false);
@@ -4466,16 +4541,13 @@ fn test_enhanced_time_pressure_detection_with_time_estimates() {
     config.enable_time_pressure_detection = true;
     config.time_pressure_base_threshold = 0.10;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Test time pressure detection with different IID time estimates
     // This is tested indirectly through should_apply_iid which uses estimate_iid_time
     let should_apply = engine.should_apply_iid(
@@ -4486,12 +4558,12 @@ fn test_enhanced_time_pressure_detection_with_time_estimates() {
         time_limit_ms,
         Some(&board),
         Some(&captured_pieces),
-        Some(Player::Black)
+        Some(Player::Black),
     );
-    
+
     // Result should handle gracefully (time estimation is integrated into decision)
     assert!(should_apply == true || should_apply == false);
-    
+
     // Verify statistics are tracked
     let stats = engine.get_iid_stats();
     assert!(stats.time_pressure_detection_total >= 0);
@@ -4505,45 +4577,44 @@ fn test_tt_move_condition_depth_age_checking() {
     config.tt_move_min_depth_for_skip = 3; // Only skip if TT entry depth >= 3
     config.tt_move_max_age_for_skip = 100; // Only skip if TT entry age <= 100
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
     let player = Player::Black;
-    
+
     // Create a TT entry with shallow depth (depth 2 < min_depth 3)
     // IID should still be applied even if TT move exists
-    let position_hash = engine.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+    let position_hash = engine
+        .hash_calculator
+        .get_position_hash(&board, player, &captured_pieces);
     let shallow_entry = TranspositionEntry::new(
         100, // score
         2,   // depth (below threshold)
         TranspositionFlag::Exact,
         Some(create_test_move(6, 4, 5, 4)),
         position_hash,
-        50   // age (acceptable)
+        50, // age (acceptable)
     );
     engine.transposition_table.store(shallow_entry);
-    
+
     // Probe to get TT move
     let tt_entry = engine.transposition_table.probe(position_hash, 0);
     let tt_move = tt_entry.and_then(|e| e.best_move.clone());
-    
+
     // Should apply IID even with TT move because depth is too shallow
     let should_apply = engine.should_apply_iid(
-        5, 
-        tt_move.as_ref(), 
-        &legal_moves, 
-        &start_time, 
-        1000, 
-        Some(&board), 
+        5,
+        tt_move.as_ref(),
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
         Some(&captured_pieces),
-        Some(player)
+        Some(player),
     );
-    
+
     // Result depends on other conditions, but TT move shouldn't skip IID if depth is too shallow
     // Note: This test may need adjustment based on actual implementation behavior
     assert!(should_apply == true || should_apply == false);
@@ -4556,27 +4627,24 @@ fn test_time_pressure_detection_accuracy_tracking() {
     let mut config = engine.get_iid_config().clone();
     config.enable_time_pressure_detection = true;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
-    
+
     // Call should_apply_iid which tracks time pressure detection accuracy
     let _ = engine.should_apply_iid(
-        5, 
-        None, 
-        &legal_moves, 
-        &start_time, 
-        1000, 
-        Some(&board), 
+        5,
+        None,
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
         Some(&captured_pieces),
-        Some(Player::Black)
+        Some(Player::Black),
     );
-    
+
     let stats = engine.get_iid_stats();
     // Time pressure detection tracking should be incremented
     assert!(stats.time_pressure_detection_total >= 0);
@@ -4591,44 +4659,43 @@ fn test_tt_move_condition_effectiveness_tracking() {
     config.tt_move_min_depth_for_skip = 3;
     config.tt_move_max_age_for_skip = 100;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    let legal_moves = vec![
-        create_test_move(6, 4, 5, 4),
-        create_test_move(6, 3, 5, 3),
-    ];
+    let legal_moves = vec![create_test_move(6, 4, 5, 4), create_test_move(6, 3, 5, 3)];
     let start_time = TimeSource::now();
     let player = Player::Black;
-    
+
     // Create a TT entry with sufficient depth and age
-    let position_hash = engine.hash_calculator.get_position_hash(&board, player, &captured_pieces);
+    let position_hash = engine
+        .hash_calculator
+        .get_position_hash(&board, player, &captured_pieces);
     let good_entry = TranspositionEntry::new(
         100,
-        5,   // depth (>= 3, sufficient)
+        5, // depth (>= 3, sufficient)
         TranspositionFlag::Exact,
         Some(create_test_move(6, 4, 5, 4)),
         position_hash,
-        50   // age (<= 100, acceptable)
+        50, // age (<= 100, acceptable)
     );
     engine.transposition_table.store(good_entry);
-    
+
     // Probe to get TT move
     let tt_entry = engine.transposition_table.probe(position_hash, 0);
     let tt_move = tt_entry.and_then(|e| e.best_move.clone());
-    
+
     // Call should_apply_iid which tracks TT move condition effectiveness
     let _ = engine.should_apply_iid(
-        5, 
-        tt_move.as_ref(), 
-        &legal_moves, 
-        &start_time, 
-        1000, 
-        Some(&board), 
+        5,
+        tt_move.as_ref(),
+        &legal_moves,
+        &start_time,
+        1000,
+        Some(&board),
         Some(&captured_pieces),
-        Some(player)
+        Some(player),
     );
-    
+
     let stats = engine.get_iid_stats();
     // TT move condition tracking should be updated
     assert!(stats.tt_move_condition_skips >= 0 || stats.tt_move_condition_tt_move_used >= 0);
@@ -4639,25 +4706,25 @@ fn test_tt_move_condition_effectiveness_tracking() {
 fn test_time_pressure_detection_configuration_options() {
     let mut engine = SearchEngine::new(None, 64);
     let mut config = engine.get_iid_config().clone();
-    
+
     // Test base threshold
     config.time_pressure_base_threshold = 0.15; // 15%
     assert_eq!(config.time_pressure_base_threshold, 0.15);
-    
+
     // Test complexity multiplier
     config.time_pressure_complexity_multiplier = 2.0;
     assert_eq!(config.time_pressure_complexity_multiplier, 2.0);
-    
+
     // Test depth multiplier
     config.time_pressure_depth_multiplier = 1.5;
     assert_eq!(config.time_pressure_depth_multiplier, 1.5);
-    
+
     // Test TT move condition thresholds
     config.tt_move_min_depth_for_skip = 5;
     config.tt_move_max_age_for_skip = 50;
     assert_eq!(config.tt_move_min_depth_for_skip, 5);
     assert_eq!(config.tt_move_max_age_for_skip, 50);
-    
+
     // Configuration should validate successfully
     assert!(config.validate().is_ok());
 }
@@ -4671,17 +4738,29 @@ fn test_iid_preset_enum() {
     let conservative = IIDPreset::Conservative;
     let aggressive = IIDPreset::Aggressive;
     let balanced = IIDPreset::Balanced;
-    
+
     // Test string representation
     assert_eq!(conservative.to_string(), "Conservative");
     assert_eq!(aggressive.to_string(), "Aggressive");
     assert_eq!(balanced.to_string(), "Balanced");
-    
+
     // Test from_str parsing
-    assert_eq!(IIDPreset::from_str("conservative"), Some(IIDPreset::Conservative));
-    assert_eq!(IIDPreset::from_str("CONSERVATIVE"), Some(IIDPreset::Conservative));
-    assert_eq!(IIDPreset::from_str("aggressive"), Some(IIDPreset::Aggressive));
-    assert_eq!(IIDPreset::from_str("AGGRESSIVE"), Some(IIDPreset::Aggressive));
+    assert_eq!(
+        IIDPreset::from_str("conservative"),
+        Some(IIDPreset::Conservative)
+    );
+    assert_eq!(
+        IIDPreset::from_str("CONSERVATIVE"),
+        Some(IIDPreset::Conservative)
+    );
+    assert_eq!(
+        IIDPreset::from_str("aggressive"),
+        Some(IIDPreset::Aggressive)
+    );
+    assert_eq!(
+        IIDPreset::from_str("AGGRESSIVE"),
+        Some(IIDPreset::Aggressive)
+    );
     assert_eq!(IIDPreset::from_str("balanced"), Some(IIDPreset::Balanced));
     assert_eq!(IIDPreset::from_str("BALANCED"), Some(IIDPreset::Balanced));
     assert_eq!(IIDPreset::from_str("invalid"), None);
@@ -4698,7 +4777,7 @@ fn test_iid_preset_configurations() {
     assert_eq!(conservative_config.time_overhead_threshold, 0.10); // Lower overhead (10%)
     assert_eq!(conservative_config.max_estimated_iid_time_ms, 30); // Lower time estimate
     assert_eq!(conservative_config.preset, Some(IIDPreset::Conservative));
-    
+
     // Test Aggressive preset
     let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
     assert_eq!(aggressive_config.min_depth, 3); // Lower min_depth
@@ -4709,7 +4788,7 @@ fn test_iid_preset_configurations() {
     assert_eq!(aggressive_config.depth_strategy, IIDDepthStrategy::Dynamic); // Dynamic strategy
     assert_eq!(aggressive_config.adaptive_min_depth, true); // Adaptive min depth enabled
     assert_eq!(aggressive_config.preset, Some(IIDPreset::Aggressive));
-    
+
     // Test Balanced preset
     let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
     assert_eq!(balanced_config.min_depth, 4); // Default min_depth
@@ -4724,19 +4803,19 @@ fn test_iid_preset_configurations() {
 #[test]
 fn test_iid_config_apply_preset() {
     let mut config = IIDConfig::default();
-    
+
     // Apply Conservative preset
     config.apply_preset(IIDPreset::Conservative);
     assert_eq!(config.min_depth, 5);
     assert_eq!(config.iid_depth_ply, 1);
     assert_eq!(config.preset, Some(IIDPreset::Conservative));
-    
+
     // Apply Aggressive preset
     config.apply_preset(IIDPreset::Aggressive);
     assert_eq!(config.min_depth, 3);
     assert_eq!(config.iid_depth_ply, 3);
     assert_eq!(config.preset, Some(IIDPreset::Aggressive));
-    
+
     // Apply Balanced preset
     config.apply_preset(IIDPreset::Balanced);
     assert_eq!(config.min_depth, 4);
@@ -4750,17 +4829,17 @@ fn test_iid_config_preset_field() {
     // Default config should have no preset
     let default_config = IIDConfig::default();
     assert_eq!(default_config.preset, None);
-    
+
     // Configs created from presets should have preset set
     let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
     assert_eq!(conservative_config.preset, Some(IIDPreset::Conservative));
-    
+
     let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
     assert_eq!(aggressive_config.preset, Some(IIDPreset::Aggressive));
-    
+
     let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
     assert_eq!(balanced_config.preset, Some(IIDPreset::Balanced));
-    
+
     // Manually configured configs can have preset set
     let mut manual_config = IIDConfig::default();
     manual_config.preset = Some(IIDPreset::Balanced);
@@ -4774,7 +4853,7 @@ fn test_iid_config_summary_includes_preset() {
     let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
     let summary = conservative_config.summary();
     assert!(summary.contains("preset=Conservative"));
-    
+
     // Config without preset
     let default_config = IIDConfig::default();
     let summary = default_config.summary();
@@ -4786,10 +4865,10 @@ fn test_iid_config_summary_includes_preset() {
 fn test_iid_preset_configurations_are_valid() {
     let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
     assert!(conservative_config.validate().is_ok());
-    
+
     let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
     assert!(aggressive_config.validate().is_ok());
-    
+
     let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
     assert!(balanced_config.validate().is_ok());
 }
@@ -4798,21 +4877,21 @@ fn test_iid_preset_configurations_are_valid() {
 #[test]
 fn test_iid_preset_integration_with_search_engine() {
     let mut engine = SearchEngine::new(None, 64);
-    
+
     // Apply Conservative preset
     let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
     assert!(engine.update_iid_config(conservative_config).is_ok());
     let config = engine.get_iid_config();
     assert_eq!(config.min_depth, 5);
     assert_eq!(config.preset, Some(IIDPreset::Conservative));
-    
+
     // Apply Aggressive preset
     let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
     assert!(engine.update_iid_config(aggressive_config).is_ok());
     let config = engine.get_iid_config();
     assert_eq!(config.min_depth, 3);
     assert_eq!(config.preset, Some(IIDPreset::Aggressive));
-    
+
     // Apply Balanced preset
     let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
     assert!(engine.update_iid_config(balanced_config).is_ok());
@@ -4827,27 +4906,31 @@ fn test_iid_preset_performance_comparison() {
     let conservative_config = IIDConfig::from_preset(IIDPreset::Conservative);
     let aggressive_config = IIDConfig::from_preset(IIDPreset::Aggressive);
     let balanced_config = IIDConfig::from_preset(IIDPreset::Balanced);
-    
+
     // Conservative should have lower overhead threshold
-    assert!(conservative_config.time_overhead_threshold < aggressive_config.time_overhead_threshold);
+    assert!(
+        conservative_config.time_overhead_threshold < aggressive_config.time_overhead_threshold
+    );
     assert!(conservative_config.time_overhead_threshold < balanced_config.time_overhead_threshold);
-    
+
     // Aggressive should have higher overhead threshold
-    assert!(aggressive_config.time_overhead_threshold > conservative_config.time_overhead_threshold);
+    assert!(
+        aggressive_config.time_overhead_threshold > conservative_config.time_overhead_threshold
+    );
     assert!(aggressive_config.time_overhead_threshold > balanced_config.time_overhead_threshold);
-    
+
     // Conservative should have higher min_depth
     assert!(conservative_config.min_depth > aggressive_config.min_depth);
     assert!(conservative_config.min_depth > balanced_config.min_depth);
-    
+
     // Aggressive should have lower min_depth
     assert!(aggressive_config.min_depth < conservative_config.min_depth);
     assert!(aggressive_config.min_depth < balanced_config.min_depth);
-    
+
     // Aggressive should have deeper IID depth
     assert!(aggressive_config.iid_depth_ply > conservative_config.iid_depth_ply);
     assert!(aggressive_config.iid_depth_ply > balanced_config.iid_depth_ply);
-    
+
     // Conservative should have shallower IID depth
     assert!(conservative_config.iid_depth_ply < aggressive_config.iid_depth_ply);
     assert!(conservative_config.iid_depth_ply < balanced_config.iid_depth_ply);
@@ -4865,17 +4948,23 @@ fn test_game_phase_based_depth_adjustment() {
     config.game_phase_middlegame_multiplier = 1.0;
     config.game_phase_endgame_multiplier = 0.8;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Test opening phase (should use opening multiplier)
     // Opening typically has more material on board
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+    let depth = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
     let stats = engine.get_iid_stats();
-    
+
     // Verify game phase adjustment was applied
     assert!(stats.game_phase_adjustment_applied >= 0);
 }
@@ -4889,15 +4978,21 @@ fn test_material_based_depth_adjustment() {
     config.material_depth_multiplier = 1.1;
     config.material_threshold_for_adjustment = 20;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+
+    let depth = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
     let stats = engine.get_iid_stats();
-    
+
     // Verify material adjustment was potentially applied
     assert!(stats.material_adjustment_applied >= 0);
 }
@@ -4911,18 +5006,24 @@ fn test_time_based_depth_adjustment() {
     config.time_depth_multiplier = 0.9;
     config.time_threshold_for_adjustment = 0.15; // 15% remaining
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Simulate low remaining time (10% remaining)
     std::thread::sleep(std::time::Duration::from_millis(900));
-    
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+
+    let depth = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
     let stats = engine.get_iid_stats();
-    
+
     // Verify time adjustment was potentially applied
     assert!(stats.time_adjustment_applied >= 0);
 }
@@ -4931,7 +5032,7 @@ fn test_time_based_depth_adjustment() {
 #[test]
 fn test_advanced_strategies_configuration() {
     let mut config = IIDConfig::default();
-    
+
     // Test game phase-based adjustment configuration
     config.enable_game_phase_based_adjustment = true;
     config.game_phase_opening_multiplier = 1.2;
@@ -4939,21 +5040,21 @@ fn test_advanced_strategies_configuration() {
     config.game_phase_endgame_multiplier = 0.8;
     assert!(config.enable_game_phase_based_adjustment);
     assert_eq!(config.game_phase_opening_multiplier, 1.2);
-    
+
     // Test material-based adjustment configuration
     config.enable_material_based_adjustment = true;
     config.material_depth_multiplier = 1.1;
     config.material_threshold_for_adjustment = 20;
     assert!(config.enable_material_based_adjustment);
     assert_eq!(config.material_threshold_for_adjustment, 20);
-    
+
     // Test time-based adjustment configuration
     config.enable_time_based_adjustment = true;
     config.time_depth_multiplier = 0.9;
     config.time_threshold_for_adjustment = 0.15;
     assert!(config.enable_time_based_adjustment);
     assert_eq!(config.time_threshold_for_adjustment, 0.15);
-    
+
     assert!(config.validate().is_ok());
 }
 
@@ -4962,23 +5063,29 @@ fn test_advanced_strategies_configuration() {
 fn test_advanced_strategies_statistics_tracking() {
     let mut engine = SearchEngine::new(None, 64);
     let mut config = engine.get_iid_config().clone();
-    
+
     // Enable all advanced strategies
     config.enable_game_phase_based_adjustment = true;
     config.enable_material_based_adjustment = true;
     config.enable_time_based_adjustment = true;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Call calculate_iid_depth which should track statistics
-    let _ = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
-    
+    let _ = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
+
     let stats = engine.get_iid_stats();
-    
+
     // Verify statistics tracking fields exist
     assert!(stats.game_phase_adjustment_applied >= 0);
     assert!(stats.material_adjustment_applied >= 0);
@@ -4993,7 +5100,7 @@ fn test_advanced_strategies_statistics_tracking() {
 fn test_advanced_strategies_integration() {
     let mut engine = SearchEngine::new(None, 64);
     let mut config = engine.get_iid_config().clone();
-    
+
     // Enable all advanced strategies with different multipliers
     config.enable_game_phase_based_adjustment = true;
     config.game_phase_opening_multiplier = 1.2;
@@ -5002,16 +5109,28 @@ fn test_advanced_strategies_integration() {
     config.enable_time_based_adjustment = true;
     config.time_depth_multiplier = 0.9;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Test that depth calculation works with all strategies enabled
-    let depth1 = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
-    let depth2 = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
-    
+    let depth1 = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
+    let depth2 = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
+
     // Depth should be consistent (or at least valid)
     assert!(depth1 >= 1 && depth1 <= 5);
     assert!(depth2 >= 1 && depth2 <= 5);
@@ -5022,27 +5141,33 @@ fn test_advanced_strategies_integration() {
 fn test_advanced_strategies_when_disabled() {
     let mut engine = SearchEngine::new(None, 64);
     let mut config = engine.get_iid_config().clone();
-    
+
     // Disable all advanced strategies
     config.enable_game_phase_based_adjustment = false;
     config.enable_material_based_adjustment = false;
     config.enable_time_based_adjustment = false;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
-    let depth = engine.calculate_iid_depth(5, Some(&board), Some(&captured_pieces), Some(&start_time), Some(time_limit_ms));
+
+    let depth = engine.calculate_iid_depth(
+        5,
+        Some(&board),
+        Some(&captured_pieces),
+        Some(&start_time),
+        Some(time_limit_ms),
+    );
     let stats = engine.get_iid_stats();
-    
+
     // Statistics should not be incremented when strategies are disabled
     // (initial state should be 0)
     assert_eq!(stats.game_phase_adjustment_applied, 0);
     assert_eq!(stats.material_adjustment_applied, 0);
     assert_eq!(stats.time_adjustment_applied, 0);
-    
+
     // Depth should still be calculated correctly
     assert!(depth >= 1);
 }
@@ -5057,24 +5182,33 @@ fn test_iid_move_ordered_first() {
     config.enabled = true;
     config.min_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Perform a search that should trigger IID
-    let _ = engine.search_at_depth(&mut board.clone(), &captured_pieces, shogi_engine::types::Player::Black, 5, -100000, 100000, &start_time, time_limit_ms);
-    
+    let _ = engine.search_at_depth(
+        &mut board.clone(),
+        &captured_pieces,
+        shogi_engine::types::Player::Black,
+        5,
+        -100000,
+        100000,
+        &start_time,
+        time_limit_ms,
+    );
+
     let stats = engine.get_iid_stats();
-    
+
     // If IID was performed and IID move was found, verify it was tracked
     if stats.iid_move_position_tracked > 0 {
         // IID move should ideally be ordered first (position 0)
         // But we allow some flexibility since move ordering is complex
         assert!(stats.iid_move_ordered_first >= 0);
         assert!(stats.iid_move_position_tracked > 0);
-        
+
         // Average position should be close to 0 if IID move is properly prioritized
         let avg_position = stats.average_iid_move_position();
         assert!(avg_position >= 0.0);
@@ -5089,31 +5223,40 @@ fn test_cutoff_rate_comparison() {
     config.enabled = true;
     config.min_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Perform searches that should trigger IID and cutoffs
     for _ in 0..5 {
-        let _ = engine.search_at_depth(&mut board.clone(), &captured_pieces, shogi_engine::types::Player::Black, 5, -100000, 100000, &start_time, time_limit_ms);
+        let _ = engine.search_at_depth(
+            &mut board.clone(),
+            &captured_pieces,
+            shogi_engine::types::Player::Black,
+            5,
+            -100000,
+            100000,
+            &start_time,
+            time_limit_ms,
+        );
     }
-    
+
     let stats = engine.get_iid_stats();
-    
+
     // Verify cutoff tracking fields exist and are non-negative
     assert!(stats.cutoffs_from_iid_moves >= 0);
     assert!(stats.cutoffs_from_non_iid_moves >= 0);
     assert!(stats.total_cutoffs >= 0);
-    
+
     // Verify percentage calculations
     let iid_percentage = stats.cutoff_percentage_from_iid_moves();
     let non_iid_percentage = stats.cutoff_percentage_from_non_iid_moves();
-    
+
     assert!(iid_percentage >= 0.0 && iid_percentage <= 100.0);
     assert!(non_iid_percentage >= 0.0 && non_iid_percentage <= 100.0);
-    
+
     // If there are cutoffs, percentages should sum to 100%
     if stats.total_cutoffs > 0 {
         assert!((iid_percentage + non_iid_percentage - 100.0).abs() < 0.01);
@@ -5128,29 +5271,38 @@ fn test_ordering_effectiveness_with_without_iid() {
     config.enabled = true;
     config.min_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Perform searches
     for _ in 0..5 {
-        let _ = engine.search_at_depth(&mut board.clone(), &captured_pieces, shogi_engine::types::Player::Black, 5, -100000, 100000, &start_time, time_limit_ms);
+        let _ = engine.search_at_depth(
+            &mut board.clone(),
+            &captured_pieces,
+            shogi_engine::types::Player::Black,
+            5,
+            -100000,
+            100000,
+            &start_time,
+            time_limit_ms,
+        );
     }
-    
+
     let stats = engine.get_iid_stats();
-    
+
     // Verify effectiveness tracking fields exist
     assert!(stats.ordering_effectiveness_with_iid_total >= 0);
     assert!(stats.ordering_effectiveness_with_iid_cutoffs >= 0);
     assert!(stats.ordering_effectiveness_without_iid_total >= 0);
     assert!(stats.ordering_effectiveness_without_iid_cutoffs >= 0);
-    
+
     // Verify effectiveness calculations
     let effectiveness_with_iid = stats.ordering_effectiveness_with_iid();
     let effectiveness_without_iid = stats.ordering_effectiveness_without_iid();
-    
+
     assert!(effectiveness_with_iid >= 0.0 && effectiveness_with_iid <= 100.0);
     assert!(effectiveness_without_iid >= 0.0 && effectiveness_without_iid <= 100.0);
 }
@@ -5163,27 +5315,36 @@ fn test_iid_efficiency_ordering_correlation() {
     config.enabled = true;
     config.min_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Perform searches to generate correlation data
     for _ in 0..5 {
-        let _ = engine.search_at_depth(&mut board.clone(), &captured_pieces, shogi_engine::types::Player::Black, 5, -100000, 100000, &start_time, time_limit_ms);
+        let _ = engine.search_at_depth(
+            &mut board.clone(),
+            &captured_pieces,
+            shogi_engine::types::Player::Black,
+            5,
+            -100000,
+            100000,
+            &start_time,
+            time_limit_ms,
+        );
     }
-    
+
     let stats = engine.get_iid_stats();
-    
+
     // Verify correlation tracking fields exist
     assert!(stats.iid_efficiency_ordering_correlation_sum >= 0.0);
     assert!(stats.iid_efficiency_ordering_correlation_points >= 0);
-    
+
     // Verify correlation calculation
     let correlation = stats.iid_efficiency_ordering_correlation();
     assert!(correlation >= 0.0);
-    
+
     // If we have correlation points, correlation should be calculated
     if stats.iid_efficiency_ordering_correlation_points > 0 {
         assert!(correlation > 0.0 || correlation == 0.0); // Can be 0 if all values are 0
@@ -5198,20 +5359,29 @@ fn test_cross_feature_statistics_integration() {
     config.enabled = true;
     config.min_depth = 3;
     engine.update_iid_config(config).unwrap();
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let start_time = TimeSource::now();
     let time_limit_ms = 1000;
-    
+
     // Perform multiple searches to generate statistics
     for _ in 0..10 {
-        let _ = engine.search_at_depth(&mut board.clone(), &captured_pieces, shogi_engine::types::Player::Black, 5, -100000, 100000, &start_time, time_limit_ms);
+        let _ = engine.search_at_depth(
+            &mut board.clone(),
+            &captured_pieces,
+            shogi_engine::types::Player::Black,
+            5,
+            -100000,
+            100000,
+            &start_time,
+            time_limit_ms,
+        );
     }
-    
+
     let stats = engine.get_iid_stats();
     let metrics = engine.get_iid_performance_metrics();
-    
+
     // Verify all cross-feature statistics are accessible
     assert!(stats.iid_move_ordered_first >= 0);
     assert!(stats.iid_move_not_ordered_first >= 0);
@@ -5220,15 +5390,28 @@ fn test_cross_feature_statistics_integration() {
     assert!(stats.total_cutoffs >= 0);
     assert!(stats.iid_move_position_sum >= 0);
     assert!(stats.iid_move_position_tracked >= 0);
-    
+
     // Verify metrics include cross-feature statistics
-    assert!(metrics.cutoff_percentage_from_iid_moves >= 0.0 && metrics.cutoff_percentage_from_iid_moves <= 100.0);
-    assert!(metrics.cutoff_percentage_from_non_iid_moves >= 0.0 && metrics.cutoff_percentage_from_non_iid_moves <= 100.0);
+    assert!(
+        metrics.cutoff_percentage_from_iid_moves >= 0.0
+            && metrics.cutoff_percentage_from_iid_moves <= 100.0
+    );
+    assert!(
+        metrics.cutoff_percentage_from_non_iid_moves >= 0.0
+            && metrics.cutoff_percentage_from_non_iid_moves <= 100.0
+    );
     assert!(metrics.average_iid_move_position >= 0.0);
-    assert!(metrics.iid_move_ordered_first_percentage >= 0.0 && metrics.iid_move_ordered_first_percentage <= 100.0);
-    assert!(metrics.ordering_effectiveness_with_iid >= 0.0 && metrics.ordering_effectiveness_with_iid <= 100.0);
-    assert!(metrics.ordering_effectiveness_without_iid >= 0.0 && metrics.ordering_effectiveness_without_iid <= 100.0);
+    assert!(
+        metrics.iid_move_ordered_first_percentage >= 0.0
+            && metrics.iid_move_ordered_first_percentage <= 100.0
+    );
+    assert!(
+        metrics.ordering_effectiveness_with_iid >= 0.0
+            && metrics.ordering_effectiveness_with_iid <= 100.0
+    );
+    assert!(
+        metrics.ordering_effectiveness_without_iid >= 0.0
+            && metrics.ordering_effectiveness_without_iid <= 100.0
+    );
     assert!(metrics.iid_efficiency_ordering_correlation >= 0.0);
 }
-
-

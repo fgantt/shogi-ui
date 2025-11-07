@@ -1,12 +1,12 @@
 //! Core data structures for the automated tuning system
-//! 
+//!
 //! This module defines all the essential types and structures used throughout
 //! the tuning process, from game records to optimization configuration.
 
+use crate::types::NUM_EVAL_FEATURES;
+use crate::types::{Move, Player};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::types::{Player, Move};
-use crate::types::NUM_EVAL_FEATURES;
 
 // ============================================================================
 // GAME AND POSITION DATA STRUCTURES
@@ -62,7 +62,7 @@ impl TimeControl {
     pub fn new(initial_time: u32, increment: u32) -> Self {
         let is_blitz = initial_time < 600; // Less than 10 minutes
         let is_bullet = initial_time < 180; // Less than 3 minutes
-        
+
         Self {
             initial_time,
             increment,
@@ -156,9 +156,17 @@ impl TrainingPosition {
         move_number: u32,
         player_to_move: Player,
     ) -> Self {
-        assert_eq!(features.len(), NUM_EVAL_FEATURES, "Feature vector must have {} elements", NUM_EVAL_FEATURES);
-        assert!(result >= -1.0 && result <= 1.0, "Result must be between -1.0 and 1.0");
-        
+        assert_eq!(
+            features.len(),
+            NUM_EVAL_FEATURES,
+            "Feature vector must have {} elements",
+            NUM_EVAL_FEATURES
+        );
+        assert!(
+            result >= -1.0 && result <= 1.0,
+            "Result must be between -1.0 and 1.0"
+        );
+
         Self {
             features,
             result,
@@ -287,9 +295,7 @@ impl Default for PerformanceConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationMethod {
     /// Gradient descent with fixed learning rate
-    GradientDescent {
-        learning_rate: f64,
-    },
+    GradientDescent { learning_rate: f64 },
     /// Adam optimizer with adaptive learning rates
     Adam {
         learning_rate: f64,
@@ -398,19 +404,31 @@ impl ValidationResults {
     pub fn new(fold_results: Vec<FoldResult>) -> Self {
         let errors: Vec<f64> = fold_results.iter().map(|f| f.validation_error).collect();
         let mean_error = errors.iter().sum::<f64>() / errors.len() as f64;
-        let variance = errors.iter()
+        let variance = errors
+            .iter()
             .map(|&x| (x - mean_error).powi(2))
-            .sum::<f64>() / errors.len() as f64;
+            .sum::<f64>()
+            / errors.len() as f64;
         let std_error = variance.sqrt();
 
-        let best_fold = fold_results.iter()
+        let best_fold = fold_results
+            .iter()
             .enumerate()
-            .min_by(|a, b| a.1.validation_error.partial_cmp(&b.1.validation_error).unwrap())
+            .min_by(|a, b| {
+                a.1.validation_error
+                    .partial_cmp(&b.1.validation_error)
+                    .unwrap()
+            })
             .map(|(i, _)| (i + 1) as u32);
 
-        let worst_fold = fold_results.iter()
+        let worst_fold = fold_results
+            .iter()
             .enumerate()
-            .max_by(|a, b| a.1.validation_error.partial_cmp(&b.1.validation_error).unwrap())
+            .max_by(|a, b| {
+                a.1.validation_error
+                    .partial_cmp(&b.1.validation_error)
+                    .unwrap()
+            })
             .map(|(i, _)| (i + 1) as u32);
 
         Self {
@@ -445,7 +463,8 @@ impl MatchResult {
     pub fn new(wins: u32, losses: u32, draws: u32) -> Self {
         let total_games = wins + losses + draws;
         let elo_difference = Self::calculate_elo_difference(wins, losses, draws);
-        let elo_confidence_interval = Self::calculate_confidence_interval(total_games, elo_difference);
+        let elo_confidence_interval =
+            Self::calculate_confidence_interval(total_games, elo_difference);
 
         Self {
             wins,
@@ -462,12 +481,12 @@ impl MatchResult {
         if wins + losses == 0 {
             return 0.0;
         }
-        
+
         let win_rate = wins as f64 / (wins + losses) as f64;
         if win_rate <= 0.0 || win_rate >= 1.0 {
             return 0.0;
         }
-        
+
         -400.0 * (1.0 / win_rate - 1.0).log10()
     }
 
@@ -477,7 +496,7 @@ impl MatchResult {
             // Not enough games for reliable confidence interval
             return (elo_diff - 200.0, elo_diff + 200.0);
         }
-        
+
         let margin = 1.96 * (400.0 / (total_games as f64).sqrt());
         (elo_diff - margin, elo_diff + margin)
     }
@@ -528,8 +547,13 @@ impl TuningResults {
         final_loss: f64,
         converged: bool,
     ) -> Self {
-        assert_eq!(weights.len(), NUM_EVAL_FEATURES, "Weights must have {} elements", NUM_EVAL_FEATURES);
-        
+        assert_eq!(
+            weights.len(),
+            NUM_EVAL_FEATURES,
+            "Weights must have {} elements",
+            NUM_EVAL_FEATURES
+        );
+
         Self {
             weights,
             validation_results,
@@ -573,11 +597,13 @@ pub fn sigmoid_derivative(x: f64) -> f64 {
 /// Calculate the mean squared error between predicted and actual values
 pub fn mean_squared_error(predictions: &[f64], actual: &[f64]) -> f64 {
     assert_eq!(predictions.len(), actual.len());
-    
-    predictions.iter()
+
+    predictions
+        .iter()
         .zip(actual.iter())
         .map(|(p, a)| (p - a).powi(2))
-        .sum::<f64>() / predictions.len() as f64
+        .sum::<f64>()
+        / predictions.len() as f64
 }
 
 /// Calculate the root mean squared error
@@ -595,9 +621,12 @@ mod tests {
         assert_eq!(GameResult::WhiteWin.to_score(), 1.0);
         assert_eq!(GameResult::Draw.to_score(), 0.0);
         assert_eq!(GameResult::BlackWin.to_score(), -1.0);
-        
+
         assert_eq!(GameResult::WhiteWin.to_score_for_player(Player::White), 1.0);
-        assert_eq!(GameResult::WhiteWin.to_score_for_player(Player::Black), -1.0);
+        assert_eq!(
+            GameResult::WhiteWin.to_score_for_player(Player::Black),
+            -1.0
+        );
     }
 
     #[test]
@@ -607,7 +636,7 @@ mod tests {
         assert_eq!(tc.increment, 5);
         assert!(tc.is_blitz);
         assert!(!tc.is_bullet);
-        
+
         let tc2 = TimeControl::new(120, 0);
         assert!(tc2.is_bullet);
     }
@@ -617,7 +646,7 @@ mod tests {
         let moves = vec![];
         let result = GameResult::Draw;
         let time_control = TimeControl::new(600, 10);
-        
+
         let record = GameRecord::new(moves, result, time_control);
         assert_eq!(record.result, GameResult::Draw);
         assert_eq!(record.move_count(), 0);
@@ -633,8 +662,9 @@ mod tests {
         let is_quiet = true;
         let move_number = 25; // Changed to 25 to be in middlegame range (20 < 25 <= 40)
         let player = Player::White;
-        
-        let position = TrainingPosition::new(features, result, game_phase, is_quiet, move_number, player);
+
+        let position =
+            TrainingPosition::new(features, result, game_phase, is_quiet, move_number, player);
         assert_eq!(position.result, 0.5);
         assert!(!position.is_opening()); // 25 > 20, so not opening
         assert!(!position.is_endgame()); // 25 <= 40, so not endgame
@@ -648,7 +678,7 @@ mod tests {
         assert_eq!(result.win_rate(), 0.5);
         // With 10 wins and 5 losses, win rate is 66.7%, which gives a significant ELO difference
         assert!(result.elo_difference > 0.0); // Should be positive (tuned engine is stronger)
-        
+
         // Test with equal wins/losses for ~0 ELO difference
         let equal_result = MatchResult::new(10, 10, 0);
         assert_eq!(equal_result.win_rate(), 0.5);
@@ -658,11 +688,26 @@ mod tests {
     #[test]
     fn test_validation_results_creation() {
         let fold_results = vec![
-            FoldResult { fold_number: 1, validation_error: 0.1, test_error: 0.12, sample_count: 100 },
-            FoldResult { fold_number: 2, validation_error: 0.15, test_error: 0.14, sample_count: 100 },
-            FoldResult { fold_number: 3, validation_error: 0.08, test_error: 0.09, sample_count: 100 },
+            FoldResult {
+                fold_number: 1,
+                validation_error: 0.1,
+                test_error: 0.12,
+                sample_count: 100,
+            },
+            FoldResult {
+                fold_number: 2,
+                validation_error: 0.15,
+                test_error: 0.14,
+                sample_count: 100,
+            },
+            FoldResult {
+                fold_number: 3,
+                validation_error: 0.08,
+                test_error: 0.09,
+                sample_count: 100,
+            },
         ];
-        
+
         let results = ValidationResults::new(fold_results);
         assert_eq!(results.mean_error, 0.11);
         assert!(results.std_error > 0.0);
@@ -675,7 +720,7 @@ mod tests {
         assert!((sigmoid(0.0) - 0.5).abs() < 1e-10);
         assert!((sigmoid(100.0) - 1.0).abs() < 1e-10);
         assert!((sigmoid(-100.0) - 0.0).abs() < 1e-10);
-        
+
         let predictions = vec![1.0, 2.0, 3.0];
         let actual = vec![1.1, 1.9, 3.1];
         let mse = mean_squared_error(&predictions, &actual);

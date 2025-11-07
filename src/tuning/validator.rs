@@ -1,15 +1,18 @@
 //! Validation framework for automated tuning
-//! 
+//!
 //! This module provides cross-validation, holdout validation, and other
 //! validation techniques to ensure the quality of tuned parameters.
 
-use std::collections::HashMap;
+use super::optimizer::Optimizer;
+use super::types::{
+    FoldResult, MatchResult, OptimizationMethod, TrainingPosition, ValidationConfig,
+    ValidationResults,
+};
+use crate::types::Player;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
-use super::types::{ValidationConfig, ValidationResults, TrainingPosition, FoldResult, MatchResult, OptimizationMethod};
-use super::optimizer::Optimizer;
-use crate::types::Player;
+use std::collections::HashMap;
 
 /// Validation engine for tuning results
 pub struct Validator {
@@ -42,7 +45,8 @@ impl Validator {
             let end_idx = start_idx + fold_size_adjusted;
 
             // Split data into training and validation sets
-            let (validation_set, training_set) = self.split_data(&shuffled_positions, start_idx, end_idx);
+            let (validation_set, training_set) =
+                self.split_data(&shuffled_positions, start_idx, end_idx);
 
             // Train model on training set
             let optimizer = Optimizer::new(OptimizationMethod::default());
@@ -51,8 +55,9 @@ impl Validator {
             match optimization_result {
                 Ok(result) => {
                     // Validate on validation set
-                    let validation_error = self.calculate_error(&result.optimized_weights, &validation_set);
-                    
+                    let validation_error =
+                        self.calculate_error(&result.optimized_weights, &validation_set);
+
                     // Also test on a small subset for test error
                     let test_subset = self.create_test_subset(&validation_set);
                     let test_error = self.calculate_error(&result.optimized_weights, &test_subset);
@@ -101,8 +106,9 @@ impl Validator {
         match optimization_result {
             Ok(result) => {
                 // Validate on validation set
-                let validation_error = self.calculate_error(&result.optimized_weights, validation_set);
-                
+                let validation_error =
+                    self.calculate_error(&result.optimized_weights, validation_set);
+
                 // Create test subset for test error
                 let test_subset = self.create_test_subset(validation_set);
                 let test_error = self.calculate_error(&result.optimized_weights, &test_subset);
@@ -131,10 +137,15 @@ impl Validator {
     }
 
     /// Split data into training and validation sets for cross-validation
-    fn split_data(&self, positions: &[TrainingPosition], start_idx: usize, end_idx: usize) -> (Vec<TrainingPosition>, Vec<TrainingPosition>) {
+    fn split_data(
+        &self,
+        positions: &[TrainingPosition],
+        start_idx: usize,
+        end_idx: usize,
+    ) -> (Vec<TrainingPosition>, Vec<TrainingPosition>) {
         let validation_set = positions[start_idx..end_idx].to_vec();
         let mut training_set = Vec::new();
-        
+
         training_set.extend_from_slice(&positions[0..start_idx]);
         training_set.extend_from_slice(&positions[end_idx..]);
 
@@ -150,10 +161,12 @@ impl Validator {
         let mut total_error = 0.0;
         for position in positions {
             // Calculate predicted probability using sigmoid
-            let score: f64 = weights.iter().zip(position.features.iter())
+            let score: f64 = weights
+                .iter()
+                .zip(position.features.iter())
                 .map(|(w, f)| w * f)
                 .sum();
-            
+
             let predicted_prob = 1.0 / (1.0 + (-score).exp());
             let error = position.result - predicted_prob;
             total_error += error * error;
@@ -168,7 +181,7 @@ impl Validator {
         if test_size == 0 {
             return validation_set.to_vec();
         }
-        
+
         let mut test_subset = validation_set.to_vec();
         test_subset.shuffle(&mut thread_rng());
         test_subset.truncate(test_size);
@@ -194,16 +207,20 @@ impl StrengthTester {
     }
 
     /// Run engine vs engine matches to test strength
-    pub fn test_engine_strength(&self, original_weights: &[f64], tuned_weights: &[f64]) -> MatchResult {
+    pub fn test_engine_strength(
+        &self,
+        original_weights: &[f64],
+        tuned_weights: &[f64],
+    ) -> MatchResult {
         // For now, simulate match results based on weight differences
         // In a real implementation, this would play actual games
-        
+
         let weight_difference = self.calculate_weight_difference(original_weights, tuned_weights);
         let strength_improvement = self.estimate_strength_improvement(weight_difference);
-        
+
         // Simulate match results based on strength improvement
         let (wins, losses, draws) = self.simulate_match_results(strength_improvement);
-        
+
         MatchResult {
             wins,
             losses,
@@ -216,7 +233,9 @@ impl StrengthTester {
 
     /// Calculate the difference between original and tuned weights
     fn calculate_weight_difference(&self, original: &[f64], tuned: &[f64]) -> f64 {
-        original.iter().zip(tuned.iter())
+        original
+            .iter()
+            .zip(tuned.iter())
             .map(|(o, t)| (o - t).abs())
             .sum::<f64>()
     }
@@ -233,14 +252,14 @@ impl StrengthTester {
         let mut rng = thread_rng();
         let win_probability = 0.5 + strength_improvement.min(0.3); // Cap at 80% win rate
         let draw_probability = 0.2;
-        
+
         let mut wins = 0;
         let mut losses = 0;
         let mut draws = 0;
-        
+
         for _ in 0..self.games_per_test {
             let rand_val: f64 = rng.gen();
-            
+
             if rand_val < win_probability {
                 wins += 1;
             } else if rand_val < win_probability + draw_probability {
@@ -249,7 +268,7 @@ impl StrengthTester {
                 losses += 1;
             }
         }
-        
+
         (wins, losses, draws)
     }
 
@@ -259,10 +278,10 @@ impl StrengthTester {
         if total_games == 0 {
             return 0.0;
         }
-        
+
         let win_rate = wins as f64 / total_games as f64;
         let _draw_rate = draws as f64 / total_games as f64;
-        
+
         // Simple ELO calculation: win rate of 0.5 = 0 ELO difference
         // This is a simplified version - real implementation would be more sophisticated
         if win_rate > 0.5 {
@@ -278,11 +297,11 @@ impl StrengthTester {
         if total_games == 0 {
             return (0.0, 0.0);
         }
-        
+
         // Simplified confidence interval calculation
         let margin = 100.0 / (total_games as f64).sqrt();
         let elo_diff = self.calculate_elo_difference(wins, losses, draws);
-        
+
         (elo_diff - margin, elo_diff + margin)
     }
 }
@@ -309,41 +328,47 @@ impl SyntheticDataGenerator {
     pub fn generate_positions(&self, count: usize) -> Vec<TrainingPosition> {
         let mut rng = thread_rng();
         let mut positions = Vec::new();
-        
+
         for i in 0..count {
             // Generate random features
             let mut features = vec![0.0; self.feature_count];
             for j in 0..self.feature_count {
                 features[j] = rng.gen_range(-1.0..1.0);
             }
-            
+
             // Generate synthetic result based on features
             let result = self.generate_synthetic_result(&features, &mut rng);
-            
+
             positions.push(TrainingPosition::new(
                 features,
                 result,
-                128, // Default game phase
-                true, // Default quiet
+                128,      // Default game phase
+                true,     // Default quiet
                 i as u32, // Move number
-                if i % 2 == 0 { Player::White } else { Player::Black },
+                if i % 2 == 0 {
+                    Player::White
+                } else {
+                    Player::Black
+                },
             ));
         }
-        
+
         positions
     }
 
     /// Generate synthetic result based on features
     fn generate_synthetic_result(&self, features: &[f64], rng: &mut impl rand::Rng) -> f64 {
         // Create a simple linear relationship with some noise
-        let true_score: f64 = features.iter().enumerate()
+        let true_score: f64 = features
+            .iter()
+            .enumerate()
             .map(|(i, &f)| f * ((i as f64 + 1.0) * 0.1))
             .sum();
-        
+
         // Add noise
         let noise = rng.gen_range(-0.1..0.1);
         let noisy_score = true_score + noise;
-        
+
         // Convert to probability using sigmoid
         1.0 / (1.0 + (-noisy_score).exp())
     }
@@ -368,17 +393,17 @@ impl OverfittingDetector {
 
     /// Detect if overfitting is occurring
     pub fn detect_overfitting(&self, training_error: f64, validation_error: f64) -> bool {
-        validation_error > self.validation_error_threshold ||
-        (validation_error - training_error) > self.error_difference_threshold
+        validation_error > self.validation_error_threshold
+            || (validation_error - training_error) > self.error_difference_threshold
     }
 
     /// Calculate overfitting score (0.0 = no overfitting, 1.0 = severe overfitting)
     pub fn calculate_overfitting_score(&self, training_error: f64, validation_error: f64) -> f64 {
         let error_diff = validation_error - training_error;
         let threshold_ratio = validation_error / self.validation_error_threshold;
-        
-        (error_diff / self.error_difference_threshold).min(1.0) * 0.5 +
-        (threshold_ratio - 1.0).max(0.0) * 0.5
+
+        (error_diff / self.error_difference_threshold).min(1.0) * 0.5
+            + (threshold_ratio - 1.0).max(0.0) * 0.5
     }
 }
 
@@ -424,25 +449,30 @@ impl PerformanceBenchmark {
         let mut report = String::new();
         report.push_str("Performance Benchmark Report\n");
         report.push_str("===========================\n\n");
-        
+
         report.push_str("Memory Usage:\n");
         for (operation, bytes) in &self.memory_usage {
-            report.push_str(&format!("  {}: {} bytes ({:.2} MB)\n", operation, bytes, *bytes as f64 / 1024.0 / 1024.0));
+            report.push_str(&format!(
+                "  {}: {} bytes ({:.2} MB)\n",
+                operation,
+                bytes,
+                *bytes as f64 / 1024.0 / 1024.0
+            ));
         }
-        
+
         report.push_str("\nTimings:\n");
         for (operation, seconds) in &self.timings {
             report.push_str(&format!("  {}: {:.3} seconds\n", operation, seconds));
         }
-        
+
         report
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::types::ValidationConfig;
+    use super::*;
 
     #[test]
     fn test_validator_creation() {
@@ -456,10 +486,10 @@ mod tests {
     fn test_cross_validation_with_empty_data() {
         let config = ValidationConfig::default();
         let validator = Validator::new(config);
-        
+
         let positions = vec![];
         let results = validator.cross_validate(&positions);
-        
+
         assert_eq!(results.fold_results.len(), 0);
     }
 
@@ -467,10 +497,10 @@ mod tests {
     fn test_holdout_validation_with_empty_data() {
         let config = ValidationConfig::default();
         let validator = Validator::new(config);
-        
+
         let positions = vec![];
         let results = validator.holdout_validate(&positions);
-        
+
         assert_eq!(results.fold_results.len(), 0);
     }
 
@@ -486,7 +516,7 @@ mod tests {
         let tester = StrengthTester::new(10, 1000);
         let original_weights = vec![1.0; NUM_EVAL_FEATURES];
         let tuned_weights = vec![1.1; NUM_EVAL_FEATURES];
-        
+
         let result = tester.test_engine_strength(&original_weights, &tuned_weights);
         assert_eq!(result.total_games, 10);
         assert_eq!(result.wins + result.losses + result.draws, 10);
@@ -496,7 +526,7 @@ mod tests {
     fn test_synthetic_data_generator() {
         let generator = SyntheticDataGenerator::new(NUM_EVAL_FEATURES, 42);
         let positions = generator.generate_positions(5);
-        
+
         assert_eq!(positions.len(), 5);
         for position in positions {
             assert_eq!(position.features.len(), NUM_EVAL_FEATURES);
@@ -507,10 +537,10 @@ mod tests {
     #[test]
     fn test_overfitting_detector() {
         let detector = OverfittingDetector::new(0.5, 0.2);
-        
+
         // Test no overfitting
         assert!(!detector.detect_overfitting(0.1, 0.15));
-        
+
         // Test overfitting
         assert!(detector.detect_overfitting(0.1, 0.6));
         assert!(detector.detect_overfitting(0.1, 0.4));
@@ -519,13 +549,13 @@ mod tests {
     #[test]
     fn test_performance_benchmark() {
         let mut benchmark = PerformanceBenchmark::new();
-        
+
         benchmark.record_memory_usage("test", 1024);
         benchmark.record_timing("test", 1.5);
-        
+
         assert_eq!(benchmark.get_memory_usage("test"), Some(1024));
         assert_eq!(benchmark.get_timing("test"), Some(1.5));
-        
+
         let report = benchmark.generate_report();
         assert!(report.contains("test"));
         assert!(report.contains("1024"));
@@ -542,13 +572,13 @@ mod tests {
             random_seed: Some(42),
         };
         let validator = Validator::new(config);
-        
+
         // Generate synthetic test data
         let generator = SyntheticDataGenerator::new(NUM_EVAL_FEATURES, 42);
         let positions = generator.generate_positions(30); // Small dataset for testing
-        
+
         let results = validator.cross_validate(&positions);
-        
+
         assert_eq!(results.fold_results.len(), 3);
         for fold_result in &results.fold_results {
             assert!(fold_result.fold_number >= 1 && fold_result.fold_number <= 3);
@@ -568,13 +598,13 @@ mod tests {
             random_seed: Some(42),
         };
         let validator = Validator::new(config);
-        
+
         // Generate synthetic test data
         let generator = SyntheticDataGenerator::new(NUM_EVAL_FEATURES, 42);
         let positions = generator.generate_positions(20); // Small dataset for testing
-        
+
         let results = validator.holdout_validate(&positions);
-        
+
         assert_eq!(results.fold_results.len(), 1);
         let fold_result = &results.fold_results[0];
         assert_eq!(fold_result.fold_number, 1);

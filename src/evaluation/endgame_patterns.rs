@@ -30,8 +30,8 @@
 //! let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 
 /// Endgame pattern evaluator
@@ -145,12 +145,12 @@ impl EndgamePatternEvaluator {
         let center_distance = self.distance_to_center(king_pos);
         let centralization_bonus = (4 - center_distance.min(4)) * 15;
         mg_score += centralization_bonus / 4; // Small bonus in middlegame
-        eg_score += centralization_bonus;      // Large bonus in endgame
+        eg_score += centralization_bonus; // Large bonus in endgame
 
         // 2. Activity bonus (king not on back rank)
         let back_rank = if player == Player::Black { 8 } else { 0 };
         if king_pos.row != back_rank {
-            mg_score += 5;  // Small bonus in middlegame
+            mg_score += 5; // Small bonus in middlegame
             eg_score += 25; // Large bonus in endgame
         }
 
@@ -160,9 +160,9 @@ impl EndgamePatternEvaluator {
         } else {
             king_pos.row >= 4
         };
-        
+
         if is_advanced {
-            mg_score += 5;  // Risky in middlegame
+            mg_score += 5; // Risky in middlegame
             eg_score += 35; // Excellent in endgame
         }
 
@@ -255,7 +255,11 @@ impl EndgamePatternEvaluator {
     }
 
     /// Evaluate rook and bishop coordination
-    fn evaluate_rook_bishop_coordination(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_rook_bishop_coordination(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let rooks = self.find_pieces(board, player, PieceType::Rook);
         let bishops = self.find_pieces(board, player, PieceType::Bishop);
 
@@ -278,7 +282,11 @@ impl EndgamePatternEvaluator {
     }
 
     /// Evaluate double rook coordination
-    fn evaluate_double_rook_coordination(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_double_rook_coordination(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let rooks = self.find_pieces(board, player, PieceType::Rook);
 
         if rooks.len() < 2 {
@@ -305,7 +313,11 @@ impl EndgamePatternEvaluator {
     }
 
     /// Evaluate piece proximity to opponent king
-    fn evaluate_piece_proximity_to_opponent_king(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_piece_proximity_to_opponent_king(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let opp_king_pos = match self.find_king_position(board, player.opposite()) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -326,7 +338,7 @@ impl EndgamePatternEvaluator {
                 if distance <= 3 {
                     let proximity_bonus = (4 - distance) * 20;
                     mg_score += proximity_bonus / 2; // Moderate in middlegame
-                    eg_score += proximity_bonus;     // Important in endgame
+                    eg_score += proximity_bonus; // Important in endgame
                 }
             }
         }
@@ -339,13 +351,18 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate mating patterns
-    fn evaluate_mating_patterns(&self, board: &BitboardBoard, player: Player, _captured_pieces: &CapturedPieces) -> TaperedScore {
+    fn evaluate_mating_patterns(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        _captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
         // 1. Back rank mate threat
         if self.detect_back_rank_mate_threat(board, player.opposite()) {
-            mg_score += 50;  // Dangerous in middlegame
+            mg_score += 50; // Dangerous in middlegame
             eg_score += 100; // Critical in endgame
         }
 
@@ -378,14 +395,19 @@ impl EndgamePatternEvaluator {
 
         // Check if there are pieces blocking escape
         let escape_squares = self.count_escape_squares(board, king_pos, player);
-        
+
         escape_squares <= 2 // Few escape squares = mate threat
     }
 
     /// Count escape squares for the king
-    fn count_escape_squares(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> i32 {
+    fn count_escape_squares(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> i32 {
         let mut count = 0;
-        
+
         for dr in -1..=1 {
             for dc in -1..=1 {
                 if dr == 0 && dc == 0 {
@@ -397,7 +419,7 @@ impl EndgamePatternEvaluator {
 
                 if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                     let pos = Position::new(new_row as u8, new_col as u8);
-                    
+
                     // Check if square is free or has enemy piece
                     if !board.is_square_occupied(pos) {
                         count += 1;
@@ -441,7 +463,7 @@ impl EndgamePatternEvaluator {
                 } else {
                     lance_pos.row < opp_king_pos.row
                 };
-                
+
                 if pointing_at_king && (opp_king_pos.row == 0 || opp_king_pos.row == 8) {
                     return true;
                 }
@@ -466,8 +488,10 @@ impl EndgamePatternEvaluator {
         }
 
         // Check if opponent king is in corner or edge
-        let is_edge = opp_king_pos.row == 0 || opp_king_pos.row == 8 || 
-                      opp_king_pos.col == 0 || opp_king_pos.col == 8;
+        let is_edge = opp_king_pos.row == 0
+            || opp_king_pos.row == 8
+            || opp_king_pos.col == 0
+            || opp_king_pos.col == 8;
 
         if !is_edge {
             return false;
@@ -509,7 +533,12 @@ impl EndgamePatternEvaluator {
         eg_score += bishops_on_diagonal * 40;
 
         // 3. Centralized major pieces
-        for piece_type in [PieceType::Rook, PieceType::Bishop, PieceType::PromotedRook, PieceType::PromotedBishop] {
+        for piece_type in [
+            PieceType::Rook,
+            PieceType::Bishop,
+            PieceType::PromotedRook,
+            PieceType::PromotedBishop,
+        ] {
             for piece_pos in self.find_pieces(board, player, piece_type) {
                 if self.is_centralized(piece_pos) {
                     mg_score += 15;
@@ -522,7 +551,13 @@ impl EndgamePatternEvaluator {
     }
 
     /// Count pieces on a specific rank
-    fn count_pieces_on_rank(&self, board: &BitboardBoard, player: Player, piece_type: PieceType, rank: u8) -> i32 {
+    fn count_pieces_on_rank(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        piece_type: PieceType,
+        rank: u8,
+    ) -> i32 {
         let mut count = 0;
         for col in 0..9 {
             let pos = Position::new(rank, col);
@@ -563,22 +598,22 @@ impl EndgamePatternEvaluator {
     fn evaluate_zugzwang(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         // Zugzwang is rare in Shogi due to drop moves, but can occur in endgame
         let opponent = player.opposite();
-        
+
         // Count mobility for both sides
         let player_squares = self.count_safe_moves(board, player);
         let opponent_squares = self.count_safe_moves(board, opponent);
-        
+
         // Zugzwang-like position: opponent has very few safe moves
         if opponent_squares <= 2 && player_squares > 5 {
             // Player benefits from opponent's lack of moves
             return TaperedScore::new_tapered(0, 80);
         }
-        
+
         // Reverse zugzwang: player has few moves
         if player_squares <= 2 && opponent_squares > 5 {
             return TaperedScore::new_tapered(0, -60);
         }
-        
+
         TaperedScore::default()
     }
 
@@ -586,7 +621,7 @@ impl EndgamePatternEvaluator {
     fn count_safe_moves(&self, _board: &BitboardBoard, _player: Player) -> i32 {
         // Simplified: count pieces that can move
         // In full implementation, would check actual legal moves
-        10  // Placeholder
+        10 // Placeholder
     }
 
     // =======================================================================
@@ -599,31 +634,31 @@ impl EndgamePatternEvaluator {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
-        
+
         let opp_king_pos = match self.find_king_position(board, player.opposite()) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
-        
+
         // Check for direct opposition (kings facing each other with 1 square between)
         let file_diff = (king_pos.col as i8 - opp_king_pos.col as i8).abs();
         let rank_diff = (king_pos.row as i8 - opp_king_pos.row as i8).abs();
-        
+
         // Direct opposition
         if (file_diff == 0 && rank_diff == 2) || (rank_diff == 0 && file_diff == 2) {
             return TaperedScore::new_tapered(0, 40);
         }
-        
+
         // Distant opposition (even number of squares between)
         if file_diff == 0 && rank_diff % 2 == 0 && rank_diff > 2 {
             return TaperedScore::new_tapered(0, 20);
         }
-        
+
         // Diagonal opposition
         if file_diff == rank_diff && file_diff % 2 == 0 && file_diff > 1 {
             return TaperedScore::new_tapered(0, 15);
         }
-        
+
         TaperedScore::default()
     }
 
@@ -637,56 +672,61 @@ impl EndgamePatternEvaluator {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
-        
+
         // Triangulation is valuable when:
         // 1. Few pieces on board
         // 2. King has room to maneuver
         // 3. Opponent is in cramped position
-        
+
         let piece_count = self.count_total_pieces(board);
-        
+
         if piece_count > 10 {
-            return TaperedScore::default();  // Too many pieces for triangulation
+            return TaperedScore::default(); // Too many pieces for triangulation
         }
-        
+
         // Check if king has triangulation squares available
         let king_mobility = self.count_king_safe_squares(board, king_pos, player);
-        
+
         if king_mobility >= 4 {
             // King has room to triangulate
             return TaperedScore::new_tapered(0, 25);
         }
-        
+
         TaperedScore::default()
     }
 
     /// Count safe squares around king
-    fn count_king_safe_squares(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> i32 {
+    fn count_king_safe_squares(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> i32 {
         let mut count = 0;
-        
+
         for dr in -1..=1 {
             for dc in -1..=1 {
                 if dr == 0 && dc == 0 {
                     continue;
                 }
-                
+
                 let new_row = king_pos.row as i8 + dr;
                 let new_col = king_pos.col as i8 + dc;
-                
+
                 if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                     let pos = Position::new(new_row as u8, new_col as u8);
-                    
+
                     if !board.is_square_occupied(pos) {
                         count += 1;
                     } else if let Some(piece) = board.get_piece(pos) {
                         if piece.player != player {
-                            count += 1;  // Can capture
+                            count += 1; // Can capture
                         }
                     }
                 }
             }
         }
-        
+
         count
     }
 
@@ -700,7 +740,7 @@ impl EndgamePatternEvaluator {
         let player_pawns = self.count_piece_type(board, player, PieceType::Pawn);
         let _opp_pieces = self.count_pieces(board, player.opposite());
         let opp_pawns = self.count_piece_type(board, player.opposite(), PieceType::Pawn);
-        
+
         // Rook vs pawns
         if player_pieces == 1 && player_pawns == 0 && opp_pawns >= 1 {
             // Check if we have a rook
@@ -714,7 +754,7 @@ impl EndgamePatternEvaluator {
                 }
             }
         }
-        
+
         // Bishop vs pawns - harder to win
         if player_pieces == 1 && player_pawns == 0 && opp_pawns >= 1 {
             if self.has_piece_type(board, player, PieceType::Bishop) {
@@ -726,7 +766,7 @@ impl EndgamePatternEvaluator {
                 }
             }
         }
-        
+
         TaperedScore::default()
     }
 
@@ -748,7 +788,7 @@ impl EndgamePatternEvaluator {
     /// Evaluate pawn advancement for player
     fn evaluate_pawn_advancement(&self, board: &BitboardBoard, player: Player) -> u8 {
         let mut max_advancement = 0;
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -764,7 +804,7 @@ impl EndgamePatternEvaluator {
                 }
             }
         }
-        
+
         max_advancement
     }
 
@@ -778,23 +818,23 @@ impl EndgamePatternEvaluator {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
-        
+
         // Check if king is in a corner or edge fortress
-        let is_corner = (king_pos.row == 0 || king_pos.row == 8) && 
-                       (king_pos.col == 0 || king_pos.col == 8);
-        
+        let is_corner =
+            (king_pos.row == 0 || king_pos.row == 8) && (king_pos.col == 0 || king_pos.col == 8);
+
         if !is_corner && king_pos.row != 0 && king_pos.row != 8 {
-            return TaperedScore::default();  // Not in fortress position
+            return TaperedScore::default(); // Not in fortress position
         }
-        
+
         // Count defenders around king
         let defenders = self.count_defenders_near_king(board, king_pos, player);
-        
+
         // Fortress is strong with 2-3 defenders
         if defenders >= 2 {
             // Check material disadvantage - fortress more valuable when behind
             let material_diff = self.get_material_difference(board, player);
-            
+
             if material_diff < -500 {
                 // Significant material disadvantage - fortress is crucial
                 return TaperedScore::new_tapered(0, 120);
@@ -802,26 +842,31 @@ impl EndgamePatternEvaluator {
                 return TaperedScore::new_tapered(0, 60);
             }
         }
-        
+
         TaperedScore::default()
     }
 
     /// Count defenders near king
-    fn count_defenders_near_king(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> i32 {
+    fn count_defenders_near_king(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> i32 {
         let mut count = 0;
-        
+
         for dr in -2..=2 {
             for dc in -2..=2 {
                 if dr == 0 && dc == 0 {
                     continue;
                 }
-                
+
                 let new_row = king_pos.row as i8 + dr;
                 let new_col = king_pos.col as i8 + dc;
-                
+
                 if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                     let pos = Position::new(new_row as u8, new_col as u8);
-                    
+
                     if let Some(piece) = board.get_piece(pos) {
                         if piece.player == player {
                             match piece.piece_type {
@@ -834,7 +879,7 @@ impl EndgamePatternEvaluator {
                 }
             }
         }
-        
+
         count
     }
 
@@ -848,7 +893,7 @@ impl EndgamePatternEvaluator {
     /// Calculate material for a player
     fn calculate_material(&self, board: &BitboardBoard, player: Player) -> i32 {
         let mut material = 0;
-        
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -859,7 +904,7 @@ impl EndgamePatternEvaluator {
                 }
             }
         }
-        
+
         material
     }
 
@@ -913,7 +958,12 @@ impl EndgamePatternEvaluator {
     }
 
     /// Count pieces of specific type for player
-    fn count_piece_type(&self, board: &BitboardBoard, player: Player, piece_type: PieceType) -> i32 {
+    fn count_piece_type(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        piece_type: PieceType,
+    ) -> i32 {
         let mut count = 0;
         for row in 0..9 {
             for col in 0..9 {
@@ -947,7 +997,7 @@ impl EndgamePatternEvaluator {
     /// Check if pawn is passed
     fn is_passed_pawn(&self, board: &BitboardBoard, pawn_pos: Position, player: Player) -> bool {
         let direction = if player == Player::Black { -1 } else { 1 };
-        
+
         for col_offset in -1..=1 {
             let check_col = pawn_pos.col as i8 + col_offset;
             if check_col < 0 || check_col >= 9 {
@@ -970,7 +1020,12 @@ impl EndgamePatternEvaluator {
     }
 
     /// Find all pieces of a specific type
-    fn find_pieces(&self, board: &BitboardBoard, player: Player, piece_type: PieceType) -> Vec<Position> {
+    fn find_pieces(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        piece_type: PieceType,
+    ) -> Vec<Position> {
         let mut pieces = Vec::new();
         for row in 0..9 {
             for col in 0..9 {
@@ -1067,7 +1122,7 @@ mod tests {
         let board = BitboardBoard::new();
 
         let score = evaluator.evaluate_king_activity(&board, Player::Black);
-        
+
         // Starting position: king on back rank, not centralized
         assert!(score.eg >= 0); // Should have some activity potential
     }
@@ -1075,13 +1130,13 @@ mod tests {
     #[test]
     fn test_distance_to_center() {
         let evaluator = EndgamePatternEvaluator::new();
-        
+
         let center = Position::new(4, 4);
         assert_eq!(evaluator.distance_to_center(center), 0);
-        
+
         let corner = Position::new(0, 0);
         assert_eq!(evaluator.distance_to_center(corner), 8);
-        
+
         let edge = Position::new(4, 0);
         assert_eq!(evaluator.distance_to_center(edge), 4);
     }
@@ -1089,10 +1144,10 @@ mod tests {
     #[test]
     fn test_manhattan_distance() {
         let evaluator = EndgamePatternEvaluator::new();
-        
+
         let pos1 = Position::new(0, 0);
         let pos2 = Position::new(3, 4);
-        
+
         assert_eq!(evaluator.manhattan_distance(pos1, pos2), 7); // 3 + 4
     }
 
@@ -1100,9 +1155,9 @@ mod tests {
     fn test_passed_pawn_endgame() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::empty();
-        
+
         let score = evaluator.evaluate_passed_pawns_endgame(&board, Player::Black);
-        
+
         // Empty board, no pawns
         assert_eq!(score.mg, 0);
         assert_eq!(score.eg, 0);
@@ -1112,9 +1167,9 @@ mod tests {
     fn test_piece_coordination() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         let score = evaluator.evaluate_piece_coordination(&board, Player::Black);
-        
+
         // Should have some coordination in starting position
         assert!(score.mg >= 0);
     }
@@ -1124,9 +1179,9 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         let score = evaluator.evaluate_mating_patterns(&board, Player::Black, &captured_pieces);
-        
+
         // Starting position shouldn't have immediate mate threats
         assert_eq!(score.mg, 0);
     }
@@ -1135,9 +1190,9 @@ mod tests {
     fn test_major_piece_activity() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         let score = evaluator.evaluate_major_piece_activity(&board, Player::Black);
-        
+
         // Starting position has inactive major pieces
         assert_eq!(score.mg, 0);
         assert_eq!(score.eg, 0);
@@ -1147,10 +1202,10 @@ mod tests {
     fn test_find_pieces() {
         let evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         let rooks = evaluator.find_pieces(&board, Player::Black, PieceType::Rook);
         assert_eq!(rooks.len(), 1); // One rook per player in starting position
-        
+
         let bishops = evaluator.find_pieces(&board, Player::Black, PieceType::Bishop);
         assert_eq!(bishops.len(), 1);
     }
@@ -1158,7 +1213,7 @@ mod tests {
     #[test]
     fn test_is_centralized() {
         let evaluator = EndgamePatternEvaluator::new();
-        
+
         assert!(evaluator.is_centralized(Position::new(4, 4)));
         assert!(evaluator.is_centralized(Position::new(3, 5)));
         assert!(!evaluator.is_centralized(Position::new(0, 0)));
@@ -1209,16 +1264,15 @@ mod tests {
     fn test_escape_squares() {
         let evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::empty();
-        
+
         // King in center has 8 escape squares on empty board
         let king_pos = Position::new(4, 4);
         let escape_count = evaluator.count_escape_squares(&board, king_pos, Player::Black);
         assert_eq!(escape_count, 8);
-        
+
         // King in corner has fewer escape squares
         let corner_king = Position::new(0, 0);
         let corner_escape = evaluator.count_escape_squares(&board, corner_king, Player::Black);
         assert_eq!(corner_escape, 3);
     }
 }
-

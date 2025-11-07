@@ -1,5 +1,5 @@
 //! Platform detection and capability detection for bit-scanning optimizations
-//! 
+//!
 //! This module provides runtime detection of CPU features and platform capabilities
 //! to select the optimal bit-scanning implementation for the current environment.
 
@@ -72,7 +72,7 @@ impl PlatformCapabilities {
     /// Detect capabilities for native platforms
     fn detect_native_capabilities() -> Self {
         let architecture = Self::detect_architecture();
-        
+
         Self {
             has_popcnt: Self::detect_popcnt_support(),
             has_bmi1: Self::detect_bmi1_support(),
@@ -89,12 +89,12 @@ impl PlatformCapabilities {
         {
             Architecture::X86_64
         }
-        
+
         #[cfg(target_arch = "aarch64")]
         {
             Architecture::ARM
         }
-        
+
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         {
             Architecture::Unknown
@@ -106,10 +106,10 @@ impl PlatformCapabilities {
     fn detect_popcnt_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;
-            
+
             // Check CPUID feature flags for POPCNT support
             let cpuid = __cpuid(1);
-            (cpuid.ecx & (1 << 23)) != 0  // POPCNT bit in ECX register
+            (cpuid.ecx & (1 << 23)) != 0 // POPCNT bit in ECX register
         }
     }
 
@@ -118,10 +118,10 @@ impl PlatformCapabilities {
     fn detect_bmi1_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;
-            
+
             // Check CPUID feature flags for BMI1 support
             let cpuid = __cpuid(7);
-            (cpuid.ebx & (1 << 3)) != 0  // BMI1 bit in EBX register
+            (cpuid.ebx & (1 << 3)) != 0 // BMI1 bit in EBX register
         }
     }
 
@@ -130,10 +130,10 @@ impl PlatformCapabilities {
     fn detect_bmi2_support() -> bool {
         unsafe {
             use std::arch::x86_64::__cpuid;
-            
+
             // Check CPUID feature flags for BMI2 support
             let cpuid = __cpuid(7);
-            (cpuid.ebx & (1 << 8)) != 0  // BMI2 bit in EBX register
+            (cpuid.ebx & (1 << 8)) != 0 // BMI2 bit in EBX register
         }
     }
 
@@ -156,22 +156,22 @@ impl PlatformCapabilities {
     /// Get optimal bitscan implementation for this platform
     pub fn get_bitscan_impl(&self) -> BitscanImpl {
         if self.is_wasm {
-            BitscanImpl::DeBruijn  // Use De Bruijn for WASM
+            BitscanImpl::DeBruijn // Use De Bruijn for WASM
         } else if self.has_bmi1 {
-            BitscanImpl::Hardware  // Use hardware acceleration when available
+            BitscanImpl::Hardware // Use hardware acceleration when available
         } else {
-            BitscanImpl::DeBruijn  // Use De Bruijn as fallback
+            BitscanImpl::DeBruijn // Use De Bruijn as fallback
         }
     }
 
     /// Get optimal popcount implementation for this platform
     pub fn get_popcount_impl(&self) -> PopcountImpl {
         if self.is_wasm {
-            PopcountImpl::BitParallel  // Use SWAR for WASM
+            PopcountImpl::BitParallel // Use SWAR for WASM
         } else if self.has_popcnt {
-            PopcountImpl::Hardware  // Use hardware acceleration when available
+            PopcountImpl::Hardware // Use hardware acceleration when available
         } else {
-            PopcountImpl::BitParallel  // Use SWAR as fallback
+            PopcountImpl::BitParallel // Use SWAR as fallback
         }
     }
 
@@ -190,7 +190,8 @@ impl PlatformCapabilities {
 }
 
 /// Global platform capabilities instance
-static PLATFORM_CAPABILITIES: std::sync::OnceLock<PlatformCapabilities> = std::sync::OnceLock::new();
+static PLATFORM_CAPABILITIES: std::sync::OnceLock<PlatformCapabilities> =
+    std::sync::OnceLock::new();
 
 /// Get the global platform capabilities instance
 pub fn get_platform_capabilities() -> &'static PlatformCapabilities {
@@ -229,10 +230,10 @@ mod tests {
     #[test]
     fn test_platform_capabilities_detection() {
         let caps = PlatformCapabilities::detect();
-        
+
         // Basic sanity checks
         assert!(caps.architecture != Architecture::Unknown || cfg!(target_arch = "wasm32"));
-        
+
         // WASM environment checks
         if cfg!(target_arch = "wasm32") {
             assert!(caps.is_wasm);
@@ -242,7 +243,7 @@ mod tests {
             assert!(!caps.has_bmi2);
             assert_eq!(caps.architecture, Architecture::Wasm32);
         }
-        
+
         // Native platform checks
         if !cfg!(target_arch = "wasm32") {
             assert!(!caps.is_wasm);
@@ -253,21 +254,21 @@ mod tests {
     #[test]
     fn test_implementation_selection() {
         let caps = PlatformCapabilities::detect();
-        
+
         let bitscan_impl = caps.get_bitscan_impl();
         let popcount_impl = caps.get_popcount_impl();
-        
+
         // WASM should use DeBruijn and BitParallel
         if caps.is_wasm {
             assert_eq!(bitscan_impl, BitscanImpl::DeBruijn);
             assert_eq!(popcount_impl, PopcountImpl::BitParallel);
         }
-        
+
         // Hardware acceleration should be preferred when available
         if caps.has_bmi1 {
             assert_eq!(bitscan_impl, BitscanImpl::Hardware);
         }
-        
+
         if caps.has_popcnt {
             assert_eq!(popcount_impl, PopcountImpl::Hardware);
         }
@@ -281,7 +282,7 @@ mod tests {
         let _has_hw = has_hardware_support();
         let _is_wasm = is_wasm_environment();
         let _summary = get_platform_summary();
-        
+
         // Ensure we get consistent results
         let caps1 = get_platform_capabilities();
         let caps2 = get_platform_capabilities();
@@ -304,14 +305,14 @@ mod tests {
     fn test_cross_platform_consistency() {
         // Test that detection works on all platforms
         let caps = PlatformCapabilities::detect();
-        
+
         // Architecture should be detected
         assert_ne!(caps.architecture, Architecture::Unknown);
-        
+
         // Implementation selection should work
         let _bitscan = caps.get_bitscan_impl();
         let _popcount = caps.get_popcount_impl();
-        
+
         // Hardware acceleration check should work
         let _has_hw = caps.has_hardware_acceleration();
     }
@@ -341,22 +342,26 @@ mod performance_tests {
     fn test_detection_performance() {
         // Test that detection is fast (should be < 1% overhead)
         let iterations = 1000;
-        
+
         let start = Instant::now();
         for _ in 0..iterations {
             let _caps = PlatformCapabilities::detect();
         }
         let duration = start.elapsed();
-        
+
         let avg_time_ns = duration.as_nanos() / iterations;
-        assert!(avg_time_ns < 1_000_000, "Detection too slow: {}ns average", avg_time_ns);
+        assert!(
+            avg_time_ns < 1_000_000,
+            "Detection too slow: {}ns average",
+            avg_time_ns
+        );
     }
 
     #[test]
     fn test_global_access_performance() {
         // Test that global access is fast
         let iterations = 10000;
-        
+
         let start = Instant::now();
         for _ in 0..iterations {
             let _caps = get_platform_capabilities();
@@ -365,8 +370,12 @@ mod performance_tests {
             let _has_hw = has_hardware_support();
         }
         let duration = start.elapsed();
-        
+
         let avg_time_ns = duration.as_nanos() / iterations;
-        assert!(avg_time_ns < 1000, "Global access too slow: {}ns average", avg_time_ns);
+        assert!(
+            avg_time_ns < 1000,
+            "Global access too slow: {}ns average",
+            avg_time_ns
+        );
     }
 }

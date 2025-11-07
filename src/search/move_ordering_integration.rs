@@ -1,68 +1,68 @@
 //! Move ordering integration with transposition table
-//! 
+//!
 //! This module provides enhanced move ordering that integrates with the
 //! transposition table system to prioritize moves based on stored best moves,
 //! hash table hints, and search history.
-//! 
+//!
 //! # Features
-//! 
+//!
 //! - **Transposition Table Integration**: Uses stored best moves from previous searches
 //! - **MVV-LVA Ordering**: Captures ordered by Most Valuable Victim - Least Valuable Attacker
 //! - **Killer Move Heuristic**: Prioritizes moves that caused beta cutoffs
 //! - **History Heuristic**: Tracks successful quiet moves
 //! - **Performance Statistics**: Detailed metrics on move ordering effectiveness
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```rust
 //! use shogi_engine::search::{TranspositionMoveOrderer, ThreadSafeTranspositionTable};
 //! use shogi_engine::bitboards::BitboardBoard;
 //! use shogi_engine::types::{Move, Player, CapturedPieces};
-//! 
+//!
 //! // Create move orderer
 //! let mut orderer = TranspositionMoveOrderer::new();
-//! 
+//!
 //! // Set transposition table reference
 //! let tt = ThreadSafeTranspositionTable::new(Default::default());
 //! orderer.set_transposition_table(&tt);
-//! 
+//!
 //! // Order moves for a position
 //! let board = BitboardBoard::new();
 //! let captured = CapturedPieces::new();
 //! let moves = vec![/* your moves */];
-//! 
+//!
 //! let ordered_moves = orderer.order_moves(
-//!     &moves, &board, &captured, Player::Black, 
+//!     &moves, &board, &captured, Player::Black,
 //!     3, // depth
 //!     -1000, // alpha
 //!     1000,  // beta
 //!     None   // iid_move
 //! );
-//! 
+//!
 //! // Get ordering statistics
 //! let stats = orderer.get_move_ordering_hints(&moves, &board, &captured, Player::Black);
 //! println!("TT hint moves: {}", stats.tt_hint_moves);
 //! ```
-//! 
+//!
 //! # Move Ordering Heuristics
-//! 
+//!
 //! 1. **Transposition Table Best Moves**: Highest priority for stored best moves
 //! 2. **Captures**: Ordered by MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
 //! 3. **Killer Moves**: Moves that caused beta cutoffs at the same depth
 //! 4. **History Heuristic**: Quiet moves that have been successful in the past
 //! 5. **Default Ordering**: Remaining moves in original order
-//! 
+//!
 //! # Performance Tips
-//! 
+//!
 //! - Update killer moves after beta cutoffs
 //! - Update history scores for quiet moves
 //! - Monitor TT hit rates for best move prioritization
 //! - Consider move ordering statistics for tuning
 
-use crate::types::*;
 use crate::bitboards::*;
-use crate::search::thread_safe_table::ThreadSafeTranspositionTable;
 use crate::search::shogi_hash::*;
+use crate::search::thread_safe_table::ThreadSafeTranspositionTable;
+use crate::types::*;
 use std::collections::HashMap;
 
 /// Enhanced move ordering system with transposition table integration
@@ -144,22 +144,22 @@ impl TranspositionMoveOrderer {
         iid_move: Option<&Move>,
     ) -> Vec<Move> {
         let start_time = Self::get_current_time();
-        
+
         // Get move ordering hints from transposition table
         let hints = self.get_move_ordering_hints(board, captured_pieces, player, depth);
-        
+
         // Categorize moves based on type and priority
         let mut categorized_moves = self.categorize_moves(moves, board, &hints, iid_move);
-        
+
         // Order each category
         self.order_captures(&mut categorized_moves.captures, board, &hints);
         self.order_killers(&mut categorized_moves.killers, board, &hints);
         self.order_quiet_moves(&mut categorized_moves.quiet_moves, board, &hints);
         self.order_other_moves(&mut categorized_moves.other_moves, board, &hints);
-        
+
         // Combine ordered moves
         let mut ordered_moves = Vec::new();
-        
+
         // 1. Best move from transposition table (highest priority)
         if let Some(best_move) = hints.best_move {
             if let Some(pos) = moves.iter().position(|m| self.moves_equal(m, &best_move)) {
@@ -167,22 +167,22 @@ impl TranspositionMoveOrderer {
                 self.stats.best_move_hits += 1;
             }
         }
-        
+
         // 2. Captures (MVV-LVA order)
         ordered_moves.extend(categorized_moves.captures);
-        
+
         // 3. Killer moves
         ordered_moves.extend(categorized_moves.killers);
-        
+
         // 4. Quiet moves (history heuristic)
         ordered_moves.extend(categorized_moves.quiet_moves);
-        
+
         // 5. Other moves
         ordered_moves.extend(categorized_moves.other_moves);
-        
+
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
-        
+
         // Calculate timing (WASM-compatible)
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -193,7 +193,7 @@ impl TranspositionMoveOrderer {
             // In WASM, we can't measure time precisely, so we use a dummy value
             self.stats.ordering_time_ms = 0.0;
         }
-        
+
         ordered_moves
     }
 
@@ -205,15 +205,22 @@ impl TranspositionMoveOrderer {
         player: Player,
         depth: u8,
     ) -> MoveOrderingHints {
-        let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
-        
+        let position_hash = self
+            .hash_calculator
+            .get_position_hash(board, player, captured_pieces);
+
         // Probe transposition table for best move and other hints
         let (best_move, tt_depth, tt_score, tt_flag) = if !self.transposition_table.is_null() {
             unsafe {
                 let tt = &*self.transposition_table;
                 if let Some(entry) = tt.probe(position_hash, depth) {
                     self.stats.tt_hint_moves += 1;
-                    (entry.best_move, entry.depth, Some(entry.score), Some(entry.flag))
+                    (
+                        entry.best_move,
+                        entry.depth,
+                        Some(entry.score),
+                        Some(entry.flag),
+                    )
                 } else {
                     (None, 0, None, None)
                 }
@@ -240,7 +247,7 @@ impl TranspositionMoveOrderer {
         iid_move: Option<&Move>,
     ) -> CategorizedMoves {
         let mut categorized = CategorizedMoves::default();
-        
+
         for mv in moves {
             // Skip best move from TT (will be added first)
             if let Some(ref best_move) = hints.best_move {
@@ -248,14 +255,14 @@ impl TranspositionMoveOrderer {
                     continue;
                 }
             }
-            
+
             // Skip IID move (will be added first)
             if let Some(iid_mv) = iid_move {
                 if self.moves_equal(mv, iid_mv) {
                     continue;
                 }
             }
-            
+
             // Categorize based on move type
             if mv.is_capture {
                 categorized.captures.push(mv.clone());
@@ -267,12 +274,17 @@ impl TranspositionMoveOrderer {
                 categorized.other_moves.push(mv.clone());
             }
         }
-        
+
         categorized
     }
 
     /// Order captures using MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
-    fn order_captures(&self, captures: &mut Vec<Move>, _board: &BitboardBoard, _hints: &MoveOrderingHints) {
+    fn order_captures(
+        &self,
+        captures: &mut Vec<Move>,
+        _board: &BitboardBoard,
+        _hints: &MoveOrderingHints,
+    ) {
         captures.sort_by(|a, b| {
             let a_mvv_lva = self.calculate_mvv_lva(a);
             let b_mvv_lva = self.calculate_mvv_lva(b);
@@ -281,7 +293,12 @@ impl TranspositionMoveOrderer {
     }
 
     /// Order killer moves
-    fn order_killers(&mut self, killers: &mut Vec<Move>, _board: &BitboardBoard, _hints: &MoveOrderingHints) {
+    fn order_killers(
+        &mut self,
+        killers: &mut Vec<Move>,
+        _board: &BitboardBoard,
+        _hints: &MoveOrderingHints,
+    ) {
         killers.sort_by(|a, b| {
             let a_killer_score = self.get_killer_score(a);
             let b_killer_score = self.get_killer_score(b);
@@ -290,7 +307,12 @@ impl TranspositionMoveOrderer {
     }
 
     /// Order quiet moves using history heuristic
-    fn order_quiet_moves(&mut self, quiet_moves: &mut Vec<Move>, _board: &BitboardBoard, _hints: &MoveOrderingHints) {
+    fn order_quiet_moves(
+        &mut self,
+        quiet_moves: &mut Vec<Move>,
+        _board: &BitboardBoard,
+        _hints: &MoveOrderingHints,
+    ) {
         quiet_moves.sort_by(|a, b| {
             let a_history = self.get_history_score(a);
             let b_history = self.get_history_score(b);
@@ -299,7 +321,12 @@ impl TranspositionMoveOrderer {
     }
 
     /// Order other moves
-    fn order_other_moves(&mut self, other_moves: &mut Vec<Move>, _board: &BitboardBoard, _hints: &MoveOrderingHints) {
+    fn order_other_moves(
+        &mut self,
+        other_moves: &mut Vec<Move>,
+        _board: &BitboardBoard,
+        _hints: &MoveOrderingHints,
+    ) {
         // For other moves, use a combination of factors
         other_moves.sort_by(|a, b| {
             let a_score = self.score_move_general(a);
@@ -313,15 +340,15 @@ impl TranspositionMoveOrderer {
         if !mv.is_capture {
             return 0;
         }
-        
+
         let victim_value = if let Some(captured) = &mv.captured_piece {
             captured.piece_type.base_value()
         } else {
             0
         };
-        
+
         let attacker_value = mv.piece_type.base_value();
-        
+
         // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
         // Higher values are better (more valuable captures first)
         victim_value * 10 - attacker_value
@@ -372,20 +399,20 @@ impl TranspositionMoveOrderer {
     /// General move scoring for other moves
     fn score_move_general(&mut self, mv: &Move) -> i32 {
         let mut score = 0;
-        
+
         // Promotion bonus
         if mv.is_promotion {
             score += 800;
         }
-        
+
         // Center control bonus
         if mv.to.row >= 3 && mv.to.row <= 5 && mv.to.col >= 3 && mv.to.col <= 5 {
             score += 20;
         }
-        
+
         // Piece value bonus
         score += mv.piece_type.base_value() / 10;
-        
+
         // Counter move bonus
         if let Some(counter) = self.counter_moves.get(mv) {
             if self.moves_equal(mv, counter) {
@@ -393,14 +420,14 @@ impl TranspositionMoveOrderer {
                 score += 300;
             }
         }
-        
+
         score
     }
 
     /// Check if two moves are equal
     pub fn moves_equal(&self, move1: &Move, move2: &Move) -> bool {
-        move1.from == move2.from 
-            && move1.to == move2.to 
+        move1.from == move2.from
+            && move1.to == move2.to
             && move1.piece_type == move2.piece_type
             && move1.is_promotion == move2.is_promotion
     }
@@ -411,7 +438,7 @@ impl TranspositionMoveOrderer {
         if self.is_killer_move(&new_killer) {
             return;
         }
-        
+
         // Shift killer moves and add new one at position 0
         self.killer_moves[1] = self.killer_moves[0].take();
         self.killer_moves[0] = Some(new_killer);
@@ -425,7 +452,7 @@ impl TranspositionMoveOrderer {
             if from_idx < 81 && to_idx < 81 {
                 // Increase history score based on depth
                 self.history_table[from_idx][to_idx] += depth as i32 * depth as i32;
-                
+
                 // Prevent overflow
                 if self.history_table[from_idx][to_idx] > 10000 {
                     self.history_table[from_idx][to_idx] = 10000;
@@ -482,21 +509,19 @@ mod tests {
         let mut orderer = TranspositionMoveOrderer::new();
         let board = BitboardBoard::new();
         let captured = CapturedPieces::new();
-        
-        let moves = vec![
-            Move {
-                from: Some(Position { row: 7, col: 4 }),
-                to: Position { row: 6, col: 4 },
-                piece_type: PieceType::Pawn,
-                is_capture: false,
-                is_promotion: false,
-                gives_check: false,
-                is_recapture: false,
-                captured_piece: None,
-                player: Player::Black,
-            },
-        ];
-        
+
+        let moves = vec![Move {
+            from: Some(Position { row: 7, col: 4 }),
+            to: Position { row: 6, col: 4 },
+            piece_type: PieceType::Pawn,
+            is_capture: false,
+            is_promotion: false,
+            gives_check: false,
+            is_recapture: false,
+            captured_piece: None,
+            player: Player::Black,
+        }];
+
         let hints = MoveOrderingHints {
             best_move: None,
             position_hash: 0,
@@ -504,7 +529,7 @@ mod tests {
             tt_score: None,
             tt_flag: None,
         };
-        
+
         let categorized = orderer.categorize_moves(&moves, &board, &hints, None);
         assert_eq!(categorized.quiet_moves.len(), 1);
     }
@@ -512,7 +537,7 @@ mod tests {
     #[test]
     fn test_killer_move_management() {
         let mut orderer = TranspositionMoveOrderer::new();
-        
+
         let killer_move = Move {
             from: Some(Position { row: 7, col: 4 }),
             to: Position { row: 6, col: 4 },
@@ -524,7 +549,7 @@ mod tests {
             captured_piece: None,
             player: Player::Black,
         };
-        
+
         orderer.update_killer_moves(killer_move.clone());
         assert!(orderer.is_killer_move(&killer_move));
     }
@@ -532,7 +557,7 @@ mod tests {
     #[test]
     fn test_history_updates() {
         let mut orderer = TranspositionMoveOrderer::new();
-        
+
         let mv = Move {
             from: Some(Position { row: 7, col: 4 }),
             to: Position { row: 6, col: 4 },
@@ -544,7 +569,7 @@ mod tests {
             captured_piece: None,
             player: Player::Black,
         };
-        
+
         orderer.update_history(&mv, 3);
         let score = orderer.get_history_score(&mv);
         assert!(score > 0);

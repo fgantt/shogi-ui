@@ -20,7 +20,7 @@
 //! use crate::evaluation::tuning::TaperedEvaluationTuner;
 //!
 //! let mut tuner = TaperedEvaluationTuner::new();
-//! 
+//!
 //! // Add training positions
 //! tuner.add_training_data(&positions);
 //!
@@ -107,7 +107,7 @@ impl TaperedEvaluationTuner {
         }?;
 
         let duration = start.elapsed();
-        
+
         Ok(TuningResults {
             optimized_weights: self.weights.clone(),
             training_error: self.calculate_error(&self.training_positions),
@@ -184,7 +184,7 @@ impl TaperedEvaluationTuner {
             .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(i, _)| i)
             .unwrap();
-        
+
         self.weights = population[best_index].clone();
 
         Ok(())
@@ -262,7 +262,11 @@ impl TaperedEvaluationTuner {
     }
 
     /// Calculate gradients excluding a fold
-    fn calculate_gradients_fold(&self, exclude_start: usize, exclude_end: usize) -> WeightGradients {
+    fn calculate_gradients_fold(
+        &self,
+        exclude_start: usize,
+        exclude_end: usize,
+    ) -> WeightGradients {
         let mut gradients = WeightGradients::default();
         let mut count = 0;
 
@@ -375,7 +379,7 @@ impl TaperedEvaluationTuner {
         // Generate random variations
         for _ in 1..size {
             let mut individual = self.weights.clone();
-            
+
             // Random perturbations
             individual.material_weight *= 0.8 + rand::random::<f32>() * 0.4;
             individual.position_weight *= 0.8 + rand::random::<f32>() * 0.4;
@@ -405,7 +409,11 @@ impl TaperedEvaluationTuner {
     }
 
     /// Select parents for genetic algorithm
-    fn select_parents(&self, population: &[EvaluationWeights], fitnesses: &[f64]) -> Vec<EvaluationWeights> {
+    fn select_parents(
+        &self,
+        population: &[EvaluationWeights],
+        fitnesses: &[f64],
+    ) -> Vec<EvaluationWeights> {
         let tournament_size = 3;
         let mut parents = Vec::new();
 
@@ -415,7 +423,8 @@ impl TaperedEvaluationTuner {
             let mut best_fitness = f64::MAX;
 
             for _ in 0..tournament_size {
-                let index = (rand::random::<f32>() * population.len() as f32) as usize % population.len();
+                let index =
+                    (rand::random::<f32>() * population.len() as f32) as usize % population.len();
                 if fitnesses[index] < best_fitness {
                     best_fitness = fitnesses[index];
                     best_index = index;
@@ -446,27 +455,45 @@ impl TaperedEvaluationTuner {
     }
 
     /// Crossover two parents
-    fn crossover(&self, parent1: &EvaluationWeights, parent2: &EvaluationWeights) -> (EvaluationWeights, EvaluationWeights) {
+    fn crossover(
+        &self,
+        parent1: &EvaluationWeights,
+        parent2: &EvaluationWeights,
+    ) -> (EvaluationWeights, EvaluationWeights) {
         let alpha = rand::random::<f32>();
 
         let child1 = EvaluationWeights {
-            material_weight: parent1.material_weight * alpha + parent2.material_weight * (1.0 - alpha),
-            position_weight: parent1.position_weight * alpha + parent2.position_weight * (1.0 - alpha),
-            king_safety_weight: parent1.king_safety_weight * alpha + parent2.king_safety_weight * (1.0 - alpha),
-            pawn_structure_weight: parent1.pawn_structure_weight * alpha + parent2.pawn_structure_weight * (1.0 - alpha),
-            mobility_weight: parent1.mobility_weight * alpha + parent2.mobility_weight * (1.0 - alpha),
-            center_control_weight: parent1.center_control_weight * alpha + parent2.center_control_weight * (1.0 - alpha),
-            development_weight: parent1.development_weight * alpha + parent2.development_weight * (1.0 - alpha),
+            material_weight: parent1.material_weight * alpha
+                + parent2.material_weight * (1.0 - alpha),
+            position_weight: parent1.position_weight * alpha
+                + parent2.position_weight * (1.0 - alpha),
+            king_safety_weight: parent1.king_safety_weight * alpha
+                + parent2.king_safety_weight * (1.0 - alpha),
+            pawn_structure_weight: parent1.pawn_structure_weight * alpha
+                + parent2.pawn_structure_weight * (1.0 - alpha),
+            mobility_weight: parent1.mobility_weight * alpha
+                + parent2.mobility_weight * (1.0 - alpha),
+            center_control_weight: parent1.center_control_weight * alpha
+                + parent2.center_control_weight * (1.0 - alpha),
+            development_weight: parent1.development_weight * alpha
+                + parent2.development_weight * (1.0 - alpha),
         };
 
         let child2 = EvaluationWeights {
-            material_weight: parent2.material_weight * alpha + parent1.material_weight * (1.0 - alpha),
-            position_weight: parent2.position_weight * alpha + parent1.position_weight * (1.0 - alpha),
-            king_safety_weight: parent2.king_safety_weight * alpha + parent1.king_safety_weight * (1.0 - alpha),
-            pawn_structure_weight: parent2.pawn_structure_weight * alpha + parent1.pawn_structure_weight * (1.0 - alpha),
-            mobility_weight: parent2.mobility_weight * alpha + parent1.mobility_weight * (1.0 - alpha),
-            center_control_weight: parent2.center_control_weight * alpha + parent1.center_control_weight * (1.0 - alpha),
-            development_weight: parent2.development_weight * alpha + parent1.development_weight * (1.0 - alpha),
+            material_weight: parent2.material_weight * alpha
+                + parent1.material_weight * (1.0 - alpha),
+            position_weight: parent2.position_weight * alpha
+                + parent1.position_weight * (1.0 - alpha),
+            king_safety_weight: parent2.king_safety_weight * alpha
+                + parent1.king_safety_weight * (1.0 - alpha),
+            pawn_structure_weight: parent2.pawn_structure_weight * alpha
+                + parent1.pawn_structure_weight * (1.0 - alpha),
+            mobility_weight: parent2.mobility_weight * alpha
+                + parent1.mobility_weight * (1.0 - alpha),
+            center_control_weight: parent2.center_control_weight * alpha
+                + parent1.center_control_weight * (1.0 - alpha),
+            development_weight: parent2.development_weight * alpha
+                + parent1.development_weight * (1.0 - alpha),
         };
 
         (child1, child2)
@@ -482,13 +509,34 @@ impl TaperedEvaluationTuner {
                 let weight_to_mutate = (rand::random::<f32>() * 7.0) as usize;
 
                 match weight_to_mutate {
-                    0 => individual.material_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    1 => individual.position_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    2 => individual.king_safety_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    3 => individual.pawn_structure_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    4 => individual.mobility_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    5 => individual.center_control_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
-                    6 => individual.development_weight *= 1.0 + (rand::random::<f32>() - 0.5) * mutation_strength,
+                    0 => {
+                        individual.material_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    1 => {
+                        individual.position_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    2 => {
+                        individual.king_safety_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    3 => {
+                        individual.pawn_structure_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    4 => {
+                        individual.mobility_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    5 => {
+                        individual.center_control_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    6 => {
+                        individual.development_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
                     _ => {}
                 }
             }
@@ -632,18 +680,16 @@ mod tests {
     #[test]
     fn test_add_training_data() {
         let mut tuner = TaperedEvaluationTuner::new();
-        let positions = vec![
-            TuningPosition {
-                material_score: 1.0,
-                position_score: 0.5,
-                king_safety_score: 0.3,
-                pawn_structure_score: 0.2,
-                mobility_score: 0.4,
-                center_control_score: 0.3,
-                development_score: 0.2,
-                result: 1.0,
-            },
-        ];
+        let positions = vec![TuningPosition {
+            material_score: 1.0,
+            position_score: 0.5,
+            king_safety_score: 0.3,
+            pawn_structure_score: 0.2,
+            mobility_score: 0.4,
+            center_control_score: 0.3,
+            development_score: 0.2,
+            result: 1.0,
+        }];
 
         tuner.add_training_data(positions);
         assert_eq!(tuner.training_positions.len(), 1);
@@ -652,7 +698,7 @@ mod tests {
     #[test]
     fn test_split_data() {
         let mut tuner = TaperedEvaluationTuner::new();
-        
+
         // Add 100 positions
         for i in 0..100 {
             tuner.add_training_data(vec![TuningPosition {
@@ -688,7 +734,7 @@ mod tests {
         };
 
         let score = tuner.evaluate_position(&position);
-        
+
         // Should be in [0, 1] range
         assert!(score >= 0.0 && score <= 1.0);
     }
@@ -696,21 +742,19 @@ mod tests {
     #[test]
     fn test_calculate_error() {
         let tuner = TaperedEvaluationTuner::new();
-        let positions = vec![
-            TuningPosition {
-                material_score: 1.0,
-                position_score: 0.0,
-                king_safety_score: 0.0,
-                pawn_structure_score: 0.0,
-                mobility_score: 0.0,
-                center_control_score: 0.0,
-                development_score: 0.0,
-                result: 1.0,
-            },
-        ];
+        let positions = vec![TuningPosition {
+            material_score: 1.0,
+            position_score: 0.0,
+            king_safety_score: 0.0,
+            pawn_structure_score: 0.0,
+            mobility_score: 0.0,
+            center_control_score: 0.0,
+            development_score: 0.0,
+            result: 1.0,
+        }];
 
         let error = tuner.calculate_error(&positions);
-        
+
         // Should have some error
         assert!(error >= 0.0);
     }
@@ -718,7 +762,7 @@ mod tests {
     #[test]
     fn test_clamp_weights() {
         let mut tuner = TaperedEvaluationTuner::new();
-        
+
         // Set extreme values
         tuner.weights.material_weight = 10.0;
         tuner.weights.mobility_weight = -1.0;
@@ -733,7 +777,7 @@ mod tests {
     #[test]
     fn test_weight_gradients_default() {
         let gradients = WeightGradients::default();
-        
+
         assert_eq!(gradients.material_weight, 0.0);
         assert_eq!(gradients.position_weight, 0.0);
     }
@@ -741,7 +785,7 @@ mod tests {
     #[test]
     fn test_tuning_config_default() {
         let config = TuningConfig::default();
-        
+
         assert_eq!(config.method, OptimizationMethod::GradientDescent);
         assert_eq!(config.learning_rate, 0.001);
         assert_eq!(config.max_iterations, 1000);
@@ -750,7 +794,7 @@ mod tests {
     #[test]
     fn test_tuning_stats() {
         let tuner = TaperedEvaluationTuner::new();
-        
+
         assert_eq!(tuner.stats().iterations, 0);
         assert_eq!(tuner.stats().error_history.len(), 0);
     }
@@ -758,7 +802,7 @@ mod tests {
     #[test]
     fn test_crossover() {
         let tuner = TaperedEvaluationTuner::new();
-        
+
         let parent1 = EvaluationWeights {
             material_weight: 1.0,
             position_weight: 1.0,
@@ -786,4 +830,3 @@ mod tests {
         assert!(child2.material_weight >= 1.0 && child2.material_weight <= 1.5);
     }
 }
-

@@ -30,9 +30,9 @@
 //! let score = integration.evaluate_with_all_features(&board, player, &captured);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::integration::IntegratedEvaluator;
+use crate::types::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -146,7 +146,12 @@ impl AdvancedIntegration {
     }
 
     /// Check endgame tablebase (stub - would integrate with actual tablebase)
-    fn check_tablebase(&self, _board: &BitboardBoard, _player: Player, _captured: &CapturedPieces) -> Option<i32> {
+    fn check_tablebase(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        _captured: &CapturedPieces,
+    ) -> Option<i32> {
         // In real implementation, would query tablebase
         // For now, return None (no tablebase hit)
         None
@@ -188,7 +193,12 @@ impl AdvancedIntegration {
     }
 
     /// Generate suggestions for analysis mode
-    fn generate_suggestions(&self, _board: &BitboardBoard, _player: Player, phase: i32) -> Vec<String> {
+    fn generate_suggestions(
+        &self,
+        _board: &BitboardBoard,
+        _player: Player,
+        phase: i32,
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
 
         match self.categorize_phase(phase) {
@@ -449,7 +459,7 @@ mod tests {
         let captured = CapturedPieces::new();
 
         let result = integration.evaluate_with_all_features(&board, Player::Black, &captured);
-        
+
         assert!(result.score.abs() < 100000);
         assert_eq!(result.source, EvaluationSource::TaperedEvaluation);
     }
@@ -477,7 +487,7 @@ mod tests {
         let captured = CapturedPieces::new();
 
         let analysis = integration.evaluate_for_analysis(&board, Player::Black, &captured);
-        
+
         assert!(analysis.total_score.abs() < 100000);
         assert!(!analysis.suggestions.is_empty());
     }
@@ -528,7 +538,7 @@ mod tests {
         ];
 
         let scores = parallel.evaluate_parallel(positions);
-        
+
         assert_eq!(scores.len(), 2);
     }
 
@@ -553,7 +563,7 @@ mod tests {
         integration.stats.opening_book_hits = 10;
 
         integration.reset_stats();
-        
+
         assert_eq!(integration.stats.opening_book_hits, 0);
     }
 
@@ -579,9 +589,8 @@ mod tests {
         };
 
         let integration = AdvancedIntegration::with_config(config);
-        
+
         assert!(integration.config.use_opening_book);
         assert!(integration.config.use_tablebase);
     }
 }
-

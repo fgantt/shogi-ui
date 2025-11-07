@@ -1,27 +1,27 @@
 //! Population count (popcount) implementations for bit-scanning optimizations
-//! 
+//!
 //! This module provides multiple implementations of population count (counting set bits)
 //! optimized for different platforms and capabilities.
 
-use crate::types::Bitboard;
 use crate::bitboards::platform_detection::{get_best_popcount_impl, PopcountImpl};
+use crate::types::Bitboard;
 
 /// Main population count function with automatic implementation selection
-/// 
+///
 /// This function automatically selects the optimal implementation based on
 /// the current platform capabilities detected at runtime.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
-/// 
+///
 /// # Examples
 /// ```
 /// use shogi_engine::types::Bitboard;
 /// use shogi_engine::bitboards::popcount::popcount;
-/// 
+///
 /// let bb: Bitboard = 0b1011; // 3 bits set
 /// assert_eq!(popcount(bb), 3);
 /// ```
@@ -34,17 +34,17 @@ pub fn popcount(bb: Bitboard) -> u32 {
 }
 
 /// Hardware-accelerated population count using x86_64 POPCNT instruction
-/// 
+///
 /// This implementation uses the native POPCNT instruction available on
 /// modern x86_64 processors. It provides the fastest possible performance
 /// for bit counting operations.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
-/// 
+///
 /// # Safety
 /// This function uses unsafe intrinsics and should only be called when
 /// POPCNT support has been verified by the platform detection system.
@@ -55,10 +55,10 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
         // Bitboard is u128, so we need to handle it as two u64 values
         let low = (bb & 0xFFFFFFFFFFFFFFFF) as u64;
         let high = ((bb >> 64) & 0xFFFFFFFFFFFFFFFF) as u64;
-        
+
         let low_count = std::arch::x86_64::_popcnt64(low as i64) as u32;
         let high_count = std::arch::x86_64::_popcnt64(high as i64) as u32;
-        
+
         low_count + high_count
     }
 }
@@ -71,17 +71,17 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
 }
 
 /// SWAR (SIMD Within A Register) population count implementation
-/// 
+///
 /// This implementation uses bit-parallel algorithms to count bits efficiently
 /// without requiring special hardware instructions. It works on all platforms
 /// including WASM and provides excellent performance.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
-/// 
+///
 /// # Performance
 /// This implementation is typically 3-5x faster than the software fallback
 /// and works on all platforms including WASM.
@@ -89,69 +89,69 @@ pub fn popcount_bit_parallel(bb: Bitboard) -> u32 {
     // Process the bitboard in 64-bit chunks since u128 operations can be expensive
     let low = (bb & 0xFFFFFFFFFFFFFFFF) as u64;
     let high = ((bb >> 64) & 0xFFFFFFFFFFFFFFFF) as u64;
-    
+
     swar_popcount_64(low) + swar_popcount_64(high)
 }
 
 /// 64-bit SWAR population count implementation
-/// 
+///
 /// This is the core SWAR algorithm that processes 64 bits simultaneously
 /// using only basic bitwise operations.
 fn swar_popcount_64(mut x: u64) -> u32 {
     // Step 1: Count bits in pairs (2-bit groups)
     // 0x5555555555555555 = 01010101...01010101 (every other bit)
     x = x - ((x >> 1) & 0x5555555555555555);
-    
+
     // Step 2: Count bits in groups of 4
     // 0x3333333333333333 = 00110011...00110011 (every 4th bit)
     x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
-    
+
     // Step 3: Count bits in groups of 8
     // 0x0f0f0f0f0f0f0f0f = 00001111...00001111 (every 8th bit)
     x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-    
+
     // Step 4: Sum all groups using multiplication
     // 0x0101010101010101 * x will sum all 8-bit groups into the high byte
     ((x * 0x0101010101010101) >> 56) as u32
 }
 
 /// Software fallback population count implementation
-/// 
+///
 /// This implementation uses a simple loop-based approach that works on
 /// all platforms but is slower than the optimized versions. It serves
 /// as a reliable fallback when no other optimizations are available.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
-/// 
+///
 /// # Performance
 /// This is the slowest implementation but guarantees correctness
 /// on all platforms.
 pub fn popcount_software(bb: Bitboard) -> u32 {
     let mut count = 0;
     let mut bits = bb;
-    
+
     while bits != 0 {
         count += 1;
         // Clear the least significant bit
         bits &= bits - 1;
     }
-    
+
     count
 }
 
 /// Optimized population count with manual implementation selection
-/// 
+///
 /// This function allows manual selection of the implementation,
 /// useful for benchmarking or when you need specific behavior.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
 /// * `impl_type` - The implementation to use
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
 pub fn popcount_with_impl(bb: Bitboard, impl_type: PopcountImpl) -> u32 {
@@ -163,13 +163,13 @@ pub fn popcount_with_impl(bb: Bitboard, impl_type: PopcountImpl) -> u32 {
 }
 
 /// Population count optimized for specific use cases
-/// 
+///
 /// This function provides additional optimizations for common patterns
 /// like single-bit checks and empty bitboards.
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
-/// 
+///
 /// # Returns
 /// The number of set bits in the bitboard
 pub fn popcount_optimized(bb: Bitboard) -> u32 {
@@ -177,21 +177,21 @@ pub fn popcount_optimized(bb: Bitboard) -> u32 {
     if bb == 0 {
         return 0;
     }
-    
+
     // Fast path for single bit (common case)
     if bb & (bb - 1) == 0 {
         return 1;
     }
-    
+
     // Use the best available implementation
     popcount(bb)
 }
 
 /// Check if a bitboard has exactly one bit set
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to check
-/// 
+///
 /// # Returns
 /// True if exactly one bit is set, false otherwise
 pub fn is_single_bit(bb: Bitboard) -> bool {
@@ -199,10 +199,10 @@ pub fn is_single_bit(bb: Bitboard) -> bool {
 }
 
 /// Check if a bitboard has more than one bit set
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to check
-/// 
+///
 /// # Returns
 /// True if more than one bit is set, false otherwise
 pub fn is_multiple_bits(bb: Bitboard) -> bool {
@@ -210,10 +210,10 @@ pub fn is_multiple_bits(bb: Bitboard) -> bool {
 }
 
 /// Check if a bitboard is empty (no bits set)
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to check
-/// 
+///
 /// # Returns
 /// True if no bits are set, false otherwise
 pub fn is_empty(bb: Bitboard) -> bool {
@@ -221,10 +221,10 @@ pub fn is_empty(bb: Bitboard) -> bool {
 }
 
 /// Get the most significant bit position
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to analyze
-/// 
+///
 /// # Returns
 /// The position of the most significant bit (0-based), or None if empty
 pub fn most_significant_bit(bb: Bitboard) -> Option<u8> {
@@ -244,10 +244,10 @@ pub fn most_significant_bit(bb: Bitboard) -> Option<u8> {
 }
 
 /// Get the least significant bit position
-/// 
+///
 /// # Arguments
 /// * `bb` - The bitboard to analyze
-/// 
+///
 /// # Returns
 /// The position of the least significant bit (0-based), or None if empty
 pub fn least_significant_bit(bb: Bitboard) -> Option<u8> {
@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(popcount(0xFFFFFFFF), 32);
         assert_eq!(popcount(0xFFFFFFFFFFFFFFFF), 64);
         assert_eq!(popcount(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF), 128);
-        
+
         // Test edge cases
         assert_eq!(popcount(0x8000000000000000), 1); // Single high bit
         assert_eq!(popcount(0x5555555555555555), 32); // Alternating bits
@@ -304,9 +304,21 @@ mod tests {
             let software_result = popcount_software(bb);
             let optimized_result = popcount_optimized(bb);
 
-            assert_eq!(hardware_result, swar_result, "Hardware vs SWAR mismatch for 0x{:X}", bb);
-            assert_eq!(hardware_result, software_result, "Hardware vs Software mismatch for 0x{:X}", bb);
-            assert_eq!(hardware_result, optimized_result, "Hardware vs Optimized mismatch for 0x{:X}", bb);
+            assert_eq!(
+                hardware_result, swar_result,
+                "Hardware vs SWAR mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                hardware_result, software_result,
+                "Hardware vs Software mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                hardware_result, optimized_result,
+                "Hardware vs Optimized mismatch for 0x{:X}",
+                bb
+            );
         }
     }
 
@@ -314,16 +326,16 @@ mod tests {
     fn test_popcount_edge_cases() {
         // Empty bitboard
         assert_eq!(popcount(0), 0);
-        
+
         // Single bit cases
         for i in 0..128 {
             let bb = 1u128 << i;
             assert_eq!(popcount(bb), 1, "Single bit at position {} failed", i);
         }
-        
+
         // All bits set
         assert_eq!(popcount(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF), 128);
-        
+
         // Pattern tests
         assert_eq!(popcount(0x5555555555555555), 32); // Every other bit
         assert_eq!(popcount(0x3333333333333333), 32); // Every 2nd pair
@@ -337,13 +349,13 @@ mod tests {
         assert!(is_single_bit(0x8000000000000000));
         assert!(!is_single_bit(0));
         assert!(!is_single_bit(3));
-        
+
         // Test is_multiple_bits
         assert!(!is_multiple_bits(0));
         assert!(!is_multiple_bits(1));
         assert!(is_multiple_bits(3));
         assert!(is_multiple_bits(0xFF));
-        
+
         // Test is_empty
         assert!(is_empty(0));
         assert!(!is_empty(1));
@@ -358,24 +370,27 @@ mod tests {
         assert_eq!(least_significant_bit(2), Some(1));
         assert_eq!(least_significant_bit(0x8000000000000000), Some(63));
         assert_eq!(least_significant_bit(0x10000000000000000), Some(64));
-        
+
         // Test most_significant_bit
         assert_eq!(most_significant_bit(0), None);
         assert_eq!(most_significant_bit(1), Some(0));
         assert_eq!(most_significant_bit(2), Some(1));
         assert_eq!(most_significant_bit(0x8000000000000000), Some(63));
         assert_eq!(most_significant_bit(0x10000000000000000), Some(64));
-        assert_eq!(most_significant_bit(0x80000000000000000000000000000000), Some(127));
+        assert_eq!(
+            most_significant_bit(0x80000000000000000000000000000000),
+            Some(127)
+        );
     }
 
     #[test]
     fn test_popcount_with_impl() {
         let bb = 0x123456789ABCDEF0;
-        
+
         let hardware_result = popcount_with_impl(bb, PopcountImpl::Hardware);
         let swar_result = popcount_with_impl(bb, PopcountImpl::BitParallel);
         let software_result = popcount_with_impl(bb, PopcountImpl::Software);
-        
+
         assert_eq!(hardware_result, swar_result);
         assert_eq!(hardware_result, software_result);
     }
@@ -384,11 +399,11 @@ mod tests {
     fn test_popcount_optimized_fast_paths() {
         // Test empty bitboard fast path
         assert_eq!(popcount_optimized(0), 0);
-        
+
         // Test single bit fast path
         assert_eq!(popcount_optimized(1), 1);
         assert_eq!(popcount_optimized(0x8000000000000000), 1);
-        
+
         // Test normal case
         assert_eq!(popcount_optimized(0xFF), 8);
     }
@@ -412,8 +427,11 @@ mod performance_tests {
                 let _result = popcount_hardware(test_bitboard);
             }
             let hardware_duration = start.elapsed();
-            println!("Hardware popcount: {:?} total, {:?} per call", 
-                    hardware_duration, hardware_duration / iterations);
+            println!(
+                "Hardware popcount: {:?} total, {:?} per call",
+                hardware_duration,
+                hardware_duration / iterations
+            );
         }
 
         // Benchmark SWAR implementation
@@ -422,8 +440,11 @@ mod performance_tests {
             let _result = popcount_bit_parallel(test_bitboard);
         }
         let swar_duration = start.elapsed();
-        println!("SWAR popcount: {:?} total, {:?} per call", 
-                swar_duration, swar_duration / iterations);
+        println!(
+            "SWAR popcount: {:?} total, {:?} per call",
+            swar_duration,
+            swar_duration / iterations
+        );
 
         // Benchmark software implementation
         let start = Instant::now();
@@ -431,26 +452,33 @@ mod performance_tests {
             let _result = popcount_software(test_bitboard);
         }
         let software_duration = start.elapsed();
-        println!("Software popcount: {:?} total, {:?} per call", 
-                software_duration, software_duration / iterations);
+        println!(
+            "Software popcount: {:?} total, {:?} per call",
+            software_duration,
+            software_duration / iterations
+        );
 
         // Verify performance targets
         // SWAR should be faster than software
-        assert!(swar_duration <= software_duration, 
-                "SWAR implementation should be faster than software");
+        assert!(
+            swar_duration <= software_duration,
+            "SWAR implementation should be faster than software"
+        );
 
         #[cfg(target_arch = "x86_64")]
         {
             // Hardware should be fastest on x86_64
-            assert!(hardware_duration <= swar_duration,
-                    "Hardware implementation should be faster than SWAR on x86_64");
+            assert!(
+                hardware_duration <= swar_duration,
+                "Hardware implementation should be faster than SWAR on x86_64"
+            );
         }
     }
 
     #[test]
     fn test_popcount_optimized_performance() {
         let iterations = 1_000_000;
-        
+
         // Test fast path performance (single bit)
         let single_bit = 0x8000000000000000;
         let start = Instant::now();
@@ -458,7 +486,7 @@ mod performance_tests {
             let _result = popcount_optimized(single_bit);
         }
         let fast_path_duration = start.elapsed();
-        
+
         // Test normal case performance
         let normal_bitboard = 0x123456789ABCDEF0;
         let start = Instant::now();
@@ -466,13 +494,21 @@ mod performance_tests {
             let _result = popcount_optimized(normal_bitboard);
         }
         let normal_duration = start.elapsed();
-        
-        println!("Optimized popcount (single bit): {:?} per call", fast_path_duration / iterations);
-        println!("Optimized popcount (normal): {:?} per call", normal_duration / iterations);
-        
+
+        println!(
+            "Optimized popcount (single bit): {:?} per call",
+            fast_path_duration / iterations
+        );
+        println!(
+            "Optimized popcount (normal): {:?} per call",
+            normal_duration / iterations
+        );
+
         // Fast path should be very fast
-        assert!(fast_path_duration < normal_duration, 
-                "Fast path should be faster than normal case");
+        assert!(
+            fast_path_duration < normal_duration,
+            "Fast path should be faster than normal case"
+        );
     }
 
     #[test]
@@ -491,33 +527,45 @@ mod performance_tests {
 
         for bb in test_cases {
             let iterations = 100_000;
-            
+
             // Run multiple implementations in parallel to ensure consistency
-            let hardware_results: Vec<u32> = (0..iterations)
-                .map(|_| popcount_hardware(bb))
-                .collect();
-            
-            let swar_results: Vec<u32> = (0..iterations)
-                .map(|_| popcount_bit_parallel(bb))
-                .collect();
-            
-            let software_results: Vec<u32> = (0..iterations)
-                .map(|_| popcount_software(bb))
-                .collect();
+            let hardware_results: Vec<u32> =
+                (0..iterations).map(|_| popcount_hardware(bb)).collect();
+
+            let swar_results: Vec<u32> =
+                (0..iterations).map(|_| popcount_bit_parallel(bb)).collect();
+
+            let software_results: Vec<u32> =
+                (0..iterations).map(|_| popcount_software(bb)).collect();
 
             // All results should be identical
-            assert!(hardware_results.iter().all(|&x| x == hardware_results[0]),
-                    "Hardware implementation inconsistent for 0x{:X}", bb);
-            assert!(swar_results.iter().all(|&x| x == swar_results[0]),
-                    "SWAR implementation inconsistent for 0x{:X}", bb);
-            assert!(software_results.iter().all(|&x| x == software_results[0]),
-                    "Software implementation inconsistent for 0x{:X}", bb);
-            
+            assert!(
+                hardware_results.iter().all(|&x| x == hardware_results[0]),
+                "Hardware implementation inconsistent for 0x{:X}",
+                bb
+            );
+            assert!(
+                swar_results.iter().all(|&x| x == swar_results[0]),
+                "SWAR implementation inconsistent for 0x{:X}",
+                bb
+            );
+            assert!(
+                software_results.iter().all(|&x| x == software_results[0]),
+                "Software implementation inconsistent for 0x{:X}",
+                bb
+            );
+
             // All implementations should agree
-            assert_eq!(hardware_results[0], swar_results[0], 
-                      "Hardware vs SWAR mismatch for 0x{:X}", bb);
-            assert_eq!(hardware_results[0], software_results[0],
-                      "Hardware vs Software mismatch for 0x{:X}", bb);
+            assert_eq!(
+                hardware_results[0], swar_results[0],
+                "Hardware vs SWAR mismatch for 0x{:X}",
+                bb
+            );
+            assert_eq!(
+                hardware_results[0], software_results[0],
+                "Hardware vs Software mismatch for 0x{:X}",
+                bb
+            );
         }
     }
 }

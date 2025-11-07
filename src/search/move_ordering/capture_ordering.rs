@@ -1,20 +1,20 @@
 //! Capture move ordering
-//! 
+//!
 //! This module contains MVV/LVA (Most Valuable Victim / Least Valuable Attacker)
 //! and capture move ordering implementation.
 
 use crate::types::*;
 
 /// Score a capture move using MVV/LVA (Most Valuable Victim / Least Valuable Attacker)
-/// 
+///
 /// This function scores capture moves based on the value of the captured piece
 /// and the value of the capturing piece. Higher scores are given for capturing
 /// valuable pieces with less valuable pieces.
-/// 
+///
 /// # Arguments
 /// * `move_` - The move to score
 /// * `capture_weight` - Base weight for capture moves
-/// 
+///
 /// # Returns
 /// Score for the capture move, or 0 if not a capture
 pub fn score_capture_move(move_: &Move, capture_weight: i32) -> i32 {
@@ -23,11 +23,11 @@ pub fn score_capture_move(move_: &Move, capture_weight: i32) -> i32 {
     }
 
     let mut score = capture_weight;
-    
+
     // Add value of captured piece
     if let Some(captured) = &move_.captured_piece {
         score += captured.piece_type.base_value();
-        
+
         // Bonus for capturing higher-value pieces
         match captured.piece_type {
             PieceType::King => score += 1000,
@@ -71,27 +71,31 @@ pub fn score_capture_move(move_: &Move, capture_weight: i32) -> i32 {
 }
 
 /// Score a promotion move
-/// 
+///
 /// Promotions are strategic moves that can significantly change
 /// the value and capabilities of a piece.
-/// 
+///
 /// # Arguments
 /// * `move_` - The move to score
 /// * `promotion_weight` - Base weight for promotion moves
 /// * `score_position_value` - Function to score position value (for center bonus)
-/// 
+///
 /// # Returns
 /// Score for the promotion move, or 0 if not a promotion
-pub fn score_promotion_move(move_: &Move, promotion_weight: i32, score_position_value: impl FnOnce(&Position) -> i32) -> i32 {
+pub fn score_promotion_move(
+    move_: &Move,
+    promotion_weight: i32,
+    score_position_value: impl FnOnce(&Position) -> i32,
+) -> i32 {
     if !move_.is_promotion {
         return 0;
     }
 
     let mut score = promotion_weight;
-    
+
     // Add promotion value
     score += move_.promotion_value();
-    
+
     // Bonus for promoting to more valuable pieces
     match move_.piece_type {
         PieceType::Pawn => score += 200, // Pawn to Gold is very valuable
@@ -119,14 +123,14 @@ pub fn score_promotion_move(move_: &Move, promotion_weight: i32, score_position_
 }
 
 /// Inline capture move scoring for hot path optimization
-/// 
+///
 /// Optimized version using MVV-LVA (Most Valuable Victim - Least Valuable Attacker).
 /// This version is optimized for performance in hot paths.
-/// 
+///
 /// # Arguments
 /// * `move_` - The move to score
 /// * `capture_weight` - Base weight for capture moves
-/// 
+///
 /// # Returns
 /// Score for the capture move, or 0 if not a capture
 pub fn score_capture_move_inline(move_: &Move, capture_weight: i32) -> i32 {
@@ -134,7 +138,7 @@ pub fn score_capture_move_inline(move_: &Move, capture_weight: i32) -> i32 {
         // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
         let victim_value = captured_piece.piece_type.base_value();
         let attacker_value = move_.piece_type.base_value();
-        
+
         // Scale the score based on the exchange value
         let exchange_value = victim_value - attacker_value;
         capture_weight + exchange_value / 10
@@ -144,27 +148,31 @@ pub fn score_capture_move_inline(move_: &Move, capture_weight: i32) -> i32 {
 }
 
 /// Inline promotion move scoring for hot path optimization
-/// 
+///
 /// Optimized version for performance in hot paths.
-/// 
+///
 /// # Arguments
 /// * `move_` - The move to score
 /// * `promotion_weight` - Base weight for promotion moves
 /// * `get_center_distance` - Function to get center distance
-/// 
+///
 /// # Returns
 /// Score for the promotion move, or 0 if not a promotion
-pub fn score_promotion_move_inline(move_: &Move, promotion_weight: i32, get_center_distance: impl FnOnce(&Position) -> i32) -> i32 {
+pub fn score_promotion_move_inline(
+    move_: &Move,
+    promotion_weight: i32,
+    get_center_distance: impl FnOnce(&Position) -> i32,
+) -> i32 {
     if move_.is_promotion {
         // Base promotion bonus
         let mut score = promotion_weight;
-        
+
         // Bonus for promoting to center squares
         let center_distance = get_center_distance(&move_.to);
         if center_distance <= 1 {
             score += 50;
         }
-        
+
         score
     } else {
         0
@@ -172,15 +180,15 @@ pub fn score_promotion_move_inline(move_: &Move, promotion_weight: i32, get_cent
 }
 
 /// Calculate MVV/LVA score for a capture
-/// 
+///
 /// MVV/LVA (Most Valuable Victim / Least Valuable Attacker) prioritizes
 /// captures where a less valuable piece captures a more valuable piece.
-/// 
+///
 /// # Arguments
 /// * `victim_value` - Base value of the captured piece
 /// * `attacker_value` - Base value of the capturing piece
 /// * `capture_weight` - Base weight for capture moves
-/// 
+///
 /// # Returns
 /// MVV/LVA score for the capture
 pub fn calculate_mvv_lva_score(victim_value: i32, attacker_value: i32, capture_weight: i32) -> i32 {
@@ -189,12 +197,12 @@ pub fn calculate_mvv_lva_score(victim_value: i32, attacker_value: i32, capture_w
 }
 
 /// Get capture value bonus for a piece type
-/// 
+///
 /// Returns the bonus value for capturing a piece of the given type.
-/// 
+///
 /// # Arguments
 /// * `piece_type` - The piece type that was captured
-/// 
+///
 /// # Returns
 /// Capture bonus value
 pub fn get_capture_bonus(piece_type: PieceType) -> i32 {
@@ -218,12 +226,12 @@ pub fn get_capture_bonus(piece_type: PieceType) -> i32 {
 }
 
 /// Get attacker bonus for capturing with a piece type
-/// 
+///
 /// Returns the bonus for capturing with a less valuable piece (good exchange).
-/// 
+///
 /// # Arguments
 /// * `piece_type` - The piece type doing the capturing
-/// 
+///
 /// # Returns
 /// Attacker bonus value
 pub fn get_attacker_bonus(piece_type: PieceType) -> i32 {

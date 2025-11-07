@@ -1,71 +1,71 @@
 //! Endgame Tablebase System
-//! 
+//!
 //! This module provides endgame tablebase functionality for the Shogi engine.
 //! It implements a modular system for solving specific endgame positions with
 //! perfect play, focusing on common and important endgame scenarios.
-//! 
+//!
 //! ## Quick Start
-//! 
+//!
 //! ```rust
 //! use shogi_engine::tablebase::MicroTablebase;
 //! use shogi_engine::{BitboardBoard, Player, CapturedPieces};
-//! 
+//!
 //! // Create tablebase with default configuration
 //! let mut tablebase = MicroTablebase::new();
-//! 
+//!
 //! // Probe for best move
 //! let board = BitboardBoard::new();
 //! let captured_pieces = CapturedPieces::new();
-//! 
+//!
 //! if let Some(result) = tablebase.probe(&board, Player::Black, &captured_pieces) {
 //!     println!("Best move: {:?}", result.best_move);
 //!     println!("Distance to mate: {}", result.distance_to_mate);
 //!     println!("Outcome: {:?}", result.outcome);
 //! }
 //! ```
-//! 
+//!
 //! ## Configuration
-//! 
+//!
 //! ```rust
 //! use shogi_engine::tablebase::{MicroTablebase, TablebaseConfig};
-//! 
+//!
 //! // Create optimized configuration
 //! let config = TablebaseConfig::performance_optimized();
 //! let tablebase = MicroTablebase::with_config(config);
-//! 
+//!
 //! // Or customize individual settings
 //! let mut config = TablebaseConfig::default();
 //! config.cache_size = 10000;
 //! config.confidence_threshold = 0.95;
 //! let tablebase = MicroTablebase::with_config(config);
 //! ```
-//! 
+//!
 //! ## Integration with Engine
-//! 
+//!
 //! ```rust
 //! use shogi_engine::ShogiEngine;
-//! 
+//!
 //! let mut engine = ShogiEngine::new();
 //! engine.enable_tablebase();
-//! 
+//!
 //! // Tablebase will be consulted automatically during search
 //! let best_move = engine.get_best_move(1, 1000, None, None);
 //! ```
-//! 
+//!
 //! ## Performance Monitoring
-//! 
+//!
 //! ```rust
 //! // Enable profiling
 //! tablebase.set_profiling_enabled(true);
-//! 
+//!
 //! // Perform operations...
-//! 
+//!
 //! // Get performance summary
 //! let profiler = tablebase.get_profiler();
 //! let summary = profiler.get_summary();
 //! println!("Performance: {}", summary);
 //! ```
-//! 
+//!
 //! Key components:
 //! - `micro_tablebase.rs`: Core tablebase implementation
 //! - `endgame_solvers/`: Individual endgame solvers for specific scenarios
@@ -73,26 +73,26 @@
 //! - `solver_traits.rs`: Common traits for endgame solvers
 //! - `tablebase_config.rs`: Configuration management
 
-use serde::{Deserialize, Serialize};
 use crate::types::Move;
+use serde::{Deserialize, Serialize};
 
-pub mod micro_tablebase;
 pub mod endgame_solvers;
+pub mod micro_tablebase;
+pub mod pattern_matching;
+pub mod performance_profiler;
+pub mod position_analysis;
 pub mod position_cache;
 pub mod solver_traits;
 pub mod tablebase_config;
-pub mod pattern_matching;
-pub mod position_analysis;
-pub mod performance_profiler;
 
 // Re-export commonly used types
 pub use micro_tablebase::MicroTablebase;
-pub use solver_traits::EndgameSolver;
-pub use position_cache::PositionCache;
-pub use tablebase_config::{TablebaseConfig, TablebaseStats};
 pub use pattern_matching::PatternMatcher;
-pub use position_analysis::{PositionAnalyzer, PositionAnalysis, PositionComplexity};
-pub use performance_profiler::{TablebaseProfiler, PerformanceMetrics, OperationProfiler};
+pub use performance_profiler::{OperationProfiler, PerformanceMetrics, TablebaseProfiler};
+pub use position_analysis::{PositionAnalysis, PositionAnalyzer, PositionComplexity};
+pub use position_cache::PositionCache;
+pub use solver_traits::EndgameSolver;
+pub use tablebase_config::{TablebaseConfig, TablebaseStats};
 
 /// Result of a tablebase probe containing the optimal move and position analysis
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -148,12 +148,7 @@ impl TablebaseResult {
 
     /// Create a draw result
     pub fn draw() -> Self {
-        Self::new(
-            None,
-            None,
-            TablebaseOutcome::Draw,
-            1.0,
-        )
+        Self::new(None, None, TablebaseOutcome::Draw, 1.0)
     }
 
     /// Check if this is a winning position
@@ -237,7 +232,7 @@ impl TablebaseOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Player, Position, PieceType, Move};
+    use crate::types::{Move, PieceType, Player, Position};
 
     #[test]
     fn test_tablebase_result_creation() {

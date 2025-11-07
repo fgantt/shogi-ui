@@ -25,8 +25,8 @@
 //! let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::types::*;
 use crate::bitboards::BitboardBoard;
+use crate::types::*;
 
 /// Coordination struct for managing tapered evaluation
 ///
@@ -168,7 +168,9 @@ impl TaperedEvaluation {
     ///
     /// This provides smooth transitions between game phases without discontinuities.
     pub fn interpolate(&self, score: TaperedScore, phase: i32) -> i32 {
-        self.stats.interpolations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.stats
+            .interpolations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         score.interpolate(phase)
     }
 
@@ -193,7 +195,8 @@ impl TaperedEvaluation {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
-                    let piece_value = (piece.piece_type.to_u8() as u64) * 100 + (piece.player as u64);
+                    let piece_value =
+                        (piece.piece_type.to_u8() as u64) * 100 + (piece.player as u64);
                     hash = hash.wrapping_mul(31).wrapping_add(piece_value);
                 }
             }
@@ -241,7 +244,8 @@ impl Clone for TaperedEvaluationStats {
             phase_calculations: self.phase_calculations,
             cache_hits: self.cache_hits,
             interpolations: std::sync::atomic::AtomicU64::new(
-                self.interpolations.load(std::sync::atomic::Ordering::Relaxed)
+                self.interpolations
+                    .load(std::sync::atomic::Ordering::Relaxed),
             ),
         }
     }
@@ -259,7 +263,8 @@ impl TaperedEvaluationStats {
 
     /// Get total interpolations
     pub fn total_interpolations(&self) -> u64 {
-        self.interpolations.load(std::sync::atomic::Ordering::Relaxed)
+        self.interpolations
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -286,7 +291,10 @@ mod tests {
         let board = BitboardBoard::new();
 
         let phase = evaluator.calculate_game_phase(&board);
-        assert_eq!(phase, GAME_PHASE_MAX, "Starting position should have maximum phase");
+        assert_eq!(
+            phase, GAME_PHASE_MAX,
+            "Starting position should have maximum phase"
+        );
     }
 
     #[test]
@@ -296,18 +304,16 @@ mod tests {
 
         let phase1 = evaluator.calculate_game_phase(&board);
         let phase2 = evaluator.calculate_game_phase(&board);
-        
+
         assert_eq!(phase1, phase2, "Phase calculation should be consistent");
     }
 
     #[test]
     fn test_calculate_game_phase_caching() {
-        let mut evaluator = TaperedEvaluation::with_config(
-            TaperedEvaluationConfig {
-                cache_game_phase: true,
-                ..Default::default()
-            }
-        );
+        let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
+            cache_game_phase: true,
+            ..Default::default()
+        });
         let board = BitboardBoard::new();
 
         // First call
@@ -323,7 +329,7 @@ mod tests {
     fn test_interpolate_pure_middlegame() {
         let evaluator = TaperedEvaluation::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = evaluator.interpolate(score, GAME_PHASE_MAX);
         assert_eq!(result, 100, "Phase MAX should return mg value");
     }
@@ -332,7 +338,7 @@ mod tests {
     fn test_interpolate_pure_endgame() {
         let evaluator = TaperedEvaluation::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = evaluator.interpolate(score, 0);
         assert_eq!(result, 200, "Phase 0 should return eg value");
     }
@@ -341,7 +347,7 @@ mod tests {
     fn test_interpolate_middlegame() {
         let evaluator = TaperedEvaluation::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let result = evaluator.interpolate(score, GAME_PHASE_MAX / 2);
         assert_eq!(result, 150, "Phase 128 should return average value");
     }
@@ -350,14 +356,19 @@ mod tests {
     fn test_smooth_interpolation() {
         let evaluator = TaperedEvaluation::new();
         let score = TaperedScore::new_tapered(100, 200);
-        
+
         let mut prev_value = evaluator.interpolate(score, 0);
-        
+
         for phase in 1..=GAME_PHASE_MAX {
             let value = evaluator.interpolate(score, phase);
             let diff = (value - prev_value).abs();
-            
-            assert!(diff <= 1, "Interpolation should be smooth at phase {}: diff = {}", phase, diff);
+
+            assert!(
+                diff <= 1,
+                "Interpolation should be smooth at phase {}: diff = {}",
+                phase,
+                diff
+            );
             prev_value = value;
         }
     }
@@ -366,7 +377,7 @@ mod tests {
     fn test_create_score() {
         let evaluator = TaperedEvaluation::new();
         let score = evaluator.create_score(50);
-        
+
         assert_eq!(score.mg, 50);
         assert_eq!(score.eg, 50);
     }
@@ -375,7 +386,7 @@ mod tests {
     fn test_create_tapered_score() {
         let evaluator = TaperedEvaluation::new();
         let score = evaluator.create_tapered_score(100, 200);
-        
+
         assert_eq!(score.mg, 100);
         assert_eq!(score.eg, 200);
     }
@@ -384,30 +395,28 @@ mod tests {
     fn test_stats_tracking() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
-        
+
         assert_eq!(evaluator.stats().phase_calculations, 0);
-        
+
         evaluator.calculate_game_phase(&board);
         assert_eq!(evaluator.stats().phase_calculations, 1);
-        
+
         evaluator.calculate_game_phase(&board);
         assert_eq!(evaluator.stats().phase_calculations, 2);
     }
 
     #[test]
     fn test_cache_hit_rate() {
-        let mut evaluator = TaperedEvaluation::with_config(
-            TaperedEvaluationConfig {
-                cache_game_phase: true,
-                ..Default::default()
-            }
-        );
+        let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
+            cache_game_phase: true,
+            ..Default::default()
+        });
         let board = BitboardBoard::new();
-        
+
         // First call - no cache hit
         evaluator.calculate_game_phase(&board);
         assert_eq!(evaluator.stats().cache_hit_rate(), 0.0);
-        
+
         // Second call - should hit cache
         evaluator.calculate_game_phase(&board);
         assert_eq!(evaluator.stats().cache_hit_rate(), 0.5);
@@ -415,17 +424,15 @@ mod tests {
 
     #[test]
     fn test_clear_cache() {
-        let mut evaluator = TaperedEvaluation::with_config(
-            TaperedEvaluationConfig {
-                cache_game_phase: true,
-                ..Default::default()
-            }
-        );
+        let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
+            cache_game_phase: true,
+            ..Default::default()
+        });
         let board = BitboardBoard::new();
-        
+
         evaluator.calculate_game_phase(&board);
         assert!(evaluator.cached_phase.is_some());
-        
+
         evaluator.clear_cache();
         assert!(evaluator.cached_phase.is_none());
     }
@@ -434,27 +441,25 @@ mod tests {
     fn test_reset_stats() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
-        
+
         evaluator.calculate_game_phase(&board);
         assert_eq!(evaluator.stats().phase_calculations, 1);
-        
+
         evaluator.reset_stats();
         assert_eq!(evaluator.stats().phase_calculations, 0);
     }
 
     #[test]
     fn test_config_update_clears_cache() {
-        let mut evaluator = TaperedEvaluation::with_config(
-            TaperedEvaluationConfig {
-                cache_game_phase: true,
-                ..Default::default()
-            }
-        );
+        let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
+            cache_game_phase: true,
+            ..Default::default()
+        });
         let board = BitboardBoard::new();
-        
+
         evaluator.calculate_game_phase(&board);
         assert!(evaluator.cached_phase.is_some());
-        
+
         let new_config = TaperedEvaluationConfig::default();
         evaluator.set_config(new_config);
         assert!(evaluator.cached_phase.is_none());
@@ -464,7 +469,7 @@ mod tests {
     fn test_game_phase_range() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
-        
+
         let phase = evaluator.calculate_game_phase(&board);
         assert!(phase >= 0, "Phase should be non-negative");
         assert!(phase <= GAME_PHASE_MAX, "Phase should not exceed maximum");
@@ -473,7 +478,7 @@ mod tests {
     #[test]
     fn test_piece_phase_values() {
         let evaluator = TaperedEvaluation::new();
-        
+
         // Test pieces that contribute to phase
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Knight), Some(1));
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Silver), Some(1));
@@ -481,7 +486,7 @@ mod tests {
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Bishop), Some(2));
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Rook), Some(3));
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Lance), Some(1));
-        
+
         // Test pieces that don't contribute to phase
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Pawn), None);
         assert_eq!(evaluator.get_piece_phase_value(PieceType::King), None);
@@ -491,7 +496,7 @@ mod tests {
     fn test_performance_optimized_config() {
         let config = TaperedEvaluationConfig::performance_optimized();
         let evaluator = TaperedEvaluation::with_config(config);
-        
+
         assert!(evaluator.config().enabled);
         assert!(evaluator.config().cache_game_phase);
         assert!(evaluator.config().enable_performance_monitoring);
@@ -501,10 +506,9 @@ mod tests {
     fn test_memory_optimized_config() {
         let config = TaperedEvaluationConfig::memory_optimized();
         let evaluator = TaperedEvaluation::with_config(config);
-        
+
         assert!(evaluator.config().enabled);
         assert!(!evaluator.config().cache_game_phase);
         assert_eq!(evaluator.config().memory_pool_size, 100);
     }
 }
-

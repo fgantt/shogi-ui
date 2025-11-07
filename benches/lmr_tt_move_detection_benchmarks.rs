@@ -17,11 +17,11 @@
 //! - TT move tracking overhead should be <1% of search time
 //! - TT move exemption should improve LMR effectiveness
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, LMRConfig, PruningParameters},
+    search::SearchEngine,
+    types::{CapturedPieces, LMRConfig, Player, PruningParameters},
 };
 use std::time::Duration;
 
@@ -31,12 +31,12 @@ fn create_test_engine_with_tt_detection() -> SearchEngine {
     let mut config = LMRConfig::default();
     config.enable_extended_exemptions = true; // Enable TT move exemption
     engine.update_lmr_config(config).unwrap();
-    
+
     // Enable extended exemptions in PruningManager
     let mut params = PruningParameters::default();
     params.lmr_enable_extended_exemptions = true;
     engine.update_pruning_parameters(params).unwrap();
-    
+
     engine
 }
 
@@ -45,11 +45,11 @@ fn benchmark_lmr_with_tt_detection(c: &mut Criterion) {
     let mut group = c.benchmark_group("lmr_with_tt_detection");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test across different depths
     for depth in [3, 4, 5, 6] {
         group.bench_with_input(
@@ -59,7 +59,7 @@ fn benchmark_lmr_with_tt_detection(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_tt_detection();
                     engine.reset_lmr_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -68,14 +68,14 @@ fn benchmark_lmr_with_tt_detection(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_lmr_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -84,15 +84,22 @@ fn benchmark_tt_move_detection_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_move_detection_effectiveness");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Test with TT move detection enabled vs disabled
     for tt_detection_enabled in [false, true] {
         group.bench_with_input(
-            BenchmarkId::new("tt_detection", if tt_detection_enabled { "enabled" } else { "disabled" }),
+            BenchmarkId::new(
+                "tt_detection",
+                if tt_detection_enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                },
+            ),
             &tt_detection_enabled,
             |b, &enabled| {
                 b.iter(|| {
@@ -104,7 +111,7 @@ fn benchmark_tt_move_detection_effectiveness(c: &mut Criterion) {
                         engine.update_pruning_parameters(params).unwrap();
                     }
                     engine.reset_lmr_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -113,14 +120,14 @@ fn benchmark_tt_move_detection_effectiveness(c: &mut Criterion) {
                         5, // Fixed depth
                         1000,
                     );
-                    
+
                     let stats = engine.get_lmr_stats().clone();
                     black_box((result, stats))
                 });
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -129,20 +136,20 @@ fn benchmark_tt_move_tracking_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_move_tracking_overhead");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Measure overhead of TT move tracking
     group.bench_function("overhead_measurement", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_tt_detection();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let _result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -150,13 +157,13 @@ fn benchmark_tt_move_tracking_overhead(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
             black_box((elapsed, stats))
         });
     });
-    
+
     group.finish();
 }
 
@@ -165,11 +172,11 @@ fn benchmark_tt_move_exemption_rate(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_move_exemption_rate");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Measure TT move exemption rate across different depths
     for depth in [3, 4, 5, 6] {
         group.bench_with_input(
@@ -179,7 +186,7 @@ fn benchmark_tt_move_exemption_rate(c: &mut Criterion) {
                 b.iter(|| {
                     let mut engine = create_test_engine_with_tt_detection();
                     engine.reset_lmr_stats();
-                    
+
                     let mut board_mut = board.clone();
                     let _result = engine.search_at_depth_legacy(
                         black_box(&mut board_mut),
@@ -188,7 +195,7 @@ fn benchmark_tt_move_exemption_rate(c: &mut Criterion) {
                         depth,
                         1000,
                     );
-                    
+
                     let stats = engine.get_lmr_stats().clone();
                     let exemption_rate = if stats.moves_considered > 0 {
                         (stats.tt_move_exempted as f64 / stats.moves_considered as f64) * 100.0
@@ -200,7 +207,7 @@ fn benchmark_tt_move_exemption_rate(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
@@ -209,19 +216,19 @@ fn benchmark_comprehensive_tt_move_analysis(c: &mut Criterion) {
     let mut group = c.benchmark_group("comprehensive_tt_move_analysis");
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     group.bench_function("comprehensive_analysis", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_tt_detection();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -229,20 +236,20 @@ fn benchmark_comprehensive_tt_move_analysis(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
-            
+
             // Calculate metrics
             let exemption_rate = if stats.moves_considered > 0 {
                 (stats.tt_move_exempted as f64 / stats.moves_considered as f64) * 100.0
             } else {
                 0.0
             };
-            
+
             let efficiency = stats.efficiency();
             let cutoff_rate = stats.cutoff_rate();
-            
+
             black_box((
                 result,
                 elapsed,
@@ -253,7 +260,7 @@ fn benchmark_comprehensive_tt_move_analysis(c: &mut Criterion) {
             ))
         });
     });
-    
+
     group.finish();
 }
 
@@ -262,20 +269,20 @@ fn benchmark_performance_regression_validation(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_move_performance_regression");
     group.measurement_time(Duration::from_secs(15));
     group.sample_size(10);
-    
+
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    
+
     // Validate that TT move tracking overhead is <1%
     group.bench_function("overhead_validation", |b| {
         b.iter(|| {
             let mut engine = create_test_engine_with_tt_detection();
             engine.reset_lmr_stats();
-            
+
             let mut board_mut = board.clone();
             let start = std::time::Instant::now();
-            
+
             let _result = engine.search_at_depth_legacy(
                 black_box(&mut board_mut),
                 black_box(&captured_pieces),
@@ -283,10 +290,10 @@ fn benchmark_performance_regression_validation(c: &mut Criterion) {
                 5, // Fixed depth
                 1000,
             );
-            
+
             let elapsed = start.elapsed();
             let stats = engine.get_lmr_stats().clone();
-            
+
             // Validate performance requirements
             let overhead_percentage = if stats.moves_considered > 0 {
                 // Estimate overhead (simplified - would need baseline comparison)
@@ -294,14 +301,17 @@ fn benchmark_performance_regression_validation(c: &mut Criterion) {
             } else {
                 0.0
             };
-            
+
             // Requirement: overhead < 1%
-            assert!(overhead_percentage < 1.0, "TT move tracking overhead exceeds 1%");
-            
+            assert!(
+                overhead_percentage < 1.0,
+                "TT move tracking overhead exceeds 1%"
+            );
+
             black_box((elapsed, stats, overhead_percentage))
         });
     });
-    
+
     group.finish();
 }
 
@@ -316,4 +326,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

@@ -1,5 +1,5 @@
 //! Weight Management System for Shogi Engine
-//! 
+//!
 //! This module provides functionality for loading, managing, and applying
 //! tuned evaluation weights to the engine.
 
@@ -9,7 +9,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use crate::types::{NUM_EVAL_FEATURES, NUM_MG_FEATURES, NUM_EG_FEATURES};
+use crate::types::{NUM_EG_FEATURES, NUM_EVAL_FEATURES, NUM_MG_FEATURES};
 
 /// Weight file format version for compatibility checking
 pub const WEIGHT_FILE_VERSION: u32 = 1;
@@ -117,18 +117,18 @@ impl WeightManager {
     /// Load weights from a file
     pub fn load_weights<P: AsRef<Path>>(&mut self, path: P) -> Result<(), WeightError> {
         let path = path.as_ref();
-        
+
         // Try to load the weight file
         match self.load_weight_file(path) {
             Ok(weight_file) => {
                 // Validate the weight file
                 self.validate_weight_file(&weight_file)?;
-                
+
                 // Set the weights
                 self.weights = Some(weight_file.weights);
                 self.metadata = Some(weight_file.header);
                 self.enabled = true;
-                
+
                 Ok(())
             }
             Err(e) => {
@@ -144,7 +144,7 @@ impl WeightManager {
     fn load_weight_file<P: AsRef<Path>>(&self, path: P) -> Result<WeightFile, WeightError> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        
+
         // Try to parse as JSON first
         match serde_json::from_reader(reader) {
             Ok(weight_file) => Ok(weight_file),
@@ -209,11 +209,7 @@ impl WeightManager {
     }
 
     /// Apply weights to evaluation features
-    pub fn apply_weights(
-        &mut self,
-        features: &[f64],
-        game_phase: i32,
-    ) -> Result<i32, WeightError> {
+    pub fn apply_weights(&mut self, features: &[f64], game_phase: i32) -> Result<i32, WeightError> {
         let start_time = Instant::now();
 
         // Ensure features match expected count
@@ -233,10 +229,10 @@ impl WeightManager {
 
         // Apply phase-dependent weighting
         let phase_weight = game_phase as f64 / 100.0; // Assuming GAME_PHASE_MAX = 100
-        
+
         let mut mg_score = 0.0;
         let mut eg_score = 0.0;
-        
+
         for (i, &feature) in features.iter().enumerate() {
             if i < NUM_MG_FEATURES {
                 mg_score += feature * weights[i];
@@ -244,14 +240,14 @@ impl WeightManager {
                 eg_score += feature * weights[i];
             }
         }
-        
+
         // Interpolate based on game phase
         let final_score = mg_score * phase_weight + eg_score * (1.0 - phase_weight);
-        
+
         // Record performance statistics
         let duration = start_time.elapsed();
         self.stats.record_application(duration);
-        
+
         Ok(final_score as i32)
     }
 
@@ -263,8 +259,7 @@ impl WeightManager {
         validation_error: f64,
         training_positions: usize,
     ) -> Result<(), WeightError> {
-        let weights = self.weights.as_ref()
-            .ok_or(WeightError::NoWeightsLoaded)?;
+        let weights = self.weights.as_ref().ok_or(WeightError::NoWeightsLoaded)?;
 
         let weight_file = WeightFile {
             header: WeightFileHeader {
@@ -370,46 +365,45 @@ impl Default for WeightManager {
 pub enum WeightError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON serialization error: {0}")]
     Json(#[from] serde_json::Error),
-    
+
     #[error("Invalid magic number in weight file")]
     InvalidMagic,
-    
-    #[error("Version mismatch: file version {file_version}, supported version {supported_version}")]
+
+    #[error(
+        "Version mismatch: file version {file_version}, supported version {supported_version}"
+    )]
     VersionMismatch {
         file_version: u32,
         supported_version: u32,
     },
-    
+
     #[error("Feature count mismatch: file has {file_features}, expected {expected_features}")]
     FeatureCountMismatch {
         file_features: usize,
         expected_features: usize,
     },
-    
+
     #[error("Weight count mismatch: file has {file_weights}, expected {expected_weights}")]
     WeightCountMismatch {
         file_weights: usize,
         expected_weights: usize,
     },
-    
+
     #[error("Invalid weight at index {index}: {value}")]
-    InvalidWeight {
-        index: usize,
-        value: f64,
-    },
-    
+    InvalidWeight { index: usize, value: f64 },
+
     #[error("Checksum mismatch: file checksum {file_checksum}, calculated {calculated_checksum}")]
     ChecksumMismatch {
         file_checksum: u64,
         calculated_checksum: u64,
     },
-    
+
     #[error("Unsupported file format")]
     UnsupportedFormat,
-    
+
     #[error("No weights loaded")]
     NoWeightsLoaded,
 }
@@ -441,10 +435,10 @@ mod tests {
         let mut manager = WeightManager::new();
         let features = vec![1.0; NUM_EVAL_FEATURES];
         let game_phase = 50;
-        
+
         let result = manager.apply_weights(&features, game_phase);
         assert!(result.is_ok());
-        
+
         let score = result.unwrap();
         assert!(score != i32::MIN && score != i32::MAX);
     }
@@ -459,22 +453,17 @@ mod tests {
         manager.weights = Some(vec![0.5; NUM_EVAL_FEATURES]);
 
         // Save weights
-        let save_result = manager.save_weights(
-            &weight_file,
-            "test_method".to_string(),
-            0.1,
-            1000,
-        );
+        let save_result = manager.save_weights(&weight_file, "test_method".to_string(), 0.1, 1000);
         assert!(save_result.is_ok());
 
         // Create a new manager and load weights
         let mut new_manager = WeightManager::new();
         let load_result = new_manager.load_weights(&weight_file);
         assert!(load_result.is_ok());
-        
+
         assert!(new_manager.has_weights());
         assert!(new_manager.is_enabled());
-        
+
         let metadata = new_manager.get_metadata().unwrap();
         assert_eq!(metadata.tuning_method, "test_method");
         assert_eq!(metadata.validation_error, 0.1);
@@ -484,12 +473,12 @@ mod tests {
     #[test]
     fn test_weight_validation() {
         let mut manager = WeightManager::new();
-        
+
         // Test with invalid feature count
         let invalid_features = vec![1.0; NUM_EVAL_FEATURES - 1];
         let result = manager.apply_weights(&invalid_features, 50);
         assert!(result.is_err());
-        
+
         match result.unwrap_err() {
             WeightError::FeatureCountMismatch { .. } => {}
             _ => panic!("Expected FeatureCountMismatch error"),
@@ -500,17 +489,17 @@ mod tests {
     fn test_performance_stats() {
         let mut manager = WeightManager::new();
         let features = vec![1.0; NUM_EVAL_FEATURES];
-        
+
         // Apply weights multiple times
         for _ in 0..10 {
             manager.apply_weights(&features, 50).unwrap();
         }
-        
+
         let stats = manager.get_stats();
         assert_eq!(stats.applications, 10);
         assert!(stats.avg_time_us > 0);
         assert!(stats.last_application.is_some());
-        
+
         // Reset stats
         manager.reset_stats();
         let stats = manager.get_stats();
@@ -522,14 +511,14 @@ mod tests {
     #[test]
     fn test_enable_disable() {
         let mut manager = WeightManager::new();
-        
+
         // Initially disabled
         assert!(!manager.is_enabled());
-        
+
         // Enable
         manager.set_enabled(true);
         assert!(manager.is_enabled());
-        
+
         // Disable
         manager.set_enabled(false);
         assert!(!manager.is_enabled());
@@ -541,11 +530,11 @@ mod tests {
         let weights1 = vec![1.0, 2.0, 3.0];
         let weights2 = vec![1.0, 2.0, 3.0];
         let weights3 = vec![1.0, 2.0, 4.0];
-        
+
         let checksum1 = manager.calculate_checksum(&weights1);
         let checksum2 = manager.calculate_checksum(&weights2);
         let checksum3 = manager.calculate_checksum(&weights3);
-        
+
         assert_eq!(checksum1, checksum2);
         assert_ne!(checksum1, checksum3);
     }

@@ -1,26 +1,26 @@
 //! Multi-Level Transposition Table
-//! 
+//!
 //! This module implements a multi-level transposition table system that uses
 //! multiple hash tables at different levels to improve cache efficiency and
 //! reduce collisions. This approach provides better performance for large
 //! search trees and reduces the impact of hash collisions.
-//! 
+//!
 //! # Features
-//! 
+//!
 //! - **Multiple Table Levels**: Different tables for different search depths
 //! - **Collision Reduction**: Reduced hash collisions through level separation
 //! - **Memory Efficiency**: Optimized memory usage across levels
 //! - **Performance Optimization**: Faster access patterns for different depths
 //! - **Configurable Levels**: Adjustable number of levels and table sizes
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```rust
 //! use shogi_engine::search::{MultiLevelTranspositionTable, TranspositionEntry, TranspositionFlag};
-//! 
+//!
 //! // Create a multi-level table with 3 levels
 //! let mut table = MultiLevelTranspositionTable::new(3, 1024);
-//! 
+//!
 //! // Store an entry - automatically selects appropriate level
 //! let entry = TranspositionEntry {
 //!     hash_key: 12345,
@@ -31,15 +31,15 @@
 //!     age: 0,
 //! };
 //! table.store(entry);
-//! 
+//!
 //! // Probe for an entry
 //! if let Some(found) = table.probe(12345, 5) {
 //!     println!("Found entry with score: {}", found.score);
 //! }
 //! ```
 
-use crate::types::*;
 use crate::search::transposition_table::{TranspositionTable, TranspositionTableConfig};
+use crate::types::*;
 use std::collections::HashMap;
 
 /// Multi-level transposition table configuration
@@ -144,7 +144,7 @@ pub struct LevelStats {
 }
 
 /// Multi-level transposition table
-/// 
+///
 /// A sophisticated transposition table that uses multiple levels to improve
 /// cache efficiency and reduce hash collisions. Each level is optimized for
 /// different depth ranges and usage patterns.
@@ -171,14 +171,14 @@ impl MultiLevelTranspositionTable {
         config.base_size = base_size;
         Self::with_config(config)
     }
-    
+
     /// Create with custom configuration
     pub fn with_config(config: MultiLevelConfig) -> Self {
         let mut tables = Vec::new();
         let mut level_configs = Vec::new();
         let mut level_stats = Vec::new();
         let mut level_memory_usage = Vec::new();
-        
+
         // Create tables and configurations for each level
         for level in 0..config.levels {
             let level_config = Self::create_level_config(&config, level);
@@ -188,10 +188,10 @@ impl MultiLevelTranspositionTable {
                 track_memory: true,
                 track_statistics: true,
             };
-            
+
             let table = TranspositionTable::with_config(table_config);
             let memory_usage = table.get_memory_usage();
-            
+
             tables.push(table);
             level_configs.push(level_config);
             level_stats.push(LevelStats {
@@ -201,55 +201,56 @@ impl MultiLevelTranspositionTable {
             });
             level_memory_usage.push(memory_usage as u64);
         }
-        
+
         // Build level selection cache
         let mut level_cache = HashMap::new();
-        for depth in 0..=20 { // Cache for depths 0-20
+        for depth in 0..=20 {
+            // Cache for depths 0-20
             let level = Self::select_level(&config, depth);
             level_cache.insert(depth, level);
         }
-        
+
         Self {
             tables,
             level_configs,
             config,
             stats: MultiLevelStats {
                 level_stats,
-            level_memory_usage: level_memory_usage.clone(),
-            total_memory_usage: level_memory_usage.iter().sum(),
+                level_memory_usage: level_memory_usage.clone(),
+                total_memory_usage: level_memory_usage.iter().sum(),
                 ..Default::default()
             },
             age: 0,
             level_cache,
         }
     }
-    
+
     /// Store an entry in the appropriate level
     pub fn store(&mut self, entry: TranspositionEntry) {
         let level = self.get_level_for_depth(entry.depth);
-        
+
         // Update statistics
         self.stats.total_stores += 1;
         self.stats.level_stats[level].stores += 1;
-        
+
         // Check if replacement will occur (simplified check)
         let existing_entry = self.tables[level].probe(entry.hash_key, 0);
         if existing_entry.is_some() {
             self.stats.total_replacements += 1;
             self.stats.level_stats[level].replacements += 1;
         }
-        
+
         // Store in the appropriate level
         self.tables[level].store(entry.clone());
-        
+
         // Update age
         self.age = self.age.wrapping_add(1);
     }
-    
+
     /// Probe for an entry, checking all relevant levels
     pub fn probe(&mut self, hash: u64, depth: u8) -> Option<TranspositionEntry> {
         let primary_level = self.get_level_for_depth(depth);
-        
+
         // First, try the primary level for this depth
         if let Some(entry) = self.tables[primary_level].probe(hash, depth) {
             self.stats.total_hits += 1;
@@ -257,7 +258,7 @@ impl MultiLevelTranspositionTable {
             self.update_level_hit_rate(primary_level);
             return Some(entry);
         }
-        
+
         // If not found in primary level, check other levels (cross-level search)
         for level in 0..self.config.levels {
             if level != primary_level {
@@ -270,7 +271,7 @@ impl MultiLevelTranspositionTable {
                 }
             }
         }
-        
+
         // Not found anywhere
         self.stats.total_misses += 1;
         self.stats.cross_level_misses += 1;
@@ -278,7 +279,7 @@ impl MultiLevelTranspositionTable {
         self.update_level_hit_rate(primary_level);
         None
     }
-    
+
     /// Clear all tables
     pub fn clear(&mut self) {
         for table in &mut self.tables {
@@ -286,48 +287,55 @@ impl MultiLevelTranspositionTable {
         }
         self.age = 0;
         self.stats = MultiLevelStats {
-            level_stats: self.stats.level_stats.iter().map(|s| LevelStats {
-                level: s.level,
-                memory_usage: s.memory_usage,
-                ..Default::default()
-            }).collect(),
+            level_stats: self
+                .stats
+                .level_stats
+                .iter()
+                .map(|s| LevelStats {
+                    level: s.level,
+                    memory_usage: s.memory_usage,
+                    ..Default::default()
+                })
+                .collect(),
             level_memory_usage: self.stats.level_memory_usage.clone(),
             total_memory_usage: self.stats.total_memory_usage,
             ..Default::default()
         };
     }
-    
+
     /// Get statistics for all levels
     pub fn get_stats(&self) -> &MultiLevelStats {
         &self.stats
     }
-    
+
     /// Get statistics for a specific level
     pub fn get_level_stats(&self, level: usize) -> Option<&LevelStats> {
         self.stats.level_stats.get(level)
     }
-    
+
     /// Get memory usage per level
     pub fn get_level_memory_usage(&self) -> Vec<u64> {
         self.stats.level_memory_usage.clone()
     }
-    
+
     /// Get total memory usage
     pub fn get_total_memory_usage(&self) -> u64 {
         self.stats.total_memory_usage
     }
-    
+
     /// Resize a specific level
     pub fn resize_level(&mut self, level: usize, new_size: usize) -> Result<(), String> {
         if level >= self.config.levels {
             return Err(format!("Invalid level: {}", level));
         }
-        
+
         if new_size < self.config.min_level_size || new_size > self.config.max_level_size {
-            return Err(format!("Size {} is outside allowed range [{}, {}]",
-                new_size, self.config.min_level_size, self.config.max_level_size));
+            return Err(format!(
+                "Size {} is outside allowed range [{}, {}]",
+                new_size, self.config.min_level_size, self.config.max_level_size
+            ));
         }
-        
+
         // Create new table with new size
         let level_config = &self.level_configs[level];
         let new_table_config = TranspositionTableConfig {
@@ -336,33 +344,33 @@ impl MultiLevelTranspositionTable {
             track_memory: true,
             track_statistics: true,
         };
-        
+
         self.tables[level] = TranspositionTable::with_config(new_table_config);
-        
+
         // Update configuration
         self.level_configs[level].size = new_size;
-        
+
         // Update memory usage
         let memory_usage = self.tables[level].get_memory_usage();
         self.stats.level_stats[level].memory_usage = memory_usage as u64;
         self.stats.level_memory_usage[level] = memory_usage as u64;
         self.stats.total_memory_usage = self.stats.level_memory_usage.iter().sum();
-        
+
         Ok(())
     }
-    
+
     /// Get the optimal level for a given depth
     fn get_level_for_depth(&self, depth: u8) -> usize {
         // Use cached result if available
         if let Some(&level) = self.level_cache.get(&depth) {
             return level;
         }
-        
+
         // Calculate level (cache miss)
         let level = Self::select_level(&self.config, depth);
         level
     }
-    
+
     /// Select the appropriate level for a given depth
     fn select_level(config: &MultiLevelConfig, depth: u8) -> usize {
         for (level, &threshold) in config.depth_thresholds.iter().enumerate() {
@@ -372,7 +380,7 @@ impl MultiLevelTranspositionTable {
         }
         config.levels - 1 // Use the last level for very deep searches
     }
-    
+
     /// Create configuration for a specific level
     fn create_level_config(config: &MultiLevelConfig, level: usize) -> LevelConfig {
         // Calculate size for this level
@@ -381,24 +389,28 @@ impl MultiLevelTranspositionTable {
             MemoryAllocationStrategy::Proportional => {
                 let multiplier = config.size_multiplier.powi(level as i32);
                 ((config.base_size as f64) * multiplier) as usize
-            },
+            }
             MemoryAllocationStrategy::Custom => {
                 // Custom sizing based on level priority
                 let priority_multiplier = (level + 1) as f64;
                 ((config.base_size as f64) * priority_multiplier) as usize
-            },
+            }
         };
-        
+
         let size = size.max(config.min_level_size).min(config.max_level_size);
-        
+
         // Calculate depth range
-        let min_depth = if level == 0 { 0 } else { config.depth_thresholds[level - 1] + 1 };
+        let min_depth = if level == 0 {
+            0
+        } else {
+            config.depth_thresholds[level - 1] + 1
+        };
         let max_depth = if level < config.depth_thresholds.len() {
             config.depth_thresholds[level]
         } else {
             255 // No upper limit for the last level
         };
-        
+
         // Select replacement policy for this level
         let replacement_policy = if config.enable_level_policies {
             match level {
@@ -409,7 +421,7 @@ impl MultiLevelTranspositionTable {
         } else {
             crate::search::transposition_table::ReplacementPolicy::DepthPreferred
         };
-        
+
         LevelConfig {
             size,
             min_depth,
@@ -418,7 +430,7 @@ impl MultiLevelTranspositionTable {
             memory_priority: level as u8,
         }
     }
-    
+
     /// Update hit rate for a specific level
     fn update_level_hit_rate(&mut self, level: usize) {
         let level_stats = &mut self.stats.level_stats[level];
@@ -440,7 +452,7 @@ impl Default for MultiLevelTranspositionTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_multi_level_table_creation() {
         let table = MultiLevelTranspositionTable::new(3, 1024);
@@ -448,11 +460,11 @@ mod tests {
         assert_eq!(table.tables.len(), 3);
         assert_eq!(table.level_configs.len(), 3);
     }
-    
+
     #[test]
     fn test_multi_level_store_and_probe() {
         let mut table = MultiLevelTranspositionTable::new(3, 1024);
-        
+
         let entry = TranspositionEntry {
             hash_key: 12345,
             depth: 3,
@@ -461,16 +473,16 @@ mod tests {
             best_move: None,
             age: 0,
         };
-        
+
         table.store(entry.clone());
-        
+
         let found = table.probe(12345, 3);
         assert!(found.is_some());
         let found = found.unwrap();
         assert_eq!(found.score, 100);
         assert_eq!(found.depth, 3);
     }
-    
+
     #[test]
     fn test_level_selection() {
         let config = MultiLevelConfig {
@@ -478,7 +490,7 @@ mod tests {
             depth_thresholds: vec![2, 6],
             ..Default::default()
         };
-        
+
         assert_eq!(MultiLevelTranspositionTable::select_level(&config, 0), 0);
         assert_eq!(MultiLevelTranspositionTable::select_level(&config, 1), 0);
         assert_eq!(MultiLevelTranspositionTable::select_level(&config, 2), 0);
@@ -487,11 +499,11 @@ mod tests {
         assert_eq!(MultiLevelTranspositionTable::select_level(&config, 7), 2);
         assert_eq!(MultiLevelTranspositionTable::select_level(&config, 20), 2);
     }
-    
+
     #[test]
     fn test_cross_level_search() {
         let mut table = MultiLevelTranspositionTable::new(3, 1024);
-        
+
         // Store in level 0 (depth 1)
         let entry1 = TranspositionEntry {
             hash_key: 12345,
@@ -502,7 +514,7 @@ mod tests {
             age: 0,
         };
         table.store(entry1);
-        
+
         // Store in level 1 (depth 4)
         let entry2 = TranspositionEntry {
             hash_key: 54321,
@@ -513,21 +525,21 @@ mod tests {
             age: 0,
         };
         table.store(entry2);
-        
+
         // Should find both entries regardless of search depth
         let found1 = table.probe(12345, 1);
         assert!(found1.is_some());
         assert_eq!(found1.unwrap().score, 100);
-        
+
         let found2 = table.probe(54321, 4);
         assert!(found2.is_some());
         assert_eq!(found2.unwrap().score, 200);
     }
-    
+
     #[test]
     fn test_statistics_tracking() {
         let mut table = MultiLevelTranspositionTable::new(3, 1024);
-        
+
         let entry = TranspositionEntry {
             hash_key: 12345,
             depth: 2,
@@ -536,67 +548,67 @@ mod tests {
             best_move: None,
             age: 0,
         };
-        
+
         table.store(entry.clone());
         table.probe(12345, 2);
         table.probe(54321, 2); // Miss
-        
+
         let stats = table.get_stats();
         assert_eq!(stats.total_stores, 1);
         assert_eq!(stats.total_hits, 1);
         assert_eq!(stats.total_misses, 1);
-        
+
         let level_stats = &stats.level_stats[0]; // Should be in level 0
         assert_eq!(level_stats.stores, 1);
         assert_eq!(level_stats.hits, 1);
         assert_eq!(level_stats.misses, 1);
         assert!(level_stats.hit_rate > 0.0);
     }
-    
+
     #[test]
     fn test_level_resize() {
         let mut table = MultiLevelTranspositionTable::new(3, 1024);
-        
+
         let initial_size = table.level_configs[0].size;
         let new_size = initial_size * 2;
-        
+
         let result = table.resize_level(0, new_size);
         assert!(result.is_ok());
         assert_eq!(table.level_configs[0].size, new_size);
     }
-    
+
     #[test]
     fn test_invalid_level_resize() {
         let mut table = MultiLevelTranspositionTable::new(3, 1024);
-        
+
         // Invalid level
         let result = table.resize_level(5, 2048);
         assert!(result.is_err());
-        
+
         // Invalid size
         let result = table.resize_level(0, 50); // Too small
         assert!(result.is_err());
     }
-    
+
     #[test]
     fn test_memory_allocation_strategies() {
         let mut config = MultiLevelConfig::default();
         config.levels = 3;
         config.base_size = 1000;
         config.size_multiplier = 2.0;
-        
+
         // Test proportional allocation
         config.allocation_strategy = MemoryAllocationStrategy::Proportional;
         let table1 = MultiLevelTranspositionTable::with_config(config.clone());
-        
+
         // Level 0: 1000, Level 1: 2000, Level 2: 4000
         assert!(table1.level_configs[0].size <= table1.level_configs[1].size);
         assert!(table1.level_configs[1].size <= table1.level_configs[2].size);
-        
+
         // Test equal allocation
         config.allocation_strategy = MemoryAllocationStrategy::Equal;
         let table2 = MultiLevelTranspositionTable::with_config(config);
-        
+
         // All levels should have similar sizes
         assert_eq!(table2.level_configs[0].size, table2.level_configs[1].size);
         assert_eq!(table2.level_configs[1].size, table2.level_configs[2].size);

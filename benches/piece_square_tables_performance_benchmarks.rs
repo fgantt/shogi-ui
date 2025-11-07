@@ -7,36 +7,36 @@
 //! - Symmetry handling
 //! - Memory usage patterns
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use shogi_engine::types::*;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::evaluation::piece_square_tables::PieceSquareTables;
+use shogi_engine::types::*;
 
 /// Benchmark table creation
 fn benchmark_table_creation(c: &mut Criterion) {
     let mut group = c.benchmark_group("table_creation");
-    
+
     group.bench_function("new", |b| {
         b.iter(|| {
             black_box(PieceSquareTables::new());
         });
     });
-    
+
     group.bench_function("default", |b| {
         b.iter(|| {
             black_box(PieceSquareTables::default());
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark value lookups for basic pieces
 fn benchmark_basic_piece_lookups(c: &mut Criterion) {
     let mut group = c.benchmark_group("basic_piece_lookups");
-    
+
     let tables = PieceSquareTables::new();
     let pos = Position::new(4, 4); // Center square
-    
+
     let piece_types = [
         PieceType::Pawn,
         PieceType::Lance,
@@ -47,7 +47,7 @@ fn benchmark_basic_piece_lookups(c: &mut Criterion) {
         PieceType::Rook,
         PieceType::King,
     ];
-    
+
     for piece_type in piece_types {
         group.bench_with_input(
             BenchmarkId::from_parameter(format!("{:?}", piece_type)),
@@ -59,17 +59,17 @@ fn benchmark_basic_piece_lookups(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark value lookups for promoted pieces
 fn benchmark_promoted_piece_lookups(c: &mut Criterion) {
     let mut group = c.benchmark_group("promoted_piece_lookups");
-    
+
     let tables = PieceSquareTables::new();
     let pos = Position::new(4, 4);
-    
+
     let piece_types = [
         PieceType::PromotedPawn,
         PieceType::PromotedLance,
@@ -78,7 +78,7 @@ fn benchmark_promoted_piece_lookups(c: &mut Criterion) {
         PieceType::PromotedBishop,
         PieceType::PromotedRook,
     ];
-    
+
     for piece_type in piece_types {
         group.bench_with_input(
             BenchmarkId::from_parameter(format!("{:?}", piece_type)),
@@ -90,16 +90,16 @@ fn benchmark_promoted_piece_lookups(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 
 /// Benchmark lookups at different positions
 fn benchmark_position_variations(c: &mut Criterion) {
     let mut group = c.benchmark_group("position_variations");
-    
+
     let tables = PieceSquareTables::new();
-    
+
     let positions = [
         ("center", Position::new(4, 4)),
         ("corner_top_left", Position::new(0, 0)),
@@ -111,41 +111,37 @@ fn benchmark_position_variations(c: &mut Criterion) {
         ("edge_left", Position::new(4, 0)),
         ("edge_right", Position::new(4, 8)),
     ];
-    
+
     for (name, pos) in positions {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(name),
-            &pos,
-            |b, &p| {
-                b.iter(|| {
-                    black_box(tables.get_value(PieceType::Rook, p, Player::Black));
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(name), &pos, |b, &p| {
+            b.iter(|| {
+                black_box(tables.get_value(PieceType::Rook, p, Player::Black));
+            });
+        });
     }
-    
+
     group.finish();
 }
 
 /// Benchmark player symmetry
 fn benchmark_symmetry(c: &mut Criterion) {
     let mut group = c.benchmark_group("symmetry");
-    
+
     let tables = PieceSquareTables::new();
     let pos = Position::new(4, 4);
-    
+
     group.bench_function("black_player", |b| {
         b.iter(|| {
             black_box(tables.get_value(PieceType::Rook, pos, Player::Black));
         });
     });
-    
+
     group.bench_function("white_player", |b| {
         b.iter(|| {
             black_box(tables.get_value(PieceType::Rook, pos, Player::White));
         });
     });
-    
+
     group.bench_function("both_players", |b| {
         b.iter(|| {
             let black = tables.get_value(PieceType::Rook, pos, Player::Black);
@@ -153,38 +149,38 @@ fn benchmark_symmetry(c: &mut Criterion) {
             black_box((black, white));
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark coordinate calculations
 fn benchmark_table_coords(c: &mut Criterion) {
     let mut group = c.benchmark_group("table_coords");
-    
+
     let tables = PieceSquareTables::new();
     let pos = Position::new(4, 4);
-    
+
     group.bench_function("black_coords", |b| {
         b.iter(|| {
             black_box(tables.get_table_coords(pos, Player::Black));
         });
     });
-    
+
     group.bench_function("white_coords", |b| {
         b.iter(|| {
             black_box(tables.get_table_coords(pos, Player::White));
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark full board evaluation
 fn benchmark_full_board(c: &mut Criterion) {
     let mut group = c.benchmark_group("full_board");
-    
+
     let tables = PieceSquareTables::new();
-    
+
     group.bench_function("evaluate_all_squares", |b| {
         b.iter(|| {
             let mut total = TaperedScore::default();
@@ -197,7 +193,7 @@ fn benchmark_full_board(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.bench_function("evaluate_all_pieces_all_squares", |b| {
         let piece_types = [
             PieceType::Pawn,
@@ -208,7 +204,7 @@ fn benchmark_full_board(c: &mut Criterion) {
             PieceType::Bishop,
             PieceType::Rook,
         ];
-        
+
         b.iter(|| {
             let mut total = TaperedScore::default();
             for &pt in &piece_types {
@@ -222,17 +218,17 @@ fn benchmark_full_board(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark repeated lookups (cache effects)
 fn benchmark_cache_effects(c: &mut Criterion) {
     let mut group = c.benchmark_group("cache_effects");
-    
+
     let tables = PieceSquareTables::new();
     let pos = Position::new(4, 4);
-    
+
     group.bench_function("same_lookup_1000x", |b| {
         b.iter(|| {
             for _ in 0..1000 {
@@ -240,7 +236,7 @@ fn benchmark_cache_effects(c: &mut Criterion) {
             }
         });
     });
-    
+
     group.bench_function("different_pieces_1000x", |b| {
         let piece_types = [
             PieceType::Pawn,
@@ -248,7 +244,7 @@ fn benchmark_cache_effects(c: &mut Criterion) {
             PieceType::Bishop,
             PieceType::Knight,
         ];
-        
+
         b.iter(|| {
             for i in 0..1000 {
                 let pt = piece_types[i % 4];
@@ -256,7 +252,7 @@ fn benchmark_cache_effects(c: &mut Criterion) {
             }
         });
     });
-    
+
     group.bench_function("different_positions_1000x", |b| {
         b.iter(|| {
             for i in 0..1000 {
@@ -267,16 +263,16 @@ fn benchmark_cache_effects(c: &mut Criterion) {
             }
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark table access patterns
 fn benchmark_access_patterns(c: &mut Criterion) {
     let mut group = c.benchmark_group("access_patterns");
-    
+
     let tables = PieceSquareTables::new();
-    
+
     group.bench_function("sequential_rows", |b| {
         b.iter(|| {
             let mut total = TaperedScore::default();
@@ -289,7 +285,7 @@ fn benchmark_access_patterns(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.bench_function("sequential_cols", |b| {
         b.iter(|| {
             let mut total = TaperedScore::default();
@@ -302,7 +298,7 @@ fn benchmark_access_patterns(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.bench_function("random_access", |b| {
         let positions = [
             Position::new(3, 7),
@@ -315,7 +311,7 @@ fn benchmark_access_patterns(c: &mut Criterion) {
             Position::new(7, 6),
             Position::new(4, 0),
         ];
-        
+
         b.iter(|| {
             let mut total = TaperedScore::default();
             for &pos in &positions {
@@ -324,40 +320,39 @@ fn benchmark_access_patterns(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark memory usage patterns
 fn benchmark_memory_patterns(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_patterns");
-    
+
     group.bench_function("create_many_tables", |b| {
         b.iter(|| {
-            let tables: Vec<PieceSquareTables> = (0..100)
-                .map(|_| PieceSquareTables::new())
-                .collect();
+            let tables: Vec<PieceSquareTables> =
+                (0..100).map(|_| PieceSquareTables::new()).collect();
             black_box(tables);
         });
     });
-    
+
     group.bench_function("clone_table", |b| {
         let tables = PieceSquareTables::new();
         b.iter(|| {
             black_box(tables.clone());
         });
     });
-    
+
     group.finish();
 }
 
 /// Benchmark complete workflow
 fn benchmark_complete_workflow(c: &mut Criterion) {
     let mut group = c.benchmark_group("complete_workflow");
-    
+
     group.bench_function("evaluate_typical_position", |b| {
         let tables = PieceSquareTables::new();
-        
+
         // Simulate a typical mid-game position
         let pieces = vec![
             (PieceType::Rook, Position::new(0, 7), Player::Black),
@@ -369,7 +364,7 @@ fn benchmark_complete_workflow(c: &mut Criterion) {
             (PieceType::Bishop, Position::new(7, 1), Player::White),
             (PieceType::Gold, Position::new(8, 3), Player::White),
         ];
-        
+
         b.iter(|| {
             let mut total = TaperedScore::default();
             for (pt, pos, player) in &pieces {
@@ -383,7 +378,7 @@ fn benchmark_complete_workflow(c: &mut Criterion) {
             black_box(total);
         });
     });
-    
+
     group.finish();
 }
 
@@ -403,4 +398,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

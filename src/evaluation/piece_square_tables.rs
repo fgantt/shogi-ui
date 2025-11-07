@@ -38,7 +38,7 @@ pub struct PieceSquareTables {
     gold_table_mg: [[i32; 9]; 9],
     bishop_table_mg: [[i32; 9]; 9],
     rook_table_mg: [[i32; 9]; 9],
-    
+
     // Endgame tables - basic pieces
     pawn_table_eg: [[i32; 9]; 9],
     lance_table_eg: [[i32; 9]; 9],
@@ -47,7 +47,7 @@ pub struct PieceSquareTables {
     gold_table_eg: [[i32; 9]; 9],
     bishop_table_eg: [[i32; 9]; 9],
     rook_table_eg: [[i32; 9]; 9],
-    
+
     // Middlegame tables - promoted pieces
     promoted_pawn_table_mg: [[i32; 9]; 9],
     promoted_lance_table_mg: [[i32; 9]; 9],
@@ -55,7 +55,7 @@ pub struct PieceSquareTables {
     promoted_silver_table_mg: [[i32; 9]; 9],
     promoted_bishop_table_mg: [[i32; 9]; 9],
     promoted_rook_table_mg: [[i32; 9]; 9],
-    
+
     // Endgame tables - promoted pieces
     promoted_pawn_table_eg: [[i32; 9]; 9],
     promoted_lance_table_eg: [[i32; 9]; 9],
@@ -77,7 +77,7 @@ impl PieceSquareTables {
             gold_table_mg: Self::init_gold_table_mg(),
             bishop_table_mg: Self::init_bishop_table_mg(),
             rook_table_mg: Self::init_rook_table_mg(),
-            
+
             // Initialize endgame tables
             pawn_table_eg: Self::init_pawn_table_eg(),
             lance_table_eg: Self::init_lance_table_eg(),
@@ -86,7 +86,7 @@ impl PieceSquareTables {
             gold_table_eg: Self::init_gold_table_eg(),
             bishop_table_eg: Self::init_bishop_table_eg(),
             rook_table_eg: Self::init_rook_table_eg(),
-            
+
             // Initialize promoted piece middlegame tables
             promoted_pawn_table_mg: Self::init_promoted_pawn_table_mg(),
             promoted_lance_table_mg: Self::init_promoted_lance_table_mg(),
@@ -94,7 +94,7 @@ impl PieceSquareTables {
             promoted_silver_table_mg: Self::init_promoted_silver_table_mg(),
             promoted_bishop_table_mg: Self::init_promoted_bishop_table_mg(),
             promoted_rook_table_mg: Self::init_promoted_rook_table_mg(),
-            
+
             // Initialize promoted piece endgame tables
             promoted_pawn_table_eg: Self::init_promoted_pawn_table_eg(),
             promoted_lance_table_eg: Self::init_promoted_lance_table_eg(),
@@ -112,13 +112,13 @@ impl PieceSquareTables {
     pub fn get_value(&self, piece_type: PieceType, pos: Position, player: Player) -> TaperedScore {
         let (mg_table, eg_table) = self.get_tables(piece_type);
         let (row, col) = self.get_table_coords(pos, player);
-        
+
         let mg_value = mg_table[row as usize][col as usize];
         let eg_value = eg_table[row as usize][col as usize];
-        
+
         TaperedScore::new_tapered(mg_value, eg_value)
     }
-    
+
     /// Get both mg and eg tables for a piece type
     ///
     /// Returns references to the middlegame and endgame tables for the specified piece.
@@ -133,20 +133,31 @@ impl PieceSquareTables {
             PieceType::Gold => (&self.gold_table_mg, &self.gold_table_eg),
             PieceType::Bishop => (&self.bishop_table_mg, &self.bishop_table_eg),
             PieceType::Rook => (&self.rook_table_mg, &self.rook_table_eg),
-            
+
             // Promoted pieces
             PieceType::PromotedPawn => (&self.promoted_pawn_table_mg, &self.promoted_pawn_table_eg),
-            PieceType::PromotedLance => (&self.promoted_lance_table_mg, &self.promoted_lance_table_eg),
-            PieceType::PromotedKnight => (&self.promoted_knight_table_mg, &self.promoted_knight_table_eg),
-            PieceType::PromotedSilver => (&self.promoted_silver_table_mg, &self.promoted_silver_table_eg),
-            PieceType::PromotedBishop => (&self.promoted_bishop_table_mg, &self.promoted_bishop_table_eg),
+            PieceType::PromotedLance => {
+                (&self.promoted_lance_table_mg, &self.promoted_lance_table_eg)
+            }
+            PieceType::PromotedKnight => (
+                &self.promoted_knight_table_mg,
+                &self.promoted_knight_table_eg,
+            ),
+            PieceType::PromotedSilver => (
+                &self.promoted_silver_table_mg,
+                &self.promoted_silver_table_eg,
+            ),
+            PieceType::PromotedBishop => (
+                &self.promoted_bishop_table_mg,
+                &self.promoted_bishop_table_eg,
+            ),
             PieceType::PromotedRook => (&self.promoted_rook_table_mg, &self.promoted_rook_table_eg),
-            
+
             // King has no positional bonus
             PieceType::King => (&[[0; 9]; 9], &[[0; 9]; 9]),
         }
     }
-    
+
     /// Get table coordinates for a position and player
     ///
     /// Handles symmetry: White player's pieces use flipped coordinates
@@ -528,7 +539,7 @@ mod tests {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4); // Center square
         let score = tables.get_value(PieceType::Pawn, pos, Player::Black);
-        
+
         // Pawns should have positive value in center
         assert!(score.mg > 0);
         assert!(score.eg > score.mg); // Pawns more valuable in endgame
@@ -539,7 +550,7 @@ mod tests {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4); // Center square
         let score = tables.get_value(PieceType::Rook, pos, Player::Black);
-        
+
         // Rooks should have positive value in center
         assert!(score.mg > 0);
         assert!(score.eg > score.mg); // Rooks more valuable in endgame
@@ -549,12 +560,12 @@ mod tests {
     fn test_get_value_promoted_pieces() {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4);
-        
+
         // Promoted pawn
         let promoted_pawn = tables.get_value(PieceType::PromotedPawn, pos, Player::Black);
         assert!(promoted_pawn.mg > 0);
         assert!(promoted_pawn.eg > 0);
-        
+
         // Promoted rook
         let promoted_rook = tables.get_value(PieceType::PromotedRook, pos, Player::Black);
         assert!(promoted_rook.mg > 0);
@@ -567,7 +578,7 @@ mod tests {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4);
         let score = tables.get_value(PieceType::King, pos, Player::Black);
-        
+
         // King should have no positional bonus
         assert_eq!(score.mg, 0);
         assert_eq!(score.eg, 0);
@@ -576,14 +587,14 @@ mod tests {
     #[test]
     fn test_symmetry() {
         let tables = PieceSquareTables::new();
-        
+
         // Check symmetry: Black (0,0) == White (8,8)
         let black_pos = Position::new(0, 0);
         let white_pos = Position::new(8, 8);
-        
+
         let black_score = tables.get_value(PieceType::Pawn, black_pos, Player::Black);
         let white_score = tables.get_value(PieceType::Pawn, white_pos, Player::White);
-        
+
         // Due to symmetry, these should be equal
         assert_eq!(black_score.mg, white_score.mg);
         assert_eq!(black_score.eg, white_score.eg);
@@ -592,13 +603,13 @@ mod tests {
     #[test]
     fn test_table_coords() {
         let tables = PieceSquareTables::new();
-        
+
         // Black player: no transformation
         let pos = Position::new(4, 4);
         let (row, col) = tables.get_table_coords(pos, Player::Black);
         assert_eq!(row, 4);
         assert_eq!(col, 4);
-        
+
         // White player: flip coordinates
         let (row, col) = tables.get_table_coords(pos, Player::White);
         assert_eq!(row, 4); // 8 - 4 = 4
@@ -608,19 +619,19 @@ mod tests {
     #[test]
     fn test_pawn_advancement_bonus() {
         let tables = PieceSquareTables::new();
-        
+
         // Pawns should get more value as they advance
         let back_row = Position::new(0, 4);
         let mid_row = Position::new(4, 4);
         let front_row = Position::new(7, 4);
-        
+
         let back_score = tables.get_value(PieceType::Pawn, back_row, Player::Black);
         let mid_score = tables.get_value(PieceType::Pawn, mid_row, Player::Black);
         let front_score = tables.get_value(PieceType::Pawn, front_row, Player::Black);
-        
+
         assert!(mid_score.mg > back_score.mg);
         assert!(front_score.mg > mid_score.mg);
-        
+
         // Even more pronounced in endgame
         assert!(mid_score.eg > back_score.eg);
         assert!(front_score.eg > mid_score.eg);
@@ -629,14 +640,14 @@ mod tests {
     #[test]
     fn test_center_bonus() {
         let tables = PieceSquareTables::new();
-        
+
         // Center should be better than edge for most pieces
         let center = Position::new(4, 4);
         let edge = Position::new(4, 0);
-        
+
         let center_rook = tables.get_value(PieceType::Rook, center, Player::Black);
         let edge_rook = tables.get_value(PieceType::Rook, edge, Player::Black);
-        
+
         assert!(center_rook.mg > edge_rook.mg);
         assert!(center_rook.eg > edge_rook.eg);
     }
@@ -644,14 +655,14 @@ mod tests {
     #[test]
     fn test_knight_back_rank_penalty() {
         let tables = PieceSquareTables::new();
-        
+
         // Knights should have penalty on back ranks
         let back_rank = Position::new(0, 4);
         let center = Position::new(4, 4);
-        
+
         let back_knight = tables.get_value(PieceType::Knight, back_rank, Player::Black);
         let center_knight = tables.get_value(PieceType::Knight, center, Player::Black);
-        
+
         assert!(back_knight.mg < center_knight.mg);
     }
 
@@ -659,19 +670,19 @@ mod tests {
     fn test_promoted_vs_unpromoted() {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4);
-        
+
         // Test pawn vs promoted pawn
         let pawn = tables.get_value(PieceType::Pawn, pos, Player::Black);
         let promoted_pawn = tables.get_value(PieceType::PromotedPawn, pos, Player::Black);
-        
+
         // Promoted pieces should have different (usually better) positional values
         // Note: This is just positional bonus, not including material value
         assert_ne!(pawn.mg, promoted_pawn.mg);
-        
+
         // Test rook vs promoted rook
         let rook = tables.get_value(PieceType::Rook, pos, Player::Black);
         let promoted_rook = tables.get_value(PieceType::PromotedRook, pos, Player::Black);
-        
+
         assert_ne!(rook.mg, promoted_rook.mg);
     }
 
@@ -679,7 +690,7 @@ mod tests {
     fn test_all_pieces_have_tables() {
         let tables = PieceSquareTables::new();
         let pos = Position::new(4, 4);
-        
+
         // Test that all piece types return valid values
         let piece_types = [
             PieceType::Pawn,
@@ -697,7 +708,7 @@ mod tests {
             PieceType::PromotedBishop,
             PieceType::PromotedRook,
         ];
-        
+
         for piece_type in piece_types {
             let score = tables.get_value(piece_type, pos, Player::Black);
             // Should not panic
@@ -709,15 +720,19 @@ mod tests {
     #[test]
     fn test_table_bounds() {
         let tables = PieceSquareTables::new();
-        
+
         // Test all corners and edges
         let positions = [
-            Position::new(0, 0), Position::new(0, 8),
-            Position::new(8, 0), Position::new(8, 8),
-            Position::new(0, 4), Position::new(8, 4),
-            Position::new(4, 0), Position::new(4, 8),
+            Position::new(0, 0),
+            Position::new(0, 8),
+            Position::new(8, 0),
+            Position::new(8, 8),
+            Position::new(0, 4),
+            Position::new(8, 4),
+            Position::new(4, 0),
+            Position::new(4, 8),
         ];
-        
+
         for pos in positions {
             let score = tables.get_value(PieceType::Rook, pos, Player::Black);
             // Should not panic on boundary positions
@@ -726,4 +741,3 @@ mod tests {
         }
     }
 }
-

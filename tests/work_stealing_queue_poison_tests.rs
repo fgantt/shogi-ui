@@ -1,5 +1,5 @@
 use shogi_engine::search::WorkStealingQueue;
-use shogi_engine::types::{Player, Position, PieceType, Move};
+use shogi_engine::types::{Move, PieceType, Player, Position};
 
 fn sample_work() -> shogi_engine::search::WorkUnit {
     use shogi_engine::bitboards::BitboardBoard;
@@ -7,7 +7,17 @@ fn sample_work() -> shogi_engine::search::WorkUnit {
     shogi_engine::search::WorkUnit {
         board: BitboardBoard::new(),
         captured_pieces: CapturedPieces::new(),
-        move_to_search: Move { from: None, to: Position::from_u8(0), piece_type: PieceType::Pawn, player: Player::Black, is_promotion: false, is_capture: false, captured_piece: None, gives_check: false, is_recapture: false },
+        move_to_search: Move {
+            from: None,
+            to: Position::from_u8(0),
+            piece_type: PieceType::Pawn,
+            player: Player::Black,
+            is_promotion: false,
+            is_capture: false,
+            captured_piece: None,
+            gives_check: false,
+            is_recapture: false,
+        },
         depth: 1,
         alpha: -1000,
         beta: 1000,
@@ -27,5 +37,3 @@ fn test_queue_recovers_from_poison_in_push_and_pop() {
     q.push_back(sample_work());
     let _ = q.pop_front();
 }
-
-

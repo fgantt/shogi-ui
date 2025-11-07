@@ -3,7 +3,10 @@
 //! A command-line tool for testing the strength of the shogi engine.
 
 use clap::{Parser, Subcommand};
-use shogi_engine::{ShogiEngine, types::{GameResult, Move}};
+use shogi_engine::{
+    types::{GameResult, Move},
+    ShogiEngine,
+};
 // use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -77,7 +80,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn test_strength(time_control: &str, games: u32, depth: u8, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn test_strength(
+    time_control: &str,
+    games: u32,
+    depth: u8,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if verbose {
         println!("Testing engine strength...");
         println!("Time control: {}", time_control);
@@ -95,10 +103,12 @@ fn test_strength(time_control: &str, games: u32, depth: u8, verbose: bool) -> Re
         }
         let result = play_game_direct(depth, verbose)?;
         match result {
-            GameResult::Win => { // Black wins
+            GameResult::Win => {
+                // Black wins
                 black_wins += 1;
             }
-            GameResult::Loss => { // White wins
+            GameResult::Loss => {
+                // White wins
                 white_wins += 1;
             }
             GameResult::Draw => draws += 1,
@@ -120,7 +130,7 @@ fn play_game_direct(depth: u8, verbose: bool) -> Result<GameResult, Box<dyn std:
     let mut move_count = 0;
     let mut consecutive_passes = 0;
     let mut last_move: Option<Move> = None;
-    
+
     // Play a game by having engine play against itself
     loop {
         // Check if game is over
@@ -130,13 +140,13 @@ fn play_game_direct(depth: u8, verbose: bool) -> Result<GameResult, Box<dyn std:
             }
             return Ok(result);
         }
-        
+
         // Get engine's best move
         if let Some(best_move) = engine.get_best_move(depth, 2000, None) {
             if verbose && move_count < 10 {
                 println!("Move {}: {}", move_count + 1, best_move.to_usi_string());
             }
-            
+
             // Check if same move repeated (possible infinite loop)
             if last_move.as_ref().map(|m| m.to_usi_string()) == Some(best_move.to_usi_string()) {
                 consecutive_passes += 1;
@@ -149,19 +159,22 @@ fn play_game_direct(depth: u8, verbose: bool) -> Result<GameResult, Box<dyn std:
             } else {
                 consecutive_passes = 0;
             }
-            
+
             last_move = Some(best_move.clone());
-            
+
             // Apply the move to the engine
             if !engine.apply_move(&best_move) {
                 if verbose {
-                    println!("Failed to apply move: {}, ending game", best_move.to_usi_string());
+                    println!(
+                        "Failed to apply move: {}, ending game",
+                        best_move.to_usi_string()
+                    );
                 }
                 return Ok(GameResult::Draw);
             }
-            
+
             move_count += 1;
-            
+
             // Safety limit to avoid infinite games
             if move_count >= 200 {
                 if verbose {
@@ -179,8 +192,13 @@ fn play_game_direct(depth: u8, verbose: bool) -> Result<GameResult, Box<dyn std:
     }
 }
 
-
-fn compare_configs(config1: &str, config2: &str, games: u32, depth: u8, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn compare_configs(
+    config1: &str,
+    config2: &str,
+    games: u32,
+    depth: u8,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if verbose {
         println!("Comparing two engine configurations...");
         println!("Config 1: {}", config1);
@@ -193,7 +211,12 @@ fn compare_configs(config1: &str, config2: &str, games: u32, depth: u8, verbose:
     Ok(())
 }
 
-fn estimate_elo(opponent: &str, games: u32, depth: u8, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn estimate_elo(
+    opponent: &str,
+    games: u32,
+    depth: u8,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if verbose {
         println!("Estimating ELO rating...");
         println!("Opponent: {}", opponent);

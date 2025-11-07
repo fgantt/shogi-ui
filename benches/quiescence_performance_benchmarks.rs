@@ -65,12 +65,12 @@
 //!
 //! This suite is designed for CI/CD integration and performance regression detection.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use shogi_engine::{
-    search::SearchEngine,
     bitboards::BitboardBoard,
-    types::{CapturedPieces, Player, QuiescenceConfig, TTReplacementPolicy},
+    search::SearchEngine,
     time_utils::TimeSource,
+    types::{CapturedPieces, Player, QuiescenceConfig, TTReplacementPolicy},
 };
 use std::time::Duration;
 
@@ -99,40 +99,55 @@ fn benchmark_pruning_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_pruning_effectiveness");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test different pruning configurations
     let configs = vec![
-        ("no_pruning", QuiescenceConfig {
-            enable_delta_pruning: false,
-            enable_futility_pruning: false,
-            ..QuiescenceConfig::default()
-        }),
-        ("delta_only", QuiescenceConfig {
-            enable_delta_pruning: true,
-            enable_futility_pruning: false,
-            ..QuiescenceConfig::default()
-        }),
-        ("futility_only", QuiescenceConfig {
-            enable_delta_pruning: false,
-            enable_futility_pruning: true,
-            ..QuiescenceConfig::default()
-        }),
-        ("both_pruning", QuiescenceConfig {
-            enable_delta_pruning: true,
-            enable_futility_pruning: true,
-            ..QuiescenceConfig::default()
-        }),
-        ("adaptive_pruning", QuiescenceConfig {
-            enable_delta_pruning: true,
-            enable_futility_pruning: true,
-            enable_adaptive_pruning: true,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "no_pruning",
+            QuiescenceConfig {
+                enable_delta_pruning: false,
+                enable_futility_pruning: false,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "delta_only",
+            QuiescenceConfig {
+                enable_delta_pruning: true,
+                enable_futility_pruning: false,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "futility_only",
+            QuiescenceConfig {
+                enable_delta_pruning: false,
+                enable_futility_pruning: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "both_pruning",
+            QuiescenceConfig {
+                enable_delta_pruning: true,
+                enable_futility_pruning: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "adaptive_pruning",
+            QuiescenceConfig {
+                enable_delta_pruning: true,
+                enable_futility_pruning: true,
+                enable_adaptive_pruning: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -142,7 +157,7 @@ fn benchmark_pruning_effectiveness(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -154,7 +169,7 @@ fn benchmark_pruning_effectiveness(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result, stats))
                     });
@@ -162,7 +177,7 @@ fn benchmark_pruning_effectiveness(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -171,22 +186,28 @@ fn benchmark_extension_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_extension_effectiveness");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test with and without extensions
     let configs = vec![
-        ("no_extensions", QuiescenceConfig {
-            enable_selective_extensions: false,
-            ..QuiescenceConfig::default()
-        }),
-        ("with_extensions", QuiescenceConfig {
-            enable_selective_extensions: true,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "no_extensions",
+            QuiescenceConfig {
+                enable_selective_extensions: false,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "with_extensions",
+            QuiescenceConfig {
+                enable_selective_extensions: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -196,7 +217,7 @@ fn benchmark_extension_effectiveness(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -208,7 +229,7 @@ fn benchmark_extension_effectiveness(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result, stats))
                     });
@@ -216,7 +237,7 @@ fn benchmark_extension_effectiveness(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -225,22 +246,28 @@ fn benchmark_tt_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_tt_effectiveness");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test with and without TT
     let configs = vec![
-        ("no_tt", QuiescenceConfig {
-            enable_tt: false,
-            ..QuiescenceConfig::default()
-        }),
-        ("with_tt", QuiescenceConfig {
-            enable_tt: true,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "no_tt",
+            QuiescenceConfig {
+                enable_tt: false,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "with_tt",
+            QuiescenceConfig {
+                enable_tt: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -250,7 +277,7 @@ fn benchmark_tt_effectiveness(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         // First search (populates TT)
                         let mut board_mut = board.clone();
                         let _result1 = engine.quiescence_search(
@@ -263,7 +290,7 @@ fn benchmark_tt_effectiveness(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         // Second search (should hit TT if enabled)
                         let mut board_mut2 = board.clone();
                         let result2 = engine.quiescence_search(
@@ -276,7 +303,7 @@ fn benchmark_tt_effectiveness(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result2, stats))
                     });
@@ -284,7 +311,7 @@ fn benchmark_tt_effectiveness(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -293,10 +320,10 @@ fn benchmark_tt_replacement_policies(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_tt_replacement_policies");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test different replacement policies
     let policies = vec![
         ("simple", TTReplacementPolicy::Simple),
@@ -304,7 +331,7 @@ fn benchmark_tt_replacement_policies(c: &mut Criterion) {
         ("depth_preferred", TTReplacementPolicy::DepthPreferred),
         ("hybrid", TTReplacementPolicy::Hybrid),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, policy) in &policies {
             group.bench_with_input(
@@ -317,7 +344,7 @@ fn benchmark_tt_replacement_policies(c: &mut Criterion) {
                         config.tt_replacement_policy = *policy;
                         let mut engine = create_test_engine_with_config(config);
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -329,7 +356,7 @@ fn benchmark_tt_replacement_policies(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result, stats))
                     });
@@ -337,7 +364,7 @@ fn benchmark_tt_replacement_policies(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -346,19 +373,22 @@ fn benchmark_move_ordering_effectiveness(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_move_ordering_effectiveness");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test different configurations (move ordering is always enabled, but we can test different configs)
     let configs = vec![
         ("default", QuiescenceConfig::default()),
-        ("with_tt", QuiescenceConfig {
-            enable_tt: true,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "with_tt",
+            QuiescenceConfig {
+                enable_tt: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -368,7 +398,7 @@ fn benchmark_move_ordering_effectiveness(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -380,11 +410,12 @@ fn benchmark_move_ordering_effectiveness(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         // Calculate cutoff rate
                         let cutoff_rate = if stats.move_ordering_total_moves > 0 {
-                            stats.move_ordering_cutoffs as f64 / stats.move_ordering_total_moves as f64
+                            stats.move_ordering_cutoffs as f64
+                                / stats.move_ordering_total_moves as f64
                         } else {
                             0.0
                         };
@@ -394,7 +425,7 @@ fn benchmark_move_ordering_effectiveness(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -403,36 +434,48 @@ fn benchmark_configuration_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_configuration_comparison");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test different configurations
     let configs = vec![
         ("default", QuiescenceConfig::default()),
-        ("adaptive_pruning", QuiescenceConfig {
-            enable_adaptive_pruning: true,
-            ..QuiescenceConfig::default()
-        }),
-        ("high_depth", QuiescenceConfig {
-            max_depth: 8,
-            ..QuiescenceConfig::default()
-        }),
-        ("low_depth", QuiescenceConfig {
-            max_depth: 3,
-            ..QuiescenceConfig::default()
-        }),
-        ("all_optimizations", QuiescenceConfig {
-            enable_delta_pruning: true,
-            enable_futility_pruning: true,
-            enable_selective_extensions: true,
-            enable_tt: true,
-            enable_adaptive_pruning: true,
-            max_depth: 6,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "adaptive_pruning",
+            QuiescenceConfig {
+                enable_adaptive_pruning: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "high_depth",
+            QuiescenceConfig {
+                max_depth: 8,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "low_depth",
+            QuiescenceConfig {
+                max_depth: 3,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "all_optimizations",
+            QuiescenceConfig {
+                enable_delta_pruning: true,
+                enable_futility_pruning: true,
+                enable_selective_extensions: true,
+                enable_tt: true,
+                enable_adaptive_pruning: true,
+                max_depth: 6,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -442,7 +485,7 @@ fn benchmark_configuration_comparison(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -454,7 +497,7 @@ fn benchmark_configuration_comparison(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result, stats))
                     });
@@ -462,7 +505,7 @@ fn benchmark_configuration_comparison(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -471,21 +514,24 @@ fn benchmark_tactical_positions(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_tactical_positions");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     // Starting position (simple)
     let (board1, captured_pieces1, player1) = create_test_position();
-    
+
     // For now, we use the same position for both (future: add specific tactical positions)
     let (board2, captured_pieces2, player2) = create_test_position();
-    
+
     let time_source = TimeSource::now();
     let config = QuiescenceConfig::default();
-    
+
     let positions = vec![
         ("starting_position", (board1, captured_pieces1, player1)),
-        ("starting_position_copy", (board2, captured_pieces2, player2)),
+        (
+            "starting_position_copy",
+            (board2, captured_pieces2, player2),
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, (board, captured_pieces, player)) in &positions {
             group.bench_with_input(
@@ -495,7 +541,7 @@ fn benchmark_tactical_positions(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         let mut board_mut = board.clone();
                         let result = engine.quiescence_search(
                             black_box(&mut board_mut),
@@ -507,7 +553,7 @@ fn benchmark_tactical_positions(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         black_box((result, stats))
                     });
@@ -515,7 +561,7 @@ fn benchmark_tactical_positions(c: &mut Criterion) {
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -524,39 +570,35 @@ fn benchmark_depth_scaling(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_depth_scaling");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
     let config = QuiescenceConfig::default();
-    
+
     for depth in [1, 2, 3, 4, 5, 6] {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(depth),
-            &depth,
-            |b, &depth| {
-                b.iter(|| {
-                    let mut engine = create_test_engine_with_config(config.clone());
-                    engine.reset_quiescence_stats();
-                    
-                    let mut board_mut = board.clone();
-                    let result = engine.quiescence_search(
-                        black_box(&mut board_mut),
-                        black_box(&captured_pieces),
-                        player,
-                        -10000,
-                        10000,
-                        &time_source,
-                        1000,
-                        depth,
-                    );
-                    
-                    let stats = engine.get_quiescence_stats();
-                    black_box((result, stats))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(depth), &depth, |b, &depth| {
+            b.iter(|| {
+                let mut engine = create_test_engine_with_config(config.clone());
+                engine.reset_quiescence_stats();
+
+                let mut board_mut = board.clone();
+                let result = engine.quiescence_search(
+                    black_box(&mut board_mut),
+                    black_box(&captured_pieces),
+                    player,
+                    -10000,
+                    10000,
+                    &time_source,
+                    1000,
+                    depth,
+                );
+
+                let stats = engine.get_quiescence_stats();
+                black_box((result, stats))
+            });
+        });
     }
-    
+
     group.finish();
 }
 
@@ -565,22 +607,28 @@ fn benchmark_stand_pat_caching(c: &mut Criterion) {
     let mut group = c.benchmark_group("quiescence_stand_pat_caching");
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
-    
+
     let (board, captured_pieces, player) = create_test_position();
     let time_source = TimeSource::now();
-    
+
     // Test with and without TT (stand-pat caching requires TT)
     let configs = vec![
-        ("no_tt", QuiescenceConfig {
-            enable_tt: false,
-            ..QuiescenceConfig::default()
-        }),
-        ("with_tt", QuiescenceConfig {
-            enable_tt: true,
-            ..QuiescenceConfig::default()
-        }),
+        (
+            "no_tt",
+            QuiescenceConfig {
+                enable_tt: false,
+                ..QuiescenceConfig::default()
+            },
+        ),
+        (
+            "with_tt",
+            QuiescenceConfig {
+                enable_tt: true,
+                ..QuiescenceConfig::default()
+            },
+        ),
     ];
-    
+
     for depth in [3, 4, 5] {
         for (name, config) in &configs {
             group.bench_with_input(
@@ -590,7 +638,7 @@ fn benchmark_stand_pat_caching(c: &mut Criterion) {
                     b.iter(|| {
                         let mut engine = create_test_engine_with_config(config.clone());
                         engine.reset_quiescence_stats();
-                        
+
                         // First search (caches stand-pat)
                         let mut board_mut = board.clone();
                         let _result1 = engine.quiescence_search(
@@ -603,7 +651,7 @@ fn benchmark_stand_pat_caching(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         // Second search (should use cached stand-pat if TT enabled)
                         let mut board_mut2 = board.clone();
                         let result2 = engine.quiescence_search(
@@ -616,21 +664,23 @@ fn benchmark_stand_pat_caching(c: &mut Criterion) {
                             1000,
                             depth,
                         );
-                        
+
                         let stats = engine.get_quiescence_stats();
                         // Check stand-pat caching stats
-                        let stand_pat_hit_rate = if stats.stand_pat_tt_misses + stats.stand_pat_tt_hits > 0 {
-                            stats.stand_pat_tt_hits as f64 / (stats.stand_pat_tt_hits + stats.stand_pat_tt_misses) as f64
-                        } else {
-                            0.0
-                        };
+                        let stand_pat_hit_rate =
+                            if stats.stand_pat_tt_misses + stats.stand_pat_tt_hits > 0 {
+                                stats.stand_pat_tt_hits as f64
+                                    / (stats.stand_pat_tt_hits + stats.stand_pat_tt_misses) as f64
+                            } else {
+                                0.0
+                            };
                         black_box((result2, stats, stand_pat_hit_rate))
                     });
                 },
             );
         }
     }
-    
+
     group.finish();
 }
 
@@ -649,4 +699,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

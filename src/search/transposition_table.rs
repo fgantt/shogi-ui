@@ -1,20 +1,20 @@
 use crate::types::*;
 
 /// Basic transposition table for caching search results
-/// 
+///
 /// This struct provides a hash table-based cache for storing and retrieving
 /// transposition table entries. It supports configurable size, replacement policies,
 /// and comprehensive statistics tracking.
-/// 
+///
 /// # Hash Key Generation
-/// 
+///
 /// **Important:** This basic table does NOT generate hash keys internally.
 /// Callers must provide valid hash keys when storing entries, typically generated
 /// using a Zobrist hasher for the board position. Hash keys are used for:
 /// - Converting positions to table indices
 /// - Detecting hash collisions
 /// - Validating entry integrity
-/// 
+///
 /// Use `crate::search::zobrist::ZobristHasher` to generate position hash keys.
 pub struct TranspositionTable {
     /// The actual hash table storing entries
@@ -75,19 +75,19 @@ impl TranspositionTable {
     pub fn new() -> Self {
         Self::with_config(TranspositionTableConfig::default())
     }
-    
+
     /// Create a new transposition table with specified size
     pub fn with_size(size: usize) -> Self {
         let mut config = TranspositionTableConfig::default();
         config.max_entries = size;
         Self::with_config(config)
     }
-    
+
     /// Create a new transposition table with custom configuration
     pub fn with_config(config: TranspositionTableConfig) -> Self {
         let size = config.max_entries;
         let memory_usage = size * std::mem::size_of::<Option<TranspositionEntry>>();
-        
+
         Self {
             entries: vec![None; size],
             size,
@@ -98,11 +98,11 @@ impl TranspositionTable {
             config,
         }
     }
-    
+
     /// Probe the table for an entry with the given hash key
     pub fn probe(&mut self, hash_key: u64, depth: u8) -> Option<TranspositionEntry> {
         let index = self.hash_to_index(hash_key);
-        
+
         if let Some(entry) = &self.entries[index] {
             // Check if the entry matches our hash key and is valid for the depth
             if entry.matches_hash(hash_key) && entry.is_valid_for_depth(depth) {
@@ -112,15 +112,15 @@ impl TranspositionTable {
                 return Some(entry.clone());
             }
         }
-        
+
         if self.config.track_statistics {
             self.misses += 1;
         }
         None
     }
-    
+
     /// Store an entry in the transposition table
-    /// 
+    ///
     /// # Important
     /// The caller must provide a valid hash key in the `entry.hash_key` field.
     /// Hash keys should be generated using a Zobrist hasher for the position.
@@ -128,19 +128,19 @@ impl TranspositionTable {
     pub fn store(&mut self, mut entry: TranspositionEntry) {
         // Update the entry's age (but preserve the hash key provided by caller)
         entry.age = self.age;
-        
+
         let index = self.hash_to_index(entry.hash_key);
-        
+
         // Apply replacement policy
         if let Some(existing_entry) = &self.entries[index] {
             if !self.should_replace(existing_entry, &entry) {
                 return; // Don't replace
             }
         }
-        
+
         self.entries[index] = Some(entry);
     }
-    
+
     /// Store an entry with explicit hash key
     pub fn store_with_hash(&mut self, hash_key: u64, entry: TranspositionEntry) {
         let mut entry = entry;
@@ -148,7 +148,7 @@ impl TranspositionTable {
         entry.age = self.age;
         self.store(entry);
     }
-    
+
     /// Clear all entries from the table
     pub fn clear(&mut self) {
         self.entries.fill(None);
@@ -158,17 +158,17 @@ impl TranspositionTable {
             self.misses = 0;
         }
     }
-    
+
     /// Increment the age counter
     pub fn increment_age(&mut self) {
         self.age = self.age.wrapping_add(1);
     }
-    
+
     /// Get the current age
     pub fn get_age(&self) -> u32 {
         self.age
     }
-    
+
     /// Get hit rate as a percentage
     pub fn get_hit_rate(&self) -> f64 {
         if self.config.track_statistics {
@@ -182,7 +182,7 @@ impl TranspositionTable {
             0.0
         }
     }
-    
+
     /// Get hit and miss counts
     pub fn get_statistics(&self) -> (u64, u64, f64) {
         if self.config.track_statistics {
@@ -191,7 +191,7 @@ impl TranspositionTable {
             (0, 0, 0.0)
         }
     }
-    
+
     /// Get memory usage in bytes
     pub fn get_memory_usage(&self) -> usize {
         if self.config.track_memory {
@@ -200,50 +200,50 @@ impl TranspositionTable {
             0
         }
     }
-    
+
     /// Get the number of entries currently stored
     pub fn get_entry_count(&self) -> usize {
         self.entries.iter().filter(|entry| entry.is_some()).count()
     }
-    
+
     /// Get the table size
     pub fn get_size(&self) -> usize {
         self.size
     }
-    
+
     /// Check if the table is full (all slots occupied)
     pub fn is_full(&self) -> bool {
         self.get_entry_count() >= self.size
     }
-    
+
     /// Get the fill percentage
     pub fn get_fill_percentage(&self) -> f64 {
         (self.get_entry_count() as f64 / self.size as f64) * 100.0
     }
-    
+
     /// Resize the table to a new size
     pub fn resize(&mut self, new_size: usize) {
         let mut new_config = self.config.clone();
         new_config.max_entries = new_size;
-        
+
         // Create new table with new size
         let mut new_table = Self::with_config(new_config);
         new_table.age = self.age;
-        
+
         // Copy all valid entries to the new table
         for entry in self.entries.iter().flatten() {
             new_table.store(entry.clone());
         }
-        
+
         // Replace current table with new one
         *self = new_table;
     }
-    
+
     /// Get configuration
     pub fn get_config(&self) -> &TranspositionTableConfig {
         &self.config
     }
-    
+
     /// Update configuration
     pub fn update_config(&mut self, new_config: TranspositionTableConfig) {
         self.config = new_config;
@@ -255,9 +255,9 @@ impl TranspositionTable {
             self.memory_usage = 0;
         }
     }
-    
+
     // Private helper methods
-    
+
     /// Convert hash key to table index using fast modulo
     fn hash_to_index(&self, hash_key: u64) -> usize {
         // Use bit masking for power-of-2 sizes, otherwise use modulo
@@ -267,7 +267,7 @@ impl TranspositionTable {
             (hash_key as usize) % self.size
         }
     }
-    
+
     /// Determine if an existing entry should be replaced
     fn should_replace(&self, existing: &TranspositionEntry, new: &TranspositionEntry) -> bool {
         match self.config.replacement_policy {
@@ -297,7 +297,7 @@ impl Default for TranspositionTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_transposition_table_creation() {
         let table = TranspositionTable::new();
@@ -306,25 +306,28 @@ mod tests {
         assert!(!table.is_full());
         assert_eq!(table.get_fill_percentage(), 0.0);
     }
-    
+
     #[test]
     fn test_transposition_table_with_size() {
         let table = TranspositionTable::with_size(1000);
         assert_eq!(table.get_size(), 1000);
         assert_eq!(table.get_entry_count(), 0);
     }
-    
+
     #[test]
     fn test_transposition_table_with_config() {
         let mut config = TranspositionTableConfig::default();
         config.max_entries = 500;
         config.replacement_policy = ReplacementPolicy::AgeBased;
-        
+
         let table = TranspositionTable::with_config(config);
         assert_eq!(table.get_size(), 500);
-        assert_eq!(table.get_config().replacement_policy, ReplacementPolicy::AgeBased);
+        assert_eq!(
+            table.get_config().replacement_policy,
+            ReplacementPolicy::AgeBased
+        );
     }
-    
+
     #[test]
     fn test_probe_empty_table() {
         let mut table = TranspositionTable::with_size(100);
@@ -332,196 +335,232 @@ mod tests {
         assert!(result.is_none());
         assert_eq!(table.get_statistics(), (0, 1, 0.0));
     }
-    
+
     #[test]
     fn test_store_and_probe() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry.clone());
         assert_eq!(table.get_entry_count(), 1);
-        
+
         let retrieved = table.probe(0x1234567890ABCDEF, 5);
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.score, 100);
         assert_eq!(retrieved.depth, 5);
         assert_eq!(retrieved.flag, TranspositionFlag::Exact);
-        
+
         assert_eq!(table.get_statistics(), (1, 0, 100.0));
     }
-    
+
     #[test]
     fn test_probe_with_insufficient_depth() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 3, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
         assert_eq!(table.get_entry_count(), 1);
-        
+
         // Probe with higher depth requirement - should not find
         let result = table.probe(0x1234567890ABCDEF, 5);
         assert!(result.is_none());
         assert_eq!(table.get_statistics(), (0, 1, 0.0));
-        
+
         // Probe with same or lower depth - should find
         let result = table.probe(0x1234567890ABCDEF, 3);
         assert!(result.is_some());
         assert_eq!(table.get_statistics(), (1, 1, 50.0));
     }
-    
+
     #[test]
     fn test_probe_with_hash_mismatch() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
-        
+
         // Probe with different hash key - should not find
         let result = table.probe(0xFEDCBA0987654321, 5);
         assert!(result.is_none());
         assert_eq!(table.get_statistics(), (0, 1, 0.0));
     }
-    
+
     #[test]
     fn test_hash_collision_detection_with_different_keys() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         // Store first entry with specific hash
         let entry1 = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
         table.store(entry1);
-        
+
         // Verify first entry is retrievable
         let result1 = table.probe(0x1234567890ABCDEF, 5);
         assert!(result1.is_some());
         assert_eq!(result1.unwrap().score, 100);
-        
+
         // Store second entry with different hash that maps to same index
         // Calculate a hash that will collide in the table index
         let table_size = 100;
         let hash2 = 0x1234567890ABCDEF + (table_size as u64);
-        let entry2 = TranspositionEntry::new_with_age(
-            200, 6, TranspositionFlag::Exact, None, hash2
-        );
+        let entry2 =
+            TranspositionEntry::new_with_age(200, 6, TranspositionFlag::Exact, None, hash2);
         table.store(entry2);
-        
+
         // Probe with second hash - should find second entry
         let result2 = table.probe(hash2, 5);
         assert!(result2.is_some());
         assert_eq!(result2.unwrap().score, 200);
-        
+
         // Probe with first hash - should NOT find anything (replaced by collision)
         let result1_after = table.probe(0x1234567890ABCDEF, 5);
-        assert!(result1_after.is_none(), "First entry should be replaced or hash mismatch detected");
-        
+        assert!(
+            result1_after.is_none(),
+            "First entry should be replaced or hash mismatch detected"
+        );
+
         // Verify hash collision detection is working
         assert_eq!(table.get_entry_count(), 1, "Should have exactly one entry");
     }
-    
+
     #[test]
     fn test_store_with_hash() {
         let mut table = TranspositionTable::with_size(100);
-        
-        let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0
-        );
-        
+
+        let entry = TranspositionEntry::new_with_age(100, 5, TranspositionFlag::Exact, None, 0);
+
         table.store_with_hash(0x1234567890ABCDEF, entry);
-        
+
         let retrieved = table.probe(0x1234567890ABCDEF, 5);
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.score, 100);
     }
-    
+
     #[test]
     fn test_clear() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
         assert_eq!(table.get_entry_count(), 1);
-        
+
         table.clear();
         assert_eq!(table.get_entry_count(), 0);
         assert_eq!(table.get_age(), 0);
         assert_eq!(table.get_statistics(), (0, 0, 0.0));
     }
-    
+
     #[test]
     fn test_increment_age() {
         let mut table = TranspositionTable::new();
-        
+
         assert_eq!(table.get_age(), 0);
         table.increment_age();
         assert_eq!(table.get_age(), 1);
         table.increment_age();
         assert_eq!(table.get_age(), 2);
     }
-    
+
     #[test]
     fn test_replacement_policies() {
         // Test AlwaysReplace
         let mut config = TranspositionTableConfig::default();
         config.max_entries = 1; // Force collision
         config.replacement_policy = ReplacementPolicy::AlwaysReplace;
-        
+
         let mut table = TranspositionTable::with_config(config);
-        
+
         let entry1 = TranspositionEntry::new_with_age(
-            100, 3, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
         let entry2 = TranspositionEntry::new_with_age(
-            200, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            200,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry1);
         table.store(entry2);
-        
+
         let result = table.probe(0x1234567890ABCDEF, 3);
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.score, 200); // Should be the second entry
     }
-    
+
     #[test]
     fn test_depth_preferred_replacement() {
         let mut config = TranspositionTableConfig::default();
         config.max_entries = 1; // Force collision
         config.replacement_policy = ReplacementPolicy::DepthPreferred;
-        
+
         let mut table = TranspositionTable::with_config(config);
-        
+
         let entry1 = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
         let entry2 = TranspositionEntry::new_with_age(
-            200, 3, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            200,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry1.clone());
         table.store(entry2);
-        
+
         let result = table.probe(0x1234567890ABCDEF, 3);
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.score, 100); // Should keep the deeper entry
     }
-    
+
     #[test]
     fn test_memory_usage_tracking() {
         let table = TranspositionTable::with_size(1000);
@@ -529,100 +568,119 @@ mod tests {
         assert!(memory_usage > 0);
         assert!(memory_usage < 1_000_000); // Should be reasonable
     }
-    
+
     #[test]
     fn test_resize() {
         let mut table = TranspositionTable::with_size(100);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
         assert_eq!(table.get_size(), 100);
         assert_eq!(table.get_entry_count(), 1);
-        
+
         table.resize(200);
         assert_eq!(table.get_size(), 200);
         assert_eq!(table.get_entry_count(), 1);
-        
+
         // Verify entry is still accessible
         let result = table.probe(0x1234567890ABCDEF, 5);
         assert!(result.is_some());
     }
-    
+
     #[test]
     fn test_hash_to_index_power_of_two() {
         let table = TranspositionTable::with_size(1024); // Power of 2
-        
+
         let hash1 = 0x1234567890ABCDEF;
         let hash2 = 0x1234567890ABCDEF + 1024; // Same index after masking
-        
+
         let index1 = table.hash_to_index(hash1);
         let index2 = table.hash_to_index(hash2);
-        
+
         assert_eq!(index1, index2); // Should map to same index
     }
-    
+
     #[test]
     fn test_hash_to_index_non_power_of_two() {
         let table = TranspositionTable::with_size(1000); // Not power of 2
-        
+
         let hash1 = 0x1234567890ABCDEF;
         let index1 = table.hash_to_index(hash1);
-        
+
         assert!(index1 < 1000); // Should be within bounds
     }
-    
+
     #[test]
     fn test_fill_percentage() {
         let mut table = TranspositionTable::with_size(10);
-        
+
         assert_eq!(table.get_fill_percentage(), 0.0);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
         assert_eq!(table.get_fill_percentage(), 10.0);
-        
+
         let entry2 = TranspositionEntry::new_with_age(
-            200, 5, TranspositionFlag::Exact, None, 0xFEDCBA0987654321
+            200,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0xFEDCBA0987654321,
         );
-        
+
         table.store(entry2);
         assert_eq!(table.get_fill_percentage(), 20.0);
     }
-    
+
     #[test]
     fn test_statistics_tracking_disabled() {
         let mut config = TranspositionTableConfig::default();
         config.track_statistics = false;
-        
+
         let mut table = TranspositionTable::with_config(config);
-        
+
         let entry = TranspositionEntry::new_with_age(
-            100, 5, TranspositionFlag::Exact, None, 0x1234567890ABCDEF
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1234567890ABCDEF,
         );
-        
+
         table.store(entry);
         table.probe(0x1234567890ABCDEF, 5);
-        
+
         assert_eq!(table.get_statistics(), (0, 0, 0.0));
     }
-    
+
     #[test]
     fn test_configuration_update() {
         let mut table = TranspositionTable::new();
-        
+
         let mut new_config = TranspositionTableConfig::default();
         new_config.replacement_policy = ReplacementPolicy::AgeBased;
         new_config.track_statistics = false;
-        
+
         table.update_config(new_config);
-        
-        assert_eq!(table.get_config().replacement_policy, ReplacementPolicy::AgeBased);
+
+        assert_eq!(
+            table.get_config().replacement_policy,
+            ReplacementPolicy::AgeBased
+        );
         assert!(!table.get_config().track_statistics);
         assert_eq!(table.get_statistics(), (0, 0, 0.0));
     }

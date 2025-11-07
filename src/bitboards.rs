@@ -2,78 +2,71 @@ use crate::types::*;
 use std::collections::HashMap;
 
 // Include the magic bitboard module
-pub mod magic;
-pub mod sliding_moves;
+pub mod api;
 pub mod attack_patterns;
-pub mod platform_detection;
-pub mod popcount;
-pub mod bitscan;
-pub mod debruijn;
-pub mod lookup_tables;
-pub mod masks;
-pub mod integration;
 pub mod bit_iterator;
 pub mod bit_utils;
-pub mod square_utils;
-pub mod api;
-pub mod cache_opt;
+pub mod bitscan;
 pub mod branch_opt;
+pub mod cache_opt;
+pub mod debruijn;
+pub mod integration;
+pub mod lookup_tables;
+pub mod magic;
+pub mod masks;
+pub mod platform_detection;
+pub mod popcount;
+pub mod sliding_moves;
+pub mod square_utils;
 
 // Re-export commonly used functions for convenience
-pub use platform_detection::{get_platform_capabilities, get_best_popcount_impl, get_best_bitscan_impl};
-pub use popcount::{popcount, popcount_optimized, is_single_bit, is_multiple_bits, is_empty};
-pub use bitscan::{
-    bit_scan_forward, bit_scan_reverse, 
-    clear_lsb, clear_msb, isolate_lsb, isolate_msb,
-    get_all_bit_positions, bit_scan_optimized
-};
-pub use lookup_tables::{
-    popcount_4bit_lookup, bit_positions_4bit_lookup, popcount_4bit_optimized,
-    popcount_4bit_small, bit_positions_4bit_small, validate_4bit_lookup_tables
-};
-pub use masks::{
-    get_rank_mask, get_file_mask, get_diagonal_mask,
-    get_rank_from_square, get_file_from_square, get_square_from_rank_file,
-    get_rank_squares, get_file_squares, get_diagonal_squares,
-    same_rank, same_file, same_diagonal, validate_masks
-};
-pub use integration::{
-    BitScanningOptimizer, GlobalOptimizer, GeometricAnalysis
-};
 pub use bit_iterator::{
-    BitIterator, ReverseBitIterator, BitIteratorExt, ReverseBitIteratorExt,
-    bits, bits_from
+    bits, bits_from, BitIterator, BitIteratorExt, ReverseBitIterator, ReverseBitIteratorExt,
 };
 pub use bit_utils::{
-    bit_positions, extract_lsb, extract_msb, lsb_position, msb_position,
-    rotate_left, rotate_right, reverse_bits, overlaps, is_subset,
-    intersection, union, symmetric_difference, complement, difference
+    bit_positions, complement, difference, extract_lsb, extract_msb, intersection, is_subset,
+    lsb_position, msb_position, overlaps, reverse_bits, rotate_left, rotate_right,
+    symmetric_difference, union,
 };
-pub use square_utils::{
-    bit_to_square, square_to_bit, bit_to_coords, coords_to_bit,
-    bit_to_square_name, square_name_to_bit, is_valid_shogi_square,
-    is_promotion_zone, square_distance, promotion_zone_mask,
-    get_center_squares, is_center_square
-};
-pub use cache_opt::{
-    CACHE_LINE_SIZE, CACHE_ALIGNED_SIZE,
-    CacheAlignedPopcountTable, CacheAlignedBitPositionTable,
-    CacheAlignedRankMasks, CacheAlignedFileMasks,
-    prefetch_bitboard, prefetch_bitboard_sequence, process_bitboard_sequence,
-    popcount_cache_optimized, get_bit_positions_cache_optimized
+pub use bitscan::{
+    bit_scan_forward, bit_scan_optimized, bit_scan_reverse, clear_lsb, clear_msb,
+    get_all_bit_positions, isolate_lsb, isolate_msb,
 };
 pub use branch_opt::{
-    optimized::{
-        bit_scan_forward_optimized, bit_scan_reverse_optimized, popcount_optimized as popcount_branch_optimized,
-        overlaps_optimized, is_subset_optimized
-    },
     common_cases::{
-        is_single_piece_optimized, is_multiple_pieces_optimized, is_empty_optimized,
-        is_not_empty_optimized, single_piece_position_optimized
+        is_empty_optimized, is_multiple_pieces_optimized, is_not_empty_optimized,
+        is_single_piece_optimized, single_piece_position_optimized,
     },
-    critical_paths::{
-        popcount_critical, bit_scan_forward_critical
-    }
+    critical_paths::{bit_scan_forward_critical, popcount_critical},
+    optimized::{
+        bit_scan_forward_optimized, bit_scan_reverse_optimized, is_subset_optimized,
+        overlaps_optimized, popcount_optimized as popcount_branch_optimized,
+    },
+};
+pub use cache_opt::{
+    get_bit_positions_cache_optimized, popcount_cache_optimized, prefetch_bitboard,
+    prefetch_bitboard_sequence, process_bitboard_sequence, CacheAlignedBitPositionTable,
+    CacheAlignedFileMasks, CacheAlignedPopcountTable, CacheAlignedRankMasks, CACHE_ALIGNED_SIZE,
+    CACHE_LINE_SIZE,
+};
+pub use integration::{BitScanningOptimizer, GeometricAnalysis, GlobalOptimizer};
+pub use lookup_tables::{
+    bit_positions_4bit_lookup, bit_positions_4bit_small, popcount_4bit_lookup,
+    popcount_4bit_optimized, popcount_4bit_small, validate_4bit_lookup_tables,
+};
+pub use masks::{
+    get_diagonal_mask, get_diagonal_squares, get_file_from_square, get_file_mask, get_file_squares,
+    get_rank_from_square, get_rank_mask, get_rank_squares, get_square_from_rank_file,
+    same_diagonal, same_file, same_rank, validate_masks,
+};
+pub use platform_detection::{
+    get_best_bitscan_impl, get_best_popcount_impl, get_platform_capabilities,
+};
+pub use popcount::{is_empty, is_multiple_bits, is_single_bit, popcount, popcount_optimized};
+pub use square_utils::{
+    bit_to_coords, bit_to_square, bit_to_square_name, coords_to_bit, get_center_squares,
+    is_center_square, is_promotion_zone, is_valid_shogi_square, promotion_zone_mask,
+    square_distance, square_name_to_bit, square_to_bit,
 };
 
 /// Information needed to unmake a move
@@ -171,23 +164,23 @@ impl BitboardBoard {
             ));
             return;
         }
-        
+
         // Debug: Log piece before conversion
         crate::debug_utils::debug_log(&format!(
             "[PLACE_PIECE] Attempting to place {:?} {:?} at row={} col={}",
             piece.player, piece.piece_type, position.row, position.col
         ));
-        
+
         let player_idx = if piece.player == Player::Black { 0 } else { 1 };
-        
+
         // Try to get piece_idx and catch any issue
         let piece_idx = piece.piece_type.to_u8() as usize;
-        
+
         crate::debug_utils::debug_log(&format!(
             "[PLACE_PIECE] Converted piece_type to index: {}",
             piece_idx
         ));
-        
+
         // Validate piece index before array access
         if piece_idx >= 14 {
             crate::debug_utils::debug_log(&format!(
@@ -199,7 +192,7 @@ impl BitboardBoard {
             ));
             return;
         }
-        
+
         set_bit(&mut self.pieces[player_idx][piece_idx], position);
         match piece.player {
             Player::Black => set_bit(&mut self.black_occupied, position),
@@ -215,10 +208,10 @@ impl BitboardBoard {
                 "[REMOVE_PIECE] Removing {:?} {:?} from row={} col={}",
                 piece.player, piece.piece_type, position.row, position.col
             ));
-            
+
             let player_idx = if piece.player == Player::Black { 0 } else { 1 };
             let piece_idx = piece.piece_type.to_u8() as usize;
-            
+
             // Validate piece index
             if piece_idx >= 14 {
                 crate::debug_utils::debug_log(&format!(
@@ -231,7 +224,7 @@ impl BitboardBoard {
                 // Still return the piece but don't update bitboards
                 return Some(piece);
             }
-            
+
             clear_bit(&mut self.pieces[player_idx][piece_idx], position);
             match piece.player {
                 Player::Black => clear_bit(&mut self.black_occupied, position),
@@ -257,7 +250,11 @@ impl BitboardBoard {
     }
 
     pub fn is_square_occupied_by(&self, position: Position, player: Player) -> bool {
-        let occupied = if player == Player::Black { self.black_occupied } else { self.white_occupied };
+        let occupied = if player == Player::Black {
+            self.black_occupied
+        } else {
+            self.white_occupied
+        };
         is_bit_set(occupied, position)
     }
 
@@ -269,7 +266,7 @@ impl BitboardBoard {
                     "[MAKE_MOVE] Moving {:?} from row={} col={} to row={} col={}",
                     piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
                 ));
-                
+
                 self.remove_piece(from);
                 if move_.is_capture {
                     if let Some(cp) = self.remove_piece(move_.to) {
@@ -277,16 +274,19 @@ impl BitboardBoard {
                     }
                 }
                 let final_piece_type = if move_.is_promotion {
-                    piece_to_move.piece_type.promoted_version().unwrap_or(piece_to_move.piece_type)
+                    piece_to_move
+                        .piece_type
+                        .promoted_version()
+                        .unwrap_or(piece_to_move.piece_type)
                 } else {
                     piece_to_move.piece_type
                 };
-                
+
                 crate::debug_utils::debug_log(&format!(
                     "[MAKE_MOVE] Placing {:?} at row={} col={}",
                     final_piece_type, move_.to.row, move_.to.col
                 ));
-                
+
                 self.place_piece(Piece::new(final_piece_type, piece_to_move.player), move_.to);
             }
         } else {
@@ -294,7 +294,7 @@ impl BitboardBoard {
                 "[MAKE_MOVE] Dropping {:?} at row={} col={}",
                 move_.piece_type, move_.to.row, move_.to.col
             ));
-            
+
             self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
         }
         captured_piece
@@ -305,17 +305,17 @@ impl BitboardBoard {
     pub fn make_move_with_info(&mut self, move_: &Move) -> MoveInfo {
         let mut captured_piece = None;
         let mut original_piece_type = move_.piece_type;
-        
+
         if let Some(from) = move_.from {
             if let Some(piece_to_move) = self.get_piece(from).cloned() {
                 // Capture the original piece type before any modifications
                 original_piece_type = piece_to_move.piece_type;
-                
+
                 crate::debug_utils::debug_log(&format!(
                     "[MAKE_MOVE_WITH_INFO] Moving {:?} from row={} col={} to row={} col={}",
                     piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
                 ));
-                
+
                 self.remove_piece(from);
                 if move_.is_capture {
                     if let Some(cp) = self.remove_piece(move_.to) {
@@ -323,16 +323,19 @@ impl BitboardBoard {
                     }
                 }
                 let final_piece_type = if move_.is_promotion {
-                    piece_to_move.piece_type.promoted_version().unwrap_or(piece_to_move.piece_type)
+                    piece_to_move
+                        .piece_type
+                        .promoted_version()
+                        .unwrap_or(piece_to_move.piece_type)
                 } else {
                     piece_to_move.piece_type
                 };
-                
+
                 crate::debug_utils::debug_log(&format!(
                     "[MAKE_MOVE_WITH_INFO] Placing {:?} at row={} col={}",
                     final_piece_type, move_.to.row, move_.to.col
                 ));
-                
+
                 self.place_piece(Piece::new(final_piece_type, piece_to_move.player), move_.to);
             }
         } else {
@@ -341,10 +344,10 @@ impl BitboardBoard {
                 "[MAKE_MOVE_WITH_INFO] Dropping {:?} at row={} col={}",
                 move_.piece_type, move_.to.row, move_.to.col
             ));
-            
+
             self.place_piece(Piece::new(move_.piece_type, move_.player), move_.to);
         }
-        
+
         MoveInfo::new(
             original_piece_type,
             move_.from,
@@ -386,22 +389,30 @@ impl BitboardBoard {
     pub fn is_king_in_check(&self, player: Player, _captured_pieces: &CapturedPieces) -> bool {
         if let Some(king_pos) = self.find_king_position(player) {
             let is_attacked = self.is_square_attacked_by(king_pos, player.opposite());
-            crate::debug_utils::debug_log(&format!("[IS_KING_IN_CHECK] Player: {:?}, King at: {}{}, Attacked: {}", 
-                player, 
-                (b'a' + king_pos.col) as char, 
+            crate::debug_utils::debug_log(&format!(
+                "[IS_KING_IN_CHECK] Player: {:?}, King at: {}{}, Attacked: {}",
+                player,
+                (b'a' + king_pos.col) as char,
                 9 - king_pos.row,
                 is_attacked
             ));
             return is_attacked;
         }
-        crate::debug_utils::debug_log(&format!("[IS_KING_IN_CHECK] Player: {:?}, No king found!", player));
+        crate::debug_utils::debug_log(&format!(
+            "[IS_KING_IN_CHECK] Player: {:?}, No king found!",
+            player
+        ));
         false
     }
 
     pub fn find_king_position(&self, player: Player) -> Option<Position> {
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let king_bb = self.pieces[player_idx][PieceType::King.to_u8() as usize];
-        if king_bb == 0 { None } else { get_lsb(king_bb) }
+        if king_bb == 0 {
+            None
+        } else {
+            get_lsb(king_bb)
+        }
     }
 
     pub fn is_square_attacked_by(&self, target_pos: Position, attacking_player: Player) -> bool {
@@ -413,9 +424,10 @@ impl BitboardBoard {
                     if piece.player == attacking_player {
                         // Check if this piece attacks the target_pos directly
                         if self.piece_attacks_square(piece, from_pos, target_pos) {
-                            crate::debug_utils::debug_log(&format!("[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}", 
+                            crate::debug_utils::debug_log(&format!(
+                                "[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}",
                                 piece.piece_type,
-                                (b'a' + from_pos.col) as char, 
+                                (b'a' + from_pos.col) as char,
                                 9 - from_pos.row
                             ));
                             return true;
@@ -428,9 +440,14 @@ impl BitboardBoard {
     }
 
     // Direct attack checking without move generation
-    fn piece_attacks_square(&self, piece: &Piece, from_pos: Position, target_pos: Position) -> bool {
+    fn piece_attacks_square(
+        &self,
+        piece: &Piece,
+        from_pos: Position,
+        target_pos: Position,
+    ) -> bool {
         let player = piece.player;
-        
+
         // Early bounds check
         if from_pos.row >= 9 || from_pos.col >= 9 || target_pos.row >= 9 || target_pos.col >= 9 {
             return false;
@@ -445,7 +462,7 @@ impl BitboardBoard {
                     return attack_pos == target_pos;
                 }
                 false
-            },
+            }
             PieceType::Knight => {
                 let dir: i8 = if player == Player::Black { 1 } else { -1 };
                 let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
@@ -460,72 +477,81 @@ impl BitboardBoard {
                     }
                 }
                 false
-            },
+            }
             PieceType::Lance => {
                 let dir: i8 = if player == Player::Black { 1 } else { -1 };
                 self.check_ray_attack(from_pos, target_pos, (dir, 0))
-            },
+            }
             PieceType::Rook => {
-                self.check_ray_attack(from_pos, target_pos, (1, 0)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, 0)) ||
-                self.check_ray_attack(from_pos, target_pos, (0, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (0, -1))
-            },
+                self.check_ray_attack(from_pos, target_pos, (1, 0))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, 0))
+                    || self.check_ray_attack(from_pos, target_pos, (0, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (0, -1))
+            }
             PieceType::Bishop => {
-                self.check_ray_attack(from_pos, target_pos, (1, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (1, -1)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, -1))
-            },
+                self.check_ray_attack(from_pos, target_pos, (1, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (1, -1))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, -1))
+            }
             PieceType::PromotedBishop => {
                 // Bishop + King moves
-                self.check_ray_attack(from_pos, target_pos, (1, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (1, -1)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, -1)) ||
-                self.check_king_attack(from_pos, target_pos, player)
-            },
+                self.check_ray_attack(from_pos, target_pos, (1, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (1, -1))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, -1))
+                    || self.check_king_attack(from_pos, target_pos, player)
+            }
             PieceType::PromotedRook => {
                 // Rook + King moves
-                self.check_ray_attack(from_pos, target_pos, (1, 0)) ||
-                self.check_ray_attack(from_pos, target_pos, (-1, 0)) ||
-                self.check_ray_attack(from_pos, target_pos, (0, 1)) ||
-                self.check_ray_attack(from_pos, target_pos, (0, -1)) ||
-                self.check_king_attack(from_pos, target_pos, player)
-            },
-            PieceType::Silver | PieceType::Gold | PieceType::King | PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => {
-                self.check_king_attack(from_pos, target_pos, player)
+                self.check_ray_attack(from_pos, target_pos, (1, 0))
+                    || self.check_ray_attack(from_pos, target_pos, (-1, 0))
+                    || self.check_ray_attack(from_pos, target_pos, (0, 1))
+                    || self.check_ray_attack(from_pos, target_pos, (0, -1))
+                    || self.check_king_attack(from_pos, target_pos, player)
             }
+            PieceType::Silver
+            | PieceType::Gold
+            | PieceType::King
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => self.check_king_attack(from_pos, target_pos, player),
         }
     }
 
     // Check if a ray from from_pos in direction (dr, dc) hits target_pos
-    fn check_ray_attack(&self, from_pos: Position, target_pos: Position, direction: (i8, i8)) -> bool {
+    fn check_ray_attack(
+        &self,
+        from_pos: Position,
+        target_pos: Position,
+        direction: (i8, i8),
+    ) -> bool {
         let (dr, dc) = direction;
         let mut current_pos = from_pos;
-        
+
         loop {
             let new_row = current_pos.row as i8 + dr;
             let new_col = current_pos.col as i8 + dc;
-            
+
             // Out of bounds
             if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
                 break;
             }
-            
+
             current_pos = Position::new(new_row as u8, new_col as u8);
-            
+
             // Found target
             if current_pos == target_pos {
                 return true;
             }
-            
+
             // Blocked by a piece
             if self.is_square_occupied(current_pos) {
                 break;
             }
         }
-        
+
         false
     }
 
@@ -533,11 +559,10 @@ impl BitboardBoard {
     fn check_king_attack(&self, from_pos: Position, target_pos: Position, _player: Player) -> bool {
         let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
         let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
-        
+
         // King attacks adjacent squares (including diagonals)
         row_diff <= 1 && col_diff <= 1 && (row_diff != 0 || col_diff != 0)
     }
-
 
     pub fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
         let mut temp_board = self.clone();
@@ -547,18 +572,22 @@ impl BitboardBoard {
         }
         !temp_board.is_king_in_check(move_.player, &temp_captured)
     }
-    
+
     pub fn is_checkmate(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
-        self.is_king_in_check(player, captured_pieces) && !self.has_legal_moves(player, captured_pieces)
+        self.is_king_in_check(player, captured_pieces)
+            && !self.has_legal_moves(player, captured_pieces)
     }
 
     pub fn is_stalemate(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
-        !self.is_king_in_check(player, captured_pieces) && !self.has_legal_moves(player, captured_pieces)
+        !self.is_king_in_check(player, captured_pieces)
+            && !self.has_legal_moves(player, captured_pieces)
     }
 
     fn has_legal_moves(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
         let move_generator = crate::moves::MoveGenerator::new();
-        !move_generator.generate_legal_moves(self, player, captured_pieces).is_empty()
+        !move_generator
+            .generate_legal_moves(self, player, captured_pieces)
+            .is_empty()
     }
 
     /// Check if both kings are in their opponent's promotion zone (impasse condition)
@@ -566,19 +595,19 @@ impl BitboardBoard {
     pub fn is_impasse_condition(&self) -> bool {
         let black_king_pos = self.find_king_position(Player::Black);
         let white_king_pos = self.find_king_position(Player::White);
-        
+
         if let (Some(black_pos), Some(white_pos)) = (black_king_pos, white_king_pos) {
             // Black king in white's camp (ranks 0-2) AND white king in black's camp (ranks 6-8)
             return black_pos.row <= 2 && white_pos.row >= 6;
         }
         false
     }
-    
+
     /// Count points for impasse resolution using the 24-point rule
     /// King = 0, Rook/Dragon = 5, Bishop/Horse = 5, all others = 1
     pub fn count_impasse_points(&self, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         let mut points = 0;
-        
+
         // Count pieces on board
         for (_, piece) in &self.piece_positions {
             if piece.player == player {
@@ -590,13 +619,13 @@ impl BitboardBoard {
                 };
             }
         }
-        
+
         // Count captured pieces (pieces in hand)
         let hand_pieces = match player {
             Player::Black => &captured_pieces.black,
             Player::White => &captured_pieces.white,
         };
-        
+
         for piece_type in hand_pieces {
             points += match piece_type {
                 PieceType::Rook => 5,
@@ -604,10 +633,10 @@ impl BitboardBoard {
                 _ => 1,
             };
         }
-        
+
         points
     }
-    
+
     /// Check impasse result and return the outcome
     /// Returns None if not an impasse condition
     /// Both players need 24+ points for a draw, otherwise the player with fewer points loses
@@ -615,10 +644,10 @@ impl BitboardBoard {
         if !self.is_impasse_condition() {
             return None;
         }
-        
+
         let black_points = self.count_impasse_points(Player::Black, captured_pieces);
         let white_points = self.count_impasse_points(Player::White, captured_pieces);
-        
+
         let outcome = if black_points >= 24 && white_points >= 24 {
             ImpasseOutcome::Draw
         } else if black_points < 24 {
@@ -626,7 +655,7 @@ impl BitboardBoard {
         } else {
             ImpasseOutcome::BlackWins
         };
-        
+
         Some(ImpasseResult {
             black_points,
             white_points,
@@ -653,15 +682,25 @@ impl BitboardBoard {
             if empty_squares > 0 {
                 fen.push_str(&empty_squares.to_string());
             }
-            if r < 8 { fen.push('/'); }
+            if r < 8 {
+                fen.push('/');
+            }
         }
         fen.push(' ');
         fen.push(if player == Player::Black { 'b' } else { 'w' });
         fen.push(' ');
         let mut captured_str = String::new();
-        for p in &captured_pieces.black { captured_str.push_str(&Piece::new(*p, Player::Black).to_fen_char()); }
-        for p in &captured_pieces.white { captured_str.push_str(&Piece::new(*p, Player::White).to_fen_char()); }
-        if captured_str.is_empty() { fen.push('-'); } else { fen.push_str(&captured_str); }
+        for p in &captured_pieces.black {
+            captured_str.push_str(&Piece::new(*p, Player::Black).to_fen_char());
+        }
+        for p in &captured_pieces.white {
+            captured_str.push_str(&Piece::new(*p, Player::White).to_fen_char());
+        }
+        if captured_str.is_empty() {
+            fen.push('-');
+        } else {
+            fen.push_str(&captured_str);
+        }
         fen
     }
 
@@ -685,33 +724,82 @@ impl BitboardBoard {
             let mut c = 0;
             let mut chars = rank_str.chars().peekable();
             while let Some(ch) = chars.next() {
-                if c >= 9 { return Err("Invalid FEN: rank has more than 9 files"); }
+                if c >= 9 {
+                    return Err("Invalid FEN: rank has more than 9 files");
+                }
                 if let Some(digit) = ch.to_digit(10) {
                     c += digit as usize;
                 } else {
-                    let is_promoted = ch == '+' ;
+                    let is_promoted = ch == '+';
                     let piece_char = if is_promoted {
-                        if let Some(next_ch) = chars.next() { next_ch } else { return Err("Invalid FEN: '+' must be followed by a piece"); }
+                        if let Some(next_ch) = chars.next() {
+                            next_ch
+                        } else {
+                            return Err("Invalid FEN: '+' must be followed by a piece");
+                        }
                     } else {
                         ch
                     };
 
-                    let player = if piece_char.is_uppercase() { Player::Black } else { Player::White };
+                    let player = if piece_char.is_uppercase() {
+                        Player::Black
+                    } else {
+                        Player::White
+                    };
                     let piece_type_char = piece_char.to_ascii_lowercase();
-                    
+
                     let piece_type = match piece_type_char {
-                        'p' => if is_promoted { PieceType::PromotedPawn } else { PieceType::Pawn },
-                        'l' => if is_promoted { PieceType::PromotedLance } else { PieceType::Lance },
-                        'n' => if is_promoted { PieceType::PromotedKnight } else { PieceType::Knight },
-                        's' => if is_promoted { PieceType::PromotedSilver } else { PieceType::Silver },
+                        'p' => {
+                            if is_promoted {
+                                PieceType::PromotedPawn
+                            } else {
+                                PieceType::Pawn
+                            }
+                        }
+                        'l' => {
+                            if is_promoted {
+                                PieceType::PromotedLance
+                            } else {
+                                PieceType::Lance
+                            }
+                        }
+                        'n' => {
+                            if is_promoted {
+                                PieceType::PromotedKnight
+                            } else {
+                                PieceType::Knight
+                            }
+                        }
+                        's' => {
+                            if is_promoted {
+                                PieceType::PromotedSilver
+                            } else {
+                                PieceType::Silver
+                            }
+                        }
                         'g' => PieceType::Gold,
-                        'b' => if is_promoted { PieceType::PromotedBishop } else { PieceType::Bishop },
-                        'r' => if is_promoted { PieceType::PromotedRook } else { PieceType::Rook },
+                        'b' => {
+                            if is_promoted {
+                                PieceType::PromotedBishop
+                            } else {
+                                PieceType::Bishop
+                            }
+                        }
+                        'r' => {
+                            if is_promoted {
+                                PieceType::PromotedRook
+                            } else {
+                                PieceType::Rook
+                            }
+                        }
                         'k' => PieceType::King,
                         _ => return Err("Invalid FEN: unknown piece character"),
                     };
-                    
-                    board.place_piece(Piece::new(piece_type, player), Position::new(r as u8, c as u8));
+
+                    board.place_piece(
+                        Piece::new(piece_type, player),
+                        Position::new(r as u8, c as u8),
+                    );
                     c += 1;
                 }
             }
@@ -731,7 +819,11 @@ impl BitboardBoard {
                 if let Some(digit) = ch.to_digit(10) {
                     count = digit;
                 } else {
-                    let hand_player = if ch.is_uppercase() { Player::Black } else { Player::White };
+                    let hand_player = if ch.is_uppercase() {
+                        Player::Black
+                    } else {
+                        Player::White
+                    };
                     let piece_type = match ch.to_ascii_lowercase() {
                         'p' => PieceType::Pawn,
                         'l' => PieceType::Lance,
@@ -807,7 +899,8 @@ impl BitboardBoard {
         piece_type: PieceType,
         player: Player,
     ) -> Bitboard {
-        self.attack_tables.get_attack_pattern(square.to_u8(), piece_type, player)
+        self.attack_tables
+            .get_attack_pattern(square.to_u8(), piece_type, player)
     }
 
     /// Check if a square is attacked by a piece using precomputed tables
@@ -818,7 +911,12 @@ impl BitboardBoard {
         piece_type: PieceType,
         player: Player,
     ) -> bool {
-        self.attack_tables.is_square_attacked(from_square.to_u8(), to_square.to_u8(), piece_type, player)
+        self.attack_tables.is_square_attacked(
+            from_square.to_u8(),
+            to_square.to_u8(),
+            piece_type,
+            player,
+        )
     }
 
     /// Get attack table statistics and metadata
@@ -827,11 +925,7 @@ impl BitboardBoard {
     }
 
     /// Get attack pattern for a square using magic bitboards
-    pub fn get_attack_pattern(
-        &self,
-        square: Position,
-        piece_type: PieceType
-    ) -> Bitboard {
+    pub fn get_attack_pattern(&self, square: Position, piece_type: PieceType) -> Bitboard {
         if let Some(ref magic_table) = self.magic_table {
             magic_table.get_attacks(square.to_index(), piece_type, self.occupied)
         } else {
@@ -841,7 +935,11 @@ impl BitboardBoard {
     }
 
     /// Generate attack pattern using ray-casting (fallback method)
-    fn generate_attack_pattern_raycast(&self, _square: Position, _piece_type: PieceType) -> Bitboard {
+    fn generate_attack_pattern_raycast(
+        &self,
+        _square: Position,
+        _piece_type: PieceType,
+    ) -> Bitboard {
         // Placeholder implementation - would use the existing ray-casting logic
         EMPTY_BITBOARD
     }
@@ -869,9 +967,15 @@ impl BitboardBoard {
     }
 
     /// Initialize sliding move generator with custom settings
-    pub fn init_sliding_generator_with_settings(&mut self, magic_enabled: bool) -> Result<(), crate::types::MagicError> {
+    pub fn init_sliding_generator_with_settings(
+        &mut self,
+        magic_enabled: bool,
+    ) -> Result<(), crate::types::MagicError> {
         if let Some(magic_table) = self.magic_table.take() {
-            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::with_settings(magic_table, magic_enabled));
+            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::with_settings(
+                magic_table,
+                magic_enabled,
+            ));
             Ok(())
         } else {
             Err(crate::types::MagicError::InitializationFailed {
@@ -898,9 +1002,9 @@ impl BitboardBoard {
         piece_type: PieceType,
         player: Player,
     ) -> Option<Vec<Move>> {
-        self.sliding_generator.as_ref().map(|gen| {
-            gen.generate_sliding_moves(self, from, piece_type, player)
-        })
+        self.sliding_generator
+            .as_ref()
+            .map(|gen| gen.generate_sliding_moves(self, from, piece_type, player))
     }
 
     /// Get occupied bitboard
@@ -926,7 +1030,7 @@ impl BoardTrait for BitboardBoard {
     fn get_piece_at(&self, position: Position) -> Option<Piece> {
         self.get_piece(position).cloned()
     }
-    
+
     fn get_all_pieces(&self) -> Vec<(Position, Piece)> {
         let mut pieces = Vec::new();
         for (pos, piece) in &self.piece_positions {
@@ -934,116 +1038,120 @@ impl BoardTrait for BitboardBoard {
         }
         pieces
     }
-    
+
     fn count_pieces(&self, piece_type: PieceType, player: Player) -> usize {
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let piece_idx = piece_type.to_u8() as usize;
         popcount(self.pieces[player_idx][piece_idx]) as usize
     }
-    
+
     fn is_square_occupied(&self, position: Position) -> bool {
         self.is_square_occupied(position)
     }
-    
+
     fn is_square_occupied_by_player(&self, position: Position, player: Player) -> bool {
         self.is_square_occupied_by(position, player)
     }
-    
+
     fn get_occupied_bitboard_for_player(&self, player: Player) -> Bitboard {
         match player {
             Player::Black => self.black_occupied,
             Player::White => self.white_occupied,
         }
     }
-    
+
     fn get_occupied_bitboard(&self) -> Bitboard {
         self.occupied
     }
-    
+
     fn is_valid_position(&self) -> bool {
         // Check for exactly one king per player
         let black_kings = self.count_pieces(PieceType::King, Player::Black);
         let white_kings = self.count_pieces(PieceType::King, Player::White);
         black_kings == 1 && white_kings == 1
     }
-    
+
     fn get_side_to_move(&self) -> Player {
         // Default to Black - this should be managed by the game state
         Player::Black
     }
-    
+
     fn get_repetition_state(&self) -> RepetitionState {
         // Default to no repetition - this should be managed by the game state
         RepetitionState::None
     }
-    
+
     fn get_captured_pieces(&self, _player: Player) -> Vec<PieceType> {
         // This method requires access to CapturedPieces, which is not stored in BitboardBoard
         // We'll return an empty vector for now - this should be managed by the game state
         Vec::new()
     }
-    
+
     fn get_captured_pieces_count(&self, _player: Player) -> usize {
         // This method requires access to CapturedPieces, which is not stored in BitboardBoard
         // We'll return 0 for now - this should be managed by the game state
         0
     }
-    
+
     fn get_captured_piece_count(&self, _piece_type: PieceType, _player: Player) -> usize {
         // This method requires access to CapturedPieces, which is not stored in BitboardBoard
         // We'll return 0 for now - this should be managed by the game state
         0
     }
-    
+
     fn has_captured_piece(&self, _piece_type: PieceType, _player: Player) -> bool {
         // This method requires access to CapturedPieces, which is not stored in BitboardBoard
         // We'll return false for now - this should be managed by the game state
         false
     }
-    
+
     fn get_position_id(&self) -> u64 {
         // Use a simple hash based on piece positions
         let mut hash = 0u64;
         for (pos, piece) in &self.piece_positions {
             hash ^= (pos.row as u64) << 32 | (pos.col as u64);
-            hash ^= (piece.piece_type.to_u8() as u64) << 16 | (match piece.player { Player::Black => 0, Player::White => 1 } as u64);
+            hash ^= (piece.piece_type.to_u8() as u64) << 16
+                | (match piece.player {
+                    Player::Black => 0,
+                    Player::White => 1,
+                } as u64);
         }
         hash
     }
-    
+
     fn clone_board(&self) -> Self {
         self.clone()
     }
-    
+
     fn is_terminal_position(&self, captured_pieces: &CapturedPieces) -> bool {
         // Check for checkmate or stalemate
-        self.is_checkmate(Player::Black, captured_pieces) ||
-        self.is_checkmate(Player::White, captured_pieces) ||
-        self.is_stalemate(Player::Black, captured_pieces) ||
-        self.is_stalemate(Player::White, captured_pieces)
+        self.is_checkmate(Player::Black, captured_pieces)
+            || self.is_checkmate(Player::White, captured_pieces)
+            || self.is_stalemate(Player::Black, captured_pieces)
+            || self.is_stalemate(Player::White, captured_pieces)
     }
-    
+
     fn get_game_phase(&self) -> GamePhase {
         let _total_pieces = BoardTraitExt::get_total_piece_count(self);
         let material_count = self.get_total_material_count();
         GamePhase::from_material_count(material_count)
     }
-    
+
     fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {
         self.is_legal_move(move_, captured_pieces)
     }
-    
+
     fn get_king_position(&self, player: Player) -> Option<Position> {
         self.find_king_position(player)
     }
-    
+
     fn is_king_in_check(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
         self.is_king_in_check(player, captured_pieces)
     }
-    
+
     fn get_material_balance(&self, player: Player) -> i32 {
         let mut balance = 0;
-        
+
         // Calculate material balance for the current player
         for (_, piece) in &self.piece_positions {
             let value = piece.piece_type.base_value();
@@ -1053,38 +1161,44 @@ impl BoardTrait for BitboardBoard {
                 balance -= value;
             }
         }
-        
+
         balance
     }
-    
+
     fn get_total_material_count(&self) -> u32 {
         self.piece_positions.len() as u32
     }
-    
+
     fn is_in_promotion_zone(&self, position: Position, player: Player) -> bool {
         match player {
             Player::Black => position.row >= 6, // Black promotes in ranks 6-8
             Player::White => position.row <= 2, // White promotes in ranks 0-2
         }
     }
-    
+
     fn get_drop_moves(&self, _piece_type: PieceType, _player: Player) -> Vec<Move> {
         // This method requires access to CapturedPieces, which is not stored in BitboardBoard
         // We'll return an empty vector for now - this should be managed by the game state
         Vec::new()
     }
-    
-    fn is_legal_drop(&self, piece_type: PieceType, position: Position, player: Player, captured_pieces: &CapturedPieces) -> bool {
+
+    fn is_legal_drop(
+        &self,
+        piece_type: PieceType,
+        position: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
         // Check if the square is empty
         if self.is_square_occupied(position) {
             return false;
         }
-        
+
         // Check if the player has the piece in hand
         if captured_pieces.count(piece_type, player) == 0 {
             return false;
         }
-        
+
         // Check piece-specific drop rules
         match piece_type {
             PieceType::Pawn => {
@@ -1093,37 +1207,55 @@ impl BoardTrait for BitboardBoard {
                     Player::Black => position.row < 8,
                     Player::White => position.row > 0,
                 }
-            },
+            }
             PieceType::Lance => {
                 // Lance cannot be dropped in the last rank
                 match player {
                     Player::Black => position.row < 8,
                     Player::White => position.row > 0,
                 }
-            },
+            }
             PieceType::Knight => {
                 // Knight cannot be dropped in the last two ranks
                 match player {
                     Player::Black => position.row < 7,
                     Player::White => position.row > 1,
                 }
-            },
+            }
             _ => true, // Other pieces can be dropped anywhere
         }
     }
-    
+
     fn get_position_hash(&self, captured_pieces: &CapturedPieces) -> u64 {
         // Use the Zobrist hasher to compute the hash
         use crate::search::zobrist::ZobristHasher;
         let hasher = ZobristHasher::new();
-        hasher.hash_position(self, self.get_side_to_move(), captured_pieces, self.get_repetition_state())
+        hasher.hash_position(
+            self,
+            self.get_side_to_move(),
+            captured_pieces,
+            self.get_repetition_state(),
+        )
     }
-    
-    fn update_hash_for_move(&self, current_hash: u64, move_: &Move, captured_pieces_before: &CapturedPieces, captured_pieces_after: &CapturedPieces) -> u64 {
+
+    fn update_hash_for_move(
+        &self,
+        current_hash: u64,
+        move_: &Move,
+        captured_pieces_before: &CapturedPieces,
+        captured_pieces_after: &CapturedPieces,
+    ) -> u64 {
         // Use the Zobrist hasher to update the hash
         use crate::search::zobrist::ZobristHasher;
         let hasher = ZobristHasher::new();
-        hasher.update_hash_for_move(current_hash, move_, self, self, captured_pieces_before, captured_pieces_after)
+        hasher.update_hash_for_move(
+            current_hash,
+            move_,
+            self,
+            self,
+            captured_pieces_before,
+            captured_pieces_after,
+        )
     }
 }
 
@@ -1149,13 +1281,15 @@ struct AttackPatterns {
 }
 
 impl AttackPatterns {
-    fn new() -> Self { Self {} }
+    fn new() -> Self {
+        Self {}
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Player, PieceType, CapturedPieces, Position};
+    use crate::types::{CapturedPieces, PieceType, Player, Position};
 
     #[test]
     fn test_from_fen_startpos() {
@@ -1174,7 +1308,7 @@ mod tests {
         let white_king = board.get_piece(Position::new(0, 4)).unwrap();
         assert_eq!(white_king.piece_type, PieceType::King);
         assert_eq!(white_king.player, Player::White);
-        
+
         let black_pawn = board.get_piece(Position::new(6, 4)).unwrap();
         assert_eq!(black_pawn.piece_type, PieceType::Pawn);
         assert_eq!(black_pawn.player, Player::Black);
@@ -1188,10 +1322,38 @@ mod tests {
         assert_eq!(player, Player::White);
 
         // Check captured pieces
-        assert_eq!(captured.black.iter().filter(|&&p| p == PieceType::Silver).count(), 1);
-        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Pawn).count(), 3);
-        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Knight).count(), 1);
-        assert_eq!(captured.white.iter().filter(|&&p| p == PieceType::Gold).count(), 1);
+        assert_eq!(
+            captured
+                .black
+                .iter()
+                .filter(|&&p| p == PieceType::Silver)
+                .count(),
+            1
+        );
+        assert_eq!(
+            captured
+                .white
+                .iter()
+                .filter(|&&p| p == PieceType::Pawn)
+                .count(),
+            3
+        );
+        assert_eq!(
+            captured
+                .white
+                .iter()
+                .filter(|&&p| p == PieceType::Knight)
+                .count(),
+            1
+        );
+        assert_eq!(
+            captured
+                .white
+                .iter()
+                .filter(|&&p| p == PieceType::Gold)
+                .count(),
+            1
+        );
 
         // Spot check a few pieces on board
         let promoted_rook = board.get_piece(Position::new(1, 2)).unwrap();
