@@ -119,6 +119,9 @@ impl RuntimeConfigurationManager {
             enable_statistics: true,
             collision_strategy: CollisionStrategy::Overwrite,
             validate_hash_keys: false,
+            bucket_count: 512,
+            depth_weight: 4.0,
+            age_weight: 1.0,
         });
         
         self.templates.insert("low_memory".to_string(), TranspositionConfig {
@@ -132,6 +135,9 @@ impl RuntimeConfigurationManager {
             enable_statistics: false,
             collision_strategy: CollisionStrategy::Overwrite,
             validate_hash_keys: false,
+            bucket_count: 64,
+            depth_weight: 4.0,
+            age_weight: 1.0,
         });
         
         self.templates.insert("balanced".to_string(), TranspositionConfig {
@@ -145,6 +151,9 @@ impl RuntimeConfigurationManager {
             enable_statistics: true,
             collision_strategy: CollisionStrategy::Overwrite,
             validate_hash_keys: false,
+            bucket_count: 256,
+            depth_weight: 4.0,
+            age_weight: 1.0,
         });
     }
     
@@ -218,6 +227,9 @@ impl RuntimeConfigurationManager {
                 enable_statistics: target_config.enable_statistics,
                 collision_strategy: target_config.collision_strategy,
                 validate_hash_keys: target_config.validate_hash_keys,
+                bucket_count: target_config.bucket_count,
+                depth_weight: target_config.depth_weight,
+                age_weight: target_config.age_weight,
             };
             
             if step == steps {

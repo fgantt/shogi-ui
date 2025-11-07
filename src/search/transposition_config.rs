@@ -74,6 +74,14 @@ pub struct TranspositionConfig {
     pub collision_strategy: CollisionStrategy,
     /// Whether to validate hash keys on probe
     pub validate_hash_keys: bool,
+    /// Number of lock buckets for parallel write performance (must be power of 2)
+    /// Higher values reduce contention but increase memory overhead
+    /// Recommended: 256 for 4-8 threads, 512 for 16+ threads
+    pub bucket_count: usize,
+    /// Weight for depth in depth-and-age replacement policy
+    pub depth_weight: f64,
+    /// Weight for age in depth-and-age replacement policy
+    pub age_weight: f64,
 }
 
 /// Strategy for handling hash collisions
@@ -106,6 +114,9 @@ impl Default for TranspositionConfig {
             enable_statistics: true,
             collision_strategy: CollisionStrategy::default(),
             validate_hash_keys: true,
+            bucket_count: 256, // 256 buckets for good 4-8 thread scaling
+            depth_weight: 4.0, // Depth is 4× more important than age
+            age_weight: 1.0,
         }
     }
 }
@@ -129,6 +140,9 @@ impl TranspositionConfig {
             enable_statistics: false,
             collision_strategy: CollisionStrategy::Overwrite,
             validate_hash_keys: false,
+            bucket_count: 128, // Fewer buckets for memory savings
+            depth_weight: 4.0,
+            age_weight: 1.0,
         }
     }
     
@@ -145,6 +159,9 @@ impl TranspositionConfig {
             enable_statistics: true,
             collision_strategy: CollisionStrategy::UseReplacementPolicy,
             validate_hash_keys: true,
+            bucket_count: 512, // More buckets for better high-thread scaling
+            depth_weight: 4.0,
+            age_weight: 1.0,
         }
     }
     
@@ -161,6 +178,9 @@ impl TranspositionConfig {
             enable_statistics: true,
             collision_strategy: CollisionStrategy::Overwrite,
             validate_hash_keys: true,
+            bucket_count: 16, // Small bucket count for testing
+            depth_weight: 4.0,
+            age_weight: 1.0,
         }
     }
     
@@ -195,6 +215,20 @@ impl TranspositionConfig {
         // Check max age is reasonable
         if self.max_age > 10000 {
             return Err(ConfigError::MaxAgeTooLarge(self.max_age));
+        }
+        
+        // Check bucket count is power of 2
+        if !self.bucket_count.is_power_of_two() {
+            return Err(ConfigError::InvalidParameter(format!(
+                "Bucket count must be a power of 2, got {}", self.bucket_count
+            )));
+        }
+        
+        // Check bucket count is reasonable (1-4096)
+        if self.bucket_count < 1 || self.bucket_count > 4096 {
+            return Err(ConfigError::InvalidParameter(format!(
+                "Bucket count must be between 1 and 4096, got {}", self.bucket_count
+            )));
         }
         
         Ok(())
@@ -407,6 +441,7 @@ pub enum ConfigError {
     TableSizeTooLarge(usize),
     MemoryLimitExceeded { estimated: usize, limit: usize },
     MaxAgeTooLarge(u32),
+    InvalidParameter(String),
     FileReadError(String),
     FileWriteError(String),
     ParseError(String),
@@ -430,6 +465,9 @@ impl std::fmt::Display for ConfigError {
             }
             ConfigError::MaxAgeTooLarge(age) => {
                 write!(f, "Max age {} is too large (maximum 10000)", age)
+            }
+            ConfigError::InvalidParameter(msg) => {
+                write!(f, "Invalid parameter: {}", msg)
             }
             ConfigError::FileReadError(msg) => {
                 write!(f, "Failed to read configuration file: {}", msg)

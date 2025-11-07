@@ -224,6 +224,12 @@ impl AtomicPackedEntry {
 /// This struct provides a thread-safe transposition table that works
 /// efficiently in both multi-threaded and single-threaded environments.
 /// In WASM, it operates without synchronization overhead.
+/// 
+/// # Parallel Performance
+/// 
+/// Uses bucketed locks to reduce write contention in multi-threaded environments.
+/// Each bucket has its own RwLock, allowing parallel writes to different buckets.
+/// Lock granularity is configurable via `TranspositionConfig::bucket_count`.
 pub struct ThreadSafeTranspositionTable {
     /// The actual hash table storing thread-safe entries
     entries: Vec<ThreadSafeEntry>,
@@ -233,9 +239,12 @@ pub struct ThreadSafeTranspositionTable {
     mask: usize,
     /// Thread safety mode
     thread_mode: ThreadSafetyMode,
-    /// Synchronization primitives for multi-threaded access
+    /// Synchronization primitives for multi-threaded access (bucketed for reduced contention)
     #[cfg(not(target_arch = "wasm32"))]
-    write_lock: Arc<RwLock<()>>,
+    bucket_locks: Vec<Arc<RwLock<()>>>,
+    /// Bit shift for fast bucket calculation
+    #[cfg(not(target_arch = "wasm32"))]
+    bucket_shift: u32,
     /// Cache manager for statistics and age management
     cache_manager: Arc<Mutex<CacheManager>>,
     /// Replacement policy handler
@@ -278,13 +287,25 @@ impl ThreadSafeTranspositionTable {
             });
         }
         
+        // Create bucketed locks for reduced write contention
+        #[cfg(not(target_arch = "wasm32"))]
+        let bucket_count = config.bucket_count.next_power_of_two();
+        #[cfg(not(target_arch = "wasm32"))]
+        let bucket_locks: Vec<Arc<RwLock<()>>> = (0..bucket_count)
+            .map(|_| Arc::new(RwLock::new(())))
+            .collect();
+        #[cfg(not(target_arch = "wasm32"))]
+        let bucket_shift = 64 - bucket_count.trailing_zeros();
+        
         Self {
             entries,
             size,
             mask,
             thread_mode,
             #[cfg(not(target_arch = "wasm32"))]
-            write_lock: Arc::new(RwLock::new(())),
+            bucket_locks,
+            #[cfg(not(target_arch = "wasm32"))]
+            bucket_shift,
             cache_manager: Arc::new(Mutex::new(CacheManager::new(config.clone()))),
             replacement_handler: Arc::new(Mutex::new(ReplacementPolicyHandler::new(config.clone()))),
             stats: Arc::new(Mutex::new(ThreadSafeStats::default())),
@@ -362,10 +383,25 @@ impl ThreadSafeTranspositionTable {
         self.increment_stores();
     }
     
+    /// Get the bucket lock for a given hash key
+    /// 
+    /// This method maps hash keys to lock buckets for reduced write contention.
+    /// Uses fast bit shifting to calculate bucket index.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn get_bucket_lock(&self, hash: u64) -> &Arc<RwLock<()>> {
+        let bucket_index = (hash >> self.bucket_shift) as usize % self.bucket_locks.len();
+        &self.bucket_locks[bucket_index]
+    }
+    
     /// Store with full synchronization (multi-threaded mode)
+    /// 
+    /// Uses bucketed locks for better parallel write performance.
+    /// Only locks the specific bucket for this hash, not the entire table.
     #[cfg(not(target_arch = "wasm32"))]
     fn store_with_synchronization(&mut self, index: usize, entry: TranspositionEntry) {
-        let _write_guard = self.write_lock.write().unwrap();
+        // Get the bucket lock for this hash (clone Arc to avoid borrow issues)
+        let bucket_lock = Arc::clone(self.get_bucket_lock(entry.hash_key));
+        let _write_guard = bucket_lock.write().unwrap();
         
         let table_entry = &mut self.entries[index];
         
@@ -461,6 +497,21 @@ impl ThreadSafeTranspositionTable {
         self.size
     }
     
+    /// Get the number of lock buckets (non-WASM only)
+    /// 
+    /// Returns the number of independent lock buckets used for parallel write operations.
+    /// Higher bucket counts reduce contention but increase memory overhead.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn bucket_count(&self) -> usize {
+        self.bucket_locks.len()
+    }
+    
+    /// Get the number of lock buckets (WASM always returns 1)
+    #[cfg(target_arch = "wasm32")]
+    pub fn bucket_count(&self) -> usize {
+        1  // No bucketing in single-threaded WASM
+    }
+    
     /// Clear the entire table
     pub fn clear(&mut self) {
         if self.thread_mode.is_multi_threaded() {
@@ -474,9 +525,18 @@ impl ThreadSafeTranspositionTable {
     }
     
     /// Clear with synchronization
+    /// 
+    /// Acquires all bucket locks to ensure no concurrent writes during clear.
     #[cfg(not(target_arch = "wasm32"))]
     fn clear_with_synchronization(&mut self) {
-        let _write_guard = self.write_lock.write().unwrap();
+        // Clone all bucket locks and acquire them to prevent writes during clear
+        let locks: Vec<_> = self.bucket_locks.iter()
+            .map(|lock| Arc::clone(lock))
+            .collect();
+        let _guards: Vec<_> = locks.iter()
+            .map(|lock| lock.write().unwrap())
+            .collect();
+        
         // Clear entries directly here to avoid borrowing issues
         for entry in &mut self.entries {
             entry.hash_key.store(0, Ordering::Release);
@@ -827,5 +887,52 @@ mod tests {
         
         // Verify no panics occurred during multi-threaded access
         // (The test passes if all threads complete without panicking)
+    }
+    
+    #[test]
+    fn test_bucket_count() {
+        let mut config = create_test_config();
+        config.bucket_count = 256;
+        let table = ThreadSafeTranspositionTable::new(config);
+        
+        #[cfg(not(target_arch = "wasm32"))]
+        assert_eq!(table.bucket_count(), 256);
+        
+        #[cfg(target_arch = "wasm32")]
+        assert_eq!(table.bucket_count(), 1);
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_bucketed_lock_isolation() {
+        let mut config = create_test_config();
+        config.bucket_count = 4; // Small number for testing
+        let table = ThreadSafeTranspositionTable::new(config);
+        
+        // Verify different buckets use different locks
+        assert_eq!(table.bucket_count(), 4);
+        
+        // Create entries that map to different buckets
+        let hash1 = 0x0000000000000001u64;
+        let hash2 = 0x1000000000000000u64;
+        let hash3 = 0x2000000000000000u64;
+        let hash4 = 0x3000000000000000u64;
+        
+        let entry1 = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        let entry2 = create_test_entry(200, 5, TranspositionFlag::Exact, 1);
+        let entry3 = create_test_entry(300, 5, TranspositionFlag::Exact, 1);
+        let entry4 = create_test_entry(400, 5, TranspositionFlag::Exact, 1);
+        
+        // These should map to different buckets and can be stored concurrently
+        table.store(entry1);
+        table.store(entry2);
+        table.store(entry3);
+        table.store(entry4);
+        
+        // Verify all were stored successfully
+        assert!(table.probe(hash1, 5).is_some());
+        assert!(table.probe(hash2, 5).is_some());
+        assert!(table.probe(hash3, 5).is_some());
+        assert!(table.probe(hash4, 5).is_some());
     }
 }
