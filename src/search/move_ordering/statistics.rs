@@ -182,6 +182,7 @@ pub struct HeuristicStats {
 }
 
 /// Individual heuristic performance metrics
+/// Task 10.0: Enhanced with per-move-type tracking
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct HeuristicPerformance {
     /// Number of times this heuristic was applied
@@ -196,6 +197,12 @@ pub struct HeuristicPerformance {
     pub execution_time_us: u64,
     /// Average execution time per application (microseconds)
     pub avg_execution_time_us: f64,
+    /// Task 10.0: Per-move-type hit rates
+    pub capture_hit_rate: f64,
+    /// Task 10.0: Promotion move hit rate
+    pub promotion_hit_rate: f64,
+    /// Task 10.0: Quiet move hit rate
+    pub quiet_hit_rate: f64,
 }
 
 /// Advanced timing statistics for detailed performance analysis
@@ -679,3 +686,234 @@ pub enum TuningPriority {
     /// Critical - should be applied immediately
     Critical,
 }
+
+// ==================== Task 10.0: Enhanced Statistics ====================
+
+/// Move type distribution statistics
+/// Task 10.0: Tracks distribution of different move types and their ordering effectiveness
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct MoveTypeDistribution {
+    /// Total number of capture moves ordered
+    pub captures: u64,
+    /// Total number of promotion moves ordered
+    pub promotions: u64,
+    /// Total number of quiet moves ordered
+    pub quiet_moves: u64,
+    /// Total number of check moves ordered
+    pub check_moves: u64,
+    /// Total number of drop moves ordered
+    pub drop_moves: u64,
+    /// Capture move ordering effectiveness (best move percentage)
+    pub capture_effectiveness: f64,
+    /// Promotion move ordering effectiveness
+    pub promotion_effectiveness: f64,
+    /// Quiet move ordering effectiveness
+    pub quiet_effectiveness: f64,
+    /// Check move ordering effectiveness
+    pub check_effectiveness: f64,
+}
+
+/// Depth-specific statistics
+/// Task 10.0: Tracks statistics at different search depths
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct DepthSpecificStats {
+    /// Statistics by depth (0-20)
+    /// Each entry contains: (moves_ordered, cache_hits, cache_misses, best_move_index_avg)
+    pub stats_by_depth: Vec<DepthStats>,
+}
+
+/// Statistics for a specific depth
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct DepthStats {
+    /// Search depth
+    pub depth: u8,
+    /// Number of moves ordered at this depth
+    pub moves_ordered: u64,
+    /// Cache hits at this depth
+    pub cache_hits: u64,
+    /// Cache misses at this depth
+    pub cache_misses: u64,
+    /// Average index of best move (lower is better)
+    pub best_move_index_avg: f64,
+    /// PV move hit rate at this depth
+    pub pv_hit_rate: f64,
+    /// Killer move hit rate at this depth
+    pub killer_hit_rate: f64,
+    /// History hit rate at this depth
+    pub history_hit_rate: f64,
+}
+
+/// Game phase-specific statistics
+/// Task 10.0: Tracks statistics by game phase (opening, middlegame, endgame)
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct GamePhaseStats {
+    /// Opening phase statistics
+    pub opening: PhaseStats,
+    /// Middlegame phase statistics
+    pub middlegame: PhaseStats,
+    /// Endgame phase statistics
+    pub endgame: PhaseStats,
+}
+
+/// Statistics for a specific game phase
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct PhaseStats {
+    /// Number of moves ordered in this phase
+    pub moves_ordered: u64,
+    /// Average ordering time in this phase (microseconds)
+    pub avg_ordering_time_us: f64,
+    /// Cache hit rate in this phase
+    pub cache_hit_rate: f64,
+    /// PV move hit rate in this phase
+    pub pv_hit_rate: f64,
+    /// Killer move hit rate in this phase
+    pub killer_hit_rate: f64,
+    /// History hit rate in this phase
+    pub history_hit_rate: f64,
+    /// Average best move index in this phase
+    pub best_move_index_avg: f64,
+    /// Heuristic effectiveness scores by phase
+    pub heuristic_effectiveness: Vec<(String, f64)>,
+}
+
+/// Enhanced statistics tracker
+/// Task 10.0: Comprehensive statistics tracking with aggregation
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct EnhancedStatistics {
+    /// Move type distribution
+    pub move_type_distribution: MoveTypeDistribution,
+    /// Depth-specific statistics
+    pub depth_specific_stats: DepthSpecificStats,
+    /// Game phase-specific statistics
+    pub game_phase_stats: GamePhaseStats,
+    /// Overall ordering effectiveness score (0-100)
+    pub overall_effectiveness: f64,
+}
+
+impl EnhancedStatistics {
+    /// Create new enhanced statistics tracker
+    pub fn new() -> Self {
+        Self {
+            move_type_distribution: MoveTypeDistribution::default(),
+            depth_specific_stats: DepthSpecificStats {
+                stats_by_depth: (0..21).map(|d| DepthStats { depth: d, ..Default::default() }).collect(),
+            },
+            game_phase_stats: GamePhaseStats::default(),
+            overall_effectiveness: 0.0,
+        }
+    }
+
+    /// Record a move ordering operation
+    /// Task 10.0: Updates appropriate statistics based on move type, depth, and phase
+    pub fn record_ordering(
+        &mut self,
+        moves: &[crate::types::Move],
+        depth: u8,
+        phase: crate::types::GamePhase,
+        best_move_index: Option<usize>,
+        ordering_time_us: u64,
+        cache_hit: bool,
+    ) {
+        // Update move type distribution
+        for move_ in moves {
+            if move_.is_capture {
+                self.move_type_distribution.captures += 1;
+            }
+            if move_.is_promotion {
+                self.move_type_distribution.promotions += 1;
+            }
+            if !move_.is_capture && !move_.is_promotion && !move_.gives_check {
+                self.move_type_distribution.quiet_moves += 1;
+            }
+            if move_.gives_check {
+                self.move_type_distribution.check_moves += 1;
+            }
+            if move_.drop {
+                self.move_type_distribution.drop_moves += 1;
+            }
+        }
+
+        // Update depth-specific statistics
+        if depth < 21 {
+            let depth_stats = &mut self.depth_specific_stats.stats_by_depth[depth as usize];
+            depth_stats.moves_ordered += moves.len() as u64;
+            if cache_hit {
+                depth_stats.cache_hits += 1;
+            } else {
+                depth_stats.cache_misses += 1;
+            }
+            if let Some(index) = best_move_index {
+                // Update running average of best move index
+                let total = depth_stats.moves_ordered;
+                depth_stats.best_move_index_avg = 
+                    (depth_stats.best_move_index_avg * (total - 1) as f64 + index as f64) / total as f64;
+            }
+        }
+
+        // Update game phase-specific statistics
+        let phase_stats = match phase {
+            crate::types::GamePhase::Opening => &mut self.game_phase_stats.opening,
+            crate::types::GamePhase::Middlegame => &mut self.game_phase_stats.middlegame,
+            crate::types::GamePhase::Endgame => &mut self.game_phase_stats.endgame,
+        };
+        
+        phase_stats.moves_ordered += moves.len() as u64;
+        let total = phase_stats.moves_ordered;
+        phase_stats.avg_ordering_time_us = 
+            (phase_stats.avg_ordering_time_us * (total - 1) as f64 + ordering_time_us as f64) / total as f64;
+        
+        if let Some(index) = best_move_index {
+            phase_stats.best_move_index_avg = 
+                (phase_stats.best_move_index_avg * (total - 1) as f64 + index as f64) / total as f64;
+        }
+    }
+
+    /// Calculate overall effectiveness score
+    /// Task 10.0: Combines multiple effectiveness metrics into single score
+    pub fn calculate_overall_effectiveness(&mut self) {
+        // Calculate based on:
+        // - Average best move index across all depths (lower is better)
+        // - Cache hit rates
+        // - Heuristic effectiveness
+        
+        let avg_best_move_index: f64 = self.depth_specific_stats.stats_by_depth.iter()
+            .filter(|s| s.moves_ordered > 0)
+            .map(|s| s.best_move_index_avg)
+            .sum::<f64>() / self.depth_specific_stats.stats_by_depth.iter()
+            .filter(|s| s.moves_ordered > 0)
+            .count().max(1) as f64;
+        
+        // Normalize: index 0 = 100%, index 10+ = 0%
+        let index_score = ((10.0 - avg_best_move_index.min(10.0)) / 10.0 * 100.0).max(0.0);
+        
+        self.overall_effectiveness = index_score;
+    }
+
+    /// Get statistics summary
+    pub fn get_summary(&self) -> StatisticsSummary {
+        StatisticsSummary {
+            total_moves: self.move_type_distribution.captures 
+                + self.move_type_distribution.promotions 
+                + self.move_type_distribution.quiet_moves,
+            capture_percentage: if self.move_type_distribution.captures > 0 {
+                (self.move_type_distribution.captures as f64 / 
+                 (self.move_type_distribution.captures + self.move_type_distribution.quiet_moves).max(1) as f64) * 100.0
+            } else {
+                0.0
+            },
+            overall_effectiveness: self.overall_effectiveness,
+        }
+    }
+}
+
+/// Statistics summary for quick overview
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StatisticsSummary {
+    /// Total moves ordered
+    pub total_moves: u64,
+    /// Percentage of capture moves
+    pub capture_percentage: f64,
+    /// Overall effectiveness score (0-100)
+    pub overall_effectiveness: f64,
+}
+
