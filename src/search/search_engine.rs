@@ -1,6 +1,7 @@
 use crate::bitboards::*;
 use crate::evaluation::*;
 use crate::moves::*;
+use crate::opening_book::OpeningBook;
 use crate::search::move_ordering::MoveOrdering;
 use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 use crate::search::{ParallelSearchConfig, ParallelSearchEngine};
@@ -59,6 +60,10 @@ pub struct SearchEngine {
     previous_scores: Vec<i32>,
     /// Time management configuration (Task 4.5-4.8)
     time_management_config: TimeManagementConfig,
+    /// Whether to prefill the TT from the opening book at startup
+    prefill_opening_book: bool,
+    /// Depth assigned to opening book prefill entries
+    opening_book_prefill_depth: u8,
     /// Time budget statistics (Task 4.10)
     time_budget_stats: TimeBudgetStats,
     /// Time pressure thresholds for algorithm coordination (Task 7.0.2.3)
@@ -393,6 +398,8 @@ impl SearchEngine {
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
             time_management_config: TimeManagementConfig::default(),
+            prefill_opening_book: true,
+            opening_book_prefill_depth: 8,
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
@@ -726,6 +733,8 @@ impl SearchEngine {
             aspiration_config: config.aspiration_windows,
             aspiration_stats: AspirationWindowStats::default(),
             time_management_config: config.time_management.clone(),
+            prefill_opening_book: config.prefill_opening_book,
+            opening_book_prefill_depth: config.opening_book_prefill_depth,
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
@@ -795,6 +804,8 @@ impl SearchEngine {
         self.aspiration_config = config.aspiration_windows;
         self.iid_config = config.iid;
         self.time_management_config = config.time_management.clone();
+        self.prefill_opening_book = config.prefill_opening_book;
+        self.opening_book_prefill_depth = config.opening_book_prefill_depth;
 
         // Reset statistics when configuration changes
         self.quiescence_stats.reset();
@@ -822,7 +833,25 @@ impl SearchEngine {
             max_depth: 20,        // This would need to be tracked separately
             time_management: self.time_management_config.clone(),
             thread_count: num_cpus::get(),
+            prefill_opening_book: self.prefill_opening_book,
+            opening_book_prefill_depth: self.opening_book_prefill_depth,
         }
+    }
+
+    /// Prefill the transposition table with entries derived from an opening book.
+    /// Returns the number of entries inserted.
+    pub fn prefill_tt_from_opening_book(&mut self, book: &mut OpeningBook, depth: u8) -> usize {
+        self.transposition_table.prefill_from_book(book, depth)
+    }
+
+    /// Check if opening book prefill is enabled in the current configuration.
+    pub fn opening_book_prefill_enabled(&self) -> bool {
+        self.prefill_opening_book
+    }
+
+    /// Get the configured depth for opening book prefill entries.
+    pub fn opening_book_prefill_depth(&self) -> u8 {
+        self.opening_book_prefill_depth
     }
 
     /// Apply a configuration preset

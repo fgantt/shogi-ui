@@ -202,6 +202,17 @@ pub struct OpeningBookMetadata {
     pub chunk_size: usize,
 }
 
+/// Prefill entry used for transposition table initialization
+#[derive(Debug, Clone)]
+pub struct OpeningBookPrefillEntry {
+    /// FEN string representing the position
+    pub fen: String,
+    /// Book move selected for this position
+    pub book_move: BookMove,
+    /// Player to move in this position
+    pub player: Player,
+}
+
 impl BookMove {
     /// Create a new book move
     pub fn new(
@@ -431,7 +442,7 @@ impl OpeningBook {
     /// Get the best move for a position with weight-based selection
     pub fn get_best_move(&mut self, fen: &str) -> Option<Move> {
         let hash = self.hash_fen(fen);
-        let player = self.determine_player_from_fen(fen);
+        let player = Self::determine_player_from_fen(fen);
 
         // First check cache
         if let Some(entry) = self.position_cache.get(&hash) {
@@ -468,7 +479,7 @@ impl OpeningBook {
     /// Get a random move for a position with weighted random selection
     pub fn get_random_move(&mut self, fen: &str) -> Option<Move> {
         let hash = self.hash_fen(fen);
-        let player = self.determine_player_from_fen(fen);
+        let player = Self::determine_player_from_fen(fen);
 
         // First check cache
         if let Some(entry) = self.position_cache.get(&hash) {
@@ -505,7 +516,7 @@ impl OpeningBook {
     /// Get all moves for a position with enhanced metadata
     pub fn get_moves_with_metadata(&self, fen: &str) -> Option<Vec<(BookMove, Move)>> {
         if let Some(entry) = self.positions.get(&self.hash_fen(fen)) {
-            let player = self.determine_player_from_fen(fen);
+            let player = Self::determine_player_from_fen(fen);
             let moves: Vec<(BookMove, Move)> = entry
                 .moves
                 .iter()
@@ -898,7 +909,8 @@ impl OpeningBook {
     }
 
     /// Determine player from FEN string
-    fn determine_player_from_fen(&self, fen: &str) -> Player {
+    /// Determine player to move from FEN string
+    pub fn determine_player_from_fen(fen: &str) -> Player {
         // FEN format: "board position active_player captured_pieces move_number"
         // The active player is the 4th field (index 3)
         let parts: Vec<&str> = fen.split_whitespace().collect();
@@ -911,6 +923,28 @@ impl OpeningBook {
         } else {
             Player::Black // Default to Black if FEN is malformed
         }
+    }
+
+    /// Collect all entries suitable for transposition table prefill
+    pub fn collect_prefill_entries(&mut self) -> Vec<OpeningBookPrefillEntry> {
+        // Materialize all lazy positions to ensure comprehensive coverage
+        let lazy_hashes: Vec<u64> = self.lazy_positions.keys().cloned().collect();
+        for hash in lazy_hashes {
+            let _ = self.load_lazy_position(hash);
+        }
+
+        let mut results = Vec::new();
+        for entry in self.positions.values() {
+            if let Some(best_move) = entry.get_best_move() {
+                results.push(OpeningBookPrefillEntry {
+                    fen: entry.fen.clone(),
+                    book_move: best_move.clone(),
+                    player: Self::determine_player_from_fen(&entry.fen),
+                });
+            }
+        }
+
+        results
     }
 
     /// Convert book move to engine move with proper move properties

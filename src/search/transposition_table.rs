@@ -1,3 +1,6 @@
+use crate::bitboards::BitboardBoard;
+use crate::opening_book::OpeningBook;
+use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::*;
 
 /// Basic transposition table for caching search results
@@ -149,6 +152,34 @@ impl TranspositionTable {
         self.store(entry);
     }
 
+    /// Prefill the table with entries from an opening book.
+    ///
+    /// Returns the number of entries inserted.
+    pub fn prefill_from_book(&mut self, book: &mut OpeningBook, depth: u8) -> usize {
+        let mut hasher = ZobristHasher::new();
+        let mut inserted = 0usize;
+
+        for prefill in book.collect_prefill_entries() {
+            if let Ok((board, player, captured)) = BitboardBoard::from_fen(&prefill.fen) {
+                let hash = hasher.hash_position(&board, player, &captured, RepetitionState::None);
+                let engine_move = prefill.book_move.to_engine_move(prefill.player);
+                let entry = TranspositionEntry::new(
+                    prefill.book_move.evaluation,
+                    depth,
+                    TranspositionFlag::Exact,
+                    Some(engine_move),
+                    hash,
+                    0,
+                    EntrySource::OpeningBook,
+                );
+                self.store(entry);
+                inserted += 1;
+            }
+        }
+
+        inserted
+    }
+
     /// Clear all entries from the table
     pub fn clear(&mut self) {
         self.entries.fill(None);
@@ -297,6 +328,9 @@ impl Default for TranspositionTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bitboards::BitboardBoard;
+    use crate::opening_book::{BookMove, OpeningBookBuilder};
+    use crate::search::zobrist::{RepetitionState, ZobristHasher};
 
     #[test]
     fn test_transposition_table_creation() {
@@ -462,6 +496,45 @@ mod tests {
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.score, 100);
+    }
+
+    #[test]
+    fn test_prefill_from_opening_book() {
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        let book_move = BookMove::new(
+            Some(Position::new(6, 4)),
+            Position::new(5, 4),
+            PieceType::Pawn,
+            false,
+            false,
+            1000,
+            75,
+        );
+
+        let mut book = OpeningBookBuilder::new()
+            .add_position(fen.to_string(), vec![book_move.clone()])
+            .mark_loaded()
+            .build();
+
+        let mut table = TranspositionTable::with_size(256);
+        let inserted = table.prefill_from_book(&mut book, 6);
+        assert_eq!(inserted, 1);
+
+        let (board, player, captured) = BitboardBoard::from_fen(fen).unwrap();
+        let hash =
+            ZobristHasher::new().hash_position(&board, player, &captured, RepetitionState::None);
+
+        let entry = table.probe(hash, 6).expect("entry should exist");
+        assert_eq!(entry.score, 75);
+        assert_eq!(entry.depth, 6);
+        assert_eq!(entry.flag, TranspositionFlag::Exact);
+        assert_eq!(entry.source, EntrySource::OpeningBook);
+
+        let stored_move = entry.best_move.expect("best move should be stored");
+        assert_eq!(stored_move.player, player);
+        assert_eq!(stored_move.piece_type, PieceType::Pawn);
+        assert_eq!(stored_move.from.unwrap().to_index(), 6 * 9 + 4);
+        assert_eq!(stored_move.to.to_index(), 5 * 9 + 4);
     }
 
     #[test]

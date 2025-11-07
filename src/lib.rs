@@ -75,6 +75,7 @@ pub struct ShogiEngine {
     captured_pieces: CapturedPieces,
     current_player: Player,
     opening_book: OpeningBook,
+    opening_book_prefilled: bool,
     tablebase: MicroTablebase,
     stop_flag: Arc<AtomicBool>,
     search_engine: Arc<Mutex<SearchEngine>>,
@@ -93,6 +94,7 @@ impl ShogiEngine {
             captured_pieces: CapturedPieces::new(),
             current_player: Player::Black,
             opening_book: OpeningBook::new(),
+            opening_book_prefilled: false,
             tablebase: MicroTablebase::new(),
             stop_flag: stop_flag.clone(),
             search_engine: Arc::new(Mutex::new(SearchEngine::new(Some(stop_flag), 16))),
@@ -147,6 +149,8 @@ impl ShogiEngine {
         let json_data = include_str!("ai/openingBook.json");
         if self.load_opening_book_from_json(json_data).is_ok() {
             crate::debug_utils::debug_log("Loaded default opening book from JSON");
+            self.opening_book_prefilled = false;
+            self.maybe_prefill_opening_book();
             return;
         }
 
@@ -155,18 +159,47 @@ impl ShogiEngine {
         crate::debug_utils::debug_log("No default opening book available");
     }
 
+    fn maybe_prefill_opening_book(&mut self) {
+        if self.opening_book_prefilled || !self.opening_book.is_loaded() {
+            return;
+        }
+
+        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+            if !search_engine_guard.opening_book_prefill_enabled() {
+                return;
+            }
+
+            let depth = search_engine_guard.opening_book_prefill_depth().max(1);
+            let inserted =
+                search_engine_guard.prefill_tt_from_opening_book(&mut self.opening_book, depth);
+
+            self.opening_book_prefilled = true;
+
+            crate::debug_utils::debug_log(&format!(
+                "Opening book prefill inserted {} entries at depth {}",
+                inserted, depth
+            ));
+        }
+    }
+
     /// Load opening book from binary data
     pub fn load_opening_book_from_binary(&mut self, data: &[u8]) -> Result<(), String> {
         self.opening_book
             .load_from_binary(data)
-            .map_err(|e| format!("Failed to load opening book: {:?}", e))
+            .map_err(|e| format!("Failed to load opening book: {:?}", e))?;
+        self.opening_book_prefilled = false;
+        self.maybe_prefill_opening_book();
+        Ok(())
     }
 
     /// Load opening book from JSON data
     pub fn load_opening_book_from_json(&mut self, json_data: &str) -> Result<(), String> {
         self.opening_book
             .load_from_json(json_data)
-            .map_err(|e| format!("Failed to load opening book: {:?}", e))
+            .map_err(|e| format!("Failed to load opening book: {:?}", e))?;
+        self.opening_book_prefilled = false;
+        self.maybe_prefill_opening_book();
+        Ok(())
     }
 
     /// Check if opening book is loaded
@@ -729,6 +762,63 @@ impl ShogiEngine {
                                 SearchEngine::new(Some(self.stop_flag.clone()), size);
                             output.push(format!("info string Set USI_Hash to {} MB", size));
                         }
+                        self.opening_book_prefilled = false;
+                        self.maybe_prefill_opening_book();
+                    }
+                }
+                "PrefillOpeningBook" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.prefill_opening_book = enabled;
+                            match search_engine_guard.update_engine_config(config) {
+                                Ok(()) => {
+                                    output.push(format!(
+                                        "info string {} opening book prefill",
+                                        if enabled { "Enabled" } else { "Disabled" }
+                                    ));
+                                }
+                                Err(e) => {
+                                    output.push(format!(
+                                        "info string error Failed to update config: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+
+                        if enabled {
+                            self.opening_book_prefilled = false;
+                            self.maybe_prefill_opening_book();
+                        }
+                    }
+                }
+                "OpeningBookPrefillDepth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        if depth == 0 {
+                            output.push(
+                                "info string error OpeningBookPrefillDepth must be >= 1"
+                                    .to_string(),
+                            );
+                        } else if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+                            let mut config = search_engine_guard.get_engine_config();
+                            config.opening_book_prefill_depth = depth;
+                            match search_engine_guard.update_engine_config(config) {
+                                Ok(()) => {
+                                    output.push(format!(
+                                        "info string Set opening book prefill depth to {}",
+                                        depth
+                                    ));
+                                    self.opening_book_prefilled = false;
+                                }
+                                Err(e) => output.push(format!(
+                                    "info string error Failed to update config: {}",
+                                    e
+                                )),
+                            }
+                        }
+
+                        self.maybe_prefill_opening_book();
                     }
                 }
                 "MaxDepth" | "depth" => {

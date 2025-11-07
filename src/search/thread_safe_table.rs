@@ -50,11 +50,14 @@
 //! - Monitor hit rates and adjust configuration accordingly
 //! - Use depth-preferred replacement for better search performance
 
+use crate::bitboards::BitboardBoard;
+use crate::opening_book::OpeningBook;
 use crate::search::cache_management::CacheManager;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::search::replacement_policies::ReplacementDecision;
 use crate::search::replacement_policies::ReplacementPolicyHandler;
 use crate::search::transposition_config::TranspositionConfig;
+use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::*;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
@@ -547,6 +550,35 @@ impl ThreadSafeTranspositionTable {
         self.increment_atomic_operations();
     }
 
+    /// Prefill the table using entries from an opening book.
+    ///
+    /// Returns the number of entries inserted.
+    pub fn prefill_from_book(&mut self, book: &mut OpeningBook, depth: u8) -> usize {
+        let mut hasher = ZobristHasher::new();
+        let mut inserted = 0usize;
+
+        for prefill in book.collect_prefill_entries() {
+            if let Ok((board, player_from_fen, captured)) = BitboardBoard::from_fen(&prefill.fen) {
+                let hash =
+                    hasher.hash_position(&board, player_from_fen, &captured, RepetitionState::None);
+                let engine_move = prefill.book_move.to_engine_move(prefill.player);
+                let entry = TranspositionEntry::new(
+                    prefill.book_move.evaluation,
+                    depth,
+                    TranspositionFlag::Exact,
+                    Some(engine_move),
+                    hash,
+                    0,
+                    EntrySource::OpeningBook,
+                );
+                self.store(entry);
+                inserted += 1;
+            }
+        }
+
+        inserted
+    }
+
     /// Store entry using atomic operations (static helper)
     #[inline(always)]
     fn store_atomic_entry_static(table_entry: &mut ThreadSafeEntry, entry: TranspositionEntry) {
@@ -835,6 +867,9 @@ impl ThreadSafeTableBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bitboards::BitboardBoard;
+    use crate::opening_book::{BookMove, OpeningBookBuilder};
+    use crate::search::zobrist::{RepetitionState, ZobristHasher};
     use std::thread;
     use std::time::Duration;
 
@@ -992,6 +1027,40 @@ mod tests {
 
         let hit_rate = table.hit_rate();
         assert!((hit_rate - 50.0).abs() < 0.1); // Should be 50% hit rate
+    }
+
+    #[test]
+    fn test_prefill_from_opening_book_thread_safe() {
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        let book_move = BookMove::new(
+            Some(Position::new(6, 4)),
+            Position::new(5, 4),
+            PieceType::Pawn,
+            false,
+            false,
+            1000,
+            60,
+        );
+
+        let mut book = OpeningBookBuilder::new()
+            .add_position(fen.to_string(), vec![book_move.clone()])
+            .mark_loaded()
+            .build();
+
+        let mut table = ThreadSafeTranspositionTable::new(create_test_config());
+        let inserted = table.prefill_from_book(&mut book, 4);
+        assert_eq!(inserted, 1);
+
+        let (board, player, captured) = BitboardBoard::from_fen(fen).unwrap();
+        let hash =
+            ZobristHasher::new().hash_position(&board, player, &captured, RepetitionState::None);
+
+        let entry = table.probe(hash, 4).expect("prefilled entry should exist");
+        assert_eq!(entry.score, 60);
+        assert_eq!(entry.depth, 4);
+        assert_eq!(entry.source, EntrySource::OpeningBook);
+        assert_eq!(entry.flag, TranspositionFlag::Exact);
+        assert_eq!(entry.best_move.unwrap().to.to_index(), 5 * 9 + 4);
     }
 
     #[test]
