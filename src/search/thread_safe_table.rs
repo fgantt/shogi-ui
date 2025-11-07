@@ -11,15 +11,16 @@
 //! - **WASM Compatibility**: Works in both native and WebAssembly environments
 //! - **Performance Optimized**: Uses atomic operations and cache-line alignment
 //! - **Memory Efficient**: Compact entry storage with configurable size
-//! - **Statistics Tracking**: Comprehensive performance and usage statistics
+//! - **Statistics Tracking**: Comprehensive performance and usage statistics (opt-in)
 //!
 //! # Usage
 //!
 //! ```rust
 //! use shogi_engine::search::{ThreadSafeTranspositionTable, TranspositionConfig, TranspositionEntry, TranspositionFlag};
 //!
-//! // Create a new transposition table
-//! let config = TranspositionConfig::default();
+//! // Create a new transposition table (enable statistics only if needed)
+//! let mut config = TranspositionConfig::default();
+//! config.enable_statistics = true;
 //! let mut tt = ThreadSafeTranspositionTable::new(config);
 //!
 //! // Store a search result
@@ -304,6 +305,8 @@ pub struct ThreadSafeTranspositionTable {
     /// Whether hardware prefetching is enabled for this table
     #[cfg(feature = "tt-prefetch")]
     prefetch_enabled: bool,
+    /// Whether statistics tracking is enabled for this table
+    statistics_enabled: bool,
     /// Cache manager for statistics and age management
     cache_manager: Arc<Mutex<CacheManager>>,
     /// Replacement policy handler
@@ -357,6 +360,7 @@ impl ThreadSafeTranspositionTable {
         let bucket_shift = 64 - bucket_count.trailing_zeros();
         #[cfg(feature = "tt-prefetch")]
         let prefetch_enabled = config.enable_prefetching && !cfg!(target_arch = "wasm32");
+        let statistics_enabled = config.enable_statistics;
 
         Self {
             entries,
@@ -369,6 +373,7 @@ impl ThreadSafeTranspositionTable {
             bucket_shift,
             #[cfg(feature = "tt-prefetch")]
             prefetch_enabled,
+            statistics_enabled,
             cache_manager: Arc::new(Mutex::new(CacheManager::new(config.clone()))),
             replacement_handler: Arc::new(Mutex::new(ReplacementPolicyHandler::new(
                 config.clone(),
@@ -382,6 +387,12 @@ impl ThreadSafeTranspositionTable {
         let mut table = Self::new(config);
         table.thread_mode = thread_mode;
         table
+    }
+
+    /// Create a thread-safe transposition table with statistics tracking explicitly enabled
+    pub fn with_statistics_tracking(mut config: TranspositionConfig) -> Self {
+        config.enable_statistics = true;
+        Self::new(config)
     }
 
     /// Probe the table for an entry
@@ -698,6 +709,9 @@ impl ThreadSafeTranspositionTable {
 
     /// Get hit rate
     pub fn hit_rate(&self) -> f64 {
+        if !self.statistics_enabled {
+            return 0.0;
+        }
         let stats = self.stats.lock().unwrap();
         let total = stats.total_probes.load(Ordering::Acquire);
         let hits = stats.hits.load(Ordering::Acquire);
@@ -711,6 +725,12 @@ impl ThreadSafeTranspositionTable {
 
     /// Get comprehensive statistics
     pub fn get_stats(&self) -> ThreadSafeStatsSnapshot {
+        if !self.statistics_enabled {
+            return ThreadSafeStatsSnapshot {
+                thread_mode: self.thread_mode,
+                ..ThreadSafeStatsSnapshot::default()
+            };
+        }
         let stats = self.stats.lock().unwrap();
         ThreadSafeStatsSnapshot {
             total_probes: stats.total_probes.load(Ordering::Acquire),
@@ -762,22 +782,27 @@ impl ThreadSafeTranspositionTable {
 
     // Statistics increment methods
     fn increment_hits(&self) {
-        self.stats
-            .lock()
-            .unwrap()
-            .hits
-            .fetch_add(1, Ordering::Relaxed);
+        if !self.statistics_enabled {
+            return;
+        }
+        let stats = self.stats.lock().unwrap();
+        stats.total_probes.fetch_add(1, Ordering::Relaxed);
+        stats.hits.fetch_add(1, Ordering::Relaxed);
     }
 
     fn increment_misses(&self) {
-        self.stats
-            .lock()
-            .unwrap()
-            .misses
-            .fetch_add(1, Ordering::Relaxed);
+        if !self.statistics_enabled {
+            return;
+        }
+        let stats = self.stats.lock().unwrap();
+        stats.total_probes.fetch_add(1, Ordering::Relaxed);
+        stats.misses.fetch_add(1, Ordering::Relaxed);
     }
 
     fn increment_stores(&self) {
+        if !self.statistics_enabled {
+            return;
+        }
         self.stats
             .lock()
             .unwrap()
@@ -787,6 +812,9 @@ impl ThreadSafeTranspositionTable {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn increment_replacements(&self) {
+        if !self.statistics_enabled {
+            return;
+        }
         self.stats
             .lock()
             .unwrap()
@@ -795,6 +823,9 @@ impl ThreadSafeTranspositionTable {
     }
 
     fn increment_atomic_operations(&self) {
+        if !self.statistics_enabled {
+            return;
+        }
         self.stats
             .lock()
             .unwrap()
@@ -833,6 +864,21 @@ pub struct ThreadSafeStatsSnapshot {
     pub atomic_operations: u64,
     pub hit_rate: f64,
     pub thread_mode: ThreadSafetyMode,
+}
+
+impl Default for ThreadSafeStatsSnapshot {
+    fn default() -> Self {
+        Self {
+            total_probes: 0,
+            hits: 0,
+            misses: 0,
+            stores: 0,
+            replacements: 0,
+            atomic_operations: 0,
+            hit_rate: 0.0,
+            thread_mode: ThreadSafetyMode::Auto,
+        }
+    }
 }
 
 /// Thread-safe table builder for configuration
@@ -930,6 +976,42 @@ mod tests {
         assert_eq!(retrieved_entry.score, entry.score);
         assert_eq!(retrieved_entry.depth, entry.depth);
         assert_eq!(retrieved_entry.flag, entry.flag);
+    }
+
+    #[test]
+    fn test_thread_safe_table_statistics_disabled() {
+        let mut config = create_test_config();
+        config.enable_statistics = false;
+        let mut table = ThreadSafeTranspositionTable::new(config);
+
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        table.store(entry.clone());
+        table.probe(entry.hash_key, 5);
+
+        let stats = table.get_stats();
+        assert_eq!(stats.total_probes, 0);
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+        assert_eq!(stats.stores, 0);
+        assert_eq!(stats.atomic_operations, 0);
+        assert_eq!(table.hit_rate(), 0.0);
+    }
+
+    #[test]
+    fn test_thread_safe_table_with_statistics_tracking() {
+        let mut config = create_test_config();
+        config.enable_statistics = false;
+        let mut table = ThreadSafeTranspositionTable::with_statistics_tracking(config);
+
+        let entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        table.store(entry.clone());
+        table.probe(entry.hash_key, 5);
+
+        let stats = table.get_stats();
+        assert_eq!(stats.total_probes, 1);
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.stores, 1);
+        assert!(table.hit_rate() > 0.0);
     }
 
     #[test]

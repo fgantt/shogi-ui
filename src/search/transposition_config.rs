@@ -117,7 +117,7 @@ impl Default for TranspositionConfig {
             enable_memory_mapping: false,
             max_memory_mb: 512, // 512 MB
             clear_between_games: true,
-            enable_statistics: true,
+            enable_statistics: false,
             collision_strategy: CollisionStrategy::default(),
             validate_hash_keys: true,
             bucket_count: 256, // 256 buckets for good 4-8 thread scaling
@@ -513,12 +513,21 @@ mod tests {
         assert!(!config.enable_memory_mapping);
         assert_eq!(config.max_memory_mb, 512);
         assert!(config.clear_between_games);
-        assert!(config.enable_statistics);
+        assert!(!config.enable_statistics);
         assert_eq!(
             config.collision_strategy,
             CollisionStrategy::UseReplacementPolicy
         );
         assert!(config.validate_hash_keys);
+    }
+
+    #[test]
+    fn test_enable_statistics_via_builder() {
+        let config = TranspositionConfigBuilder::new()
+            .enable_statistics(true)
+            .build()
+            .expect("builder should validate");
+        assert!(config.enable_statistics);
     }
 
     #[test]

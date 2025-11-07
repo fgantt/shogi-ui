@@ -352,5 +352,3 @@ mod integration_coordination_tests {
         );
     }
 }
-
- 

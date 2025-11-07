@@ -19,6 +19,12 @@ use crate::types::*;
 /// - Validating entry integrity
 ///
 /// Use `crate::search::zobrist::ZobristHasher` to generate position hash keys.
+///
+/// # Statistics Tracking
+///
+/// By default, statistics and memory tracking are disabled to avoid incidental overhead.
+/// Use `TranspositionTable::with_statistics_tracking()` or configure
+/// `TranspositionTableConfig` to explicitly enable these features when needed.
 pub struct TranspositionTable {
     /// The actual hash table storing entries
     entries: Vec<Option<TranspositionEntry>>,
@@ -49,6 +55,23 @@ pub struct TranspositionTableConfig {
     pub track_statistics: bool,
 }
 
+impl TranspositionTableConfig {
+    /// Enable or disable statistics tracking (also toggles memory tracking when enabled)
+    pub fn with_statistics_tracking(mut self, enable: bool) -> Self {
+        self.track_statistics = enable;
+        if !enable {
+            self.track_memory = false;
+        }
+        self
+    }
+
+    /// Enable or disable memory usage tracking
+    pub fn with_memory_tracking(mut self, enable: bool) -> Self {
+        self.track_memory = enable;
+        self
+    }
+}
+
 /// Replacement policies for the transposition table
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplacementPolicy {
@@ -67,8 +90,8 @@ impl Default for TranspositionTableConfig {
         Self {
             max_entries: 1_000_000, // 1 million entries by default
             replacement_policy: ReplacementPolicy::DepthPreferred,
-            track_memory: true,
-            track_statistics: true,
+            track_memory: false,
+            track_statistics: false,
         }
     }
 }
@@ -89,7 +112,11 @@ impl TranspositionTable {
     /// Create a new transposition table with custom configuration
     pub fn with_config(config: TranspositionTableConfig) -> Self {
         let size = config.max_entries;
-        let memory_usage = size * std::mem::size_of::<Option<TranspositionEntry>>();
+        let memory_usage = if config.track_memory {
+            size * std::mem::size_of::<Option<TranspositionEntry>>()
+        } else {
+            0
+        };
 
         Self {
             entries: vec![None; size],
@@ -100,6 +127,14 @@ impl TranspositionTable {
             memory_usage,
             config,
         }
+    }
+
+    /// Create a new transposition table with statistics and memory tracking enabled
+    pub fn with_statistics_tracking() -> Self {
+        let mut config = TranspositionTableConfig::default();
+        config.track_statistics = true;
+        config.track_memory = true;
+        Self::with_config(config)
     }
 
     /// Probe the table for an entry with the given hash key
@@ -282,7 +317,9 @@ impl TranspositionTable {
             self.hits = 0;
             self.misses = 0;
         }
-        if !self.config.track_memory {
+        if self.config.track_memory {
+            self.memory_usage = self.size * std::mem::size_of::<Option<TranspositionEntry>>();
+        } else {
             self.memory_usage = 0;
         }
     }
@@ -636,7 +673,10 @@ mod tests {
 
     #[test]
     fn test_memory_usage_tracking() {
-        let table = TranspositionTable::with_size(1000);
+        let config = TranspositionTableConfig::default()
+            .with_memory_tracking(true)
+            .with_statistics_tracking(true);
+        let table = TranspositionTable::with_config(config);
         let memory_usage = table.get_memory_usage();
         assert!(memory_usage > 0);
         assert!(memory_usage < 1_000_000); // Should be reasonable
@@ -720,11 +760,8 @@ mod tests {
     }
 
     #[test]
-    fn test_statistics_tracking_disabled() {
-        let mut config = TranspositionTableConfig::default();
-        config.track_statistics = false;
-
-        let mut table = TranspositionTable::with_config(config);
+    fn test_statistics_tracking_disabled_by_default() {
+        let mut table = TranspositionTable::new();
 
         let entry = TranspositionEntry::new_with_age(
             100,
@@ -742,7 +779,7 @@ mod tests {
 
     #[test]
     fn test_configuration_update() {
-        let mut table = TranspositionTable::new();
+        let mut table = TranspositionTable::with_statistics_tracking();
 
         let mut new_config = TranspositionTableConfig::default();
         new_config.replacement_policy = ReplacementPolicy::AgeBased;
@@ -756,5 +793,27 @@ mod tests {
         );
         assert!(!table.get_config().track_statistics);
         assert_eq!(table.get_statistics(), (0, 0, 0.0));
+    }
+
+    #[test]
+    fn test_statistics_tracking_enabled() {
+        let mut table = TranspositionTable::with_statistics_tracking();
+
+        let entry = TranspositionEntry::new_with_age(
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0xABCDEF1234567890,
+        );
+
+        table.store(entry.clone());
+        table.probe(entry.hash_key, 5);
+        table.probe(0x0, 5);
+
+        let (hits, misses, hit_rate) = table.get_statistics();
+        assert_eq!(hits, 1);
+        assert_eq!(misses, 1);
+        assert!((hit_rate - 50.0).abs() < f64::EPSILON);
     }
 }

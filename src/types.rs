@@ -2740,10 +2740,7 @@ impl LMRStats {
 
     /// Get statistics for a specific game phase (Task 4.6)
     pub fn get_phase_stats(&self, phase: GamePhase) -> LMRPhaseStats {
-        self.phase_stats
-            .get(&phase)
-            .cloned()
-            .unwrap_or_default()
+        self.phase_stats.get(&phase).cloned().unwrap_or_default()
     }
 
     /// Check if performance meets minimum thresholds (Task 4.4)
@@ -6878,7 +6875,6 @@ impl SearchState {
     pub fn set_advanced_reduction_config(&mut self, config: AdvancedReductionConfig) {
         self.advanced_reduction_config = Some(config);
     }
-
 }
 
 /// Pruning decision result

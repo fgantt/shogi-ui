@@ -121,7 +121,7 @@ The following advanced features exist internally but are **not yet exposed** to 
 - `min_depth`: Minimum depth for aspiration (Default: 2)
 - `enable_adaptive_sizing`: Adaptive window sizing (Default: true)
 - `max_researches`: Maximum research attempts (Default: 2)
-- `enable_statistics`: Track statistics (Default: true)
+- `enable_statistics`: Track statistics (Default: false)
 
 ### Time Management (`TimeManagementConfig`)
 - `time_per_move_ms`: Time budget per move in milliseconds

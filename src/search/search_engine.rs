@@ -6902,7 +6902,13 @@ impl SearchEngine {
     /// - High-value captures (important tactical moves)
     ///
     /// This helps maintain tactical accuracy while still pruning weak captures.
-    fn should_prune_futility(&mut self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8) -> bool {
+    fn should_prune_futility(
+        &mut self,
+        move_: &Move,
+        stand_pat: i32,
+        alpha: i32,
+        depth: u8,
+    ) -> bool {
         if !self.quiescence_config.enable_futility_pruning {
             return false;
         }
