@@ -1999,6 +1999,12 @@ pub struct LMRConfig {
     pub enable_adaptive_reduction: bool,      // Use position-based adaptation
     pub enable_extended_exemptions: bool,     // Extended move exemption rules
     pub re_search_margin: i32,               // Margin for re-search decision (centipawns, default: 50, range: 0-500)
+    /// Enable position-type adaptive re-search margin (Task 7.0.6.1)
+    pub enable_position_type_margin: bool,
+    /// Re-search margin for tactical positions (default: 75cp) (Task 7.0.6.3)
+    pub tactical_re_search_margin: i32,
+    /// Re-search margin for quiet positions (default: 25cp) (Task 7.0.6.3)
+    pub quiet_re_search_margin: i32,
     /// Position classification configuration (Task 5.8)
     pub classification_config: PositionClassificationConfig,
     /// Escape move detection configuration (Task 6.7)
@@ -2194,6 +2200,9 @@ impl Default for LMRConfig {
             enable_adaptive_reduction: true,
             enable_extended_exemptions: true,
             re_search_margin: 50,             // Default: 50 centipawns
+            enable_position_type_margin: false,  // Task 7.0.6.1: Disabled by default
+            tactical_re_search_margin: 75,    // Task 7.0.6.3: 75cp for tactical positions
+            quiet_re_search_margin: 25,       // Task 7.0.6.3: 25cp for quiet positions
             classification_config: PositionClassificationConfig::default(),
             escape_move_config: EscapeMoveConfig::default(),
             adaptive_tuning_config: AdaptiveTuningConfig::default(),
@@ -2557,6 +2566,10 @@ pub struct LMRStats {
     pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
     pub iid_move_explicitly_exempted: u64,    // Number of IID moves explicitly exempted from LMR (Task 7.0.1)
     pub iid_move_reduced_count: u64,          // Number of times IID move was reduced (should be 0!) (Task 7.0.5.1)
+    /// Re-search statistics by position type (Task 7.0.6.4)
+    pub tactical_researches: u64,             // Re-searches in tactical positions
+    pub quiet_researches: u64,                // Re-searches in quiet positions
+    pub neutral_researches: u64,              // Re-searches in neutral positions
     /// Statistics by game phase (Task 4.6)
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
     /// Position classification statistics (Task 5.10)

@@ -679,3 +679,101 @@ mod iid_lmr_coordination_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod lmr_position_type_adaptation_tests {
+    use super::*;
+
+    fn create_test_engine() -> SearchEngine {
+        SearchEngine::new(None, 16)
+    }
+
+    fn create_test_board() -> BitboardBoard {
+        BitboardBoard::new()
+    }
+
+    fn create_test_captured_pieces() -> CapturedPieces {
+        CapturedPieces::new()
+    }
+
+    /// Test 7.0.6.5: Test position-type adaptive re-search margin
+    #[test]
+    fn test_position_type_adaptive_margin() {
+        let mut engine = create_test_engine();
+        
+        // Enable LMR with position-type adaptation
+        let mut lmr_config = LMRConfig::default();
+        lmr_config.enabled = true;
+        lmr_config.min_depth = 3;
+        lmr_config.min_move_index = 2;
+        lmr_config.enable_adaptive_reduction = true;
+        lmr_config.enable_position_type_margin = true;  // Enable adaptive margin
+        lmr_config.tactical_re_search_margin = 75;
+        lmr_config.quiet_re_search_margin = 25;
+        engine.update_lmr_config(lmr_config).unwrap();
+        
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Reset statistics
+        engine.reset_lmr_stats();
+        
+        // Perform search
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 5, 5000);
+        
+        let lmr_stats = engine.get_lmr_stats();
+        
+        println!("=== Position-Type Adaptive Margin ===");
+        println!("Tactical re-searches: {}", lmr_stats.tactical_researches);
+        println!("Quiet re-searches: {}", lmr_stats.quiet_researches);
+        println!("Neutral re-searches: {}", lmr_stats.neutral_researches);
+        println!("Total re-searches: {}", lmr_stats.researches_triggered);
+        
+        // Statistics should be tracked by position type
+        let total_classified = lmr_stats.tactical_researches + 
+                               lmr_stats.quiet_researches + 
+                               lmr_stats.neutral_researches;
+        
+        // All re-searches should be classified
+        assert_eq!(total_classified, lmr_stats.researches_triggered,
+            "All re-searches should be classified by position type");
+    }
+
+    /// Test comparing re-search rates with adaptive margin
+    #[test]
+    fn test_adaptive_margin_effectiveness() {
+        let mut engine = create_test_engine();
+        
+        // Enable LMR with adaptive margin
+        let mut lmr_config = LMRConfig::default();
+        lmr_config.enabled = true;
+        lmr_config.min_depth = 3;
+        lmr_config.min_move_index = 2;
+        lmr_config.enable_adaptive_reduction = true;
+        lmr_config.enable_position_type_margin = true;
+        engine.update_lmr_config(lmr_config).unwrap();
+        
+        let board = create_test_board();
+        let captured_pieces = create_test_captured_pieces();
+        let player = Player::Black;
+        
+        // Reset statistics
+        engine.reset_lmr_stats();
+        
+        // Perform search
+        let _result = engine.search_at_depth(&board, &captured_pieces, player, 6, 8000);
+        
+        let lmr_stats = engine.get_lmr_stats();
+        
+        println!("With adaptive margin:");
+        println!("  Total reductions: {}", lmr_stats.reductions_applied);
+        println!("  Total re-searches: {}", lmr_stats.researches_triggered);
+        println!("  Re-search rate: {:.2}%", if lmr_stats.reductions_applied > 0 {
+            (lmr_stats.researches_triggered as f64 / lmr_stats.reductions_applied as f64) * 100.0
+        } else { 0.0 });
+        
+        // Test that adaptation is working
+        assert!(lmr_stats.reductions_applied > 0, "LMR should have been applied");
+    }
+}

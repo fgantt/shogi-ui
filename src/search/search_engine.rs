@@ -8267,16 +8267,46 @@ impl SearchEngine {
             );
             
             // Check if re-search is needed (with margin)
-            let re_search_threshold = alpha + self.lmr_config.re_search_margin;
+            // Task 7.0.6.3: Use position-type adaptive re-search margin
+            let margin = if self.lmr_config.enable_position_type_margin {
+                match search_state.position_classification {
+                    Some(crate::types::PositionClassification::Tactical) => {
+                        self.lmr_config.tactical_re_search_margin
+                    }
+                    Some(crate::types::PositionClassification::Quiet) => {
+                        self.lmr_config.quiet_re_search_margin
+                    }
+                    Some(crate::types::PositionClassification::Neutral) | None => {
+                        self.lmr_config.re_search_margin
+                    }
+                }
+            } else {
+                self.lmr_config.re_search_margin
+            };
+            
+            let re_search_threshold = alpha + margin;
             if score > re_search_threshold {
                 self.lmr_stats.researches_triggered += 1;
                 self.lmr_stats.re_search_margin_allowed += 1;
                 self.pruning_manager.statistics.re_searches += 1;
                 
+                // Task 7.0.6.4: Track re-search by position type
+                match search_state.position_classification {
+                    Some(crate::types::PositionClassification::Tactical) => {
+                        self.lmr_stats.tactical_researches += 1;
+                    }
+                    Some(crate::types::PositionClassification::Quiet) => {
+                        self.lmr_stats.quiet_researches += 1;
+                    }
+                    Some(crate::types::PositionClassification::Neutral) | None => {
+                        self.lmr_stats.neutral_researches += 1;
+                    }
+                }
+                
                 // Debug logging for re-search margin decisions
                 crate::debug_utils::trace_log("LMR", &format!(
-                    "Re-search triggered: score={} > threshold={} (alpha={} + margin={})",
-                    score, re_search_threshold, alpha, self.lmr_config.re_search_margin
+                    "Re-search triggered: score={} > threshold={} (alpha={} + margin={}, position: {:?})",
+                    score, re_search_threshold, alpha, margin, search_state.position_classification
                 ));
                 
                 // Re-search at full depth
