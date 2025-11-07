@@ -144,18 +144,18 @@
   - [x] 7.7 Add benchmark comparing performance with and without statistics *(deferred until global bench harness issues are resolved)*
   - [x] 7.8 Document expected 1-2% performance improvement in comments
 
-- [ ] 8.0 🔵 **LOW: Robustness - Handle Lock Poisoning Gracefully** (Effort: 1 hour)
-  - [ ] 8.1 Update `store_with_synchronization()` to handle poisoned lock:
-    - [ ] 8.1.1 Replace `.unwrap()` with match statement
-    - [ ] 8.1.2 On `Ok(guard)` use guard normally
-    - [ ] 8.1.3 On `Err(poisoned)` call `poisoned.into_inner()` to recover
-    - [ ] 8.1.4 Add warning log when poison is detected
-  - [ ] 8.2 Update `replacement_handler.lock()` calls to handle poison errors
-  - [ ] 8.3 Update `cache_manager.lock()` calls to handle poison errors
-  - [ ] 8.4 Update `stats.lock()` calls to handle poison errors
-  - [ ] 8.5 Add integration test that deliberately poisons a lock and verifies recovery
-  - [ ] 8.6 Document poison recovery behavior in API documentation
-  - [ ] 8.7 Consider adding statistics counter for poison recovery events
+- [x] 8.0 🔵 **LOW: Robustness - Handle Lock Poisoning Gracefully** (Effort: 1 hour) ✅ **COMPLETE**
+  - [x] 8.1 Update `store_with_synchronization()` to handle poisoned lock:
+    - [x] 8.1.1 Replace `.unwrap()` with match statement *(encapsulated in recovery helpers)*
+    - [x] 8.1.2 On `Ok(guard)` use guard normally
+    - [x] 8.1.3 On `Err(poisoned)` call `poisoned.into_inner()` to recover
+    - [x] 8.1.4 Add warning log when poison is detected *(uses `log::warn!` with contextual message)*
+  - [x] 8.2 Update `replacement_handler.lock()` calls to handle poison errors
+  - [x] 8.3 Update `cache_manager.lock()` calls to handle poison errors
+  - [x] 8.4 Update `stats.lock()` calls to handle poison errors
+  - [x] 8.5 Add integration test that deliberately poisons a lock and verifies recovery
+  - [x] 8.6 Document poison recovery behavior in API documentation
+  - [x] 8.7 Consider adding statistics counter for poison recovery events *(tracked via `poison_recoveries`)*
 
 - [ ] 9.0 🔵 **LOW: Advanced - Hierarchical Compression for Large Tables** (Effort: 24 hours)
   - [ ] 9.1 Design hierarchical architecture:
@@ -1082,3 +1082,25 @@ let transposition_table = ThreadSafeTranspositionTable::new(tt_config);
 
 - Benchmark work is prepared but deferred until the workspace bench harness builds cleanly (consistent with earlier tasks). No regression expected; follow-up planned once the global build issues are resolved.
 
+---
+
+## Task 8.0 Completion Notes
+
+**Task:** Robustness – Handle Lock Poisoning Gracefully (LOW PRIORITY)
+
+**Status:** ✅ **COMPLETE** – Bucket locks, cache manager, replacement policy, and statistics mutexes now recover cleanly from poison without aborting search threads.
+
+### Recovery Helpers (Tasks 8.1-8.4)
+
+- Added `recover_write_guard` (non-WASM) and `recover_mutex_guard` helpers that unwrap `LockResult` values, log a warning, and recover poisoned guards via `into_inner()`.
+- Centralised warning emission through `record_poison_recovery`, ensuring every recovery is surfaced via `log::warn!` with contextual details while minimising steady-state overhead.
+- Refactored `store_with_synchronization`, `clear_with_synchronization`, age-management utilities, and all statistics mutators to funnel through the new helpers.
+
+### Testing & Metrics (Tasks 8.5 & 8.7)
+
+- Added `test_poison_recovery_during_store` which deliberately poisons the replacement-handler mutex, then verifies that a subsequent store succeeds and increments the new counter.
+- Introduced a `poison_recoveries` atomic on `ThreadSafeTranspositionTable` exposed via `ThreadSafeStatsSnapshot`, enabling opt-in telemetry on recovery frequency.
+
+### Documentation (Task 8.6)
+
+- Expanded the module-level documentation to describe poison recovery guarantees and highlighted the new statistics field for operations that monitor robustness.

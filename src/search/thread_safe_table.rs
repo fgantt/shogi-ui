@@ -12,6 +12,8 @@
 //! - **Performance Optimized**: Uses atomic operations and cache-line alignment
 //! - **Memory Efficient**: Compact entry storage with configurable size
 //! - **Statistics Tracking**: Comprehensive performance and usage statistics (opt-in)
+//! - **Robust Under Failure**: Recovers from poisoned synchronization primitives without
+//!   crashing the engine
 //!
 //! # Usage
 //!
@@ -50,6 +52,12 @@
 //! - Consider cache line alignment for optimal performance
 //! - Monitor hit rates and adjust configuration accordingly
 //! - Use depth-preferred replacement for better search performance
+//!
+//! # Robustness
+//!
+//! - A warning is logged whenever the table recovers from a poisoned mutex or RW lock.
+//! - When statistics are enabled, poison recovery events are counted via the
+//!   `poison_recoveries` metric in `ThreadSafeStatsSnapshot`.
 
 use crate::bitboards::BitboardBoard;
 use crate::opening_book::OpeningBook;
@@ -60,10 +68,11 @@ use crate::search::replacement_policies::ReplacementPolicyHandler;
 use crate::search::transposition_config::TranspositionConfig;
 use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::*;
+use log::warn;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::RwLock;
-use std::sync::{Arc, Mutex};
+use std::sync::{RwLock, RwLockWriteGuard};
 
 #[cfg(all(feature = "tt-prefetch", target_arch = "x86"))]
 use core::arch::x86::{_mm_prefetch, _MM_HINT_T2};
@@ -313,6 +322,8 @@ pub struct ThreadSafeTranspositionTable {
     replacement_handler: Arc<Mutex<ReplacementPolicyHandler>>,
     /// Performance statistics
     stats: Arc<Mutex<ThreadSafeStats>>,
+    /// Number of poison recovery events observed
+    poison_recoveries: AtomicU64,
 }
 
 /// Thread-safe statistics
@@ -379,6 +390,7 @@ impl ThreadSafeTranspositionTable {
                 config.clone(),
             ))),
             stats: Arc::new(Mutex::new(ThreadSafeStats::default())),
+            poison_recoveries: AtomicU64::new(0),
         }
     }
 
@@ -492,6 +504,54 @@ impl ThreadSafeTranspositionTable {
         self.increment_stores();
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recover_write_guard<'a, T, F>(
+        &self,
+        lock_result: LockResult<RwLockWriteGuard<'a, T>>,
+        context: F,
+    ) -> RwLockWriteGuard<'a, T>
+    where
+        F: FnOnce() -> String,
+    {
+        match lock_result {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                let message = context();
+                self.record_poison_recovery(&message);
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    fn recover_mutex_guard<'a, T, F>(
+        &self,
+        lock_result: LockResult<MutexGuard<'a, T>>,
+        context: F,
+    ) -> MutexGuard<'a, T>
+    where
+        F: FnOnce() -> String,
+    {
+        match lock_result {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                let message = context();
+                self.record_poison_recovery(&message);
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    fn record_poison_recovery(&self, context: &str) {
+        warn!(
+            "ThreadSafeTranspositionTable recovered from poisoned {}",
+            context
+        );
+
+        if self.statistics_enabled {
+            self.poison_recoveries.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     /// Get the bucket lock for a given hash key
     ///
     /// This method maps hash keys to lock buckets for reduced write contention.
@@ -511,7 +571,9 @@ impl ThreadSafeTranspositionTable {
     fn store_with_synchronization(&mut self, index: usize, entry: TranspositionEntry) {
         // Get the bucket lock for this hash (clone Arc to avoid borrow issues)
         let bucket_lock = Arc::clone(self.get_bucket_lock(entry.hash_key));
-        let _write_guard = bucket_lock.write().unwrap();
+        let _write_guard = self.recover_write_guard(bucket_lock.write(), || {
+            format!("bucket lock for hash 0x{:016x}", entry.hash_key)
+        });
 
         let table_entry = &mut self.entries[index];
 
@@ -521,12 +583,17 @@ impl ThreadSafeTranspositionTable {
             let current_entry = Self::reconstruct_entry_static(table_entry, current_hash);
 
             // Use replacement policy to decide
-            let mut handler = self.replacement_handler.lock().unwrap();
-            let decision = handler.should_replace_entry(
-                &current_entry,
-                &entry,
-                self.cache_manager.lock().unwrap().current_age(),
-            );
+            let cache_age = {
+                let cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
+                    "cache manager mutex during store".to_string()
+                });
+                cache_manager.current_age()
+            };
+
+            let mut handler = self.recover_mutex_guard(self.replacement_handler.lock(), || {
+                "replacement handler mutex during store".to_string()
+            });
+            let decision = handler.should_replace_entry(&current_entry, &entry, cache_age);
 
             match decision {
                 ReplacementDecision::Replace => {
@@ -678,7 +745,15 @@ impl ThreadSafeTranspositionTable {
             .iter()
             .map(|lock| Arc::clone(lock))
             .collect();
-        let _guards: Vec<_> = locks.iter().map(|lock| lock.write().unwrap()).collect();
+        let _guards: Vec<_> = locks
+            .iter()
+            .enumerate()
+            .map(|(idx, lock)| {
+                self.recover_write_guard(lock.write(), || {
+                    format!("bucket lock {} during clear", idx)
+                })
+            })
+            .collect();
 
         // Clear entries directly here to avoid borrowing issues
         for entry in &mut self.entries {
@@ -699,12 +774,22 @@ impl ThreadSafeTranspositionTable {
 
     /// Get current age from cache manager
     pub fn current_age(&self) -> u32 {
-        self.cache_manager.lock().unwrap().current_age()
+        let age = {
+            let cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
+                "cache manager mutex during current_age".to_string()
+            });
+            cache_manager.current_age()
+        };
+
+        age
     }
 
     /// Increment age counter
     pub fn increment_age(&mut self, node_count: u64) -> bool {
-        self.cache_manager.lock().unwrap().increment_age(node_count)
+        let mut cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
+            "cache manager mutex during increment_age".to_string()
+        });
+        cache_manager.increment_age(node_count)
     }
 
     /// Get hit rate
@@ -712,7 +797,9 @@ impl ThreadSafeTranspositionTable {
         if !self.statistics_enabled {
             return 0.0;
         }
-        let stats = self.stats.lock().unwrap();
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during hit_rate".to_string()
+        });
         let total = stats.total_probes.load(Ordering::Acquire);
         let hits = stats.hits.load(Ordering::Acquire);
 
@@ -731,7 +818,9 @@ impl ThreadSafeTranspositionTable {
                 ..ThreadSafeStatsSnapshot::default()
             };
         }
-        let stats = self.stats.lock().unwrap();
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during get_stats".to_string()
+        });
         ThreadSafeStatsSnapshot {
             total_probes: stats.total_probes.load(Ordering::Acquire),
             hits: stats.hits.load(Ordering::Acquire),
@@ -739,6 +828,7 @@ impl ThreadSafeTranspositionTable {
             stores: stats.stores.load(Ordering::Acquire),
             replacements: stats.replacements.load(Ordering::Acquire),
             atomic_operations: stats.atomic_operations.load(Ordering::Acquire),
+            poison_recoveries: self.poison_recoveries.load(Ordering::Relaxed),
             hit_rate: self.hit_rate(),
             thread_mode: self.thread_mode,
         }
@@ -785,7 +875,9 @@ impl ThreadSafeTranspositionTable {
         if !self.statistics_enabled {
             return;
         }
-        let stats = self.stats.lock().unwrap();
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during increment_hits".to_string()
+        });
         stats.total_probes.fetch_add(1, Ordering::Relaxed);
         stats.hits.fetch_add(1, Ordering::Relaxed);
     }
@@ -794,7 +886,9 @@ impl ThreadSafeTranspositionTable {
         if !self.statistics_enabled {
             return;
         }
-        let stats = self.stats.lock().unwrap();
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during increment_misses".to_string()
+        });
         stats.total_probes.fetch_add(1, Ordering::Relaxed);
         stats.misses.fetch_add(1, Ordering::Relaxed);
     }
@@ -803,11 +897,10 @@ impl ThreadSafeTranspositionTable {
         if !self.statistics_enabled {
             return;
         }
-        self.stats
-            .lock()
-            .unwrap()
-            .stores
-            .fetch_add(1, Ordering::Relaxed);
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during increment_stores".to_string()
+        });
+        stats.stores.fetch_add(1, Ordering::Relaxed);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -815,22 +908,20 @@ impl ThreadSafeTranspositionTable {
         if !self.statistics_enabled {
             return;
         }
-        self.stats
-            .lock()
-            .unwrap()
-            .replacements
-            .fetch_add(1, Ordering::Relaxed);
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during increment_replacements".to_string()
+        });
+        stats.replacements.fetch_add(1, Ordering::Relaxed);
     }
 
     fn increment_atomic_operations(&self) {
         if !self.statistics_enabled {
             return;
         }
-        self.stats
-            .lock()
-            .unwrap()
-            .atomic_operations
-            .fetch_add(1, Ordering::Relaxed);
+        let stats = self.recover_mutex_guard(self.stats.lock(), || {
+            "statistics mutex during increment_atomic_operations".to_string()
+        });
+        stats.atomic_operations.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -853,7 +944,7 @@ unsafe fn prefetch_entry_ptr(entry: &ThreadSafeEntry) {
 #[inline(always)]
 unsafe fn prefetch_entry_ptr(_entry: &ThreadSafeEntry) {}
 
-/// Snapshot of thread-safe statistics
+/// Snapshot of thread-safe statistics, including poison-recovery counts when tracking is enabled
 #[derive(Debug, Clone)]
 pub struct ThreadSafeStatsSnapshot {
     pub total_probes: u64,
@@ -862,6 +953,7 @@ pub struct ThreadSafeStatsSnapshot {
     pub stores: u64,
     pub replacements: u64,
     pub atomic_operations: u64,
+    pub poison_recoveries: u64,
     pub hit_rate: f64,
     pub thread_mode: ThreadSafetyMode,
 }
@@ -875,6 +967,7 @@ impl Default for ThreadSafeStatsSnapshot {
             stores: 0,
             replacements: 0,
             atomic_operations: 0,
+            poison_recoveries: 0,
             hit_rate: 0.0,
             thread_mode: ThreadSafetyMode::Auto,
         }
@@ -917,6 +1010,8 @@ mod tests {
     use crate::bitboards::BitboardBoard;
     use crate::opening_book::{BookMove, OpeningBookBuilder};
     use crate::search::zobrist::{RepetitionState, ZobristHasher};
+    use std::panic;
+    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
@@ -994,6 +1089,7 @@ mod tests {
         assert_eq!(stats.misses, 0);
         assert_eq!(stats.stores, 0);
         assert_eq!(stats.atomic_operations, 0);
+        assert_eq!(stats.poison_recoveries, 0);
         assert_eq!(table.hit_rate(), 0.0);
     }
 
@@ -1011,6 +1107,7 @@ mod tests {
         assert_eq!(stats.total_probes, 1);
         assert_eq!(stats.hits, 1);
         assert_eq!(stats.stores, 1);
+        assert_eq!(stats.poison_recoveries, 0);
         assert!(table.hit_rate() > 0.0);
     }
 
@@ -1027,6 +1124,7 @@ mod tests {
         assert_eq!(stats.total_probes, 1);
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.hits, 0);
+        assert_eq!(stats.poison_recoveries, 0);
     }
 
     #[test]
@@ -1156,6 +1254,43 @@ mod tests {
 
         let stats = table.get_stats();
         assert_eq!(stats.atomic_operations, 1); // One atomic store operation
+        assert_eq!(stats.poison_recoveries, 0);
+    }
+
+    #[test]
+    fn test_poison_recovery_during_store() {
+        let mut config = create_test_config();
+        config.enable_statistics = true;
+        let mut table =
+            ThreadSafeTranspositionTable::with_thread_mode(config, ThreadSafetyMode::MultiThreaded);
+
+        // Seed the table so the next store triggers the replacement path
+        let mut initial_entry = create_test_entry(100, 5, TranspositionFlag::Exact, 1);
+        initial_entry.hash_key = 0xAA55_AA55_AA55_AA55;
+        table.store(initial_entry.clone());
+
+        // Poison the replacement handler lock
+        let handler = Arc::clone(&table.replacement_handler);
+        let _ = panic::catch_unwind(|| {
+            let _guard = handler.lock().unwrap();
+            panic!("intentional poison");
+        });
+
+        // Attempt to store a replacement entry and ensure recovery succeeds
+        let mut replacement_entry = create_test_entry(120, 6, TranspositionFlag::Exact, 2);
+        replacement_entry.hash_key = initial_entry.hash_key;
+        table.store(replacement_entry.clone());
+
+        let stats = table.get_stats();
+        assert!(
+            stats.poison_recoveries >= 1,
+            "expected poison recovery to be recorded"
+        );
+
+        // Verify store still succeeds after recovery
+        assert!(table
+            .probe(replacement_entry.hash_key, replacement_entry.depth)
+            .is_some());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
