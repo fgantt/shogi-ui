@@ -28,6 +28,9 @@ pub struct PVOrdering {
     previous_iteration_pv: HashMap<u64, Move>,
     /// Task 11.0: Maximum number of PV moves to store per position
     max_pv_moves_per_position: usize,
+    /// Task 11.4: Sibling node PV moves
+    /// Maps parent position hash -> Vec of PV moves from sibling nodes
+    sibling_pv_moves: HashMap<u64, Vec<Move>>,
 }
 
 impl PVOrdering {
@@ -39,6 +42,7 @@ impl PVOrdering {
             multiple_pv_cache: HashMap::new(),
             previous_iteration_pv: HashMap::new(),
             max_pv_moves_per_position: 3, // Default: store top 3 PV moves
+            sibling_pv_moves: HashMap::new(), // Task 11.4
         }
     }
 
@@ -51,6 +55,7 @@ impl PVOrdering {
             multiple_pv_cache: HashMap::new(),
             previous_iteration_pv: HashMap::new(),
             max_pv_moves_per_position: max_pv_moves,
+            sibling_pv_moves: HashMap::new(), // Task 11.4
         }
     }
 
@@ -90,6 +95,7 @@ impl PVOrdering {
         self.clear_depth_moves();
         self.multiple_pv_cache.clear(); // Task 11.0
         self.previous_iteration_pv.clear(); // Task 11.0
+        self.sibling_pv_moves.clear(); // Task 11.4
     }
 
     /// Get cache size
@@ -143,17 +149,57 @@ impl PVOrdering {
         self.previous_iteration_pv.clear();
     }
 
+    // ==================== Task 11.4: Sibling Node PV ====================
+
+    /// Store PV move from sibling node
+    /// Task 11.4: Stores PV moves discovered in sibling search nodes
+    /// 
+    /// Sibling nodes are nodes at the same depth in the search tree.
+    /// When exploring one node, the PV from other sibling nodes can be useful.
+    pub fn store_sibling_pv(&mut self, parent_hash: u64, sibling_pv_move: Move) {
+        let siblings = self.sibling_pv_moves.entry(parent_hash).or_insert_with(Vec::new);
+        
+        // Only store if not already present
+        if !siblings.iter().any(|m| moves_equal(m, &sibling_pv_move)) {
+            siblings.push(sibling_pv_move);
+            
+            // Limit number of sibling PV moves per parent
+            if siblings.len() > self.max_pv_moves_per_position {
+                siblings.remove(0); // Remove oldest
+            }
+        }
+    }
+
+    /// Get PV moves from sibling nodes
+    /// Task 11.4: Returns PV moves discovered in sibling search nodes
+    pub fn get_sibling_pv_moves(&self, parent_hash: u64) -> Option<&Vec<Move>> {
+        self.sibling_pv_moves.get(&parent_hash)
+    }
+
+    /// Clear sibling PV moves
+    pub fn clear_sibling_pv(&mut self) {
+        self.sibling_pv_moves.clear();
+    }
+
+    /// Clear sibling PV moves for a specific parent
+    pub fn clear_sibling_pv_for_parent(&mut self, parent_hash: u64) {
+        self.sibling_pv_moves.remove(&parent_hash);
+    }
+
     /// Get memory usage estimate for cache
-    /// Task 11.0: Updated to include multiple PV and previous iteration caches
+    /// Task 11.0/11.4: Updated to include all PV caches (multiple, previous iteration, sibling)
     pub fn cache_memory_bytes(&self) -> usize {
         let single_pv = self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>());
         let depth_pv = self.pv_moves.len() * (std::mem::size_of::<u8>() + std::mem::size_of::<Move>());
         let multiple_pv = self.multiple_pv_cache.iter()
-            .map(|(k, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
+            .map(|(_, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
             .sum::<usize>();
         let previous_pv = self.previous_iteration_pv.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Move>());
+        let sibling_pv = self.sibling_pv_moves.iter()
+            .map(|(_, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
+            .sum::<usize>();
         
-        single_pv + depth_pv + multiple_pv + previous_pv
+        single_pv + depth_pv + multiple_pv + previous_pv + sibling_pv
     }
 
     /// Check if cache is full (for size management)
@@ -199,7 +245,7 @@ pub fn moves_equal(a: &Move, b: &Move) -> bool {
 // ==================== Task 11.0: PV Statistics ====================
 
 /// PV move statistics
-/// Task 11.0: Tracks effectiveness of different PV move sources
+/// Task 11.0/11.4: Tracks effectiveness of different PV move sources
 #[derive(Debug, Clone, Default)]
 pub struct PVMoveStatistics {
     /// Number of times primary PV move was used
@@ -208,6 +254,8 @@ pub struct PVMoveStatistics {
     pub multiple_pv_hits: u64,
     /// Number of times previous iteration PV was used
     pub previous_iteration_pv_hits: u64,
+    /// Task 11.4: Number of times sibling PV was used
+    pub sibling_pv_hits: u64,
     /// Number of times PV move not available
     pub pv_misses: u64,
     /// Number of times primary PV move was the best move
@@ -216,6 +264,8 @@ pub struct PVMoveStatistics {
     pub multiple_pv_best_move_count: u64,
     /// Number of times previous iteration PV was the best move
     pub previous_iteration_best_move_count: u64,
+    /// Task 11.4: Number of times sibling PV was the best move
+    pub sibling_pv_best_move_count: u64,
 }
 
 impl PVMoveStatistics {
@@ -256,6 +306,26 @@ impl PVMoveStatistics {
     pub fn previous_iteration_effectiveness(&self) -> f64 {
         if self.previous_iteration_pv_hits > 0 {
             (self.previous_iteration_best_move_count as f64 / self.previous_iteration_pv_hits as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate sibling PV effectiveness
+    /// Task 11.4: Effectiveness of sibling node PV moves
+    pub fn sibling_pv_effectiveness(&self) -> f64 {
+        if self.sibling_pv_hits > 0 {
+            (self.sibling_pv_best_move_count as f64 / self.sibling_pv_hits as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate sibling PV hit rate
+    pub fn sibling_pv_hit_rate(&self) -> f64 {
+        let total = self.sibling_pv_hits + self.pv_misses;
+        if total > 0 {
+            (self.sibling_pv_hits as f64 / total as f64) * 100.0
         } else {
             0.0
         }

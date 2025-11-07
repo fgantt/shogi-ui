@@ -9596,6 +9596,226 @@ mod tests {
         assert!(orderer.get_see_cache_size() <= orderer.max_see_cache_size);
     }
 
+    // ==================== Task 11.7: PV Move Enhancement Tests ====================
+
+    #[test]
+    fn test_multiple_pv_moves_storage() {
+        // Test storing and retrieving multiple PV moves
+        let mut orderer = MoveOrdering::new();
+        
+        // Create test moves
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Knight, Player::Black);
+        let move3 = create_test_move(Some(Position::new(1, 3)), Position::new(2, 3), PieceType::Silver, Player::Black);
+        
+        let pv_moves = vec![move1.clone(), move2.clone(), move3.clone()];
+        let position_hash = 12345u64;
+        
+        // Store multiple PV moves
+        orderer.pv_ordering.store_multiple_pv_moves(position_hash, pv_moves.clone());
+        
+        // Retrieve and verify
+        let retrieved = orderer.pv_ordering.get_multiple_pv_moves(position_hash);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_multiple_pv_moves_limit() {
+        // Test that multiple PV moves are limited to max_pv_moves_per_position
+        let mut orderer = MoveOrdering::new();
+        orderer.pv_ordering.set_max_pv_moves_per_position(2);
+        
+        // Create 5 test moves
+        let moves: Vec<Move> = (0..5)
+            .map(|i| create_test_move(
+                Some(Position::new(1, i)),
+                Position::new(2, i),
+                PieceType::Pawn,
+                Player::Black
+            ))
+            .collect();
+        
+        let position_hash = 12345u64;
+        
+        // Store 5 moves but only 2 should be kept
+        orderer.pv_ordering.store_multiple_pv_moves(position_hash, moves);
+        
+        let retrieved = orderer.pv_ordering.get_multiple_pv_moves(position_hash);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().len(), 2); // Only 2 stored
+    }
+
+    #[test]
+    fn test_previous_iteration_pv() {
+        // Test previous iteration PV tracking
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let position_hash = 12345u64;
+        
+        // Cache a PV move
+        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
+        
+        // Verify it's in current cache
+        assert!(orderer.pv_ordering.get_cached_pv_move(position_hash).is_some());
+        
+        // Save as previous iteration
+        orderer.pv_ordering.save_previous_iteration_pv();
+        
+        // Verify it's in previous iteration cache
+        let prev_pv = orderer.pv_ordering.get_previous_iteration_pv(position_hash);
+        assert!(prev_pv.is_some());
+        assert_eq!(prev_pv.unwrap().to, move1.to);
+    }
+
+    #[test]
+    fn test_previous_iteration_pv_clear() {
+        // Test clearing previous iteration PV
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let position_hash = 12345u64;
+        
+        // Cache and save to previous iteration
+        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
+        orderer.pv_ordering.save_previous_iteration_pv();
+        
+        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_some());
+        
+        // Clear previous iteration
+        orderer.pv_ordering.clear_previous_iteration();
+        
+        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_none());
+    }
+
+    #[test]
+    fn test_sibling_pv_storage() {
+        // Test sibling node PV tracking
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let move2 = create_test_move(Some(Position::new(1, 2)), Position::new(2, 2), PieceType::Knight, Player::Black);
+        
+        let parent_hash = 98765u64;
+        
+        // Store sibling PV moves
+        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
+        orderer.pv_ordering.store_sibling_pv(parent_hash, move2.clone());
+        
+        // Retrieve and verify
+        let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
+        assert!(siblings.is_some());
+        assert_eq!(siblings.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_sibling_pv_deduplication() {
+        // Test that duplicate sibling PV moves are not stored
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let parent_hash = 98765u64;
+        
+        // Store same move twice
+        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
+        orderer.pv_ordering.store_sibling_pv(parent_hash, move1.clone());
+        
+        // Should only have one entry
+        let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
+        assert!(siblings.is_some());
+        assert_eq!(siblings.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_sibling_pv_limit() {
+        // Test that sibling PV moves respect max_pv_moves_per_position limit
+        let mut orderer = MoveOrdering::new();
+        orderer.pv_ordering.set_max_pv_moves_per_position(2);
+        
+        let parent_hash = 98765u64;
+        
+        // Store 4 different sibling PV moves
+        for i in 0..4 {
+            let move_ = create_test_move(
+                Some(Position::new(1, i)),
+                Position::new(2, i),
+                PieceType::Pawn,
+                Player::Black
+            );
+            orderer.pv_ordering.store_sibling_pv(parent_hash, move_);
+        }
+        
+        // Should only keep max_pv_moves_per_position (2)
+        let siblings = orderer.pv_ordering.get_sibling_pv_moves(parent_hash);
+        assert!(siblings.is_some());
+        assert_eq!(siblings.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_pv_statistics_tracking() {
+        // Test PVMoveStatistics structure
+        let mut stats = PVMoveStatistics::new();
+        
+        // Simulate some PV hits
+        stats.primary_pv_hits = 10;
+        stats.pv_misses = 5;
+        stats.primary_pv_best_move_count = 8;
+        
+        // Calculate hit rate
+        let hit_rate = stats.primary_pv_hit_rate();
+        assert!((hit_rate - 66.67).abs() < 0.1); // 10 / (10 + 5) * 100 ≈ 66.67%
+        
+        // Calculate effectiveness
+        let effectiveness = stats.primary_pv_effectiveness();
+        assert!((effectiveness - 80.0).abs() < 0.1); // 8 / 10 * 100 = 80%
+    }
+
+    #[test]
+    fn test_pv_memory_tracking() {
+        // Test that PV memory usage is tracked correctly
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let position_hash = 12345u64;
+        
+        // Initial memory
+        let initial_memory = orderer.pv_ordering.cache_memory_bytes();
+        
+        // Store some PV moves
+        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
+        orderer.pv_ordering.store_multiple_pv_moves(position_hash, vec![move1.clone()]);
+        orderer.pv_ordering.save_previous_iteration_pv();
+        
+        // Memory should increase
+        let final_memory = orderer.pv_ordering.cache_memory_bytes();
+        assert!(final_memory > initial_memory);
+    }
+
+    #[test]
+    fn test_pv_clear_operations() {
+        // Test that various clear operations work correctly
+        let mut orderer = MoveOrdering::new();
+        
+        let move1 = create_test_move(Some(Position::new(1, 1)), Position::new(2, 1), PieceType::Pawn, Player::Black);
+        let position_hash = 12345u64;
+        
+        // Add data to all PV caches
+        orderer.pv_ordering.cache_pv_move(position_hash, Some(move1.clone()));
+        orderer.pv_ordering.store_multiple_pv_moves(position_hash, vec![move1.clone()]);
+        orderer.pv_ordering.save_previous_iteration_pv();
+        orderer.pv_ordering.store_sibling_pv(position_hash, move1.clone());
+        
+        // Clear all
+        orderer.pv_ordering.clear_all();
+        
+        // Verify all cleared
+        assert!(orderer.pv_ordering.get_cached_pv_move(position_hash).is_none());
+        assert!(orderer.pv_ordering.get_multiple_pv_moves(position_hash).is_none());
+        assert!(orderer.pv_ordering.get_previous_iteration_pv(position_hash).is_none());
+        assert!(orderer.pv_ordering.get_sibling_pv_moves(position_hash).is_none());
+    }
+
     // ==================== Performance Optimization Tests ====================
 
     #[test]
