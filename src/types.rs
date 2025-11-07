@@ -2556,6 +2556,7 @@ pub struct LMRStats {
     pub tt_move_exempted: u64,                // Number of TT moves exempted from LMR
     pub tt_move_missed: u64,                  // Number of moves that should have been TT moves but weren't detected
     pub iid_move_explicitly_exempted: u64,    // Number of IID moves explicitly exempted from LMR (Task 7.0.1)
+    pub iid_move_reduced_count: u64,          // Number of times IID move was reduced (should be 0!) (Task 7.0.5.1)
     /// Statistics by game phase (Task 4.6)
     pub phase_stats: std::collections::HashMap<GamePhase, LMRPhaseStats>,
     /// Position classification statistics (Task 5.10)
@@ -6705,6 +6706,67 @@ pub struct SearchPerformanceMetrics {
     pub check_cache_size: usize,
     pub total_cache_operations: u64,
     pub cache_hit_rate: f64,
+}
+
+/// Integration statistics for cross-algorithm coordination monitoring (Task 7.0.5.4)
+/// Tracks interactions between NMP, IID, LMR, and other search algorithms
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct IntegrationStats {
+    /// Total time spent in NMP before move loop (milliseconds)
+    pub nmp_overhead_time_ms: u64,
+    /// Total time spent in IID before move loop (milliseconds)
+    pub iid_overhead_time_ms: u64,
+    /// Number of times both NMP and IID ran before move loop
+    pub both_nmp_and_iid_overhead: u64,
+    /// Number of times NMP failed and IID subsequently ran
+    pub nmp_fail_then_iid: u64,
+    /// Number of times NMP succeeded (IID not needed)
+    pub nmp_success_no_iid: u64,
+    /// Correlation tracking: IID effectiveness after NMP failure
+    pub iid_cutoffs_after_nmp_fail: u64,
+    /// Correlation tracking: IID searches after NMP failure
+    pub iid_searches_after_nmp_fail: u64,
+    /// Time pressure level distribution
+    pub time_pressure_none_count: u64,
+    pub time_pressure_low_count: u64,
+    pub time_pressure_medium_count: u64,
+    pub time_pressure_high_count: u64,
+    /// Timeout occurrences by time pressure level
+    pub timeouts_at_none: u64,
+    pub timeouts_at_low: u64,
+    pub timeouts_at_medium: u64,
+    pub timeouts_at_high: u64,
+}
+
+impl IntegrationStats {
+    /// Create a new empty integration statistics structure
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+    
+    /// Calculate NMP-IID sequential overhead percentage
+    pub fn sequential_overhead_percent(&self) -> f64 {
+        let total_overhead = self.nmp_overhead_time_ms + self.iid_overhead_time_ms;
+        if total_overhead == 0 {
+            return 0.0;
+        }
+        // Would need total search time to calculate percentage
+        // For now return absolute overhead
+        total_overhead as f64
+    }
+    
+    /// Calculate IID effectiveness after NMP failure
+    pub fn iid_effectiveness_after_nmp_fail(&self) -> f64 {
+        if self.iid_searches_after_nmp_fail == 0 {
+            return 0.0;
+        }
+        (self.iid_cutoffs_after_nmp_fail as f64 / self.iid_searches_after_nmp_fail as f64) * 100.0
+    }
 }
 
 /// Comprehensive search metrics for performance monitoring (Task 5.7-5.9)

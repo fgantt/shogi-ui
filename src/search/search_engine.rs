@@ -62,6 +62,8 @@ pub struct SearchEngine {
     time_pressure_thresholds: crate::types::TimePressureThresholds,
     /// Core search metrics for performance monitoring (Task 5.7-5.8)
     core_search_metrics: crate::types::CoreSearchMetrics,
+    /// Integration statistics for cross-algorithm monitoring (Task 7.0.5.4)
+    integration_stats: crate::types::IntegrationStats,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     // Tapered evaluation search integration
@@ -349,6 +351,7 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
+            integration_stats: crate::types::IntegrationStats::default(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -570,6 +573,7 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
+            integration_stats: crate::types::IntegrationStats::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
@@ -8223,6 +8227,17 @@ impl SearchEngine {
                 tt_move.as_ref()
             )
         };
+        
+        // Task 7.0.5.1-5.2: Monitor and alert if IID move somehow gets reduced (should never happen)
+        if reduction > 0 && is_iid_move {
+            self.lmr_stats.iid_move_reduced_count += 1;
+            eprintln!("⚠️  WARNING: IID move was reduced by LMR! This should never happen.");
+            eprintln!("    Move: {}, Reduction: {}, Depth: {}", move_.to_usi_string(), reduction, depth);
+            crate::debug_utils::trace_log("LMR_ALERT", &format!(
+                "CRITICAL: IID move {} was reduced by {} at depth {}. This indicates a bug in exemption logic!",
+                move_.to_usi_string(), reduction, depth
+            ));
+        }
         
         if reduction > 0 {
             self.lmr_stats.reductions_applied += 1;
