@@ -1881,6 +1881,7 @@ pub struct NullMoveStats {
     pub disabled_material_endgame: u64,      // Times disabled due to material endgame detection
     pub disabled_king_activity_endgame: u64,  // Times disabled due to king activity endgame detection
     pub disabled_zugzwang: u64,              // Times disabled due to zugzwang-prone endgame detection
+    pub skipped_time_pressure: u64,          // Times skipped due to time pressure (Task 7.0.2.8)
 }
 
 impl NullMoveStats {
@@ -6399,6 +6400,56 @@ impl GamePhase {
             0..=20 => GamePhase::Endgame,
             21..=35 => GamePhase::Middlegame,
             _ => GamePhase::Opening,
+        }
+    }
+}
+
+/// Time pressure level for adaptive algorithm coordination (Task 7.0.2.1)
+/// Used to coordinate NMP and IID decisions based on remaining time
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TimePressure {
+    /// No time pressure - all algorithms run normally
+    None,
+    /// Low time pressure - skip expensive operations in simple positions
+    Low,
+    /// Medium time pressure - skip IID, allow fast NMP
+    Medium,
+    /// High time pressure - skip both NMP and IID, focus on main search
+    High,
+}
+
+impl TimePressure {
+    /// Determine time pressure level from remaining time percentage
+    pub fn from_remaining_time_percent(remaining_percent: f64, thresholds: &TimePressureThresholds) -> Self {
+        if remaining_percent <= thresholds.high_pressure_threshold {
+            TimePressure::High
+        } else if remaining_percent <= thresholds.medium_pressure_threshold {
+            TimePressure::Medium
+        } else if remaining_percent <= thresholds.low_pressure_threshold {
+            TimePressure::Low
+        } else {
+            TimePressure::None
+        }
+    }
+}
+
+/// Thresholds for time pressure detection (Task 7.0.2.3)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimePressureThresholds {
+    /// Threshold for low time pressure (default: 25%)
+    pub low_pressure_threshold: f64,
+    /// Threshold for medium time pressure (default: 15%)
+    pub medium_pressure_threshold: f64,
+    /// Threshold for high time pressure (default: 5%)
+    pub high_pressure_threshold: f64,
+}
+
+impl Default for TimePressureThresholds {
+    fn default() -> Self {
+        Self {
+            low_pressure_threshold: 25.0,
+            medium_pressure_threshold: 15.0,
+            high_pressure_threshold: 5.0,
         }
     }
 }

@@ -58,6 +58,8 @@ pub struct SearchEngine {
     time_management_config: TimeManagementConfig,
     /// Time budget statistics (Task 4.10)
     time_budget_stats: TimeBudgetStats,
+    /// Time pressure thresholds for algorithm coordination (Task 7.0.2.3)
+    time_pressure_thresholds: crate::types::TimePressureThresholds,
     /// Core search metrics for performance monitoring (Task 5.7-5.8)
     core_search_metrics: crate::types::CoreSearchMetrics,
     // Advanced Alpha-Beta Pruning
@@ -319,6 +321,7 @@ impl SearchEngine {
             previous_scores: Vec::new(),
             time_management_config: TimeManagementConfig::default(),
             time_budget_stats: TimeBudgetStats::default(),
+            time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
@@ -643,6 +646,28 @@ impl SearchEngine {
 
     // ===== INTERNAL ITERATIVE DEEPENING (IID) METHODS =====
 
+    /// Calculate time pressure level based on remaining time (Task 7.0.2.2)
+    /// Returns the current time pressure level for algorithm coordination
+    pub fn calculate_time_pressure_level(&self, start_time: &TimeSource, time_limit_ms: u32) -> crate::types::TimePressure {
+        if time_limit_ms == 0 {
+            return crate::types::TimePressure::None;
+        }
+        
+        let elapsed_ms = start_time.elapsed_ms();
+        let remaining_ms = if elapsed_ms >= time_limit_ms {
+            0
+        } else {
+            time_limit_ms - elapsed_ms
+        };
+        
+        let remaining_percent = (remaining_ms as f64 / time_limit_ms as f64) * 100.0;
+        
+        crate::types::TimePressure::from_remaining_time_percent(
+            remaining_percent,
+            &self.time_pressure_thresholds
+        )
+    }
+    
     /// Determine if IID should be applied at this position
     /// Task 4.9: Added board and captured_pieces for adaptive minimum depth
     /// Task 5.0: Integrated time estimation into decision logic
@@ -3838,6 +3863,9 @@ impl SearchEngine {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
+        // Task 7.0.2.4: Calculate time pressure level for algorithm coordination
+        let time_pressure = self.calculate_time_pressure_level(start_time, time_limit_ms);
+        
         if self.should_stop(&start_time, time_limit_ms) { 
             // Try to return a meaningful score instead of 0
             if let Some(best_score) = best_score_tracked {
@@ -3925,8 +3953,21 @@ impl SearchEngine {
         }
         
         // === NULL MOVE PRUNING ===
-        if self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
-            crate::debug_utils::trace_log("NULL_MOVE", &format!("Attempting null move pruning at depth {}", depth));
+        // Task 7.0.2.5, 7.0.2.9: Skip NMP at High time pressure, allow at Low/Medium/None
+        let skip_nmp_time_pressure = time_pressure == crate::types::TimePressure::High;
+        if skip_nmp_time_pressure {
+            self.null_move_stats.skipped_time_pressure += 1;
+            crate::debug_utils::trace_log("NULL_MOVE", &format!(
+                "Skipping NMP due to HIGH time pressure (depth: {})",
+                depth
+            ));
+        }
+        
+        if !skip_nmp_time_pressure && self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
+            crate::debug_utils::trace_log("NULL_MOVE", &format!(
+                "Attempting null move pruning at depth {} (time pressure: {:?})",
+                depth, time_pressure
+            ));
             crate::debug_utils::start_timing("null_move_search");
             // Create local hash_history for null move search (Task 8.4, Task 8.6)
             // This separate hash history ensures that repetition detection within the null move
@@ -4049,11 +4090,27 @@ impl SearchEngine {
         // === INTERNAL ITERATIVE DEEPENING (IID) ===
         let mut iid_move = None;
         let tt_move = self.transposition_table.probe(position_hash, 255).and_then(|entry| entry.best_move.clone());
+        
+        // Task 7.0.2.6, 7.0.2.9: Skip IID at Medium/High time pressure, allow at Low/None
+        let skip_iid_time_pressure = time_pressure == crate::types::TimePressure::Medium ||
+                                      time_pressure == crate::types::TimePressure::High;
+        if skip_iid_time_pressure {
+            self.iid_stats.positions_skipped_time_pressure += 1;
+            crate::debug_utils::trace_log("IID", &format!(
+                "Skipping IID due to time pressure {:?} (depth: {})",
+                time_pressure, depth
+            ));
+        }
+        
         // Task 4.9: Pass board and captured_pieces for adaptive minimum depth
-        let should_apply_iid = self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms, Some(board), Some(captured_pieces), Some(player));
+        let should_apply_iid = !skip_iid_time_pressure && 
+                                 self.should_apply_iid(depth, tt_move.as_ref(), &legal_moves, start_time, time_limit_ms, Some(board), Some(captured_pieces), Some(player));
         
         if should_apply_iid {
-            crate::debug_utils::trace_log("IID", &format!("Applying Internal Iterative Deepening at depth {}", depth));
+            crate::debug_utils::trace_log("IID", &format!(
+                "Applying Internal Iterative Deepening at depth {} (time pressure: {:?})",
+                depth, time_pressure
+            ));
             crate::debug_utils::start_timing("iid_search");
             // Task 4.0: Pass board and captured_pieces for Dynamic strategy depth calculation
             let iid_depth = self.calculate_iid_depth(depth, Some(board), Some(captured_pieces), Some(start_time), Some(time_limit_ms));
