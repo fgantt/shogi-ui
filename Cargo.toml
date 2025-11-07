@@ -11,6 +11,9 @@ verbose-debug = []
 # Enable statistics tracking (Task 7.3)
 # When disabled, statistics tracking code is compiled out
 statistics = []
+# Enable transposition-table prefetching hints (Task 4.0)
+# Requires architecture support; falls back to no-op when unavailable
+tt-prefetch = []
 
 [lib]
 crate-type = ["rlib"]
