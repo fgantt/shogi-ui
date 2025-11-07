@@ -11,6 +11,7 @@ use std::collections::HashMap;
 /// 
 /// Manages PV move cache and provides methods for retrieving and updating PV moves.
 /// PV moves are cached by position hash for fast lookup.
+/// Task 11.0: Enhanced with multiple PV moves and previous iteration support
 #[derive(Debug, Clone)]
 pub struct PVOrdering {
     /// PV move cache: maps position hash -> PV move
@@ -19,6 +20,14 @@ pub struct PVOrdering {
     /// PV moves organized by depth: maps depth -> PV move
     /// Stores the best move found at each search depth
     pv_moves: HashMap<u8, Move>,
+    /// Task 11.0: Multiple PV moves per position (top N moves)
+    /// Maps position hash -> Vec of PV moves (ordered by quality)
+    multiple_pv_cache: HashMap<u64, Vec<Move>>,
+    /// Task 11.0: Previous iteration PV moves
+    /// Maps position hash -> PV move from previous search iteration
+    previous_iteration_pv: HashMap<u64, Move>,
+    /// Task 11.0: Maximum number of PV moves to store per position
+    max_pv_moves_per_position: usize,
 }
 
 impl PVOrdering {
@@ -27,6 +36,21 @@ impl PVOrdering {
         Self {
             pv_move_cache: HashMap::new(),
             pv_moves: HashMap::new(),
+            multiple_pv_cache: HashMap::new(),
+            previous_iteration_pv: HashMap::new(),
+            max_pv_moves_per_position: 3, // Default: store top 3 PV moves
+        }
+    }
+
+    /// Create a new PV ordering manager with custom configuration
+    /// Task 11.0: Allows configuration of maximum PV moves per position
+    pub fn with_max_pv_moves(max_pv_moves: usize) -> Self {
+        Self {
+            pv_move_cache: HashMap::new(),
+            pv_moves: HashMap::new(),
+            multiple_pv_cache: HashMap::new(),
+            previous_iteration_pv: HashMap::new(),
+            max_pv_moves_per_position: max_pv_moves,
         }
     }
 
@@ -64,6 +88,8 @@ impl PVOrdering {
     pub fn clear_all(&mut self) {
         self.clear_cache();
         self.clear_depth_moves();
+        self.multiple_pv_cache.clear(); // Task 11.0
+        self.previous_iteration_pv.clear(); // Task 11.0
     }
 
     /// Get cache size
@@ -71,9 +97,63 @@ impl PVOrdering {
         self.pv_move_cache.len()
     }
 
+    // ==================== Task 11.0: Multiple PV Moves ====================
+
+    /// Store multiple PV moves for a position
+    /// Task 11.0: Allows storing top N moves from transposition table
+    pub fn store_multiple_pv_moves(&mut self, position_hash: u64, moves: Vec<Move>) {
+        let mut pv_moves = moves;
+        pv_moves.truncate(self.max_pv_moves_per_position);
+        self.multiple_pv_cache.insert(position_hash, pv_moves);
+    }
+
+    /// Get multiple PV moves for a position
+    /// Task 11.0: Returns top N PV moves if available
+    pub fn get_multiple_pv_moves(&self, position_hash: u64) -> Option<&Vec<Move>> {
+        self.multiple_pv_cache.get(&position_hash)
+    }
+
+    /// Set maximum number of PV moves to store per position
+    pub fn set_max_pv_moves_per_position(&mut self, max_pv_moves: usize) {
+        self.max_pv_moves_per_position = max_pv_moves;
+    }
+
+    // ==================== Task 11.0: Previous Iteration PV ====================
+
+    /// Store PV move from previous iteration
+    /// Task 11.0: Called at the start of a new iteration to save previous PV moves
+    pub fn save_previous_iteration_pv(&mut self) {
+        // Copy current PV moves to previous iteration cache
+        self.previous_iteration_pv.clear();
+        for (hash, pv_move_opt) in &self.pv_move_cache {
+            if let Some(pv_move) = pv_move_opt {
+                self.previous_iteration_pv.insert(*hash, pv_move.clone());
+            }
+        }
+    }
+
+    /// Get PV move from previous iteration
+    /// Task 11.0: Returns PV move from previous search iteration if available
+    pub fn get_previous_iteration_pv(&self, position_hash: u64) -> Option<&Move> {
+        self.previous_iteration_pv.get(&position_hash)
+    }
+
+    /// Clear previous iteration PV moves
+    pub fn clear_previous_iteration(&mut self) {
+        self.previous_iteration_pv.clear();
+    }
+
     /// Get memory usage estimate for cache
+    /// Task 11.0: Updated to include multiple PV and previous iteration caches
     pub fn cache_memory_bytes(&self) -> usize {
-        self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>())
+        let single_pv = self.pv_move_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Option<Move>>());
+        let depth_pv = self.pv_moves.len() * (std::mem::size_of::<u8>() + std::mem::size_of::<Move>());
+        let multiple_pv = self.multiple_pv_cache.iter()
+            .map(|(k, v)| std::mem::size_of::<u64>() + v.len() * std::mem::size_of::<Move>())
+            .sum::<usize>();
+        let previous_pv = self.previous_iteration_pv.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<Move>());
+        
+        single_pv + depth_pv + multiple_pv + previous_pv
     }
 
     /// Check if cache is full (for size management)
@@ -114,4 +194,70 @@ pub fn moves_equal(a: &Move, b: &Move) -> bool {
     a.piece_type == b.piece_type && 
     a.player == b.player &&
     a.is_promotion == b.is_promotion
+}
+
+// ==================== Task 11.0: PV Statistics ====================
+
+/// PV move statistics
+/// Task 11.0: Tracks effectiveness of different PV move sources
+#[derive(Debug, Clone, Default)]
+pub struct PVMoveStatistics {
+    /// Number of times primary PV move was used
+    pub primary_pv_hits: u64,
+    /// Number of times multiple PV moves were used
+    pub multiple_pv_hits: u64,
+    /// Number of times previous iteration PV was used
+    pub previous_iteration_pv_hits: u64,
+    /// Number of times PV move not available
+    pub pv_misses: u64,
+    /// Number of times primary PV move was the best move
+    pub primary_pv_best_move_count: u64,
+    /// Number of times multiple PV move was the best move
+    pub multiple_pv_best_move_count: u64,
+    /// Number of times previous iteration PV was the best move
+    pub previous_iteration_best_move_count: u64,
+}
+
+impl PVMoveStatistics {
+    /// Create new PV move statistics
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Calculate primary PV hit rate
+    pub fn primary_pv_hit_rate(&self) -> f64 {
+        let total = self.primary_pv_hits + self.pv_misses;
+        if total > 0 {
+            (self.primary_pv_hits as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate primary PV effectiveness (percentage of times it was best move)
+    pub fn primary_pv_effectiveness(&self) -> f64 {
+        if self.primary_pv_hits > 0 {
+            (self.primary_pv_best_move_count as f64 / self.primary_pv_hits as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate multiple PV effectiveness
+    pub fn multiple_pv_effectiveness(&self) -> f64 {
+        if self.multiple_pv_hits > 0 {
+            (self.multiple_pv_best_move_count as f64 / self.multiple_pv_hits as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate previous iteration PV effectiveness
+    pub fn previous_iteration_effectiveness(&self) -> f64 {
+        if self.previous_iteration_pv_hits > 0 {
+            (self.previous_iteration_best_move_count as f64 / self.previous_iteration_pv_hits as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
 }

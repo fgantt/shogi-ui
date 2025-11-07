@@ -55,7 +55,7 @@ mod counter_moves;
 #[path = "move_ordering/pv_ordering.rs"]
 mod pv_ordering;
 
-pub use pv_ordering::{PVOrdering, score_pv_move as score_pv_move_helper, moves_equal as moves_equal_helper};
+pub use pv_ordering::{PVOrdering, score_pv_move as score_pv_move_helper, moves_equal as moves_equal_helper, PVMoveStatistics};
 
 #[path = "move_ordering/capture_ordering.rs"]
 mod capture_ordering;
