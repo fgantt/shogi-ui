@@ -414,7 +414,7 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
                     config_enabled.enabled = true;
                     engine_enabled.update_null_move_config(config_enabled).unwrap();
                     engine_enabled.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_enabled = board.clone();
                     let _result_enabled = engine_enabled.search_at_depth_legacy(
@@ -427,14 +427,14 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
                     let time_enabled = start.elapsed();
                     let nodes_enabled = engine_enabled.get_nodes_searched();
                     let stats_enabled = engine_enabled.get_null_move_stats().clone();
-                    
+
                     // NMP disabled
                     let mut engine_disabled = SearchEngine::new(None, 16);
                     let mut config_disabled = engine_disabled.get_null_move_config().clone();
                     config_disabled.enabled = false;
                     engine_disabled.update_null_move_config(config_disabled).unwrap();
                     engine_disabled.reset_null_move_stats();
-                    
+
                     let start = Instant::now();
                     let mut board_disabled = board.clone();
                     let _result_disabled = engine_disabled.search_at_depth_legacy(
@@ -446,19 +446,19 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
                     );
                     let time_disabled = start.elapsed();
                     let nodes_disabled = engine_disabled.get_nodes_searched();
-                    
+
                     // Calculate metrics
                     let nodes_reduction = if nodes_disabled > 0 {
                         ((nodes_disabled - nodes_enabled) as f64 / nodes_disabled as f64) * 100.0
                     } else {
                         0.0
                     };
-                    
+
                     // Validate in test mode
                     if std::env::var("NMP_VALIDATION_TEST").is_ok() {
                         println!("Depth {}: Nodes reduction: {:.2}%, Cutoff rate: {:.2}%, Efficiency: {:.2}%",
                             depth, nodes_reduction, stats_enabled.cutoff_rate(), stats_enabled.efficiency());
-                        
+
                         // Validate targets
                         if nodes_disabled > 0 && nodes_enabled > 0 {
                             assert!(
@@ -468,7 +468,7 @@ fn benchmark_comprehensive_validation(c: &mut Criterion) {
                             );
                         }
                     }
-                    
+
                     black_box((
                         result_enabled, result_disabled,
                         time_enabled, time_disabled,

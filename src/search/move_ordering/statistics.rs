@@ -833,7 +833,7 @@ impl EnhancedStatistics {
             if move_.gives_check {
                 self.move_type_distribution.check_moves += 1;
             }
-            if move_.drop {
+            if move_.is_drop() {
                 self.move_type_distribution.drop_moves += 1;
             }
         }

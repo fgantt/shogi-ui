@@ -156,7 +156,7 @@ impl TranspositionTable {
     ///
     /// Returns the number of entries inserted.
     pub fn prefill_from_book(&mut self, book: &mut OpeningBook, depth: u8) -> usize {
-        let mut hasher = ZobristHasher::new();
+        let hasher = ZobristHasher::new();
         let mut inserted = 0usize;
 
         for prefill in book.collect_prefill_entries() {

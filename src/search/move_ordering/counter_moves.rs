@@ -5,7 +5,6 @@
 //! and are likely to be good responses to similar moves.
 
 use crate::types::*;
-use serde::Serialize;
 use std::collections::HashMap;
 
 /// Counter-move heuristic configuration
@@ -167,7 +166,7 @@ impl CounterMoveManager {
     /// Get memory usage estimate
     pub fn memory_bytes(&self) -> usize {
         let mut total = 0;
-        for (opponent_move, counter_moves) in &self.counter_move_table {
+        for (_opponent_move, counter_moves) in &self.counter_move_table {
             total += std::mem::size_of::<Move>(); // opponent_move key
             total += std::mem::size_of::<Vec<Move>>(); // vector overhead
             total += counter_moves.len() * std::mem::size_of::<Move>(); // counter_moves

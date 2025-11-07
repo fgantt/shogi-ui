@@ -192,44 +192,29 @@ pub fn end_timing(key: &str, feature: &str) {
 
 /// Log with feature context and timing information
 /// Optimized: checks debug flag first to avoid unnecessary string formatting
+#[cfg(feature = "verbose-debug")]
 #[inline]
 pub fn trace_log(feature: &str, message: &str) {
-    // Early return if debug is disabled - prevents string formatting
-    #[cfg(feature = "verbose-debug")]
-    {
-        if !is_debug_enabled() {
-            return;
-        }
-    }
-    #[cfg(not(feature = "verbose-debug"))]
-    {
-        // When verbose-debug feature is disabled, this function does nothing
-        // This allows compile-time removal of debug logging
+    if !is_debug_enabled() {
         return;
     }
 
     let search_elapsed = get_search_elapsed_ms();
     let formatted_message = format!("[{}] [{}ms] {}", feature, search_elapsed, message);
 
-    // Use the existing debug_log function which already works in WASM
     debug_log(&formatted_message);
 }
 
+#[cfg(not(feature = "verbose-debug"))]
+#[inline]
+pub fn trace_log(_: &str, _: &str) {}
+
 /// Debug logging for standalone environments
 /// Optimized: checks debug flag first to avoid unnecessary string formatting
+#[cfg(feature = "verbose-debug")]
 #[inline]
 pub fn debug_log(message: &str) {
-    // Early return if debug is disabled - prevents string formatting
-    #[cfg(feature = "verbose-debug")]
-    {
-        if !is_debug_enabled() {
-            return;
-        }
-    }
-    #[cfg(not(feature = "verbose-debug"))]
-    {
-        // When verbose-debug feature is disabled, this function does nothing
-        // This allows compile-time removal of debug logging
+    if !is_debug_enabled() {
         return;
     }
 
@@ -239,20 +224,16 @@ pub fn debug_log(message: &str) {
     eprintln!("DEBUG: {}", formatted_message);
 }
 
+#[cfg(not(feature = "verbose-debug"))]
+#[inline]
+pub fn debug_log(_: &str) {}
+
 /// Log decision points with context
 /// Optimized: checks debug flag first to avoid unnecessary string formatting
+#[cfg(feature = "verbose-debug")]
 #[inline]
 pub fn log_decision(feature: &str, decision: &str, reason: &str, value: Option<i32>) {
-    // Early return if debug is disabled - prevents string formatting
-    #[cfg(feature = "verbose-debug")]
-    {
-        if !is_debug_enabled() {
-            return;
-        }
-    }
-    #[cfg(not(feature = "verbose-debug"))]
-    {
-        // When verbose-debug feature is disabled, this function does nothing
+    if !is_debug_enabled() {
         return;
     }
 
@@ -268,20 +249,16 @@ pub fn log_decision(feature: &str, decision: &str, reason: &str, value: Option<i
     );
 }
 
+#[cfg(not(feature = "verbose-debug"))]
+#[inline]
+pub fn log_decision(_: &str, _: &str, _: &str, _: Option<i32>) {}
+
 /// Log move evaluation with context
 /// Optimized: checks debug flag first to avoid unnecessary string formatting
+#[cfg(feature = "verbose-debug")]
 #[inline]
 pub fn log_move_eval(feature: &str, move_str: &str, score: i32, reason: &str) {
-    // Early return if debug is disabled - prevents string formatting
-    #[cfg(feature = "verbose-debug")]
-    {
-        if !is_debug_enabled() {
-            return;
-        }
-    }
-    #[cfg(not(feature = "verbose-debug"))]
-    {
-        // When verbose-debug feature is disabled, this function does nothing
+    if !is_debug_enabled() {
         return;
     }
 
@@ -291,20 +268,16 @@ pub fn log_move_eval(feature: &str, move_str: &str, score: i32, reason: &str) {
     );
 }
 
+#[cfg(not(feature = "verbose-debug"))]
+#[inline]
+pub fn log_move_eval(_: &str, _: &str, _: i32, _: &str) {}
+
 /// Log search statistics
 /// Optimized: checks debug flag first to avoid unnecessary string formatting
+#[cfg(feature = "verbose-debug")]
 #[inline]
 pub fn log_search_stats(feature: &str, depth: u8, nodes: u64, score: i32, pv: &str) {
-    // Early return if debug is disabled - prevents string formatting
-    #[cfg(feature = "verbose-debug")]
-    {
-        if !is_debug_enabled() {
-            return;
-        }
-    }
-    #[cfg(not(feature = "verbose-debug"))]
-    {
-        // When verbose-debug feature is disabled, this function does nothing
+    if !is_debug_enabled() {
         return;
     }
 
@@ -316,3 +289,7 @@ pub fn log_search_stats(feature: &str, depth: u8, nodes: u64, score: i32, pv: &s
         ),
     );
 }
+
+#[cfg(not(feature = "verbose-debug"))]
+#[inline]
+pub fn log_search_stats(_: &str, _: u8, _: u64, _: i32, _: &str) {}

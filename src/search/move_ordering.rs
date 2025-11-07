@@ -76,7 +76,6 @@ mod see_calculation;
 
 pub use see_calculation::{
     calculate_see_internal as calculate_see_internal_helper,
-    find_attackers_defenders as find_attackers_defenders_helper,
     piece_attacks_square as piece_attacks_square_helper, score_see_move as score_see_move_helper,
     SEECache, SEECacheEntry, SEECacheStats,
 };
@@ -2597,7 +2596,6 @@ impl MoveOrdering {
         // OPTIMIZATION: Fast cache key generation using bit manipulation
         if self.config.cache_config.enable_see_cache {
             let from_pos = move_.from.unwrap_or(Position::new(0, 0));
-            let cache_key = (from_pos, move_.to);
 
             // OPTIMIZATION: Use direct hash lookup (Task 6.0: use SEECache module)
             if let Some(cached_value) = self.see_cache.get(from_pos, move_.to) {
@@ -2626,216 +2624,6 @@ impl MoveOrdering {
             self.stats.see_calculation_time_us as f64 / self.stats.see_calculations as f64;
 
         Ok(see_value)
-    }
-
-    /// Internal SEE calculation implementation (Task 6.0: now delegates to module)
-    ///
-    /// This method delegates to the see_calculation module's calculate_see_internal.
-    /// The actual implementation has been extracted to the module for better organization.
-    fn calculate_see_internal(&self, move_: &Move, board: &crate::bitboards::BitboardBoard) -> i32 {
-        calculate_see_internal_helper(move_, board)
-    }
-
-    /// Find all attackers and defenders of a given square (Task 6.0: now delegates to module)
-    ///
-    /// This method delegates to the see_calculation module's find_attackers_defenders.
-    /// The actual implementation has been extracted to the module for better organization.
-    fn find_attackers_defenders(
-        &self,
-        square: Position,
-        board: &crate::bitboards::BitboardBoard,
-    ) -> (
-        Vec<(Position, crate::types::Piece)>,
-        Vec<(Position, crate::types::Piece)>,
-    ) {
-        let all_attackers = find_attackers_defenders_helper(square, board); // Task 6.0: use see_calculation module
-                                                                            // Return all attackers with their positions; the caller will separate by player
-        (all_attackers, Vec::new())
-    }
-
-    /// Internal helper to check if a specific piece attacks a square
-    ///
-    /// This duplicates the logic from BitboardBoard::piece_attacks_square
-    /// since that method is private.
-    fn piece_attacks_square_internal(
-        &self,
-        piece: &crate::types::Piece,
-        from_pos: Position,
-        target_pos: Position,
-        board: &crate::bitboards::BitboardBoard,
-    ) -> bool {
-        let player = piece.player;
-
-        // Early bounds check
-        if from_pos.row >= 9 || from_pos.col >= 9 || target_pos.row >= 9 || target_pos.col >= 9 {
-            return false;
-        }
-
-        match piece.piece_type {
-            crate::types::PieceType::Pawn => {
-                let dir: i8 = if player == crate::types::Player::Black {
-                    1
-                } else {
-                    -1
-                };
-                let new_row = from_pos.row as i8 + dir;
-                if new_row >= 0 && new_row < 9 {
-                    let attack_pos = Position::new(new_row as u8, from_pos.col);
-                    return attack_pos == target_pos;
-                }
-                false
-            }
-            crate::types::PieceType::Knight => {
-                let dir: i8 = if player == crate::types::Player::Black {
-                    1
-                } else {
-                    -1
-                };
-                let move_offsets = [(2 * dir, 1), (2 * dir, -1)];
-                for (dr, dc) in move_offsets.iter() {
-                    let new_row = from_pos.row as i8 + dr;
-                    let new_col = from_pos.col as i8 + dc;
-                    if new_row >= 0 && new_col >= 0 && new_row < 9 && new_col < 9 {
-                        let attack_pos = Position::new(new_row as u8, new_col as u8);
-                        if attack_pos == target_pos {
-                            return true;
-                        }
-                    }
-                }
-                false
-            }
-            crate::types::PieceType::Lance => {
-                let dir: i8 = if player == crate::types::Player::Black {
-                    1
-                } else {
-                    -1
-                };
-                self.check_ray_attack_internal(from_pos, target_pos, (dir, 0), board)
-            }
-            crate::types::PieceType::Rook => {
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
-            }
-            crate::types::PieceType::Bishop => {
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
-            }
-            crate::types::PieceType::PromotedBishop => {
-                // Bishop + King moves
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (1, -1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, -1), board)
-                    || self.check_king_attack_internal(from_pos, target_pos, player)
-            }
-            crate::types::PieceType::PromotedRook => {
-                // Rook + King moves
-                self.check_ray_attack_internal(from_pos, target_pos, (1, 0), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (-1, 0), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (0, 1), board)
-                    || self.check_ray_attack_internal(from_pos, target_pos, (0, -1), board)
-                    || self.check_king_attack_internal(from_pos, target_pos, player)
-            }
-            crate::types::PieceType::Silver
-            | crate::types::PieceType::Gold
-            | crate::types::PieceType::King
-            | crate::types::PieceType::PromotedPawn
-            | crate::types::PieceType::PromotedLance
-            | crate::types::PieceType::PromotedKnight
-            | crate::types::PieceType::PromotedSilver => {
-                self.check_king_attack_internal(from_pos, target_pos, player)
-            }
-        }
-    }
-
-    /// Check if a ray from from_pos in direction (dr, dc) hits target_pos
-    fn check_ray_attack_internal(
-        &self,
-        from_pos: Position,
-        target_pos: Position,
-        direction: (i8, i8),
-        board: &crate::bitboards::BitboardBoard,
-    ) -> bool {
-        let (dr, dc) = direction;
-        let mut current_pos = from_pos;
-
-        loop {
-            let new_row = current_pos.row as i8 + dr;
-            let new_col = current_pos.col as i8 + dc;
-
-            // Out of bounds
-            if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
-                break;
-            }
-
-            current_pos = Position::new(new_row as u8, new_col as u8);
-
-            // Found target
-            if current_pos == target_pos {
-                return true;
-            }
-
-            // Blocked by a piece
-            if board.is_square_occupied(current_pos) {
-                break;
-            }
-        }
-
-        false
-    }
-
-    /// Check if a king-like piece attacks target_pos
-    fn check_king_attack_internal(
-        &self,
-        from_pos: Position,
-        target_pos: Position,
-        _player: crate::types::Player,
-    ) -> bool {
-        let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
-        let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
-
-        // King attacks adjacent squares (including diagonals)
-        row_diff <= 1 && col_diff <= 1 && (row_diff != 0 || col_diff != 0)
-    }
-
-    /// Find the least valuable attacker in a list
-    ///
-    /// This method finds the piece with the lowest value that can
-    /// participate in the exchange sequence.
-    fn find_least_valuable_attacker(
-        &self,
-        attackers: &[crate::types::Piece],
-        player: Player,
-    ) -> Option<usize> {
-        let mut min_value = i32::MAX;
-        let mut min_index = None;
-
-        for (index, attacker) in attackers.iter().enumerate() {
-            if attacker.player == player {
-                let value = attacker.piece_type.base_value();
-                if value < min_value {
-                    min_value = value;
-                    min_index = Some(index);
-                }
-            }
-        }
-
-        min_index
-    }
-
-    /// Find a piece in a list by piece type and player
-    fn find_piece_in_list(
-        &self,
-        pieces: &[crate::types::Piece],
-        target: &crate::types::Piece,
-    ) -> Option<usize> {
-        pieces.iter().position(|piece| {
-            piece.piece_type == target.piece_type && piece.player == target.player
-        })
     }
 
     /// Score a capture move
@@ -3462,7 +3250,7 @@ impl MoveOrdering {
                 let old_weight = *weight_ref;
 
                 // Calculate new weight
-                let mut new_weight = old_weight;
+                let mut new_weight;
 
                 // Adjust weight based on effectiveness
                 // Positive effectiveness_diff -> increase weight

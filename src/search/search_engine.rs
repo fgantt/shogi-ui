@@ -70,8 +70,6 @@ pub struct SearchEngine {
     time_pressure_thresholds: crate::types::TimePressureThresholds,
     /// Core search metrics for performance monitoring (Task 5.7-5.8)
     core_search_metrics: crate::types::CoreSearchMetrics,
-    /// Integration statistics for cross-algorithm monitoring (Task 7.0.5.4)
-    integration_stats: crate::types::IntegrationStats,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     // Tapered evaluation search integration
@@ -403,7 +401,6 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
-            integration_stats: crate::types::IntegrationStats::default(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -610,9 +607,6 @@ impl SearchEngine {
         opponent_last_move: Option<&Move>,
     ) -> Vec<Move> {
         // Task 2.6: Added opponent_last_move parameter
-        // Task 6.4: Check if position is in check (affects move ordering priority)
-        let is_check = board.is_king_in_check(player, captured_pieces);
-
         // Task 3.0: Try advanced move ordering first with IID move
         // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
         match self.order_moves_advanced(
@@ -738,7 +732,6 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
-            integration_stats: crate::types::IntegrationStats::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
@@ -990,7 +983,7 @@ impl SearchEngine {
                     {
                         crate::debug_utils::trace_log("IID_TT_MOVE", &format!(
                             "IID skipped: TT move available (depth: {}, age: {}, min_depth: {}, max_age: {})",
-                            entry.depth, entry.age, 
+                            entry.depth, entry.age,
                             self.iid_config.tt_move_min_depth_for_skip,
                             self.iid_config.tt_move_max_age_for_skip
                         ));
@@ -1143,8 +1136,8 @@ impl SearchEngine {
 
                 // Task 9.10: Debug logging for time pressure detection
                 crate::debug_utils::trace_log("IID_TIME_PRESSURE", &format!(
-                    "IID skipped: time pressure (remaining {}ms, depth: {}, complexity: {:?}, estimated_iid: {}ms)", 
-                    remaining_time, 
+                    "IID skipped: time pressure (remaining {}ms, depth: {}, complexity: {:?}, estimated_iid: {}ms)",
+                    remaining_time,
                     depth,
                     complexity_opt,
                     estimated_iid_time_ms
@@ -1329,8 +1322,8 @@ impl SearchEngine {
                 depth *= self.iid_config.time_depth_multiplier;
 
                 crate::debug_utils::trace_log("IID_DEPTH_ADVANCED", &format!(
-                    "Time adjustment: remaining={:.1}%, threshold={:.1}%, multiplier={}, depth={:.1}", 
-                    remaining_percentage * 100.0, 
+                    "Time adjustment: remaining={:.1}%, threshold={:.1}%, multiplier={}, depth={:.1}",
+                    remaining_percentage * 100.0,
                     self.iid_config.time_threshold_for_adjustment * 100.0,
                     self.iid_config.time_depth_multiplier, depth
                 ));
@@ -6381,7 +6374,7 @@ impl SearchEngine {
                     }
                 } else {
                     // Invalid ordering - fallback to enhanced traditional
-                    self.sort_quiescence_moves_enhanced(
+                    self.sort_quiescence_moves_advanced(
                         moves,
                         board,
                         captured_pieces,
@@ -6392,7 +6385,7 @@ impl SearchEngine {
             }
             Err(_) => {
                 // Fallback to enhanced traditional quiescence move ordering
-                self.sort_quiescence_moves_enhanced(
+                self.sort_quiescence_moves_advanced(
                     moves,
                     board,
                     captured_pieces,
@@ -6909,7 +6902,7 @@ impl SearchEngine {
     /// - High-value captures (important tactical moves)
     ///
     /// This helps maintain tactical accuracy while still pruning weak captures.
-    fn should_prune_futility(&self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8) -> bool {
+    fn should_prune_futility(&mut self, move_: &Move, stand_pat: i32, alpha: i32, depth: u8) -> bool {
         if !self.quiescence_config.enable_futility_pruning {
             return false;
         }
@@ -6947,7 +6940,7 @@ impl SearchEngine {
     /// Excludes checking moves and high-value captures to maintain tactical accuracy.
     /// This provides better pruning effectiveness while maintaining tactical accuracy.
     fn should_prune_futility_adaptive(
-        &self,
+        &mut self,
         move_: &Move,
         stand_pat: i32,
         alpha: i32,
@@ -7188,167 +7181,6 @@ impl SearchEngine {
         hash = hash.wrapping_mul(31).wrapping_add(move_.player as u64);
 
         hash
-    }
-
-    /// Enhanced move ordering with position-specific heuristics
-    fn compare_quiescence_moves_enhanced(
-        &self,
-        a: &Move,
-        b: &Move,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> std::cmp::Ordering {
-        // 1. Checks first (highest priority)
-        match (a.gives_check, b.gives_check) {
-            (true, false) => return std::cmp::Ordering::Less,
-            (false, true) => return std::cmp::Ordering::Greater,
-            _ => {}
-        }
-
-        // 2. Captures vs non-captures (captures have higher priority)
-        match (a.is_capture, b.is_capture) {
-            (true, false) => return std::cmp::Ordering::Less,
-            (false, true) => return std::cmp::Ordering::Greater,
-            (true, true) => {
-                // Both are captures - use MVV-LVA with position awareness
-                let a_value = self.assess_capture_value(a, board, player);
-                let b_value = self.assess_capture_value(b, board, player);
-                return b_value.cmp(&a_value);
-            }
-            (false, false) => {
-                // Neither is a capture - continue to other criteria
-            }
-        }
-
-        // 3. Promotions with position awareness
-        match (a.is_promotion, b.is_promotion) {
-            (true, false) => {
-                let a_promotion_value = self.assess_promotion_value(a, board, player);
-                let b_promotion_value = self.assess_promotion_value(b, board, player);
-                return b_promotion_value.cmp(&a_promotion_value);
-            }
-            (false, true) => {
-                let a_promotion_value = self.assess_promotion_value(a, board, player);
-                let b_promotion_value = self.assess_promotion_value(b, board, player);
-                return b_promotion_value.cmp(&a_promotion_value);
-            }
-            _ => {}
-        }
-
-        // 4. Tactical threat assessment with position awareness
-        let a_threat_value = self.assess_tactical_threat_enhanced(a, board, player);
-        let b_threat_value = self.assess_tactical_threat_enhanced(b, board, player);
-        if a_threat_value != b_threat_value {
-            return b_threat_value.cmp(&a_threat_value);
-        }
-
-        // 5. Position-specific ordering
-        let a_position_value = self.assess_position_value(a, board, player);
-        let b_position_value = self.assess_position_value(b, board, player);
-        if a_position_value != b_position_value {
-            return b_position_value.cmp(&a_position_value);
-        }
-
-        // 6. Default ordering (by piece value)
-        b.piece_value().cmp(&a.piece_value())
-    }
-
-    /// Assess capture value with position awareness
-    fn assess_capture_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
-        let mut value = move_.captured_piece_value() - move_.piece_value();
-
-        // Bonus for capturing pieces that are attacking our pieces
-        if let Some(captured_piece) = &move_.captured_piece {
-            if self.is_piece_attacking_our_king(captured_piece, move_.to, board, player) {
-                value += 200; // Bonus for capturing attacking pieces
-            }
-        }
-
-        // Bonus for capturing pieces in the center
-        if self.is_center_square(move_.to) {
-            value += 50;
-        }
-
-        value
-    }
-
-    /// Assess promotion value with position awareness
-    fn assess_promotion_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
-        let mut value = move_.promotion_value();
-
-        // Bonus for promoting in the center
-        if self.is_center_square(move_.to) {
-            value += 100;
-        }
-
-        // Bonus for promoting pieces that are attacking
-        if self.is_piece_attacking_opponent(move_, board, player) {
-            value += 150;
-        }
-
-        value
-    }
-
-    /// Enhanced tactical threat assessment
-    fn assess_tactical_threat_enhanced(
-        &self,
-        move_: &Move,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> i32 {
-        let mut threat_value = 0;
-
-        // High value for captures
-        if move_.is_capture {
-            threat_value += move_.captured_piece_value();
-        }
-
-        // High value for checks
-        if move_.gives_check {
-            threat_value += 1000;
-        }
-
-        // High value for promotions
-        if move_.is_promotion {
-            threat_value += move_.promotion_value();
-        }
-
-        // High value for recaptures
-        if move_.is_recapture {
-            threat_value += 500;
-        }
-
-        // Bonus for threats to opponent's king
-        if self.is_threatening_opponent_king(move_, board, player) {
-            threat_value += 300;
-        }
-
-        // Bonus for threats in the center
-        if self.is_center_square(move_.to) {
-            threat_value += 50;
-        }
-
-        threat_value
-    }
-
-    /// Assess position-specific value of a move
-    fn assess_position_value(&self, move_: &Move, board: &BitboardBoard, player: Player) -> i32 {
-        let mut value = 0;
-
-        // Center control bonus
-        if self.is_center_square(move_.to) {
-            value += 30;
-        }
-
-        // Development bonus for pieces moving forward
-        if self.is_forward_move(move_, player) {
-            value += 20;
-        }
-
-        // Mobility bonus
-        value += self.assess_mobility_gain(move_, board, player);
-
-        value
     }
 
     /// Check if a square is in the center
@@ -7708,8 +7540,13 @@ impl SearchEngine {
                 entries.sort_by_key(|(_, entry)| entry.last_access_age);
 
                 // Remove oldest entries
-                for (key, _) in entries.iter().take(entries_to_remove) {
-                    self.quiescence_tt.remove(key);
+                let keys_to_remove: Vec<String> = entries
+                    .iter()
+                    .take(entries_to_remove)
+                    .map(|(key, _)| key.clone())
+                    .collect();
+                for key in keys_to_remove {
+                    self.quiescence_tt.remove(&key);
                 }
             }
             TTReplacementPolicy::DepthPreferred => {
@@ -7728,8 +7565,13 @@ impl SearchEngine {
                 });
 
                 // Remove shallowest entries
-                for (key, _) in entries.iter().take(entries_to_remove) {
-                    self.quiescence_tt.remove(key);
+                let keys_to_remove: Vec<String> = entries
+                    .iter()
+                    .take(entries_to_remove)
+                    .map(|(key, _)| key.clone())
+                    .collect();
+                for key in keys_to_remove {
+                    self.quiescence_tt.remove(&key);
                 }
             }
             TTReplacementPolicy::Hybrid => {
@@ -7756,8 +7598,13 @@ impl SearchEngine {
                 entries.sort_by_key(|(_, score)| *score);
 
                 // Remove entries with lowest scores
-                for (key, _) in entries.iter().take(entries_to_remove) {
-                    self.quiescence_tt.remove(key);
+                let keys_to_remove: Vec<String> = entries
+                    .iter()
+                    .take(entries_to_remove)
+                    .map(|(key, _)| key.clone())
+                    .collect();
+                for key in keys_to_remove {
+                    self.quiescence_tt.remove(&key);
                 }
             }
         }
@@ -9092,7 +8939,7 @@ impl SearchEngine {
         // Debug logging
         crate::debug_utils::debug_log(&format!(
             "Aspiration: comprehensive window size calculation - depth={}, base={}, final={}, factors=[d:{:.2}, s:{:.2}, f:{:.2}, c:{:.2}, t:{:.2}, su:{:.2}, b:{:.2}]",
-            depth, base_size, final_size, depth_factor, score_factor, failure_factor, 
+            depth, base_size, final_size, depth_factor, score_factor, failure_factor,
             complexity_factor, time_factor, success_factor, branching_factor
         ));
 
@@ -9940,21 +9787,6 @@ impl SearchEngine {
                 .set_advanced_reduction_config(self.lmr_config.advanced_reduction_config.clone());
         }
 
-        // Set conditional exemption configuration if enabled (Task 12.2, 12.3)
-        if self
-            .lmr_config
-            .conditional_exemption_config
-            .enable_conditional_capture_exemption
-            || self
-                .lmr_config
-                .conditional_exemption_config
-                .enable_conditional_promotion_exemption
-        {
-            search_state.set_conditional_exemption_config(
-                self.lmr_config.conditional_exemption_config.clone(),
-            );
-        }
-
         // Check extended exemptions
         let is_killer = self.is_killer_move(move_);
 
@@ -10222,18 +10054,6 @@ impl SearchEngine {
         })
     }
 
-    /// Check if a move is from transposition table (Task 3.5, 3.9)
-    ///
-    /// NOTE: This heuristic method is deprecated. Use actual TT move comparison
-    /// via SearchState.tt_move instead. This method is kept for backward compatibility
-    /// but should not be used for LMR decisions.
-    #[deprecated(note = "Use actual TT move from SearchState.tt_move instead of heuristic")]
-    fn is_transposition_table_move(&self, move_: &Move) -> bool {
-        // Legacy heuristic - deprecated in favor of actual TT move tracking
-        // This method is kept for backward compatibility only
-        move_.is_capture && move_.captured_piece_value() > 500
-    }
-
     /// Check if a move is an escape move
     /// Check if a move is an escape move (Task 6.1-6.5)
     /// Enhanced with threat-based detection instead of center-to-edge heuristic
@@ -10260,9 +10080,6 @@ impl SearchEngine {
                     if !self.is_piece_under_attack_after_move(board, captured_pieces, move_, player)
                     {
                         // Track threat-based detection (Task 6.8)
-                        self.lmr_stats
-                            .escape_move_stats
-                            .record_escape_move(true, true);
                         return true;
                     }
                 }
@@ -10277,13 +10094,6 @@ impl SearchEngine {
                     // Track heuristic detection (Task 6.8)
                     let is_threat =
                         self.is_piece_under_attack(board, captured_pieces, from, player);
-                    if !is_threat {
-                        // False positive: heuristic said escape but no threat (Task 6.8)
-                        self.lmr_stats.escape_move_stats.record_false_positive();
-                    }
-                    self.lmr_stats
-                        .escape_move_stats
-                        .record_escape_move(true, false);
                     return true;
                 }
             }
@@ -10429,11 +10239,6 @@ impl SearchEngine {
             crate::types::PositionClassification::Neutral
         };
 
-        // Track classification statistics (Task 5.10)
-        self.lmr_stats
-            .classification_stats
-            .record_classification(classification);
-
         classification
     }
 
@@ -10520,8 +10325,6 @@ impl SearchEngine {
             MoveType::Promotion
         } else if self.is_killer_move(move_) {
             MoveType::Killer
-        } else if self.is_transposition_table_move(move_) {
-            MoveType::TranspositionTable
         } else if self.is_escape_move(move_, board, captured_pieces, player) {
             MoveType::Escape
         } else if self.is_center_move(move_) {
@@ -10836,60 +10639,43 @@ impl SearchEngine {
     ///   - Adaptive tuning enabled with Moderate aggressiveness
     pub fn get_lmr_preset(&self, style: LMRPlayingStyle) -> LMRConfig {
         match style {
-            LMRPlayingStyle::Aggressive => LMRConfig {
-                enabled: true,
-                min_depth: 2,
-                min_move_index: 3,
-                base_reduction: 2,
-                max_reduction: 4,
-                enable_dynamic_reduction: true,
-                enable_adaptive_reduction: true,
-                enable_extended_exemptions: true,
-                re_search_margin: 25, // Lower margin for more aggressive play
-                classification_config: PositionClassificationConfig::default(),
-                escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig {
+            LMRPlayingStyle::Aggressive => {
+                let mut config = LMRConfig::default();
+                config.min_depth = 2;
+                config.min_move_index = 3;
+                config.base_reduction = 2;
+                config.max_reduction = 4;
+                config.re_search_margin = 25; // Lower margin for more aggressive play
+                config.adaptive_tuning_config = AdaptiveTuningConfig {
                     enabled: true,
                     aggressiveness: TuningAggressiveness::Moderate,
                     min_data_threshold: 100,
-                },
-            },
-            LMRPlayingStyle::Conservative => LMRConfig {
-                enabled: true,
-                min_depth: 4,
-                min_move_index: 6,
-                base_reduction: 1,
-                max_reduction: 2,
-                enable_dynamic_reduction: true,
-                enable_adaptive_reduction: true,
-                enable_extended_exemptions: true,
-                re_search_margin: 100, // Higher margin for safer play
-                classification_config: PositionClassificationConfig::default(),
-                escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig {
+                };
+                config
+            }
+            LMRPlayingStyle::Conservative => {
+                let mut config = LMRConfig::default();
+                config.min_depth = 4;
+                config.min_move_index = 6;
+                config.base_reduction = 1;
+                config.max_reduction = 2;
+                config.re_search_margin = 100; // Higher margin for safer play
+                config.adaptive_tuning_config = AdaptiveTuningConfig {
                     enabled: true,
                     aggressiveness: TuningAggressiveness::Conservative,
                     min_data_threshold: 100,
-                },
-            },
-            LMRPlayingStyle::Balanced => LMRConfig {
-                enabled: true,
-                min_depth: 3,
-                min_move_index: 4,
-                base_reduction: 1,
-                max_reduction: 3,
-                enable_dynamic_reduction: true,
-                enable_adaptive_reduction: true,
-                enable_extended_exemptions: true,
-                re_search_margin: 50, // Default margin
-                classification_config: PositionClassificationConfig::default(),
-                escape_move_config: EscapeMoveConfig::default(),
-                adaptive_tuning_config: AdaptiveTuningConfig {
-                    enabled: true,
-                    aggressiveness: TuningAggressiveness::Moderate,
-                    min_data_threshold: 100,
-                },
-            },
+                };
+                config
+            }
+            LMRPlayingStyle::Balanced => {
+                let mut config = LMRConfig::default();
+                config.min_depth = 3;
+                config.min_move_index = 4;
+                config.base_reduction = 1;
+                config.max_reduction = 3;
+                config.re_search_margin = 50; // Default margin
+                config
+            }
         }
     }
 
@@ -11033,8 +10819,8 @@ impl SearchEngine {
         improvements
     }
 
-    /// Get LMR performance report with optimization suggestions
-    pub fn get_lmr_performance_report(&self) -> String {
+    /// Get detailed LMR performance report with optimization suggestions
+    pub fn get_lmr_performance_report_with_recommendations(&self) -> String {
         let metrics = self.get_lmr_performance_metrics();
         let recommendations = metrics.get_optimization_recommendations();
 
@@ -11131,20 +10917,7 @@ impl SearchEngine {
     pub fn get_hardware_optimized_config(&self) -> LMRConfig {
         // This would analyze system capabilities in a real implementation
         // For now, return a balanced configuration
-        LMRConfig {
-            enabled: true,
-            min_depth: 3,
-            min_move_index: 4,
-            base_reduction: 1,
-            max_reduction: 3,
-            enable_dynamic_reduction: true,
-            enable_adaptive_reduction: true,
-            enable_extended_exemptions: true,
-            re_search_margin: 50, // Default margin
-            classification_config: PositionClassificationConfig::default(),
-            escape_move_config: EscapeMoveConfig::default(),
-            adaptive_tuning_config: AdaptiveTuningConfig::default(),
-        }
+        LMRConfig::default()
     }
 
     /// Log null move attempt for debugging
@@ -12989,7 +12762,7 @@ impl IterativeDeepening {
                         // Send info message (skip during silent benches)
                         if std::env::var("SHOGI_SILENT_BENCH").is_err() {
                             let info_string = if !current_pv.is_empty() {
-                                format!("info depth {} seldepth {} score cp {} time {} nodes {} nps {} pv {}", 
+                                format!("info depth {} seldepth {} score cp {} time {} nodes {} nps {} pv {}",
                                     depth_clone, seldepth, current_score, elapsed, nodes, nps, current_pv)
                             } else {
                                 format!(
@@ -13059,7 +12832,7 @@ impl IterativeDeepening {
                     // Use saturating arithmetic to prevent overflow/underflow
                     let first_alpha = initial_static_eval.saturating_sub(window_size);
                     let first_beta = initial_static_eval.saturating_add(window_size);
-                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window with static eval (static_eval: {}, window_size: {}, alpha: {}, beta: {})", 
+                    crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window with static eval (static_eval: {}, window_size: {}, alpha: {}, beta: {})",
                         depth, initial_static_eval, window_size, first_alpha, first_beta));
                     (first_alpha, first_beta)
                 } else {
@@ -13087,7 +12860,7 @@ impl IterativeDeepening {
                 // Use saturating arithmetic to prevent overflow/underflow
                 let calculated_alpha = previous_score.saturating_sub(window_size);
                 let calculated_beta = previous_score.saturating_add(window_size);
-                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window (prev_score: {}, window_size: {}, alpha: {}, beta: {})", 
+                crate::debug_utils::trace_log("ITERATIVE_DEEPENING", &format!("Depth {}: Using aspiration window (prev_score: {}, window_size: {}, alpha: {}, beta: {})",
                     depth, previous_score, window_size, calculated_alpha, calculated_beta));
                 (calculated_alpha, calculated_beta)
             };

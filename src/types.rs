@@ -2388,7 +2388,7 @@ impl LMRConfig {
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
-            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}, re_search_margin={}, classification(tactical_threshold={:.2}, quiet_threshold={:.2}, material_imbalance_threshold={}, min_moves_threshold={})",
+            "LMRConfig: enabled={}, min_depth={}, min_move_index={}, base_reduction={}, max_reduction={}, dynamic={}, adaptive={}, extended_exemptions={}, re_search_margin={}, classification(tactical_threshold={:.2}, quiet_threshold={:.2}, material_imbalance_threshold={}, min_moves_threshold={}), escape_move(exemption={}, threat_detection={}), adaptive_tuning(enabled={}, aggressiveness={:?}), advanced_reduction(enabled={}, strategy={:?})",
             self.enabled,
             self.min_depth,
             self.min_move_index,
@@ -2405,9 +2405,9 @@ impl LMRConfig {
             self.escape_move_config.enable_escape_move_exemption,
             self.escape_move_config.use_threat_based_detection,
             self.adaptive_tuning_config.enabled,
-            format!("{:?}", self.adaptive_tuning_config.aggressiveness),
+            self.adaptive_tuning_config.aggressiveness,
             self.advanced_reduction_config.enabled,
-            format!("{:?}", self.advanced_reduction_config.strategy)
+            self.advanced_reduction_config.strategy
         )
     }
 }
@@ -2739,10 +2739,11 @@ impl LMRStats {
     }
 
     /// Get statistics for a specific game phase (Task 4.6)
-    pub fn get_phase_stats(&self, phase: GamePhase) -> &LMRPhaseStats {
+    pub fn get_phase_stats(&self, phase: GamePhase) -> LMRPhaseStats {
         self.phase_stats
             .get(&phase)
-            .unwrap_or(&LMRPhaseStats::default())
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Check if performance meets minimum thresholds (Task 4.4)
@@ -2786,7 +2787,6 @@ impl LMRStats {
         }
 
         // Check move ordering effectiveness (Task 10.7)
-        let ordering_effectiveness = self.move_ordering_stats.ordering_effectiveness();
         let late_cutoff_rate = self
             .move_ordering_stats
             .cutoffs_after_threshold_percentage();
@@ -5950,6 +5950,7 @@ impl EngineConfig {
                     delta_margin: 200,
                     tt_size_mb: 32,
                     tt_cleanup_threshold: 100000,
+                    ..QuiescenceConfig::default()
                 },
                 null_move: NullMoveConfig {
                     enabled: true,
@@ -5993,6 +5994,7 @@ impl EngineConfig {
                     enable_adaptive_reduction: true,
                     enable_extended_exemptions: true,
                     re_search_margin: 50,
+                    ..LMRConfig::default()
                 },
                 aspiration_windows: AspirationWindowConfig {
                     enabled: true,
@@ -6074,6 +6076,7 @@ impl EngineConfig {
                     delta_margin: 100,
                     tt_size_mb: 64,
                     tt_cleanup_threshold: 200000,
+                    ..QuiescenceConfig::default()
                 },
                 null_move: NullMoveConfig {
                     enabled: true,
@@ -6117,6 +6120,7 @@ impl EngineConfig {
                     enable_adaptive_reduction: false,
                     enable_extended_exemptions: true,
                     re_search_margin: 50,
+                    ..LMRConfig::default()
                 },
                 aspiration_windows: AspirationWindowConfig {
                     enabled: true,
@@ -6842,7 +6846,6 @@ impl SearchState {
             position_classification: None,
             tt_move: None,
             advanced_reduction_config: None,
-            conditional_exemption_config: None,
         }
     }
 
@@ -6876,10 +6879,6 @@ impl SearchState {
         self.advanced_reduction_config = Some(config);
     }
 
-    /// Set conditional exemption configuration (Task 12.2, 12.3)
-    pub fn set_conditional_exemption_config(&mut self, config: ConditionalExemptionConfig) {
-        self.conditional_exemption_config = Some(config);
-    }
 }
 
 /// Pruning decision result
@@ -7037,67 +7036,6 @@ pub struct SearchPerformanceMetrics {
     pub check_cache_size: usize,
     pub total_cache_operations: u64,
     pub cache_hit_rate: f64,
-}
-
-/// Integration statistics for cross-algorithm coordination monitoring (Task 7.0.5.4)
-/// Tracks interactions between NMP, IID, LMR, and other search algorithms
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct IntegrationStats {
-    /// Total time spent in NMP before move loop (milliseconds)
-    pub nmp_overhead_time_ms: u64,
-    /// Total time spent in IID before move loop (milliseconds)
-    pub iid_overhead_time_ms: u64,
-    /// Number of times both NMP and IID ran before move loop
-    pub both_nmp_and_iid_overhead: u64,
-    /// Number of times NMP failed and IID subsequently ran
-    pub nmp_fail_then_iid: u64,
-    /// Number of times NMP succeeded (IID not needed)
-    pub nmp_success_no_iid: u64,
-    /// Correlation tracking: IID effectiveness after NMP failure
-    pub iid_cutoffs_after_nmp_fail: u64,
-    /// Correlation tracking: IID searches after NMP failure
-    pub iid_searches_after_nmp_fail: u64,
-    /// Time pressure level distribution
-    pub time_pressure_none_count: u64,
-    pub time_pressure_low_count: u64,
-    pub time_pressure_medium_count: u64,
-    pub time_pressure_high_count: u64,
-    /// Timeout occurrences by time pressure level
-    pub timeouts_at_none: u64,
-    pub timeouts_at_low: u64,
-    pub timeouts_at_medium: u64,
-    pub timeouts_at_high: u64,
-}
-
-impl IntegrationStats {
-    /// Create a new empty integration statistics structure
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Reset all statistics to zero
-    pub fn reset(&mut self) {
-        *self = Self::default();
-    }
-
-    /// Calculate NMP-IID sequential overhead percentage
-    pub fn sequential_overhead_percent(&self) -> f64 {
-        let total_overhead = self.nmp_overhead_time_ms + self.iid_overhead_time_ms;
-        if total_overhead == 0 {
-            return 0.0;
-        }
-        // Would need total search time to calculate percentage
-        // For now return absolute overhead
-        total_overhead as f64
-    }
-
-    /// Calculate IID effectiveness after NMP failure
-    pub fn iid_effectiveness_after_nmp_fail(&self) -> f64 {
-        if self.iid_searches_after_nmp_fail == 0 {
-            return 0.0;
-        }
-        (self.iid_cutoffs_after_nmp_fail as f64 / self.iid_searches_after_nmp_fail as f64) * 100.0
-    }
 }
 
 /// Comprehensive search metrics for performance monitoring (Task 5.7-5.9)
@@ -7525,7 +7463,7 @@ impl PruningManager {
         base_reduction: u8,
         state: &SearchState,
         mv: &Move,
-        config: &AdvancedReductionConfig,
+        _config: &AdvancedReductionConfig,
     ) -> u8 {
         // Get history score for this move
         // For now, use a simplified heuristic based on move characteristics
@@ -7553,40 +7491,13 @@ impl PruningManager {
                 PositionClassification::Tactical => {
                     // More conservative reduction in tactical positions
                     reduction = reduction.saturating_sub(1);
-                    // Debug logging (Task 8.11)
-                    #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log(
-                        "LMR",
-                        &format!(
-                            "Adaptive reduction: Tactical position, reduced by 1 ({} -> {})",
-                            base_reduction, reduction
-                        ),
-                    );
                 }
                 PositionClassification::Quiet => {
                     // More aggressive reduction in quiet positions
                     reduction = reduction.saturating_add(1);
-                    // Debug logging (Task 8.11)
-                    #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log(
-                        "LMR",
-                        &format!(
-                            "Adaptive reduction: Quiet position, increased by 1 ({} -> {})",
-                            base_reduction, reduction
-                        ),
-                    );
                 }
                 PositionClassification::Neutral => {
                     // Keep base reduction for neutral positions
-                    // Debug logging (Task 8.11)
-                    #[cfg(feature = "debug")]
-                    crate::debug_utils::trace_log(
-                        "LMR",
-                        &format!(
-                            "Adaptive reduction: Neutral position, no adjustment ({})",
-                            base_reduction
-                        ),
-                    );
                 }
             }
         }
@@ -7594,15 +7505,6 @@ impl PruningManager {
         // Adjust based on move characteristics (center moves are important)
         if self.is_center_move(mv) {
             reduction = reduction.saturating_sub(1);
-            // Debug logging (Task 8.11)
-            #[cfg(feature = "debug")]
-            crate::debug_utils::trace_log(
-                "LMR",
-                &format!(
-                    "Adaptive reduction: Center move, reduced by 1 ({} -> {})",
-                    base_reduction, reduction
-                ),
-            );
         }
 
         reduction
@@ -7740,61 +7642,14 @@ impl PruningManager {
             return false;
         }
 
-        // Conditional capture exemption (Task 12.2)
-        // Research shows small captures might benefit from reduction in deep searches
+        // Captures remain exempt from reduction by default
         if self.is_capture_move(mv) {
-            // Check if conditional exemption is enabled and applies
-            if let Some(conditional_config) = &state.conditional_exemption_config {
-                if conditional_config.enable_conditional_capture_exemption {
-                    // Only exempt high-value captures or at shallow depths
-                    let captured_value = mv.captured_piece_value();
-                    let depth_threshold = conditional_config.min_depth_for_conditional_capture;
-                    let value_threshold = conditional_config.min_capture_value_threshold;
-
-                    // Exempt if: (1) captured value >= threshold OR (2) depth < threshold
-                    if captured_value >= value_threshold || state.depth < depth_threshold {
-                        return false; // Exempt high-value captures or shallow depth
-                    }
-                    // Small captures at deep depth: allow LMR (return true, continue)
-                } else {
-                    // Default: exempt all captures (safer)
-                    return false;
-                }
-            } else {
-                // Default: exempt all captures (safer)
-                return false;
-            }
+            return false;
         }
 
-        // Conditional promotion exemption (Task 12.3)
-        // Research shows quiet promotions might benefit from reduction in deep searches
+        // Promotions remain exempt from reduction by default
         if self.is_promotion_move(mv) {
-            // Check if conditional exemption is enabled and applies
-            if let Some(conditional_config) = &state.conditional_exemption_config {
-                if conditional_config.enable_conditional_promotion_exemption {
-                    let depth_threshold = conditional_config.min_depth_for_conditional_promotion;
-
-                    // Only exempt tactical promotions (captures or checks) at deep depths
-                    if conditional_config.exempt_tactical_promotions_only {
-                        let is_tactical = mv.is_capture || mv.gives_check;
-
-                        // Exempt if: (1) tactical promotion OR (2) depth < threshold
-                        if is_tactical || state.depth < depth_threshold {
-                            return false; // Exempt tactical promotions or shallow depth
-                        }
-                        // Quiet promotions at deep depth: allow LMR (return true, continue)
-                    } else {
-                        // Default: exempt all promotions (safer)
-                        return false;
-                    }
-                } else {
-                    // Default: exempt all promotions (safer)
-                    return false;
-                }
-            } else {
-                // Default: exempt all promotions (safer)
-                return false;
-            }
+            return false;
         }
 
         // Extended exemptions if enabled

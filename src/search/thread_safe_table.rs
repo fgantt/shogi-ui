@@ -302,6 +302,7 @@ pub struct ThreadSafeTranspositionTable {
     #[cfg(not(target_arch = "wasm32"))]
     bucket_shift: u32,
     /// Whether hardware prefetching is enabled for this table
+    #[cfg(feature = "tt-prefetch")]
     prefetch_enabled: bool,
     /// Cache manager for statistics and age management
     cache_manager: Arc<Mutex<CacheManager>>,
@@ -354,9 +355,8 @@ impl ThreadSafeTranspositionTable {
             .collect();
         #[cfg(not(target_arch = "wasm32"))]
         let bucket_shift = 64 - bucket_count.trailing_zeros();
-        let prefetch_enabled = config.enable_prefetching
-            && cfg!(feature = "tt-prefetch")
-            && !cfg!(target_arch = "wasm32");
+        #[cfg(feature = "tt-prefetch")]
+        let prefetch_enabled = config.enable_prefetching && !cfg!(target_arch = "wasm32");
 
         Self {
             entries,
@@ -367,6 +367,7 @@ impl ThreadSafeTranspositionTable {
             bucket_locks,
             #[cfg(not(target_arch = "wasm32"))]
             bucket_shift,
+            #[cfg(feature = "tt-prefetch")]
             prefetch_enabled,
             cache_manager: Arc::new(Mutex::new(CacheManager::new(config.clone()))),
             replacement_handler: Arc::new(Mutex::new(ReplacementPolicyHandler::new(
@@ -554,7 +555,7 @@ impl ThreadSafeTranspositionTable {
     ///
     /// Returns the number of entries inserted.
     pub fn prefill_from_book(&mut self, book: &mut OpeningBook, depth: u8) -> usize {
-        let mut hasher = ZobristHasher::new();
+        let hasher = ZobristHasher::new();
         let mut inserted = 0usize;
 
         for prefill in book.collect_prefill_entries() {

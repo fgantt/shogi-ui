@@ -5,7 +5,6 @@
 //! in a sibling node, and are likely to be good moves in similar positions.
 
 use crate::types::*;
-use serde::Serialize;
 use std::collections::HashMap;
 
 /// Killer move configuration
@@ -179,7 +178,7 @@ impl KillerMoveManager {
     /// Get memory usage estimate
     pub fn memory_bytes(&self) -> usize {
         let mut total = 0;
-        for (depth, moves) in &self.killer_moves {
+        for (_depth, moves) in &self.killer_moves {
             total += std::mem::size_of::<u8>(); // depth key
             total += std::mem::size_of::<Vec<Move>>(); // vector overhead
             total += moves.len() * std::mem::size_of::<Move>(); // moves

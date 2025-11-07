@@ -4,7 +4,6 @@
 //! management methods for the move ordering system.
 
 use crate::types::*;
-use serde::Serialize;
 use std::collections::HashMap;
 
 /// Cache eviction policy for move ordering cache
@@ -290,7 +289,7 @@ impl MoveOrderingCacheManager {
     /// Get memory usage estimate
     pub fn memory_bytes(&self) -> usize {
         let mut total = 0;
-        for (key, entry) in &self.cache {
+        for (_key, entry) in &self.cache {
             total += std::mem::size_of::<(u64, u8)>(); // key
             total += std::mem::size_of::<MoveOrderingCacheEntry>(); // entry overhead
             total += entry.moves.len() * std::mem::size_of::<Move>(); // moves

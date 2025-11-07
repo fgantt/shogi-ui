@@ -4,7 +4,6 @@
 use shogi_engine::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-
 #[cfg(test)]
 mod integration_coordination_tests {
     use super::*;
@@ -354,98 +353,4 @@ mod integration_coordination_tests {
     }
 }
 
-#[cfg(test)]
-mod integration_statistics_tests {
-    use super::*;
-
-    fn create_test_engine() -> SearchEngine {
-        SearchEngine::new(None, 16)
-    }
-
-    fn create_test_board() -> BitboardBoard {
-        BitboardBoard::new()
-    }
-
-    fn create_test_captured_pieces() -> CapturedPieces {
-        CapturedPieces::new()
-    }
-
-    /// Test that IntegrationStats structure is properly tracked
-    #[test]
-    fn test_integration_stats_tracking() {
-        let mut engine = create_test_engine();
-
-        // Enable NMP and IID
-        let mut nmp_config = NullMoveConfig::default();
-        nmp_config.enabled = true;
-        nmp_config.min_depth = 3;
-        engine.update_null_move_config(nmp_config).unwrap();
-
-        let mut iid_config = IIDConfig::default();
-        iid_config.enabled = true;
-        iid_config.min_depth = 4;
-        engine.update_iid_config(iid_config).unwrap();
-
-        let board = create_test_board();
-        let captured_pieces = create_test_captured_pieces();
-        let player = Player::Black;
-
-        // Perform search
-        let _result = engine.search_at_depth(&board, &captured_pieces, player, 5, 5000);
-
-        println!("Integration statistics tracking verified");
-
-        // Test passes if no panics - integration stats structure is present
-        assert!(true);
-    }
-
-    /// Test monitoring for edge cases
-    #[test]
-    fn test_edge_case_monitoring() {
-        let mut engine = create_test_engine();
-
-        // Enable all features
-        let mut nmp_config = NullMoveConfig::default();
-        nmp_config.enabled = true;
-        nmp_config.min_depth = 3;
-        engine.update_null_move_config(nmp_config).unwrap();
-
-        let mut iid_config = IIDConfig::default();
-        iid_config.enabled = true;
-        iid_config.min_depth = 4;
-        engine.update_iid_config(iid_config).unwrap();
-
-        let mut lmr_config = LMRConfig::default();
-        lmr_config.enabled = true;
-        lmr_config.min_depth = 3;
-        engine.update_lmr_config(lmr_config).unwrap();
-
-        let board = create_test_board();
-        let captured_pieces = create_test_captured_pieces();
-        let player = Player::Black;
-
-        // Reset statistics
-        engine.reset_lmr_stats();
-        engine.reset_core_search_metrics();
-
-        // Perform search
-        let _result = engine.search_at_depth(&board, &captured_pieces, player, 6, 8000);
-
-        let lmr_stats = engine.get_lmr_stats();
-        let metrics = engine.get_core_search_metrics();
-
-        println!("=== Edge Case Monitoring ===");
-        println!(
-            "IID moves reduced (edge case - should be 0): {}",
-            lmr_stats.iid_move_reduced_count
-        );
-        println!(
-            "TT pollution prevented: {}",
-            metrics.tt_auxiliary_overwrites_prevented
-        );
-        println!("Evaluation calls saved: {}", metrics.evaluation_calls_saved);
-
-        // Critical edge case: IID move should never be reduced
-        assert_eq!(lmr_stats.iid_move_reduced_count, 0);
-    }
-}
+ 

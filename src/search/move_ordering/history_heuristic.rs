@@ -240,7 +240,7 @@ impl HistoryHeuristicManager {
     pub fn update_history_score(
         &mut self,
         move_: &Move,
-        depth: u8,
+        _depth: u8,
         bonus: u32,
         config: &HistoryConfig,
         board: Option<&BitboardBoard>,
