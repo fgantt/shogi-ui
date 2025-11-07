@@ -3690,6 +3690,7 @@ impl MoveOrdering {
             best_move: Some(best_move.clone()),
             hash_key: position_hash,
             age: 0, // Will be set by the transposition table
+            source: crate::types::EntrySource::MainSearch,  // Task 7.0.3: Default to MainSearch
         };
 
         // Store in transposition table

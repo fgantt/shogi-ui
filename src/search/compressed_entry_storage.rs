@@ -397,6 +397,7 @@ impl CompressedEntryStorage {
             flag,
             best_move,
             age,
+            source: crate::types::EntrySource::MainSearch,
         }
     }
     
@@ -821,6 +822,8 @@ mod tests {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 10,
+            source: crate::types::EntrySource::MainSearch,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         let compressed = storage.compress_entry(&original_entry);
@@ -857,6 +860,8 @@ mod tests {
             flag: TranspositionFlag::LowerBound,
             best_move: Some(move_.clone()),
             age: 5,
+            source: crate::types::EntrySource::MainSearch,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         let compressed = storage.compress_entry(&original_entry);
@@ -891,6 +896,8 @@ mod tests {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 10,
+            source: crate::types::EntrySource::MainSearch,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         // Compress and decompress multiple times
@@ -924,6 +931,8 @@ mod tests {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 10,
+            source: crate::types::EntrySource::MainSearch,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         for config in algorithms {
@@ -949,6 +958,8 @@ mod tests {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 10,
+            source: crate::types::EntrySource::MainSearch,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         let compressed = storage.compress_entry(&entry);

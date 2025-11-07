@@ -542,6 +542,7 @@ impl SearchEngine {
             aspiration_stats: AspirationWindowStats::default(),
             time_management_config: config.time_management.clone(),
             time_budget_stats: TimeBudgetStats::default(),
+            time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
@@ -1149,6 +1150,7 @@ impl SearchEngine {
             
             // Shallow search for this move with null window for efficiency
             // Task 2.6: Pass None for opponent_last_move in IID search (not applicable)
+            // Task 7.0.3.6: Tag as IID entry
             let score = -self.negamax_with_context(
             board, 
                 &new_captured,
@@ -1163,7 +1165,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                None  // Task 2.6: IID search doesn't track opponent's move
+                None,  // Task 2.6: IID search doesn't track opponent's move
+                crate::types::EntrySource::IIDSearch  // Task 7.0.3.6: Tag as IID entry
             );
         
             // Restore board state by unmaking the move
@@ -1909,6 +1912,7 @@ impl SearchEngine {
             }
 
             // Recursive search with reduced depth
+            // Task 7.0.3.6: Tag as IID entry
             let score = -self.negamax_with_context(
                 board,
                 &new_captured,
@@ -1923,7 +1927,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                None  // Task 2.6: IID search doesn't track opponent's move
+                None,  // Task 2.6: IID search doesn't track opponent's move
+                crate::types::EntrySource::IIDSearch  // Task 7.0.3.6: Tag as IID entry
             );
             
             // Restore board state by unmaking the move
@@ -2373,6 +2378,7 @@ impl SearchEngine {
                 let aspiration_beta = best_score + window_size;
 
                 // Recursive search
+                // Task 7.0.3.6: Tag as IID entry
                 let score = -self.negamax_with_context(
                     board,
                     &new_captured,
@@ -2387,7 +2393,8 @@ impl SearchEngine {
                     false,
                     false,
                     false,
-                    None  // Task 2.6: IID search doesn't track opponent's move
+                    None,  // Task 2.6: IID search doesn't track opponent's move
+                    crate::types::EntrySource::IIDSearch  // Task 7.0.3.6: Tag as IID entry
                 );
                 
                 // Restore board state by unmaking the move
@@ -2755,6 +2762,7 @@ impl SearchEngine {
             }
 
             // Shallow search to evaluate move potential
+            // Task 7.0.3.6: Tag as IID entry
             let score = -self.negamax_with_context(
                 board,
                 &new_captured,
@@ -2769,7 +2777,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                None  // Task 2.6: IID search doesn't track opponent's move
+                None,  // Task 2.6: IID search doesn't track opponent's move
+                crate::types::EntrySource::IIDSearch  // Task 7.0.3.6: Tag as IID entry
             );
             
             // Restore board state by unmaking the move
@@ -2828,6 +2837,7 @@ impl SearchEngine {
             }
 
             // Deeper search for verification
+            // Task 7.0.3.6: Tag as IID entry
             let deep_score = -self.negamax_with_context(
                 board,
                 &new_captured,
@@ -2842,7 +2852,8 @@ impl SearchEngine {
                 false,
                 false,
                 false,
-                None  // Task 2.6: IID search doesn't track opponent's move
+                None,  // Task 2.6: IID search doesn't track opponent's move
+                crate::types::EntrySource::IIDSearch  // Task 7.0.3.6: Tag as IID entry
             );
             
             // Restore board state by unmaking the move
@@ -2996,6 +3007,7 @@ impl SearchEngine {
                 board, captured_pieces, player, depth,
                 -10000, 10000, &iid_start, time_limit_ms,
                 &mut hash_history, false, false, false, false, None  // Task 2.6: Benchmark doesn't track opponent's move
+            , crate::types::EntrySource::MainSearch  // Task 7.0.3.7
             );
             let iid_time = iid_start.elapsed_ms();
             let iid_nodes = self.iid_stats.total_iid_nodes;
@@ -3007,6 +3019,7 @@ impl SearchEngine {
                 board, captured_pieces, player, depth,
                 -10000, 10000, &non_iid_start, time_limit_ms,
                 &mut hash_history, false, false, false, false, None  // Task 2.6: Benchmark doesn't track opponent's move
+            , crate::types::EntrySource::MainSearch  // Task 7.0.3.7
             );
             let non_iid_time = non_iid_start.elapsed_ms();
 
@@ -3316,6 +3329,7 @@ impl SearchEngine {
             false,
             false,
             None  // Task 2.6: Test doesn't track opponent's move
+        , crate::types::EntrySource::MainSearch  // Task 7.0.3.7
         );
         
         // Extract best move from transposition table or search results
@@ -3856,10 +3870,10 @@ impl SearchEngine {
     }
 
     fn negamax(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool) -> i32 {
-        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, hash_history, can_null_move, false, false, false, None)
+        self.negamax_with_context(board, captured_pieces, player, depth, alpha, beta, start_time, time_limit_ms, hash_history, can_null_move, false, false, false, None, crate::types::EntrySource::MainSearch)
     }
     
-    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool, opponent_last_move: Option<Move>) -> i32 {
+    fn negamax_with_context(&mut self, board: &mut BitboardBoard, captured_pieces: &CapturedPieces, player: Player, depth: u8, mut alpha: i32, beta: i32, start_time: &TimeSource, time_limit_ms: u32, hash_history: &mut Vec<u64>, can_null_move: bool, is_root: bool, _has_capture: bool, has_check: bool, opponent_last_move: Option<Move>, entry_source: crate::types::EntrySource) -> i32 {
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
         
@@ -4274,6 +4288,7 @@ impl SearchEngine {
             crate::debug_utils::start_timing(&format!("move_search_{}", move_index));
             // Task 2.6: Pass current move as opponent_last_move to recursive call
             // Task 7.0.1: Pass IID move for explicit exemption from LMR
+            // Task 7.0.3.4: Pass entry source for TT priority management
             let score = self.search_move_with_lmr(
                 board, 
                 &new_captured, 
@@ -4290,7 +4305,8 @@ impl SearchEngine {
                 move_.is_capture,
                 has_check,
                 opponent_last_move.clone(),  // Task 2.6: Pass opponent's last move for counter-move heuristic
-                iid_move.as_ref()  // Task 7.0.1: Pass IID move for explicit exemption from LMR
+                iid_move.as_ref(),  // Task 7.0.1: Pass IID move for explicit exemption from LMR
+                entry_source  // Task 7.0.3.4: Pass entry source for TT priority management
             );
             crate::debug_utils::end_timing(&format!("move_search_{}", move_index), "NEGAMAX");
             
@@ -4424,7 +4440,8 @@ impl SearchEngine {
         
         // Use the position hash we calculated earlier for proper TT storage
         // Clone best_move_for_tt before passing to avoid move error (Task 5.12)
-        let entry = TranspositionEntry::new_with_age(best_score, depth, flag, best_move_for_tt.clone(), position_hash);
+        // Task 7.0.3.7: Create entry with source tracking
+        let entry = TranspositionEntry::new(best_score, depth, flag, best_move_for_tt.clone(), position_hash, 0, entry_source);
         self.maybe_buffer_tt_store(entry, depth, flag);
         
         crate::debug_utils::trace_log("NEGAMAX", &format!("Negamax completed: depth={}, score={}, flag={:?}", depth, best_score, flag));
@@ -6635,7 +6652,8 @@ impl SearchEngine {
             board, captured_pieces, player.opposite(), 
             search_depth, beta.saturating_neg(), beta.saturating_neg().saturating_add(1), 
             start_time, time_limit_ms, hash_history, 
-            false, false, false, false, None  // Task 2.6: Null move search doesn't track opponent's move
+            false, false, false, false, None,  // Task 2.6: Null move search doesn't track opponent's move
+            crate::types::EntrySource::NullMoveSearch  // Task 7.0.3.5: Tag as NMP entry
         );
         
         null_move_score
@@ -6672,7 +6690,8 @@ impl SearchEngine {
             board, captured_pieces, player.opposite(),
             depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
             start_time, time_limit_ms, hash_history,
-            false, false, false, false, None  // Task 2.6: Null move verification doesn't track opponent's move
+            false, false, false, false, None,  // Task 2.6: Null move verification doesn't track opponent's move
+            crate::types::EntrySource::NullMoveSearch  // Task 7.0.3.5: Tag as NMP entry
         );
         
         verification_score
@@ -6709,11 +6728,13 @@ impl SearchEngine {
         
         // Perform verification search at depth - 1 (full depth, no reduction)
         // Use zero-width window like null move search
+        // Task 7.0.3.5: Tag as NMP entry (part of null move threat detection)
         let mate_threat_score = -self.negamax_with_context(
             board, captured_pieces, player.opposite(),
             depth - 1, beta.saturating_neg(), beta.saturating_neg().saturating_add(1),
             start_time, time_limit_ms, hash_history,
-            false, false, false, false, None  // Task 2.6: Mate threat verification doesn't track opponent's move
+            false, false, false, false, None,  // Task 2.6: Mate threat verification doesn't track opponent's move
+            crate::types::EntrySource::NullMoveSearch  // Task 7.0.3.5: Tag as NMP entry
         );
         
         if mate_threat_score >= beta {
@@ -8071,7 +8092,8 @@ impl SearchEngine {
                            has_capture: bool,
                            has_check: bool,
                            opponent_last_move: Option<Move>,  // Task 2.6: Track opponent's last move for counter-move heuristic
-                           iid_move: Option<&Move>) -> i32 {  // Task 7.0.1: IID move for explicit exemption
+                           iid_move: Option<&Move>,  // Task 7.0.1: IID move for explicit exemption
+                           entry_source: crate::types::EntrySource) -> i32 {  // Task 7.0.3.4: Entry source for TT priority
         
         self.lmr_stats.moves_considered += 1;
         
@@ -8175,6 +8197,7 @@ impl SearchEngine {
             // Perform reduced-depth search with null window
             let reduced_depth = depth - 1 - reduction;
             // Task 2.6: Pass current move as opponent_last_move to recursive call
+            // Task 7.0.3.7: Main search path uses MainSearch entry source
             let score = -self.negamax_with_context(
                 board, 
                 captured_pieces, 
@@ -8189,7 +8212,8 @@ impl SearchEngine {
                 false, // not root
                 has_capture,
                 has_check,
-                Some(move_.clone())  // Task 2.6: Pass current move as opponent's last move
+                Some(move_.clone()),  // Task 2.6: Pass current move as opponent's last move
+                entry_source  // Task 7.0.3.7: Propagate entry source through search
             );
             
             // Check if re-search is needed (with margin)
@@ -8207,6 +8231,7 @@ impl SearchEngine {
                 
                 // Re-search at full depth
                 // Task 2.6: Pass current move as opponent_last_move to recursive call
+                // Task 7.0.3.7: Main search path uses MainSearch entry source
                 let full_score = -self.negamax_with_context(
                     board, 
                     captured_pieces, 
@@ -8221,7 +8246,8 @@ impl SearchEngine {
                     false, // not root
                     has_capture,
                     has_check,
-                    Some(move_.clone())  // Task 2.6: Pass current move as opponent's last move
+                    Some(move_.clone()),  // Task 2.6: Pass current move as opponent's last move
+                    entry_source  // Task 7.0.3.7: Propagate entry source through search
                 );
                 
                 let cutoff_after_research = full_score >= beta;
@@ -8275,6 +8301,7 @@ impl SearchEngine {
             }
         } else {
             // No reduction - perform full-depth search
+            // Task 7.0.3.7: Main search path uses propagated entry source
             let score = -self.negamax_with_context(
                 board, 
                 captured_pieces, 
@@ -8288,7 +8315,9 @@ impl SearchEngine {
                 true,
                 false, // not root
                 has_capture,
-                has_check
+                has_check,
+                opponent_last_move,  // Propagate opponent's last move
+                entry_source  // Task 7.0.3.7: Propagate entry source through search
             );
             
             // Track phase statistics for non-reduced moves (Task 4.6)

@@ -161,6 +161,7 @@ impl MoveOrderingTestSuite {
             flag: TranspositionFlag::Exact,
             best_move: Some(best_move.clone()),
             age: 0,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         tt.store(entry);

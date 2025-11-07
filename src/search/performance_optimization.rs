@@ -435,6 +435,7 @@ impl HotPathOptimizer {
             best_move: entry.best_move(),
             hash_key: hash,
             age: 0, // Would need to be stored separately in a real implementation
+            source: crate::types::EntrySource::MainSearch,  // Task 7.0.3: Default to MainSearch
         }
     }
     

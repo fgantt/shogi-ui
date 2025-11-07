@@ -334,6 +334,7 @@ impl ThreadSafeTranspositionTable {
             best_move: packed_data.best_move(),
             hash_key: hash,
             age: entry.age.load(Ordering::Acquire),
+            source: crate::types::EntrySource::MainSearch,  // Task 7.0.3: Default to MainSearch for reconstructed entries
         };
         
         self.increment_hits();
@@ -441,6 +442,7 @@ impl ThreadSafeTranspositionTable {
             best_move: table_entry.packed_data.best_move(),
             hash_key: hash,
             age: table_entry.age.load(Ordering::Acquire),
+            source: crate::types::EntrySource::MainSearch,  // Task 7.0.3: Default to MainSearch for reconstructed entries
         }
     }
     

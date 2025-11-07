@@ -489,6 +489,7 @@ impl ComprehensiveTestSuite {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 0,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         tt.store(entry.clone());
@@ -517,6 +518,7 @@ impl ComprehensiveTestSuite {
             flag: TranspositionFlag::LowerBound,
             best_move: None,
             age: 1,
+            source: crate::types::EntrySource::MainSearch,
         };
         
         tt.store(entry);
@@ -537,6 +539,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
         }
@@ -549,6 +552,7 @@ impl ComprehensiveTestSuite {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 0,
+            source: crate::types::EntrySource::MainSearch,
         };
         tt.store(entry);
         
@@ -615,6 +619,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
         }
@@ -640,6 +645,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
             
@@ -694,6 +700,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: (i % 100) as u32,
+                source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
         }
@@ -721,6 +728,7 @@ impl ComprehensiveTestSuite {
             flag: TranspositionFlag::Exact,
             best_move: None,
             age: 0,
+            source: crate::types::EntrySource::MainSearch,
         };
         tt.store(entry);
         
@@ -740,6 +748,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
         }
@@ -764,6 +773,7 @@ impl ComprehensiveTestSuite {
                     flag: TranspositionFlag::Exact,
                     best_move: None,
                     age: 0,
+            source: crate::types::EntrySource::MainSearch,
                 };
                 tt.store(entry);
             }
@@ -793,6 +803,7 @@ impl ComprehensiveTestSuite {
                     flag: TranspositionFlag::Exact,
                     best_move: None,
                     age: 0,
+            source: crate::types::EntrySource::MainSearch,
                 };
                 tt.store(entry);
             }
@@ -847,6 +858,7 @@ impl ComprehensiveTestSuite {
                 flag: TranspositionFlag::Exact,
                 best_move: None,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             tt.store(entry);
         }

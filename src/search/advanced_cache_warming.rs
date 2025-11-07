@@ -371,6 +371,7 @@ impl AdvancedCacheWarmer {
                 flag: entry.flag,
                 best_move: entry.best_move,
                 age: 0,
+            source: crate::types::EntrySource::MainSearch,
             };
             
             // Store in target table

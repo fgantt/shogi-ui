@@ -505,11 +505,14 @@ pub struct TranspositionEntry {
     pub hash_key: u64,
     /// Age counter for replacement policies
     pub age: u32,
+    /// Source of this entry for priority management (Task 7.0.3.2)
+    pub source: EntrySource,
 }
 
 impl TranspositionEntry {
     /// Create a new transposition table entry
-    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64, age: u32) -> Self {
+    /// Task 7.0.3.3: Added source parameter for entry priority management
+    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64, age: u32, source: EntrySource) -> Self {
         Self {
             score,
             depth,
@@ -517,12 +520,13 @@ impl TranspositionEntry {
             best_move,
             hash_key,
             age,
+            source,
         }
     }
     
-    /// Create a new entry with default age (0)
+    /// Create a new entry with default age (0) and MainSearch source
     pub fn new_with_age(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>, hash_key: u64) -> Self {
-        Self::new(score, depth, flag, best_move, hash_key, 0)
+        Self::new(score, depth, flag, best_move, hash_key, 0, EntrySource::MainSearch)
     }
     
     /// Check if this entry is valid for the given search depth
@@ -6460,6 +6464,20 @@ pub enum PositionClassification {
     Tactical,  // Position with high tactical activity (many cutoffs)
     Quiet,     // Position with low tactical activity (few cutoffs)
     Neutral,   // Position with moderate tactical activity or insufficient data
+}
+
+/// Source of transposition table entry for priority management (Task 7.0.3.1)
+/// Used to prevent shallow auxiliary search entries from overwriting deeper main search entries
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EntrySource {
+    /// Entry from main search path (highest priority)
+    MainSearch,
+    /// Entry from null move pruning search (lower priority)
+    NullMoveSearch,
+    /// Entry from internal iterative deepening search (lower priority)
+    IIDSearch,
+    /// Entry from quiescence search (lower priority)
+    QuiescenceSearch,
 }
 
 /// Search state for advanced alpha-beta pruning
