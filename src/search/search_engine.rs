@@ -3941,6 +3941,9 @@ impl SearchEngine {
         // Calculate position hash for repetition detection and TT
         let position_hash = self.hash_calculator.get_position_hash(board, player, captured_pieces);
         
+        // Task 7.0.4.2: Evaluate position once at entry and cache for reuse
+        let cached_static_eval = self.evaluate_position(board, player, captured_pieces);
+        
         // Hash-based repetition detection (Task 5.1-5.3)
         // Use hash_calculator's built-in repetition detection instead of FEN strings
         // Note: hash_calculator maintains its own global history via add_position_to_history
@@ -4003,7 +4006,8 @@ impl SearchEngine {
             ));
         }
         
-        if !skip_nmp_time_pressure && self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move) {
+        // Task 7.0.4.3: Pass cached evaluation to avoid re-evaluation
+        if !skip_nmp_time_pressure && self.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move, Some(cached_static_eval)) {
             crate::debug_utils::trace_log("NULL_MOVE", &format!(
                 "Attempting null move pruning at depth {} (time pressure: {:?})",
                 depth, time_pressure
@@ -4482,10 +4486,12 @@ impl SearchEngine {
         // Refine fallback logic to use best-scoring move or static evaluation (Task 5.10-5.11)
         // If best_score is still at initial alpha and we have no tracked score, use static evaluation
         if best_score == alpha && best_score_tracked.is_none() && best_move_for_tt.is_none() {
-            // No moves were evaluated or all moves were pruned - use static evaluation
-            let static_eval = self.evaluate_position(board, player, captured_pieces);
-            crate::debug_utils::trace_log("NEGAMAX", &format!("No moves evaluated, returning static evaluation: {}", static_eval));
-            return static_eval;
+            // No moves were evaluated or all moves were pruned - use cached static evaluation
+            // Task 7.0.4.2, 7.0.4.8: Use cached evaluation and track savings
+            self.core_search_metrics.evaluation_cache_hits += 1;
+            self.core_search_metrics.evaluation_calls_saved += 1;
+            crate::debug_utils::trace_log("NEGAMAX", &format!("No moves evaluated, returning cached static evaluation: {}", cached_static_eval));
+            return cached_static_eval;
         }
         
         // If we still have a sentinel-like value, prefer tracked score or static eval
@@ -4493,9 +4499,11 @@ impl SearchEngine {
             if let Some(tracked_score) = best_score_tracked {
                 return tracked_score;
             }
-            let static_eval = self.evaluate_position(board, player, captured_pieces);
-            crate::debug_utils::trace_log("NEGAMAX", &format!("Best score is sentinel value, returning static evaluation: {}", static_eval));
-            return static_eval;
+            // Task 7.0.4.2, 7.0.4.8: Use cached evaluation and track savings
+            self.core_search_metrics.evaluation_cache_hits += 1;
+            self.core_search_metrics.evaluation_calls_saved += 1;
+            crate::debug_utils::trace_log("NEGAMAX", &format!("Best score is sentinel value, returning cached static evaluation: {}", cached_static_eval));
+            return cached_static_eval;
         }
         
         // Task 12.5: Update correlation tracking between IID efficiency and ordering effectiveness
@@ -6373,8 +6381,9 @@ impl SearchEngine {
     }
     // ===== NULL MOVE PRUNING METHODS =====
     /// Check if null move pruning should be attempted in the current position
+    /// Task 7.0.4.3: Accept cached_static_eval to avoid re-evaluation
     fn should_attempt_null_move(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces,
-                               player: Player, depth: u8, can_null_move: bool) -> bool {
+                               player: Player, depth: u8, can_null_move: bool, cached_static_eval: Option<i32>) -> bool {
         if !self.null_move_config.enabled || !can_null_move {
             return false;
         }

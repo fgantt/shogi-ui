@@ -6735,6 +6735,10 @@ pub struct CoreSearchMetrics {
     pub tt_auxiliary_overwrites_prevented: u64,
     /// Number of times main entry preserved another main entry (Task 7.0.3.10)
     pub tt_main_entries_preserved: u64,
+    /// Number of evaluation calls saved through caching (Task 7.0.4.8)
+    pub evaluation_calls_saved: u64,
+    /// Number of times cached evaluation was reused (Task 7.0.4.8)
+    pub evaluation_cache_hits: u64,
 }
 
 impl CoreSearchMetrics {
