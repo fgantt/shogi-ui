@@ -7,6 +7,18 @@ use shogi_engine::bitboards::*;
 use shogi_engine::search::*;
 use shogi_engine::types::*;
 
+fn make_entry(hash_key: u64, depth: u8, score: i32) -> TranspositionEntry {
+    TranspositionEntry::new(
+        score,
+        depth,
+        TranspositionFlag::Exact,
+        None,
+        hash_key,
+        0,
+        EntrySource::MainSearch,
+    )
+}
+
 fn main() {
     println!("🔧 Transposition Table Troubleshooting Guide");
     println!("==============================================");
@@ -65,14 +77,7 @@ fn demonstrate_low_hit_rate_issues() {
 
     // Store entries with random patterns (simulating poor hash distribution)
     for i in 0..1000 {
-        let entry = TranspositionEntry {
-            hash_key: (i * 1000000) as u64, // Poor hash distribution
-            depth: 1,
-            score: i as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = make_entry((i * 1_000_000) as u64, 1, i as i32);
         tt.store(entry);
     }
 
@@ -104,14 +109,7 @@ fn demonstrate_low_hit_rate_issues() {
 
     // Store with better distribution
     for i in 0..1000 {
-        let entry = TranspositionEntry {
-            hash_key: i as u64, // Better distribution
-            depth: 1,
-            score: i as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = make_entry(i as u64, 1, i as i32);
         large_tt.store(entry);
     }
 
@@ -171,14 +169,7 @@ fn demonstrate_performance_issues() {
     let start = std::time::Instant::now();
 
     for i in 0..iterations {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: 1,
-            score: i as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = make_entry(i as u64, 1, i as i32);
         tt.store(entry);
     }
 
@@ -201,14 +192,7 @@ fn demonstrate_performance_issues() {
     let perf_start = std::time::Instant::now();
 
     for i in 0..iterations {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: 1,
-            score: i as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = make_entry(i as u64, 1, i as i32);
         perf_tt.store(entry);
     }
 
@@ -233,22 +217,17 @@ fn demonstrate_hash_collision_issues() {
 
     // Force collisions by using same hash keys
     for i in 0..100 {
-        let entry = TranspositionEntry {
-            hash_key: i as u64 % 10, // Force collisions
-            depth: 1,
-            score: i as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = make_entry(i as u64 % 10, 1, i as i32);
         tt.store(entry);
     }
 
     let stats = tt.get_stats();
-    println!(
-        "  Current collision rate: {:.2}%",
-        stats.collision_rate * 100.0
-    );
+    println!("  Stores: {}", stats.stores);
+    println!("  Replacements (collisions): {}", stats.replacements);
+    if stats.stores > 0 {
+        let collision_ratio = stats.replacements as f64 / stats.stores as f64;
+        println!("  Collision ratio: {:.2}%", collision_ratio * 100.0);
+    }
 
     // Solutions
     println!("  Solutions:");
@@ -309,7 +288,14 @@ fn demonstrate_move_ordering_issues() {
     println!("    Original moves: {}", moves.len());
     println!("    Ordered moves: {}", ordered_moves.len());
 
-    let stats = orderer.get_move_ordering_hints(&moves, &board, &captured, Player::Black);
+    let hints = orderer.get_move_ordering_hints(&board, &captured, Player::Black, 3);
+    println!("    TT best move: {:?}", hints.best_move);
+    println!("    TT depth: {}", hints.tt_depth);
+    if let Some(score) = hints.tt_score {
+        println!("    TT score: {}", score);
+    }
+
+    let stats = orderer.get_stats();
     println!("    TT hint moves: {}", stats.tt_hint_moves);
     println!("    Killer move hits: {}", stats.killer_move_hits);
     println!("    History hits: {}", stats.history_hits);
@@ -323,12 +309,44 @@ fn demonstrate_move_ordering_issues() {
     println!("    5. Ensure proper TT integration");
 
     // Demonstrate proper setup
-    let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+    let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+    let hash_calc = ShogiHashHandler::new(1000);
+    let position_hash = hash_calc.get_position_hash(&board, Player::Black, &captured);
+    let tt_entry = TranspositionEntry::new(
+        320,
+        4,
+        TranspositionFlag::Exact,
+        moves.first().cloned(),
+        position_hash,
+        0,
+        EntrySource::MainSearch,
+    );
+    tt.store(tt_entry);
+
     orderer.set_transposition_table(&tt);
 
     println!("  After proper setup:");
-    let stats_after = orderer.get_move_ordering_hints(&moves, &board, &captured, Player::Black);
+    orderer.reset_stats();
+    let _ordered_with_tt = orderer.order_moves(
+        &moves,
+        &board,
+        &captured,
+        Player::Black,
+        3,
+        -1000,
+        1000,
+        None,
+    );
+    let hints_after = orderer.get_move_ordering_hints(&board, &captured, Player::Black, 3);
+    println!("    TT best move: {:?}", hints_after.best_move);
+    println!("    TT depth: {}", hints_after.tt_depth);
+    if let Some(score) = hints_after.tt_score {
+        println!("    TT score: {}", score);
+    }
+    let stats_after = orderer.get_stats();
     println!("    TT hint moves: {}", stats_after.tt_hint_moves);
+    println!("    Killer move hits: {}", stats_after.killer_move_hits);
+    println!("    History hits: {}", stats_after.history_hits);
 }
 
 fn demonstrate_wasm_compatibility() {
@@ -363,14 +381,7 @@ fn demonstrate_wasm_compatibility() {
     let config = TranspositionConfig::default();
     let mut tt = ThreadSafeTranspositionTable::new(config);
 
-    let entry = TranspositionEntry {
-        hash_key: 12345,
-        depth: 3,
-        score: 100,
-        flag: TranspositionFlag::Exact,
-        best_move: None,
-        age: 0,
-    };
+    let entry = make_entry(12345, 3, 100);
 
     tt.store(entry);
     let retrieved = tt.probe(12345, 3);

@@ -5,9 +5,22 @@
 //! maintaining fast access times.
 
 use shogi_engine::search::{
-    CompressedEntryStorage, CompressionAlgorithm, CompressionConfig, TranspositionEntry,
-    TranspositionFlag,
+    CompressedEntryStorage, CompressionAlgorithm, CompressionConfig,
 };
+use shogi_engine::types::{
+    EntrySource, Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag,
+};
+
+fn build_entry(
+    score: i32,
+    depth: u8,
+    flag: TranspositionFlag,
+    best_move: Option<Move>,
+    hash_key: u64,
+    age: u32,
+) -> TranspositionEntry {
+    TranspositionEntry::new(score, depth, flag, best_move, hash_key, age, EntrySource::MainSearch)
+}
 
 fn main() {
     println!("Compressed Entry Storage Example");
@@ -42,14 +55,14 @@ fn demonstrate_compression_algorithms() {
         ("Run-Length Encoding", CompressionConfig::rle()),
     ];
 
-    let entry = TranspositionEntry {
-        hash_key: 0x123456789ABCDEF0,
-        depth: 8,
-        score: 150,
-        flag: TranspositionFlag::Exact,
-        best_move: None,
-        age: 25,
-    };
+    let entry = build_entry(
+        150,
+        8,
+        TranspositionFlag::Exact,
+        None,
+        0x123456789ABCDEF0,
+        25,
+    );
 
     for (name, config) in algorithms {
         let mut storage = CompressedEntryStorage::new(config);
@@ -88,32 +101,18 @@ fn demonstrate_compression_benefits() {
     // Create multiple entries with different characteristics
     let entries = vec![
         // Entry with no best move
-        TranspositionEntry {
-            hash_key: 0x1111111111111111,
-            depth: 3,
-            score: 50,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 10,
-        },
+        build_entry(50, 3, TranspositionFlag::Exact, None, 0x1111111111111111, 10),
         // Entry with best move
-        TranspositionEntry {
-            hash_key: 0x2222222222222222,
-            depth: 6,
-            score: -75,
-            flag: TranspositionFlag::LowerBound,
-            best_move: Some(create_sample_move()),
-            age: 15,
-        },
+        build_entry(
+            -75,
+            6,
+            TranspositionFlag::LowerBound,
+            Some(create_sample_move()),
+            0x2222222222222222,
+            15,
+        ),
         // Deep entry
-        TranspositionEntry {
-            hash_key: 0x3333333333333333,
-            depth: 12,
-            score: 200,
-            flag: TranspositionFlag::UpperBound,
-            best_move: None,
-            age: 20,
-        },
+        build_entry(200, 12, TranspositionFlag::UpperBound, None, 0x3333333333333333, 20),
     ];
 
     let mut total_original_size = 0;
@@ -156,15 +155,8 @@ fn demonstrate_caching() {
     println!("\n--- Caching Demo ---");
 
     let mut storage = CompressedEntryStorage::new(CompressionConfig::lz4_fast());
-
-    let entry = TranspositionEntry {
-        hash_key: 0x4444444444444444,
-        depth: 5,
-        score: 100,
-        flag: TranspositionFlag::Exact,
-        best_move: None,
-        age: 12,
-    };
+ 
+    let entry = build_entry(100, 5, TranspositionFlag::Exact, None, 0x4444444444444444, 12);
 
     let compressed = storage.compress_entry(&entry);
 
@@ -182,15 +174,10 @@ fn demonstrate_caching() {
 
     println!("Second decompression: {}μs (cache hit)", second_time);
 
-    println!(
-        "Cache hits: {}, cache misses: {}",
-        storage.cache_hits, storage.cache_misses
-    );
-
-    // Verify cache hit was faster
-    if storage.cache_hits > 0 {
+    // Estimate improvement based on timing
+    if second_time > 0 {
         println!(
-            "Cache hit was {}x faster",
+            "Cache hit was {:.2}x faster",
             first_time as f64 / second_time as f64
         );
     }
@@ -204,32 +191,18 @@ fn demonstrate_adaptive_compression() {
     // Create entries with different data characteristics
     let entries = vec![
         // Low entropy entry (repeated patterns)
-        TranspositionEntry {
-            hash_key: 0xAAAAAAAAAAAAAAAA,
-            depth: 1,
-            score: 0,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 1,
-        },
+        build_entry(0, 1, TranspositionFlag::Exact, None, 0xAAAAAAAAAAAAAAAA, 1),
         // High entropy entry (random-like)
-        TranspositionEntry {
-            hash_key: 0x123456789ABCDEF0,
-            depth: 8,
-            score: 150,
-            flag: TranspositionFlag::Exact,
-            best_move: Some(create_sample_move()),
-            age: 25,
-        },
+        build_entry(
+            150,
+            8,
+            TranspositionFlag::Exact,
+            Some(create_sample_move()),
+            0x123456789ABCDEF0,
+            25,
+        ),
         // Medium entropy entry
-        TranspositionEntry {
-            hash_key: 0x5555555555555555,
-            depth: 4,
-            score: 75,
-            flag: TranspositionFlag::LowerBound,
-            best_move: None,
-            age: 10,
-        },
+        build_entry(75, 4, TranspositionFlag::LowerBound, None, 0x5555555555555555, 10),
     ];
 
     for (i, entry) in entries.iter().enumerate() {
@@ -257,30 +230,9 @@ fn demonstrate_dictionary_compression() {
 
     // Create entries with repeated patterns
     let entries = vec![
-        TranspositionEntry {
-            hash_key: 0x1111111111111111,
-            depth: 3,
-            score: 50,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 10,
-        },
-        TranspositionEntry {
-            hash_key: 0x1111111111111112,
-            depth: 4,
-            score: 60,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 11,
-        },
-        TranspositionEntry {
-            hash_key: 0x1111111111111113,
-            depth: 5,
-            score: 70,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 12,
-        },
+        build_entry(50, 3, TranspositionFlag::Exact, None, 0x1111111111111111, 10),
+        build_entry(60, 4, TranspositionFlag::Exact, None, 0x1111111111111112, 11),
+        build_entry(70, 5, TranspositionFlag::Exact, None, 0x1111111111111113, 12),
     ];
 
     // Update dictionary with common patterns

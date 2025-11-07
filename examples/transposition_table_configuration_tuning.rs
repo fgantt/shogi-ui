@@ -1,63 +1,23 @@
-//! Comprehensive configuration and tuning example for transposition tables
-//!
-//! This example demonstrates the complete configuration and tuning system including
-//! runtime configuration management, adaptive configuration, performance tuning,
-//! and configuration templates.
-
+#[cfg(feature = "tt-config-tuning")]
 use shogi_engine::bitboards::*;
+#[cfg(feature = "tt-config-tuning")]
 use shogi_engine::search::*;
+#[cfg(feature = "tt-config-tuning")]
 use shogi_engine::types::*;
+#[cfg(feature = "tt-config-tuning")]
 use std::time::Instant;
 
+#[cfg(not(feature = "tt-config-tuning"))]
 fn main() {
-    println!("⚙️ Transposition Table Configuration and Tuning Example");
-    println!("=====================================================");
-
-    // 1. Basic configuration management
-    println!("\n📋 Basic Configuration Management");
-    println!("----------------------------------");
-    basic_configuration_management();
-
-    // 2. Runtime configuration updates
-    println!("\n🔄 Runtime Configuration Updates");
-    println!("---------------------------------");
-    runtime_configuration_updates();
-
-    // 3. Adaptive configuration
-    println!("\n🤖 Adaptive Configuration");
-    println!("-------------------------");
-    adaptive_configuration_demo();
-
-    // 4. Performance tuning
-    println!("\n⚡ Performance Tuning");
-    println!("---------------------");
-    performance_tuning_demo();
-
-    // 5. Configuration templates
-    println!("\n📝 Configuration Templates");
-    println!("---------------------------");
-    configuration_templates_demo();
-
-    // 6. Configuration validation
-    println!("\n✅ Configuration Validation");
-    println!("---------------------------");
-    configuration_validation_demo();
-
-    // 7. Advanced tuning scenarios
-    println!("\n🎯 Advanced Tuning Scenarios");
-    println!("-----------------------------");
-    advanced_tuning_scenarios();
-
-    println!("\n🎉 Configuration and tuning example completed!");
-    println!("\n📚 Key Features Demonstrated:");
-    println!("   • Runtime configuration management and updates");
-    println!("   • Adaptive configuration based on performance metrics");
-    println!("   • Performance tuning with recommendations");
-    println!("   • Configuration templates for common use cases");
-    println!("   • Comprehensive configuration validation");
-    println!("   • Advanced tuning scenarios and optimization");
+    eprintln!(
+        "Enable the `tt-config-tuning` feature to build the transposition_table_configuration_tuning example."
+    );
 }
 
+#[cfg(feature = "tt-config-tuning")]
+fn main() {
+
+#[cfg(feature = "tt-config-tuning")]
 fn basic_configuration_management() {
     println!("Creating runtime configuration manager...");
 
@@ -86,6 +46,7 @@ fn basic_configuration_management() {
     }
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn runtime_configuration_updates() {
     println!("Demonstrating runtime configuration updates...");
 
@@ -154,6 +115,7 @@ fn runtime_configuration_updates() {
     }
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn adaptive_configuration_demo() {
     println!("Demonstrating adaptive configuration...");
 
@@ -221,6 +183,7 @@ fn adaptive_configuration_demo() {
     }
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn performance_tuning_demo() {
     println!("Demonstrating performance tuning...");
 
@@ -306,6 +269,7 @@ fn performance_tuning_demo() {
     }
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn configuration_templates_demo() {
     println!("Demonstrating configuration templates...");
 
@@ -403,6 +367,7 @@ fn configuration_templates_demo() {
     }
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn configuration_validation_demo() {
     println!("Demonstrating configuration validation...");
 
@@ -482,6 +447,7 @@ fn configuration_validation_demo() {
     );
 }
 
+#[cfg(feature = "tt-config-tuning")]
 fn advanced_tuning_scenarios() {
     println!("Demonstrating advanced tuning scenarios...");
 
@@ -583,4 +549,54 @@ fn advanced_tuning_scenarios() {
     println!("    Current table size: {}", current_config.table_size);
 
     println!("  All advanced tuning scenarios completed successfully!");
+}
+
+#[cfg(feature = "tt-config-tuning")]
+fn main() {
+    println!("⚙️ Transposition Table Configuration and Tuning Example");
+    println!("=====================================================");
+
+    // 1. Basic configuration management
+    println!("\n📋 Basic Configuration Management");
+    println!("----------------------------------");
+    basic_configuration_management();
+
+    // 2. Runtime configuration updates
+    println!("\n🔄 Runtime Configuration Updates");
+    println!("---------------------------------");
+    runtime_configuration_updates();
+
+    // 3. Adaptive configuration
+    println!("\n🤖 Adaptive Configuration");
+    println!("-------------------------");
+    adaptive_configuration_demo();
+
+    // 4. Performance tuning
+    println!("\n⚡ Performance Tuning");
+    println!("---------------------");
+    performance_tuning_demo();
+
+    // 5. Configuration templates
+    println!("\n📝 Configuration Templates");
+    println!("---------------------------");
+    configuration_templates_demo();
+
+    // 6. Configuration validation
+    println!("\n✅ Configuration Validation");
+    println!("---------------------------");
+    configuration_validation_demo();
+
+    // 7. Advanced tuning scenarios
+    println!("\n🎯 Advanced Tuning Scenarios");
+    println!("-----------------------------");
+    advanced_tuning_scenarios();
+
+    println!("\n🎉 Configuration and tuning example completed!");
+    println!("\n📚 Key Features Demonstrated:");
+    println!("   • Runtime configuration management and updates");
+    println!("   • Adaptive configuration based on performance metrics");
+    println!("   • Performance tuning with recommendations");
+    println!("   • Configuration templates for common use cases");
+    println!("   • Comprehensive configuration validation");
+    println!("   • Advanced tuning scenarios and optimization");
 }

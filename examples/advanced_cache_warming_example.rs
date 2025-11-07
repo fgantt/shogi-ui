@@ -7,6 +7,10 @@ use shogi_engine::search::{
     AdvancedCacheWarmer, CacheWarmingConfig, GamePhase, PositionAnalysis, WarmingEntry,
     WarmingEntryType, WarmingResults, WarmingSession, WarmingStrategy,
 };
+use shogi_engine::search::advanced_cache_warming::{
+    TacticalPattern, TacticalPatternType, TranspositionTableInterface,
+};
+use shogi_engine::types::{Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag};
 
 fn main() {
     println!("Advanced Cache Warming Example");
@@ -303,7 +307,7 @@ impl MockTranspositionTable {
     }
 }
 
-impl shogi_engine::search::TranspositionTableInterface for MockTranspositionTable {
+impl TranspositionTableInterface for MockTranspositionTable {
     fn store(&mut self, entry: TranspositionEntry) -> bool {
         if self.entries.len() < self.max_size {
             self.entries.insert(entry.hash_key, entry);
@@ -350,6 +354,3 @@ fn create_sample_move() -> Move {
         is_recapture: false,
     }
 }
-
-// Import necessary types
-use crate::types::{Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag};

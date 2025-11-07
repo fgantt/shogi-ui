@@ -6,8 +6,11 @@
 
 use shogi_engine::search::{
     AccessPatternInfo, MLAlgorithm, MLReplacementConfig, MLReplacementContext,
-    MLReplacementDecision, MLReplacementPolicy, PositionFeatures, ReplacementAction, TemporalInfo,
+    MLReplacementDecision, MLReplacementPolicy, PositionFeatures, ReplacementAction,
+    TemporalInfo,
 };
+use shogi_engine::search::ml_replacement_policies::ReplacementOutcome;
+use shogi_engine::types::{EntrySource, TranspositionEntry, TranspositionFlag};
 
 fn main() {
     println!("Machine Learning Replacement Policies Example");
@@ -308,22 +311,24 @@ fn demonstrate_realtime_adaptation() {
 fn create_sample_context() -> MLReplacementContext {
     MLReplacementContext {
         current_hash: 0x123456789ABCDEF0,
-        existing_entry: Some(TranspositionEntry {
-            hash_key: 0x123456789ABCDEF0,
-            depth: 5,
-            score: 100,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 10,
-        }),
-        new_entry: TranspositionEntry {
-            hash_key: 0x123456789ABCDEF0,
-            depth: 6,
-            score: 120,
-            flag: TranspositionFlag::LowerBound,
-            best_move: None,
-            age: 1,
-        },
+        existing_entry: Some(TranspositionEntry::new(
+            100,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x123456789ABCDEF0,
+            10,
+            EntrySource::MainSearch,
+        )),
+        new_entry: TranspositionEntry::new(
+            120,
+            6,
+            TranspositionFlag::LowerBound,
+            None,
+            0x123456789ABCDEF0,
+            1,
+            EntrySource::MainSearch,
+        ),
         access_pattern: AccessPatternInfo {
             recent_frequency: 0.7,
             depth_pattern: 0.5,
@@ -382,7 +387,8 @@ fn create_varying_context(decision_num: usize) -> MLReplacementContext {
     // Vary features based on decision number
     context.position_features.complexity = 0.3 + (decision_num as f64 * 0.05) % 0.7;
     context.access_pattern.recent_frequency = 0.2 + (decision_num as f64 * 0.03) % 0.8;
-    context.temporal_info.existing_age = std::time::Duration::from_secs(5 + decision_num);
+    context.temporal_info.existing_age =
+        std::time::Duration::from_secs(5 + decision_num as u64);
 
     context
 }
@@ -403,6 +409,3 @@ fn create_sample_outcome(beneficial: bool) -> ReplacementOutcome {
         access_frequency: if beneficial { 0.7 } else { 0.4 },
     }
 }
-
-// Import necessary types
-use crate::types::{TranspositionEntry, TranspositionFlag};

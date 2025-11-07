@@ -19,12 +19,11 @@ fn main() {
 
     // 2. Create a sample transposition entry
     println!("\n📝 Creating sample transposition entry...");
-    let entry = TranspositionEntry {
-        hash_key: 0x123456789ABCDEF0,
-        depth: 5,
-        score: 150,
-        flag: TranspositionFlag::Exact,
-        best_move: Some(Move {
+    let entry = TranspositionEntry::new(
+        150,
+        5,
+        TranspositionFlag::Exact,
+        Some(Move {
             from: Some(Position { row: 7, col: 4 }),
             to: Position { row: 6, col: 4 },
             piece_type: PieceType::Pawn,
@@ -35,8 +34,10 @@ fn main() {
             captured_piece: None,
             player: Player::Black,
         }),
-        age: 0,
-    };
+        0x123456789ABCDEF0,
+        0,
+        EntrySource::MainSearch,
+    );
     println!(
         "✅ Entry created with hash: 0x{:X}, depth: {}, score: {}",
         entry.hash_key, entry.depth, entry.score
@@ -77,14 +78,15 @@ fn main() {
     // 6. Demonstrate multiple entries and replacement
     println!("\n🔄 Demonstrating multiple entries and replacement...");
     for i in 0..10 {
-        let test_entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: 1,
-            score: i as i32 * 10,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let test_entry = TranspositionEntry::new(
+            i as i32 * 10,
+            1,
+            TranspositionFlag::Exact,
+            None,
+            i as u64,
+            0,
+            EntrySource::MainSearch,
+        );
         tt.store(test_entry);
     }
     println!("✅ Stored 10 test entries");
@@ -154,7 +156,14 @@ fn main() {
     println!("   Ordered moves: {}", ordered_moves.len());
 
     // Get move ordering statistics
-    let ordering_stats = move_orderer.get_move_ordering_hints(&board, &captured, Player::Black, 3);
+    let hints = move_orderer.get_move_ordering_hints(&board, &captured, Player::Black, 3);
+    println!("   TT best move: {:?}", hints.best_move);
+    println!("   TT depth: {}", hints.tt_depth);
+    if let Some(score) = hints.tt_score {
+        println!("   TT score: {}", score);
+    }
+
+    let ordering_stats = move_orderer.get_stats();
     println!("   TT hint moves: {}", ordering_stats.tt_hint_moves);
     println!("   Killer move hits: {}", ordering_stats.killer_move_hits);
     println!("   History hits: {}", ordering_stats.history_hits);

@@ -7,6 +7,17 @@ use shogi_engine::bitboards::*;
 use shogi_engine::search::*;
 use shogi_engine::types::*;
 
+fn build_entry(
+    score: i32,
+    depth: u8,
+    flag: TranspositionFlag,
+    best_move: Option<Move>,
+    hash_key: u64,
+    age: u32,
+) -> TranspositionEntry {
+    TranspositionEntry::new(score, depth, flag, best_move, hash_key, age, EntrySource::MainSearch)
+}
+
 fn main() {
     println!("📚 Transposition Table Best Practices Guide");
     println!("===========================================");
@@ -107,19 +118,19 @@ fn performance_best_practices() {
         enable_statistics: true,
         ..TranspositionConfig::performance_optimized()
     };
-
+    let table_capacity = config.table_size as f64;
     let mut tt = ThreadSafeTranspositionTable::new(config);
 
     // Simulate realistic usage
     for i in 0..1000 {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: (i % 10) as u8,
-            score: (i % 1000) as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = build_entry(
+            (i % 1000) as i32,
+            (i % 10) as u8,
+            TranspositionFlag::Exact,
+            None,
+            i as u64,
+            0,
+        );
         tt.store(entry);
     }
 
@@ -134,14 +145,16 @@ fn performance_best_practices() {
         "   Hit rate: {:.2}% (target: > 30%)",
         stats.hit_rate * 100.0
     );
-    println!(
-        "   Collision rate: {:.2}% (target: < 10%)",
-        stats.collision_rate * 100.0
-    );
-    println!(
-        "   Table utilization: {:.2}%",
-        (stats.table_size as f64 / 65536.0) * 100.0
-    );
+    println!("   Stores recorded: {}", stats.stores);
+    println!("   Replacements recorded: {}", stats.replacements);
+    if stats.stores > 0 {
+        println!(
+            "   Replacement ratio: {:.2}%",
+            (stats.replacements as f64 / stats.stores as f64) * 100.0
+        );
+        let utilization = (stats.stores as f64 / table_capacity).min(1.0) * 100.0;
+        println!("   Estimated utilization: {:.2}%", utilization);
+    }
 
     println!("\n2. Optimize for your specific use case:");
     println!("   • Use larger tables for deeper searches");
@@ -173,14 +186,14 @@ fn memory_management_best_practices() {
 
     println!("\n3. Monitor memory usage:");
     let config = TranspositionConfig::memory_optimized();
+    let table_size = config.table_size;
+    let estimated_memory_kb = table_size * 16 / 1024;
     let tt = ThreadSafeTranspositionTable::new(config);
     let stats = tt.get_stats();
 
-    println!("   Current table size: {}", stats.table_size);
-    println!(
-        "   Estimated memory usage: ~{} KB",
-        stats.table_size * 16 / 1024
-    );
+    println!("   Configured table size: {}", table_size);
+    println!("   Estimated memory usage: ~{} KB", estimated_memory_kb);
+    println!("   Current hit rate: {:.2}%", stats.hit_rate * 100.0);
 
     println!("\n4. Use memory-efficient configurations when needed:");
     println!("   • Enable memory optimization flags");
@@ -199,7 +212,7 @@ fn thread_safety_best_practices() {
     println!("\n2. Use thread-safe patterns:");
 
     // Demonstrate thread-safe usage
-    let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+    let _tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
     // Multiple threads can safely access the same table
     println!("   • Multiple threads can safely store entries");
@@ -245,7 +258,7 @@ fn error_handling_best_practices() {
         (
             "Very large table",
             TranspositionConfig {
-                table_size: u32::MAX,
+                table_size: usize::MAX,
                 ..TranspositionConfig::default()
             },
         ),
@@ -255,14 +268,7 @@ fn error_handling_best_practices() {
         println!("   Testing {}...", scenario);
         let mut tt = ThreadSafeTranspositionTable::new(config);
 
-        let entry = TranspositionEntry {
-            hash_key: 12345,
-            depth: 3,
-            score: 100,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = build_entry(100, 3, TranspositionFlag::Exact, None, 12345, 0);
 
         // This should handle the error gracefully
         tt.store(entry);
@@ -292,7 +298,7 @@ fn testing_best_practices() {
     println!("1. Test all components thoroughly:");
 
     // Demonstrate comprehensive testing
-    let mut test_suite = ComprehensiveTestSuite::new();
+    let mut _test_suite = ComprehensiveTestSuite::new();
 
     println!("   • Unit tests for individual components");
     println!("   • Integration tests for component interaction");
@@ -324,14 +330,7 @@ fn testing_best_practices() {
     let mut tt = ThreadSafeTranspositionTable::new(config);
 
     // Basic functionality test
-    let entry = TranspositionEntry {
-        hash_key: 12345,
-        depth: 3,
-        score: 100,
-        flag: TranspositionFlag::Exact,
-        best_move: None,
-        age: 0,
-    };
+    let entry = build_entry(100, 3, TranspositionFlag::Exact, None, 12345, 0);
 
     tt.store(entry);
     let result = tt.probe(12345, 3);
@@ -377,7 +376,8 @@ fn integration_best_practices() {
     println!("\n3. Monitor integration performance:");
     let stats = tt.get_stats();
     println!("   TT hit rate: {:.2}%", stats.hit_rate * 100.0);
-    println!("   TT size: {}", stats.table_size);
+    println!("   TT stores: {}", stats.stores);
+    println!("   TT replacements: {}", stats.replacements);
     println!("   Monitor these metrics during integration");
 
     println!("\n4. Handle component failures gracefully:");
@@ -394,11 +394,11 @@ fn integration_best_practices() {
 
     // Demonstrate integration test
     println!("\n   Running integration test...");
-    let test_board = BitboardBoard::new();
-    let test_captured = CapturedPieces::new();
+    let mut test_board = BitboardBoard::new();
+    let mut test_captured = CapturedPieces::new();
 
     if let Some((_best_move, score)) = engine.search_at_depth(
-        &test_board,
+        &mut test_board,
         &test_captured,
         Player::Black,
         2,

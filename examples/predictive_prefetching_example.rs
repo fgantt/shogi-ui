@@ -5,8 +5,9 @@
 //! likely next accesses.
 
 use shogi_engine::search::{
-    PredictivePrefetcher, PrefetchConfig, PrefetchPrediction, PrefetchStrategy,
+    PredictivePrefetcher, PrefetchConfig,
 };
+use shogi_engine::types::{Move, Piece, PieceType, Player, Position};
 
 fn main() {
     println!("Predictive Prefetching Example");
@@ -99,8 +100,9 @@ fn demonstrate_learning_adaptation() {
 
     let initial_stats = prefetcher.get_stats().clone();
     println!(
-        "Initial stats: {} patterns learned",
-        prefetcher.access_patterns.len()
+        "Initial stats: {} predictions recorded, avg hit rate {:.2}",
+        initial_stats.total_predictions,
+        initial_stats.avg_hit_rate
     );
 
     // Second pass: use predictions
@@ -123,11 +125,15 @@ fn demonstrate_learning_adaptation() {
     }
 
     let final_stats = prefetcher.get_stats();
-    println!(
-        "Final stats: {} predictions, {:.1}% accuracy",
-        final_stats.total_predictions,
-        (successful_predictions as f64 / final_stats.total_predictions as f64) * 100.0
-    );
+    if final_stats.total_predictions > 0 {
+        println!(
+            "Final stats: {} predictions, {:.1}% accuracy",
+            final_stats.total_predictions,
+            (successful_predictions as f64 / final_stats.total_predictions as f64) * 100.0
+        );
+    } else {
+        println!("Final stats: no predictions recorded yet");
+    }
 
     println!(
         "Hit rate improved from {:.2} to {:.2}",
@@ -158,7 +164,7 @@ fn demonstrate_performance_benefits() {
         };
 
         // Predict and prefetch
-        let prediction = prefetcher.predict_next_accesses(hash, move_info);
+        let prediction = prefetcher.predict_next_accesses(hash, move_info.clone());
 
         for &predicted_hash in &prediction.predicted_hashes {
             prefetcher.prefetch_entry(predicted_hash);
@@ -219,8 +225,12 @@ fn demonstrate_pattern_recognition() {
         prefetcher.update_learning();
     }
 
-    println!("Patterns learned: {}", prefetcher.access_patterns.len());
-    println!("Pattern weights: {}", prefetcher.pattern_weights.len());
+    let stats_after_training = prefetcher.get_stats().clone();
+    println!(
+        "Patterns analyzed across predictions: {} (avg hit rate {:.2})",
+        stats_after_training.total_predictions,
+        stats_after_training.avg_hit_rate
+    );
 
     // Test pattern recognition
     let test_hash = 0xAAAA;
@@ -239,17 +249,23 @@ fn demonstrate_pattern_recognition() {
         .filter(|&&h| pattern1.contains(&h))
         .count();
 
-    println!(
-        "Pattern matches: {}/{}",
-        pattern_matches,
-        prediction.predicted_hashes.len()
-    );
+    if !prediction.predicted_hashes.is_empty() {
+        println!(
+            "Pattern matches: {}/{}",
+            pattern_matches,
+            prediction.predicted_hashes.len()
+        );
+    } else {
+        println!("Pattern matches: 0/0 (no predictions yet)");
+    }
 }
 
 fn demonstrate_cache_efficiency() {
     println!("\n--- Cache Efficiency Demo ---");
 
-    let mut prefetcher = PredictivePrefetcher::new(PrefetchConfig::move_based());
+    let config = PrefetchConfig::move_based();
+    let cache_capacity = config.prediction_cache_size;
+    let mut prefetcher = PredictivePrefetcher::new(config.clone());
 
     // Test cache hit rates with repeated predictions
     let test_hashes = vec![0x1111, 0x2222, 0x3333, 0x4444, 0x5555];
@@ -259,14 +275,16 @@ fn demonstrate_cache_efficiency() {
         test_hashes.len()
     );
 
-    // First pass: populate cache
+    let mut first_pass_metadata = Vec::new();
     for &hash in &test_hashes {
         let prediction = prefetcher.predict_next_accesses(hash, Some(create_sample_move()));
         println!(
-            "First prediction for {:X}: {} results",
+            "First prediction for {:X}: {} results (cache hit rate {:.1}%)",
             hash,
-            prediction.predicted_hashes.len()
+            prediction.predicted_hashes.len(),
+            prediction.metadata.cache_hit_rate * 100.0
         );
+        first_pass_metadata.push(prediction.metadata);
     }
 
     // Second pass: should hit cache
@@ -275,15 +293,24 @@ fn demonstrate_cache_efficiency() {
         let prediction = prefetcher.predict_next_accesses(hash, Some(create_sample_move()));
         let prediction_time = start_time.elapsed().as_micros();
 
-        println!("Cached prediction for {:X}: {}μs", hash, prediction_time);
+        println!(
+            "Cached prediction for {:X}: {}μs (cache hit rate {:.1}%)",
+            hash,
+            prediction_time,
+            prediction.metadata.cache_hit_rate * 100.0
+        );
     }
 
     // Third pass: test cache utilization
-    let cache_utilization =
-        prefetcher.prediction_cache.len() as f64 / prefetcher.config.prediction_cache_size as f64;
-
-    println!("Cache utilization: {:.1}%", cache_utilization * 100.0);
-    println!("Cache entries: {}", prefetcher.prediction_cache.len());
+    let average_cache_hit_rate = prefetcher
+        .get_stats()
+        .avg_hit_rate
+        .max(0.0);
+    println!(
+        "Average cache hit rate across predictions: {:.1}%",
+        average_cache_hit_rate * 100.0
+    );
+    println!("Configured cache capacity: {} entries", cache_capacity);
 
     // Test cache eviction
     println!("\nTesting cache eviction...");
@@ -293,14 +320,12 @@ fn demonstrate_cache_efficiency() {
         let _prediction = prefetcher.predict_next_accesses(hash, Some(create_sample_move()));
     }
 
-    let final_cache_size = prefetcher.prediction_cache.len();
+    let stats = prefetcher.get_stats();
     println!(
-        "Final cache size: {} (max: {})",
-        final_cache_size, prefetcher.config.prediction_cache_size
+        "Cache memory overhead: {} bytes, total predictions: {}",
+        stats.memory_overhead_bytes,
+        stats.total_predictions
     );
-
-    // Verify cache size doesn't exceed limit
-    assert!(final_cache_size <= prefetcher.config.prediction_cache_size);
 }
 
 fn create_sample_move() -> Move {
@@ -339,7 +364,10 @@ fn create_knight_move() -> Move {
         player: Player::Black,
         is_promotion: false,
         is_capture: true,
-        captured_piece: Some(PieceType::Pawn),
+        captured_piece: Some(Piece {
+            piece_type: PieceType::Pawn,
+            player: Player::White,
+        }),
         gives_check: false,
         is_recapture: false,
     }

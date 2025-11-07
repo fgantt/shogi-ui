@@ -8,6 +8,17 @@ use shogi_engine::search::*;
 use shogi_engine::types::*;
 use std::time::Instant;
 
+fn build_entry(
+    score: i32,
+    depth: u8,
+    flag: TranspositionFlag,
+    best_move: Option<Move>,
+    hash_key: u64,
+    age: u32,
+) -> TranspositionEntry {
+    TranspositionEntry::new(score, depth, flag, best_move, hash_key, age, EntrySource::MainSearch)
+}
+
 fn main() {
     println!("⚡ Transposition Table Performance Tuning Guide");
     println!("================================================");
@@ -99,14 +110,14 @@ fn benchmark_transposition_table(config: &TranspositionConfig, name: &str) {
     // Benchmark store operations
     let start = Instant::now();
     for i in 0..iterations {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: (i % 10) as u8,
-            score: (i % 1000) as i32,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = build_entry(
+            (i % 1000) as i32,
+            (i % 10) as u8,
+            TranspositionFlag::Exact,
+            None,
+            i as u64,
+            0,
+        );
         tt.store(entry);
     }
     let store_time = start.elapsed();
@@ -132,7 +143,9 @@ fn benchmark_transposition_table(config: &TranspositionConfig, name: &str) {
         probe_time.as_micros() as f64 / iterations as f64
     );
     println!("  Hit rate: {:.2}%", stats.hit_rate * 100.0);
-    println!("  Table size: {}", stats.table_size);
+    println!("  Configured table size: {}", config.table_size);
+    println!("  Stores recorded: {}", stats.stores);
+    println!("  Replacements recorded: {}", stats.replacements);
 }
 
 fn analyze_hit_rates() {
@@ -152,14 +165,14 @@ fn analyze_hit_rates() {
         // Store entries with varying depths
         for i in 0..iterations {
             let depth = (i % 9 + 1) as u8;
-            let entry = TranspositionEntry {
-                hash_key: i as u64,
+            let entry = build_entry(
+                (i % 1000) as i32,
                 depth,
-                score: (i % 1000) as i32,
-                flag: TranspositionFlag::Exact,
-                best_move: None,
-                age: 0,
-            };
+                TranspositionFlag::Exact,
+                None,
+                i as u64,
+                0,
+            );
             tt.store(entry);
         }
 
@@ -191,13 +204,16 @@ fn analyze_memory_usage() {
 
     for (config, name) in configs {
         println!("\n{}:", name);
+        let table_size = config.table_size;
+        let estimated_memory_kb = table_size * 16 / 1024; // Assuming 16 bytes per entry
+        let statistics_enabled = config.enable_statistics;
         let tt = ThreadSafeTranspositionTable::new(config);
         let stats = tt.get_stats();
 
-        // Estimate memory usage (rough calculation)
-        let estimated_memory_kb = stats.table_size * 16 / 1024; // Assuming 16 bytes per entry
-        println!("  Table size: {}", stats.table_size);
+        println!("  Configured table size: {}", table_size);
         println!("  Estimated memory: ~{} KB", estimated_memory_kb);
+        println!("  Statistics enabled: {}", statistics_enabled);
+        println!("  Thread mode: {:?}", stats.thread_mode);
     }
 }
 
@@ -255,7 +271,9 @@ fn benchmark_move_ordering() {
     println!("  Moves per operation: {}", sample_moves.len());
 
     // Get ordering statistics
-    let stats = orderer.get_move_ordering_hints(&sample_moves, &board, &captured, Player::Black);
+    let hints = orderer.get_move_ordering_hints(&board, &captured, Player::Black, 3);
+    println!("  TT best move: {:?}", hints.best_move);
+    let stats = orderer.get_stats();
     println!("  TT hint moves: {}", stats.tt_hint_moves);
     println!("  Killer move hits: {}", stats.killer_move_hits);
     println!("  History hits: {}", stats.history_hits);
@@ -271,32 +289,34 @@ fn demonstrate_advanced_statistics() {
 
     // Perform various operations to generate statistics
     for i in 0..5000 {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: (i % 10) as u8,
-            score: (i % 1000) as i32,
-            flag: match i % 3 {
-                0 => TranspositionFlag::Exact,
-                1 => TranspositionFlag::LowerBound,
-                _ => TranspositionFlag::UpperBound,
-            },
-            best_move: if i % 2 == 0 {
-                Some(Move {
-                    from: Some(Position { row: 7, col: 4 }),
-                    to: Position { row: 6, col: 4 },
-                    piece_type: PieceType::Pawn,
-                    is_capture: false,
-                    is_promotion: false,
-                    gives_check: false,
-                    is_recapture: false,
-                    captured_piece: None,
-                    player: Player::Black,
-                })
-            } else {
-                None
-            },
-            age: (i % 100) as u32,
+        let flag = match i % 3 {
+            0 => TranspositionFlag::Exact,
+            1 => TranspositionFlag::LowerBound,
+            _ => TranspositionFlag::UpperBound,
         };
+        let best_move = if i % 2 == 0 {
+            Some(Move {
+                from: Some(Position { row: 7, col: 4 }),
+                to: Position { row: 6, col: 4 },
+                piece_type: PieceType::Pawn,
+                is_capture: false,
+                is_promotion: false,
+                gives_check: false,
+                is_recapture: false,
+                captured_piece: None,
+                player: Player::Black,
+            })
+        } else {
+            None
+        };
+        let entry = build_entry(
+            (i % 1000) as i32,
+            (i % 10) as u8,
+            flag,
+            best_move,
+            i as u64,
+            (i % 100) as u32,
+        );
         tt.store(entry);
     }
 
@@ -308,10 +328,16 @@ fn demonstrate_advanced_statistics() {
     let stats = tt.get_stats();
 
     println!("  Total probes: {}", stats.total_probes);
-    println!("  Total stores: {}", stats.total_stores);
+    println!("  Total hits: {}", stats.hits);
+    println!("  Total misses: {}", stats.misses);
+    println!("  Total stores: {}", stats.stores);
+    println!("  Replacements: {}", stats.replacements);
     println!("  Hit rate: {:.2}%", stats.hit_rate * 100.0);
-    println!("  Collision rate: {:.2}%", stats.collision_rate * 100.0);
-    println!("  Table size: {}", stats.table_size);
-    println!("  Replacement count: {}", stats.replacement_count);
     println!("  Atomic operations: {}", stats.atomic_operations);
+    println!("  Poison recoveries: {}", stats.poison_recoveries);
+    println!("  Thread mode: {:?}", stats.thread_mode);
+    if stats.stores > 0 {
+        let replacement_ratio = stats.replacements as f64 / stats.stores as f64;
+        println!("  Replacement ratio: {:.2}%", replacement_ratio * 100.0);
+    }
 }

@@ -4,30 +4,76 @@
 //! system for improved cache efficiency and reduced hash collisions.
 
 use shogi_engine::search::{
-    MemoryAllocationStrategy, MultiLevelConfig, MultiLevelTranspositionTable, TranspositionEntry,
-    TranspositionFlag,
+    MemoryAllocationStrategy, MultiLevelConfig, MultiLevelTranspositionTable,
 };
+use shogi_engine::types::{EntrySource, TranspositionEntry, TranspositionFlag};
+
+fn build_entry(hash_key: u64, depth: u8, score: i32, flag: TranspositionFlag) -> TranspositionEntry {
+    TranspositionEntry::new(score, depth, flag, None, hash_key, 0, EntrySource::MainSearch)
+}
+
+fn select_level(config: &MultiLevelConfig, depth: u8) -> usize {
+    for (level, &threshold) in config.depth_thresholds.iter().enumerate() {
+        if depth <= threshold {
+            return level;
+        }
+    }
+    config.levels.saturating_sub(1)
+}
+
+fn compute_level_info(config: &MultiLevelConfig, level: usize) -> (usize, u8, u8) {
+    let size = match config.allocation_strategy {
+        MemoryAllocationStrategy::Equal => config.base_size,
+        MemoryAllocationStrategy::Proportional => {
+            let multiplier = config.size_multiplier.powi(level as i32);
+            ((config.base_size as f64) * multiplier) as usize
+        }
+        MemoryAllocationStrategy::Custom => {
+            let priority_multiplier = (level + 1) as f64;
+            ((config.base_size as f64) * priority_multiplier) as usize
+        }
+    }
+    .max(config.min_level_size)
+    .min(config.max_level_size);
+
+    let min_depth = if level == 0 {
+        0
+    } else {
+        config.depth_thresholds[level - 1] + 1
+    };
+
+    let max_depth = if level < config.depth_thresholds.len() {
+        config.depth_thresholds[level]
+    } else {
+        u8::MAX
+    };
+
+    (size, min_depth, max_depth)
+}
 
 fn main() {
     println!("Multi-Level Transposition Table Example");
     println!("======================================");
 
     // Create a multi-level table with 4 levels
-    let mut table = MultiLevelTranspositionTable::new(4, 1024);
+    let mut base_config = MultiLevelConfig::default();
+    base_config.levels = 4;
+    base_config.base_size = 1024;
+    let mut table = MultiLevelTranspositionTable::with_config(base_config.clone());
 
     println!(
         "Created multi-level table with {} levels",
-        table.config.levels
+        base_config.levels
     );
 
     // Demonstrate basic operations
     demonstrate_basic_operations(&mut table);
 
     // Demonstrate level selection
-    demonstrate_level_selection(&table);
+    demonstrate_level_selection(&base_config);
 
     // Demonstrate cross-level search
-    demonstrate_cross_level_search(&mut table);
+    demonstrate_cross_level_search(&mut table, &base_config);
 
     // Demonstrate statistics
     demonstrate_statistics(&table);
@@ -46,18 +92,12 @@ fn demonstrate_basic_operations(table: &mut MultiLevelTranspositionTable) {
 
     // Store entries at different depths
     for i in 0..10 {
-        let entry = TranspositionEntry {
-            hash_key: i as u64,
-            depth: i as u8,
-            score: (i as i32 % 100) - 50,
-            flag: match i % 3 {
-                0 => TranspositionFlag::Exact,
-                1 => TranspositionFlag::LowerBound,
-                _ => TranspositionFlag::UpperBound,
-            },
-            best_move: None,
-            age: 0,
+        let flag = match i % 3 {
+            0 => TranspositionFlag::Exact,
+            1 => TranspositionFlag::LowerBound,
+            _ => TranspositionFlag::UpperBound,
         };
+        let entry = build_entry(i as u64, i as u8, (i as i32 % 100) - 50, flag);
 
         table.store(entry);
         println!("Stored entry {} at depth {}", i, i);
@@ -76,22 +116,25 @@ fn demonstrate_basic_operations(table: &mut MultiLevelTranspositionTable) {
     }
 }
 
-fn demonstrate_level_selection(table: &MultiLevelTranspositionTable) {
+fn demonstrate_level_selection(config: &MultiLevelConfig) {
     println!("\n--- Level Selection Demo ---");
 
-    println!("Depth thresholds: {:?}", table.config.depth_thresholds);
+    println!("Depth thresholds: {:?}", config.depth_thresholds);
 
     for depth in 0..=10 {
-        let level = table.get_level_for_depth(depth);
-        let level_config = &table.level_configs[level];
+        let level = select_level(config, depth);
+        let (size, min_depth, max_depth) = compute_level_info(config, level);
         println!(
             "Depth {} -> Level {} (depth range: {}-{}, size: {})",
-            depth, level, level_config.min_depth, level_config.max_depth, level_config.size
+            depth, level, min_depth, max_depth, size
         );
     }
 }
 
-fn demonstrate_cross_level_search(table: &mut MultiLevelTranspositionTable) {
+fn demonstrate_cross_level_search(
+    table: &mut MultiLevelTranspositionTable,
+    config: &MultiLevelConfig,
+) {
     println!("\n--- Cross-Level Search Demo ---");
 
     // Store entries in different levels
@@ -102,20 +145,13 @@ fn demonstrate_cross_level_search(table: &mut MultiLevelTranspositionTable) {
     ];
 
     for (hash, depth, score) in entries {
-        let entry = TranspositionEntry {
-            hash_key: hash,
-            depth,
-            score,
-            flag: TranspositionFlag::Exact,
-            best_move: None,
-            age: 0,
-        };
+        let entry = build_entry(hash, depth, score, TranspositionFlag::Exact);
         table.store(entry);
         println!(
             "Stored entry {} at depth {} in level {}",
             hash,
             depth,
-            table.get_level_for_depth(depth)
+            select_level(config, depth)
         );
     }
 
@@ -178,23 +214,21 @@ fn demonstrate_custom_configuration() {
         allocation_strategy: MemoryAllocationStrategy::Custom,
     };
 
-    let table = MultiLevelTranspositionTable::with_config(config);
+    let table = MultiLevelTranspositionTable::with_config(config.clone());
 
     println!("Custom configuration:");
-    println!("  Levels: {}", table.config.levels);
-    println!("  Base size: {}", table.config.base_size);
-    println!("  Size multiplier: {}", table.config.size_multiplier);
-    println!("  Depth thresholds: {:?}", table.config.depth_thresholds);
+    println!("  Levels: {}", config.levels);
+    println!("  Base size: {}", config.base_size);
+    println!("  Size multiplier: {}", config.size_multiplier);
+    println!("  Depth thresholds: {:?}", config.depth_thresholds);
+    println!("  Level policies enabled: {}", config.enable_level_policies);
 
     println!("\nLevel configurations:");
-    for (level, level_config) in table.level_configs.iter().enumerate() {
+    for level in 0..config.levels {
+        let (size, min_depth, max_depth) = compute_level_info(&config, level);
         println!(
-            "  Level {}: size={}, depth_range={}-{}, policy={:?}",
-            level,
-            level_config.size,
-            level_config.min_depth,
-            level_config.max_depth,
-            level_config.replacement_policy
+            "  Level {}: size={}, depth_range={}-{}",
+            level, size, min_depth, max_depth
         );
     }
 }
@@ -212,31 +246,34 @@ fn demonstrate_memory_allocation_strategies() {
     // Equal allocation
     let mut config = base_config.clone();
     config.allocation_strategy = MemoryAllocationStrategy::Equal;
-    let equal_table = MultiLevelTranspositionTable::with_config(config);
+    let equal_table = MultiLevelTranspositionTable::with_config(config.clone());
 
     println!("Equal Allocation Strategy:");
-    for (level, level_config) in equal_table.level_configs.iter().enumerate() {
-        println!("  Level {}: size={}", level, level_config.size);
+    for level in 0..config.levels {
+        let (size, _, _) = compute_level_info(&config, level);
+        println!("  Level {}: size={}", level, size);
     }
 
     // Proportional allocation
     let mut config = base_config.clone();
     config.allocation_strategy = MemoryAllocationStrategy::Proportional;
-    let proportional_table = MultiLevelTranspositionTable::with_config(config);
+    let proportional_table = MultiLevelTranspositionTable::with_config(config.clone());
 
     println!("\nProportional Allocation Strategy:");
-    for (level, level_config) in proportional_table.level_configs.iter().enumerate() {
-        println!("  Level {}: size={}", level, level_config.size);
+    for level in 0..config.levels {
+        let (size, _, _) = compute_level_info(&config, level);
+        println!("  Level {}: size={}", level, size);
     }
 
     // Custom allocation
     let mut config = base_config;
     config.allocation_strategy = MemoryAllocationStrategy::Custom;
-    let custom_table = MultiLevelTranspositionTable::with_config(config);
+    let custom_table = MultiLevelTranspositionTable::with_config(config.clone());
 
     println!("\nCustom Allocation Strategy:");
-    for (level, level_config) in custom_table.level_configs.iter().enumerate() {
-        println!("  Level {}: size={}", level, level_config.size);
+    for level in 0..config.levels {
+        let (size, _, _) = compute_level_info(&config, level);
+        println!("  Level {}: size={}", level, size);
     }
 
     // Compare total memory usage

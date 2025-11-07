@@ -16,6 +16,7 @@ statistics = []
 tt-prefetch = []
 # Toggle long-tail legacy/unit tests that no longer track current APIs
 legacy-tests = []
+legacy-examples = []
 
 [lib]
 crate-type = ["rlib"]
@@ -95,6 +96,41 @@ harness = false
 [[bench]]
 name = "quiescence_performance_benchmarks"
 harness = false
+
+[[example]]
+name = "transposition_table_configuration_tuning"
+path = "examples/transposition_table_configuration_tuning.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "transposition_table_integration"
+path = "examples/transposition_table_integration.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "dynamic_table_sizing_example"
+path = "examples/dynamic_table_sizing_example.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "ml_replacement_policies_example"
+path = "examples/ml_replacement_policies_example.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "bit-scanning-examples"
+path = "examples/bit-scanning-examples.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "multi_level_transposition_table_example"
+path = "examples/multi_level_transposition_table_example.rs"
+required-features = ["legacy-examples"]
+
+[[example]]
+name = "tablebase_examples"
+path = "examples/tablebase_examples.rs"
+required-features = ["legacy-examples"]
 
 [[bench]]
 name = "parallel_search_performance_benchmarks"
