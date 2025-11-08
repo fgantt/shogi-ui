@@ -305,7 +305,7 @@ pub mod optimized {
             32, 23, 11, 46, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6,
         ];
 
-        let isolated = bb & (!bb + 1);
+        let isolated = bb & (!bb).wrapping_add(1);
         let index = (isolated.wrapping_mul(DEBRUIJN)) >> 58;
         TABLE[index as usize]
     }
@@ -313,16 +313,8 @@ pub mod optimized {
     /// De Bruijn sequence reverse scan for 64-bit values
     #[inline(always)]
     pub fn debruijn_reverse_64(bb: u64) -> u8 {
-        const DEBRUIJN: u64 = 0x03f79d71b4cb0a89;
-        const TABLE: [u8; 64] = [
-            63, 62, 48, 61, 57, 49, 28, 60, 61, 58, 50, 42, 38, 29, 17, 59, 62, 55, 59, 36, 53, 51,
-            43, 22, 45, 39, 33, 30, 24, 18, 12, 58, 63, 47, 56, 27, 60, 41, 37, 16, 54, 35, 52, 21,
-            44, 32, 23, 11, 46, 26, 40, 15, 34, 20, 31, 10, 25, 14, 19, 9, 13, 8, 7, 6,
-        ];
-
-        let isolated = 1u64 << (63 - bb.leading_zeros());
-        let index = (isolated.wrapping_mul(DEBRUIJN)) >> 58;
-        TABLE[index as usize]
+        debug_assert!(bb != 0, "debruijn_reverse_64 called with zero");
+        (63 - bb.leading_zeros()) as u8
     }
 }
 
@@ -883,7 +875,7 @@ mod tests {
         assert!(!optimized::overlaps_optimized(0, 1));
         assert!(!optimized::overlaps_optimized(1, 0));
         assert!(optimized::overlaps_optimized(1, 1));
-        assert!(optimized::overlaps_optimized(0b1010, 0b0101));
+        assert!(optimized::overlaps_optimized(0b1010, 0b0010));
         assert!(!optimized::overlaps_optimized(0b1010, 0b0001));
     }
 

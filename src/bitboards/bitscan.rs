@@ -340,7 +340,11 @@ pub fn bit_scan_optimized(bb: Bitboard, forward: bool) -> Option<u8> {
 /// # Returns
 /// The bitboard with the least significant bit cleared
 pub fn clear_lsb(bb: Bitboard) -> Bitboard {
-    bb & (bb - 1)
+    if bb == 0 {
+        0
+    } else {
+        bb & (bb - 1)
+    }
 }
 
 /// Clear the most significant bit
@@ -372,7 +376,7 @@ pub fn clear_msb(bb: Bitboard) -> Bitboard {
 /// # Returns
 /// A bitboard with only the least significant bit set
 pub fn isolate_lsb(bb: Bitboard) -> Bitboard {
-    bb & (!bb + 1)
+    bb & (!bb).wrapping_add(1)
 }
 
 /// Isolate the most significant bit

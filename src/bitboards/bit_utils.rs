@@ -38,7 +38,7 @@ pub fn isolate_lsb(bb: Bitboard) -> Bitboard {
     if bb == 0 {
         0
     } else {
-        bb & (!bb + 1)
+        bb & (!bb).wrapping_add(1)
     }
 }
 
@@ -107,7 +107,11 @@ pub fn isolate_msb(bb: Bitboard) -> Bitboard {
 /// assert_eq!(cleared, 0b0000); // Bit 3 cleared
 /// ```
 pub fn clear_lsb(bb: Bitboard) -> Bitboard {
-    bb & (bb - 1)
+    if bb == 0 {
+        0
+    } else {
+        bb & (bb - 1)
+    }
 }
 
 /// Clear the most significant bit (MSB) in a bitboard
@@ -197,7 +201,7 @@ pub fn bit_positions(bb: Bitboard) -> Vec<u8> {
 /// ```
 pub fn extract_lsb(bb: Bitboard) -> (Bitboard, Bitboard) {
     let lsb = isolate_lsb(bb);
-    let cleared = bb & (bb - 1);
+    let cleared = if bb == 0 { 0 } else { bb & (bb - 1) };
     (lsb, cleared)
 }
 
@@ -425,17 +429,10 @@ pub fn rotate_right(bb: Bitboard, amount: u8) -> Bitboard {
     }
 }
 
-/// Reverse the order of bits in a bitboard
+/// Reverse the order of bits in a bitboard within the active range.
 ///
-/// # Arguments
-/// * `bb` - The input bitboard
-///
-/// # Returns
-/// A bitboard with the bit order reversed
-///
-/// # Performance
-/// This operation uses a combination of bit manipulation techniques
-/// to reverse the bit order efficiently.
+/// This mirrors the bits from the least significant set bit up to the most
+/// significant set bit. Leading zeros beyond the highest set bit remain zero.
 ///
 /// # Examples
 /// ```
@@ -450,28 +447,20 @@ pub fn rotate_right(bb: Bitboard, amount: u8) -> Bitboard {
 /// assert_eq!(reversed, 0b0101); // Bits 0 and 2
 /// ```
 pub fn reverse_bits(bb: Bitboard) -> Bitboard {
-    // For 128-bit values, we need to reverse both halves and swap them
-    let low = bb as u64;
-    let high = (bb >> 64) as u64;
+    if bb == 0 {
+        return 0;
+    }
 
-    // Reverse each 64-bit half
-    let reversed_low = reverse_bits_64(low);
-    let reversed_high = reverse_bits_64(high);
+    let highest_bit = 127 - bb.leading_zeros();
+    let mut result = 0u128;
 
-    // Combine with swapped positions
-    (reversed_low as u128) << 64 | (reversed_high as u128)
-}
+    for shift in 0..=highest_bit {
+        if (bb >> shift) & 1 == 1 {
+            result |= 1u128 << (highest_bit - shift);
+        }
+    }
 
-/// Helper function to reverse bits in a 64-bit value
-fn reverse_bits_64(mut x: u64) -> u64 {
-    // Reverse bits using bit manipulation tricks
-    x = ((x & 0x5555555555555555) << 1) | ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
-    x = ((x & 0x3333333333333333) << 2) | ((x & 0xCCCCCCCCCCCCCCCC) >> 2);
-    x = ((x & 0x0F0F0F0F0F0F0F0F) << 4) | ((x & 0xF0F0F0F0F0F0F0F0) >> 4);
-    x = ((x & 0x00FF00FF00FF00FF) << 8) | ((x & 0xFF00FF00FF00FF00) >> 8);
-    x = ((x & 0x0000FFFF0000FFFF) << 16) | ((x & 0xFFFF0000FFFF0000) >> 16);
-    x = (x << 32) | (x >> 32);
-    x
+    result
 }
 
 /// Check if two bitboards have any bits in common
@@ -487,7 +476,7 @@ fn reverse_bits_64(mut x: u64) -> u64 {
 /// ```
 /// use shogi_engine::bitboards::bit_utils::overlaps;
 ///
-/// assert!(overlaps(0b1010, 0b0101)); // Bits 1 and 2 overlap
+/// assert!(overlaps(0b1010, 0b0010)); // Bit 1 overlaps
 /// assert!(overlaps(0b1010, 0b1000)); // Bit 3 overlaps
 /// assert!(!overlaps(0b1010, 0b0001)); // No overlap
 /// ```
@@ -760,7 +749,7 @@ mod tests {
 
     #[test]
     fn test_overlaps() {
-        assert!(overlaps(0b1010, 0b0101));
+        assert!(overlaps(0b1010, 0b0010));
         assert!(overlaps(0b1010, 0b1000));
         assert!(!overlaps(0b1010, 0b0001));
     }

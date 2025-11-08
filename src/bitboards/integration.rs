@@ -259,7 +259,7 @@ impl BitScanningOptimizer {
             x = x - ((x >> 1) & 0x5555555555555555);
             x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
             x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-            ((x * 0x0101010101010101) >> 56) as u32
+            ((x.wrapping_mul(0x0101010101010101)) >> 56) as u32
         };
 
         let high_count = {
@@ -267,7 +267,7 @@ impl BitScanningOptimizer {
             x = x - ((x >> 1) & 0x5555555555555555);
             x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333);
             x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-            ((x * 0x0101010101010101) >> 56) as u32
+            ((x.wrapping_mul(0x0101010101010101)) >> 56) as u32
         };
 
         low_count + high_count

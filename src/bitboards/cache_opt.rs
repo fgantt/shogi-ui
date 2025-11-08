@@ -59,25 +59,19 @@ pub struct CacheAlignedBitPositionTable {
 impl CacheAlignedBitPositionTable {
     /// Create a new cache-aligned bit position table
     pub fn new() -> Self {
+        let mut positions = [[0xFFu8; 4]; 16];
+        for value in 0u8..16 {
+            let mut idx = 0;
+            for bit in 0..4 {
+                if value & (1 << bit) != 0 {
+                    positions[value as usize][idx] = bit;
+                    idx += 1;
+                }
+            }
+        }
+
         Self {
-            positions: [
-                [0, 0, 0, 0], // 0000
-                [0, 0, 0, 0], // 0001
-                [1, 0, 0, 0], // 0010
-                [0, 1, 0, 0], // 0011
-                [2, 0, 0, 0], // 0100
-                [0, 2, 0, 0], // 0101
-                [1, 2, 0, 0], // 0110
-                [0, 1, 2, 0], // 0111
-                [3, 0, 0, 0], // 1000
-                [0, 3, 0, 0], // 1001
-                [1, 3, 0, 0], // 1010
-                [0, 1, 3, 0], // 1011
-                [2, 3, 0, 0], // 1100
-                [0, 2, 3, 0], // 1101
-                [1, 2, 3, 0], // 1110
-                [0, 1, 2, 3], // 1111
-            ],
+            positions,
             _padding: [],
         }
     }
@@ -327,7 +321,7 @@ pub fn get_bit_positions_cache_optimized(bb: Bitboard) -> Vec<u8> {
         if chunk != 0 {
             let chunk_positions = CACHE_ALIGNED_BIT_POSITION_TABLE.get_positions(chunk);
             for &pos in chunk_positions.iter() {
-                if pos < 4 {
+                if pos != 0xFF {
                     positions.push((i * 4 + pos) as u8);
                 }
             }
@@ -340,7 +334,7 @@ pub fn get_bit_positions_cache_optimized(bb: Bitboard) -> Vec<u8> {
         if chunk != 0 {
             let chunk_positions = CACHE_ALIGNED_BIT_POSITION_TABLE.get_positions(chunk);
             for &pos in chunk_positions.iter() {
-                if pos < 4 {
+                if pos != 0xFF {
                     positions.push((64 + i * 4 + pos) as u8);
                 }
             }

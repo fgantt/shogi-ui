@@ -112,7 +112,7 @@ fn swar_popcount_64(mut x: u64) -> u32 {
 
     // Step 4: Sum all groups using multiplication
     // 0x0101010101010101 * x will sum all 8-bit groups into the high byte
-    ((x * 0x0101010101010101) >> 56) as u32
+    ((x.wrapping_mul(0x0101010101010101)) >> 56) as u32
 }
 
 /// Software fallback population count implementation
