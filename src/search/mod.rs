@@ -38,7 +38,11 @@ pub mod runtime_configuration;
 // Advanced features modules
 pub mod advanced_cache_warming;
 pub mod compressed_entry_storage;
+#[cfg(feature = "hierarchical-tt")]
+pub mod compressed_transposition_table;
 pub mod dynamic_table_sizing;
+#[cfg(feature = "hierarchical-tt")]
+pub mod hierarchical_transposition_table;
 pub mod ml_replacement_policies;
 pub mod multi_level_transposition_table;
 pub mod predictive_prefetching;
@@ -138,6 +142,15 @@ pub use multi_level_transposition_table::{
 pub use compressed_entry_storage::{
     CompressedEntry, CompressedEntryStorage, CompressionAlgorithm, CompressionConfig,
     CompressionMetadata, CompressionStats,
+};
+#[cfg(feature = "hierarchical-tt")]
+pub use compressed_transposition_table::{
+    CompressedTranspositionStats, CompressedTranspositionTable, CompressedTranspositionTableConfig,
+};
+#[cfg(feature = "hierarchical-tt")]
+pub use hierarchical_transposition_table::{
+    HierarchicalSnapshot, HierarchicalStats, HierarchicalTranspositionConfig,
+    HierarchicalTranspositionTable, HitLevel,
 };
 
 pub use predictive_prefetching::{
