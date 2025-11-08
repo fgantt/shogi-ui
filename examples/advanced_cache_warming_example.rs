@@ -3,14 +3,16 @@
 //! This example demonstrates how to use advanced cache warming to preload
 //! transposition tables with relevant entries to improve initial performance.
 
-use shogi_engine::search::{
-    AdvancedCacheWarmer, CacheWarmingConfig, GamePhase, PositionAnalysis, WarmingEntry,
-    WarmingEntryType, WarmingResults, WarmingSession, WarmingStrategy,
-};
 use shogi_engine::search::advanced_cache_warming::{
-    TacticalPattern, TacticalPatternType, TranspositionTableInterface,
+    GamePhase, TacticalPattern, TacticalPatternType, TranspositionTableInterface,
 };
-use shogi_engine::types::{Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag};
+use shogi_engine::search::{
+    AdvancedCacheWarmer, CacheWarmingConfig, PositionAnalysis, WarmingEntry, WarmingEntryType,
+    WarmingResults, WarmingSession, WarmingStrategy,
+};
+use shogi_engine::types::{
+    Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag,
+};
 
 fn main() {
     println!("Advanced Cache Warming Example");
@@ -48,11 +50,13 @@ fn demonstrate_warming_strategies() {
         let mut warmer = AdvancedCacheWarmer::new(config);
         let mut mock_table = MockTranspositionTable::new(10000);
 
+        let config_snapshot = warmer.get_config().clone();
+
         println!("{} Strategy:", name);
-        println!("  Max entries: {}", warmer.config.max_warm_entries);
-        println!("  Timeout: {:?}", warmer.config.warming_timeout);
-        println!("  Aggressiveness: {:.1}", warmer.config.aggressiveness);
-        println!("  Memory limit: {} bytes", warmer.config.memory_limit);
+        println!("  Max entries: {}", config_snapshot.max_warm_entries);
+        println!("  Timeout: {:?}", config_snapshot.warming_timeout);
+        println!("  Aggressiveness: {:.1}", config_snapshot.aggressiveness);
+        println!("  Memory limit: {} bytes", config_snapshot.memory_limit);
 
         let session = warmer.start_warming_session(Some(0x1234));
         let results = warmer.warm_cache(session.session_id, &mut mock_table);

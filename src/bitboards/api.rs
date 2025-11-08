@@ -23,7 +23,7 @@ pub mod bitscan {
     /// Get the optimal population count for a bitboard
     ///
     /// This function automatically selects the best available implementation
-    /// based on platform capabilities (hardware acceleration, WASM, etc.).
+    /// based on platform capabilities (hardware acceleration, fallback paths, etc.).
     ///
     /// # Arguments
     /// * `bb` - The bitboard to count

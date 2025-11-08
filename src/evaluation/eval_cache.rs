@@ -7,8 +7,8 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::RwLock;
 
-// WASM compatibility (Task 3.5)
-// Note: wasm_bindgen import not needed yet - cache uses standard Rust structures
+// Evaluation cache implementation
+// Evaluation cache implementation uses standard Rust structures
 
 /// Configuration for the evaluation cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,12 +25,7 @@ pub struct EvaluationCacheConfig {
 
 impl Default for EvaluationCacheConfig {
     fn default() -> Self {
-        // WASM optimization: use smaller default cache (Task 3.5.3)
-        #[cfg(target_arch = "wasm32")]
-        let default_size = 64 * 1024; // 64K entries (~2MB) for WASM
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let default_size = 1024 * 1024; // 1M entries (~32MB) for native
+        let default_size = 1024 * 1024; // 1M entries (~32MB)
 
         Self {
             size: default_size,
@@ -729,18 +724,6 @@ impl EvaluationCache {
     /// Create a new evaluation cache with default configuration
     pub fn new() -> Self {
         Self::with_config(EvaluationCacheConfig::default())
-    }
-
-    /// Create WASM-optimized cache (Task 3.5.1)
-    #[cfg(target_arch = "wasm32")]
-    pub fn new_wasm_optimized() -> Self {
-        let config = EvaluationCacheConfig {
-            size: 32 * 1024, // 32K entries (~1MB) - WASM optimized
-            replacement_policy: ReplacementPolicy::DepthPreferred,
-            enable_statistics: false,   // Reduce overhead
-            enable_verification: false, // Reduce overhead
-        };
-        Self::with_config(config)
     }
 
     /// Create a new evaluation cache with custom configuration
@@ -3048,43 +3031,9 @@ mod tests {
         }
     }
 
-    // ============================================================================
-    // PHASE 3 TASK 3.5: WASM COMPATIBILITY TESTS
-    // ============================================================================
-
-    #[test]
-    fn test_wasm_default_configuration() {
-        // Test that WASM gets appropriate defaults
-        let config = EvaluationCacheConfig::default();
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            // WASM should use smaller default
-            assert_eq!(config.size, 64 * 1024);
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // Native should use larger default
-            assert_eq!(config.size, 1024 * 1024);
-        }
-    }
-
-    #[test]
-    #[cfg(target_arch = "wasm32")]
-    fn test_wasm_optimized_cache() {
-        // Test WASM-optimized constructor
-        let cache = EvaluationCache::new_wasm_optimized();
-
-        // Should have WASM-appropriate size
-        assert_eq!(cache.config.size, 32 * 1024);
-        assert_eq!(cache.config.enable_statistics, false);
-        assert_eq!(cache.config.enable_verification, false);
-    }
-
     #[test]
     fn test_cache_binary_size_efficiency() {
-        // Verify cache entry is compact for WASM binary size
+        // Verify cache entry is compact for binary size
         use std::mem::size_of;
 
         // Entry should be exactly 32 bytes (cache-line aligned)
@@ -3095,10 +3044,10 @@ mod tests {
     }
 
     #[test]
-    fn test_wasm_memory_efficiency() {
-        // Test that small cache works correctly (WASM constraint)
+    fn test_small_cache_efficiency() {
+        // Test that a small cache works correctly
         let config = EvaluationCacheConfig {
-            size: 1024, // Small for WASM
+            size: 1024,
             replacement_policy: ReplacementPolicy::DepthPreferred,
             enable_statistics: false,
             enable_verification: false,

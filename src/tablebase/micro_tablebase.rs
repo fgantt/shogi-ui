@@ -93,7 +93,6 @@ pub struct MicroTablebase {
 impl MicroTablebase {
     /// Create a new tablebase with default configuration
     pub fn new() -> Self {
-        // Automatically use WASM-optimized configuration when running in WASM
         let config = TablebaseConfig::default();
         Self::with_config(config)
     }
@@ -110,13 +109,8 @@ impl MicroTablebase {
         // Sort by priority (highest first)
         solvers.sort_by_key(|s| std::cmp::Reverse(s.priority()));
 
-        // Create cache with configuration, applying WASM optimizations if needed
-        let cache_size = if config.wasm.enable_wasm_optimizations && config.wasm.reduce_cache_sizes
-        {
-            config.wasm.get_recommended_cache_size()
-        } else {
-            config.cache_size
-        };
+        // Create cache with configuration
+        let cache_size = config.cache_size;
 
         let cache_config = super::position_cache::CacheConfig {
             max_size: cache_size,
@@ -141,13 +135,6 @@ impl MicroTablebase {
             return;
         }
 
-        // Skip memory monitoring in WASM if disabled
-        if self.config.wasm.enable_wasm_optimizations
-            && self.config.wasm.should_disable_feature("memory_monitoring")
-        {
-            return;
-        }
-
         // Check if enough time has passed since last check
         let now = TimeSource::now();
         let time_since_last_check = now
@@ -169,7 +156,7 @@ impl MicroTablebase {
             self.config.memory.warning_threshold,
         ) {
             self.stats.record_memory_warning();
-            if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
+            if self.config.memory.enable_logging {
                 println!(
                     "Tablebase memory warning: {} bytes used ({:.1}% of limit)",
                     current_memory,
@@ -184,7 +171,7 @@ impl MicroTablebase {
             self.config.memory.critical_threshold,
         ) {
             self.stats.record_memory_critical_alert();
-            if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
+            if self.config.memory.enable_logging {
                 println!(
                     "Tablebase memory critical: {} bytes used ({:.1}% of limit)",
                     current_memory,
@@ -217,7 +204,7 @@ impl MicroTablebase {
         self.position_cache.clear_half();
         self.stats.record_auto_eviction();
 
-        if self.config.memory.enable_logging && !self.config.wasm.use_simple_logging {
+        if self.config.memory.enable_logging {
             println!("Tablebase emergency eviction performed");
         }
     }

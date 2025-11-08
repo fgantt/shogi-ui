@@ -43,7 +43,7 @@ export class ShogiController extends EventEmitter {
     this.record = recordResult;
   }
 
-  // WASM engine methods removed - use Tauri engines via GamePage instead
+  // Web engine methods removed - use Tauri engines via GamePage instead
 
   async initialize(): Promise<void> {
     // Simple initialization - no engine setup needed

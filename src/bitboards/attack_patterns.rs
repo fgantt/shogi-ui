@@ -5,8 +5,6 @@
 //! at initialization time, providing O(1) lookup performance.
 
 use crate::types::{Bitboard, PieceType, Player, EMPTY_BITBOARD};
-
-#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
 /// Cache-friendly attack tables with 64-byte alignment for optimal performance
@@ -151,21 +149,10 @@ impl AttackTables {
             },
         };
 
-        // Only measure time on non-WASM platforms
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let start_time = Instant::now();
-            tables.precompute_all_patterns();
-            let initialization_time = start_time.elapsed();
-            tables.metadata.initialization_time = initialization_time;
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            tables.precompute_all_patterns();
-            // Set zero duration for WASM (timing not available)
-            tables.metadata.initialization_time = std::time::Duration::ZERO;
-        }
+        let start_time = Instant::now();
+        tables.precompute_all_patterns();
+        let initialization_time = start_time.elapsed();
+        tables.metadata.initialization_time = initialization_time;
 
         tables.metadata.memory_usage_bytes = std::mem::size_of::<AttackTables>();
         tables.metadata.validation_passed = true;

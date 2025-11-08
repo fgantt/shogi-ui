@@ -21,7 +21,7 @@ export interface GameState {
   isThinking: boolean;
   winner: 'player1' | 'player2' | 'draw' | null;
   difficulty: 'easy' | 'medium' | 'hard';
-  engineType: 'ai-js' | 'ai-wasm';
+  engineType: 'ai-js';
   pieceSet: 'kanji' | 'international';
   showAttackedPieces: boolean;
   showPieceTooltips: boolean;

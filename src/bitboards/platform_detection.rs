@@ -10,7 +10,7 @@
 pub enum BitscanImpl {
     /// Hardware-accelerated bit scanning (native platforms only)
     Hardware,
-    /// De Bruijn sequence lookup (WASM and fallback)
+    /// De Bruijn sequence lookup (fallback)
     DeBruijn,
     /// Generic software implementation (final fallback)
     Software,
@@ -21,7 +21,7 @@ pub enum BitscanImpl {
 pub enum PopcountImpl {
     /// Hardware-accelerated population count (native platforms only)
     Hardware,
-    /// SWAR (SIMD Within A Register) bit counting - WASM optimized
+    /// SWAR (SIMD Within A Register) bit counting fallback
     BitParallel,
     /// Generic software implementation (final fallback)
     Software,
@@ -34,8 +34,6 @@ pub enum Architecture {
     X86_64,
     /// ARM architecture
     ARM,
-    /// WebAssembly architecture
-    Wasm32,
     /// Unknown architecture
     Unknown,
 }
@@ -51,10 +49,6 @@ pub struct PlatformCapabilities {
     pub has_bmi2: bool,
     /// Detected architecture
     pub architecture: Architecture,
-    /// Whether running in WASM environment
-    pub is_wasm: bool,
-    /// WebAssembly specific flags
-    pub is_web_assembly: bool,
 }
 
 impl Default for PlatformCapabilities {
@@ -78,8 +72,6 @@ impl PlatformCapabilities {
             has_bmi1: Self::detect_bmi1_support(),
             has_bmi2: Self::detect_bmi2_support(),
             architecture,
-            is_wasm: false,
-            is_web_assembly: false,
         }
     }
 
@@ -138,26 +130,24 @@ impl PlatformCapabilities {
     }
 
     /// Fallback implementations for non-x86_64 platforms
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "x86_64"))]
     fn detect_popcnt_support() -> bool {
         false
     }
 
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "x86_64"))]
     fn detect_bmi1_support() -> bool {
         false
     }
 
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "wasm32")))]
+    #[cfg(not(target_arch = "x86_64"))]
     fn detect_bmi2_support() -> bool {
         false
     }
 
     /// Get optimal bitscan implementation for this platform
     pub fn get_bitscan_impl(&self) -> BitscanImpl {
-        if self.is_wasm {
-            BitscanImpl::DeBruijn // Use De Bruijn for WASM
-        } else if self.has_bmi1 {
+        if self.has_bmi1 {
             BitscanImpl::Hardware // Use hardware acceleration when available
         } else {
             BitscanImpl::DeBruijn // Use De Bruijn as fallback
@@ -166,9 +156,7 @@ impl PlatformCapabilities {
 
     /// Get optimal popcount implementation for this platform
     pub fn get_popcount_impl(&self) -> PopcountImpl {
-        if self.is_wasm {
-            PopcountImpl::BitParallel // Use SWAR for WASM
-        } else if self.has_popcnt {
+        if self.has_popcnt {
             PopcountImpl::Hardware // Use hardware acceleration when available
         } else {
             PopcountImpl::BitParallel // Use SWAR as fallback
@@ -183,8 +171,8 @@ impl PlatformCapabilities {
     /// Get platform summary string
     pub fn get_summary(&self) -> String {
         format!(
-            "Architecture: {:?}, WASM: {}, POPCNT: {}, BMI1: {}, BMI2: {}",
-            self.architecture, self.is_wasm, self.has_popcnt, self.has_bmi1, self.has_bmi2
+            "Architecture: {:?}, POPCNT: {}, BMI1: {}, BMI2: {}",
+            self.architecture, self.has_popcnt, self.has_bmi1, self.has_bmi2
         )
     }
 }
@@ -213,11 +201,6 @@ pub fn has_hardware_support() -> bool {
     get_platform_capabilities().has_hardware_acceleration()
 }
 
-/// Check if running in WASM environment
-pub fn is_wasm_environment() -> bool {
-    get_platform_capabilities().is_wasm
-}
-
 /// Get platform summary for debugging
 pub fn get_platform_summary() -> String {
     get_platform_capabilities().get_summary()
@@ -232,23 +215,7 @@ mod tests {
         let caps = PlatformCapabilities::detect();
 
         // Basic sanity checks
-        assert!(caps.architecture != Architecture::Unknown || cfg!(target_arch = "wasm32"));
-
-        // WASM environment checks
-        if cfg!(target_arch = "wasm32") {
-            assert!(caps.is_wasm);
-            assert!(caps.is_web_assembly);
-            assert!(!caps.has_popcnt);
-            assert!(!caps.has_bmi1);
-            assert!(!caps.has_bmi2);
-            assert_eq!(caps.architecture, Architecture::Wasm32);
-        }
-
-        // Native platform checks
-        if !cfg!(target_arch = "wasm32") {
-            assert!(!caps.is_wasm);
-            assert!(!caps.is_web_assembly);
-        }
+        assert_ne!(caps.architecture, Architecture::Unknown);
     }
 
     #[test]
@@ -257,12 +224,6 @@ mod tests {
 
         let bitscan_impl = caps.get_bitscan_impl();
         let popcount_impl = caps.get_popcount_impl();
-
-        // WASM should use DeBruijn and BitParallel
-        if caps.is_wasm {
-            assert_eq!(bitscan_impl, BitscanImpl::DeBruijn);
-            assert_eq!(popcount_impl, PopcountImpl::BitParallel);
-        }
 
         // Hardware acceleration should be preferred when available
         if caps.has_bmi1 {
@@ -280,14 +241,12 @@ mod tests {
         let _impl = get_best_bitscan_impl();
         let _impl = get_best_popcount_impl();
         let _has_hw = has_hardware_support();
-        let _is_wasm = is_wasm_environment();
         let _summary = get_platform_summary();
 
         // Ensure we get consistent results
         let caps1 = get_platform_capabilities();
         let caps2 = get_platform_capabilities();
         assert_eq!(caps1.architecture, caps2.architecture);
-        assert_eq!(caps1.is_wasm, caps2.is_wasm);
     }
 
     #[test]
@@ -295,7 +254,6 @@ mod tests {
         let summary = get_platform_summary();
         assert!(!summary.is_empty());
         assert!(summary.contains("Architecture:"));
-        assert!(summary.contains("WASM:"));
         assert!(summary.contains("POPCNT:"));
         assert!(summary.contains("BMI1:"));
         assert!(summary.contains("BMI2:"));
@@ -315,21 +273,6 @@ mod tests {
 
         // Hardware acceleration check should work
         let _has_hw = caps.has_hardware_acceleration();
-    }
-
-    #[test]
-    fn test_wasm_specific_behavior() {
-        #[cfg(target_arch = "wasm32")]
-        {
-            let caps = PlatformCapabilities::detect();
-            assert!(caps.is_wasm);
-            assert!(caps.is_web_assembly);
-            assert_eq!(caps.architecture, Architecture::Wasm32);
-            assert!(!caps.has_popcnt);
-            assert!(!caps.has_bmi1);
-            assert!(!caps.has_bmi2);
-            assert!(!caps.has_hardware_acceleration());
-        }
     }
 }
 

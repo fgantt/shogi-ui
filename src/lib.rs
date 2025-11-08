@@ -567,7 +567,7 @@ impl ShogiEngine {
             if legal_moves.is_empty() {
                 return None;
             }
-            // Use a seeded RNG that's WASM-compatible
+            // Use a seeded RNG that's platform-compatible
             let mut rng = StdRng::seed_from_u64(42); // Fixed seed for deterministic behavior
             legal_moves.choose(&mut rng).cloned()
         }
@@ -1192,5 +1192,5 @@ pub fn is_debug_enabled() -> bool {
     debug_utils::is_debug_enabled()
 }
 
-// WASM bindings removed - application now uses Tauri for desktop functionality
+// Web bindings removed - application now uses Tauri for desktop functionality
 // The engine is accessed via the standalone USI binary (src/bin/shogi_engine.rs)

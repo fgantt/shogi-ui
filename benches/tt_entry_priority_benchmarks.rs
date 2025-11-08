@@ -10,11 +10,13 @@
 //! - Main entries preserved
 //! - Search performance impact
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{
+    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
+};
 use shogi_engine::{
     bitboards::BitboardBoard,
     search::SearchEngine,
-    types::{CapturedPieces, IIDConfig, NullMoveConfig, Player},
+    types::{CapturedPieces, Player},
 };
 use std::time::Duration;
 
@@ -37,18 +39,70 @@ fn create_test_engine() -> SearchEngine {
     engine
 }
 
+fn single_search_tt_metrics(depth: u8, nodes: u32) -> (f64, f64, u64, u64) {
+    let mut engine = create_test_engine();
+    let captured = CapturedPieces::new();
+
+    {
+        let mut board = BitboardBoard::new();
+        let _ = engine.search_at_depth(
+            &mut board,
+            &captured,
+            Player::Black,
+            depth,
+            nodes,
+            -10000,
+            10000,
+        );
+    }
+
+    engine.reset_core_search_metrics();
+
+    let mut board = BitboardBoard::new();
+    let _ = engine.search_at_depth(
+        &mut board,
+        &captured,
+        Player::Black,
+        depth,
+        nodes,
+        -10000,
+        10000,
+    );
+
+    let metrics = engine.get_core_search_metrics();
+    let hit_rate = if metrics.total_tt_probes > 0 {
+        (metrics.total_tt_hits as f64 / metrics.total_tt_probes as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let prevention_rate = if metrics.total_tt_probes > 0 {
+        (metrics.tt_auxiliary_overwrites_prevented as f64 / metrics.total_tt_probes as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    (
+        hit_rate,
+        prevention_rate,
+        metrics.tt_auxiliary_overwrites_prevented,
+        metrics.tt_main_entries_preserved,
+    )
+}
+
 /// Benchmark TT hit rate with priority system
 fn benchmark_tt_hit_rate_with_priority(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_priority_hit_rate");
-    group.measurement_time(Duration::from_secs(15));
+    group.measurement_time(Duration::from_secs(4));
     group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
 
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
 
     // Benchmark at different depths
-    for depth in [5, 6] {
+    for depth in [3u8] {
         group.throughput(Throughput::Elements(1));
 
         group.bench_with_input(
@@ -57,12 +111,15 @@ fn benchmark_tt_hit_rate_with_priority(c: &mut Criterion) {
             |b, &depth| {
                 b.iter(|| {
                     let mut engine = create_test_engine();
+                    let mut board_mut = board.clone();
                     let result = engine.search_at_depth(
-                        black_box(&board),
+                        black_box(&mut board_mut),
                         black_box(&captured_pieces),
                         black_box(player),
                         black_box(depth),
-                        black_box(5000),
+                        black_box(1000u32),
+                        black_box(-10000),
+                        black_box(10000),
                     );
 
                     // Get TT statistics
@@ -80,29 +137,39 @@ fn benchmark_tt_hit_rate_with_priority(c: &mut Criterion) {
     }
 
     group.finish();
+
+    let (hit_rate, _, prevented, preserved) = single_search_tt_metrics(3, 5000u32);
+    println!(
+        "[TT Priority] depth=3 hit_rate={:.2}% prevented={} preserved={}",
+        hit_rate, prevented, preserved
+    );
 }
 
 /// Benchmark auxiliary overwrite prevention effectiveness
 fn benchmark_overwrite_prevention(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_overwrite_prevention");
-    group.measurement_time(Duration::from_secs(12));
-    group.sample_size(15);
+    group.measurement_time(Duration::from_secs(4));
+    group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
 
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    let depth = 6;
+    let depth = 3;
 
     group.bench_function("prevention_effectiveness", |b| {
         b.iter(|| {
             let mut engine = create_test_engine();
 
+            let mut board_mut = board.clone();
             let _result = engine.search_at_depth(
-                black_box(&board),
+                black_box(&mut board_mut),
                 black_box(&captured_pieces),
                 black_box(player),
                 black_box(depth),
-                black_box(5000),
+                black_box(1000u32),
+                black_box(-10000),
+                black_box(10000),
             );
 
             // Measure prevention effectiveness
@@ -124,31 +191,41 @@ fn benchmark_overwrite_prevention(c: &mut Criterion) {
     });
 
     group.finish();
+
+    let (_, prevention_rate, prevented, preserved) = single_search_tt_metrics(depth, 5000u32);
+    println!(
+        "[TT Overwrite Prevention] depth={} prevention_rate={:.2}% prevented={} preserved={}",
+        depth, prevention_rate, prevented, preserved
+    );
 }
 
 /// Benchmark TT pollution comparison across multiple searches
 fn benchmark_tt_pollution_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("tt_pollution_comparison");
-    group.measurement_time(Duration::from_secs(20));
+    group.measurement_time(Duration::from_secs(4));
     group.sample_size(10);
+    group.sampling_mode(SamplingMode::Flat);
 
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
-    let depth = 5;
+    let depth = 3;
 
     group.bench_function("multiple_searches_with_priority", |b| {
         b.iter(|| {
             let mut engine = create_test_engine();
 
             // Perform multiple searches to stress-test TT priority system
-            for _ in 0..3 {
+            for _ in 0..2 {
+                let mut board_mut = board.clone();
                 let _result = engine.search_at_depth(
-                    black_box(&board),
+                    black_box(&mut board_mut),
                     black_box(&captured_pieces),
                     black_box(player),
                     black_box(depth),
-                    black_box(2000),
+                    black_box(750u32),
+                    black_box(-10000),
+                    black_box(10000),
                 );
             }
 
@@ -160,8 +237,7 @@ fn benchmark_tt_pollution_comparison(c: &mut Criterion) {
             } else {
                 0.0
             };
-
-            let exact_hit_rate = if metrics.total_tt_hits > 0 {
+            let exact_rate = if metrics.total_tt_hits > 0 {
                 (metrics.tt_exact_hits as f64 / metrics.total_tt_hits as f64) * 100.0
             } else {
                 0.0
@@ -169,7 +245,7 @@ fn benchmark_tt_pollution_comparison(c: &mut Criterion) {
 
             black_box((
                 hit_rate,
-                exact_hit_rate,
+                exact_rate,
                 metrics.tt_auxiliary_overwrites_prevented,
                 metrics.tt_main_entries_preserved,
             ))
@@ -177,6 +253,42 @@ fn benchmark_tt_pollution_comparison(c: &mut Criterion) {
     });
 
     group.finish();
+
+    let mut engine = create_test_engine();
+    let captured = CapturedPieces::new();
+    for _ in 0..2 {
+        let mut board = BitboardBoard::new();
+        let _ = engine.search_at_depth(
+            &mut board,
+            &captured,
+            Player::Black,
+            depth,
+            750u32,
+            -10000,
+            10000,
+        );
+    }
+
+    let metrics = engine.get_core_search_metrics();
+    let hit_rate = if metrics.total_tt_probes > 0 {
+        (metrics.total_tt_hits as f64 / metrics.total_tt_probes as f64) * 100.0
+    } else {
+        0.0
+    };
+    let exact_rate = if metrics.total_tt_hits > 0 {
+        (metrics.tt_exact_hits as f64 / metrics.total_tt_hits as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    println!(
+        "[TT Pollution] depth={} hit_rate={:.2}% exact_hit_rate={:.2}% prevented={} preserved={}",
+        depth,
+        hit_rate,
+        exact_rate,
+        metrics.tt_auxiliary_overwrites_prevented,
+        metrics.tt_main_entries_preserved
+    );
 }
 
 criterion_group!(

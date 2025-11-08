@@ -46,10 +46,6 @@ fn configuration_example() {
     let memory_config = TablebaseConfig::memory_optimized();
     let mut memory_tablebase = MicroTablebase::with_config(memory_config);
 
-    // Create WASM-optimized configuration
-    let wasm_config = TablebaseConfig::wasm_optimized();
-    let mut wasm_tablebase = MicroTablebase::with_config(wasm_config);
-
     // Test all configurations
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
@@ -61,11 +57,6 @@ fn configuration_example() {
 
     println!("Memory-optimized tablebase:");
     if let Some(_) = memory_tablebase.probe(&board, Player::Black, &captured_pieces) {
-        println!("  Found solution");
-    }
-
-    println!("WASM-optimized tablebase:");
-    if let Some(_) = wasm_tablebase.probe(&board, Player::Black, &captured_pieces) {
         println!("  Found solution");
     }
 }
@@ -98,10 +89,6 @@ fn custom_configuration_example() {
         shogi_engine::tablebase::tablebase_config::EvictionStrategy::LRU;
     config.performance.enable_adaptive_caching = true;
     config.performance.enable_profiling = true;
-
-    // Configure WASM settings
-    config.wasm.enable_wasm_optimizations = false; // Disable for native testing
-    config.wasm.use_simple_logging = false;
 
     let mut tablebase = MicroTablebase::with_config(config);
 

@@ -67,18 +67,15 @@ impl BitScanningOptimizer {
         let bit_count = self.estimate_bit_count(bb);
 
         // Determine best implementation based on platform capabilities
-        if self.platform_caps.has_popcnt && !self.platform_caps.is_wasm {
+        if self.platform_caps.has_popcnt {
             // Hardware acceleration is available and fastest
             self.popcount_hardware(bb)
-        } else if !self.platform_caps.is_wasm {
-            // SWAR implementation - good for most cases
-            self.popcount_swar(bb)
         } else {
-            // WASM environment - choose between 4-bit lookup and software based on density
+            // Choose between 4-bit lookup and SWAR based on density
             if bit_count < 16 {
                 popcount_4bit_optimized(bb)
             } else {
-                self.popcount_software(bb)
+                self.popcount_swar(bb)
             }
         }
     }
@@ -96,15 +93,12 @@ impl BitScanningOptimizer {
         }
 
         // Determine best implementation based on platform capabilities
-        if self.platform_caps.has_bmi1 && !self.platform_caps.is_wasm {
+        if self.platform_caps.has_bmi1 {
             // Hardware acceleration available
             self.bit_scan_forward_hardware(bb)
-        } else if !self.platform_caps.is_wasm {
-            // De Bruijn sequences - best software fallback for native
-            bit_scan_forward_debruijn(bb)
         } else {
-            // WASM environment - use basic software implementation for simplicity
-            self.bit_scan_forward_software(bb)
+            // De Bruijn sequences - best software fallback
+            bit_scan_forward_debruijn(bb)
         }
     }
 
@@ -121,15 +115,12 @@ impl BitScanningOptimizer {
         }
 
         // Determine best implementation based on platform capabilities
-        if self.platform_caps.has_bmi1 && !self.platform_caps.is_wasm {
+        if self.platform_caps.has_bmi1 {
             // Hardware acceleration available
             self.bit_scan_reverse_hardware(bb)
-        } else if !self.platform_caps.is_wasm {
-            // De Bruijn sequences - best software fallback for native
-            bit_scan_reverse_debruijn(bb)
         } else {
-            // WASM environment - use basic software implementation for simplicity
-            self.bit_scan_reverse_software(bb)
+            // De Bruijn sequences - best software fallback
+            bit_scan_reverse_debruijn(bb)
         }
     }
 

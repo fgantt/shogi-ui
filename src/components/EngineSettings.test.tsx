@@ -39,11 +39,14 @@ describe('EngineSettings', () => {
     );
 
     expect(screen.getByText('Engine Settings')).toBeInTheDocument();
-    expect(screen.getByLabelText('Built-in WASM (./ai/ai.worker.ts)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Built-in WASM (./ai/ai.worker.ts)')).toBeChecked();
     const store = (localStorage as any).getStore();
-    expect(JSON.parse(store['shogi-engines'])).toEqual([{ name: 'Built-in WASM', path: './ai/ai.worker.ts' }]);
-    expect(store['shogi-selected-engine']).toBe('./ai/ai.worker.ts');
+    const engines = JSON.parse(store['shogi-engines']);
+    expect(Array.isArray(engines)).toBe(true);
+    expect(engines.length).toBeGreaterThan(0);
+    const defaultLabel = `${engines[0].name} (${engines[0].path})`;
+    expect(screen.getByLabelText(defaultLabel)).toBeInTheDocument();
+    expect(screen.getByLabelText(defaultLabel)).toBeChecked();
+    expect(store['shogi-selected-engine']).toBe(engines[0].path);
   });
 
   test('adds a new engine and saves it to localStorage', () => {
@@ -71,11 +74,11 @@ describe('EngineSettings', () => {
   test('selects a different engine and saves the selection to localStorage', () => {
     // Setup initial state with two engines
     const initialEngines = [
-        { name: 'Built-in WASM', path: './ai/ai.worker.ts' },
+        { name: 'Built-in Engine', path: 'builtin://engine' },
         { name: 'Test Engine', path: './test-engine.js' }
     ];
     localStorage.setItem('shogi-engines', JSON.stringify(initialEngines));
-    localStorage.setItem('shogi-selected-engine', './ai/ai.worker.ts');
+    localStorage.setItem('shogi-selected-engine', 'builtin://engine');
 
     render(
       <BrowserRouter>

@@ -21,7 +21,7 @@ pub mod position_features;
 pub mod statistics;
 pub mod tapered_eval;
 pub mod tuning;
-// pub mod wasm_compatibility; // Removed - no longer needed
+// Compatibility module removed - no longer needed
 pub mod advanced_integration;
 pub mod eval_cache;
 pub mod pattern_advanced;

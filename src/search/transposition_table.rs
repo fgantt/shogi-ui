@@ -687,7 +687,9 @@ mod tests {
     fn test_memory_usage_tracking() {
         let mut config = TranspositionTableConfig::default();
         config.max_entries = 1024;
-        config = config.with_memory_tracking(true).with_statistics_tracking(true);
+        config = config
+            .with_memory_tracking(true)
+            .with_statistics_tracking(true);
         let table = TranspositionTable::with_config(config);
         let memory_usage = table.get_memory_usage();
         assert!(memory_usage > 0);

@@ -74,7 +74,7 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
 ///
 /// This implementation uses bit-parallel algorithms to count bits efficiently
 /// without requiring special hardware instructions. It works on all platforms
-/// including WASM and provides excellent performance.
+/// and provides excellent performance.
 ///
 /// # Arguments
 /// * `bb` - The bitboard to count bits in
@@ -84,7 +84,7 @@ pub fn popcount_hardware(bb: Bitboard) -> u32 {
 ///
 /// # Performance
 /// This implementation is typically 3-5x faster than the software fallback
-/// and works on all platforms including WASM.
+/// and works on all supported platforms.
 pub fn popcount_bit_parallel(bb: Bitboard) -> u32 {
     // Process the bitboard in 64-bit chunks since u128 operations can be expensive
     let low = (bb & 0xFFFFFFFFFFFFFFFF) as u64;

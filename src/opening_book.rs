@@ -370,7 +370,7 @@ impl OpeningBook {
         reader.read_opening_book()
     }
 
-    /// Create opening book from binary data (optimized for WASM)
+    /// Create opening book from binary data using lightweight operations
     pub fn from_binary_boxed(data: Box<[u8]>) -> Result<Self, OpeningBookError> {
         let mut reader = binary_format::BinaryReader::new(data.into_vec());
         reader.read_opening_book()
@@ -864,14 +864,14 @@ impl OpeningBook {
         Ok(())
     }
 
-    /// Hash a FEN string for lookup (optimized for WASM)
+    /// Hash a FEN string for lookup using a lightweight hash
     fn hash_fen(&self, fen: &str) -> u64 {
-        // Use FNV-1a hash for better WASM performance
+        // Use FNV-1a hash for better performance in constrained environments
         // FNV-1a is faster than DefaultHasher and has good distribution
         self.hash_fen_fnv1a(fen)
     }
 
-    /// FNV-1a hash function optimized for WASM
+    /// FNV-1a hash function for lightweight hashing
     fn hash_fen_fnv1a(&self, fen: &str) -> u64 {
         let mut hash: u64 = 0xcbf29ce484222325; // FNV offset basis
         let prime: u64 = 0x100000001b3; // FNV prime
@@ -895,7 +895,7 @@ impl OpeningBook {
         hash
     }
 
-    /// Hash function using bit manipulation for maximum WASM performance
+    /// Hash function using bit manipulation for maximum performance
     fn hash_fen_bitwise(&self, fen: &str) -> u64 {
         let mut hash: u64 = 0;
         let mut i = 0;

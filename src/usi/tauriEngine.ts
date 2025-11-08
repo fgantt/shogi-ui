@@ -159,7 +159,7 @@ export class TauriEngineAdapter implements EngineAdapter {
 
 /**
  * Factory function to create an engine adapter
- * This can be used to create either WASM or Tauri adapters based on environment
+ * This can be used to create Tauri adapters based on environment
  */
 export async function createEngineAdapter(
   sessionId: string,

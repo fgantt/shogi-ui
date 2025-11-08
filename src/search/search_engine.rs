@@ -12556,13 +12556,13 @@ pub struct TroubleshootingReport {
     pub performance_metrics: PerformanceMetrics,
     pub recommendations: Vec<String>,
 }
-// js_sys::Function removed - no longer using WASM callbacks
+// js_sys::Function removed - no longer using callback bindings
 
 pub struct IterativeDeepening {
     max_depth: u8,
     time_limit_ms: u32,
     stop_flag: Option<Arc<AtomicBool>>,
-    // on_info removed - no longer using WASM callbacks
+    // on_info removed - no longer using external callbacks
     /// Number of threads to use for parallel root search (1 = single-threaded)
     thread_count: usize,
     /// Optional parallel search engine for root move search

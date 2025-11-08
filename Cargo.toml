@@ -86,159 +86,307 @@ opt-level = 0
 debug = true
 
 [[bench]]
-name = "tablebase_performance_benchmarks"
+name = "aspiration_window_statistics_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "attack_pattern_performance_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "quiescence_performance_benchmarks"
+name = "bitscan_comprehensive_benchmarks"
 harness = false
-
-[[example]]
-name = "transposition_table_configuration_tuning"
-path = "examples/transposition_table_configuration_tuning.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "transposition_table_integration"
-path = "examples/transposition_table_integration.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "dynamic_table_sizing_example"
-path = "examples/dynamic_table_sizing_example.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "ml_replacement_policies_example"
-path = "examples/ml_replacement_policies_example.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "bit-scanning-examples"
-path = "examples/bit-scanning-examples.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "multi_level_transposition_table_example"
-path = "examples/multi_level_transposition_table_example.rs"
-required-features = ["legacy-examples"]
-
-[[example]]
-name = "tablebase_examples"
-path = "examples/tablebase_examples.rs"
-required-features = ["legacy-examples"]
-
-[[bench]]
-name = "parallel_search_performance_benchmarks"
-harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "board_clone_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "config_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "debug_logging_performance_benchmarks"
 harness = false
-
-[[bench]]
-name = "iid_move_extraction_benchmarks"
-harness = false
-
-[[bench]]
-name = "move_unmaking_performance_benchmarks"
-harness = false
-
-[[bench]]
-name = "iid_performance_monitoring"
-harness = false
-
-[[bench]]
-name = "repetition_detection_performance_benchmarks"
-harness = false
-
-[[bench]]
-name = "move_ordering_performance_benchmarks"
-harness = false
-
-[[bench]]
-name = "aspiration_window_statistics_benchmarks"
-harness = false
-
-[[bench]]
-name = "time_management_overhead_benchmarks"
-harness = false
-
-[[bench]]
-name = "null_move_verification_performance_benchmarks"
-harness = false
-
-[[bench]]
-name = "endgame_detection_performance_benchmarks"
-harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "dynamic_reduction_formula_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "mate_threat_detection_benchmarks"
+name = "endgame_detection_performance_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "endgame_patterns_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "endgame_type_detection_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "null_move_performance_monitoring_benchmarks"
+name = "evaluation_cache_performance_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "nmp_performance_validation_benchmarks"
+name = "evaluation_caching_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_consolidation_performance_benchmarks"
+name = "evaluation_performance_optimization_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_re_search_margin_benchmarks"
+name = "history_heuristic_performance_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_tt_move_detection_benchmarks"
+name = "iid_lmr_coordination_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_performance_monitoring_benchmarks"
+name = "iid_move_extraction_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_enhanced_classification_benchmarks"
+name = "iid_performance_monitoring"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
-name = "lmr_escape_move_detection_benchmarks"
+name = "killer_move_ordering_performance_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "lmr_adaptive_tuning_benchmarks"
 harness = false
-
-[[bench]]
-name = "lmr_pruning_manager_adaptive_reduction_benchmarks"
-harness = false
-
-[[bench]]
-name = "lmr_move_ordering_effectiveness_benchmarks"
-harness = false
+required-features = ["legacy-tests"]
 
 [[bench]]
 name = "lmr_advanced_reduction_strategies_benchmarks"
 harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_consolidation_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_enhanced_classification_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_escape_move_detection_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_move_ordering_effectiveness_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_performance_monitoring_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_pruning_manager_adaptive_reduction_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_re_search_margin_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "lmr_tt_move_detection_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "mate_threat_detection_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "material_evaluation_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "move_ordering_configuration_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "move_ordering_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "move_scoring_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "move_unmaking_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "nmp_performance_validation_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "null_move_performance_monitoring_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "null_move_verification_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "opening_principles_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "parallel_search_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "phase_transition_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "piece_square_tables_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "position_features_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "pv_move_ordering_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "quiescence_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "repetition_detection_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "search_coordination_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "see_and_cache_eviction_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "tablebase_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "tablebase_performance_validation"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "tapered_evaluation_performance_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "tapered_evaluation_validation_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "time_management_overhead_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "time_pressure_management_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
+name = "tt_entry_priority_benchmarks"
+harness = false
+[[example]]
+name = "transposition_table_configuration_tuning"
+path = "examples/transposition_table_configuration_tuning.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "transposition_table_integration"
+path = "examples/transposition_table_integration.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "dynamic_table_sizing_example"
+path = "examples/dynamic_table_sizing_example.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "ml_replacement_policies_example"
+path = "examples/ml_replacement_policies_example.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "bit-scanning-examples"
+path = "examples/bit-scanning-examples.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "multi_level_transposition_table_example"
+path = "examples/multi_level_transposition_table_example.rs"
+required-features = ["legacy-tests"]
+
+[[example]]
+name = "tablebase_examples"
+path = "examples/tablebase_examples.rs"
+required-features = ["legacy-tests"]
 
 [[example]]
 name = "attack_pattern_demo"

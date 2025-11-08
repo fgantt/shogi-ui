@@ -213,7 +213,7 @@ pub struct Position {
 
 impl Position {
     pub fn new(row: u8, col: u8) -> Self {
-        // Clamp coordinates to valid range for WASM compatibility
+        // Clamp coordinates to valid range for platform compatibility
         let row = if row >= 9 { 8 } else { row };
         let col = if col >= 9 { 8 } else { col };
         Self { row, col }

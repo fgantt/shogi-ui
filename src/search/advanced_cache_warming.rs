@@ -330,6 +330,11 @@ impl AdvancedCacheWarmer {
         session
     }
 
+    /// Get a reference to the underlying configuration
+    pub fn get_config(&self) -> &CacheWarmingConfig {
+        &self.config
+    }
+
     /// Warm cache with entries
     pub fn warm_cache(
         &mut self,

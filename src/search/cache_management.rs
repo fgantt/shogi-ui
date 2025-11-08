@@ -32,7 +32,12 @@ pub struct AgeCounter {
 impl AgeCounter {
     /// Create a new age counter
     pub fn new(config: &TranspositionConfig) -> Self {
-        debug_assert!(config.max_age <= AGE_STAMP_MASK, "max_age {} exceeds supported range {}", config.max_age, AGE_STAMP_MASK);
+        debug_assert!(
+            config.max_age <= AGE_STAMP_MASK,
+            "max_age {} exceeds supported range {}",
+            config.max_age,
+            AGE_STAMP_MASK
+        );
         Self {
             current_age: 0,
             max_age: config.max_age,
@@ -317,14 +322,6 @@ impl Default for PerformanceThresholds {
 }
 
 impl CacheManager {
-    /// Get current time, with WASM compatibility
-    #[cfg(target_arch = "wasm32")]
-    fn get_current_time() -> Instant {
-        // In WASM, we can't use Instant::now(), so we'll use a dummy implementation
-        unsafe { std::mem::zeroed() }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
     fn get_current_time() -> Instant {
         Instant::now()
     }

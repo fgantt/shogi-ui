@@ -60,7 +60,7 @@ impl ParallelInitializer {
         Ok(table)
     }
 
-    /// Initialize magic table sequentially (WASM-compatible)
+    /// Initialize magic table sequentially
     pub fn initialize_sequential(&self) -> Result<MagicTable, MagicError> {
         // This is the same as MagicTable::new() but with progress tracking
         let table = MagicTable::new()?;

@@ -459,7 +459,6 @@ fn test_platform_specific_performance() {
 
     println!("\n=== Platform-Specific Performance Validation ===");
     println!("Platform: {:?}", capabilities.architecture);
-    println!("WASM: {}", capabilities.is_wasm);
     println!("POPCNT: {}", capabilities.has_popcnt);
     println!("BMI1: {}", capabilities.has_bmi1);
     println!("BMI2: {}", capabilities.has_bmi2);

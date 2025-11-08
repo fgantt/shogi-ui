@@ -4,9 +4,7 @@
 //! to significantly reduce memory usage in transposition tables while
 //! maintaining fast access times.
 
-use shogi_engine::search::{
-    CompressedEntryStorage, CompressionAlgorithm, CompressionConfig,
-};
+use shogi_engine::search::{CompressedEntryStorage, CompressionAlgorithm, CompressionConfig};
 use shogi_engine::types::{
     EntrySource, Move, PieceType, Player, Position, TranspositionEntry, TranspositionFlag,
 };
@@ -19,7 +17,26 @@ fn build_entry(
     hash_key: u64,
     age: u32,
 ) -> TranspositionEntry {
-    TranspositionEntry::new(score, depth, flag, best_move, hash_key, age, EntrySource::MainSearch)
+    TranspositionEntry::new(
+        score,
+        depth,
+        flag,
+        best_move,
+        hash_key,
+        age,
+        EntrySource::MainSearch,
+    )
+}
+
+fn rle_config() -> CompressionConfig {
+    CompressionConfig {
+        algorithm: CompressionAlgorithm::Rle,
+        level: 1,
+        adaptive: false,
+        min_ratio: 0.8,
+        cache_size: 500,
+        use_dictionary: false,
+    }
 }
 
 fn main() {
@@ -52,7 +69,7 @@ fn demonstrate_compression_algorithms() {
         ("LZ4 High", CompressionConfig::lz4_high()),
         ("Huffman", CompressionConfig::huffman()),
         ("Bit Packing", CompressionConfig::bit_packing()),
-        ("Run-Length Encoding", CompressionConfig::rle()),
+        ("Run-Length Encoding", rle_config()),
     ];
 
     let entry = build_entry(
@@ -101,7 +118,14 @@ fn demonstrate_compression_benefits() {
     // Create multiple entries with different characteristics
     let entries = vec![
         // Entry with no best move
-        build_entry(50, 3, TranspositionFlag::Exact, None, 0x1111111111111111, 10),
+        build_entry(
+            50,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1111111111111111,
+            10,
+        ),
         // Entry with best move
         build_entry(
             -75,
@@ -112,7 +136,14 @@ fn demonstrate_compression_benefits() {
             15,
         ),
         // Deep entry
-        build_entry(200, 12, TranspositionFlag::UpperBound, None, 0x3333333333333333, 20),
+        build_entry(
+            200,
+            12,
+            TranspositionFlag::UpperBound,
+            None,
+            0x3333333333333333,
+            20,
+        ),
     ];
 
     let mut total_original_size = 0;
@@ -155,8 +186,15 @@ fn demonstrate_caching() {
     println!("\n--- Caching Demo ---");
 
     let mut storage = CompressedEntryStorage::new(CompressionConfig::lz4_fast());
- 
-    let entry = build_entry(100, 5, TranspositionFlag::Exact, None, 0x4444444444444444, 12);
+
+    let entry = build_entry(
+        100,
+        5,
+        TranspositionFlag::Exact,
+        None,
+        0x4444444444444444,
+        12,
+    );
 
     let compressed = storage.compress_entry(&entry);
 
@@ -202,7 +240,14 @@ fn demonstrate_adaptive_compression() {
             25,
         ),
         // Medium entropy entry
-        build_entry(75, 4, TranspositionFlag::LowerBound, None, 0x5555555555555555, 10),
+        build_entry(
+            75,
+            4,
+            TranspositionFlag::LowerBound,
+            None,
+            0x5555555555555555,
+            10,
+        ),
     ];
 
     for (i, entry) in entries.iter().enumerate() {
@@ -230,9 +275,30 @@ fn demonstrate_dictionary_compression() {
 
     // Create entries with repeated patterns
     let entries = vec![
-        build_entry(50, 3, TranspositionFlag::Exact, None, 0x1111111111111111, 10),
-        build_entry(60, 4, TranspositionFlag::Exact, None, 0x1111111111111112, 11),
-        build_entry(70, 5, TranspositionFlag::Exact, None, 0x1111111111111113, 12),
+        build_entry(
+            50,
+            3,
+            TranspositionFlag::Exact,
+            None,
+            0x1111111111111111,
+            10,
+        ),
+        build_entry(
+            60,
+            4,
+            TranspositionFlag::Exact,
+            None,
+            0x1111111111111112,
+            11,
+        ),
+        build_entry(
+            70,
+            5,
+            TranspositionFlag::Exact,
+            None,
+            0x1111111111111113,
+            12,
+        ),
     ];
 
     // Update dictionary with common patterns
@@ -273,19 +339,5 @@ fn create_sample_move() -> Move {
         captured_piece: None,
         gives_check: true,
         is_recapture: false,
-    }
-}
-
-// Helper function to create RLE configuration
-impl CompressionConfig {
-    fn rle() -> Self {
-        Self {
-            algorithm: CompressionAlgorithm::Rle,
-            level: 1,
-            adaptive: false,
-            min_ratio: 0.8,
-            cache_size: 500,
-            use_dictionary: false,
-        }
     }
 }

@@ -195,7 +195,7 @@ pub fn bit_scan_reverse_hardware(bb: Bitboard) -> Option<u8> {
 /// De Bruijn sequence bit scan forward implementation
 ///
 /// This implementation uses De Bruijn sequences for efficient bit position determination.
-/// It works on all platforms including WASM and provides good performance.
+/// It works on all supported platforms and provides good performance.
 ///
 /// # Arguments
 /// * `bb` - The bitboard to scan
@@ -209,7 +209,7 @@ pub fn bit_scan_forward_debruijn(bb: Bitboard) -> Option<u8> {
 /// De Bruijn sequence bit scan reverse implementation
 ///
 /// This implementation uses De Bruijn sequences for efficient bit position determination.
-/// It works on all platforms including WASM and provides good performance.
+/// It works on all supported platforms and provides good performance.
 ///
 /// # Arguments
 /// * `bb` - The bitboard to scan

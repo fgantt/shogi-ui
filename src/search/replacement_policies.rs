@@ -444,9 +444,8 @@ impl OptimizedReplacementMaker {
             }
             ReplacementPolicy::DepthAndAge => {
                 let depth_advantage = new_entry.depth as i32 - existing.depth as i32;
-                let age_advantage =
-                    self.age_delta(current_age, existing.age) as i32
-                        - self.age_delta(current_age, new_entry.age) as i32;
+                let age_advantage = self.age_delta(current_age, existing.age) as i32
+                    - self.age_delta(current_age, new_entry.age) as i32;
                 depth_advantage > 0 || age_advantage > self.age_threshold as i32
             }
             ReplacementPolicy::ExactPreferred => {

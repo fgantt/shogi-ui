@@ -485,10 +485,8 @@ impl PredictivePrefetcher {
 
         if predicted_hashes.is_empty() {
             // Fall back to depth-based heuristics to ensure we always have predictions
-            let fallback_hashes = self.predict_depth_based_hashes(
-                current_hash,
-                self.config.prefetch_depth.max(1),
-            );
+            let fallback_hashes =
+                self.predict_depth_based_hashes(current_hash, self.config.prefetch_depth.max(1));
 
             for hash in fallback_hashes
                 .into_iter()

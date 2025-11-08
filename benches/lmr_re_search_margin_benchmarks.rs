@@ -1,6 +1,7 @@
-//! Performance benchmarks for LMR re-search margin
+#![cfg(feature = "legacy-tests")]
+//! Benchmarks for LMR re-search margin tuning
 //!
-//! This benchmark suite measures the performance impact of re-search margin
+//! Measures the performance impact of adjusting the re-search margin thresholds
 //! on LMR effectiveness. It compares:
 //! - LMR with re-search margin disabled (margin = 0)
 //! - LMR with different margin values (25, 50, 75, 100 centipawns)

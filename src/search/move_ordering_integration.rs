@@ -183,16 +183,8 @@ impl TranspositionMoveOrderer {
         // Update statistics
         self.stats.total_moves_ordered += moves.len() as u64;
 
-        // Calculate timing (WASM-compatible)
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.stats.ordering_time_ms = start_time.elapsed().as_nanos() as f64 / 1_000_000.0;
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            // In WASM, we can't measure time precisely, so we use a dummy value
-            self.stats.ordering_time_ms = 0.0;
-        }
+        // Calculate timing
+        self.stats.ordering_time_ms = start_time.elapsed().as_nanos() as f64 / 1_000_000.0;
 
         ordered_moves
     }

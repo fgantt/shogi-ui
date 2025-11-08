@@ -1,11 +1,7 @@
-//! Performance benchmarks for SEE implementation and cache eviction policies (Task 9.0)
+#![cfg(feature = "legacy-tests")]
+//! Benchmarks for SEE integration with cache eviction logic
 //!
-//! This benchmark suite measures:
-//! - SEE vs MVV/LVA ordering effectiveness
-//! - SEE calculation overhead
-//! - Cache eviction policy performance (FIFO, LRU, DepthPreferred, Hybrid)
-//! - Counter-move heuristic effectiveness
-//! - Cache hit rates with different policies
+//! Measures the interaction between SEE pruning and TT cache eviction strategies
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::{

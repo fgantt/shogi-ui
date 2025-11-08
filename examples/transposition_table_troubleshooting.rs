@@ -51,7 +51,6 @@ fn main() {
     // 6. WASM compatibility issues
     println!("\n🌐 WASM Compatibility Issues");
     println!("-----------------------------");
-    demonstrate_wasm_compatibility();
 
     // 7. Configuration validation
     println!("\n✅ Configuration Validation");
@@ -347,46 +346,6 @@ fn demonstrate_move_ordering_issues() {
     println!("    TT hint moves: {}", stats_after.tt_hint_moves);
     println!("    Killer move hits: {}", stats_after.killer_move_hits);
     println!("    History hits: {}", stats_after.history_hits);
-}
-
-fn demonstrate_wasm_compatibility() {
-    println!("Problem: WASM runtime errors or compatibility issues");
-
-    println!("  Common WASM issues:");
-    println!("    1. Time-based operations not available");
-    println!("    2. Threading limitations");
-    println!("    3. Memory constraints");
-    println!("    4. Platform-specific APIs");
-
-    // Solutions
-    println!("  Solutions:");
-    println!("    1. Use conditional compilation for WASM");
-    println!("    2. Avoid std::time::Instant in WASM");
-    println!("    3. Use single-threaded designs");
-    println!("    4. Implement WASM-compatible alternatives");
-    println!("    5. Test both native and WASM builds");
-
-    // Demonstrate WASM-compatible code
-    #[cfg(target_arch = "wasm32")]
-    {
-        println!("  Running in WASM environment - using compatible implementations");
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        println!("  Running in native environment - full functionality available");
-    }
-
-    // Test WASM-compatible transposition table
-    let config = TranspositionConfig::default();
-    let mut tt = ThreadSafeTranspositionTable::new(config);
-
-    let entry = make_entry(12345, 3, 100);
-
-    tt.store(entry);
-    let retrieved = tt.probe(12345, 3);
-
-    println!("  WASM compatibility test: {}", retrieved.is_some());
 }
 
 fn demonstrate_configuration_validation() {

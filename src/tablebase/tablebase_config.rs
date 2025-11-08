@@ -26,8 +26,6 @@ pub struct TablebaseConfig {
     pub performance: PerformanceConfig,
     /// Memory usage monitoring and limits
     pub memory: MemoryConfig,
-    /// WASM-specific optimizations and compatibility settings
-    pub wasm: WasmConfig,
 }
 
 impl Default for TablebaseConfig {
@@ -40,7 +38,6 @@ impl Default for TablebaseConfig {
             solvers: SolverConfig::default(),
             performance: PerformanceConfig::default(),
             memory: MemoryConfig::default(),
-            wasm: WasmConfig::default(),
         }
     }
 }
@@ -61,7 +58,6 @@ impl TablebaseConfig {
             solvers: SolverConfig::performance_optimized(),
             performance: PerformanceConfig::performance_optimized(),
             memory: MemoryConfig::performance_optimized(),
-            wasm: WasmConfig::default(),
         }
     }
 
@@ -75,21 +71,6 @@ impl TablebaseConfig {
             solvers: SolverConfig::memory_optimized(),
             performance: PerformanceConfig::memory_optimized(),
             memory: MemoryConfig::memory_optimized(),
-            wasm: WasmConfig::wasm_memory_constrained(),
-        }
-    }
-
-    /// Create a configuration optimized for WASM
-    pub fn wasm_optimized() -> Self {
-        Self {
-            enabled: true,
-            cache_size: 5000, // Smaller cache for WASM
-            max_depth: 12,    // Reduced depth for WASM
-            confidence_threshold: 0.8,
-            solvers: SolverConfig::memory_optimized(),
-            performance: PerformanceConfig::memory_optimized(),
-            memory: MemoryConfig::wasm_memory_constrained(),
-            wasm: WasmConfig::wasm_optimized(),
         }
     }
 
@@ -110,7 +91,6 @@ impl TablebaseConfig {
         self.solvers.validate()?;
         self.performance.validate()?;
         self.memory.validate()?;
-        self.wasm.validate()?;
 
         Ok(())
     }
@@ -165,7 +145,6 @@ impl TablebaseConfig {
         self.solvers.merge_with(&other.solvers);
         self.performance.merge_with(&other.performance);
         self.memory.merge_with(&other.memory);
-        self.wasm.merge_with(&other.wasm);
     }
 }
 
@@ -567,19 +546,6 @@ impl MemoryConfig {
         }
     }
 
-    /// Create a WASM memory-constrained configuration
-    pub fn wasm_memory_constrained() -> Self {
-        Self {
-            enable_monitoring: false,          // Disable in WASM
-            max_memory_bytes: 8 * 1024 * 1024, // 8MB for WASM
-            warning_threshold: 0.6,            // 60%
-            critical_threshold: 0.8,           // 80%
-            enable_auto_eviction: true,
-            check_interval_ms: 2000, // 2 seconds
-            enable_logging: false,   // Disable in WASM
-        }
-    }
-
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), String> {
         if self.warning_threshold >= self.critical_threshold {
@@ -606,124 +572,6 @@ impl MemoryConfig {
         self.enable_auto_eviction = other.enable_auto_eviction;
         self.check_interval_ms = other.check_interval_ms;
         self.enable_logging = other.enable_logging;
-    }
-}
-
-/// WASM-specific configuration and optimizations
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WasmConfig {
-    /// Whether WASM optimizations are enabled
-    pub enable_wasm_optimizations: bool,
-    /// Maximum memory usage for WASM (in bytes)
-    pub max_wasm_memory: usize,
-    /// Whether to use smaller data structures for WASM
-    pub use_compact_structures: bool,
-    /// Whether to disable certain features that don't work well in WASM
-    pub disable_heavy_features: bool,
-    /// Whether to use synchronous operations only (no async)
-    pub force_synchronous: bool,
-    /// Whether to reduce cache sizes for WASM
-    pub reduce_cache_sizes: bool,
-    /// Whether to disable memory monitoring in WASM
-    pub disable_memory_monitoring: bool,
-    /// Whether to use simplified logging for WASM
-    pub use_simple_logging: bool,
-}
-
-impl Default for WasmConfig {
-    fn default() -> Self {
-        Self {
-            enable_wasm_optimizations: false,
-            max_wasm_memory: 16 * 1024 * 1024, // 16MB default for WASM
-            use_compact_structures: false,
-            disable_heavy_features: false,
-            force_synchronous: false,
-            reduce_cache_sizes: false,
-            disable_memory_monitoring: false,
-            use_simple_logging: false,
-        }
-    }
-}
-
-impl WasmConfig {
-    /// Create a WASM-optimized configuration
-    pub fn wasm_optimized() -> Self {
-        Self {
-            enable_wasm_optimizations: true,
-            max_wasm_memory: 32 * 1024 * 1024, // 32MB for WASM
-            use_compact_structures: true,
-            disable_heavy_features: true,
-            force_synchronous: true,
-            reduce_cache_sizes: true,
-            disable_memory_monitoring: true,
-            use_simple_logging: true,
-        }
-    }
-
-    /// Create a configuration for memory-constrained WASM environments
-    pub fn wasm_memory_constrained() -> Self {
-        Self {
-            enable_wasm_optimizations: true,
-            max_wasm_memory: 8 * 1024 * 1024, // 8MB for constrained environments
-            use_compact_structures: true,
-            disable_heavy_features: true,
-            force_synchronous: true,
-            reduce_cache_sizes: true,
-            disable_memory_monitoring: true,
-            use_simple_logging: true,
-        }
-    }
-
-    /// Check if running in WASM environment
-    pub fn is_wasm_environment() -> bool {
-        false
-    }
-
-    /// Validate the configuration
-    pub fn validate(&self) -> Result<(), String> {
-        if self.max_wasm_memory == 0 {
-            return Err("Max WASM memory must be greater than 0".to_string());
-        }
-        if self.max_wasm_memory > 1024 * 1024 * 1024 {
-            return Err("Max WASM memory should not exceed 1GB".to_string());
-        }
-        Ok(())
-    }
-
-    /// Merge with another configuration
-    pub fn merge_with(&mut self, other: &WasmConfig) {
-        self.enable_wasm_optimizations = other.enable_wasm_optimizations;
-        self.max_wasm_memory = other.max_wasm_memory;
-        self.use_compact_structures = other.use_compact_structures;
-        self.disable_heavy_features = other.disable_heavy_features;
-        self.force_synchronous = other.force_synchronous;
-        self.reduce_cache_sizes = other.reduce_cache_sizes;
-        self.disable_memory_monitoring = other.disable_memory_monitoring;
-        self.use_simple_logging = other.use_simple_logging;
-    }
-
-    /// Get recommended cache size for WASM
-    pub fn get_recommended_cache_size(&self) -> usize {
-        if self.reduce_cache_sizes {
-            // Reduce cache size for WASM
-            (self.max_wasm_memory / 1000).min(1000) // Max 1000 entries
-        } else {
-            (self.max_wasm_memory / 100).min(10000) // Max 10000 entries
-        }
-    }
-
-    /// Check if a feature should be disabled in WASM
-    pub fn should_disable_feature(&self, feature: &str) -> bool {
-        if !self.enable_wasm_optimizations {
-            return false;
-        }
-
-        match feature {
-            "memory_monitoring" => self.disable_memory_monitoring,
-            "heavy_computation" => self.disable_heavy_features,
-            "async_operations" => self.force_synchronous,
-            _ => false,
-        }
     }
 }
 

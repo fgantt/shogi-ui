@@ -15,9 +15,6 @@ fn main() {
 }
 
 #[cfg(feature = "tt-config-tuning")]
-fn main() {
-
-#[cfg(feature = "tt-config-tuning")]
 fn basic_configuration_management() {
     println!("Creating runtime configuration manager...");
 

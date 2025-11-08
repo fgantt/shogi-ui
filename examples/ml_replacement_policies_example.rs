@@ -4,12 +4,11 @@
 //! policies for transposition tables, showing different algorithms and
 //! their learning capabilities.
 
+use shogi_engine::search::ml_replacement_policies::ReplacementOutcome;
 use shogi_engine::search::{
     AccessPatternInfo, MLAlgorithm, MLReplacementConfig, MLReplacementContext,
-    MLReplacementDecision, MLReplacementPolicy, PositionFeatures, ReplacementAction,
-    TemporalInfo,
+    MLReplacementDecision, MLReplacementPolicy, PositionFeatures, ReplacementAction, TemporalInfo,
 };
-use shogi_engine::search::ml_replacement_policies::ReplacementOutcome;
 use shogi_engine::types::{EntrySource, TranspositionEntry, TranspositionFlag};
 
 fn main() {
@@ -387,8 +386,7 @@ fn create_varying_context(decision_num: usize) -> MLReplacementContext {
     // Vary features based on decision number
     context.position_features.complexity = 0.3 + (decision_num as f64 * 0.05) % 0.7;
     context.access_pattern.recent_frequency = 0.2 + (decision_num as f64 * 0.03) % 0.8;
-    context.temporal_info.existing_age =
-        std::time::Duration::from_secs(5 + decision_num as u64);
+    context.temporal_info.existing_age = std::time::Duration::from_secs(5 + decision_num as u64);
 
     context
 }

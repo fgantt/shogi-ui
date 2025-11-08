@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-tests")]
 //! Performance benchmarks for LMR consolidation verification
 //!
 //! This benchmark suite measures the performance impact of consolidating LMR

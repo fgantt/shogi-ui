@@ -4,9 +4,7 @@
 //! to improve transposition table performance by predicting and prefetching
 //! likely next accesses.
 
-use shogi_engine::search::{
-    PredictivePrefetcher, PrefetchConfig,
-};
+use shogi_engine::search::{PredictivePrefetcher, PrefetchConfig};
 use shogi_engine::types::{Move, Piece, PieceType, Player, Position};
 
 fn main() {
@@ -101,8 +99,7 @@ fn demonstrate_learning_adaptation() {
     let initial_stats = prefetcher.get_stats().clone();
     println!(
         "Initial stats: {} predictions recorded, avg hit rate {:.2}",
-        initial_stats.total_predictions,
-        initial_stats.avg_hit_rate
+        initial_stats.total_predictions, initial_stats.avg_hit_rate
     );
 
     // Second pass: use predictions
@@ -228,8 +225,7 @@ fn demonstrate_pattern_recognition() {
     let stats_after_training = prefetcher.get_stats().clone();
     println!(
         "Patterns analyzed across predictions: {} (avg hit rate {:.2})",
-        stats_after_training.total_predictions,
-        stats_after_training.avg_hit_rate
+        stats_after_training.total_predictions, stats_after_training.avg_hit_rate
     );
 
     // Test pattern recognition
@@ -302,10 +298,7 @@ fn demonstrate_cache_efficiency() {
     }
 
     // Third pass: test cache utilization
-    let average_cache_hit_rate = prefetcher
-        .get_stats()
-        .avg_hit_rate
-        .max(0.0);
+    let average_cache_hit_rate = prefetcher.get_stats().avg_hit_rate.max(0.0);
     println!(
         "Average cache hit rate across predictions: {:.1}%",
         average_cache_hit_rate * 100.0
@@ -323,8 +316,7 @@ fn demonstrate_cache_efficiency() {
     let stats = prefetcher.get_stats();
     println!(
         "Cache memory overhead: {} bytes, total predictions: {}",
-        stats.memory_overhead_bytes,
-        stats.total_predictions
+        stats.memory_overhead_bytes, stats.total_predictions
     );
 }
 

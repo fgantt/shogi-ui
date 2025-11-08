@@ -6,7 +6,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use shogi_engine::{
     bitboards::BitboardBoard,
-    tablebase::tablebase_config::{EvictionStrategy, MemoryConfig, WasmConfig},
+    tablebase::tablebase_config::EvictionStrategy,
     tablebase::{MicroTablebase, TablebaseConfig},
     types::{CapturedPieces, PieceType, Player, Position},
     ShogiEngine,
@@ -111,7 +111,6 @@ fn bench_memory_usage(c: &mut Criterion) {
             "performance_optimized",
             TablebaseConfig::performance_optimized(),
         ),
-        ("wasm_optimized", TablebaseConfig::wasm_optimized()),
     ];
 
     for (name, config) in configs.iter() {

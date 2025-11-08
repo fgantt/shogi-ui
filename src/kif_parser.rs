@@ -198,7 +198,10 @@ impl KifGame {
         })?;
 
         let from_rank_letter = Self::rank_to_letter(origin.1)?;
-        let mut usi = format!("{}{}{}{}", origin.0, from_rank_letter, to_file, to_rank_letter);
+        let mut usi = format!(
+            "{}{}{}{}",
+            origin.0, from_rank_letter, to_file, to_rank_letter
+        );
 
         if promotion {
             usi.push('+');

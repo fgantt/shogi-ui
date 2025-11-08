@@ -33,7 +33,7 @@ pub mod configuration_templates;
 pub mod performance_tuning;
 pub mod runtime_configuration;
 
-// WASM compatibility modules removed - no longer needed
+// Web compatibility modules removed - no longer needed
 
 // Advanced features modules
 pub mod advanced_cache_warming;
@@ -127,7 +127,7 @@ pub use configuration_templates::{
     TemplateMetadata, ValidationResult, ValidationRule, ValidationSeverity,
 };
 
-// WASM compatibility re-exports removed - no longer needed
+// Web compatibility re-exports removed - no longer needed
 
 // Advanced features re-exports
 pub use multi_level_transposition_table::{

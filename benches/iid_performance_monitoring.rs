@@ -1,7 +1,7 @@
-//! Task 8.0: Performance Monitoring Benchmarks
+#![cfg(feature = "legacy-tests")]
+//! Benchmarks for IID performance monitoring improvements
 //!
-//! This benchmark suite compares IID enabled vs disabled with different configurations
-//! to track IID performance over time.
+//! Measures the overhead introduced by detailed IID monitoring instrumentation
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;

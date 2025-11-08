@@ -1,14 +1,12 @@
 //! Thread-safe transposition table implementation
 //!
-//! This module provides thread-safe transposition table functionality while
-//! maintaining WASM compatibility. Since WASM is single-threaded, this module
-//! provides a unified interface that works efficiently in both multi-threaded
-//! native environments and single-threaded WASM environments.
+//! This module provides thread-safe transposition table functionality that
+//! works efficiently in both multi-threaded and single-threaded environments.
 //!
 //! # Features
 //!
 //! - **Thread Safety**: Safe for concurrent access across multiple threads
-//! - **WASM Compatibility**: Works in both native and WebAssembly environments
+//! - **Flexible Execution**: Operates in both multi-threaded and single-threaded modes
 //! - **Performance Optimized**: Uses atomic operations and cache-line alignment
 //! - **Memory Efficient**: Compact entry storage with configurable size
 //! - **Statistics Tracking**: Comprehensive performance and usage statistics (opt-in)
@@ -62,7 +60,6 @@
 use crate::bitboards::BitboardBoard;
 use crate::opening_book::OpeningBook;
 use crate::search::cache_management::CacheManager;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::search::replacement_policies::ReplacementDecision;
 use crate::search::replacement_policies::ReplacementPolicyHandler;
 use crate::search::transposition_config::TranspositionConfig;
@@ -70,9 +67,7 @@ use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::*;
 use log::warn;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::{Arc, LockResult, Mutex, MutexGuard};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::{RwLock, RwLockWriteGuard};
+use std::sync::{Arc, LockResult, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 
 #[cfg(all(feature = "tt-prefetch", target_arch = "x86"))]
 use core::arch::x86::{_mm_prefetch, _MM_HINT_T2};
@@ -84,7 +79,7 @@ use core::arch::x86_64::{_mm_prefetch, _MM_HINT_T2};
 pub enum ThreadSafetyMode {
     /// Multi-threaded mode with full synchronization
     MultiThreaded,
-    /// Single-threaded mode (WASM compatible)
+    /// Single-threaded mode
     SingleThreaded,
     /// Auto-detect based on platform
     Auto,
@@ -93,14 +88,7 @@ pub enum ThreadSafetyMode {
 impl ThreadSafetyMode {
     /// Detect the appropriate thread safety mode
     pub fn detect() -> Self {
-        #[cfg(target_arch = "wasm32")]
-        {
-            Self::SingleThreaded
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            Self::MultiThreaded
-        }
+        Self::MultiThreaded
     }
 
     /// Check if this mode supports multiple threads
@@ -291,7 +279,7 @@ impl AtomicPackedEntry {
 ///
 /// This struct provides a thread-safe transposition table that works
 /// efficiently in both multi-threaded and single-threaded environments.
-/// In WASM, it operates without synchronization overhead.
+/// In single-threaded configurations, it operates without synchronization overhead.
 ///
 /// # Parallel Performance
 ///
@@ -308,10 +296,8 @@ pub struct ThreadSafeTranspositionTable {
     /// Thread safety mode
     thread_mode: ThreadSafetyMode,
     /// Synchronization primitives for multi-threaded access (bucketed for reduced contention)
-    #[cfg(not(target_arch = "wasm32"))]
     bucket_locks: Vec<Arc<RwLock<()>>>,
     /// Bit shift for fast bucket calculation
-    #[cfg(not(target_arch = "wasm32"))]
     bucket_shift: u32,
     /// Whether hardware prefetching is enabled for this table
     #[cfg(feature = "tt-prefetch")]
@@ -364,16 +350,13 @@ impl ThreadSafeTranspositionTable {
         }
 
         // Create bucketed locks for reduced write contention
-        #[cfg(not(target_arch = "wasm32"))]
         let bucket_count = config.bucket_count.next_power_of_two();
-        #[cfg(not(target_arch = "wasm32"))]
         let bucket_locks: Vec<Arc<RwLock<()>>> = (0..bucket_count)
             .map(|_| Arc::new(RwLock::new(())))
             .collect();
-        #[cfg(not(target_arch = "wasm32"))]
         let bucket_shift = 64 - bucket_count.trailing_zeros();
         #[cfg(feature = "tt-prefetch")]
-        let prefetch_enabled = config.enable_prefetching && !cfg!(target_arch = "wasm32");
+        let prefetch_enabled = config.enable_prefetching;
         let statistics_enabled = config.enable_statistics;
 
         Self {
@@ -381,9 +364,7 @@ impl ThreadSafeTranspositionTable {
             size,
             mask,
             thread_mode,
-            #[cfg(not(target_arch = "wasm32"))]
             bucket_locks,
-            #[cfg(not(target_arch = "wasm32"))]
             bucket_shift,
             #[cfg(feature = "tt-prefetch")]
             prefetch_enabled,
@@ -470,7 +451,7 @@ impl ThreadSafeTranspositionTable {
 
     #[inline(always)]
     fn prefetch_entry(&self, hash: u64) {
-        #[cfg(all(feature = "tt-prefetch", not(target_arch = "wasm32")))]
+        #[cfg(feature = "tt-prefetch")]
         {
             if self.prefetch_enabled {
                 let index = self.get_index(hash);
@@ -479,7 +460,7 @@ impl ThreadSafeTranspositionTable {
                 }
             }
         }
-        #[cfg(not(all(feature = "tt-prefetch", not(target_arch = "wasm32"))))]
+        #[cfg(not(feature = "tt-prefetch"))]
         {
             let _ = hash;
         }
@@ -496,10 +477,7 @@ impl ThreadSafeTranspositionTable {
         let is_multi_threaded = self.thread_mode.is_multi_threaded();
 
         if is_multi_threaded {
-            #[cfg(not(target_arch = "wasm32"))]
             self.store_with_synchronization(index, entry);
-            #[cfg(target_arch = "wasm32")]
-            self.store_atomic_only(index, entry);
         } else {
             self.store_atomic_only(index, entry);
         }
@@ -507,7 +485,6 @@ impl ThreadSafeTranspositionTable {
         self.increment_stores();
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn recover_write_guard<'a, T, F>(
         &self,
         lock_result: LockResult<RwLockWriteGuard<'a, T>>,
@@ -559,7 +536,6 @@ impl ThreadSafeTranspositionTable {
     ///
     /// This method maps hash keys to lock buckets for reduced write contention.
     /// Uses fast bit shifting to calculate bucket index.
-    #[cfg(not(target_arch = "wasm32"))]
     fn get_bucket_lock(&self, hash: u64) -> &Arc<RwLock<()>> {
         let bucket_index = (hash >> self.bucket_shift) as usize % self.bucket_locks.len();
         &self.bucket_locks[bucket_index]
@@ -569,7 +545,6 @@ impl ThreadSafeTranspositionTable {
     ///
     /// Uses bucketed locks for better parallel write performance.
     /// Only locks the specific bucket for this hash, not the entire table.
-    #[cfg(not(target_arch = "wasm32"))]
     #[inline(always)]
     fn store_with_synchronization(&mut self, index: usize, entry: TranspositionEntry) {
         // Get the bucket lock for this hash (clone Arc to avoid borrow issues)
@@ -601,7 +576,6 @@ impl ThreadSafeTranspositionTable {
             match decision {
                 ReplacementDecision::Replace => {
                     Self::store_atomic_entry_static(&mut self.entries[index], entry);
-                    #[cfg(not(target_arch = "wasm32"))]
                     self.increment_replacements();
                     self.increment_atomic_operations();
                 }
@@ -611,7 +585,6 @@ impl ThreadSafeTranspositionTable {
                 ReplacementDecision::ReplaceIfExact => {
                     if entry.is_exact() && !current_entry.is_exact() {
                         Self::store_atomic_entry_static(&mut self.entries[index], entry);
-                        #[cfg(not(target_arch = "wasm32"))]
                         self.increment_replacements();
                         self.increment_atomic_operations();
                     }
@@ -716,28 +689,18 @@ impl ThreadSafeTranspositionTable {
         self.size
     }
 
-    /// Get the number of lock buckets (non-WASM only)
+    /// Get the number of lock buckets
     ///
     /// Returns the number of independent lock buckets used for parallel write operations.
     /// Higher bucket counts reduce contention but increase memory overhead.
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn bucket_count(&self) -> usize {
         self.bucket_locks.len()
-    }
-
-    /// Get the number of lock buckets (WASM always returns 1)
-    #[cfg(target_arch = "wasm32")]
-    pub fn bucket_count(&self) -> usize {
-        1 // No bucketing in single-threaded WASM
     }
 
     /// Clear the entire table
     pub fn clear(&mut self) {
         if self.thread_mode.is_multi_threaded() {
-            #[cfg(not(target_arch = "wasm32"))]
             self.clear_with_synchronization();
-            #[cfg(target_arch = "wasm32")]
-            self.clear_atomic_only();
         } else {
             self.clear_atomic_only();
         }
@@ -746,7 +709,6 @@ impl ThreadSafeTranspositionTable {
     /// Clear with synchronization
     ///
     /// Acquires all bucket locks to ensure no concurrent writes during clear.
-    #[cfg(not(target_arch = "wasm32"))]
     fn clear_with_synchronization(&mut self) {
         // Clone all bucket locks and acquire them to prevent writes during clear
         let locks: Vec<_> = self
@@ -924,7 +886,6 @@ impl ThreadSafeTranspositionTable {
         stats.stores.fetch_add(1, Ordering::Relaxed);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn increment_replacements(&self) {
         if !self.statistics_enabled {
             return;
@@ -1059,11 +1020,6 @@ mod tests {
     #[test]
     fn test_thread_safety_mode_detection() {
         let mode = ThreadSafetyMode::detect();
-
-        #[cfg(target_arch = "wasm32")]
-        assert_eq!(mode, ThreadSafetyMode::SingleThreaded);
-
-        #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(mode, ThreadSafetyMode::MultiThreaded);
     }
 
@@ -1323,7 +1279,6 @@ mod tests {
             .is_some());
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_concurrent_access() {
         let config = create_test_config();
@@ -1363,14 +1318,9 @@ mod tests {
         config.bucket_count = 256;
         let mut table = ThreadSafeTranspositionTable::new(config);
 
-        #[cfg(not(target_arch = "wasm32"))]
         assert_eq!(table.bucket_count(), 256);
-
-        #[cfg(target_arch = "wasm32")]
-        assert_eq!(table.bucket_count(), 1);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_bucketed_lock_isolation() {
         let mut config = create_test_config();

@@ -2,7 +2,7 @@
 //!
 //! This module provides advanced performance optimizations for the transposition table,
 //! including cache line alignment, prefetching, optimized hash mapping, and hot path
-//! optimizations while maintaining WASM compatibility.
+//! optimizations while maintaining cross-platform compatibility.
 
 use crate::types::*;
 use std::alloc::{alloc, dealloc, Layout};
@@ -493,9 +493,9 @@ pub struct HotPathStats {
     pub cache_entries: usize,
 }
 
-/// WASM-compatible atomic packed entry
+/// Platform-agnostic atomic packed entry
 ///
-/// This struct provides atomic operations that work in WASM environments
+/// This struct provides atomic operations that work across targets
 /// where certain atomic operations may not be available.
 #[derive(Debug, Clone, Copy)]
 pub struct AtomicPackedEntry {
@@ -513,7 +513,7 @@ impl AtomicPackedEntry {
     /// Load entry data (atomic read)
     #[inline(always)]
     pub fn load(&self) -> u64 {
-        self.data // In WASM, this is already atomic for u64
+        self.data
     }
 
     /// Store entry data (atomic write)

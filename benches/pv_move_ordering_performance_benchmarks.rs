@@ -1,8 +1,7 @@
-//! Performance benchmarks for PV move ordering system
+#![cfg(feature = "legacy-tests")]
+//! Principal Variation move ordering performance benchmarks
 //!
-//! This module provides comprehensive benchmarks to measure the performance
-//! of PV move ordering operations and validate that they meet performance
-//! requirements.
+//! Measures the effectiveness and overhead of various PV move ordering heuristics
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::bitboards::BitboardBoard;

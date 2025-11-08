@@ -15,7 +15,15 @@ fn build_entry(
     hash_key: u64,
     age: u32,
 ) -> TranspositionEntry {
-    TranspositionEntry::new(score, depth, flag, best_move, hash_key, age, EntrySource::MainSearch)
+    TranspositionEntry::new(
+        score,
+        depth,
+        flag,
+        best_move,
+        hash_key,
+        age,
+        EntrySource::MainSearch,
+    )
 }
 
 fn main() {

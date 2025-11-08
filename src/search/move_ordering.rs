@@ -7116,36 +7116,11 @@ impl MoveOrdering {
         }
     }
 
-    // ==================== WASM-Specific Optimizations ====================
-
-    /// Get WASM-optimized configuration
+    /// Get optimized configuration
     ///
-    /// Returns a configuration optimized for WebAssembly environments
-    /// with reduced memory usage and simplified operations.
-    #[cfg(target_arch = "wasm32")]
-    pub fn wasm_optimized_config() -> MoveOrderingConfig {
-        let mut config = MoveOrderingConfig::default();
-
-        // Reduce cache sizes for WASM memory constraints
-        config.cache_config.max_cache_size = 50000;
-        config.cache_config.max_see_cache_size = 25000;
-        config.cache_config.enable_auto_optimization = false;
-
-        // Limit killer moves for memory efficiency
-        config.killer_config.max_killer_moves_per_depth = 2;
-
-        // Optimize for WASM performance
-        config.performance_config.enable_performance_monitoring = false; // Reduce overhead
-
-        config
-    }
-
-    /// Get native-optimized configuration
-    ///
-    /// Returns a configuration optimized for native environments
-    /// with larger caches and more features enabled.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn native_optimized_config() -> MoveOrderingConfig {
+    /// Returns a configuration optimized for native environments with larger caches
+    /// and full performance features enabled.
+    pub fn optimized_config() -> MoveOrderingConfig {
         let mut config = MoveOrderingConfig::default();
 
         // Larger caches for native environments
@@ -7164,64 +7139,30 @@ impl MoveOrdering {
         config
     }
 
-    /// Create WASM-optimized move orderer
+    /// Create optimized move orderer
     ///
-    /// Creates a move orderer specifically optimized for WASM environments.
-    #[cfg(target_arch = "wasm32")]
-    pub fn new_wasm_optimized() -> Self {
-        Self::with_config(Self::wasm_optimized_config())
-    }
-
-    /// Create native-optimized move orderer
-    ///
-    /// Creates a move orderer specifically optimized for native environments.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn new_native_optimized() -> Self {
-        Self::with_config(Self::native_optimized_config())
+    /// Creates a move orderer using the recommended optimized configuration.
+    pub fn new_optimized() -> Self {
+        Self::with_config(Self::optimized_config())
     }
 
     /// Get platform-specific configuration
     ///
     /// Returns an optimized configuration for the current platform.
     pub fn platform_optimized_config() -> MoveOrderingConfig {
-        #[cfg(target_arch = "wasm32")]
-        {
-            Self::wasm_optimized_config()
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            Self::native_optimized_config()
-        }
-    }
-
-    /// Check if running in WASM environment
-    pub fn is_wasm_environment() -> bool {
-        cfg!(target_arch = "wasm32")
+        Self::optimized_config()
     }
 
     /// Get memory limits for current platform
     ///
     /// Returns recommended memory limits based on platform.
     pub fn get_platform_memory_limits() -> PlatformMemoryLimits {
-        #[cfg(target_arch = "wasm32")]
-        {
-            PlatformMemoryLimits {
-                max_total_memory_bytes: 10 * 1024 * 1024, // 10 MB for WASM
-                max_cache_size: 50000,
-                max_see_cache_size: 25000,
-                recommended_cache_size: 25000,
-                recommended_see_cache_size: 10000,
-            }
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            PlatformMemoryLimits {
-                max_total_memory_bytes: 100 * 1024 * 1024, // 100 MB for native
-                max_cache_size: 1000000,
-                max_see_cache_size: 500000,
-                recommended_cache_size: 200000,
-                recommended_see_cache_size: 100000,
-            }
+        PlatformMemoryLimits {
+            max_total_memory_bytes: 100 * 1024 * 1024, // 100 MB for native
+            max_cache_size: 1000000,
+            max_see_cache_size: 500000,
+            recommended_cache_size: 200000,
+            recommended_see_cache_size: 100000,
         }
     }
 }
@@ -13773,59 +13714,6 @@ mod tests {
         assert!(final_weight >= initial_weight || initial_weight >= 12000);
     }
 
-    // ==================== WASM Compatibility Tests ====================
-
-    #[test]
-    fn test_wasm_optimized_config() {
-        #[cfg(target_arch = "wasm32")]
-        {
-            let config = MoveOrdering::wasm_optimized_config();
-
-            // Verify WASM-specific settings
-            assert!(
-                config.cache_config.max_cache_size <= 100000,
-                "WASM cache should be limited"
-            );
-            assert!(
-                config.cache_config.max_see_cache_size <= 50000,
-                "WASM SEE cache should be limited"
-            );
-            assert!(
-                config.killer_config.max_killer_moves_per_depth <= 2,
-                "WASM killer moves should be limited"
-            );
-        }
-    }
-
-    #[test]
-    fn test_native_optimized_config() {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let config = MoveOrdering::native_optimized_config();
-
-            // Verify native-specific settings
-            assert!(
-                config.cache_config.max_cache_size >= 100000,
-                "Native cache should be larger"
-            );
-            assert!(
-                config.performance_config.enable_performance_monitoring,
-                "Native should enable monitoring"
-            );
-        }
-    }
-
-    #[test]
-    fn test_platform_detection() {
-        let is_wasm = MoveOrdering::is_wasm_environment();
-
-        #[cfg(target_arch = "wasm32")]
-        assert!(is_wasm, "Should detect WASM environment");
-
-        #[cfg(not(target_arch = "wasm32"))]
-        assert!(!is_wasm, "Should detect native environment");
-    }
-
     #[test]
     fn test_platform_memory_limits() {
         let limits = MoveOrdering::get_platform_memory_limits();
@@ -13836,35 +13724,19 @@ mod tests {
         assert!(limits.max_see_cache_size > 0);
         assert!(limits.recommended_cache_size <= limits.max_cache_size);
         assert!(limits.recommended_see_cache_size <= limits.max_see_cache_size);
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            assert!(
-                limits.max_total_memory_bytes <= 20 * 1024 * 1024,
-                "WASM memory limit should be conservative"
-            );
-            assert!(
-                limits.max_cache_size <= 100000,
-                "WASM cache limit should be conservative"
-            );
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            assert!(
-                limits.max_total_memory_bytes >= 50 * 1024 * 1024,
-                "Native memory limit should be generous"
-            );
-            assert!(
-                limits.max_cache_size >= 100000,
-                "Native cache limit should be generous"
-            );
-        }
+        assert!(
+            limits.max_total_memory_bytes >= 50 * 1024 * 1024,
+            "Memory limit should be generous for native targets"
+        );
+        assert!(
+            limits.max_cache_size >= 100000,
+            "Cache limit should be generous for native targets"
+        );
     }
 
     #[test]
-    fn test_wasm_compatibility_time_source() {
-        // Verify TimeSource is being used (WASM-compatible)
+    fn test_time_source_usage() {
+        // Verify TimeSource is being used
         let mut orderer = MoveOrdering::new();
 
         let moves = vec![Move::new_move(
@@ -13875,7 +13747,7 @@ mod tests {
             false,
         )];
 
-        // This should not panic on WASM
+        // This should not panic
         for _ in 0..10 {
             let _ = orderer.order_moves(&moves);
         }
@@ -13886,8 +13758,8 @@ mod tests {
     }
 
     #[test]
-    fn test_wasm_array_indexing() {
-        // Verify array indexing is safe for WASM
+    fn test_history_table_indexing() {
+        // Verify array indexing is safe for history updates
         let mut orderer = MoveOrdering::new();
 
         // Test with various positions to ensure no index out of bounds

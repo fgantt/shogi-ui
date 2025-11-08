@@ -1,6 +1,8 @@
-//! Performance Benchmarks for IID-LMR Coordination
+#![cfg(feature = "legacy-tests")]
+//! Benchmarks for IID/LMR coordination strategies
 //!
-//! This benchmark suite measures the impact of explicit IID move exemption from LMR.
+//! This suite measures the impact of coordinated IID and LMR heuristics on
+//! search performance.
 //!
 //! Task 7.0.1.10: Measure impact of explicit IID exemption on search performance
 //!

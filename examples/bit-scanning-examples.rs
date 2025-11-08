@@ -243,7 +243,6 @@ fn platform_optimization_examples() {
     println!("  POPCNT: {}", caps.has_popcnt);
     println!("  BMI1: {}", caps.has_bmi1);
     println!("  BMI2: {}", caps.has_bmi2);
-    println!("  WASM: {}", caps.is_wasm);
     println!("  Architecture: {:?}", caps.architecture);
 
     // Get best implementations

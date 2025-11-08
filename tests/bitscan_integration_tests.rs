@@ -48,18 +48,16 @@ fn test_platform_detection_integration() {
     // Should always return a valid implementation
     match popcount_impl {
         shogi_engine::bitboards::platform_detection::PopcountImpl::Hardware => {
-            // Hardware implementation should only be selected on native x86_64
-            #[cfg(all(target_arch = "x86_64", not(target_arch = "wasm32")))]
-            assert!(true); // Expected on x86_64
-            #[cfg(not(all(target_arch = "x86_64", not(target_arch = "wasm32"))))]
             assert!(
-                false,
-                "Hardware popcount should not be selected on non-x86_64 platforms"
+                capabilities.has_popcnt,
+                "Hardware popcount should only be selected when POPCNT is available"
             );
         }
         shogi_engine::bitboards::platform_detection::PopcountImpl::BitParallel => {
-            // SWAR implementation should be selected on WASM and as fallback
-            assert!(true); // Valid on all platforms
+            assert!(
+                !capabilities.has_popcnt,
+                "BitParallel popcount should be used only when hardware POPCNT is unavailable"
+            );
         }
         shogi_engine::bitboards::platform_detection::PopcountImpl::Software => {
             // Software implementation should only be used as final fallback
@@ -69,15 +67,16 @@ fn test_platform_detection_integration() {
 
     match bitscan_impl {
         shogi_engine::bitboards::platform_detection::BitscanImpl::Hardware => {
-            // Hardware implementation should only be selected on native platforms
-            #[cfg(not(target_arch = "wasm32"))]
-            assert!(true); // Expected on native platforms
-            #[cfg(target_arch = "wasm32")]
-            assert!(false, "Hardware bitscan should not be selected on WASM");
+            assert!(
+                capabilities.has_bmi1,
+                "Hardware bitscan should only be selected when BMI1 is available"
+            );
         }
         shogi_engine::bitboards::platform_detection::BitscanImpl::DeBruijn => {
-            // DeBruijn implementation should be selected on WASM and as fallback
-            assert!(true); // Valid on all platforms
+            assert!(
+                !capabilities.has_bmi1,
+                "DeBruijn bitscan should be selected when BMI1 is unavailable"
+            );
         }
         shogi_engine::bitboards::platform_detection::BitscanImpl::Software => {
             // Software implementation should only be used as final fallback
@@ -405,15 +404,10 @@ fn test_existing_bitboard_integration() {
 
 // WASM-specific functionality removed - no longer needed
 
-/// Test native platform functionality
-#[cfg(not(target_arch = "wasm32"))]
+/// Test platform functionality
 #[test]
-fn test_native_platform_functionality() {
+fn test_platform_functionality() {
     let capabilities = get_platform_capabilities();
-
-    // Verify native detection
-    assert!(!capabilities.is_wasm);
-    assert!(!capabilities.is_web_assembly);
 
     // Test that functions work correctly on native platforms
     let test_bitboard = 0x123456789ABCDEF0u128;

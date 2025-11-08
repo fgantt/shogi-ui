@@ -8,8 +8,21 @@ use shogi_engine::search::{
 };
 use shogi_engine::types::{EntrySource, TranspositionEntry, TranspositionFlag};
 
-fn build_entry(hash_key: u64, depth: u8, score: i32, flag: TranspositionFlag) -> TranspositionEntry {
-    TranspositionEntry::new(score, depth, flag, None, hash_key, 0, EntrySource::MainSearch)
+fn build_entry(
+    hash_key: u64,
+    depth: u8,
+    score: i32,
+    flag: TranspositionFlag,
+) -> TranspositionEntry {
+    TranspositionEntry::new(
+        score,
+        depth,
+        flag,
+        None,
+        hash_key,
+        0,
+        EntrySource::MainSearch,
+    )
 }
 
 fn select_level(config: &MultiLevelConfig, depth: u8) -> usize {
