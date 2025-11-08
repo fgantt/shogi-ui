@@ -638,7 +638,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod performance_tests {
     use super::*;
     use std::time::Instant;

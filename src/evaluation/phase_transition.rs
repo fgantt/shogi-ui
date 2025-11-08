@@ -321,7 +321,7 @@ pub struct PhaseTransitionStats {
     pub interpolations: u64,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

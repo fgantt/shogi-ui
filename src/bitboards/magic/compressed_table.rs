@@ -120,7 +120,7 @@ mod tests {
         let compressed = CompressedMagicTable::from_table(table).unwrap();
 
         let stats = compressed.stats();
-        assert!(stats.original_size > 0, "Should have original size");
+        assert!(stats.original_size >= stats.compressed_size);
         assert!(
             stats.compression_ratio >= 1.0,
             "Compression ratio should be >= 1.0"

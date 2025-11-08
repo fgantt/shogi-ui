@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 /// the age of entries in the transposition table for replacement policies.
 /// The counter advances on a fixed node interval for predictable aging.
 pub(crate) const AGE_INCREMENT_INTERVAL: u64 = 10_000;
+const AGE_STAMP_BITS: u32 = 16;
+const AGE_STAMP_MASK: u32 = (1 << AGE_STAMP_BITS) - 1;
+const WRAP_STAMP_MASK: u32 = (1 << (32 - AGE_STAMP_BITS)) - 1;
 
 #[derive(Debug, Clone)]
 pub struct AgeCounter {
@@ -22,14 +25,18 @@ pub struct AgeCounter {
     current_age: u32,
     /// Maximum age before wrapping
     max_age: u32,
+    /// Number of wraps that have occurred (saturating)
+    wrap_count: u32,
 }
 
 impl AgeCounter {
     /// Create a new age counter
     pub fn new(config: &TranspositionConfig) -> Self {
+        debug_assert!(config.max_age <= AGE_STAMP_MASK, "max_age {} exceeds supported range {}", config.max_age, AGE_STAMP_MASK);
         Self {
             current_age: 0,
             max_age: config.max_age,
+            wrap_count: 0,
         }
     }
 
@@ -45,11 +52,7 @@ impl AgeCounter {
     pub fn increment_age(&mut self, node_count: u64) -> bool {
         if node_count != 0 && node_count % AGE_INCREMENT_INTERVAL == 0 {
             self.current_age = self.current_age.wrapping_add(1);
-
-            // Handle age wrapping
-            if self.current_age == 0 {
-                self.current_age = 1; // Start from 1 after wrap
-            }
+            self.enforce_max_age();
 
             true
         } else {
@@ -60,26 +63,80 @@ impl AgeCounter {
     /// Manually increment the age (regardless of frequency)
     pub fn force_increment(&mut self) {
         self.current_age = self.current_age.wrapping_add(1);
-
-        if self.current_age == 0 {
-            self.current_age = 1;
-        }
+        self.enforce_max_age();
     }
 
     /// Check if an entry is expired based on age
     pub fn is_entry_expired(&self, entry_age: u32) -> bool {
-        let age_difference = self.current_age.wrapping_sub(entry_age);
-        age_difference > self.max_age
+        self.age_gap(entry_age) > self.max_age
     }
 
     /// Get the age difference between current age and entry age
     pub fn age_difference(&self, entry_age: u32) -> u32 {
-        self.current_age.wrapping_sub(entry_age)
+        self.age_gap(entry_age)
     }
 
     /// Reset age counter back to zero
     pub fn reset(&mut self) {
         self.current_age = 0;
+        self.wrap_count = 0;
+    }
+
+    fn enforce_max_age(&mut self) {
+        if self.current_age == 0 {
+            self.current_age = 1;
+        } else if self.current_age > self.max_age {
+            self.current_age = 1;
+            if self.wrap_count < WRAP_STAMP_MASK {
+                self.wrap_count += 1;
+            }
+        }
+    }
+
+    fn age_gap(&self, entry_age: u32) -> u32 {
+        if self.current_age == 0 {
+            return 0;
+        }
+
+        let (entry_wrap, entry_age_only) = Self::decode_stamp(entry_age);
+        let entry_age_clamped = entry_age_only.min(self.max_age);
+        let current_wrap = self.wrap_count;
+
+        if current_wrap < entry_wrap {
+            return 0;
+        }
+
+        let wrap_diff = current_wrap - entry_wrap;
+        if wrap_diff == 0 {
+            return self.current_age.saturating_sub(entry_age_clamped);
+        }
+
+        let mut diff = self
+            .max_age
+            .saturating_sub(entry_age_clamped)
+            .saturating_add(self.current_age);
+
+        if wrap_diff > 1 {
+            diff = diff.saturating_add((wrap_diff - 1) * self.max_age);
+        }
+
+        diff
+    }
+
+    pub fn current_age_stamp(&self) -> u32 {
+        Self::encode_stamp(self.wrap_count, self.current_age)
+    }
+
+    pub(crate) fn encode_stamp(wrap: u32, age: u32) -> u32 {
+        let wrap_component = (wrap & WRAP_STAMP_MASK) << AGE_STAMP_BITS;
+        let age_component = age & AGE_STAMP_MASK;
+        wrap_component | age_component
+    }
+
+    pub(crate) fn decode_stamp(stamp: u32) -> (u32, u32) {
+        let age = stamp & AGE_STAMP_MASK;
+        let wrap = stamp >> AGE_STAMP_BITS;
+        (wrap, age)
     }
 }
 
@@ -212,7 +269,7 @@ pub struct WarmingStats {
 }
 
 /// Performance monitoring system
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PerformanceMonitor {
     /// Probe timing data
     probe_times: Vec<Duration>,
@@ -222,6 +279,17 @@ pub struct PerformanceMonitor {
     max_samples: usize,
     /// Performance thresholds
     thresholds: PerformanceThresholds,
+}
+
+impl Default for PerformanceMonitor {
+    fn default() -> Self {
+        Self {
+            probe_times: Vec::new(),
+            store_times: Vec::new(),
+            max_samples: 128,
+            thresholds: PerformanceThresholds::default(),
+        }
+    }
 }
 
 /// Performance thresholds for monitoring
@@ -275,6 +343,11 @@ impl CacheManager {
     /// Get the current age from the age counter
     pub fn current_age(&self) -> u32 {
         self.age_counter.current_age()
+    }
+
+    /// Get the current age stamp (wrap-aware representation)
+    pub fn current_age_stamp(&self) -> u32 {
+        self.age_counter.current_age_stamp()
     }
 
     /// Increment age counter
@@ -352,8 +425,14 @@ impl CacheManager {
         }
 
         let warming_time = start_time.elapsed();
+        let elapsed_ms = warming_time.as_millis() as u64;
+        let warming_time_ms = if elapsed_ms == 0 && !positions.is_empty() {
+            1
+        } else {
+            elapsed_ms
+        };
         self.warming_data.warming_stats.positions_warmed += positions.len() as u64;
-        self.warming_data.warming_stats.warming_time_ms += warming_time.as_millis() as u64;
+        self.warming_data.warming_stats.warming_time_ms += warming_time_ms;
 
         // Update average warming time
         let total_positions = self.warming_data.warming_stats.positions_warmed;
@@ -413,11 +492,19 @@ impl CacheManager {
 
     /// Clean expired entries from warming data
     pub fn clean_expired_warming_entries(&mut self) {
-        let current_age = self.current_age();
+        let mut removed = 0u64;
         self.warming_data.warming_positions.retain(|_, entry| {
-            let age_difference = current_age.wrapping_sub(entry.age);
-            age_difference <= self.config.max_age
+            let age_difference = self.age_counter.age_difference(entry.age);
+            let is_recent = age_difference <= self.config.max_age;
+            if !is_recent {
+                removed += 1;
+            }
+            is_recent
         });
+
+        if removed > 0 {
+            self.cache_stats.expired_removals += removed;
+        }
     }
 }
 
@@ -425,7 +512,7 @@ impl PerformanceMonitor {
     /// Record probe time
     fn record_probe_time(&mut self, duration: Duration) {
         self.probe_times.push(duration);
-        if self.probe_times.len() > self.max_samples {
+        if self.max_samples > 0 && self.probe_times.len() > self.max_samples {
             self.probe_times.remove(0);
         }
     }
@@ -433,7 +520,7 @@ impl PerformanceMonitor {
     /// Record store time
     fn record_store_time(&mut self, duration: Duration) {
         self.store_times.push(duration);
-        if self.store_times.len() > self.max_samples {
+        if self.max_samples > 0 && self.store_times.len() > self.max_samples {
             self.store_times.remove(0);
         }
     }

@@ -561,10 +561,7 @@ impl PerformanceTrendAnalyzer {
         let mut points = self.data_points.lock().unwrap();
 
         // Remove old data points outside the time window
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let current_time = data_point.timestamp;
 
         while let Some(front) = points.front() {
             if current_time - front.timestamp > self.time_window_seconds {

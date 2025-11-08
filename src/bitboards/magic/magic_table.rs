@@ -19,14 +19,12 @@ impl MagicTable {
 
     /// Create a new magic table with custom memory pool
     pub fn with_memory_pool(memory_pool: MemoryPool) -> Result<Self, MagicError> {
-        let mut table = Self {
+        Ok(Self {
             rook_magics: [MagicBitboard::default(); 81],
             bishop_magics: [MagicBitboard::default(); 81],
             attack_storage: Vec::new(),
             memory_pool,
-        };
-        table.initialize_tables()?;
-        Ok(table)
+        })
     }
 
     /// Initialize all magic tables

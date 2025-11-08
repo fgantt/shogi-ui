@@ -26,6 +26,10 @@ impl MemoryPool {
     ///
     /// Returns the base index where the allocated memory starts
     pub fn allocate(&mut self, size: usize) -> Result<usize, MagicError> {
+        if self.blocks.is_empty() {
+            self.allocate_new_block()?;
+        }
+
         // Check if current block has enough space
         if self.current_offset + size <= self.block_size {
             let offset = self.current_offset;
@@ -44,6 +48,7 @@ impl MemoryPool {
         let block = vec![EMPTY_BITBOARD; self.block_size];
         self.blocks.push(block);
         self.current_block = self.blocks.len() - 1;
+        self.current_offset = 0;
         Ok(())
     }
 

@@ -159,16 +159,99 @@ impl KifGame {
     }
 
     /// Convert KIF notation to USI format (simplified)
-    fn kif_to_usi(_kif_text: &str) -> Option<String> {
-        // This is a simplified converter
-        // Real implementation would need full Japanese notation parsing
+    fn kif_to_usi(kif_text: &str) -> Option<String> {
+        // Strip any trailing annotation such as elapsed time or comments after spaces
+        let token = kif_text.split_whitespace().next().unwrap_or(kif_text);
 
-        // For now, skip conversion and return None
-        // This avoids UTF-8 boundary issues with Japanese characters
-        // A full implementation would use proper character-based indexing
+        // Separate the base move (e.g. "７六歩") from optional origin information "(77)"
+        let (base, origin_hint) = match token.split_once('(') {
+            Some((head, tail)) => (head, Some(tail.trim_end_matches(')'))),
+            None => (token, None),
+        };
 
-        // Return None to indicate no conversion available
-        None
+        // Drop moves contain the Japanese character "打"
+        let is_drop = base.ends_with('打');
+        let promotion = base.contains('成');
+
+        // The destination square is described by the first two characters (file, rank)
+        let mut base_chars = base.chars();
+        let file_char = base_chars.next()?;
+        let rank_char = base_chars.next()?;
+
+        let to_file = Self::char_to_digit(file_char)?;
+        let to_rank = Self::char_to_digit(rank_char)?;
+        let to_rank_letter = Self::rank_to_letter(to_rank)?;
+
+        if is_drop {
+            // Determine piece initial for drop (e.g. "歩" -> "P")
+            let piece_char = base_chars.find(|&c| c != '打' && c != '成')?;
+            let piece_code = Self::piece_to_usi_letter(piece_char)?;
+            return Some(format!("{}*{}{}", piece_code, to_file, to_rank_letter));
+        }
+
+        // Determine origin square from the hint (e.g. "77")
+        let origin = origin_hint.and_then(|hint| {
+            let mut chars = hint.chars();
+            let file = chars.next().and_then(Self::char_to_digit)?;
+            let rank = chars.next().and_then(Self::char_to_digit)?;
+            Some((file, rank))
+        })?;
+
+        let from_rank_letter = Self::rank_to_letter(origin.1)?;
+        let mut usi = format!("{}{}{}{}", origin.0, from_rank_letter, to_file, to_rank_letter);
+
+        if promotion {
+            usi.push('+');
+        }
+
+        Some(usi)
+    }
+
+    fn char_to_digit(c: char) -> Option<u8> {
+        match c {
+            '1' | '１' | '一' => Some(1),
+            '2' | '２' | '二' => Some(2),
+            '3' | '３' | '三' => Some(3),
+            '4' | '４' | '四' => Some(4),
+            '5' | '５' | '五' => Some(5),
+            '6' | '６' | '六' => Some(6),
+            '7' | '７' | '七' => Some(7),
+            '8' | '８' | '八' => Some(8),
+            '9' | '９' | '九' => Some(9),
+            _ => None,
+        }
+    }
+
+    fn rank_to_letter(rank: u8) -> Option<char> {
+        match rank {
+            1 => Some('a'),
+            2 => Some('b'),
+            3 => Some('c'),
+            4 => Some('d'),
+            5 => Some('e'),
+            6 => Some('f'),
+            7 => Some('g'),
+            8 => Some('h'),
+            9 => Some('i'),
+            _ => None,
+        }
+    }
+
+    fn piece_to_usi_letter(piece: char) -> Option<&'static str> {
+        match piece {
+            '歩' | '香' | '桂' | '銀' | '金' | '角' | '飛' | '玉' => Some(match piece {
+                '歩' => "P",
+                '香' => "L",
+                '桂' => "N",
+                '銀' => "S",
+                '金' => "G",
+                '角' => "B",
+                '飛' => "R",
+                '玉' => "K",
+                _ => unreachable!(),
+            }),
+            _ => None,
+        }
     }
 
     /// Parse Japanese number to integer
@@ -201,13 +284,13 @@ mod tests {
         assert!(kif_move.is_some());
         let kif_move = kif_move.unwrap();
         assert_eq!(kif_move.move_number, 1);
-        assert_eq!(kif_move.move_text, "７六歩");
+        assert_eq!(kif_move.move_text, "７六歩(77)");
     }
 
     #[test]
     fn test_kif_to_usi() {
         // Test basic pawn move conversion
-        let result = KifGame::kif_to_usi("７六歩");
-        assert!(result.is_some());
+        let result = KifGame::kif_to_usi("７六歩(77)");
+        assert_eq!(result.as_deref(), Some("7g7f"));
     }
 }

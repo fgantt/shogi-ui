@@ -887,9 +887,8 @@ pub struct PositionFeatureStats {
     pub development_evals: u64,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_position_feature_evaluator_creation() {

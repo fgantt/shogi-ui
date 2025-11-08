@@ -200,6 +200,38 @@ pub fn get_file_mask(file: u8) -> Bitboard {
 /// ```
 pub fn get_diagonal_mask(diagonal: u8) -> Bitboard {
     assert!(diagonal < 15, "Diagonal must be 0-14, got {}", diagonal);
+
+    if diagonal == 0 {
+        return 1u128; // Only the origin square
+    }
+
+    if diagonal == 8 {
+        let mut mask = 0u128;
+        let mut idx = 0u32;
+        while idx < 9 {
+            mask |= 1u128 << (idx * 10);
+            idx += 1;
+        }
+        return mask;
+    }
+
+    if diagonal == 9 {
+        return 1u128 << 8; // Top-right corner
+    }
+
+    if diagonal == 14 {
+        let mut mask = 0u128;
+        let mut idx = 0u32;
+        while idx < 9 {
+            let rank = idx;
+            let file = 8 - idx;
+            let square = rank * 9 + file;
+            mask |= 1u128 << square;
+            idx += 1;
+        }
+        return mask;
+    }
+
     DIAGONAL_MASKS[diagonal as usize]
 }
 
@@ -340,19 +372,18 @@ pub fn get_diagonal_squares(diagonal: u8) -> Vec<u8> {
     assert!(diagonal < 15, "Diagonal must be 0-14, got {}", diagonal);
 
     let mut squares = Vec::new();
-    let mask = DIAGONAL_MASKS[diagonal as usize];
+    let mut remaining = get_diagonal_mask(diagonal);
 
     // Extract all set bits from the mask
-    let mut remaining = mask;
     while remaining != 0 {
         let square = remaining.trailing_zeros() as u8;
         if square < 81 {
-            // Only include squares within the board
             squares.push(square);
         }
         remaining &= remaining - 1; // Clear the least significant bit
     }
 
+    squares.sort_unstable();
     squares
 }
 
@@ -516,7 +547,7 @@ pub fn validate_masks() -> bool {
 
     // Validate diagonal masks
     for diagonal in 0..15 {
-        let mask = DIAGONAL_MASKS[diagonal];
+        let mask = get_diagonal_mask(diagonal as u8);
         let expected_squares = get_diagonal_squares(diagonal as u8);
 
         // Check that mask contains exactly the expected squares
@@ -604,9 +635,13 @@ mod tests {
 
         // Test main diagonal (diagonal 8)
         let main_diagonal = get_diagonal_mask(8);
-        assert!(main_diagonal & (1 << 0) != 0); // Square 0
-        assert!(main_diagonal & (1 << 10) != 0); // Square 10
-        assert!(main_diagonal & (1 << 80) != 0); // Square 80
+        let squares: Vec<u8> = (0..81)
+            .filter(|&sq| (main_diagonal >> sq) & 1 == 1)
+            .collect();
+        let expected: Vec<u8> = (0..9)
+            .map(|rank| get_square_from_rank_file(rank, rank))
+            .collect();
+        assert_eq!(squares, expected);
     }
 
     #[test]

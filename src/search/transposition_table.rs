@@ -401,7 +401,10 @@ mod tests {
 
     #[test]
     fn test_probe_empty_table() {
-        let mut table = TranspositionTable::with_size(100);
+        let mut config = TranspositionTableConfig::default();
+        config.max_entries = 100;
+        config.track_statistics = true;
+        let mut table = TranspositionTable::with_config(config);
         let result = table.probe(0x1234567890ABCDEF, 5);
         assert!(result.is_none());
         assert_eq!(table.get_statistics(), (0, 1, 0.0));
@@ -409,7 +412,10 @@ mod tests {
 
     #[test]
     fn test_store_and_probe() {
-        let mut table = TranspositionTable::with_size(100);
+        let mut config = TranspositionTableConfig::default();
+        config.max_entries = 100;
+        config.track_statistics = true;
+        let mut table = TranspositionTable::with_config(config);
 
         let entry = TranspositionEntry::new_with_age(
             100,
@@ -434,7 +440,10 @@ mod tests {
 
     #[test]
     fn test_probe_with_insufficient_depth() {
-        let mut table = TranspositionTable::with_size(100);
+        let mut config = TranspositionTableConfig::default();
+        config.max_entries = 100;
+        config.track_statistics = true;
+        let mut table = TranspositionTable::with_config(config);
 
         let entry = TranspositionEntry::new_with_age(
             100,
@@ -460,7 +469,10 @@ mod tests {
 
     #[test]
     fn test_probe_with_hash_mismatch() {
-        let mut table = TranspositionTable::with_size(100);
+        let mut config = TranspositionTableConfig::default();
+        config.max_entries = 100;
+        config.track_statistics = true;
+        let mut table = TranspositionTable::with_config(config);
 
         let entry = TranspositionEntry::new_with_age(
             100,
@@ -673,9 +685,9 @@ mod tests {
 
     #[test]
     fn test_memory_usage_tracking() {
-        let config = TranspositionTableConfig::default()
-            .with_memory_tracking(true)
-            .with_statistics_tracking(true);
+        let mut config = TranspositionTableConfig::default();
+        config.max_entries = 1024;
+        config = config.with_memory_tracking(true).with_statistics_tracking(true);
         let table = TranspositionTable::with_config(config);
         let memory_usage = table.get_memory_usage();
         assert!(memory_usage > 0);
@@ -744,7 +756,7 @@ mod tests {
             0x1234567890ABCDEF,
         );
 
-        table.store(entry);
+        table.store_with_hash(1, entry);
         assert_eq!(table.get_fill_percentage(), 10.0);
 
         let entry2 = TranspositionEntry::new_with_age(
@@ -755,7 +767,7 @@ mod tests {
             0xFEDCBA0987654321,
         );
 
-        table.store(entry2);
+        table.store_with_hash(2, entry2);
         assert_eq!(table.get_fill_percentage(), 20.0);
     }
 

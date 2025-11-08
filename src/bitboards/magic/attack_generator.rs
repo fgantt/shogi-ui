@@ -584,9 +584,10 @@ mod tests {
         let count = generator.count_attacked_squares(0, PieceType::Rook, EMPTY_BITBOARD);
         assert!(count > 0);
 
-        // Count attacks from center square (should be more)
-        let center_count = generator.count_attacked_squares(40, PieceType::Rook, EMPTY_BITBOARD);
-        assert!(center_count > count);
+        // Bishops have strictly more mobility from the center than the corner
+        let bishop_corner = generator.count_attacked_squares(0, PieceType::Bishop, EMPTY_BITBOARD);
+        let bishop_center = generator.count_attacked_squares(40, PieceType::Bishop, EMPTY_BITBOARD);
+        assert!(bishop_center > bishop_corner);
     }
 
     #[test]

@@ -463,13 +463,13 @@ impl ShogiMoveValidator {
 
         // Check if move is in promotion zone or from promotion zone
         let from_promotion_zone = move_.from.map_or(false, |from| match move_.player {
-            Player::Black => from.row >= 6,
-            Player::White => from.row <= 2,
+            Player::Black => from.row <= 2,
+            Player::White => from.row >= 6,
         });
 
         let to_promotion_zone = match move_.player {
-            Player::Black => move_.to.row >= 6,
-            Player::White => move_.to.row <= 2,
+            Player::Black => move_.to.row <= 2,
+            Player::White => move_.to.row >= 6,
         };
 
         from_promotion_zone || to_promotion_zone

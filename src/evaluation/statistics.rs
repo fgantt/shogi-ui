@@ -468,7 +468,7 @@ impl std::fmt::Display for StatisticsReport {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

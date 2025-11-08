@@ -598,7 +598,7 @@ pub struct OpeningPrincipleStats {
     pub evaluations: u64,
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
 

@@ -117,10 +117,15 @@ impl TablebaseResult {
         outcome: TablebaseOutcome,
         confidence: f32,
     ) -> Self {
+        let moves_to_mate = match distance_to_mate {
+            Some(d) if d > 0 => Some(d as u8),
+            _ => None,
+        };
+
         Self {
             best_move,
             distance_to_mate,
-            moves_to_mate: distance_to_mate.map(|d| d.abs() as u8),
+            moves_to_mate,
             outcome,
             confidence,
         }
@@ -183,7 +188,7 @@ impl TablebaseResult {
             }
             TablebaseOutcome::Loss => {
                 if let Some(distance) = self.distance_to_mate {
-                    -10000 - distance
+                    -10000 - distance.abs()
                 } else {
                     -10000
                 }

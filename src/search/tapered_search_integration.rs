@@ -305,7 +305,7 @@ impl Default for TaperedSearchConfig {
             enable_phase_extensions: true,
             opening_pruning_margin: 150,
             middlegame_pruning_margin: 100,
-            endgame_pruning_margin: 75,
+            endgame_pruning_margin: 50,
         }
     }
 }

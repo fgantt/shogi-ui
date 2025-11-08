@@ -438,7 +438,11 @@ impl DynamicTableSizer {
 
     /// Apply resize decision
     pub fn apply_resize(&mut self, decision: &ResizeDecision) {
-        self.current_size = decision.new_size;
+        let clamped_size = decision
+            .new_size
+            .max(self.config.min_table_size)
+            .min(self.config.max_table_size);
+        self.current_size = clamped_size;
         self.last_resize = Instant::now();
     }
 
@@ -663,7 +667,10 @@ impl DynamicTableSizer {
     fn make_resize_decision(&self) -> Option<ResizeDecision> {
         let mut reasons = Vec::new();
         let mut confidence: f64 = 0.0;
-        let mut new_size = self.current_size;
+        let mut downsizing_factor: f64 = 1.0;
+        let mut upsizing_factor: f64 = 1.0;
+        let mut downsizing_requested = false;
+        let mut upsizing_requested = false;
 
         // Check memory pressure
         if self.config.memory_monitoring.enable_memory_pressure
@@ -674,7 +681,8 @@ impl DynamicTableSizer {
             confidence += 0.8;
 
             // Downsize due to memory pressure
-            new_size = (new_size as f64 * 0.8) as usize;
+            downsizing_factor *= 0.8;
+            downsizing_requested = true;
         }
 
         // Check performance thresholds
@@ -690,7 +698,8 @@ impl DynamicTableSizer {
                 confidence += 0.6;
 
                 // Upsize to improve hit rate
-                new_size = (new_size as f64 * 1.2) as usize;
+                upsizing_factor *= 1.2;
+                upsizing_requested = true;
             } else if self.performance_stats.hit_rate
                 > self.config.performance_monitoring.hit_rate_threshold + 0.1
             {
@@ -698,7 +707,8 @@ impl DynamicTableSizer {
                 confidence += 0.4;
 
                 // Can afford larger table
-                new_size = (new_size as f64 * 1.1) as usize;
+                upsizing_factor *= 1.1;
+                upsizing_requested = true;
             }
         }
 
@@ -713,13 +723,15 @@ impl DynamicTableSizer {
                 confidence += 0.5;
 
                 // High concentration suggests smaller table might be sufficient
-                new_size = (new_size as f64 * 0.9) as usize;
+                downsizing_factor *= 0.9;
+                downsizing_requested = true;
             } else if self.access_analysis.access_locality < 0.3 {
                 reasons.push(ResizeReason::AccessPattern);
                 confidence += 0.3;
 
                 // Low locality suggests larger table might help
-                new_size = (new_size as f64 * 1.15) as usize;
+                upsizing_factor *= 1.15;
+                upsizing_requested = true;
             }
         }
 
@@ -729,7 +741,21 @@ impl DynamicTableSizer {
             confidence += 0.7;
 
             // Try upsizing to improve performance
-            new_size = (new_size as f64 * 1.3) as usize;
+            upsizing_factor *= 1.3;
+            upsizing_requested = true;
+        }
+
+        // Determine final multiplier with downsizing taking precedence
+        let mut size_multiplier = 1.0;
+        if downsizing_requested {
+            size_multiplier = downsizing_factor.min(1.0);
+        } else if upsizing_requested {
+            size_multiplier = upsizing_factor.max(1.0);
+        }
+
+        let mut new_size = ((self.current_size as f64) * size_multiplier).round() as usize;
+        if new_size == 0 {
+            new_size = 1;
         }
 
         // Apply size constraints
@@ -738,22 +764,26 @@ impl DynamicTableSizer {
             .min(self.config.max_table_size);
 
         // Only resize if there's a significant change and sufficient confidence
-        let size_change_ratio = (new_size as f64 / self.current_size as f64).abs();
-        if size_change_ratio > 1.1 || size_change_ratio < 0.9 {
-            if confidence > 0.3 {
-                let expected_impact = self.calculate_expected_impact(new_size);
+        let size_change_ratio = if self.current_size > 0 {
+            new_size as f64 / self.current_size as f64
+        } else {
+            1.0
+        };
+        let significant_change = size_change_ratio > 1.1 || size_change_ratio < 0.9;
 
-                return Some(ResizeDecision {
-                    new_size,
-                    reason: reasons
-                        .first()
-                        .copied()
-                        .unwrap_or(ResizeReason::PeriodicMaintenance),
-                    confidence: confidence.min(1.0),
-                    expected_impact,
-                    timestamp: Instant::now(),
-                });
-            }
+        if significant_change && confidence > 0.3 {
+            let expected_impact = self.calculate_expected_impact(new_size);
+
+            return Some(ResizeDecision {
+                new_size,
+                reason: reasons
+                    .first()
+                    .copied()
+                    .unwrap_or(ResizeReason::PeriodicMaintenance),
+                confidence: confidence.min(1.0),
+                expected_impact,
+                timestamp: Instant::now(),
+            });
         }
 
         None

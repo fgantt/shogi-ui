@@ -483,6 +483,24 @@ impl PredictivePrefetcher {
             }
         }
 
+        if predicted_hashes.is_empty() {
+            // Fall back to depth-based heuristics to ensure we always have predictions
+            let fallback_hashes = self.predict_depth_based_hashes(
+                current_hash,
+                self.config.prefetch_depth.max(1),
+            );
+
+            for hash in fallback_hashes
+                .into_iter()
+                .take(self.config.max_prefetch_entries - predicted_hashes.len())
+            {
+                if !predicted_hashes.contains(&hash) {
+                    predicted_hashes.push(hash);
+                    confidence_scores.push(0.3);
+                }
+            }
+        }
+
         PrefetchPrediction {
             predicted_hashes,
             confidence_scores,
@@ -587,12 +605,15 @@ impl PredictivePrefetcher {
         // Choose best strategy based on recent performance
         let best_strategy = self.select_best_strategy();
 
-        match best_strategy {
+        let mut prediction = match best_strategy {
             PrefetchStrategy::MoveBased => self.predict_move_based(current_hash, current_move),
             PrefetchStrategy::DepthBased => self.predict_depth_based(current_hash),
             PrefetchStrategy::PatternBased => self.predict_pattern_based(current_hash),
             _ => self.predict_hybrid(current_hash, current_move),
-        }
+        };
+
+        prediction.strategy_used = PrefetchStrategy::Adaptive;
+        prediction
     }
 
     /// Predict likely follow-up moves
@@ -799,6 +820,10 @@ impl PredictivePrefetcher {
 
         // Find repeating patterns
         for window_size in 3..=8 {
+            if recent_accesses.len() < window_size {
+                continue;
+            }
+
             for start in 0..=recent_accesses.len().saturating_sub(window_size) {
                 let pattern: Vec<u64> = recent_accesses[start..start + window_size]
                     .iter()

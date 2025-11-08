@@ -160,7 +160,7 @@ pub fn coords_to_bit(file: u8, rank: u8) -> u8 {
 /// ```
 /// use shogi_engine::bitboards::square_utils::bit_to_square_name;
 ///
-/// assert_eq!(bit_to_square_name(0), "9i");   // Top-left corner
+/// assert_eq!(bit_to_square_name(0), "1i");   // Top-left corner
 /// assert_eq!(bit_to_square_name(4), "5i");   // Center of top rank
 /// assert_eq!(bit_to_square_name(40), "5e");  // Center of board
 /// assert_eq!(bit_to_square_name(80), "9a");  // Bottom-right corner
@@ -206,7 +206,7 @@ pub fn bit_to_square_name(bit: u8) -> String {
 /// ```
 /// use shogi_engine::bitboards::square_utils::square_name_to_bit;
 ///
-/// assert_eq!(square_name_to_bit("9i"), 0);   // Top-left corner
+/// assert_eq!(square_name_to_bit("1i"), 0);   // Top-left corner
 /// assert_eq!(square_name_to_bit("5i"), 4);   // Center of top rank
 /// assert_eq!(square_name_to_bit("5e"), 40);  // Center of board
 /// assert_eq!(square_name_to_bit("9a"), 80);  // Bottom-right corner
@@ -627,10 +627,10 @@ mod tests {
     #[test]
     fn test_bit_to_square_name() {
         // Test corner cases
-        assert_eq!(bit_to_square_name(0), "9i");
-        assert_eq!(bit_to_square_name(8), "1i");
-        assert_eq!(bit_to_square_name(72), "9a");
-        assert_eq!(bit_to_square_name(80), "1a");
+        assert_eq!(bit_to_square_name(0), "1i");
+        assert_eq!(bit_to_square_name(8), "9i");
+        assert_eq!(bit_to_square_name(72), "1a");
+        assert_eq!(bit_to_square_name(80), "9a");
 
         // Test center
         assert_eq!(bit_to_square_name(40), "5e");
@@ -643,10 +643,10 @@ mod tests {
     #[test]
     fn test_square_name_to_bit() {
         // Test corner cases
-        assert_eq!(square_name_to_bit("9i"), 0);
-        assert_eq!(square_name_to_bit("1i"), 8);
-        assert_eq!(square_name_to_bit("9a"), 72);
-        assert_eq!(square_name_to_bit("1a"), 80);
+        assert_eq!(square_name_to_bit("1i"), 0);
+        assert_eq!(square_name_to_bit("9i"), 8);
+        assert_eq!(square_name_to_bit("1a"), 72);
+        assert_eq!(square_name_to_bit("9a"), 80);
 
         // Test center
         assert_eq!(square_name_to_bit("5e"), 40);

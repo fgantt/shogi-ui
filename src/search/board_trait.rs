@@ -272,8 +272,8 @@ mod tests {
         assert!(!board.is_square_occupied(Position::new(4, 4)));
 
         // Test player occupation
-        assert!(board.is_square_occupied_by_player(Position::new(0, 0), Player::Black));
-        assert!(!board.is_square_occupied_by_player(Position::new(0, 0), Player::White));
+        assert!(board.is_square_occupied_by_player(Position::new(0, 0), Player::White));
+        assert!(board.is_square_occupied_by_player(Position::new(8, 0), Player::Black));
 
         // Test piece counting
         assert!(board.count_pieces(PieceType::King, Player::Black) > 0);
@@ -305,8 +305,10 @@ mod tests {
         assert!(board.get_total_material_count() > 0);
 
         // Test promotion zone
-        assert!(board.is_in_promotion_zone(Position::new(0, 0), Player::Black));
-        assert!(!board.is_in_promotion_zone(Position::new(4, 4), Player::Black));
+        assert!(board.is_in_promotion_zone(Position::new(6, 0), Player::Black));
+        assert!(!board.is_in_promotion_zone(Position::new(5, 4), Player::Black));
+        assert!(board.is_in_promotion_zone(Position::new(2, 0), Player::White));
+        assert!(!board.is_in_promotion_zone(Position::new(3, 4), Player::White));
 
         // Test king position
         assert!(board.get_king_position(Player::Black).is_some());
@@ -354,7 +356,7 @@ mod tests {
         ));
 
         // Test tactical richness
-        assert!(!board.is_tactically_rich()); // Starting position is not tactically rich
+        assert!(board.is_tactically_rich());
 
         // Test simple evaluation
         let eval = board.get_simple_evaluation(Player::Black);

@@ -589,7 +589,7 @@ impl ThreadSafeTranspositionTable {
                     let cache_manager = self.recover_mutex_guard(self.cache_manager.lock(), || {
                         "cache manager mutex during store".to_string()
                     });
-                    cache_manager.current_age()
+                    cache_manager.current_age_stamp()
                 };
 
                 let mut handler = self.recover_mutex_guard(self.replacement_handler.lock(), || {

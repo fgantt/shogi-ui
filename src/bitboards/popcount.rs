@@ -206,7 +206,7 @@ pub fn is_single_bit(bb: Bitboard) -> bool {
 /// # Returns
 /// True if more than one bit is set, false otherwise
 pub fn is_multiple_bits(bb: Bitboard) -> bool {
-    bb & (bb - 1) != 0
+    bb != 0 && (bb & (bb - 1)) != 0
 }
 
 /// Check if a bitboard is empty (no bits set)

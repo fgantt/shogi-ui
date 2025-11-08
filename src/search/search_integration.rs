@@ -16,6 +16,8 @@ use crate::types::*;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+const MAX_QUIESCENCE_DEPTH: u8 = 4;
+
 /// Enhanced search engine with integrated transposition table
 pub struct EnhancedSearchEngine {
     /// Thread-safe transposition table
@@ -120,6 +122,7 @@ impl EnhancedSearchEngine {
                 alpha,
                 beta,
                 time_limit_ms,
+                MAX_QUIESCENCE_DEPTH,
             )?);
         }
 
@@ -293,11 +296,16 @@ impl EnhancedSearchEngine {
         alpha: i32,
         beta: i32,
         time_limit_ms: u32,
+        remaining_depth: u8,
     ) -> TranspositionResult<i32> {
         let start_time = Instant::now();
 
         // Check time limit
         if start_time.elapsed().as_millis() > time_limit_ms as u128 {
+            return Ok(self.evaluator.evaluate(board, player, captured_pieces));
+        }
+
+        if remaining_depth == 0 {
             return Ok(self.evaluator.evaluate(board, player, captured_pieces));
         }
 
@@ -334,6 +342,7 @@ impl EnhancedSearchEngine {
                 -beta,
                 -alpha,
                 time_limit_ms,
+                remaining_depth.saturating_sub(1),
             )?;
 
             if score > best_score {

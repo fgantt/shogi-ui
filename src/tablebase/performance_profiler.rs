@@ -163,6 +163,11 @@ impl TablebaseProfiler {
         // End any current operation
         self.end_operation();
 
+        if !self.metrics.contains_key(&operation_name) {
+            self.metrics
+                .insert(operation_name.clone(), PerformanceMetrics::new());
+        }
+
         self.current_operation = Some(operation_name);
         self.start_time = Some(TimeSource::now());
     }

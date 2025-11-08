@@ -4,6 +4,7 @@
 //! including depth-preferred, age-based, and combined strategies that optimize
 //! hit rates and search performance.
 
+use crate::search::cache_management::AgeCounter;
 use crate::search::transposition_config::{ReplacementPolicy, TranspositionConfig};
 use crate::types::*;
 
@@ -184,8 +185,7 @@ impl ReplacementPolicyHandler {
         _new_entry: &TranspositionEntry,
         current_age: u32,
     ) -> ReplacementDecision {
-        let existing_age = existing.age;
-        let age_difference = current_age.saturating_sub(existing_age);
+        let age_difference = self.age_delta(current_age, existing.age);
 
         // Replace very old entries
         if age_difference > self.config.max_age {
@@ -219,7 +219,9 @@ impl ReplacementPolicyHandler {
         if new_score > existing_score {
             // Determine which factor contributed most
             let depth_advantage = new_entry.depth as i32 - existing.depth as i32;
-            let age_advantage = existing.age as i32 - new_entry.age as i32;
+            let existing_age_gap = self.age_delta(current_age, existing.age) as i32;
+            let new_age_gap = self.age_delta(current_age, new_entry.age) as i32;
+            let age_advantage = existing_age_gap - new_age_gap;
 
             if depth_advantage > age_advantage {
                 self.stats.depth_preferred_replacements += 1;
@@ -247,7 +249,6 @@ impl ReplacementPolicyHandler {
 
         // Always replace non-exact with exact
         if !existing_is_exact && new_is_exact {
-            self.stats.exact_replacements += 1;
             return ReplacementDecision::Replace;
         }
 
@@ -259,7 +260,6 @@ impl ReplacementPolicyHandler {
         // Both exact - use depth preference
         if existing_is_exact && new_is_exact {
             if new_entry.depth > existing.depth {
-                self.stats.exact_replacements += 1;
                 return ReplacementDecision::Replace;
             }
         }
@@ -280,7 +280,8 @@ impl ReplacementPolicyHandler {
     /// Higher scores indicate better entries that should be kept.
     fn calculate_entry_score(&self, entry: &TranspositionEntry, current_age: u32) -> i32 {
         let depth_score = entry.depth as i32 * 1000;
-        let age_score = (self.config.max_age as i32 - (current_age - entry.age) as i32).max(0);
+        let age_gap = self.age_delta(current_age, entry.age) as i32;
+        let age_score = (self.config.max_age as i32 - age_gap).max(0);
         let bound_score = self.get_bound_quality(entry) as i32 * 100;
 
         depth_score + age_score + bound_score
@@ -301,21 +302,40 @@ impl ReplacementPolicyHandler {
         existing: &TranspositionEntry,
         new_entry: &TranspositionEntry,
     ) {
-        if new_entry.depth > existing.depth {
-            self.stats.depth_preferred_replacements += 1;
+        if new_entry.is_exact() {
+            self.stats.exact_replacements += 1;
         }
 
-        if new_entry.age > existing.age {
-            self.stats.age_based_replacements += 1;
+        if new_entry.is_exact() && !existing.is_exact() {
+            self.stats.bound_replacements += 1;
+        }
+    }
+
+    fn age_delta(&self, current_stamp: u32, entry_stamp: u32) -> u32 {
+        let (current_wrap, current_age) = AgeCounter::decode_stamp(current_stamp);
+        let (entry_wrap, entry_age_raw) = AgeCounter::decode_stamp(entry_stamp);
+
+        if current_wrap < entry_wrap {
+            return 0;
         }
 
-        match new_entry.flag {
-            TranspositionFlag::Exact => {
-                self.stats.exact_replacements += 1;
+        let entry_age = entry_age_raw.min(self.config.max_age);
+        let wrap_diff = current_wrap - entry_wrap;
+
+        if wrap_diff == 0 {
+            current_age.saturating_sub(entry_age)
+        } else {
+            let mut diff = self
+                .config
+                .max_age
+                .saturating_sub(entry_age)
+                .saturating_add(current_age);
+
+            if wrap_diff > 1 {
+                diff = diff.saturating_add((wrap_diff - 1) * self.config.max_age);
             }
-            _ => {
-                self.stats.bound_replacements += 1;
-            }
+
+            diff
         }
     }
 
@@ -388,6 +408,7 @@ pub struct OptimizedReplacementMaker {
     age_threshold: u32,
     /// Current policy
     policy: ReplacementPolicy,
+    max_age: u32,
 }
 
 impl OptimizedReplacementMaker {
@@ -397,6 +418,7 @@ impl OptimizedReplacementMaker {
             depth_threshold: 3,                // Replace if depth difference > 3
             age_threshold: config.max_age / 4, // Replace if age difference > max_age/4
             policy: config.replacement_policy,
+            max_age: config.max_age,
         }
     }
 
@@ -418,11 +440,13 @@ impl OptimizedReplacementMaker {
                         && self.get_bound_quality(new_entry) > self.get_bound_quality(existing)
             }
             ReplacementPolicy::AgeBased => {
-                current_age.saturating_sub(existing.age) > self.age_threshold
+                self.age_delta(current_age, existing.age) > self.age_threshold
             }
             ReplacementPolicy::DepthAndAge => {
                 let depth_advantage = new_entry.depth as i32 - existing.depth as i32;
-                let age_advantage = existing.age as i32 - new_entry.age as i32;
+                let age_advantage =
+                    self.age_delta(current_age, existing.age) as i32
+                        - self.age_delta(current_age, new_entry.age) as i32;
                 depth_advantage > 0 || age_advantage > self.age_threshold as i32
             }
             ReplacementPolicy::ExactPreferred => {
@@ -440,6 +464,33 @@ impl OptimizedReplacementMaker {
             TranspositionFlag::Exact => 3,
             TranspositionFlag::LowerBound => 2,
             TranspositionFlag::UpperBound => 1,
+        }
+    }
+
+    fn age_delta(&self, current_stamp: u32, entry_stamp: u32) -> u32 {
+        let (current_wrap, current_age) = AgeCounter::decode_stamp(current_stamp);
+        let (entry_wrap, entry_age_raw) = AgeCounter::decode_stamp(entry_stamp);
+
+        if current_wrap < entry_wrap {
+            return 0;
+        }
+
+        let entry_age = entry_age_raw.min(self.max_age);
+        let wrap_diff = current_wrap - entry_wrap;
+
+        if wrap_diff == 0 {
+            current_age.saturating_sub(entry_age)
+        } else {
+            let mut diff = self
+                .max_age
+                .saturating_sub(entry_age)
+                .saturating_add(current_age);
+
+            if wrap_diff > 1 {
+                diff = diff.saturating_add((wrap_diff - 1) * self.max_age);
+            }
+
+            diff
         }
     }
 }
