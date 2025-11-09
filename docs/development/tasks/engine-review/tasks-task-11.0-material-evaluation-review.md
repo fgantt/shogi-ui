@@ -61,7 +61,7 @@ Task 11.0 focuses on bringing the material evaluation subsystem in line with the
 - [x] **3.0 🔴 Externalized Material Value Sets**
 - [x] **4.0 🟡 Observability & Telemetry Expansion**
 - [x] **5.0 🟡 Performance & Scalability Enhancements**
-- [ ] **6.0 🟡 Test Coverage & Edge Case Validation**
+- [x] **6.0 🟡 Test Coverage & Edge Case Validation**
 - [ ] **7.0 🔵 Documentation, Release Notes, and Rollout**
 - [ ] **8.0 🔵 Post-Deployment Monitoring & Follow-up**
 
@@ -195,18 +195,18 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Guarantee correctness across Shogi-specific scenarios and prevent regressions.
 
-- [ ] **6.1 Board & Hand Scenarios**
-  - [ ] 6.1.1 Add tests covering large hand inventories (e.g., nine pawns, multiple major pieces).  
-  - [ ] 6.1.2 Validate promoted capture handling (board pieces captured, demoted in hand).  
-  - [ ] 6.1.3 Ensure symmetry for mirrored positions and both players.
-- [ ] **6.2 Impasse & Special Rules**
-  - [ ] 6.2.1 Verify material scoring at impasse thresholds (24/27 points) remains accurate with new tables.  
-  - [ ] 6.2.2 Evaluate hand-value heuristics versus drop restrictions (knights/lances near promotion zone); adjust or document limitations.  
-  - [ ] 6.2.3 Add tests for repetition scenarios to confirm statistics reset between evaluations.
-- [ ] **6.3 Regression Harness**
-  - [ ] 6.3.1 Integrate material-only evaluation regression suite (positions + expected scores).  
-  - [ ] 6.3.2 Provide fixtures for tuning teams to validate custom tables.  
-  - [ ] 6.3.3 Ensure tests are included in CI gating (fast subset + extended nightly).
+- [x] **6.1 Board & Hand Scenarios**
+  - [x] 6.1.1 Add tests covering large hand inventories (e.g., nine pawns, multiple major pieces).  
+  - [x] 6.1.2 Validate promoted capture handling (board pieces captured, demoted in hand).  
+  - [x] 6.1.3 Ensure symmetry for mirrored positions and both players.
+- [x] **6.2 Impasse & Special Rules**
+  - [x] 6.2.1 Verify material scoring at impasse thresholds (24/27 points) remains accurate with new tables.  
+  - [x] 6.2.2 Evaluate hand-value heuristics versus drop restrictions (knights/lances near promotion zone); adjust or document limitations.  
+  - [x] 6.2.3 Add tests for repetition scenarios to confirm statistics reset between evaluations.
+- [x] **6.3 Regression Harness**
+  - [x] 6.3.1 Integrate material-only evaluation regression suite (positions + expected scores).  
+  - [x] 6.3.2 Provide fixtures for tuning teams to validate custom tables.  
+  - [x] 6.3.3 Ensure tests are included in CI gating (fast subset + extended nightly).
 
 **Exit Criteria:** Test suite covers identified edge cases; CI runs enforce material correctness.
 
@@ -321,6 +321,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Testing:** Extended unit coverage to verify delta parity and contribution accounting; added a feature-gated cross-check (`cargo test --features material_fast_loop material_delta`) to compare legacy vs. fast loops; integration tests confirm telemetry resets after config updates.
 - **Benchmarks:** Expanded `material_evaluation_performance_benchmarks.rs` with heavy board, hand-inventory, promoted, and ablation scenarios. Latest run shows board-heavy evaluations dropping from ~233 ns to ~41 ns (~6.1×) when the fast loop is enabled. Results are logged in `docs/development/tasks/engine-performance-analysis.md`.
 - **Documentation:** Updated configuration guides with the new flag, captured profiling notes in the performance analysis document, and recorded rollout guidance (opt-in default, parity validation workflow) in the task plan.
+
+### Task 6.0 — Test Coverage & Edge Case Validation
+
+- **Implementation:** Added dedicated edge-case tests covering massive hand inventories, promoted capture demotion flow, impasse thresholds, and stats resets; introduced a reusable regression harness with curated positions and expected tapered scores.
+- **Testing:** New suites (`material_edge_case_tests`, `material_regression_tests`) run under `cargo test`, including feature-gated fast-loop parity checks to guard optimization rollouts.
+- **Documentation:** Task checklist updated to reflect expanded coverage; benchmark document references the regression harness for future tuning verification.
 
 ---
 
