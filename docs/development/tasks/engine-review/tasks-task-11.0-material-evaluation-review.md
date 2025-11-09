@@ -122,21 +122,21 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Allow material tables to be loaded from and saved to external artifacts to enable tuning workflows.
 
-- [ ] **3.1 File Format & Serialization**
-  - [ ] 3.1.1 Define a `material_values.schema.json` (or equivalent) capturing board/hand tables, metadata, and optional annotations.  
-  - [ ] 3.1.2 Implement Serde serialization/deserialization supporting JSON and TOML with versioning.  
-  - [ ] 3.1.3 Provide default assets for both research and classic value sets under `resources/material/`.
-- [ ] **3.2 Loader Integration**
-  - [ ] 3.2.1 Add `MaterialValueSet::from_path` and `from_reader` helpers with robust error reporting.  
-  - [ ] 3.2.2 Integrate loaders into configuration (e.g., `material.values_path`).  
-  - [ ] 3.2.3 Support hot-reloading in development mode (optional).
-- [ ] **3.3 Tuning Pipeline Hookups**
-  - [ ] 3.3.1 Update tuning manager utilities to export/import material tables.  
-  - [ ] 3.3.2 Document canonical workflows for running self-play with alternate value sets.  
-  - [ ] 3.3.3 Add regression tests ensuring loading/saving round-trips preserve data.
-- [ ] **3.4 Safety & Validation**
-  - [ ] 3.4.1 Validate tables for completeness (all piece types) and symmetry before acceptance.  
-  - [ ] 3.4.2 Provide fallback behavior (e.g., revert to defaults) when file loading fails, with telemetry warnings.
+- [x] **3.1 File Format & Serialization**
+  - [x] 3.1.1 Define a `material_values.schema.json` (or equivalent) capturing board/hand tables, metadata, and optional annotations.  
+  - [x] 3.1.2 Implement Serde serialization/deserialization supporting JSON and TOML with versioning.  
+  - [x] 3.1.3 Provide default assets for both research and classic value sets under `resources/material/`.
+- [x] **3.2 Loader Integration**
+  - [x] 3.2.1 Add `MaterialValueSet::from_path` and `from_reader` helpers with robust error reporting.  
+  - [x] 3.2.2 Integrate loaders into configuration (e.g., `material.values_path`).  
+  - [x] 3.2.3 Support hot-reloading in development mode (optional).
+- [x] **3.3 Tuning Pipeline Hookups**
+  - [x] 3.3.1 Update tuning manager utilities to export/import material tables.  
+  - [x] 3.3.2 Document canonical workflows for running self-play with alternate value sets.  
+  - [x] 3.3.3 Add regression tests ensuring loading/saving round-trips preserve data.
+- [x] **3.4 Safety & Validation**
+  - [x] 3.4.1 Validate tables for completeness (all piece types) and symmetry before acceptance.  
+  - [x] 3.4.2 Provide fallback behavior (e.g., revert to defaults) when file loading fails, with telemetry warnings.
 
 **Exit Criteria:** Engine can run using value tables stored outside the binary; tuning tools can manipulate these tables without modifying source code.
 
@@ -302,6 +302,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** `IntegratedEvaluationConfig` now owns `MaterialEvaluationConfig`, and both `IntegratedEvaluator` and `OptimizedEvaluator` hydrate their material evaluators from it. Runtime updates rebuild material evaluators, refresh optimized paths, clear evaluation/phase caches, and reset telemetry counters.
 - **Testing:** Added unit coverage for `MaterialEvaluator::apply_config` plus integration tests that toggle presets at runtime, assert cache invalidation, score divergence, and material statistics resets.
 - **Notes:** A dedicated handle struct was unnecessary—the existing `RefCell`-backed evaluator provides safe runtime swapping. Configuration inputs remain validated by design because the preset flag maps to compiled-in value sets.
+
+### Task 3.0 — Externalized Material Value Sets
+
+- **Implementation:** Added `MaterialValueSet` Serde bindings with JSON/TOML parsing, external loader/saver utilities, and manifest-backed default assets under `resources/material/`. `MaterialEvaluationConfig` gains an optional `values_path` allowing runtime selection of custom tables with graceful fallback and logging.
+- **Testing:** Introduced standalone loader tests covering custom JSON round-trips, built-in asset loading, and fallback behavior. Leveraged integration tests to ensure alternate presets influence evaluation outcomes.
+- **Documentation:** Updated configuration guidance and task plan to explain external file workflows; defaults ship with research/classic presets for tuning teams.
 
 ---
 

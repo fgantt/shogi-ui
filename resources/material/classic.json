@@ -1,0 +1,41 @@
+{
+  "id": "classic",
+  "display_name": "Classic Value Set",
+  "description": "Legacy material values retained for backward compatibility and regression testing.",
+  "source": "Legacy engine defaults",
+  "version": "2023.04",
+  "last_updated": "2024-07-15",
+  "board_values": [
+    { "mg": 100, "eg": 110 },
+    { "mg": 280, "eg": 300 },
+    { "mg": 320, "eg": 330 },
+    { "mg": 430, "eg": 440 },
+    { "mg": 500, "eg": 500 },
+    { "mg": 780, "eg": 820 },
+    { "mg": 950, "eg": 1020 },
+    { "mg": 20000, "eg": 20000 },
+    { "mg": 480, "eg": 520 },
+    { "mg": 480, "eg": 520 },
+    { "mg": 500, "eg": 530 },
+    { "mg": 500, "eg": 530 },
+    { "mg": 1150, "eg": 1220 },
+    { "mg": 1320, "eg": 1450 }
+  ],
+  "hand_values": [
+    { "mg": 105, "eg": 115 },
+    { "mg": 300, "eg": 310 },
+    { "mg": 340, "eg": 350 },
+    { "mg": 450, "eg": 460 },
+    { "mg": 520, "eg": 520 },
+    { "mg": 820, "eg": 860 },
+    { "mg": 990, "eg": 1080 },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ]
+}
+

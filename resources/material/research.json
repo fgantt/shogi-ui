@@ -1,0 +1,41 @@
+{
+  "id": "research",
+  "display_name": "Research Value Set",
+  "description": "Default tuned material values used for production play.",
+  "source": "Internal tuning study",
+  "version": "2024.10",
+  "last_updated": "2025-08-10",
+  "board_values": [
+    { "mg": 100, "eg": 120 },
+    { "mg": 300, "eg": 280 },
+    { "mg": 350, "eg": 320 },
+    { "mg": 450, "eg": 460 },
+    { "mg": 500, "eg": 520 },
+    { "mg": 800, "eg": 850 },
+    { "mg": 1000, "eg": 1100 },
+    { "mg": 20000, "eg": 20000 },
+    { "mg": 500, "eg": 550 },
+    { "mg": 500, "eg": 540 },
+    { "mg": 520, "eg": 550 },
+    { "mg": 520, "eg": 550 },
+    { "mg": 1200, "eg": 1300 },
+    { "mg": 1400, "eg": 1550 }
+  ],
+  "hand_values": [
+    { "mg": 110, "eg": 130 },
+    { "mg": 320, "eg": 300 },
+    { "mg": 370, "eg": 350 },
+    { "mg": 480, "eg": 490 },
+    { "mg": 530, "eg": 550 },
+    { "mg": 850, "eg": 920 },
+    { "mg": 1050, "eg": 1180 },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ]
+}
+

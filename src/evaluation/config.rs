@@ -120,6 +120,7 @@ impl TaperedEvalConfig {
             material: MaterialEvaluationConfig {
                 include_hand_pieces: true,
                 use_research_values: true,
+                values_path: None,
             },
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,
@@ -147,6 +148,7 @@ impl TaperedEvalConfig {
             material: MaterialEvaluationConfig {
                 include_hand_pieces: true,
                 use_research_values: true,
+                values_path: None,
             },
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Advanced,
@@ -186,6 +188,7 @@ impl TaperedEvalConfig {
             material: MaterialEvaluationConfig {
                 include_hand_pieces: true,
                 use_research_values: true,
+                values_path: None,
             },
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,

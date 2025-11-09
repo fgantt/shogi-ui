@@ -12,6 +12,7 @@ pub mod endgame_patterns;
 pub mod integration;
 pub mod king_safety;
 pub mod material;
+pub mod material_value_loader;
 pub mod opening_principles;
 pub mod patterns;
 pub mod performance;

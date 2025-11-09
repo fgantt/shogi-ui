@@ -239,6 +239,7 @@ fn benchmark_configurations(c: &mut Criterion) {
             MaterialEvaluationConfig {
                 include_hand_pieces: false,
                 use_research_values: true,
+                values_path: None,
             },
         ),
     ];

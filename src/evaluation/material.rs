@@ -27,8 +27,14 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
+use crate::debug_utils::debug_log;
+use crate::evaluation::material_value_loader::MaterialValueLoader;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use serde_json;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use toml;
 
 macro_rules! ts {
     ($mg:expr, $eg:expr) => {
@@ -36,107 +42,67 @@ macro_rules! ts {
     };
 }
 
-const RESEARCH_BOARD_VALUES: [TaperedScore; PieceType::COUNT] = [
-    ts!(100, 120),     // Pawn
-    ts!(300, 280),     // Lance
-    ts!(350, 320),     // Knight
-    ts!(450, 460),     // Silver
-    ts!(500, 520),     // Gold
-    ts!(800, 850),     // Bishop
-    ts!(1000, 1100),   // Rook
-    ts!(20000, 20000), // King
-    ts!(500, 550),     // PromotedPawn
-    ts!(500, 540),     // PromotedLance
-    ts!(520, 550),     // PromotedKnight
-    ts!(520, 550),     // PromotedSilver
-    ts!(1200, 1300),   // PromotedBishop
-    ts!(1400, 1550),   // PromotedRook
-];
-
-const RESEARCH_HAND_VALUES: [Option<TaperedScore>; PieceType::COUNT] = [
-    Some(ts!(110, 130)),   // Pawn
-    Some(ts!(320, 300)),   // Lance
-    Some(ts!(370, 350)),   // Knight
-    Some(ts!(480, 490)),   // Silver
-    Some(ts!(530, 550)),   // Gold
-    Some(ts!(850, 920)),   // Bishop
-    Some(ts!(1050, 1180)), // Rook
-    None,                  // King
-    None,                  // PromotedPawn
-    None,                  // PromotedLance
-    None,                  // PromotedKnight
-    None,                  // PromotedSilver
-    None,                  // PromotedBishop
-    None,                  // PromotedRook
-];
-
-const CLASSIC_BOARD_VALUES: [TaperedScore; PieceType::COUNT] = [
-    ts!(100, 110),     // Pawn
-    ts!(280, 300),     // Lance
-    ts!(320, 330),     // Knight
-    ts!(430, 440),     // Silver
-    ts!(500, 500),     // Gold
-    ts!(780, 820),     // Bishop
-    ts!(950, 1020),    // Rook
-    ts!(20000, 20000), // King
-    ts!(480, 520),     // PromotedPawn
-    ts!(480, 520),     // PromotedLance
-    ts!(500, 530),     // PromotedKnight
-    ts!(500, 530),     // PromotedSilver
-    ts!(1150, 1220),   // PromotedBishop
-    ts!(1320, 1450),   // PromotedRook
-];
-
-const CLASSIC_HAND_VALUES: [Option<TaperedScore>; PieceType::COUNT] = [
-    Some(ts!(105, 115)),  // Pawn
-    Some(ts!(300, 310)),  // Lance
-    Some(ts!(340, 350)),  // Knight
-    Some(ts!(450, 460)),  // Silver
-    Some(ts!(520, 520)),  // Gold
-    Some(ts!(820, 860)),  // Bishop
-    Some(ts!(990, 1080)), // Rook
-    None,                 // King
-    None,                 // PromotedPawn
-    None,                 // PromotedLance
-    None,                 // PromotedKnight
-    None,                 // PromotedSilver
-    None,                 // PromotedBishop
-    None,                 // PromotedRook
-];
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialValueSet {
-    pub id: &'static str,
-    pub display_name: &'static str,
-    pub source: &'static str,
-    pub version: &'static str,
-    pub last_updated: &'static str,
-    board_values: [TaperedScore; PieceType::COUNT],
-    hand_values: [Option<TaperedScore>; PieceType::COUNT],
+    pub id: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub last_updated: Option<String>,
+    #[serde(default)]
+    pub board_values: [TaperedScore; PieceType::COUNT],
+    #[serde(default)]
+    pub hand_values: [Option<TaperedScore>; PieceType::COUNT],
 }
 
 impl MaterialValueSet {
     pub fn research() -> Self {
-        Self {
-            id: "research",
-            display_name: "Research Value Set",
-            source: "Internal tuning study",
-            version: "2024.10",
-            last_updated: "2025-08-10",
-            board_values: RESEARCH_BOARD_VALUES,
-            hand_values: RESEARCH_HAND_VALUES,
-        }
+        Self::from_legacy(
+            "research",
+            "Research Value Set",
+            Some("Internal tuning study"),
+            Some("2024.10"),
+            Some("2025-08-10"),
+            Self::legacy_research_board(),
+            Self::legacy_research_hand(),
+        )
     }
 
     pub fn classic() -> Self {
+        Self::from_legacy(
+            "classic",
+            "Classic Value Set",
+            Some("Legacy engine defaults"),
+            Some("2023.04"),
+            Some("2024-07-15"),
+            Self::legacy_classic_board(),
+            Self::legacy_classic_hand(),
+        )
+    }
+
+    fn from_legacy(
+        id: &str,
+        display_name: &str,
+        source: Option<&str>,
+        version: Option<&str>,
+        last_updated: Option<&str>,
+        board_values: [TaperedScore; PieceType::COUNT],
+        hand_values: [Option<TaperedScore>; PieceType::COUNT],
+    ) -> Self {
         Self {
-            id: "classic",
-            display_name: "Classic Value Set",
-            source: "Legacy engine defaults",
-            version: "2023.04",
-            last_updated: "2024-07-15",
-            board_values: CLASSIC_BOARD_VALUES,
-            hand_values: CLASSIC_HAND_VALUES,
+            id: id.to_string(),
+            display_name: display_name.to_string(),
+            description: None,
+            source: source.map(|s| s.to_string()),
+            version: version.map(|s| s.to_string()),
+            last_updated: last_updated.map(|s| s.to_string()),
+            board_values,
+            hand_values,
         }
     }
 
@@ -149,6 +115,172 @@ impl MaterialValueSet {
     pub fn hand_value(&self, piece_type: PieceType) -> TaperedScore {
         self.hand_values[piece_type.as_index()].unwrap_or_else(|| self.board_value(piece_type))
     }
+
+    pub fn validate(&self) -> Result<(), String> {
+        for idx in 0..PieceType::COUNT {
+            let piece = PieceType::from_u8(idx as u8);
+            let board = self.board_values[idx];
+            if board.mg == 0 && board.eg == 0 && piece != PieceType::King {
+                return Err(format!(
+                    "Board value missing for piece {:?} in value set {}",
+                    piece, self.id
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn from_reader<R: Read>(mut reader: R) -> Result<Self, MaterialValueSetError> {
+        let mut data = Vec::new();
+        reader
+            .read_to_end(&mut data)
+            .map_err(|err| MaterialValueSetError::Io {
+                path: PathBuf::from("<reader>"),
+                message: err.to_string(),
+            })?;
+        Self::from_json_bytes(&data)
+    }
+
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, MaterialValueSetError> {
+        let path_ref = path.as_ref();
+        let data = std::fs::read(path_ref).map_err(|err| MaterialValueSetError::Io {
+            path: path_ref.to_path_buf(),
+            message: err.to_string(),
+        })?;
+        let extension = path_ref
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match extension.as_str() {
+            "json" => Self::from_json_bytes(&data),
+            "toml" => Self::from_toml_bytes(&data),
+            "" => Err(MaterialValueSetError::UnsupportedFormat {
+                extension: "<missing>".to_string(),
+            }),
+            other => Err(MaterialValueSetError::UnsupportedFormat {
+                extension: other.to_string(),
+            }),
+        }
+    }
+
+    pub fn to_writer<W: std::io::Write>(&self, writer: W) -> Result<(), MaterialValueSetError> {
+        serde_json::to_writer_pretty(writer, self)
+            .map_err(|err| MaterialValueSetError::Serialize(err.to_string()))
+    }
+
+    fn from_json_bytes(bytes: &[u8]) -> Result<Self, MaterialValueSetError> {
+        let value_set: MaterialValueSet = serde_json::from_slice(bytes)
+            .map_err(|err| MaterialValueSetError::Parse(err.to_string()))?;
+        value_set
+            .validate()
+            .map_err(MaterialValueSetError::Validation)?;
+        Ok(value_set)
+    }
+
+    fn from_toml_bytes(bytes: &[u8]) -> Result<Self, MaterialValueSetError> {
+        let text = std::str::from_utf8(bytes)
+            .map_err(|err| MaterialValueSetError::Parse(err.to_string()))?;
+        let value_set: MaterialValueSet =
+            toml::from_str(text).map_err(|err| MaterialValueSetError::Parse(err.to_string()))?;
+        value_set
+            .validate()
+            .map_err(MaterialValueSetError::Validation)?;
+        Ok(value_set)
+    }
+
+    pub fn legacy_research_board() -> [TaperedScore; PieceType::COUNT] {
+        [
+            ts!(100, 120),
+            ts!(300, 280),
+            ts!(350, 320),
+            ts!(450, 460),
+            ts!(500, 520),
+            ts!(800, 850),
+            ts!(1000, 1100),
+            ts!(20000, 20000),
+            ts!(500, 550),
+            ts!(500, 540),
+            ts!(520, 550),
+            ts!(520, 550),
+            ts!(1200, 1300),
+            ts!(1400, 1550),
+        ]
+    }
+
+    pub fn legacy_research_hand() -> [Option<TaperedScore>; PieceType::COUNT] {
+        [
+            Some(ts!(110, 130)),
+            Some(ts!(320, 300)),
+            Some(ts!(370, 350)),
+            Some(ts!(480, 490)),
+            Some(ts!(530, 550)),
+            Some(ts!(850, 920)),
+            Some(ts!(1050, 1180)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    }
+
+    pub fn legacy_classic_board() -> [TaperedScore; PieceType::COUNT] {
+        [
+            ts!(100, 110),
+            ts!(280, 300),
+            ts!(320, 330),
+            ts!(430, 440),
+            ts!(500, 500),
+            ts!(780, 820),
+            ts!(950, 1020),
+            ts!(20000, 20000),
+            ts!(480, 520),
+            ts!(480, 520),
+            ts!(500, 530),
+            ts!(500, 530),
+            ts!(1150, 1220),
+            ts!(1320, 1450),
+        ]
+    }
+
+    pub fn legacy_classic_hand() -> [Option<TaperedScore>; PieceType::COUNT] {
+        [
+            Some(ts!(105, 115)),
+            Some(ts!(300, 310)),
+            Some(ts!(340, 350)),
+            Some(ts!(450, 460)),
+            Some(ts!(520, 520)),
+            Some(ts!(820, 860)),
+            Some(ts!(990, 1080)),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MaterialValueSetError {
+    #[error("Unsupported material value file format: `{extension}`")]
+    UnsupportedFormat { extension: String },
+    #[error("Unable to read material value file `{path:?}`: {message}")]
+    Io {
+        path: std::path::PathBuf,
+        message: String,
+    },
+    #[error("Failed to parse material value set: {0}")]
+    Parse(String),
+    #[error("Invalid material value set: {0}")]
+    Validation(String),
+    #[error("Failed to serialize material value set: {0}")]
+    Serialize(String),
 }
 
 /// Material evaluator with phase-aware piece values
@@ -163,11 +295,22 @@ pub struct MaterialEvaluator {
 
 impl MaterialEvaluator {
     fn select_value_set(config: &MaterialEvaluationConfig) -> MaterialValueSet {
+        MaterialValueLoader::load(config).unwrap_or_else(|err| {
+            debug_log(&format!(
+                "[MaterialEvaluator] Failed to load external value set: {}. Falling back to {} preset.",
+                err,
+                if config.use_research_values {
+                    "research"
+                } else {
+                    "classic"
+                }
+            ));
         if config.use_research_values {
-            MaterialValueSet::research()
-        } else {
-            MaterialValueSet::classic()
-        }
+                MaterialValueSet::research()
+            } else {
+                MaterialValueSet::classic()
+            }
+        })
     }
 
     /// Create a new MaterialEvaluator with default configuration
@@ -375,6 +518,8 @@ pub struct MaterialEvaluationConfig {
     pub include_hand_pieces: bool,
     /// Use research-based values vs classic values
     pub use_research_values: bool,
+    /// Optional path to a custom material value set (JSON/TOML)
+    pub values_path: Option<String>,
 }
 
 impl Default for MaterialEvaluationConfig {
@@ -382,6 +527,7 @@ impl Default for MaterialEvaluationConfig {
         Self {
             include_hand_pieces: true,
             use_research_values: true,
+            values_path: None,
         }
     }
 }
@@ -408,6 +554,7 @@ mod tests {
         let config = MaterialEvaluationConfig {
             include_hand_pieces: false,
             use_research_values: false,
+            values_path: None,
         };
         let evaluator = MaterialEvaluator::with_config(config);
         assert!(!evaluator.config().include_hand_pieces);
@@ -499,6 +646,7 @@ mod tests {
         let config = MaterialEvaluationConfig {
             include_hand_pieces: false,
             use_research_values: true,
+            values_path: None,
         };
         let mut evaluator = MaterialEvaluator::with_config(config);
         let board = BitboardBoard::new();
@@ -533,6 +681,7 @@ mod tests {
         let classic_eval = MaterialEvaluator::with_config(MaterialEvaluationConfig {
             include_hand_pieces: true,
             use_research_values: false,
+            values_path: None,
         });
 
         let research_rook = research_eval.get_piece_value(PieceType::Rook);
@@ -553,10 +702,12 @@ mod tests {
         let config_research = MaterialEvaluationConfig {
             include_hand_pieces: true,
             use_research_values: true,
+            values_path: None,
         };
         let config_classic = MaterialEvaluationConfig {
             include_hand_pieces: true,
             use_research_values: false,
+            values_path: None,
         };
 
         let mut research_eval = MaterialEvaluator::with_config(config_research);
@@ -682,6 +833,7 @@ mod tests {
         let mut evaluator = MaterialEvaluator::with_config(MaterialEvaluationConfig {
             include_hand_pieces: true,
             use_research_values: true,
+            values_path: None,
         });
 
         let board = BitboardBoard::new();
@@ -695,6 +847,7 @@ mod tests {
         evaluator.apply_config(MaterialEvaluationConfig {
             include_hand_pieces: false,
             use_research_values: false,
+            values_path: None,
         });
 
         assert_eq!(evaluator.stats().evaluations, 0);
