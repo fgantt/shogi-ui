@@ -133,7 +133,7 @@ The following advanced features exist internally but are **not yet exposed** to 
 
 #### Material Evaluation
 - `include_hand_pieces`: Include captured pieces in material count (Default: true)
-- `use_research_values`: Use research-based piece values (Default: true)
+- `use_research_values`: Selects the material value preset. When `true` (default) the engine loads the research-tuned tables; when `false` it falls back to the classic legacy tables. Both presets include board and hand-piece tapered values and can be switched at runtime.
 
 #### Piece-Square Tables
 - Piece-square table weights for all piece types

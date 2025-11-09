@@ -35,6 +35,27 @@ pub enum PieceType {
 }
 
 impl PieceType {
+    pub const COUNT: usize = 14;
+
+    pub const fn as_index(self) -> usize {
+        match self {
+            PieceType::Pawn => 0,
+            PieceType::Lance => 1,
+            PieceType::Knight => 2,
+            PieceType::Silver => 3,
+            PieceType::Gold => 4,
+            PieceType::Bishop => 5,
+            PieceType::Rook => 6,
+            PieceType::King => 7,
+            PieceType::PromotedPawn => 8,
+            PieceType::PromotedLance => 9,
+            PieceType::PromotedKnight => 10,
+            PieceType::PromotedSilver => 11,
+            PieceType::PromotedBishop => 12,
+            PieceType::PromotedRook => 13,
+        }
+    }
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "Pawn" => Some(PieceType::Pawn),

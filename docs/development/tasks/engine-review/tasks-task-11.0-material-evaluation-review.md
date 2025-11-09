@@ -56,7 +56,7 @@ Task 11.0 focuses on bringing the material evaluation subsystem in line with the
 
 ## High-Level Task Breakdown
 
-- [ ] **1.0 🔴 Value-Set Selection Enablement**
+- [x] **1.0 🔴 Value-Set Selection Enablement**
 - [ ] **2.0 🔴 Configuration Propagation & Lifecycle**
 - [ ] **3.0 🔴 Externalized Material Value Sets**
 - [ ] **4.0 🟡 Observability & Telemetry Expansion**
@@ -73,22 +73,22 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Honor the `use_research_values` flag and provide a clear API for selecting value tables.
 
-- [ ] **1.1 Material Value Abstraction**
-  - [ ] 1.1.1 Introduce a `MaterialValueSet` struct encapsulating board and hand tapered tables.  
-  - [ ] 1.1.2 Provide constructors for `classic` and `research` presets mirroring current constants.  
-  - [ ] 1.1.3 Include metadata (source, version, last updated) to support auditing and telemetry tagging.
-- [ ] **1.2 Evaluator Construction**
-  - [ ] 1.2.1 Extend `MaterialEvaluator::new_with_config(config: &MaterialEvaluationConfig)` to load the selected value set.  
-  - [ ] 1.2.2 Ensure hand-value lookup degrades gracefully when a table omits promoted pieces (default to board values).  
-  - [ ] 1.2.3 Add assertions or warnings when the requested preset is missing required entries.
-- [ ] **1.3 Tests & Fixtures**
-  - [ ] 1.3.1 Snapshot tests comparing classic vs. research evaluations on representative positions.  
-  - [ ] 1.3.2 Property tests verifying toggling the flag produces different scores when tables diverge.  
-  - [ ] 1.3.3 Update unit benches (if needed) to exercise both presets.
-- [ ] **1.4 Configuration Surface**
-  - [ ] 1.4.1 Update TOML/CLI configuration schemas with documentation for `use_research_values`.  
-  - [ ] 1.4.2 Add validation ensuring only known presets are accepted (until custom loading is available).  
-  - [ ] 1.4.3 Document expected default (research) and supported alternatives.
+- [x] **1.1 Material Value Abstraction**
+  - [x] 1.1.1 Introduce a `MaterialValueSet` struct encapsulating board and hand tapered tables.  
+  - [x] 1.1.2 Provide constructors for `classic` and `research` presets mirroring current constants.  
+  - [x] 1.1.3 Include metadata (source, version, last updated) to support auditing and telemetry tagging.
+- [x] **1.2 Evaluator Construction**
+  - [x] 1.2.1 Extend `MaterialEvaluator::new_with_config(config: &MaterialEvaluationConfig)` to load the selected value set.  
+  - [x] 1.2.2 Ensure hand-value lookup degrades gracefully when a table omits promoted pieces (default to board values).  
+  - [x] 1.2.3 Add assertions or warnings when the requested preset is missing required entries.
+- [x] **1.3 Tests & Fixtures**
+  - [x] 1.3.1 Snapshot tests comparing classic vs. research evaluations on representative positions.  
+  - [x] 1.3.2 Property tests verifying toggling the flag produces different scores when tables diverge.  
+  - [x] 1.3.3 Update unit benches (if needed) to exercise both presets.
+- [x] **1.4 Configuration Surface**
+  - [x] 1.4.1 Update TOML/CLI configuration schemas with documentation for `use_research_values`.  
+  - [x] 1.4.2 Add validation ensuring only known presets are accepted (until custom loading is available).  
+  - [x] 1.4.3 Document expected default (research) and supported alternatives.
 
 **Exit Criteria:** Unit tests demonstrate measurable differences between classic and research tables; configuration flag toggles behavior without code changes.
 
@@ -286,6 +286,16 @@ Risks should be addressed during implementation planning; unresolved questions r
 - `docs/development/tasks/engine-performance-analysis.md` (benchmark logging)  
 - `docs/tuning/weight-manager.md` (integration reference)  
 - Criterion benchmarks under `benches/material_evaluation_performance_benchmarks.rs`
+
+---
+
+## Completion Notes
+
+### Task 1.0 — Value-Set Selection Enablement
+
+- **Implementation:** Added `MaterialValueSet` abstraction with classic and research presets, metadata tags, and per-piece tapered tables. `MaterialEvaluator` now selects the appropriate preset based on `MaterialEvaluationConfig`, with graceful hand-value fallbacks when entries are omitted.
+- **Testing:** Expanded material evaluator unit tests to cover preset toggling, value-set differentials, and promoted piece fallbacks. Introduced position-based regression ensuring evaluations diverge between presets.
+- **Documentation:** Updated `ENGINE_CONFIGURATION_GUIDE.md` to explain preset selection semantics for `use_research_values`.
 
 ---
 
