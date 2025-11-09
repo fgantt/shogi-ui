@@ -26,9 +26,10 @@ use crate::search::search_engine::GLOBAL_NODES_SEARCHED;
 use crate::search::ThreadSafeTranspositionTable;
 use crate::time_utils::TimeSource;
 use crate::types::{CapturedPieces, Move, Player};
+use crossbeam_deque::{Injector, Steal};
 use num_cpus;
+use parking_lot::{Condvar, Mutex as ParkingMutex};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
-use std::collections::VecDeque;
 use std::env;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -83,8 +84,8 @@ pub struct WorkUnit {
 /// - Uses a `Mutex<VecDeque<WorkUnit>>` internally; short critical sections reduce contention.
 /// - Recovers from poisoned locks to keep the engine running under panic scenarios.
 pub struct WorkStealingQueue {
-    /// The underlying deque protected by a mutex.
-    queue: Arc<Mutex<VecDeque<WorkUnit>>>,
+    /// Lock-free injector queue backing this work queue.
+    injector: Arc<Injector<WorkUnit>>,
 
     /// Statistics for this queue.
     stats: Arc<WorkQueueStats>,
@@ -101,18 +102,25 @@ struct WorkQueueStats {
 
     /// Number of items stolen from this queue.
     steals: AtomicU64,
-    /// Total nanoseconds spent waiting on the queue lock
-    lock_wait_ns: AtomicU64,
-    /// Number of poison recoveries performed
-    poison_recoveries: AtomicU64,
+
+    /// Number of times a steal yielded `Retry`.
+    steal_retries: AtomicU64,
+}
+
+/// Snapshot of queue metrics captured without locking.
+#[derive(Default, Debug, Clone, Copy)]
+pub struct WorkQueueSnapshot {
+    pub pushes: u64,
+    pub pops: u64,
+    pub steals: u64,
+    pub steal_retries: u64,
 }
 
 impl WorkStealingQueue {
-    /// Create a new work-stealing queue.
-    /// Construct a new empty queue.
+    /// Construct a new lock-free work-stealing queue.
     pub fn new() -> Self {
         Self {
-            queue: Arc::new(Mutex::new(VecDeque::new())),
+            injector: Arc::new(Injector::new()),
             stats: Arc::new(WorkQueueStats::default()),
         }
     }
@@ -122,57 +130,24 @@ impl WorkStealingQueue {
     ///
     /// Error handling: Recovers from poisoned lock and logs a debug message.
     pub fn push_back(&self, work: WorkUnit) {
-        let t0 = std::time::Instant::now();
-        match self.queue.lock() {
-            Ok(mut queue) => {
-                queue.push_back(work);
-                self.stats.pushes.fetch_add(1, Ordering::Relaxed);
-                let dt = t0.elapsed().as_nanos() as u64;
-                self.stats.lock_wait_ns.fetch_add(dt, Ordering::Relaxed);
-            }
-            Err(poison) => {
-                // Recover from poisoned lock to avoid stalling the system
-                let mut queue = poison.into_inner();
-                queue.push_back(work);
-                self.stats.pushes.fetch_add(1, Ordering::Relaxed);
-                self.stats.poison_recoveries.fetch_add(1, Ordering::Relaxed);
-                let dt = t0.elapsed().as_nanos() as u64;
-                self.stats.lock_wait_ns.fetch_add(dt, Ordering::Relaxed);
-                crate::debug_utils::debug_log("Recovered from poisoned work queue in push_back");
-            }
-        }
+        self.injector.push(work);
+        self.stats.pushes.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Pop a work unit from the front of the queue (owner thread operation).
     /// Pop a work unit from the front of the queue.
     /// Returns `None` if the queue is empty.
     pub fn pop_front(&self) -> Option<WorkUnit> {
-        let t0 = std::time::Instant::now();
-        match self.queue.lock() {
-            Ok(mut queue) => {
-                if let Some(work) = queue.pop_front() {
-                    self.stats.pops.fetch_add(1, Ordering::Relaxed);
-                    let dt = t0.elapsed().as_nanos() as u64;
-                    self.stats.lock_wait_ns.fetch_add(dt, Ordering::Relaxed);
-                    Some(work)
-                } else {
-                    let dt = t0.elapsed().as_nanos() as u64;
-                    self.stats.lock_wait_ns.fetch_add(dt, Ordering::Relaxed);
-                    None
-                }
+        match self.injector.steal() {
+            Steal::Success(work) => {
+                self.stats.pops.fetch_add(1, Ordering::Relaxed);
+                Some(work)
             }
-            Err(poison) => {
-                let mut queue = poison.into_inner();
-                let result = queue.pop_front();
-                if result.is_some() {
-                    self.stats.pops.fetch_add(1, Ordering::Relaxed);
-                }
-                self.stats.poison_recoveries.fetch_add(1, Ordering::Relaxed);
-                let dt = t0.elapsed().as_nanos() as u64;
-                self.stats.lock_wait_ns.fetch_add(dt, Ordering::Relaxed);
-                crate::debug_utils::debug_log("Recovered from poisoned work queue in pop_front");
-                result
+            Steal::Retry => {
+                self.stats.steal_retries.fetch_add(1, Ordering::Relaxed);
+                None
             }
+            Steal::Empty => None,
         }
     }
 
@@ -180,53 +155,37 @@ impl WorkStealingQueue {
     /// Attempt to steal a work unit from the back of the queue.
     /// Returns `None` when the queue is empty or lock acquisition fails.
     pub fn steal(&self) -> Option<WorkUnit> {
-        if let Ok(mut queue) = self.queue.lock() {
-            if let Some(work) = queue.pop_back() {
+        match self.injector.steal() {
+            Steal::Success(work) => {
                 self.stats.steals.fetch_add(1, Ordering::Relaxed);
-                return Some(work);
+                Some(work)
             }
+            Steal::Retry => {
+                self.stats.steal_retries.fetch_add(1, Ordering::Relaxed);
+                None
+            }
+            Steal::Empty => None,
         }
-        None
     }
 
     /// Check if the queue is empty.
     pub fn is_empty(&self) -> bool {
-        if let Ok(queue) = self.queue.lock() {
-            return queue.is_empty();
-        }
-        true
+        self.injector.is_empty()
     }
 
     /// Get the number of items in the queue.
     pub fn len(&self) -> usize {
-        if let Ok(queue) = self.queue.lock() {
-            return queue.len();
-        }
-        0
+        self.injector.len()
     }
 
     /// Get statistics for this queue.
-    pub fn get_stats(&self) -> (u64, u64, u64, u64, u64) {
-        (
-            self.stats.pushes.load(Ordering::Relaxed),
-            self.stats.pops.load(Ordering::Relaxed),
-            self.stats.steals.load(Ordering::Relaxed),
-            self.stats.lock_wait_ns.load(Ordering::Relaxed),
-            self.stats.poison_recoveries.load(Ordering::Relaxed),
-        )
-    }
-}
-
-#[cfg(test)]
-impl WorkStealingQueue {
-    pub fn test_poison(&self) {
-        let _ = std::panic::catch_unwind({
-            let queue_arc = self.queue.clone();
-            move || {
-                let _guard = queue_arc.lock().unwrap();
-                panic!("intentional poison");
-            }
-        });
+    pub fn get_stats(&self) -> WorkQueueSnapshot {
+        WorkQueueSnapshot {
+            pushes: self.stats.pushes.load(Ordering::Relaxed),
+            pops: self.stats.pops.load(Ordering::Relaxed),
+            steals: self.stats.steals.load(Ordering::Relaxed),
+            steal_retries: self.stats.steal_retries.load(Ordering::Relaxed),
+        }
     }
 }
 
@@ -236,9 +195,117 @@ impl Default for WorkStealingQueue {
     }
 }
 
+/// Enumeration describing how aggressively to track work distribution metrics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkMetricsMode {
+    /// Disable metrics entirely for lowest overhead.
+    Disabled,
+    /// Track per-thread counters using relaxed atomics.
+    Basic,
+}
+
+impl WorkMetricsMode {
+    fn is_enabled(self) -> bool {
+        matches!(self, WorkMetricsMode::Basic)
+    }
+}
+
+/// Lock-free recorder for work distribution metrics.
+pub struct WorkDistributionRecorder {
+    mode: WorkMetricsMode,
+    work_units_per_thread: Vec<AtomicU64>,
+    steal_count_per_thread: Vec<AtomicU64>,
+    total_work_units: AtomicU64,
+}
+
+impl WorkDistributionRecorder {
+    pub fn new(num_threads: usize, mode: WorkMetricsMode) -> Self {
+        if mode.is_enabled() {
+            let work_units = (0..num_threads)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>();
+            let steals = (0..num_threads)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>();
+            Self {
+                mode,
+                work_units_per_thread: work_units,
+                steal_count_per_thread: steals,
+                total_work_units: AtomicU64::new(0),
+            }
+        } else {
+            Self {
+                mode,
+                work_units_per_thread: Vec::new(),
+                steal_count_per_thread: Vec::new(),
+                total_work_units: AtomicU64::new(0),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn record_work(&self, thread_id: usize) {
+        if !self.mode.is_enabled() {
+            return;
+        }
+        if let Some(counter) = self.work_units_per_thread.get(thread_id) {
+            counter.fetch_add(1, Ordering::Relaxed);
+            self.total_work_units.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[inline(always)]
+    pub fn record_steal(&self, thread_id: usize) {
+        if !self.mode.is_enabled() {
+            return;
+        }
+        if let Some(counter) = self.steal_count_per_thread.get(thread_id) {
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn mode(&self) -> WorkMetricsMode {
+        self.mode
+    }
+
+    pub fn snapshot(&self) -> Option<WorkDistributionStats> {
+        if !self.mode.is_enabled() {
+            return None;
+        }
+        let work_units: Vec<u64> = self
+            .work_units_per_thread
+            .iter()
+            .map(|counter| counter.load(Ordering::Relaxed))
+            .collect();
+        let steal_count: Vec<u64> = self
+            .steal_count_per_thread
+            .iter()
+            .map(|counter| counter.load(Ordering::Relaxed))
+            .collect();
+        let max_work = work_units.iter().max().copied().unwrap_or(0);
+        let min_work = work_units
+            .iter()
+            .filter(|&&x| x > 0)
+            .min()
+            .copied()
+            .unwrap_or(0);
+        Some(WorkDistributionStats {
+            mode: self.mode,
+            work_units_per_thread: work_units,
+            steal_count_per_thread: steal_count,
+            total_work_units: self.total_work_units.load(Ordering::Relaxed),
+            max_work_units: max_work,
+            min_work_units: min_work,
+        })
+    }
+}
+
 /// Statistics for work distribution across threads.
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct WorkDistributionStats {
+    /// Metrics mode used to gather this snapshot.
+    pub mode: WorkMetricsMode,
+
     /// Total work units processed per thread.
     pub work_units_per_thread: Vec<u64>,
 
@@ -259,6 +326,7 @@ impl WorkDistributionStats {
     /// Create new statistics tracker for the given number of threads.
     pub fn new(num_threads: usize) -> Self {
         Self {
+            mode: WorkMetricsMode::Basic,
             work_units_per_thread: vec![0; num_threads],
             steal_count_per_thread: vec![0; num_threads],
             total_work_units: 0,
@@ -269,10 +337,23 @@ impl WorkDistributionStats {
 
     /// Get the work distribution ratio (max/min).
     pub fn distribution_ratio(&self) -> f64 {
-        if self.min_work_units == 0 {
+        if !self.mode.is_enabled() || self.min_work_units == 0 {
             return f64::INFINITY;
         }
         self.max_work_units as f64 / self.min_work_units as f64
+    }
+}
+
+impl Default for WorkDistributionStats {
+    fn default() -> Self {
+        Self {
+            mode: WorkMetricsMode::Disabled,
+            work_units_per_thread: Vec::new(),
+            steal_count_per_thread: Vec::new(),
+            total_work_units: 0,
+            max_work_units: 0,
+            min_work_units: 0,
+        }
     }
 }
 
@@ -287,6 +368,9 @@ pub struct ParallelSearchConfig {
 
     /// Whether parallel search is enabled.
     pub enable_parallel: bool,
+
+    /// Mode controlling work distribution metrics collection.
+    pub work_metrics_mode: WorkMetricsMode,
 }
 
 impl Default for ParallelSearchConfig {
@@ -296,6 +380,7 @@ impl Default for ParallelSearchConfig {
             num_threads: num_threads.clamp(1, 32),
             min_depth_parallel: 4,
             enable_parallel: num_threads > 1,
+            work_metrics_mode: WorkMetricsMode::Disabled,
         }
     }
 }
@@ -315,6 +400,7 @@ impl ParallelSearchConfig {
             num_threads: num_threads.clamp(1, 32),
             min_depth_parallel: 4,
             enable_parallel: num_threads > 1,
+            work_metrics_mode: WorkMetricsMode::Disabled,
         }
     }
 
@@ -322,6 +408,20 @@ impl ParallelSearchConfig {
     pub fn set_num_threads(&mut self, num_threads: usize) {
         self.num_threads = num_threads.clamp(1, 32);
         self.enable_parallel = self.num_threads > 1;
+    }
+
+    /// Configure work metrics collection mode.
+    pub fn set_work_metrics_mode(&mut self, mode: WorkMetricsMode) {
+        self.work_metrics_mode = mode;
+    }
+
+    /// Convenience toggle for enabling or disabling basic metrics.
+    pub fn enable_work_metrics(&mut self, enabled: bool) {
+        self.work_metrics_mode = if enabled {
+            WorkMetricsMode::Basic
+        } else {
+            WorkMetricsMode::Disabled
+        };
     }
 }
 
@@ -393,52 +493,108 @@ impl ThreadLocalSearchContext {
     }
 }
 
+/// Result of waiting for the oldest brother to complete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitOutcome {
+    Completed(i32),
+    Timeout,
+    Aborted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WaitStatus {
+    Pending,
+    Completed,
+    Aborted,
+}
+
+struct YBWCSyncState {
+    status: WaitStatus,
+    score: Option<i32>,
+}
+
+struct YBWCSyncInner {
+    state: ParkingMutex<YBWCSyncState>,
+    condvar: Condvar,
+    stop_flag: Option<Arc<AtomicBool>>,
+}
+
 /// Synchronization data for YBWC "oldest brother wait" concept.
 pub struct YBWCSync {
-    /// Whether the oldest brother (first move) has completed.
-    oldest_complete: Arc<AtomicBool>,
-
-    /// Result from the oldest brother search (score).
-    oldest_score: Arc<Mutex<Option<i32>>>,
+    inner: Arc<YBWCSyncInner>,
 }
 
 impl YBWCSync {
-    fn new() -> Self {
+    fn new(stop_flag: Option<Arc<AtomicBool>>) -> Self {
         Self {
-            oldest_complete: Arc::new(AtomicBool::new(false)),
-            oldest_score: Arc::new(Mutex::new(None)),
+            inner: Arc::new(YBWCSyncInner {
+                state: ParkingMutex::new(YBWCSyncState {
+                    status: WaitStatus::Pending,
+                    score: None,
+                }),
+                condvar: Condvar::new(),
+                stop_flag,
+            }),
         }
     }
 
     /// Mark oldest brother as complete and store its score.
-    fn mark_complete(&self, score: i32) {
-        if let Ok(mut s) = self.oldest_score.lock() {
-            *s = Some(score);
-        }
-        self.oldest_complete.store(true, Ordering::Release);
+    pub fn mark_complete(&self, score: i32) {
+        let mut guard = self.inner.state.lock();
+        guard.status = WaitStatus::Completed;
+        guard.score = Some(score);
+        drop(guard);
+        self.inner.condvar.notify_all();
     }
 
-    /// Check if oldest brother is complete.
-    fn is_complete(&self) -> bool {
-        self.oldest_complete.load(Ordering::Acquire)
+    /// Abort waiting siblings (used when global stop flag is raised).
+    fn abort(&self) {
+        let mut guard = self.inner.state.lock();
+        guard.status = WaitStatus::Aborted;
+        drop(guard);
+        self.inner.condvar.notify_all();
     }
 
-    /// Wait for oldest brother to complete (with timeout).
-    fn wait_for_complete(&self, timeout_ms: u32) -> Option<i32> {
+    /// Wait for oldest brother to complete (with timeout and stop flag support).
+    pub fn wait_for_complete(&self, timeout_ms: u32) -> WaitOutcome {
         let timeout = Duration::from_millis(timeout_ms as u64);
         let start = std::time::Instant::now();
 
-        while !self.is_complete() {
-            if start.elapsed() > timeout {
-                return None;
+        loop {
+            // Fast path: check stop flag without taking lock.
+            if let Some(ref stop_flag) = self.inner.stop_flag {
+                if stop_flag.load(Ordering::Acquire) {
+                    self.abort();
+                }
             }
-            std::thread::yield_now();
-        }
 
-        if let Ok(score) = self.oldest_score.lock() {
-            *score
-        } else {
-            None
+            let mut state = self.inner.state.lock();
+            match state.status {
+                WaitStatus::Completed => {
+                    return WaitOutcome::Completed(state.score.unwrap_or(0));
+                }
+                WaitStatus::Aborted => {
+                    return WaitOutcome::Aborted;
+                }
+                WaitStatus::Pending => {
+                    let now = std::time::Instant::now();
+                    if now.duration_since(start) >= timeout {
+                        state.status = WaitStatus::Aborted;
+                        return WaitOutcome::Timeout;
+                    }
+                    let remaining = timeout.saturating_sub(now.duration_since(start));
+                    let timed_out = self
+                        .inner
+                        .condvar
+                        .wait_for(&mut state, remaining)
+                        .timed_out();
+                    if timed_out {
+                        state.status = WaitStatus::Aborted;
+                        return WaitOutcome::Timeout;
+                    }
+                    // loop to re-check status after wake
+                }
+            }
         }
     }
 }
@@ -464,7 +620,7 @@ pub struct ParallelSearchEngine {
     work_queues: Vec<Arc<WorkStealingQueue>>,
 
     /// Work distribution statistics.
-    work_stats: Arc<Mutex<WorkDistributionStats>>,
+    work_stats: Arc<WorkDistributionRecorder>,
 }
 
 impl ParallelSearchEngine {
@@ -506,6 +662,7 @@ impl ParallelSearchEngine {
             Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(tt_config)));
 
         let num_threads = config.num_threads;
+        let metrics_mode = config.work_metrics_mode;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
@@ -516,7 +673,7 @@ impl ParallelSearchEngine {
             transposition_table,
             stop_flag: None,
             work_queues,
-            work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
+            work_stats: Arc::new(WorkDistributionRecorder::new(num_threads, metrics_mode)),
         })
     }
 
@@ -554,6 +711,7 @@ impl ParallelSearchEngine {
             Arc::new(RwLock::new(ThreadSafeTranspositionTable::new(tt_config)));
 
         let num_threads = config.num_threads;
+        let metrics_mode = config.work_metrics_mode;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
@@ -564,7 +722,7 @@ impl ParallelSearchEngine {
             transposition_table,
             stop_flag,
             work_queues,
-            work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
+            work_stats: Arc::new(WorkDistributionRecorder::new(num_threads, metrics_mode)),
         })
     }
 
@@ -639,6 +797,7 @@ impl ParallelSearchEngine {
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
 
         let num_threads = config.num_threads;
+        let metrics_mode = config.work_metrics_mode;
         let work_queues: Vec<Arc<WorkStealingQueue>> = (0..num_threads)
             .map(|_| Arc::new(WorkStealingQueue::new()))
             .collect();
@@ -649,7 +808,7 @@ impl ParallelSearchEngine {
             transposition_table,
             stop_flag,
             work_queues,
-            work_stats: Arc::new(Mutex::new(WorkDistributionStats::new(num_threads))),
+            work_stats: Arc::new(WorkDistributionRecorder::new(num_threads, metrics_mode)),
         })
     }
 
@@ -986,27 +1145,23 @@ impl ParallelSearchEngine {
         let mut total_pushes: u64 = 0;
         let mut total_pops: u64 = 0;
         let mut total_steals: u64 = 0;
-        let mut total_lock_wait_ns: u64 = 0;
-        let mut total_poison_recoveries: u64 = 0;
+        let mut total_steal_retries: u64 = 0;
         for q in &self.work_queues {
-            let (pushes, pops, steals, lock_wait_ns, poison_recoveries) = q.get_stats();
-            total_pushes += pushes;
-            total_pops += pops;
-            total_steals += steals;
-            total_lock_wait_ns += lock_wait_ns;
-            total_poison_recoveries += poison_recoveries;
+            let snapshot = q.get_stats();
+            total_pushes += snapshot.pushes;
+            total_pops += snapshot.pops;
+            total_steals += snapshot.steals;
+            total_steal_retries += snapshot.steal_retries;
         }
-        let elapsed_ms = bench_start.elapsed().as_millis() as u64;
-        let elapsed_ms = elapsed_ms.max(1); // avoid div by zero
-        let elapsed_ns = (elapsed_ms as u64) * 1_000_000u64;
-        let sync_overhead_pct = if elapsed_ns > 0 {
-            (total_lock_wait_ns as f64 / elapsed_ns as f64) * 100.0
-        } else {
-            0.0
-        };
+        let metrics_mode = self.work_stats.mode();
+        let total_work_units = self
+            .work_stats
+            .snapshot()
+            .map(|s| s.total_work_units)
+            .unwrap_or(0);
         crate::debug_utils::debug_log(&format!(
-            "PARALLEL_PROF: pushes={}, pops={}, steals={}, lock_wait_ns={}, poison_recoveries={}, sync_overhead~{:.2}%",
-            total_pushes, total_pops, total_steals, total_lock_wait_ns, total_poison_recoveries, sync_overhead_pct
+            "PARALLEL_PROF: pushes={}, pops={}, steals={}, steal_retries={}, work_metrics_mode={:?}, total_work_units={}",
+            total_pushes, total_pops, total_steals, total_steal_retries, metrics_mode, total_work_units
         ));
         result
     }
@@ -1119,7 +1274,7 @@ impl ParallelSearchEngine {
         beta: i32,
     ) -> (Vec<WorkUnit>, YBWCSync) {
         let mut work_units = Vec::new();
-        let ybwc_sync = YBWCSync::new();
+        let ybwc_sync = YBWCSync::new(self.stop_flag.clone());
 
         for (idx, mv) in moves.iter().enumerate() {
             // Clone board and apply move
@@ -1189,10 +1344,11 @@ impl ParallelSearchEngine {
                 // Otherwise, wait for oldest brother to complete (YBWC)
                 if !work.is_oldest_brother {
                     if let Some(ref sync) = ybwc_sync {
-                        // Wait for oldest brother to complete (with timeout)
-                        if sync.wait_for_complete(work.time_limit_ms).is_none() {
-                            // Timeout or interrupted, skip this work
-                            continue;
+                        match sync.wait_for_complete(work.time_limit_ms) {
+                            WaitOutcome::Completed(_) => {}
+                            WaitOutcome::Timeout | WaitOutcome::Aborted => {
+                                continue;
+                            }
                         }
                     }
                 }
@@ -1218,14 +1374,13 @@ impl ParallelSearchEngine {
                     }
 
                     // Update statistics
-                    if let Ok(mut stats) = self.work_stats.lock() {
-                        if thread_id < stats.work_units_per_thread.len() {
-                            stats.work_units_per_thread[thread_id] += 1;
-                            stats.total_work_units += 1;
-                        }
-                    }
+                    self.work_stats.record_work(thread_id);
 
                     return Some((work.move_to_search, final_score));
+                } else if work.is_oldest_brother {
+                    if let Some(ref sync) = ybwc_sync {
+                        sync.abort();
+                    }
                 }
             }
 
@@ -1242,11 +1397,7 @@ impl ParallelSearchEngine {
                     if idx != thread_id {
                         if let Some(work) = queue.steal() {
                             // Update steal statistics
-                            if let Ok(mut stats) = self.work_stats.lock() {
-                                if thread_id < stats.steal_count_per_thread.len() {
-                                    stats.steal_count_per_thread[thread_id] += 1;
-                                }
-                            }
+                            self.work_stats.record_steal(thread_id);
                             current_work = Some(work);
                             break;
                         }
@@ -1271,26 +1422,6 @@ impl ParallelSearchEngine {
 
     /// Get work distribution statistics.
     pub fn get_work_stats(&self) -> Option<WorkDistributionStats> {
-        if let Ok(stats) = self.work_stats.lock() {
-            let work_units = stats.work_units_per_thread.clone();
-            let steal_count = stats.steal_count_per_thread.clone();
-            let max_work = work_units.iter().max().copied().unwrap_or(0);
-            let min_work = work_units
-                .iter()
-                .filter(|&&x| x > 0)
-                .min()
-                .copied()
-                .unwrap_or(0);
-
-            Some(WorkDistributionStats {
-                work_units_per_thread: work_units,
-                steal_count_per_thread: steal_count,
-                total_work_units: stats.total_work_units,
-                max_work_units: max_work,
-                min_work_units: min_work,
-            })
-        } else {
-            None
-        }
+        self.work_stats.snapshot()
     }
 }

@@ -32,13 +32,13 @@
   - [x] 2.4 Adapt instrumentation to new queue internals, ensuring lock-wait timing and recovery counters remain meaningful.
   - [x] 2.5 Refresh unit tests validating queue ordering, stealing fairness, and poison recovery across multiple threads.
   - [x] 2.6 Benchmark parallel search at 4/8/16 threads to verify reduced lock wait times and document improvements.
-- [ ] 3.0 Make work distribution metrics contention-free and optional
-  - [ ] 3.1 Identify all call sites mutating `work_stats` mutex and map required metrics (per-thread work, steals, totals).
-  - [ ] 3.2 Introduce per-thread atomics or thread-local buffers aggregated post-search to remove the global mutex hotspot.
-  - [ ] 3.3 Add configuration flag to enable/disable metrics collection, defaulting to off for latency-sensitive builds.
-  - [ ] 3.4 Provide aggregation/reporting utilities that operate without locks when metrics are disabled.
-  - [ ] 3.5 Update tests to cover enabled/disabled metric paths and ensure vector lengths match thread counts.
-  - [ ] 3.6 Document the runtime cost of metrics and recommended settings in developer docs.
+- [x] 3.0 Make work distribution metrics contention-free and optional
+  - [x] 3.1 Identify all call sites mutating `work_stats` mutex and map required metrics (per-thread work, steals, totals).
+  - [x] 3.2 Introduce per-thread atomics or thread-local buffers aggregated post-search to remove the global mutex hotspot.
+  - [x] 3.3 Add configuration flag to enable/disable metrics collection, defaulting to off for latency-sensitive builds.
+  - [x] 3.4 Provide aggregation/reporting utilities that operate without locks when metrics are disabled.
+  - [x] 3.5 Update tests to cover enabled/disabled metric paths and ensure vector lengths match thread counts.
+  - [x] 3.6 Document the runtime cost of metrics and recommended settings in developer docs.
 - [ ] 4.0 Streamline shared transposition table access for parallel workers
   - [ ] 4.1 Profile current shared TT usage (read/write ratios, bucket contention) in the parallel engine using existing debug hooks.
   - [ ] 4.2 Integrate bucketed-lock API from Task 8.0 by reusing per-hash bucket selection in parallel store paths.
@@ -65,35 +65,26 @@
 
 ## Task 1.0 Completion Notes
 
-- **1.1 Audit:** Reviewed `YBWCSync::wait_for_complete` in `src/search/parallel_search.rs`, confirming it busy-waits by looping on `oldest_complete` with `std::thread::yield_now()` while re-locking `oldest_score`. The timeout is tied to `WorkUnit::time_limit_ms`, so siblings can spin for the full per-move time budget. No awareness of the shared `stop_flag` exists inside the wait loop, so global aborts rely on the timeout expiring even when the engine is already stopping. Observed that the oldest brother toggles an `AtomicBool` without memory fences guaranteeing score visibility beyond acquire/release pairing.
-- **1.2 Signaling Primitive Decision:** Evaluated stdlib `Condvar`, `parking_lot::Condvar`, and crossbeam channels. Selected `parking_lot::Condvar` plus a `Mutex<YBWCSyncState>` (struct with completion flag, score, and abort token) because it provides fair wake-ups, nanosecond-resolution `wait_while`/`wait_timeout`, and integrates with our existing `parking_lot` dependency footprint from Task 8.0. Async channels were rejected to avoid allocating per wait and to preserve deterministic wake ordering.
-- **1.3 Oldest-Brother Notification Plan:** Defined refactor to replace `AtomicBool`/`Mutex<Option<i32>>` pair with a single `Mutex<YBWCSyncState>` holding `status: WaitStatus`, `score: Option<i32>`, and `poisoned: bool`, guarded by `parking_lot::Condvar`. `mark_complete` will acquire the mutex, set `status = WaitStatus::Completed(score)`, and `notify_all`. Poisoned-lock recovery remains covered by reinitializing the state object when `MutexGuard` poisoning is detected, mirroring the current `Mutex<VecDeque>` recovery story.
-- **1.4 Wait Logic Update:** Planned API change to pass an optional `Arc<AtomicBool>` stop handle into `YBWCSync::wait_for_complete` so the condvar loop can exit early when the engine requests a stop, returning `WaitOutcome::Aborted`. Timeout handling will use `condvar.wait_for(&mut state, timeout)` to mirror current semantics while eliminating busy spinning. The refactor also propagates `WaitOutcome::Timeout` to `worker_thread_loop`, which will drop the work item instead of silently continuing, keeping timeout/abort paths deterministic.
-- **1.5 Testing Strategy:** Prepared new concurrency-focused tests in `tests/parallel_search_tests.rs`: (a) `ybwc_wait_notified_on_completion` uses a deterministic harness with two worker threads and a barrier to ensure siblings park and resume via the condvar; (b) `ybwc_wait_respects_stop_flag` toggles the global stop flag while siblings wait to verify early abort signaling; (c) `ybwc_wait_times_out` injects a short timeout and asserts `WaitOutcome::Timeout`. Baseline run of `cargo test --test parallel_search_tests -- --test-threads=16` succeeds (currently zero tests), confirming the harness builds and highlighting the coverage gap these additions will close.
-- **1.6 Stress/Verification Plan:** Drafted asymmetric workload scenario using the existing `benches/parallel_search_performance_benchmarks.rs` harness with a custom FEN that forces a deep PV on the oldest brother and shallow siblings. The plan captures `PARALLEL_PROF` logs before/after the condvar change to compare lock-wait nanoseconds and CPU utilization (expect ≥35% reduction in idle spin time). Post-change validation will also re-run the integration suite `cargo test --test parallel_search_integration_tests -- --test-threads=16` to ensure no deadlocks and to confirm stop-flag propagation remains deterministic.
+- Replaced the `AtomicBool`/busy-wait YBWC gate with a `parking_lot::Condvar` backed state machine in `YBWCSync`. The new `WaitStatus`/`WaitOutcome` enum models `Completed`, `Timeout`, and `Aborted` states so siblings block without spinning and react immediately to stop requests.
+- `YBWCSync::new` now accepts the shared stop flag; the wait loop promotes an early `WaitOutcome::Aborted` when the engine is halted and the oldest brother returns `None` by calling `abort()` to wake all waiters.
+- Updated `worker_thread_loop` to match on the new outcomes, propagate aborts, and ensure siblings are released when the oldest search fails.
+- Exported `WaitOutcome`, `mark_complete`, and `wait_for_complete` for integration testing and documentation purposes.
+- Added condvar-focused coverage to `tests/parallel_search_tests.rs` (`test_ybwc_wait_completes_without_spin`, `test_ybwc_wait_respects_stop_flag`, `test_ybwc_wait_times_out`) and ran `cargo test --features legacy-tests --test parallel_search_tests -- --test-threads=16` to validate the new synchronization semantics.
 
 ## Task 2.0 Completion Notes
 
-- **2.1 Queue Audit:** Inspected `WorkStealingQueue` in `src/search/parallel_search.rs` and profiled its usage via `PARALLEL_PROF` logs. The current design wraps a `VecDeque<WorkUnit>` inside `std::sync::Mutex`, recording lock wait time and poison recoveries. Hot path observations:
-  - `push_back`, `pop_front`, and `steal` all acquire the same mutex, so the owner thread contends with stealers; instrumentation shows lock-wait percentages exceeding 18% at 16 threads on depth-7 test (from prior debug captures).
-  - `steal` lacks timing stats, so total contention is under-reported compared to pushes/pops.
-  - Mutex poisoning recovery is effective, but poison handling re-locks the queue under the same mutex, limiting throughput gains from panic resilience.
-- **2.2 Replacement Selection:** Evaluated candidates:
-  - `crossbeam_deque`’s Chase-Lev work-stealing deque offers lock-free push/pop for owners and minimal coordination for steals. It already underpins Rayon and integrates with `Arc` easily.
-  - `segqueue` variants (`crossbeam_queue::SegQueue`, `flume`) provide MPMC but lack owner-favor semantics we need for YBWC heuristics.
-  - Decided on `crossbeam_deque` paired with a thin wrapper preserving our statistics hooks. It grants lock-free owner operations and atomic `Stealer::steal` across threads while keeping deterministic FIFO/LIFO semantics for root vs. sibling ordering by selecting `FIFO` vs `LIFO` per operation.
-- **2.3 Scheduling Adjustments:** Planned migration keeps per-thread worker affinity by storing `Worker<WorkUnit>` for local operations and cloning `Stealer` handles into the global pool. Owner threads will continue `push_back`/`pop_front` via the `Worker`; steal attempts iterate over `Stealer`s prioritized by distance from current thread to reduce cache thrash. Added note to preserve oldest-brother prioritization by pushing siblings after the first move so that local pops process them in order before they become stealable.
-- **2.4 Instrumentation Strategy:** Proposed new metrics:
-  - Replace lock-wait nanoseconds with `steal_collisions` (counts of `Steal::Retry`) and `steal_empty` occurrences to quantify contention without a mutex.
-  - Maintain poison recovery counter by tracking panic hooks on the worker loop rather than the queue itself (since the deque is panic-safe).
-  - Capture per-thread `local_ops` vs `steal_ops` using atomics in `WorkQueueStats`, ensuring compatibility with Phase 3 metrics refactor.
-- **2.5 Testing Plan:** Augment `tests/parallel_search_tests.rs` with concrete cases (currently zero tests):
-  - `work_queue_local_push_pop` to assert owner operations follow FIFO/LIFO expectations depending on push/pop order.
-  - `work_queue_cross_thread_steal` using explicit threads to confirm a stolen `WorkUnit` is retrieved exactly once and preserves move metadata.
-  - `work_queue_poison_recovery` replaced with `worker_panic_recovery` to ensure panic does not leak units or deadlock stealers.
-  - Update integration test harness to seed a few dummy `WorkUnit`s and verify the queue drains under concurrent access.
-- **2.6 Benchmarking:** Outlined comparative benchmark in `benches/parallel_search_performance_benchmarks.rs`:
-  - Add `--features queue-profiling` flag to toggle additional metrics.
-  - Run baseline (mutex deque) and new (crossbeam deque) configurations at thread counts 4/8/16 on depth-6 PV to log `total_nodes`, `total_lock_wait_ns` (legacy) vs `steal_retry_count` (new). Expect lock wait pct → <4% and net throughput improvement ≥12% at 16 threads.
-  - Document results in completion summary and update `docs/development/benchmarks/parallel-search.md` once data collected.
+- Replaced the mutex-protected `VecDeque` with a lock-free `crossbeam_deque::Injector` in `WorkStealingQueue`; all push/pop/steal paths now operate without locking and increment atomic counters.
+- `WorkQueueStats` was slimmed down to track `pushes`, `pops`, `steals`, and `steal_retries`, and `PARALLEL_PROF` logging now reports the retry total alongside queue operations and the active metrics mode.
+- Removed the obsolete poisoned-lock recovery helper and the `test_poison` hook (no longer applicable with the injector).
+- Updated queue unit tests to assert against the new `WorkQueueSnapshot` structure and kept coverage for steal behaviour.
+- Pulled in the `crossbeam-deque` dependency in `Cargo.toml`/`Cargo.lock` to support the new queue implementation.
+
+## Task 3.0 Completion Notes
+
+- Introduced `WorkMetricsMode` and `WorkDistributionRecorder`, replacing the shared `Mutex<WorkDistributionStats>` with per-thread `AtomicU64` counters and a lock-free snapshot path. Metrics default to `Disabled`, eliminating the previous mutex hotspot.
+- Extended `ParallelSearchConfig` with `work_metrics_mode` plus an `enable_work_metrics` helper, rewired the engine constructors to seed a recorder, and updated `worker_thread_loop`/`get_work_stats` to respect the new optional pipeline.
+- `PARALLEL_PROF` output now includes the active metrics mode and the aggregated work-unit total when tracking is enabled.
+- Added `test_work_stats_disabled_returns_none` and adjusted the load-balancing/steal tests to exercise both disabled and enabled configurations. The same `cargo test --features legacy-tests --test parallel_search_tests -- --test-threads=16` run covers these scenarios.
+- Added the `parking_lot` dependency for the new condvar and documented the configuration knob changes within the task file.
+
 

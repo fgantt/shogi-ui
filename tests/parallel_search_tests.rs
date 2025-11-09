@@ -120,9 +120,7 @@ fn test_parallel_search_engine_instantiation() {
 
 #[test]
 fn test_board_cloning_correctness() {
-    use shogi_engine::search::parallel_search::{
-        ParallelSearchConfig, ParallelSearchEngine, ThreadLocalSearchContext,
-    };
+    use shogi_engine::search::parallel_search::{ParallelSearchConfig, ParallelSearchEngine};
     use shogi_engine::{
         types::{CapturedPieces, Player},
         BitboardBoard,
@@ -149,7 +147,6 @@ fn test_board_cloning_correctness() {
 #[test]
 fn test_result_aggregation() {
     use shogi_engine::search::parallel_search::{ParallelSearchConfig, ParallelSearchEngine};
-    use shogi_engine::types::Move;
 
     let config = ParallelSearchConfig::new(1);
     let engine = ParallelSearchEngine::new(config).unwrap();
@@ -198,6 +195,129 @@ fn test_basic_parallel_search_2_threads() {
         // Just verify the method completes without error
         assert!(true, "Parallel search completed");
     }
+}
+
+#[test]
+fn test_work_stats_disabled_returns_none() {
+    use shogi_engine::search::parallel_search::{ParallelSearchConfig, ParallelSearchEngine};
+    use std::sync::{atomic::AtomicBool, Arc};
+
+    let config = ParallelSearchConfig::new(2);
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let engine = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag)).unwrap();
+    assert!(engine.get_work_stats().is_none());
+}
+
+#[test]
+fn test_ybwc_wait_completes_without_spin() {
+    use shogi_engine::search::parallel_search::{
+        ParallelSearchConfig, ParallelSearchEngine, WaitOutcome,
+    };
+    use shogi_engine::{
+        moves::MoveGenerator,
+        types::{CapturedPieces, Player},
+        BitboardBoard,
+    };
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let config = ParallelSearchConfig::new(1);
+    let engine = ParallelSearchEngine::new(config).unwrap();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+    let player = Player::Black;
+    let moves = MoveGenerator::new().generate_legal_moves(&board, player, &captured);
+    if moves.is_empty() {
+        return;
+    }
+    let (_, sync) = engine.distribute_work(
+        &board,
+        &captured,
+        player,
+        &moves,
+        2,
+        100,
+        i32::MIN + 1,
+        i32::MAX - 1,
+    );
+    let sync = Arc::new(sync);
+    let waiter = {
+        let wait_sync = sync.clone();
+        thread::spawn(move || matches!(wait_sync.wait_for_complete(200), WaitOutcome::Completed(7)))
+    };
+    thread::sleep(Duration::from_millis(5));
+    sync.mark_complete(7);
+    assert!(waiter.join().unwrap());
+}
+
+#[test]
+fn test_ybwc_wait_respects_stop_flag() {
+    use shogi_engine::search::parallel_search::{
+        ParallelSearchConfig, ParallelSearchEngine, WaitOutcome,
+    };
+    use shogi_engine::{
+        moves::MoveGenerator,
+        types::{CapturedPieces, Player},
+        BitboardBoard,
+    };
+    use std::sync::{atomic::AtomicBool, Arc};
+
+    let config = ParallelSearchConfig::new(1);
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let engine = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag.clone())).unwrap();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+    let player = Player::Black;
+    let moves = MoveGenerator::new().generate_legal_moves(&board, player, &captured);
+    if moves.is_empty() {
+        return;
+    }
+    let (_, sync) = engine.distribute_work(
+        &board,
+        &captured,
+        player,
+        &moves,
+        2,
+        50,
+        i32::MIN + 1,
+        i32::MAX - 1,
+    );
+    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(sync.wait_for_complete(50), WaitOutcome::Aborted);
+}
+
+#[test]
+fn test_ybwc_wait_times_out() {
+    use shogi_engine::search::parallel_search::{
+        ParallelSearchConfig, ParallelSearchEngine, WaitOutcome,
+    };
+    use shogi_engine::{
+        moves::MoveGenerator,
+        types::{CapturedPieces, Player},
+        BitboardBoard,
+    };
+
+    let config = ParallelSearchConfig::new(1);
+    let engine = ParallelSearchEngine::new(config).unwrap();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+    let player = Player::Black;
+    let moves = MoveGenerator::new().generate_legal_moves(&board, player, &captured);
+    if moves.is_empty() {
+        return;
+    }
+    let (_, sync) = engine.distribute_work(
+        &board,
+        &captured,
+        player,
+        &moves,
+        2,
+        10,
+        i32::MIN + 1,
+        i32::MAX - 1,
+    );
+    assert_eq!(sync.wait_for_complete(5), WaitOutcome::Timeout);
 }
 
 #[test]
@@ -268,10 +388,10 @@ fn test_work_stealing_queue_operations() {
     assert!(queue.is_empty());
 
     // Test statistics
-    let (pushes, pops, steals) = queue.get_stats();
-    assert_eq!(pushes, 2);
-    assert_eq!(pops, 1);
-    assert_eq!(steals, 1);
+    let snapshot = queue.get_stats();
+    assert_eq!(snapshot.pushes, 2);
+    assert_eq!(snapshot.pops, 1);
+    assert_eq!(snapshot.steals, 1);
 }
 
 #[test]
@@ -326,7 +446,8 @@ fn test_load_balancing() {
     use shogi_engine::search::parallel_search::{ParallelSearchConfig, ParallelSearchEngine};
     use std::sync::{atomic::AtomicBool, Arc};
 
-    let config = ParallelSearchConfig::new(4);
+    let mut config = ParallelSearchConfig::new(4);
+    config.enable_work_metrics(true);
     let stop_flag = Arc::new(AtomicBool::new(false));
     let engine = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag)).unwrap();
 
@@ -378,8 +499,8 @@ fn test_work_stealing_triggers() {
     assert!(stolen.is_some());
 
     // Verify steal statistics
-    let (_, _, steals) = queue.get_stats();
-    assert!(steals > 0);
+    let snapshot = queue.get_stats();
+    assert!(snapshot.steals > 0);
 }
 
 #[test]
@@ -389,7 +510,8 @@ fn test_many_threads_work_stealing() {
 
     // Test with many threads (8, 16)
     for num_threads in [8, 16] {
-        let config = ParallelSearchConfig::new(num_threads);
+        let mut config = ParallelSearchConfig::new(num_threads);
+        config.enable_work_metrics(true);
         let stop_flag = Arc::new(AtomicBool::new(false));
         let engine_result = ParallelSearchEngine::new_with_stop_flag(config, Some(stop_flag));
 
