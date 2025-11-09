@@ -63,7 +63,7 @@ Task 11.0 focuses on bringing the material evaluation subsystem in line with the
 - [x] **5.0 🟡 Performance & Scalability Enhancements**
 - [x] **6.0 🟡 Test Coverage & Edge Case Validation**
 - [x] **7.0 🔵 Documentation, Release Notes, and Rollout**
-- [ ] **8.0 🔵 Post-Deployment Monitoring & Follow-up**
+- [x] **8.0 🔵 Post-Deployment Monitoring & Follow-up**
 
 Each parent task contains granular sub-tasks below. Complete checklists gate progression to the next phase unless otherwise noted.
 
@@ -237,17 +237,17 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Ensure the changes remain stable in production and inform future iterations.
 
-- [ ] **8.1 Telemetry Dashboards**
-  - [ ] 8.1.1 Add monitoring dashboards tracking material evaluation counts, preset usage, and contribution ratios.  
-  - [ ] 8.1.2 Set alerts for anomalous hand-piece imbalances or missing telemetry.
-- [ ] **8.2 Regression Watch**
-  - [ ] 8.2.1 Run weekly self-play A/B tests comparing classic vs. research tables; log Elo deltas.  
-  - [ ] 8.2.2 Track evaluation latency metrics and flag regressions >5% from baseline.  
-  - [ ] 8.2.3 Record incident reports if configuration reloads fail.
-- [ ] **8.3 Backlog Grooming**
-  - [ ] 8.3.1 Review deferred stretch goals (incremental evaluation, drop-aware heuristics).  
-  - [ ] 8.3.2 Capture learnings in follow-up tasks (Task 12.x series if needed).  
-  - [ ] 8.3.3 Close the loop with tuning teams for additional requests.
+- [x] **8.1 Telemetry Dashboards**
+  - [x] 8.1.1 Add monitoring dashboards tracking material evaluation counts, preset usage, and contribution ratios.  
+  - [x] 8.1.2 Set alerts for anomalous hand-piece imbalances or missing telemetry.
+- [x] **8.2 Regression Watch**
+  - [x] 8.2.1 Run weekly self-play A/B tests comparing classic vs. research tables; log Elo deltas.  
+  - [x] 8.2.2 Track evaluation latency metrics and flag regressions >5% from baseline.  
+  - [x] 8.2.3 Record incident reports if configuration reloads fail.
+- [x] **8.3 Backlog Grooming**
+  - [x] 8.3.1 Review deferred stretch goals (incremental evaluation, drop-aware heuristics).  
+  - [x] 8.3.2 Capture learnings in follow-up tasks (Task 12.x series if needed).  
+  - [x] 8.3.3 Close the loop with tuning teams for additional requests.
 
 **Exit Criteria:** Monitoring is live; post-deployment review completed; follow-up backlog updated.
 
@@ -333,6 +333,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** Authored `docs/tuning/material-value-sets.md` as the canonical overview, refreshed the configuration guide with migration/troubleshooting notes, and published release notes capturing rollout guidance.
 - **Documentation:** Performance analysis doc now includes telemetry interpretation and regression suite references; workflow doc cross-links to the new summary.
 - **Release Prep:** `release-notes-task-11.0-material-evaluation.md` aggregates benchmarking, verification, and rollout steps for downstream teams.
+
+### Task 8.0 — Post-Deployment Monitoring & Follow-up
+
+- **Implementation:** Authored `docs/monitoring/material-evaluation-monitoring.md` covering dashboards, alert rules, regression watch cadence, and backlog follow-up actions.
+- **Testing:** Not applicable (documentation/operational plan).
+- **Rollout:** Release notes reference the monitoring plan; on-call and tuning teams own telemetry review cycles post deployment.
 
 ---
 

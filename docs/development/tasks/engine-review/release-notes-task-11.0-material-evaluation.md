@@ -4,6 +4,7 @@
 - Functional configuration surface: `use_research_values`, `values_path`, and `enable_fast_loop` now shape runtime behaviour across evaluators.
 - Material values externalized with schema-backed JSON/TOML assets, custom loaders, and regression harnesses.
 - Telemetry enriched with per-piece contributions, preset usage counters, and parity cross-checks for optimized traversal.
+- Material telemetry monitoring plan documented in `docs/monitoring/material-evaluation-monitoring.md`, covering dashboards, alerts, and incident workflow.
 
 ## Key Changes
 - New `MaterialValueSet` abstraction with built-in `research` and `classic` presets plus on-disk schema under `resources/material/`.
