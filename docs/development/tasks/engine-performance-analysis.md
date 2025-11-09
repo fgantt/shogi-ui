@@ -36,3 +36,20 @@
 1. Integrate fast loop toggle into performance-optimized presets (done in code; awaiting rollout validation).
 2. Capture nightly CI benchmarks to monitor regression risk once the optimization ships by default.
 3. Extend ablation coverage to include hybrid incremental paths once the make/unmake integration lands.
+
+## Telemetry Interpretation
+
+Material telemetry snapshots now surface the following fields:
+
+- `board_contributions` / `hand_contributions`: per-piece tapered aggregates. Track which pieces dominate evaluations when comparing presets.
+- `hand_balance`: net advantage from pieces in hand; large swings indicate impending drops.
+- `phase_weighted_total`: cumulative score after phase interpolation, useful when correlating with search scores.
+- `preset_usage`: counts of `research`, `classic`, and `custom` tables evaluated during the run. Useful for spotting mixed configurations.
+
+Access via `EvaluationStatistics::telemetry()` or the integrated evaluator debug logs.
+
+## Regression Harness
+
+- Edge-case coverage lives in `tests/material_edge_case_tests.rs` (large hands, promoted captures, impasse thresholds, stats resets).
+- Deterministic score expectations are codified in `tests/material_regression_tests.rs`.
+- Run both suites with `cargo test material_edge_case_tests material_regression_tests` after modifying tables or configuration defaults.

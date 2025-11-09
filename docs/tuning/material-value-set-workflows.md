@@ -1,8 +1,6 @@
 # Material Value Set Workflows
 
-This document outlines how to export, modify, and consume material value tables for the Shogi engine. The workflow is designed to integrate with the automated tuning pipeline while remaining simple enough for manual experiments.
-
----
+This document complements `docs/tuning/material-value-sets.md`, which provides a high-level overview of presets and configuration knobs.
 
 ## 1. Default Assets
 

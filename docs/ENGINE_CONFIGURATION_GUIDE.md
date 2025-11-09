@@ -137,6 +137,18 @@ The following advanced features exist internally but are **not yet exposed** to 
 - `values_path`: Optional filesystem path (JSON or TOML) pointing to a custom material value set. When provided, it overrides `use_research_values`. Paths are resolved relative to the engine working directory unless absolute; failures fall back to the preset indicated by `use_research_values` and emit a debug log.
 - `enable_fast_loop`: Experimental fast path that counts bitboards directly rather than scanning 81 squares. Disabled by default; enable after validating parity via the cross-check test (`cargo test --features material_fast_loop material_delta`).
 
+**Migration Notes**
+
+- Releases prior to 11.0 hard-coded material tables. The new presets (`research`, `classic`) preserve the previous behaviour; no config changes are required to maintain default output.
+- External tooling that previously patched source files should use `values_path` instead.
+- When upgrading existing configs, add `enable_fast_loop = false` explicitly if deterministic parity is required before running the new regression suites.
+
+**Troubleshooting**
+
+- Missing or unreadable `values_path` files trigger a warning in the debug log and fall back to the preset specified by `use_research_values`.
+- Mismatched table lengths (fewer than 14 piece entries) surface as `MaterialValueSetError::Validation` during startup.
+- To compare presets or custom tables, enable telemetry (`integrated_evaluator.enable_statistics()`) and inspect the material snapshot dump in debug logs.
+
 #### Piece-Square Tables
 - Piece-square table weights for all piece types
 - Middle game vs endgame table values

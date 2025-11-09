@@ -62,7 +62,7 @@ Task 11.0 focuses on bringing the material evaluation subsystem in line with the
 - [x] **4.0 🟡 Observability & Telemetry Expansion**
 - [x] **5.0 🟡 Performance & Scalability Enhancements**
 - [x] **6.0 🟡 Test Coverage & Edge Case Validation**
-- [ ] **7.0 🔵 Documentation, Release Notes, and Rollout**
+- [x] **7.0 🔵 Documentation, Release Notes, and Rollout**
 - [ ] **8.0 🔵 Post-Deployment Monitoring & Follow-up**
 
 Each parent task contains granular sub-tasks below. Complete checklists gate progression to the next phase unless otherwise noted.
@@ -216,18 +216,18 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Communicate changes clearly to engine developers, tuning teams, and users.
 
-- [ ] **7.1 Developer Documentation**
-  - [ ] 7.1.1 Update material evaluation section in `docs/development/tasks/engine-performance-analysis.md` with new metrics and benchmarks.  
-  - [ ] 7.1.2 Add value-set workflow documentation in `docs/tuning/material-value-sets.md` (new file) covering import/export, presets, and tuning tips.  
-  - [ ] 7.1.3 Document telemetry fields and how to interpret hand-piece statistics.
-- [ ] **7.2 Configuration Guides**
-  - [ ] 7.2.1 Update configuration reference to explain new options (`values_path`, presets, telemetry verbosity).  
-  - [ ] 7.2.2 Provide migration notes for users relying on hard-coded tables.  
-  - [ ] 7.2.3 Include troubleshooting guide for missing/invalid value files.
-- [ ] **7.3 Release Notes**
-  - [ ] 7.3.1 Summarize material evaluation changes for the next engine release.  
-  - [ ] 7.3.2 Highlight compatibility impacts and recommended defaults.  
-  - [ ] 7.3.3 Link to benchmarks and tuning case studies.
+- [x] **7.1 Developer Documentation**
+  - [x] 7.1.1 Update material evaluation section in `docs/development/tasks/engine-performance-analysis.md` with new metrics and benchmarks.  
+  - [x] 7.1.2 Add value-set workflow documentation in `docs/tuning/material-value-sets.md` (new file) covering import/export, presets, and tuning tips.  
+  - [x] 7.1.3 Document telemetry fields and how to interpret hand-piece statistics.
+- [x] **7.2 Configuration Guides**
+  - [x] 7.2.1 Update configuration reference to explain new options (`values_path`, presets, telemetry verbosity).  
+  - [x] 7.2.2 Provide migration notes for users relying on hard-coded tables.  
+  - [x] 7.2.3 Include troubleshooting guide for missing/invalid value files.
+- [x] **7.3 Release Notes**
+  - [x] 7.3.1 Summarize material evaluation changes for the next engine release.  
+  - [x] 7.3.2 Highlight compatibility impacts and recommended defaults.  
+  - [x] 7.3.3 Link to benchmarks and tuning case studies.
 
 **Exit Criteria:** Documentation updated, reviewed, and published; release notes ready before deployment.
 
@@ -327,6 +327,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** Added dedicated edge-case tests covering massive hand inventories, promoted capture demotion flow, impasse thresholds, and stats resets; introduced a reusable regression harness with curated positions and expected tapered scores.
 - **Testing:** New suites (`material_edge_case_tests`, `material_regression_tests`) run under `cargo test`, including feature-gated fast-loop parity checks to guard optimization rollouts.
 - **Documentation:** Task checklist updated to reflect expanded coverage; benchmark document references the regression harness for future tuning verification.
+
+### Task 7.0 — Documentation, Release Notes, and Rollout
+
+- **Implementation:** Authored `docs/tuning/material-value-sets.md` as the canonical overview, refreshed the configuration guide with migration/troubleshooting notes, and published release notes capturing rollout guidance.
+- **Documentation:** Performance analysis doc now includes telemetry interpretation and regression suite references; workflow doc cross-links to the new summary.
+- **Release Prep:** `release-notes-task-11.0-material-evaluation.md` aggregates benchmarking, verification, and rollout steps for downstream teams.
 
 ---
 
