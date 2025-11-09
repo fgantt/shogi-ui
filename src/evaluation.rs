@@ -1,4 +1,5 @@
 use crate::bitboards::*;
+use crate::evaluation::piece_square_tables::PieceSquareTables;
 use crate::moves::MoveGenerator;
 use crate::types::*;
 use crate::weights::{WeightError, WeightManager};
@@ -1762,285 +1763,6 @@ impl PositionEvaluator {
     }
 }
 
-/// Piece-square tables for dual-phase positional evaluation
-#[derive(Clone)]
-struct PieceSquareTables {
-    // Middlegame tables
-    pawn_table_mg: [[i32; 9]; 9],
-    lance_table_mg: [[i32; 9]; 9],
-    knight_table_mg: [[i32; 9]; 9],
-    silver_table_mg: [[i32; 9]; 9],
-    gold_table_mg: [[i32; 9]; 9],
-    bishop_table_mg: [[i32; 9]; 9],
-    rook_table_mg: [[i32; 9]; 9],
-
-    // Endgame tables
-    pawn_table_eg: [[i32; 9]; 9],
-    lance_table_eg: [[i32; 9]; 9],
-    knight_table_eg: [[i32; 9]; 9],
-    silver_table_eg: [[i32; 9]; 9],
-    gold_table_eg: [[i32; 9]; 9],
-    bishop_table_eg: [[i32; 9]; 9],
-    rook_table_eg: [[i32; 9]; 9],
-}
-
-impl PieceSquareTables {
-    fn new() -> Self {
-        Self {
-            // Initialize middlegame tables
-            pawn_table_mg: Self::init_pawn_table_mg(),
-            lance_table_mg: Self::init_lance_table_mg(),
-            knight_table_mg: Self::init_knight_table_mg(),
-            silver_table_mg: Self::init_silver_table_mg(),
-            gold_table_mg: Self::init_gold_table_mg(),
-            bishop_table_mg: Self::init_bishop_table_mg(),
-            rook_table_mg: Self::init_rook_table_mg(),
-
-            // Initialize endgame tables
-            pawn_table_eg: Self::init_pawn_table_eg(),
-            lance_table_eg: Self::init_lance_table_eg(),
-            knight_table_eg: Self::init_knight_table_eg(),
-            silver_table_eg: Self::init_silver_table_eg(),
-            gold_table_eg: Self::init_gold_table_eg(),
-            bishop_table_eg: Self::init_bishop_table_eg(),
-            rook_table_eg: Self::init_rook_table_eg(),
-        }
-    }
-
-    /// Get positional value for a piece (returns TaperedScore)
-    fn get_value(&self, piece_type: PieceType, pos: Position, player: Player) -> TaperedScore {
-        let (mg_table, eg_table) = self.get_tables(piece_type);
-        let (row, col) = self.get_table_coords(pos, player);
-
-        let mg_value = mg_table[row as usize][col as usize];
-        let eg_value = eg_table[row as usize][col as usize];
-
-        TaperedScore::new_tapered(mg_value, eg_value)
-    }
-
-    /// Get both mg and eg tables for a piece type
-    fn get_tables(&self, piece_type: PieceType) -> (&[[i32; 9]; 9], &[[i32; 9]; 9]) {
-        match piece_type {
-            PieceType::Pawn => (&self.pawn_table_mg, &self.pawn_table_eg),
-            PieceType::Lance => (&self.lance_table_mg, &self.lance_table_eg),
-            PieceType::Knight => (&self.knight_table_mg, &self.knight_table_eg),
-            PieceType::Silver => (&self.silver_table_mg, &self.silver_table_eg),
-            PieceType::Gold => (&self.gold_table_mg, &self.gold_table_eg),
-            PieceType::Bishop => (&self.bishop_table_mg, &self.bishop_table_eg),
-            PieceType::Rook => (&self.rook_table_mg, &self.rook_table_eg),
-            _ => return (&[[0; 9]; 9], &[[0; 9]; 9]), // No positional value for other pieces
-        }
-    }
-
-    /// Get table coordinates for a position and player
-    fn get_table_coords(&self, pos: Position, player: Player) -> (u8, u8) {
-        if player == Player::Black {
-            (pos.row, pos.col)
-        } else {
-            //TODO(feg): With the switch to tsshogi, this is may no longer be needed.
-            (8 - pos.row, 8 - pos.col)
-        }
-    }
-
-    // Middlegame table initialization functions
-    fn init_pawn_table_mg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [5, 5, 5, 5, 5, 5, 5, 5, 5],
-            [10, 10, 10, 10, 10, 10, 10, 10, 10],
-            [15, 15, 15, 15, 15, 15, 15, 15, 15],
-            [20, 20, 20, 20, 20, 20, 20, 20, 20],
-            [25, 25, 25, 25, 25, 25, 25, 25, 25],
-            [30, 30, 30, 30, 30, 30, 30, 30, 30],
-            [35, 35, 35, 35, 35, 35, 35, 35, 35],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    // Endgame table initialization functions
-    fn init_pawn_table_eg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [10, 10, 10, 10, 10, 10, 10, 10, 10],
-            [20, 20, 20, 20, 20, 20, 20, 20, 20],
-            [30, 30, 30, 30, 30, 30, 30, 30, 30],
-            [40, 40, 40, 40, 40, 40, 40, 40, 40],
-            [50, 50, 50, 50, 50, 50, 50, 50, 50],
-            [60, 60, 60, 60, 60, 60, 60, 60, 60],
-            [70, 70, 70, 70, 70, 70, 70, 70, 70],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    fn init_lance_table_mg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 5, 10, 10, 10, 5, 0, 0],
-            [0, 0, 0, 10, 10, 10, 5, 0, 0],
-        ]
-    }
-
-    fn init_lance_table_eg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 10, 20, 20, 20, 10, 0, 0],
-            [0, 0, 0, 20, 20, 20, 10, 0, 0],
-        ]
-    }
-
-    fn init_knight_table_mg() -> [[i32; 9]; 9] {
-        [
-            [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-            [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-            [-10, 0, 5, 10, 15, 10, 5, 0, -10],
-            [-10, 0, 10, 15, 20, 15, 10, 0, -10],
-            [-10, 0, 5, 10, 15, 10, 5, 0, -10],
-            [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-            [-10, 0, 5, 5, 5, 5, 5, 0, -10],
-            [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-            [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-        ]
-    }
-
-    fn init_knight_table_eg() -> [[i32; 9]; 9] {
-        [
-            [-20, -20, -20, -20, -20, -20, -20, -20, -20],
-            [-20, 0, 0, 0, 0, 0, 0, 0, -20],
-            [-20, 0, 10, 20, 30, 20, 10, 0, -20],
-            [-20, 0, 20, 30, 40, 30, 20, 0, -20],
-            [-20, 0, 10, 20, 30, 20, 10, 0, -20],
-            [-20, 0, 10, 20, 20, 20, 10, 0, -20],
-            [-20, 0, 10, 10, 10, 10, 10, 0, -20],
-            [-20, 0, 0, 0, 0, 0, 0, 0, -20],
-            [-20, -20, -20, -20, -20, -20, -20, -20, -20],
-        ]
-    }
-
-    fn init_silver_table_mg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    fn init_silver_table_eg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    fn init_gold_table_mg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    fn init_gold_table_eg() -> [[i32; 9]; 9] {
-        [
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 10, 20, 30, 30, 30, 20, 10, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0],
-        ]
-    }
-
-    fn init_bishop_table_mg() -> [[i32; 9]; 9] {
-        [
-            [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-            [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-            [-10, 5, 10, 15, 15, 15, 10, 5, -10],
-            [-10, 10, 15, 20, 20, 20, 15, 10, -10],
-            [-10, 10, 15, 20, 20, 20, 15, 10, -10],
-            [-10, 5, 10, 15, 15, 15, 10, 5, -10],
-            [-10, 0, 5, 10, 10, 10, 5, 0, -10],
-            [-10, 0, 0, 0, 0, 0, 0, 0, -10],
-            [-10, -10, -10, -10, -10, -10, -10, -10, -10],
-        ]
-    }
-
-    fn init_bishop_table_eg() -> [[i32; 9]; 9] {
-        [
-            [-20, -20, -20, -20, -20, -20, -20, -20, -20],
-            [-20, 0, 10, 20, 20, 20, 10, 0, -20],
-            [-20, 10, 20, 30, 30, 30, 20, 10, -20],
-            [-20, 20, 30, 40, 40, 40, 30, 20, -20],
-            [-20, 20, 30, 40, 40, 40, 30, 20, -20],
-            [-20, 10, 20, 30, 30, 30, 20, 10, -20],
-            [-20, 0, 10, 20, 20, 20, 10, 0, -20],
-            [-20, 0, 0, 0, 0, 0, 0, 0, -20],
-            [-20, -20, -20, -20, -20, -20, -20, -20, -20],
-        ]
-    }
-
-    fn init_rook_table_mg() -> [[i32; 9]; 9] {
-        [
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-        ]
-    }
-
-    fn init_rook_table_eg() -> [[i32; 9]; 9] {
-        [
-            [-10, -5, 0, 5, 5, 5, 0, -5, -10],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [5, 10, 15, 20, 20, 20, 15, 10, 5],
-            [10, 15, 20, 25, 25, 25, 20, 15, 10],
-            [10, 15, 20, 25, 25, 25, 20, 15, 10],
-            [10, 15, 20, 25, 25, 25, 20, 15, 10],
-            [5, 10, 15, 20, 20, 20, 15, 10, 5],
-            [0, 5, 10, 15, 15, 15, 10, 5, 0],
-            [-10, -5, 0, 5, 5, 5, 0, -5, -10],
-        ]
-    }
-}
-
 #[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
@@ -2239,13 +1961,13 @@ mod tests {
 
         // Test pawn tables
         let (mg_table, eg_table) = tables.get_tables(PieceType::Pawn);
-        assert_eq!(mg_table[1][4], 5); // First row should have value 5
-        assert_eq!(eg_table[1][4], 10); // Endgame should have higher values
+        assert_eq!(mg_table[1][4], 5); // First promotion rank bonus
+        assert_eq!(eg_table[1][4], 15); // Endgame values emphasize advancement more strongly
 
         // Test rook tables
         let (mg_table, eg_table) = tables.get_tables(PieceType::Rook);
-        assert_eq!(mg_table[0][4], 15); // First row should have value 15
-        assert_eq!(eg_table[0][4], 5); // Endgame first row should have value 5
+        assert_eq!(mg_table[0][4], 15); // Opening rook activity bonus
+        assert_eq!(eg_table[0][4], 12); // Endgame tables encourage central rook activity
 
         // Test invalid piece type
         let (mg_table, eg_table) = tables.get_tables(PieceType::King);
@@ -2311,6 +2033,41 @@ mod tests {
         let (rook_mg, _rook_eg) = tables.get_tables(PieceType::Rook);
         assert!(rook_mg[4][4] > 0); // Center should be positive
         assert!(rook_mg[0][4] > 0); // First rank should be positive in middlegame
+    }
+
+    fn parse_fen_triple(fen: &str) -> (BitboardBoard, Player, CapturedPieces) {
+        let parts: Vec<&str> = fen.split_whitespace().collect();
+        let fen3 = if parts.len() >= 3 {
+            format!("{} {} {}", parts[0], parts[1], parts[2])
+        } else {
+            fen.to_string()
+        };
+        BitboardBoard::from_fen(&fen3).expect("valid SFEN")
+    }
+
+    #[test]
+    fn test_legacy_and_integrated_evaluators_align_on_sample_positions() {
+        let positions = [
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b -",
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w -",
+            "4k4/1r7/pp1p1pppp/9/9/9/PP1P1PPPP/7R1/4K4 b -",
+        ];
+
+        for fen in positions {
+            let (board, player, captured) = parse_fen_triple(fen);
+
+            let integrated_score = PositionEvaluator::new().evaluate(&board, player, &captured);
+
+            let mut legacy_evaluator = PositionEvaluator::new();
+            legacy_evaluator.disable_integrated_evaluator();
+            let legacy_score = legacy_evaluator.evaluate(&board, player, &captured);
+
+            assert_eq!(
+                legacy_score, integrated_score,
+                "Score mismatch between legacy and integrated evaluator for fen {}",
+                fen
+            );
+        }
     }
 
     #[test]
