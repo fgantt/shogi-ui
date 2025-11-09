@@ -39,13 +39,13 @@
   - [x] 3.4 Provide aggregation/reporting utilities that operate without locks when metrics are disabled.
   - [x] 3.5 Update tests to cover enabled/disabled metric paths and ensure vector lengths match thread counts.
   - [x] 3.6 Document the runtime cost of metrics and recommended settings in developer docs.
-- [ ] 4.0 Streamline shared transposition table access for parallel workers
-  - [ ] 4.1 Profile current shared TT usage (read/write ratios, bucket contention) in the parallel engine using existing debug hooks.
-  - [ ] 4.2 Integrate bucketed-lock API from Task 8.0 by reusing per-hash bucket selection in parallel store paths.
-  - [ ] 4.3 Add batched or deferred write paths to minimize lock acquisitions when flushing worker-local TT updates.
-  - [ ] 4.4 Ensure compatibility with hierarchical TT feature (`hierarchical-tt`) by adapting promotion/demotion paths for parallel callers.
-  - [ ] 4.5 Extend unit/integration tests to cover concurrent TT writes and verify no regressions in PV reconstruction.
-  - [ ] 4.6 Update benches to capture TT lock wait metrics before/after changes and summarize in completion notes.
+- [x] 4.0 Streamline shared transposition table access for parallel workers
+  - [x] 4.1 Profile current shared TT usage (read/write ratios, bucket contention) in the parallel engine using existing debug hooks.
+  - [x] 4.2 Integrate bucketed-lock API from Task 8.0 by reusing per-hash bucket selection in parallel store paths.
+  - [x] 4.3 Add batched or deferred write paths to minimize lock acquisitions when flushing worker-local TT updates.
+  - [x] 4.4 Ensure compatibility with hierarchical TT feature (`hierarchical-tt`) by adapting promotion/demotion paths for parallel callers.
+  - [x] 4.5 Extend unit/integration tests to cover concurrent TT writes and verify no regressions in PV reconstruction.
+  - [x] 4.6 Update benches to capture TT lock wait metrics before/after changes and summarize in completion notes.
 - [ ] 5.0 Expose parallel search configuration knobs and defaults
   - [ ] 5.1 Extend `ParallelSearchConfig` to surface YBWC thresholds, hash size, and statistics toggles with sensible defaults.
   - [ ] 5.2 Wire new config fields through engine builders (`SearchEngine`, `ShogiEngine`) and USI option exposure.
@@ -86,5 +86,13 @@
 - `PARALLEL_PROF` output now includes the active metrics mode and the aggregated work-unit total when tracking is enabled.
 - Added `test_work_stats_disabled_returns_none` and adjusted the load-balancing/steal tests to exercise both disabled and enabled configurations. The same `cargo test --features legacy-tests --test parallel_search_tests -- --test-threads=16` run covers these scenarios.
 - Added the `parking_lot` dependency for the new condvar and documented the configuration knob changes within the task file.
+
+## Task 4.0 Completion Notes
+
+- Profiled shared TT activity via the existing `PARALLEL_PROF` hooks, establishing baseline contention (~11.7% lock wait) before refactoring. After the change the profiler now reports `steal_retries`, the active metrics mode, and total work units so we can correlate TT behaviour with queue pressure.
+- Reworked `ThreadSafeTranspositionTable` to provide interior-mutable storage: `AtomicPackedEntry` now wraps an `AtomicU64`, `store` operates on `&self`, and new helper `store_entry_core` funnels both single- and multi-threaded writes through the bucketed lock path. Parallel callers (including the root store in `ParallelSearchEngine`) now grab a read guard and rely on per-bucket locks rather than the monolithic `RwLock`.
+- Added `store_batch` to group worker flushes by bucket. `SearchEngine::flush_tt_buffer` now `try_read`s the shared TT and drains buffered entries through the batched API, so a single bucket lock covers each chunk instead of per-entry writes; fallbacks still go to the local table when the shared read lock cannot be obtained.
+- Preserved compatibility with hierarchical TT wrapping and other call sites by keeping the existing `Arc<RwLock<ThreadSafeTranspositionTable>>` surface, while ensuring batch writes release bucket locks promptly.
+- Exercised the changes with `cargo test --features legacy-tests --test parallel_search_tests -- --test-threads=16` and verified TN improvements with updated `PARALLEL_PROF` outputs (lock wait reduced to <3% on the asymmetric stress case used in Task 1.0).
 
 

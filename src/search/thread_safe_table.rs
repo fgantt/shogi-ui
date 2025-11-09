@@ -122,10 +122,26 @@ pub struct ThreadSafeEntry {
 /// This struct packs the essential entry data into a format suitable
 /// for atomic operations, reducing memory overhead and improving
 /// cache efficiency.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct AtomicPackedEntry {
-    data: u64,
+    data: AtomicU64,
 }
+
+impl Clone for AtomicPackedEntry {
+    fn clone(&self) -> Self {
+        Self {
+            data: AtomicU64::new(self.data.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl PartialEq for AtomicPackedEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.data.load(Ordering::Relaxed) == other.data.load(Ordering::Relaxed)
+    }
+}
+
+impl Eq for AtomicPackedEntry {}
 
 impl AtomicPackedEntry {
     const SCORE_BITS: u64 = 20;
@@ -159,8 +175,7 @@ impl AtomicPackedEntry {
 
     const DROP_SENTINEL: u8 = 0x7F;
 
-    /// Create a new packed entry
-    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>) -> Self {
+    fn pack(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>) -> u64 {
         let mut data = 0u64;
 
         let clamped_score = score.clamp(Self::SCORE_MIN, Self::SCORE_MAX);
@@ -197,23 +212,42 @@ impl AtomicPackedEntry {
             data |= 1 << Self::HAS_MOVE_SHIFT;
         }
 
-        Self { data }
+        data
+    }
+
+    fn unpack(&self, order: Ordering) -> u64 {
+        self.data.load(order)
+    }
+
+    fn store_raw(&self, value: u64, order: Ordering) {
+        self.data.store(value, order);
+    }
+
+    /// Create a new packed entry
+    pub fn new(score: i32, depth: u8, flag: TranspositionFlag, best_move: Option<Move>) -> Self {
+        let packed = Self::pack(score, depth, flag, best_move);
+        Self {
+            data: AtomicU64::new(packed),
+        }
     }
 
     /// Extract score from packed data
     pub fn score(&self) -> i32 {
-        let encoded = (self.data >> Self::SCORE_SHIFT) & Self::SCORE_MASK;
+        let data = self.unpack(Ordering::Acquire);
+        let encoded = (data >> Self::SCORE_SHIFT) & Self::SCORE_MASK;
         (encoded as i32) + Self::SCORE_MIN
     }
 
     /// Extract depth from packed data
     pub fn depth(&self) -> u8 {
-        ((self.data >> Self::DEPTH_SHIFT) & Self::DEPTH_MASK) as u8
+        let data = self.unpack(Ordering::Acquire);
+        ((data >> Self::DEPTH_SHIFT) & Self::DEPTH_MASK) as u8
     }
 
     /// Extract flag from packed data
     pub fn flag(&self) -> TranspositionFlag {
-        match (self.data >> Self::FLAG_SHIFT) & Self::FLAG_MASK {
+        let data = self.unpack(Ordering::Acquire);
+        match (data >> Self::FLAG_SHIFT) & Self::FLAG_MASK {
             0 => TranspositionFlag::Exact,
             1 => TranspositionFlag::LowerBound,
             2 => TranspositionFlag::UpperBound,
@@ -223,29 +257,30 @@ impl AtomicPackedEntry {
 
     /// Extract best move from packed data
     pub fn best_move(&self) -> Option<Move> {
-        let has_move = ((self.data >> Self::HAS_MOVE_SHIFT) & Self::HAS_MOVE_MASK) == 1;
+        let data = self.unpack(Ordering::Acquire);
+        let has_move = ((data >> Self::HAS_MOVE_SHIFT) & Self::HAS_MOVE_MASK) == 1;
         if !has_move {
             return None;
         }
 
-        let to_idx = ((self.data >> Self::TO_SHIFT) & Self::TO_MASK) as u8;
+        let to_idx = ((data >> Self::TO_SHIFT) & Self::TO_MASK) as u8;
         let to = Position::from_index(to_idx);
 
-        let from_idx = ((self.data >> Self::FROM_SHIFT) & Self::FROM_MASK) as u8;
+        let from_idx = ((data >> Self::FROM_SHIFT) & Self::FROM_MASK) as u8;
         let from = if from_idx == Self::DROP_SENTINEL {
             None
         } else {
             Some(Position::from_index(from_idx))
         };
 
-        let piece_idx = ((self.data >> Self::PIECE_SHIFT) & Self::PIECE_MASK) as u8;
+        let piece_idx = ((data >> Self::PIECE_SHIFT) & Self::PIECE_MASK) as u8;
         let piece_type = PieceType::from_u8(piece_idx);
 
-        let move_flags = ((self.data >> Self::MOVE_FLAGS_SHIFT) & Self::MOVE_FLAGS_MASK) as u8;
+        let move_flags = ((data >> Self::MOVE_FLAGS_SHIFT) & Self::MOVE_FLAGS_MASK) as u8;
         let is_promotion = (move_flags & 0b10) != 0;
         let is_capture = (move_flags & 0b01) != 0;
 
-        let player = match ((self.data >> Self::PLAYER_SHIFT) & Self::PLAYER_MASK) as u8 {
+        let player = match ((data >> Self::PLAYER_SHIFT) & Self::PLAYER_MASK) as u8 {
             0 => Player::Black,
             1 => Player::White,
             _ => Player::Black,
@@ -266,12 +301,28 @@ impl AtomicPackedEntry {
 
     /// Check if the entry is valid (non-zero)
     pub fn is_valid(&self) -> bool {
-        self.data != 0
+        self.is_valid_raw(Ordering::Acquire)
     }
 
     /// Create an empty/invalid entry
     pub fn empty() -> Self {
-        Self { data: 0 }
+        Self {
+            data: AtomicU64::new(0),
+        }
+    }
+
+    pub fn store_entry(&self, entry: &TranspositionEntry) {
+        let packed = Self::pack(
+            entry.score,
+            entry.depth,
+            entry.flag,
+            entry.best_move.clone(),
+        );
+        self.store_raw(packed, Ordering::Release);
+    }
+
+    pub fn is_valid_raw(&self, order: Ordering) -> bool {
+        self.unpack(order) != 0
     }
 }
 
@@ -408,7 +459,7 @@ impl ThreadSafeTranspositionTable {
         }
 
         // Atomic read of packed data
-        let packed_data = entry.packed_data;
+        let packed_data = &entry.packed_data;
         if !packed_data.is_valid() {
             self.increment_misses();
             return None;
@@ -471,7 +522,7 @@ impl ThreadSafeTranspositionTable {
     /// This method provides thread-safe entry storage with appropriate
     /// synchronization based on the thread mode.
     #[inline(always)]
-    pub fn store(&mut self, entry: TranspositionEntry) {
+    pub fn store(&self, entry: TranspositionEntry) {
         let hash = entry.hash_key;
         let index = self.get_index(hash);
         let is_multi_threaded = self.thread_mode.is_multi_threaded();
@@ -537,8 +588,17 @@ impl ThreadSafeTranspositionTable {
     /// This method maps hash keys to lock buckets for reduced write contention.
     /// Uses fast bit shifting to calculate bucket index.
     fn get_bucket_lock(&self, hash: u64) -> &Arc<RwLock<()>> {
-        let bucket_index = (hash >> self.bucket_shift) as usize % self.bucket_locks.len();
+        let bucket_index = self.bucket_index(hash);
         &self.bucket_locks[bucket_index]
+    }
+
+    #[inline(always)]
+    fn bucket_index(&self, hash: u64) -> usize {
+        if self.bucket_locks.is_empty() {
+            0
+        } else {
+            ((hash >> self.bucket_shift) as usize) % self.bucket_locks.len()
+        }
     }
 
     /// Store with full synchronization (multi-threaded mode)
@@ -546,13 +606,17 @@ impl ThreadSafeTranspositionTable {
     /// Uses bucketed locks for better parallel write performance.
     /// Only locks the specific bucket for this hash, not the entire table.
     #[inline(always)]
-    fn store_with_synchronization(&mut self, index: usize, entry: TranspositionEntry) {
+    fn store_with_synchronization(&self, index: usize, entry: TranspositionEntry) {
         // Get the bucket lock for this hash (clone Arc to avoid borrow issues)
         let bucket_lock = Arc::clone(self.get_bucket_lock(entry.hash_key));
         let _write_guard = self.recover_write_guard(bucket_lock.write(), || {
             format!("bucket lock for hash 0x{:016x}", entry.hash_key)
         });
 
+        self.store_entry_core(index, entry);
+    }
+
+    fn store_entry_core(&self, index: usize, entry: TranspositionEntry) {
         // Check if we should replace the existing entry
         let current_hash = self.entries[index].hash_key.load(Ordering::Acquire);
         if current_hash != 0 {
@@ -575,7 +639,7 @@ impl ThreadSafeTranspositionTable {
 
             match decision {
                 ReplacementDecision::Replace => {
-                    Self::store_atomic_entry_static(&mut self.entries[index], entry);
+                    Self::store_atomic_entry_static(&self.entries[index], &entry);
                     self.increment_replacements();
                     self.increment_atomic_operations();
                 }
@@ -584,7 +648,7 @@ impl ThreadSafeTranspositionTable {
                 }
                 ReplacementDecision::ReplaceIfExact => {
                     if entry.is_exact() && !current_entry.is_exact() {
-                        Self::store_atomic_entry_static(&mut self.entries[index], entry);
+                        Self::store_atomic_entry_static(&self.entries[index], &entry);
                         self.increment_replacements();
                         self.increment_atomic_operations();
                     }
@@ -592,17 +656,61 @@ impl ThreadSafeTranspositionTable {
             }
         } else {
             // Empty slot, store directly
-            Self::store_atomic_entry_static(&mut self.entries[index], entry);
+            Self::store_atomic_entry_static(&self.entries[index], &entry);
             self.increment_atomic_operations();
         }
     }
 
     /// Store with atomic operations only (single-threaded mode)
     #[inline(always)]
-    fn store_atomic_only(&mut self, index: usize, entry: TranspositionEntry) {
-        let table_entry = &mut self.entries[index];
-        Self::store_atomic_entry_static(table_entry, entry);
-        self.increment_atomic_operations();
+    fn store_atomic_only(&self, index: usize, entry: TranspositionEntry) {
+        self.store_entry_core(index, entry);
+    }
+
+    /// Store a batch of entries, grouping by bucket to minimise lock acquisitions.
+    pub fn store_batch<I>(&self, entries: I)
+    where
+        I: IntoIterator<Item = TranspositionEntry>,
+    {
+        if !self.thread_mode.is_multi_threaded() {
+            for entry in entries.into_iter() {
+                self.store(entry);
+            }
+            return;
+        }
+
+        let bucket_count = self.bucket_locks.len();
+        if bucket_count == 0 {
+            for entry in entries.into_iter() {
+                self.store(entry);
+            }
+            return;
+        }
+
+        let mut buckets: Vec<Vec<TranspositionEntry>> = vec![Vec::new(); bucket_count];
+        for entry in entries.into_iter() {
+            let bucket_idx = self.bucket_index(entry.hash_key);
+            buckets[bucket_idx].push(entry);
+        }
+
+        for (bucket_idx, bucket_entries) in buckets.into_iter().enumerate() {
+            if bucket_entries.is_empty() {
+                continue;
+            }
+            let context_hash = bucket_entries[0].hash_key;
+            let bucket_lock = Arc::clone(&self.bucket_locks[bucket_idx]);
+            let _guard = self.recover_write_guard(bucket_lock.write(), || {
+                format!(
+                    "bucket lock {} during batch store (hash 0x{:016x})",
+                    bucket_idx, context_hash
+                )
+            });
+            for entry in bucket_entries {
+                let index = self.get_index(entry.hash_key);
+                self.store_entry_core(index, entry);
+                self.increment_stores();
+            }
+        }
     }
 
     /// Prefill the table using entries from an opening book.
@@ -637,18 +745,14 @@ impl ThreadSafeTranspositionTable {
 
     /// Store entry using atomic operations (static helper)
     #[inline(always)]
-    fn store_atomic_entry_static(table_entry: &mut ThreadSafeEntry, entry: TranspositionEntry) {
-        // Pack the entry data
-        let packed_data =
-            AtomicPackedEntry::new(entry.score, entry.depth, entry.flag, entry.best_move);
-
+    fn store_atomic_entry_static(table_entry: &ThreadSafeEntry, entry: &TranspositionEntry) {
         // Atomic write of hash key
         table_entry
             .hash_key
             .store(entry.hash_key, Ordering::Release);
 
         // Atomic write of packed data
-        table_entry.packed_data = packed_data;
+        table_entry.packed_data.store_entry(entry);
 
         // Atomic write of age
         table_entry.age.store(entry.age, Ordering::Release);

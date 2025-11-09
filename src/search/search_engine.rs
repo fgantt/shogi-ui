@@ -260,14 +260,15 @@ impl SearchEngine {
         }
         if let Some(ref shared_tt) = self.shared_transposition_table {
             TT_TRY_WRITES.fetch_add(1, Ordering::Relaxed);
-            if let Ok(mut guard) = shared_tt.try_write() {
+            if let Ok(guard) = shared_tt.try_read() {
                 TT_TRY_WRITE_SUCCESSES.fetch_add(1, Ordering::Relaxed);
-                let to_write = self.tt_write_buffer.len() as u64;
-                self.tt_buffer_flushes += 1;
-                self.tt_buffer_entries_written += to_write;
-                for e in self.tt_write_buffer.drain(..) {
-                    self.shared_tt_store_writes += 1;
-                    guard.store(e);
+                let drained: Vec<_> = self.tt_write_buffer.drain(..).collect();
+                let to_write = drained.len() as u64;
+                if to_write > 0 {
+                    self.tt_buffer_flushes += 1;
+                    self.tt_buffer_entries_written += to_write;
+                    self.shared_tt_store_writes += to_write;
+                    guard.store_batch(drained);
                 }
                 return;
             } else {

@@ -1062,7 +1062,7 @@ impl ParallelSearchEngine {
             );
 
             // Store in shared TT
-            if let Ok(mut tt) = self.transposition_table.write() {
+            if let Ok(tt) = self.transposition_table.read() {
                 tt.store(entry);
             }
 
