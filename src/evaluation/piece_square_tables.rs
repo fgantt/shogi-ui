@@ -523,7 +523,7 @@ impl Default for PieceSquareTables {
     }
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -675,9 +675,13 @@ mod tests {
         let pawn = tables.get_value(PieceType::Pawn, pos, Player::Black);
         let promoted_pawn = tables.get_value(PieceType::PromotedPawn, pos, Player::Black);
 
-        // Promoted pieces should have different (usually better) positional values
-        // Note: This is just positional bonus, not including material value
-        assert_ne!(pawn.mg, promoted_pawn.mg);
+        // Promoted pieces should have different positional characteristics from their base forms.
+        // Note: This is just positional bonus, not including material value.
+        assert_ne!(
+            (pawn.mg, pawn.eg),
+            (promoted_pawn.mg, promoted_pawn.eg),
+            "Promoted pawn should not share the exact mg/eg pair with an unpromoted pawn"
+        );
 
         // Test rook vs promoted rook
         let rook = tables.get_value(PieceType::Rook, pos, Player::Black);
@@ -738,6 +742,69 @@ mod tests {
             // Should not panic on boundary positions
             let _ = score.mg;
             let _ = score.eg;
+        }
+    }
+
+    #[test]
+    fn test_promoted_piece_symmetry() {
+        let tables = PieceSquareTables::new();
+        let promoted_pieces = [
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
+        ];
+
+        for piece_type in promoted_pieces {
+            for row in 0..9 {
+                for col in 0..9 {
+                    let black_pos = Position::new(row, col);
+                    let white_pos = Position::new(8 - row, 8 - col);
+
+                    let black_score = tables.get_value(piece_type, black_pos, Player::Black);
+                    let white_score = tables.get_value(piece_type, white_pos, Player::White);
+
+                    assert_eq!(
+                        black_score.mg, white_score.mg,
+                        "Promoted {:?} mg mismatch at ({}, {}) vs mirrored position",
+                        piece_type, row, col
+                    );
+                    assert_eq!(
+                        black_score.eg, white_score.eg,
+                        "Promoted {:?} eg mismatch at ({}, {}) vs mirrored position",
+                        piece_type, row, col
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_taper_interpolation_endpoints_match_tables() {
+        let tables = PieceSquareTables::new();
+        let sample_positions = [
+            (PieceType::Pawn, Position::new(6, 4)),
+            (PieceType::Rook, Position::new(4, 4)),
+            (PieceType::Bishop, Position::new(3, 3)),
+            (PieceType::PromotedRook, Position::new(4, 4)),
+        ];
+
+        for (piece_type, pos) in sample_positions {
+            let score_black = tables.get_value(piece_type, pos, Player::Black);
+            assert_eq!(
+                score_black.interpolate(256),
+                score_black.mg,
+                "mg endpoint mismatch for {:?}",
+                piece_type
+            );
+            assert_eq!(
+                score_black.interpolate(0),
+                score_black.eg,
+                "eg endpoint mismatch for {:?}",
+                piece_type
+            );
         }
     }
 }

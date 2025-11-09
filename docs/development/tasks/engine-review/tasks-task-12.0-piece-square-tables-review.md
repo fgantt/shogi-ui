@@ -38,11 +38,11 @@ This task list translates the recommendations from Task 12.0 into actionable eng
   - [x] 1.4 Verify bench harnesses and profiling hooks use the unified PST implementation
   - [x] 1.5 Document migration notes in `docs/development/tasks/engine-review/task-12.0-piece-square-tables-review.md` (Section 12.1 reference)
 
-- [ ] 2.0 Promote PST Tests to Default CI (High Priority — Est: 2-3 hours)
-  - [ ] 2.1 Remove the `legacy-tests` feature gate around PST unit tests and ensure they run under `cargo test`
-  - [ ] 2.2 Expand unit tests to cover promoted pieces, white/black symmetry, and taper consistency (mg vs. eg totals)
-  - [ ] 2.3 Add integration tests verifying PST scoring across phase transitions within `tests/evaluation_pipeline_tests.rs`
-  - [ ] 2.4 Update CI configuration/docs to highlight PST coverage and expected runtime deltas (Section 12.4 reference)
+- [x] 2.0 Promote PST Tests to Default CI (High Priority — Est: 2-3 hours)
+  - [x] 2.1 Remove the `legacy-tests` feature gate around PST unit tests and ensure they run under `cargo test`
+  - [x] 2.2 Expand unit tests to cover promoted pieces, white/black symmetry, and taper consistency (mg vs. eg totals)
+  - [x] 2.3 Add integration tests verifying PST scoring across phase transitions within `tests/evaluation_pipeline_tests.rs`
+  - [x] 2.4 Update CI configuration/docs to highlight PST coverage and expected runtime deltas (Section 12.4 reference)
 
 - [ ] 3.0 Introduce Configurable PST Loader (High Priority — Est: 8-12 hours)
   - [ ] 3.1 Design a serializable PST schema (JSON or TOML) supporting piece type, phase, and symmetry metadata
@@ -112,6 +112,15 @@ Meeting these criteria confirms Task 12.0’s recommendations are fully implemen
 - **Regression Testing:** Added a gated regression test (`test_legacy_and_integrated_evaluators_align_on_sample_positions`) under the `legacy-tests` suite to compare legacy and integrated evaluators across representative SFEN positions, along with adjustments to existing PST assertions to reflect the canonical table values.
 - **Validation:** Ran `cargo check` to confirm the codebase builds after the refactor. Attempting to run `cargo test --features legacy-tests` exposed pre-existing failures in unrelated move-ordering modules; these were noted but left unchanged as part of this task.
 - **Documentation:** Updated the task checklist to reflect completion of subtasks 1.1–1.5 and captured the migration summary here to align with Section 12.1 of the parent PRD.
+
+---
+
+## Task 2.0 Completion Notes
+
+- **Implementation:** Dropped the `legacy-tests` feature gate around PST unit tests so they execute under the default `cargo test` path. Augmented coverage with promoted-piece symmetry checks and taper interpolation guards inside `/Users/fgantt/projects/vibe/shogi-game/shogi-ui/src/evaluation/piece_square_tables.rs`.
+- **Integration Testing:** Added `tests/evaluation_pipeline_tests.rs` to confirm PST-only configurations weight endgame values more heavily as the phase collapses, providing end-to-end validation across the integrated evaluator pipeline.
+- **Validation:** Successfully ran `cargo test piece_square_tables` and `cargo test pst_contribution_increases_as_position_reaches_endgame` to verify the ungated unit suite and new integration scenario.
+- **CI Guidance:** Documented the new default coverage expectations here (Section 2.0) so CI owners can rely on `cargo test` without feature flags; runtime impact remains minimal (~4s locally).
 
 ---
 
