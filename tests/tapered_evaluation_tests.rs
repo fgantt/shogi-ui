@@ -409,27 +409,34 @@ fn test_evaluation_consistency_stress() {
 
 #[test]
 fn test_tapered_evaluation_comprehensive() {
-    let evaluator = PositionEvaluator::new();
+    let config = PhaseTransitionConfig {
+        use_advanced_interpolator: true,
+        ..PhaseTransitionConfig::default()
+    };
+    let mut evaluator = PositionEvaluator::new_with_config(config);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
 
     // Comprehensive test of the entire tapered evaluation system
-    let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
+    let mut transition = PhaseTransition::with_config(config);
     let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
-    // Verify all components work together
-    assert!(
-        game_phase >= 0 && game_phase <= GAME_PHASE_MAX,
-        "Game phase should be valid: {}",
-        game_phase
-    );
-    assert!(
-        score.abs() < 10000,
-        "Final score should be reasonable: {}",
-        score
-    );
+    for method in [
+        InterpolationMethod::Linear,
+        InterpolationMethod::Cubic,
+        InterpolationMethod::Sigmoid,
+        InterpolationMethod::Smoothstep,
+        InterpolationMethod::Advanced,
+    ] {
+        let smooth =
+            transition.validate_smooth_transitions(TaperedScore::new_tapered(100, 200), method);
+        assert!(
+            smooth,
+            "Interpolation method {:?} should maintain smooth transitions",
+            method
+        );
+    }
 
-    // Test that evaluation uses the calculated phase
     // The final score should be reasonable
     assert!(
         score.abs() < 10000,

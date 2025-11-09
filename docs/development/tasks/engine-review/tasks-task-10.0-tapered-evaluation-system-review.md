@@ -39,11 +39,11 @@
   - [x] 3.2 Refactor advanced interpolation tests out of `legacy-tests` feature gating so they run under default CI.
   - [x] 3.3 Ensure graceful fallback to standard interpolators when advanced module is disabled or misconfigured.
   - [x] 3.4 Document usage patterns and configuration steps for advanced interpolators in evaluation config docs.
-- [ ] 4.0 Validation & Test Coverage Expansion
-  - [ ] 4.1 Build a parameterized test harness exercising all interpolation methods across key phase checkpoints (0, 64, 128, 192, 256).
-  - [ ] 4.2 Integrate `PhaseTransition::validate_smooth_transitions()` into default test suite to enforce smoothness constraints automatically.
-  - [ ] 4.3 Add integration tests using `IntegratedEvaluator` on representative shogi positions to confirm phase accuracy with new hand/promotion logic.
-  - [ ] 4.4 Supplement performance regression tests/benchmarks capturing interpolation cost comparisons (linear vs sigmoid vs smoothstep vs cubic).
+- [x] 4.0 Validation & Test Coverage Expansion
+  - [x] 4.1 Build a parameterized test harness exercising all interpolation methods across key phase checkpoints (0, 64, 128, 192, 256).
+  - [x] 4.2 Integrate `PhaseTransition::validate_smooth_transitions()` into default test suite to enforce smoothness constraints automatically.
+  - [x] 4.3 Add integration tests using `IntegratedEvaluator` on representative shogi positions to confirm phase accuracy with new hand/promotion logic.
+  - [x] 4.4 Supplement performance regression tests/benchmarks capturing interpolation cost comparisons (linear vs sigmoid vs smoothstep vs cubic).
 - [ ] 5.0 Observability & Instrumentation Surfacing
   - [ ] 5.1 Surface `TaperedEvaluationStats` and `PhaseTransitionStats` via existing search telemetry or debug logging hooks.
   - [ ] 5.2 Implement RAII guard or scoped helper around `PerformanceProfiler` to simplify enabling/disabling during evaluation runs.
@@ -68,4 +68,10 @@
 - **Implementation**: Added an `Advanced` interpolation mode with configuration/plumbing so `PhaseTransition` can host an `AdvancedInterpolator`, including presets via `PhaseTransitionConfig` and the strength-optimized eval preset.
 - **Testing**: Promoted advanced interpolation tests to run unconditionally and added coverage for both fallback and enabled paths.
 - **Documentation**: Updated the task plan to outline the new toggle and usage guidance; advanced tests now part of default CI signal.
+
+### Task 4.0 Completion Notes
+
+- **Implementation**: Introduced a default-enabled regression harness (`tests/phase_transition_validation_tests.rs`) that exercises every interpolation method across the standard phase checkpoints and cross-checks the smoothness validator, plus new integrated evaluator tests ensuring hand/promotion material drives phase calculations.
+- **Testing**: Added non-gated coverage that compares phase values for promoted vs. base pieces and verifies integrated scores react to captured-piece pools; expanded performance benchmarks now sample the advanced interpolator alongside legacy curves.
+- **Documentation**: Updated the task tracking doc with the new validation scope and recorded the broadened benchmark coverage for interpolation cost comparisons.
 

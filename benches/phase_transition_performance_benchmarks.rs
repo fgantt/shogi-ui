@@ -310,13 +310,20 @@ fn benchmark_configurations(c: &mut Criterion) {
                 ..Default::default()
             },
         ),
+        (
+            "advanced_enabled",
+            PhaseTransitionConfig {
+                use_advanced_interpolator: true,
+                ..PhaseTransitionConfig::default()
+            },
+        ),
     ];
 
     for (name, config) in configs {
         group.bench_with_input(BenchmarkId::from_parameter(name), &config, |b, cfg| {
             let mut transition = PhaseTransition::with_config(cfg.clone());
             b.iter(|| {
-                black_box(transition.interpolate(score, 128, InterpolationMethod::Linear));
+                black_box(transition.interpolate(score, 128, transition.default_method));
             });
         });
     }
