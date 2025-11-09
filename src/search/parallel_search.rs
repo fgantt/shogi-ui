@@ -492,8 +492,17 @@ impl ParallelSearchConfig {
 /// and evaluator to avoid contention during parallel search.
 #[allow(dead_code)]
 pub struct ThreadLocalSearchContext {
-    /// Thread-local board state (cloned from root position).
+    /// Cached root board position for quick resets.
+    root_board: BitboardBoard,
+
+    /// Thread-local working board state.
     board: BitboardBoard,
+
+    /// Cached root captured pieces for quick resets.
+    root_captured: CapturedPieces,
+
+    /// Thread-local captured pieces state.
+    captured_pieces: CapturedPieces,
 
     /// Thread-local move generator.
     move_generator: MoveGenerator,
@@ -523,19 +532,38 @@ impl ThreadLocalSearchContext {
     /// * `hash_size_mb` - Size of transposition table in MB
     pub fn new(
         board: &BitboardBoard,
-        _captured_pieces: &CapturedPieces,
+        captured_pieces: &CapturedPieces,
         _player: Player,
         stop_flag: Option<Arc<AtomicBool>>,
         hash_size_mb: usize,
     ) -> Self {
+        let root_board = board.clone();
+        let root_captured = captured_pieces.clone();
         Self {
-            board: board.clone(),
+            root_board: root_board.clone(),
+            board: root_board.clone(),
+            root_captured: root_captured.clone(),
+            captured_pieces: root_captured,
             move_generator: MoveGenerator::new(),
             evaluator: PositionEvaluator::new(),
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             search_engine: SearchEngine::new(stop_flag, hash_size_mb),
         }
+    }
+
+    /// Refresh the cached root state with a new board/captured snapshot.
+    pub fn refresh_root_state(&mut self, board: &BitboardBoard, captured_pieces: &CapturedPieces) {
+        self.root_board.clone_from(board);
+        self.board.clone_from(board);
+        self.root_captured.clone_from(captured_pieces);
+        self.captured_pieces.clone_from(captured_pieces);
+    }
+
+    /// Reset working state back to cached root copies.
+    pub fn reset_to_root(&mut self) {
+        self.board.clone_from(&self.root_board);
+        self.captured_pieces.clone_from(&self.root_captured);
     }
 
     /// Get mutable reference to the thread-local board.
@@ -548,9 +576,90 @@ impl ThreadLocalSearchContext {
         &self.board
     }
 
+    /// Get mutable reference to thread-local captured pieces.
+    pub fn captured_pieces_mut(&mut self) -> &mut CapturedPieces {
+        &mut self.captured_pieces
+    }
+
+    /// Get reference to thread-local captured pieces.
+    pub fn captured_pieces(&self) -> &CapturedPieces {
+        &self.captured_pieces
+    }
+
+    /// Borrow mutable references to both board and captured pieces simultaneously.
+    pub fn board_and_captured_mut(&mut self) -> (&mut BitboardBoard, &mut CapturedPieces) {
+        (&mut self.board, &mut self.captured_pieces)
+    }
+
+    pub fn search_root_child(
+        &mut self,
+        mv: &Move,
+        player: Player,
+        depth: u8,
+        time_limit_ms: u32,
+        alpha: i32,
+        beta: i32,
+    ) -> Option<i32> {
+        let board = &mut self.board;
+        let captured = &mut self.captured_pieces;
+        if let Some(captured_piece) = board.make_move(mv) {
+            captured.add_piece(captured_piece.piece_type, player);
+        }
+        self.search_engine
+            .search_at_depth(
+                board,
+                captured,
+                player.opposite(),
+                depth,
+                time_limit_ms,
+                alpha,
+                beta,
+            )
+            .map(|(_, score)| score)
+    }
+
+    pub fn flush_and_get_pv(&mut self, player: Player, depth: u8) -> Vec<Move> {
+        self.search_engine.flush_tt_buffer();
+        self.search_engine
+            .get_pv_for_reporting(&self.board, &self.captured_pieces, player, depth)
+    }
+
+    /// Update the stop flag used by the thread-local search engine.
+    pub fn update_stop_flag(&mut self, stop_flag: Option<Arc<AtomicBool>>) {
+        self.search_engine.set_stop_flag(stop_flag);
+    }
+
     /// Get mutable reference to the thread-local search engine.
     pub fn search_engine_mut(&mut self) -> &mut SearchEngine {
         &mut self.search_engine
+    }
+}
+
+static NEXT_CONTEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+struct ThreadContextHolder {
+    generation: u64,
+    context: ThreadLocalSearchContext,
+}
+
+impl ThreadContextHolder {
+    fn new(
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        stop_flag: Option<Arc<AtomicBool>>,
+        hash_size_mb: usize,
+    ) -> Self {
+        Self {
+            generation: 0,
+            context: ThreadLocalSearchContext::new(
+                board,
+                captured_pieces,
+                player,
+                stop_flag,
+                hash_size_mb,
+            ),
+        }
     }
 }
 
@@ -1007,89 +1116,100 @@ impl ParallelSearchEngine {
             }
         });
 
+        let shared_tt = self.transposition_table.clone();
+        let generation_id = NEXT_CONTEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
+
         self.thread_pool.install(|| {
-            // Use min_len to encourage chunking and reduce scheduling overhead
             moves
                 .par_iter()
                 .enumerate()
                 .with_min_len((moves.len() / (self.config.num_threads * 2).max(1)).max(1))
-                .for_each(|(idx, mv)| {
-                // Check stop flag before searching this move
-                if search_stop.load(Ordering::Relaxed) {
-                    crate::debug_utils::debug_log("Stop flag set before worker started move; skipping");
-                    return;
-                }
+                .for_each_init(
+                    || {
+                        ThreadContextHolder::new(
+                            board,
+                            captured_pieces,
+                            player,
+                            Some(search_stop.clone()),
+                            hash_size_mb,
+                        )
+                    },
+                    |holder, (idx, mv)| {
+                        if search_stop.load(Ordering::Relaxed) {
+                            crate::debug_utils::debug_log(
+                                "Stop flag set before worker started move; skipping",
+                            );
+                            return;
+                        }
 
-                // Create thread-local context per task (simpler Send bounds for rayon)
-                let mut context = ThreadLocalSearchContext::new(
-                        board,
-                        captured_pieces,
-                        player,
-                        Some(search_stop.clone()),
-                        hash_size_mb,
-                    );
-                // Provide shared TT to improve ordering/PV consistency across workers
-                context.search_engine_mut().set_shared_transposition_table(self.transposition_table.clone());
-                // Enable intra-node YBWC for worker engines with reasonable defaults
-                // (These can be tuned in the main SearchEngine as needed.)
-                self.configure_worker_engine(context.search_engine_mut());
+                        holder
+                            .context
+                            .update_stop_flag(Some(search_stop.clone()));
 
-                // Clone board and apply move
-                let mut test_board = board.clone();
-                let mut test_captured = captured_pieces.clone();
-                if let Some(captured) = test_board.make_move(mv) {
-                    test_captured.add_piece(captured.piece_type, player);
-                }
+                        if holder.generation != generation_id {
+                            holder
+                                .context
+                                .refresh_root_state(board, captured_pieces);
+                            holder
+                                .context
+                                .search_engine_mut()
+                                .set_shared_transposition_table(shared_tt.clone());
+                            self.configure_worker_engine(holder.context.search_engine_mut());
+                            holder.generation = generation_id;
+                        } else {
+                            holder.context.reset_to_root();
+                        }
 
-                // Search at reduced depth
-                let search_depth = if depth > 0 { depth - 1 } else { 0 };
+                        let search_depth = if depth > 0 { depth - 1 } else { 0 };
 
-                // Optional test injection: simulate panic in a worker for the first task
-                if env::var("SHOGI_FORCE_WORKER_PANIC").ok().as_deref() == Some("1") && idx == 0 {
-                    panic!("Forced worker panic for testing");
-                }
-                if let Some((_, score_child)) = context.search_engine_mut().search_at_depth(
-                    &mut test_board,
-                    &test_captured,
-                    player.opposite(),
-                    search_depth,
-                    time_limit_ms,
-                    -beta,
-                    -alpha,
-                ) {
-                    // Flush TT buffer before building PV so all entries are visible in shared TT
-                    context.search_engine_mut().flush_tt_buffer();
-                    // Build PV from child and prefix root move
-                    // IMPORTANT: The PV building uses get_pv_for_reporting which will build as many moves
-                    // as are available in the TT (up to 64 moves). The depth parameter is just a hint,
-                    // but the actual PV length is determined by how many positions have best_move entries.
-                    // Use a large depth value to allow building the full PV line from the child position.
-                    let seldepth = crate::search::search_engine::GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
-                    // Use seldepth if available, otherwise use a large value (64) to allow full PV building
-                    // The get_pv_for_reporting function will stop when it runs out of entries with best_move
-                    let pv_depth = if seldepth > 0 { seldepth } else { 64 };
-                    let pv_moves = context
-                        .search_engine_mut()
-                        .get_pv_for_reporting(&test_board, &test_captured, player.opposite(), pv_depth);
-                    let mv_root = mv.to_usi_string();
-                    let mut pv_string = String::with_capacity(mv_root.len() + pv_moves.len() * 4);
-                    pv_string.push_str(&mv_root);
-                    for child in pv_moves.iter() {
-                        pv_string.push(' ');
-                        pv_string.push_str(&child.to_usi_string());
-                    }
-                    // Check stop flag again in case stop was requested during search
-                    if search_stop.load(Ordering::Relaxed) {
-                        crate::debug_utils::debug_log("Stop flag observed after move search; reporting partial and returning");
-                    }
-                    let score = -score_child;
-                    let _ = tx.send((mv.clone(), score, pv_string));
-                } else {
-                    // Still report move completion with no PV
-                    crate::debug_utils::debug_log("Search_at_depth returned None; reporting move with no PV");
-                    let _ = tx.send((mv.clone(), i32::MIN / 2, mv.to_usi_string()));
-                }
-            });
+                        if env::var("SHOGI_FORCE_WORKER_PANIC")
+                            .ok()
+                            .as_deref()
+                            == Some("1")
+                            && idx == 0
+                        {
+                            panic!("Forced worker panic for testing");
+                        }
+
+                        let search_score = holder.context.search_root_child(
+                            mv,
+                            player,
+                            search_depth,
+                            time_limit_ms,
+                            -beta,
+                            -alpha,
+                        );
+
+                        if let Some(score_child) = search_score {
+                            let seldepth = crate::search::search_engine::GLOBAL_SELDEPTH
+                                .load(Ordering::Relaxed) as u8;
+                            let pv_depth = if seldepth > 0 { seldepth } else { 64 };
+                            let pv_moves = holder
+                                .context
+                                .flush_and_get_pv(player.opposite(), pv_depth);
+                            let mv_root = mv.to_usi_string();
+                            let mut pv_string =
+                                String::with_capacity(mv_root.len() + pv_moves.len() * 4);
+                            pv_string.push_str(&mv_root);
+                            for child in pv_moves.iter() {
+                                pv_string.push(' ');
+                                pv_string.push_str(&child.to_usi_string());
+                            }
+                            if search_stop.load(Ordering::Relaxed) {
+                                crate::debug_utils::debug_log("Stop flag observed after move search; reporting partial and returning");
+                            }
+                            let score = -score_child;
+                            let _ = tx.send((mv.clone(), score, pv_string));
+                        } else {
+                            crate::debug_utils::debug_log(
+                                "Search_at_depth returned None; reporting move with no PV",
+                            );
+                            let _ = tx.send((mv.clone(), i32::MIN / 2, mv.to_usi_string()));
+                        }
+
+                        holder.context.reset_to_root();
+                    },
+                );
         });
         // Close the channel to signal the consumer that no more results are coming
         drop(tx);

@@ -846,6 +846,10 @@ impl SearchEngine {
         Ok(())
     }
 
+    pub fn set_stop_flag(&mut self, stop_flag: Option<Arc<AtomicBool>>) {
+        self.stop_flag = stop_flag;
+    }
+
     /// Get the current engine configuration
     pub fn get_engine_config(&self) -> EngineConfig {
         EngineConfig {
