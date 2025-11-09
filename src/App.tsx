@@ -42,8 +42,9 @@ function App() {
   const [sessions, setSessions] = useState<string[]>([]);
 
   useEffect(() => {
-    const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI__);
-    if (!isTauri) {
+    const isTauriEnvironment =
+      typeof window !== 'undefined' && typeof (window as any).__TAURI_INTERNALS__ === 'object';
+    if (!isTauriEnvironment) {
       return;
     }
 
