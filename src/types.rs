@@ -843,13 +843,19 @@ impl std::ops::Mul<f32> for TaperedScore {
 pub const GAME_PHASE_MAX: i32 = 256;
 
 /// Phase values for different piece types
-pub const PIECE_PHASE_VALUES: [(PieceType, i32); 6] = [
+pub const PIECE_PHASE_VALUES: [(PieceType, i32); 12] = [
+    (PieceType::Lance, 1),
     (PieceType::Knight, 1),
     (PieceType::Silver, 1),
     (PieceType::Gold, 2),
     (PieceType::Bishop, 2),
     (PieceType::Rook, 3),
-    (PieceType::Lance, 1),
+    (PieceType::PromotedPawn, 2),
+    (PieceType::PromotedLance, 2),
+    (PieceType::PromotedKnight, 2),
+    (PieceType::PromotedSilver, 2),
+    (PieceType::PromotedBishop, 3),
+    (PieceType::PromotedRook, 3),
 ];
 
 // ============================================================================
@@ -984,6 +990,9 @@ pub struct TaperedEvaluationConfig {
     pub enabled: bool,
     /// Cache game phase calculation per search node
     pub cache_game_phase: bool,
+    /// Maximum number of phase entries to retain in the local cache
+    #[serde(default = "TaperedEvaluationConfig::default_phase_cache_size")]
+    pub phase_cache_size: usize,
     /// Use SIMD optimizations (future feature)
     pub use_simd: bool,
     /// Memory pool size for TaperedScore objects
@@ -999,6 +1008,7 @@ impl Default for TaperedEvaluationConfig {
         Self {
             enabled: true,
             cache_game_phase: true,
+            phase_cache_size: Self::default_phase_cache_size(),
             use_simd: false,
             memory_pool_size: 1000,
             enable_performance_monitoring: false,
@@ -1013,11 +1023,16 @@ impl TaperedEvaluationConfig {
         Self::default()
     }
 
+    pub const fn default_phase_cache_size() -> usize {
+        4
+    }
+
     /// Create a configuration with tapered evaluation disabled
     pub fn disabled() -> Self {
         Self {
             enabled: false,
             cache_game_phase: false,
+            phase_cache_size: 0,
             use_simd: false,
             memory_pool_size: 0,
             enable_performance_monitoring: false,
@@ -1030,6 +1045,7 @@ impl TaperedEvaluationConfig {
         Self {
             enabled: true,
             cache_game_phase: true,
+            phase_cache_size: 8,
             use_simd: false,
             memory_pool_size: 2000,
             enable_performance_monitoring: true,
@@ -1042,6 +1058,7 @@ impl TaperedEvaluationConfig {
         Self {
             enabled: true,
             cache_game_phase: false,
+            phase_cache_size: 1,
             use_simd: false,
             memory_pool_size: 100,
             enable_performance_monitoring: false,
@@ -3883,7 +3900,7 @@ mod tests {
     #[test]
     fn test_game_phase_constants() {
         assert_eq!(GAME_PHASE_MAX, 256);
-        assert_eq!(PIECE_PHASE_VALUES.len(), 6);
+        assert_eq!(PIECE_PHASE_VALUES.len(), 12);
 
         // Test that all piece types have phase values
         let piece_types = [
@@ -3893,6 +3910,12 @@ mod tests {
             PieceType::Bishop,
             PieceType::Rook,
             PieceType::Lance,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
         ];
 
         for piece_type in &piece_types {

@@ -17,7 +17,8 @@ fn test_game_phase_calculation_comprehensive() {
 
     // Test starting position (should be maximum phase)
     let board = BitboardBoard::new();
-    let phase = evaluator.calculate_game_phase(&board);
+    let captured_pieces = CapturedPieces::new();
+    let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
     assert_eq!(
         phase, GAME_PHASE_MAX,
         "Starting position should have maximum phase"
@@ -25,7 +26,7 @@ fn test_game_phase_calculation_comprehensive() {
 
     // Test phase calculation consistency
     for _ in 0..10 {
-        let phase_repeat = evaluator.calculate_game_phase(&board);
+        let phase_repeat = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(
             phase, phase_repeat,
             "Phase calculation should be consistent"
@@ -358,10 +359,11 @@ fn test_tapered_score_arithmetic() {
 fn test_game_phase_edge_cases() {
     let evaluator = PositionEvaluator::new();
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     // Test phase calculation with empty board (if possible)
     // Note: This might not be possible with current BitboardBoard implementation
-    let phase = evaluator.calculate_game_phase(&board);
+    let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
     // Phase should be in valid range
     assert!(phase >= 0, "Phase should be non-negative: {}", phase);
@@ -373,7 +375,7 @@ fn test_game_phase_edge_cases() {
 
     // Test phase calculation consistency
     for _ in 0..100 {
-        let phase_repeat = evaluator.calculate_game_phase(&board);
+        let phase_repeat = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(
             phase, phase_repeat,
             "Phase calculation should be deterministic"
@@ -412,7 +414,7 @@ fn test_tapered_evaluation_comprehensive() {
     let captured_pieces = CapturedPieces::new();
 
     // Comprehensive test of the entire tapered evaluation system
-    let game_phase = evaluator.calculate_game_phase(&board);
+    let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
     let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
     // Verify all components work together

@@ -105,6 +105,7 @@ fn benchmark_game_phase_calculation(c: &mut Criterion) {
     let mut group = c.benchmark_group("game_phase_calculation");
 
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     group.bench_function("no_cache", |b| {
         let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
@@ -112,7 +113,7 @@ fn benchmark_game_phase_calculation(c: &mut Criterion) {
             ..Default::default()
         });
         b.iter(|| {
-            black_box(evaluator.calculate_game_phase(&board));
+            black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
         });
     });
 
@@ -122,7 +123,7 @@ fn benchmark_game_phase_calculation(c: &mut Criterion) {
                 cache_game_phase: true,
                 ..Default::default()
             });
-            black_box(evaluator.calculate_game_phase(&board));
+            black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
         });
     });
 
@@ -132,10 +133,10 @@ fn benchmark_game_phase_calculation(c: &mut Criterion) {
             ..Default::default()
         });
         // Warm up cache
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
 
         b.iter(|| {
-            black_box(evaluator.calculate_game_phase(&board));
+            black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
         });
     });
 
@@ -147,6 +148,7 @@ fn benchmark_cache_performance(c: &mut Criterion) {
     let mut group = c.benchmark_group("cache_performance");
 
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     group.bench_function("cache_hit_rate_100", |b| {
         let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
@@ -154,12 +156,12 @@ fn benchmark_cache_performance(c: &mut Criterion) {
             ..Default::default()
         });
         // Warm up cache
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
 
         b.iter(|| {
             // All calls should hit cache
             for _ in 0..100 {
-                black_box(evaluator.calculate_game_phase(&board));
+                black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
             }
         });
     });
@@ -192,13 +194,14 @@ fn benchmark_complete_workflow(c: &mut Criterion) {
     let mut group = c.benchmark_group("complete_workflow");
 
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     group.bench_function("phase_calculation_and_interpolation", |b| {
         let mut evaluator = TaperedEvaluation::new();
         let score = TaperedScore::new_tapered(100, 200);
 
         b.iter(|| {
-            let phase = evaluator.calculate_game_phase(&board);
+            let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
             black_box(evaluator.interpolate(score, phase));
         });
     });
@@ -207,7 +210,7 @@ fn benchmark_complete_workflow(c: &mut Criterion) {
         let mut evaluator = TaperedEvaluation::new();
 
         b.iter(|| {
-            let phase = evaluator.calculate_game_phase(&board);
+            let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
             let mut total = TaperedScore::default();
             for _ in 0..10 {
@@ -226,6 +229,7 @@ fn benchmark_statistics_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("statistics_overhead");
 
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     group.bench_function("with_stats_tracking", |b| {
         let mut evaluator = TaperedEvaluation::with_config(TaperedEvaluationConfig {
@@ -234,7 +238,7 @@ fn benchmark_statistics_overhead(c: &mut Criterion) {
         });
 
         b.iter(|| {
-            black_box(evaluator.calculate_game_phase(&board));
+            black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
         });
     });
 
@@ -245,7 +249,7 @@ fn benchmark_statistics_overhead(c: &mut Criterion) {
         });
 
         b.iter(|| {
-            black_box(evaluator.calculate_game_phase(&board));
+            black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
         });
     });
 
@@ -257,6 +261,7 @@ fn benchmark_configurations(c: &mut Criterion) {
     let mut group = c.benchmark_group("configurations");
 
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     let configs = vec![
         ("default", TaperedEvaluationConfig::default()),
@@ -275,7 +280,7 @@ fn benchmark_configurations(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(name), &config, |b, config| {
             let mut evaluator = TaperedEvaluation::with_config(config.clone());
             b.iter(|| {
-                black_box(evaluator.calculate_game_phase(&board));
+                black_box(evaluator.calculate_game_phase(&board, &captured_pieces));
             });
         });
     }

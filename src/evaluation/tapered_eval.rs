@@ -27,6 +27,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::*;
+use std::cmp;
 
 /// Coordination struct for managing tapered evaluation
 ///
@@ -36,8 +37,8 @@ use crate::types::*;
 pub struct TaperedEvaluation {
     /// Configuration for tapered evaluation
     config: TaperedEvaluationConfig,
-    /// Cached game phase for performance optimization
-    cached_phase: Option<(u64, i32)>, // (position_hash, phase)
+    /// Cached game phases for performance optimization (LRU order)
+    phase_cache: Vec<(u64, i32)>, // (position_hash, phase)
     /// Statistics for monitoring and tuning
     stats: TaperedEvaluationStats,
 }
@@ -47,7 +48,7 @@ impl TaperedEvaluation {
     pub fn new() -> Self {
         Self {
             config: TaperedEvaluationConfig::default(),
-            cached_phase: None,
+            phase_cache: Vec::new(),
             stats: TaperedEvaluationStats::default(),
         }
     }
@@ -56,7 +57,7 @@ impl TaperedEvaluation {
     pub fn with_config(config: TaperedEvaluationConfig) -> Self {
         Self {
             config,
-            cached_phase: None,
+            phase_cache: Vec::new(),
             stats: TaperedEvaluationStats::default(),
         }
     }
@@ -70,7 +71,7 @@ impl TaperedEvaluation {
     pub fn set_config(&mut self, config: TaperedEvaluationConfig) {
         self.config = config;
         // Clear cache when configuration changes
-        self.cached_phase = None;
+        self.phase_cache.clear();
     }
 
     /// Calculate the current game phase based on material count
@@ -78,6 +79,7 @@ impl TaperedEvaluation {
     /// # Arguments
     ///
     /// * `board` - The current board state
+    /// * `captured_pieces` - Pieces in hand for both players
     ///
     /// # Returns
     ///
@@ -87,27 +89,35 @@ impl TaperedEvaluation {
     ///
     /// This function uses caching when enabled in configuration to avoid
     /// recalculating the phase for the same position.
-    pub fn calculate_game_phase(&mut self, board: &BitboardBoard) -> i32 {
+    pub fn calculate_game_phase(
+        &mut self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         self.stats.phase_calculations += 1;
 
         // Check cache if enabled
         if self.config.cache_game_phase {
-            let position_hash = self.get_position_hash(board);
-            if let Some((cached_hash, cached_phase)) = self.cached_phase {
-                if cached_hash == position_hash {
-                    self.stats.cache_hits += 1;
-                    return cached_phase;
-                }
+            let position_hash = self.get_position_hash(board, captured_pieces);
+            if let Some(index) = self
+                .phase_cache
+                .iter()
+                .position(|(cached_hash, _)| *cached_hash == position_hash)
+            {
+                let (_, cached_phase) = self.phase_cache.remove(index);
+                self.phase_cache.push((position_hash, cached_phase));
+                self.stats.cache_hits += 1;
+                return cached_phase;
             }
         }
 
         // Calculate phase based on material
-        let phase = self.calculate_phase_from_material(board);
+        let phase = self.calculate_phase_from_material(board, captured_pieces);
 
         // Update cache if enabled
         if self.config.cache_game_phase {
-            let position_hash = self.get_position_hash(board);
-            self.cached_phase = Some((position_hash, phase));
+            let position_hash = self.get_position_hash(board, captured_pieces);
+            self.insert_phase_cache(position_hash, phase);
         }
 
         phase
@@ -117,7 +127,11 @@ impl TaperedEvaluation {
     ///
     /// This is the core phase calculation algorithm. It assigns phase values
     /// to each piece type and sums them to determine the overall game phase.
-    fn calculate_phase_from_material(&self, board: &BitboardBoard) -> i32 {
+    fn calculate_phase_from_material(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let mut phase = 0;
 
         for row in 0..9 {
@@ -131,6 +145,8 @@ impl TaperedEvaluation {
             }
         }
 
+        phase += self.calculate_phase_from_captured(captured_pieces);
+
         // Scale to 0-256 range
         // Starting position has 30 total phase value (15 per player)
         // We want this to map to GAME_PHASE_MAX (256)
@@ -143,12 +159,30 @@ impl TaperedEvaluation {
     /// Get phase value for a piece type
     ///
     /// Returns None for pieces that don't contribute to game phase
-    /// (pawns, kings, promoted pieces)
+    /// (pawns, kings)
     fn get_piece_phase_value(&self, piece_type: PieceType) -> Option<i32> {
         PIECE_PHASE_VALUES
             .iter()
             .find(|(pt, _)| *pt == piece_type)
             .map(|(_, value)| *value)
+    }
+
+    fn calculate_phase_from_captured(&self, captured_pieces: &CapturedPieces) -> i32 {
+        let mut phase = 0;
+
+        for &piece_type in &captured_pieces.black {
+            if let Some(value) = self.get_piece_phase_value(piece_type) {
+                phase += value;
+            }
+        }
+
+        for &piece_type in &captured_pieces.white {
+            if let Some(value) = self.get_piece_phase_value(piece_type) {
+                phase += value;
+            }
+        }
+
+        phase
     }
 
     /// Interpolate a tapered score based on game phase
@@ -188,7 +222,11 @@ impl TaperedEvaluation {
     ///
     /// This is a simplified hash for phase caching purposes.
     /// For more sophisticated hashing, use the Zobrist hash system.
-    fn get_position_hash(&self, board: &BitboardBoard) -> u64 {
+    fn get_position_hash(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> u64 {
         let mut hash = 0u64;
 
         for row in 0..9 {
@@ -198,6 +236,28 @@ impl TaperedEvaluation {
                     let piece_value =
                         (piece.piece_type.to_u8() as u64) * 100 + (piece.player as u64);
                     hash = hash.wrapping_mul(31).wrapping_add(piece_value);
+                }
+            }
+        }
+
+        let mut captured_counts = [[0u8; 14]; 2];
+
+        for &piece in &captured_pieces.black {
+            let idx = piece.to_u8() as usize;
+            captured_counts[0][idx] = captured_counts[0][idx].saturating_add(1);
+        }
+
+        for &piece in &captured_pieces.white {
+            let idx = piece.to_u8() as usize;
+            captured_counts[1][idx] = captured_counts[1][idx].saturating_add(1);
+        }
+
+        for (player_idx, counts) in captured_counts.iter().enumerate() {
+            for (piece_idx, count) in counts.iter().enumerate() {
+                if *count > 0 {
+                    let contribution =
+                        ((player_idx as u64) << 48) ^ ((piece_idx as u64) << 8) ^ (*count as u64);
+                    hash = hash.wrapping_mul(131).wrapping_add(contribution);
                 }
             }
         }
@@ -217,7 +277,29 @@ impl TaperedEvaluation {
 
     /// Clear the phase cache
     pub fn clear_cache(&mut self) {
-        self.cached_phase = None;
+        self.phase_cache.clear();
+    }
+
+    fn insert_phase_cache(&mut self, hash: u64, phase: i32) {
+        if self.config.phase_cache_size == 0 {
+            return;
+        }
+
+        if let Some(pos) = self.phase_cache.iter().position(|(existing, _)| *existing == hash) {
+            self.phase_cache.remove(pos);
+        }
+
+        self.phase_cache.push((hash, phase));
+
+        let capacity = cmp::max(self.config.phase_cache_size, 1);
+        while self.phase_cache.len() > capacity {
+            self.phase_cache.remove(0);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cache_len(&self) -> usize {
+        self.phase_cache.len()
     }
 }
 
@@ -289,8 +371,9 @@ mod tests {
     fn test_calculate_game_phase_starting_position() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(
             phase, GAME_PHASE_MAX,
             "Starting position should have maximum phase"
@@ -301,9 +384,10 @@ mod tests {
     fn test_calculate_game_phase_consistency() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let phase1 = evaluator.calculate_game_phase(&board);
-        let phase2 = evaluator.calculate_game_phase(&board);
+        let phase1 = evaluator.calculate_game_phase(&board, &captured_pieces);
+        let phase2 = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         assert_eq!(phase1, phase2, "Phase calculation should be consistent");
     }
@@ -315,13 +399,14 @@ mod tests {
             ..Default::default()
         });
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // First call
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().cache_hits, 0);
 
         // Second call should hit cache
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().cache_hits, 1);
     }
 
@@ -395,13 +480,14 @@ mod tests {
     fn test_stats_tracking() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         assert_eq!(evaluator.stats().phase_calculations, 0);
 
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().phase_calculations, 1);
 
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().phase_calculations, 2);
     }
 
@@ -412,13 +498,14 @@ mod tests {
             ..Default::default()
         });
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // First call - no cache hit
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().cache_hit_rate(), 0.0);
 
         // Second call - should hit cache
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().cache_hit_rate(), 0.5);
     }
 
@@ -429,20 +516,22 @@ mod tests {
             ..Default::default()
         });
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        evaluator.calculate_game_phase(&board);
-        assert!(evaluator.cached_phase.is_some());
+        evaluator.calculate_game_phase(&board, &captured_pieces);
+        assert!(evaluator.cache_len() > 0);
 
         evaluator.clear_cache();
-        assert!(evaluator.cached_phase.is_none());
+        assert_eq!(evaluator.cache_len(), 0);
     }
 
     #[test]
     fn test_reset_stats() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        evaluator.calculate_game_phase(&board);
+        evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(evaluator.stats().phase_calculations, 1);
 
         evaluator.reset_stats();
@@ -456,23 +545,97 @@ mod tests {
             ..Default::default()
         });
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        evaluator.calculate_game_phase(&board);
-        assert!(evaluator.cached_phase.is_some());
+        evaluator.calculate_game_phase(&board, &captured_pieces);
+        assert!(evaluator.cache_len() > 0);
 
         let new_config = TaperedEvaluationConfig::default();
         evaluator.set_config(new_config);
-        assert!(evaluator.cached_phase.is_none());
+        assert_eq!(evaluator.cache_len(), 0);
     }
 
     #[test]
     fn test_game_phase_range() {
         let mut evaluator = TaperedEvaluation::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert!(phase >= 0, "Phase should be non-negative");
         assert!(phase <= GAME_PHASE_MAX, "Phase should not exceed maximum");
+    }
+
+    #[test]
+    fn test_captured_pieces_contribute_to_phase() {
+        let mut config = TaperedEvaluationConfig::default();
+        config.cache_game_phase = false;
+        let mut evaluator = TaperedEvaluation::with_config(config);
+        let board = BitboardBoard::empty();
+
+        let empty_captured = CapturedPieces::new();
+        let phase_without = evaluator.calculate_game_phase(&board, &empty_captured);
+
+        let mut captured_with = CapturedPieces::new();
+        captured_with.add_piece(PieceType::Rook, Player::Black);
+        let phase_with = evaluator.calculate_game_phase(&board, &captured_with);
+
+        assert!(
+            phase_with > phase_without,
+            "Having pieces in hand should increase phase value"
+        );
+    }
+
+    #[test]
+    fn test_promoted_piece_contributes_to_phase() {
+        let mut config = TaperedEvaluationConfig::default();
+        config.cache_game_phase = false;
+        let mut evaluator = TaperedEvaluation::with_config(config);
+        let mut board = BitboardBoard::empty();
+        let captured_pieces = CapturedPieces::new();
+        let position = Position::new(4, 4);
+
+        board.place_piece(Piece::new(PieceType::Pawn, Player::Black), position);
+        let pawn_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
+
+        board.remove_piece(position);
+        board.place_piece(
+            Piece::new(PieceType::PromotedPawn, Player::Black),
+            position,
+        );
+        let promoted_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
+
+        assert!(
+            promoted_phase > pawn_phase,
+            "Promoted pieces should contribute more to phase than their unpromoted counterparts"
+        );
+    }
+
+    #[test]
+    fn test_phase_cache_includes_captured_pieces_in_hash() {
+        let mut evaluator = TaperedEvaluation::default();
+        let board = BitboardBoard::empty();
+        let empty_captured = CapturedPieces::new();
+
+        let mut captured_with = CapturedPieces::new();
+        captured_with.add_piece(PieceType::Silver, Player::Black);
+
+        let phase_empty = evaluator.calculate_game_phase(&board, &empty_captured);
+        assert_eq!(evaluator.stats().cache_hits, 0);
+
+        let phase_with = evaluator.calculate_game_phase(&board, &captured_with);
+        assert_eq!(
+            evaluator.stats().cache_hits, 0,
+            "Different captured sets should not hit the cache"
+        );
+        assert!(phase_with > phase_empty);
+
+        let phase_empty_again = evaluator.calculate_game_phase(&board, &empty_captured);
+        assert_eq!(
+            evaluator.stats().cache_hits, 1,
+            "Reusing identical captured sets should hit the cache"
+        );
+        assert_eq!(phase_empty, phase_empty_again);
     }
 
     #[test]
@@ -486,6 +649,30 @@ mod tests {
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Bishop), Some(2));
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Rook), Some(3));
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Lance), Some(1));
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedPawn),
+            Some(2)
+        );
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedLance),
+            Some(2)
+        );
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedKnight),
+            Some(2)
+        );
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedSilver),
+            Some(2)
+        );
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedBishop),
+            Some(3)
+        );
+        assert_eq!(
+            evaluator.get_piece_phase_value(PieceType::PromotedRook),
+            Some(3)
+        );
 
         // Test pieces that don't contribute to phase
         assert_eq!(evaluator.get_piece_phase_value(PieceType::Pawn), None);

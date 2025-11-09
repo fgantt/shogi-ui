@@ -122,7 +122,7 @@ impl IntegratedEvaluator {
 
         // Check cache if enabled
         if self.config.enable_eval_cache {
-            let hash = self.compute_position_hash(board, player);
+            let hash = self.compute_position_hash(board, player, captured_pieces);
             if let Some(cached) = self.eval_cache.borrow().get(&hash).copied() {
                 if self.statistics.borrow().is_enabled() {
                     self.statistics
@@ -142,7 +142,7 @@ impl IntegratedEvaluator {
             self.statistics.borrow_mut().record_timing(duration);
 
             if self.config.enable_phase_cache {
-                let phase = self.calculate_phase_cached(board);
+                let phase = self.calculate_phase_cached(board, captured_pieces);
                 self.statistics.borrow_mut().record_evaluation(score, phase);
             }
         }
@@ -158,7 +158,7 @@ impl IntegratedEvaluator {
         captured_pieces: &CapturedPieces,
     ) -> i32 {
         // Calculate phase
-        let phase = self.calculate_phase_cached(board);
+        let phase = self.calculate_phase_cached(board, captured_pieces);
 
         // Accumulate component scores
         let mut total = TaperedScore::default();
@@ -241,7 +241,7 @@ impl IntegratedEvaluator {
 
         // Cache if enabled
         if self.config.enable_eval_cache {
-            let hash = self.compute_position_hash(board, player);
+            let hash = self.compute_position_hash(board, player, captured_pieces);
             self.eval_cache.borrow_mut().insert(
                 hash,
                 CachedEvaluation {
@@ -277,24 +277,39 @@ impl IntegratedEvaluator {
     }
 
     /// Calculate phase with caching
-    fn calculate_phase_cached(&self, board: &BitboardBoard) -> i32 {
+    fn calculate_phase_cached(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         if !self.config.enable_phase_cache {
-            return self.tapered_eval.borrow_mut().calculate_game_phase(board);
+            return self
+                .tapered_eval
+                .borrow_mut()
+                .calculate_game_phase(board, captured_pieces);
         }
 
-        let hash = self.compute_phase_hash(board);
+        let hash = self.compute_phase_hash(board, captured_pieces);
 
         if let Some(&phase) = self.phase_cache.borrow().get(&hash) {
             return phase;
         }
 
-        let phase = self.tapered_eval.borrow_mut().calculate_game_phase(board);
+        let phase = self
+            .tapered_eval
+            .borrow_mut()
+            .calculate_game_phase(board, captured_pieces);
         self.phase_cache.borrow_mut().insert(hash, phase);
         phase
     }
 
     /// Compute position hash for caching
-    fn compute_position_hash(&self, board: &BitboardBoard, player: Player) -> u64 {
+    fn compute_position_hash(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> u64 {
         // Simple hash - in production, use Zobrist hashing
         let mut hash = 0u64;
 
@@ -311,12 +326,38 @@ impl IntegratedEvaluator {
             }
         }
 
+        let mut captured_counts = [[0u8; 14]; 2];
+
+        for &piece in &captured_pieces.black {
+            let idx = piece.to_u8() as usize;
+            captured_counts[0][idx] = captured_counts[0][idx].saturating_add(1);
+        }
+
+        for &piece in &captured_pieces.white {
+            let idx = piece.to_u8() as usize;
+            captured_counts[1][idx] = captured_counts[1][idx].saturating_add(1);
+        }
+
+        for (player_idx, counts) in captured_counts.iter().enumerate() {
+            for (piece_idx, count) in counts.iter().enumerate() {
+                if *count > 0 {
+                    let token =
+                        ((player_idx as u64) << 48) ^ ((piece_idx as u64) << 8) ^ (*count as u64);
+                    hash ^= token.wrapping_mul(0x94d049bb133111eb);
+                }
+            }
+        }
+
         hash ^= (player as u64).wrapping_mul(0x517cc1b727220a95);
         hash
     }
 
     /// Compute phase hash (material-based)
-    fn compute_phase_hash(&self, board: &BitboardBoard) -> u64 {
+    fn compute_phase_hash(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> u64 {
         let mut hash = 0u64;
 
         for row in 0..9 {
@@ -325,6 +366,28 @@ impl IntegratedEvaluator {
                 if let Some(piece) = board.get_piece(pos) {
                     let piece_hash = (piece.piece_type as u64) << 4 | (piece.player as u64);
                     hash ^= piece_hash.wrapping_mul(0x9e3779b97f4a7c15);
+                }
+            }
+        }
+
+        let mut captured_counts = [[0u8; 14]; 2];
+
+        for &piece in &captured_pieces.black {
+            let idx = piece.to_u8() as usize;
+            captured_counts[0][idx] = captured_counts[0][idx].saturating_add(1);
+        }
+
+        for &piece in &captured_pieces.white {
+            let idx = piece.to_u8() as usize;
+            captured_counts[1][idx] = captured_counts[1][idx].saturating_add(1);
+        }
+
+        for (player_idx, counts) in captured_counts.iter().enumerate() {
+            for (piece_idx, count) in counts.iter().enumerate() {
+                if *count > 0 {
+                    let token =
+                        ((player_idx as u64) << 32) ^ ((piece_idx as u64) << 4) ^ (*count as u64);
+                    hash ^= token.wrapping_mul(0x9e3779b97f4a7c15);
                 }
             }
         }
@@ -531,9 +594,10 @@ mod tests {
     fn test_phase_caching() {
         let mut evaluator = IntegratedEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let phase1 = evaluator.calculate_phase_cached(&board);
-        let phase2 = evaluator.calculate_phase_cached(&board);
+        let phase1 = evaluator.calculate_phase_cached(&board, &captured_pieces);
+        let phase2 = evaluator.calculate_phase_cached(&board, &captured_pieces);
 
         assert_eq!(phase1, phase2);
         assert!(evaluator.phase_cache.len() > 0);

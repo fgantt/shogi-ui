@@ -468,7 +468,7 @@ impl PositionEvaluator {
         if self.is_using_tuned_weights() {
             // Extract features and use tuned weights
             let features = self.get_evaluation_features(board, player, captured_pieces);
-            let game_phase = self.calculate_game_phase(board);
+            let game_phase = self.calculate_game_phase(board, captured_pieces);
 
             match self.evaluate_with_weights(&features, game_phase) {
                 Ok(score) => score,
@@ -552,7 +552,7 @@ impl PositionEvaluator {
         }
 
         // 1. Calculate game phase
-        let game_phase = self.calculate_game_phase(board);
+        let game_phase = self.calculate_game_phase(board, captured_pieces);
 
         // 2. Accumulate all evaluation terms
         let mut total_score = TaperedScore::default();
@@ -1405,7 +1405,11 @@ impl PositionEvaluator {
 
     /// Calculate the current game phase (0 = endgame, GAME_PHASE_MAX = opening)
     /// This is based on the number and type of non-pawn, non-king pieces on the board
-    pub fn calculate_game_phase(&self, board: &BitboardBoard) -> i32 {
+    pub fn calculate_game_phase(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let mut phase = 0;
 
         for row in 0..9 {
@@ -1419,6 +1423,8 @@ impl PositionEvaluator {
             }
         }
 
+        phase += self.calculate_phase_from_captured(captured_pieces);
+
         // Scale to 0-256 range
         // Starting position has 30 total phase value (15 per player)
         // We want this to map to GAME_PHASE_MAX (256)
@@ -1430,12 +1436,30 @@ impl PositionEvaluator {
     }
 
     /// Get phase value for a piece type
-    /// Returns None for pieces that don't contribute to game phase (pawns, kings, promoted pieces)
+    /// Returns None for pieces that don't contribute to game phase (pawns, kings)
     fn get_piece_phase_value(&self, piece_type: PieceType) -> Option<i32> {
         PIECE_PHASE_VALUES
             .iter()
             .find(|(pt, _)| *pt == piece_type)
             .map(|(_, value)| *value)
+    }
+
+    fn calculate_phase_from_captured(&self, captured_pieces: &CapturedPieces) -> i32 {
+        let mut phase = 0;
+
+        for &piece_type in &captured_pieces.black {
+            if let Some(value) = self.get_piece_phase_value(piece_type) {
+                phase += value;
+            }
+        }
+
+        for &piece_type in &captured_pieces.white {
+            if let Some(value) = self.get_piece_phase_value(piece_type) {
+                phase += value;
+            }
+        }
+
+        phase
     }
 
     // ============================================================================
@@ -2009,13 +2033,14 @@ mod tests {
     fn test_calculate_game_phase_starting_position() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new(); // Starting position
+        let captured_pieces = CapturedPieces::new();
 
         // Starting position should have maximum phase
         // Each player has: 2 Knights(1) + 2 Silvers(1) + 2 Golds(2) + 1 Bishop(2) + 1 Rook(3) + 2 Lances(1)
         // Total per player: 2*1 + 2*1 + 2*2 + 1*2 + 1*3 + 2*1 = 2 + 2 + 4 + 2 + 3 + 2 = 15
         // Both players: 15 * 2 = 30
         // But we need to scale this to 0-256 range
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(phase, GAME_PHASE_MAX);
     }
 
@@ -2023,11 +2048,12 @@ mod tests {
     fn test_calculate_game_phase_empty_board() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // Remove all pieces to create empty board
         // This is a bit tricky since we can't easily create an empty board
         // For now, we'll test with a board that has minimal pieces
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert!(phase >= 0);
         assert!(phase <= GAME_PHASE_MAX);
     }
@@ -2036,10 +2062,11 @@ mod tests {
     fn test_calculate_game_phase_endgame_position() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // In a typical endgame, we'd have fewer major pieces
         // For now, we'll test that the phase calculation works
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert!(phase >= 0);
         assert!(phase <= GAME_PHASE_MAX);
     }
@@ -2061,27 +2088,27 @@ mod tests {
         assert_eq!(evaluator.get_piece_phase_value(PieceType::King), None);
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedPawn),
-            None
+            Some(2)
         );
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedLance),
-            None
+            Some(2)
         );
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedKnight),
-            None
+            Some(2)
         );
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedSilver),
-            None
+            Some(2)
         );
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedBishop),
-            None
+            Some(3)
         );
         assert_eq!(
             evaluator.get_piece_phase_value(PieceType::PromotedRook),
-            None
+            Some(3)
         );
     }
 
@@ -2089,10 +2116,11 @@ mod tests {
     fn test_game_phase_calculation_consistency() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // Phase calculation should be consistent across multiple calls
-        let phase1 = evaluator.calculate_game_phase(&board);
-        let phase2 = evaluator.calculate_game_phase(&board);
+        let phase1 = evaluator.calculate_game_phase(&board, &captured_pieces);
+        let phase2 = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert_eq!(phase1, phase2);
     }
 
@@ -2100,11 +2128,12 @@ mod tests {
     fn test_game_phase_calculation_performance() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
         // Performance test - should complete quickly
         let start = std::time::Instant::now();
         for _ in 0..1000 {
-            let _ = evaluator.calculate_game_phase(&board);
+            let _ = evaluator.calculate_game_phase(&board, &captured_pieces);
         }
         let duration = start.elapsed();
 
@@ -2116,8 +2145,9 @@ mod tests {
     fn test_game_phase_range() {
         let evaluator = PositionEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         // Phase should be within valid range
         assert!(phase >= 0);
@@ -2141,7 +2171,7 @@ mod tests {
         }
 
         // Test that we have the expected number of piece types
-        assert_eq!(PIECE_PHASE_VALUES.len(), 6);
+        assert_eq!(PIECE_PHASE_VALUES.len(), 12);
 
         // Test that all expected piece types are present
         let expected_pieces = [
@@ -2151,6 +2181,12 @@ mod tests {
             PieceType::Bishop,
             PieceType::Rook,
             PieceType::Lance,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
         ];
 
         for expected_piece in &expected_pieces {
@@ -2337,7 +2373,7 @@ mod tests {
         );
 
         // Test with different game phases
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         assert!(game_phase >= 0 && game_phase <= GAME_PHASE_MAX);
     }
 
@@ -2379,7 +2415,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         // Test interpolation at different phases
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         // Create a test TaperedScore
         let test_score = TaperedScore::new_tapered(100, 200);
@@ -2513,7 +2549,7 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         // Test that evaluation is consistent across different phases
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         // Multiple evaluations should be consistent
         let score1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
@@ -2525,8 +2561,8 @@ mod tests {
         );
 
         // Test that phase calculation is consistent
-        let phase1 = evaluator.calculate_game_phase(&board);
-        let phase2 = evaluator.calculate_game_phase(&board);
+        let phase1 = evaluator.calculate_game_phase(&board, &captured_pieces);
+        let phase2 = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         assert_eq!(phase1, phase2, "Phase calculation should be consistent");
     }
@@ -2794,7 +2830,7 @@ mod tests {
         let weights = vec![1.0; NUM_EVAL_FEATURES];
 
         // Test evaluation with weights
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         let weighted_score =
             evaluator.evaluate_with_weights_legacy(&features, &weights, game_phase);
 
@@ -3112,7 +3148,7 @@ mod tests {
 
         // Extract features
         let features = evaluator.get_evaluation_features(&board, Player::Black, &captured_pieces);
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         // Test new evaluate_with_weights method (should use default weights)
         let result = evaluator.evaluate_with_weights(&features, game_phase);

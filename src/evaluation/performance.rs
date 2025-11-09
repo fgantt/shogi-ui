@@ -83,7 +83,7 @@ impl OptimizedEvaluator {
         };
 
         // 1. Calculate phase (with caching)
-        let phase = self.calculate_phase_optimized(board);
+        let phase = self.calculate_phase_optimized(board, captured_pieces);
 
         // 2. Accumulate scores (inlined for performance)
         let total_score = self.accumulate_scores_optimized(board, player, captured_pieces);
@@ -101,14 +101,20 @@ impl OptimizedEvaluator {
 
     /// Optimized phase calculation with caching
     #[inline(always)]
-    fn calculate_phase_optimized(&mut self, board: &BitboardBoard) -> i32 {
+    fn calculate_phase_optimized(
+        &mut self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let start = if self.profiler.enabled {
             Some(Instant::now())
         } else {
             None
         };
 
-        let phase = self.tapered_eval.calculate_game_phase(board);
+        let phase = self
+            .tapered_eval
+            .calculate_game_phase(board, captured_pieces);
 
         if let Some(start_time) = start {
             self.profiler

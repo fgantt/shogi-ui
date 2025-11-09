@@ -50,7 +50,7 @@ fn test_phase_calculation_performance_regression() {
     let start = Instant::now();
 
     for _ in 0..iterations {
-        let _ = evaluator.calculate_game_phase(&board);
+        let _ = evaluator.calculate_game_phase(&board, &CapturedPieces::new());
     }
 
     let duration = start.elapsed();
@@ -233,7 +233,7 @@ fn test_comprehensive_performance_regression() {
 
     for _ in 0..iterations {
         // Test complete evaluation pipeline
-        let game_phase = evaluator.calculate_game_phase(&board);
+        let game_phase = evaluator.calculate_game_phase(&board, &CapturedPieces::new());
         let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
         // Verify results are reasonable

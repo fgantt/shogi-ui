@@ -39,7 +39,7 @@ fn test_integration_starting_position() {
     );
 
     // Game phase should be maximum for starting position
-    let game_phase = evaluator.calculate_game_phase(&board);
+    let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
     assert_eq!(
         game_phase, GAME_PHASE_MAX,
         "Starting position should have maximum phase: {}",
@@ -75,11 +75,12 @@ fn test_integration_evaluation_consistency() {
 fn test_integration_phase_calculation_consistency() {
     let evaluator = PositionEvaluator::new();
     let board = BitboardBoard::new();
+    let captured_pieces = CapturedPieces::new();
 
     // Test phase calculation consistency
     let mut phases = Vec::new();
     for _ in 0..100 {
-        let phase = evaluator.calculate_game_phase(&board);
+        let phase = evaluator.calculate_game_phase(&board, &captured_pieces);
         phases.push(phase);
     }
 
@@ -286,7 +287,7 @@ fn test_integration_comprehensive_evaluation() {
     let captured_pieces = CapturedPieces::new();
 
     // Comprehensive test of the entire tapered evaluation system
-    let game_phase = evaluator.calculate_game_phase(&board);
+    let game_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
     let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
     // Verify all components work together
