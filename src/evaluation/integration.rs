@@ -28,7 +28,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::{
     endgame_patterns::EndgamePatternEvaluator,
-    material::MaterialEvaluator,
+    material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
     opening_principles::OpeningPrincipleEvaluator,
     pattern_cache::PatternCache,
     performance::OptimizedEvaluator,
@@ -91,7 +91,7 @@ impl IntegratedEvaluator {
     /// Create with custom configuration
     pub fn with_config(config: IntegratedEvaluationConfig) -> Self {
         let optimized_eval = if config.use_optimized_path {
-            Some(OptimizedEvaluator::new())
+            Some(OptimizedEvaluator::with_config(&config.material))
         } else {
             None
         };
@@ -99,7 +99,7 @@ impl IntegratedEvaluator {
         Self {
             config: config.clone(),
             tapered_eval: RefCell::new(TaperedEvaluation::new()),
-            material_eval: RefCell::new(MaterialEvaluator::new()),
+            material_eval: RefCell::new(MaterialEvaluator::with_config(config.material.clone())),
             pst: PieceSquareTables::new(),
             phase_transition: RefCell::new(PhaseTransition::new()),
             position_features: RefCell::new(PositionFeatureEvaluator::new()),
@@ -464,16 +464,40 @@ impl IntegratedEvaluator {
         &self.config
     }
 
+    /// Update only the material evaluation configuration.
+    pub fn update_material_config(&mut self, material_config: MaterialEvaluationConfig) {
+        let mut updated = self.config.clone();
+        updated.material = material_config;
+        self.set_config(updated);
+    }
+
+    /// Retrieve material evaluation statistics.
+    pub fn material_statistics(&self) -> MaterialEvaluationStats {
+        self.material_eval.borrow().stats().clone()
+    }
+
     /// Update configuration
     pub fn set_config(&mut self, config: IntegratedEvaluationConfig) {
-        self.config = config;
+        self.config = config.clone();
 
-        // Recreate optimized evaluator if needed
-        if self.config.use_optimized_path && self.optimized_eval.is_none() {
-            self.optimized_eval = Some(OptimizedEvaluator::new());
-        } else if !self.config.use_optimized_path {
+        {
+            let mut material_eval = self.material_eval.borrow_mut();
+            material_eval.apply_config(config.material.clone());
+        }
+
+        if config.use_optimized_path {
+            if let Some(opt) = self.optimized_eval.as_mut() {
+                opt.apply_material_config(&config.material);
+            } else {
+                self.optimized_eval = Some(OptimizedEvaluator::with_config(&config.material));
+            }
+        } else {
             self.optimized_eval = None;
         }
+
+        self.clear_caches();
+        self.statistics.borrow_mut().reset();
+        self.telemetry.borrow_mut().take();
     }
 
     /// Get cache statistics
@@ -508,6 +532,8 @@ pub struct IntegratedEvaluationConfig {
     pub max_cache_size: usize,
     /// Pattern cache size (Phase 3 - Task 3.1)
     pub pattern_cache_size: usize,
+    /// Material evaluation configuration
+    pub material: MaterialEvaluationConfig,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -519,6 +545,7 @@ impl Default for IntegratedEvaluationConfig {
             use_optimized_path: true,
             max_cache_size: 10000,
             pattern_cache_size: 100_000,
+            material: MaterialEvaluationConfig::default(),
         }
     }
 }

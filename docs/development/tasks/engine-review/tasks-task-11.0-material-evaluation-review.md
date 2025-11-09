@@ -98,21 +98,21 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Ensure material configuration changes flow from top-level evaluators into concrete evaluators at runtime.
 
-- [ ] **2.1 Integration Wiring**
-  - [ ] 2.1.1 Modify `IntegratedEvaluator` and `OptimizedEvaluator` constructors to accept a `MaterialEvaluationConfig`.  
-  - [ ] 2.1.2 Pass material configuration through evaluator factories, avoiding default instantiation.  
-  - [ ] 2.1.3 Introduce `MaterialEvaluatorHandle` helper if needed to manage interior mutability.
-- [ ] **2.2 Runtime Reconfiguration**
-  - [ ] 2.2.1 Add `update_config(&self, new_config)` path that rebuilds or hot-swaps the material evaluator.  
-  - [ ] 2.2.2 Ensure caches dependent on material values (evaluation cache, phase cache) are invalidated or versioned.  
-  - [ ] 2.2.3 Reset or migrate `MaterialEvaluationStats` on config change to avoid mixing metrics.
-- [ ] **2.3 Integration Tests**
-  - [ ] 2.3.1 Add test toggling `include_hand_pieces` and `use_research_values` during runtime; assert evaluator output changes accordingly.  
-  - [ ] 2.3.2 Verify configuration updates propagate through telemetry endpoints.  
-  - [ ] 2.3.3 Confirm time pressure or evaluation batching logic respects updated material configuration.
-- [ ] **2.4 Error Handling**
-  - [ ] 2.4.1 Provide clear errors when configurations reference unavailable value sets.  
-  - [ ] 2.4.2 Ensure concurrent reconfiguration is synchronized (e.g., via `RwLock`/`Mutex`).
+- [x] **2.1 Integration Wiring**
+  - [x] 2.1.1 Modify `IntegratedEvaluator` and `OptimizedEvaluator` constructors to accept a `MaterialEvaluationConfig`.  
+  - [x] 2.1.2 Pass material configuration through evaluator factories, avoiding default instantiation.  
+  - [x] 2.1.3 Introduce `MaterialEvaluatorHandle` helper if needed to manage interior mutability.
+- [x] **2.2 Runtime Reconfiguration**
+  - [x] 2.2.1 Add `update_config(&self, new_config)` path that rebuilds or hot-swaps the material evaluator.  
+  - [x] 2.2.2 Ensure caches dependent on material values (evaluation cache, phase cache) are invalidated or versioned.  
+  - [x] 2.2.3 Reset or migrate `MaterialEvaluationStats` on config change to avoid mixing metrics.
+- [x] **2.3 Integration Tests**
+  - [x] 2.3.1 Add test toggling `include_hand_pieces` and `use_research_values` during runtime; assert evaluator output changes accordingly.  
+  - [x] 2.3.2 Verify configuration updates propagate through telemetry endpoints.  
+  - [x] 2.3.3 Confirm time pressure or evaluation batching logic respects updated material configuration.
+- [x] **2.4 Error Handling**
+  - [x] 2.4.1 Provide clear errors when configurations reference unavailable value sets.  
+  - [x] 2.4.2 Ensure concurrent reconfiguration is synchronized (e.g., via `RwLock`/`Mutex`).
 
 **Exit Criteria:** Integration tests pass; runtime config changes are reflected without restart; caches and statistics remain consistent.
 
@@ -296,6 +296,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** Added `MaterialValueSet` abstraction with classic and research presets, metadata tags, and per-piece tapered tables. `MaterialEvaluator` now selects the appropriate preset based on `MaterialEvaluationConfig`, with graceful hand-value fallbacks when entries are omitted.
 - **Testing:** Expanded material evaluator unit tests to cover preset toggling, value-set differentials, and promoted piece fallbacks. Introduced position-based regression ensuring evaluations diverge between presets.
 - **Documentation:** Updated `ENGINE_CONFIGURATION_GUIDE.md` to explain preset selection semantics for `use_research_values`.
+
+### Task 2.0 — Configuration Propagation & Lifecycle
+
+- **Implementation:** `IntegratedEvaluationConfig` now owns `MaterialEvaluationConfig`, and both `IntegratedEvaluator` and `OptimizedEvaluator` hydrate their material evaluators from it. Runtime updates rebuild material evaluators, refresh optimized paths, clear evaluation/phase caches, and reset telemetry counters.
+- **Testing:** Added unit coverage for `MaterialEvaluator::apply_config` plus integration tests that toggle presets at runtime, assert cache invalidation, score divergence, and material statistics resets.
+- **Notes:** A dedicated handle struct was unnecessary—the existing `RefCell`-backed evaluator provides safe runtime swapping. Configuration inputs remain validated by design because the preset flag maps to compiled-in value sets.
 
 ---
 

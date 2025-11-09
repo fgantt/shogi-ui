@@ -37,71 +37,71 @@ macro_rules! ts {
 }
 
 const RESEARCH_BOARD_VALUES: [TaperedScore; PieceType::COUNT] = [
-    ts!(100, 120),  // Pawn
-    ts!(300, 280),  // Lance
-    ts!(350, 320),  // Knight
-    ts!(450, 460),  // Silver
-    ts!(500, 520),  // Gold
-    ts!(800, 850),  // Bishop
-    ts!(1000, 1100), // Rook
+    ts!(100, 120),     // Pawn
+    ts!(300, 280),     // Lance
+    ts!(350, 320),     // Knight
+    ts!(450, 460),     // Silver
+    ts!(500, 520),     // Gold
+    ts!(800, 850),     // Bishop
+    ts!(1000, 1100),   // Rook
     ts!(20000, 20000), // King
-    ts!(500, 550),   // PromotedPawn
-    ts!(500, 540),   // PromotedLance
-    ts!(520, 550),   // PromotedKnight
-    ts!(520, 550),   // PromotedSilver
-    ts!(1200, 1300), // PromotedBishop
-    ts!(1400, 1550), // PromotedRook
+    ts!(500, 550),     // PromotedPawn
+    ts!(500, 540),     // PromotedLance
+    ts!(520, 550),     // PromotedKnight
+    ts!(520, 550),     // PromotedSilver
+    ts!(1200, 1300),   // PromotedBishop
+    ts!(1400, 1550),   // PromotedRook
 ];
 
 const RESEARCH_HAND_VALUES: [Option<TaperedScore>; PieceType::COUNT] = [
-    Some(ts!(110, 130)), // Pawn
-    Some(ts!(320, 300)), // Lance
-    Some(ts!(370, 350)), // Knight
-    Some(ts!(480, 490)), // Silver
-    Some(ts!(530, 550)), // Gold
-    Some(ts!(850, 920)), // Bishop
+    Some(ts!(110, 130)),   // Pawn
+    Some(ts!(320, 300)),   // Lance
+    Some(ts!(370, 350)),   // Knight
+    Some(ts!(480, 490)),   // Silver
+    Some(ts!(530, 550)),   // Gold
+    Some(ts!(850, 920)),   // Bishop
     Some(ts!(1050, 1180)), // Rook
-    None,                // King
-    None,                // PromotedPawn
-    None,                // PromotedLance
-    None,                // PromotedKnight
-    None,                // PromotedSilver
-    None,                // PromotedBishop
-    None,                // PromotedRook
+    None,                  // King
+    None,                  // PromotedPawn
+    None,                  // PromotedLance
+    None,                  // PromotedKnight
+    None,                  // PromotedSilver
+    None,                  // PromotedBishop
+    None,                  // PromotedRook
 ];
 
 const CLASSIC_BOARD_VALUES: [TaperedScore; PieceType::COUNT] = [
-    ts!(100, 110),  // Pawn
-    ts!(280, 300),  // Lance
-    ts!(320, 330),  // Knight
-    ts!(430, 440),  // Silver
-    ts!(500, 500),  // Gold
-    ts!(780, 820),  // Bishop
-    ts!(950, 1020), // Rook
+    ts!(100, 110),     // Pawn
+    ts!(280, 300),     // Lance
+    ts!(320, 330),     // Knight
+    ts!(430, 440),     // Silver
+    ts!(500, 500),     // Gold
+    ts!(780, 820),     // Bishop
+    ts!(950, 1020),    // Rook
     ts!(20000, 20000), // King
-    ts!(480, 520),  // PromotedPawn
-    ts!(480, 520),  // PromotedLance
-    ts!(500, 530),  // PromotedKnight
-    ts!(500, 530),  // PromotedSilver
-    ts!(1150, 1220), // PromotedBishop
-    ts!(1320, 1450), // PromotedRook
+    ts!(480, 520),     // PromotedPawn
+    ts!(480, 520),     // PromotedLance
+    ts!(500, 530),     // PromotedKnight
+    ts!(500, 530),     // PromotedSilver
+    ts!(1150, 1220),   // PromotedBishop
+    ts!(1320, 1450),   // PromotedRook
 ];
 
 const CLASSIC_HAND_VALUES: [Option<TaperedScore>; PieceType::COUNT] = [
-    Some(ts!(105, 115)), // Pawn
-    Some(ts!(300, 310)), // Lance
-    Some(ts!(340, 350)), // Knight
-    Some(ts!(450, 460)), // Silver
-    Some(ts!(520, 520)), // Gold
-    Some(ts!(820, 860)), // Bishop
+    Some(ts!(105, 115)),  // Pawn
+    Some(ts!(300, 310)),  // Lance
+    Some(ts!(340, 350)),  // Knight
+    Some(ts!(450, 460)),  // Silver
+    Some(ts!(520, 520)),  // Gold
+    Some(ts!(820, 860)),  // Bishop
     Some(ts!(990, 1080)), // Rook
-    None,                // King
-    None,                // PromotedPawn
-    None,                // PromotedLance
-    None,                // PromotedKnight
-    None,                // PromotedSilver
-    None,                // PromotedBishop
-    None,                // PromotedRook
+    None,                 // King
+    None,                 // PromotedPawn
+    None,                 // PromotedLance
+    None,                 // PromotedKnight
+    None,                 // PromotedSilver
+    None,                 // PromotedBishop
+    None,                 // PromotedRook
 ];
 
 #[derive(Debug, Clone)]
@@ -147,8 +147,7 @@ impl MaterialValueSet {
 
     #[inline]
     pub fn hand_value(&self, piece_type: PieceType) -> TaperedScore {
-        self.hand_values[piece_type.as_index()]
-            .unwrap_or_else(|| self.board_value(piece_type))
+        self.hand_values[piece_type.as_index()].unwrap_or_else(|| self.board_value(piece_type))
     }
 }
 
@@ -163,22 +162,22 @@ pub struct MaterialEvaluator {
 }
 
 impl MaterialEvaluator {
+    fn select_value_set(config: &MaterialEvaluationConfig) -> MaterialValueSet {
+        if config.use_research_values {
+            MaterialValueSet::research()
+        } else {
+            MaterialValueSet::classic()
+        }
+    }
+
     /// Create a new MaterialEvaluator with default configuration
     pub fn new() -> Self {
-        Self {
-            config: MaterialEvaluationConfig::default(),
-            stats: MaterialEvaluationStats::default(),
-            value_set: MaterialValueSet::research(),
-        }
+        Self::with_config(MaterialEvaluationConfig::default())
     }
 
     /// Create a new MaterialEvaluator with custom configuration
     pub fn with_config(config: MaterialEvaluationConfig) -> Self {
-        let value_set = if config.use_research_values {
-            MaterialValueSet::research()
-        } else {
-            MaterialValueSet::classic()
-        };
+        let value_set = Self::select_value_set(&config);
         Self {
             config,
             stats: MaterialEvaluationStats::default(),
@@ -189,6 +188,13 @@ impl MaterialEvaluator {
     /// Get the current configuration
     pub fn config(&self) -> &MaterialEvaluationConfig {
         &self.config
+    }
+
+    /// Apply a new configuration, rebuilding value tables and resetting statistics.
+    pub fn apply_config(&mut self, config: MaterialEvaluationConfig) {
+        self.config = config;
+        self.value_set = Self::select_value_set(&self.config);
+        self.reset_stats();
     }
 
     /// Get the currently loaded material value set
@@ -557,8 +563,7 @@ mod tests {
         let mut classic_eval = MaterialEvaluator::with_config(config_classic);
         let captured = CapturedPieces::new();
 
-        let research_score =
-            research_eval.evaluate_material(&board, Player::Black, &captured);
+        let research_score = research_eval.evaluate_material(&board, Player::Black, &captured);
         let classic_score = classic_eval.evaluate_material(&board, Player::Black, &captured);
 
         assert_ne!(
@@ -670,6 +675,33 @@ mod tests {
 
         assert_eq!(score1.mg, score2.mg);
         assert_eq!(score1.eg, score2.eg);
+    }
+
+    #[test]
+    fn test_apply_config_resets_stats_and_updates_values() {
+        let mut evaluator = MaterialEvaluator::with_config(MaterialEvaluationConfig {
+            include_hand_pieces: true,
+            use_research_values: true,
+        });
+
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        evaluator.evaluate_material(&board, Player::Black, &captured_pieces);
+        assert_eq!(evaluator.stats().evaluations, 1);
+
+        let research_rook = evaluator.get_piece_value(PieceType::Rook);
+
+        evaluator.apply_config(MaterialEvaluationConfig {
+            include_hand_pieces: false,
+            use_research_values: false,
+        });
+
+        assert_eq!(evaluator.stats().evaluations, 0);
+
+        let classic_rook = evaluator.get_piece_value(PieceType::Rook);
+        assert_ne!(research_rook, classic_rook);
+        assert!(!evaluator.config().include_hand_pieces);
     }
 
     #[test]

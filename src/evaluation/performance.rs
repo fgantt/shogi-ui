@@ -33,7 +33,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::evaluation::material::MaterialEvaluator;
+use crate::evaluation::material::{MaterialEvaluationConfig, MaterialEvaluator};
 use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransition};
 use crate::evaluation::piece_square_tables::PieceSquareTables;
 use crate::evaluation::tapered_eval::TaperedEvaluation;
@@ -58,13 +58,23 @@ pub struct OptimizedEvaluator {
 impl OptimizedEvaluator {
     /// Create a new optimized evaluator
     pub fn new() -> Self {
+        Self::with_config(&MaterialEvaluationConfig::default())
+    }
+
+    /// Create a new optimized evaluator with a specific material configuration
+    pub fn with_config(material_config: &MaterialEvaluationConfig) -> Self {
         Self {
             tapered_eval: TaperedEvaluation::new(),
-            material_eval: MaterialEvaluator::new(),
+            material_eval: MaterialEvaluator::with_config(material_config.clone()),
             pst: PieceSquareTables::new(),
             phase_transition: PhaseTransition::new(),
             profiler: PerformanceProfiler::new(),
         }
+    }
+
+    /// Apply an updated material configuration.
+    pub fn apply_material_config(&mut self, material_config: &MaterialEvaluationConfig) {
+        self.material_eval.apply_config(material_config.clone());
     }
 
     /// Optimized evaluation with all components
