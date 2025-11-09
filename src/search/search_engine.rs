@@ -12453,6 +12453,17 @@ impl SearchEngine {
                     performance.avg_interpolation_ns
                 ));
             }
+            if let Some(material) = telemetry.material {
+                crate::debug_utils::debug_log(&format!(
+                    "[EvalTelemetry] material_evals={} presets(r={},c={},x={}) hand_balance_mg={} phase_weighted_total={}",
+                    material.evaluations,
+                    material.preset_usage.research,
+                    material.preset_usage.classic,
+                    material.preset_usage.custom,
+                    material.hand_balance.mg,
+                    material.phase_weighted_total
+                ));
+            }
         }
     }
 

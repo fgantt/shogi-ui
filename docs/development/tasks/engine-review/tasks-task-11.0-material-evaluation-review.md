@@ -146,21 +146,21 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Offer deep insight into material contribution during search and tuning.
 
-- [ ] **4.1 Statistics Enrichment**
-  - [ ] 4.1.1 Extend `MaterialEvaluationStats` with per-piece totals (board and hand), phase-weighted contributions, and evaluation deltas.  
-  - [ ] 4.1.2 Track evaluations by configuration preset (classic vs. research vs. custom).  
-  - [ ] 4.1.3 Introduce hand-piece imbalance metrics to aid impasse diagnostics.
-- [ ] **4.2 Telemetry Integration**
-  - [ ] 4.2.1 Surface new stats via `IntegratedEvaluator::get_statistics` and telemetry exporters.  
-  - [ ] 4.2.2 Add optional debug logging showing top contributing pieces when evaluation thresholds are crossed.  
-  - [ ] 4.2.3 Ensure telemetry respects privacy/performance guardrails (toggleable verbosity).
-- [ ] **4.3 Testing & Validation**
-  - [ ] 4.3.1 Create integration tests verifying telemetry counters increment appropriately across board/hand scenarios.  
-  - [ ] 4.3.2 Add assertion tests ensuring statistics reset on configuration change.  
-  - [ ] 4.3.3 Update performance benchmarks to measure telemetry overhead (should remain <2%).
-- [ ] **4.4 Tooling Support**
-  - [ ] 4.4.1 Update search debug UI dashboards (if applicable) with new material metrics.  
-  - [ ] 4.4.2 Provide sample telemetry snapshots in documentation for tuning teams.
+- [x] **4.1 Statistics Enrichment**
+  - [x] 4.1.1 Extend `MaterialEvaluationStats` with per-piece totals (board and hand), phase-weighted contributions, and evaluation deltas.  
+  - [x] 4.1.2 Track evaluations by configuration preset (classic vs. research vs. custom).  
+  - [x] 4.1.3 Introduce hand-piece imbalance metrics to aid impasse diagnostics.
+- [x] **4.2 Telemetry Integration**
+  - [x] 4.2.1 Surface new stats via `IntegratedEvaluator::get_statistics` and telemetry exporters.  
+  - [x] 4.2.2 Add optional debug logging showing top contributing pieces when evaluation thresholds are crossed.  
+  - [x] 4.2.3 Ensure telemetry respects privacy/performance guardrails (toggleable verbosity).
+- [x] **4.3 Testing & Validation**
+  - [x] 4.3.1 Create integration tests verifying telemetry counters increment appropriately across board/hand scenarios.  
+  - [x] 4.3.2 Add assertion tests ensuring statistics reset on configuration change.  
+  - [x] 4.3.3 Update performance benchmarks to measure telemetry overhead (should remain <2%).
+- [x] **4.4 Tooling Support**
+  - [x] 4.4.1 Update search debug UI dashboards (if applicable) with new material metrics.  
+  - [x] 4.4.2 Provide sample telemetry snapshots in documentation for tuning teams.
 
 **Exit Criteria:** Material metrics are exposed through standard telemetry paths with test coverage and acceptable overhead.
 
@@ -308,6 +308,12 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** Added `MaterialValueSet` Serde bindings with JSON/TOML parsing, external loader/saver utilities, and manifest-backed default assets under `resources/material/`. `MaterialEvaluationConfig` gains an optional `values_path` allowing runtime selection of custom tables with graceful fallback and logging.
 - **Testing:** Introduced standalone loader tests covering custom JSON round-trips, built-in asset loading, and fallback behavior. Leveraged integration tests to ensure alternate presets influence evaluation outcomes.
 - **Documentation:** Updated configuration guidance and task plan to explain external file workflows; defaults ship with research/classic presets for tuning teams.
+
+### Task 4.0 — Observability & Telemetry Expansion
+
+- **Implementation:** Expanded `MaterialEvaluationStats` to accumulate per-piece board and hand contributions, hand-piece balance, phase-weighted totals, and preset usage counters. Integrated phase-weight recording within `IntegratedEvaluator` and surfaced a material telemetry snapshot alongside existing tapered/phase/performance data with debug logging.
+- **Testing:** Added unit tests covering contribution accounting and preset usage, plus integration tests that assert material telemetry emission and statistics resets after configuration changes.
+- **Documentation:** Captured telemetry workflow updates in the task plan and ensured search debug output exposes the new material metrics.
 
 ---
 

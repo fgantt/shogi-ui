@@ -35,6 +35,7 @@
 //! println!("{}", report);
 //! ```
 
+use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
@@ -68,6 +69,7 @@ pub struct EvaluationTelemetry {
     pub tapered: Option<TaperedEvaluationSnapshot>,
     pub phase_transition: Option<PhaseTransitionSnapshot>,
     pub performance: Option<PerformanceReport>,
+    pub material: Option<MaterialTelemetry>,
 }
 
 impl EvaluationTelemetry {
@@ -75,11 +77,13 @@ impl EvaluationTelemetry {
         tapered: TaperedEvaluationSnapshot,
         phase_transition: PhaseTransitionSnapshot,
         performance: Option<PerformanceReport>,
+        material: Option<MaterialTelemetry>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
             phase_transition: Some(phase_transition),
             performance,
+            material,
         }
     }
 }

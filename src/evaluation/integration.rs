@@ -277,10 +277,17 @@ impl IntegratedEvaluator {
                 None
             }
         });
+        let material_snapshot = {
+            let mut material_eval = self.material_eval.borrow_mut();
+            material_eval.stats_mut().record_phase_weighted(final_score);
+            material_eval.stats().snapshot()
+        };
+
         let telemetry = EvaluationTelemetry::from_snapshots(
             tapered_snapshot,
             phase_snapshot,
             performance_snapshot,
+            Some(material_snapshot),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {

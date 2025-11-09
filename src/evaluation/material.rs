@@ -283,6 +283,67 @@ pub enum MaterialValueSetError {
     Serialize(String),
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct AggregateScore {
+    pub mg: i64,
+    pub eg: i64,
+}
+
+impl AggregateScore {
+    #[inline]
+    fn add_tapered(&mut self, value: TaperedScore, sign: i64) {
+        self.mg += value.mg as i64 * sign;
+        self.eg += value.eg as i64 * sign;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct MaterialPresetUsage {
+    pub research: u64,
+    pub classic: u64,
+    pub custom: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MaterialTelemetry {
+    pub evaluations: u64,
+    pub board_contributions: Vec<AggregateScore>,
+    pub hand_contributions: Vec<AggregateScore>,
+    pub hand_balance: AggregateScore,
+    pub phase_weighted_total: i64,
+    pub preset_usage: MaterialPresetUsage,
+}
+
+#[derive(Debug, Clone)]
+struct MaterialContribution {
+    board: [AggregateScore; PieceType::COUNT],
+    hand: [AggregateScore; PieceType::COUNT],
+    hand_balance: AggregateScore,
+}
+
+impl Default for MaterialContribution {
+    fn default() -> Self {
+        Self {
+            board: [AggregateScore::default(); PieceType::COUNT],
+            hand: [AggregateScore::default(); PieceType::COUNT],
+            hand_balance: AggregateScore::default(),
+        }
+    }
+}
+
+impl MaterialContribution {
+    fn add_board(&mut self, piece_type: PieceType, value: TaperedScore, is_player: bool) {
+        let sign = if is_player { 1 } else { -1 };
+        self.board[piece_type.as_index()].add_tapered(value, sign);
+    }
+
+    fn add_hand(&mut self, piece_type: PieceType, value: TaperedScore, is_player: bool) {
+        let sign = if is_player { 1 } else { -1 };
+        self.hand[piece_type.as_index()].add_tapered(value, sign);
+        self.hand_balance.add_tapered(value, sign);
+    }
+}
+
 /// Material evaluator with phase-aware piece values
 pub struct MaterialEvaluator {
     /// Configuration for material evaluation
@@ -354,23 +415,29 @@ impl MaterialEvaluator {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
-        self.stats.evaluations += 1;
-
+        self.stats.register_value_set(&self.value_set);
+        let mut contribution = MaterialContribution::default();
         let mut score = TaperedScore::default();
 
         // Evaluate pieces on board
-        score += self.evaluate_board_material(board, player);
+        score += self.evaluate_board_material(board, player, &mut contribution);
 
         // Evaluate captured pieces (pieces in hand)
         if self.config.include_hand_pieces {
-            score += self.evaluate_hand_material(captured_pieces, player);
+            score += self.evaluate_hand_material(captured_pieces, player, &mut contribution);
         }
 
+        self.stats.record_contribution(&contribution);
         score
     }
 
     /// Evaluate material for pieces on the board
-    fn evaluate_board_material(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_board_material(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        contribution: &mut MaterialContribution,
+    ) -> TaperedScore {
         let mut score = TaperedScore::default();
 
         for row in 0..9 {
@@ -380,8 +447,10 @@ impl MaterialEvaluator {
                     let piece_value = self.get_piece_value(piece.piece_type);
 
                     if piece.player == player {
+                        contribution.add_board(piece.piece_type, piece_value, true);
                         score += piece_value;
                     } else {
+                        contribution.add_board(piece.piece_type, piece_value, false);
                         score -= piece_value;
                     }
                 }
@@ -396,6 +465,7 @@ impl MaterialEvaluator {
         &self,
         captured_pieces: &CapturedPieces,
         player: Player,
+        contribution: &mut MaterialContribution,
     ) -> TaperedScore {
         let mut score = TaperedScore::default();
 
@@ -413,12 +483,16 @@ impl MaterialEvaluator {
 
         // Add value for pieces we can drop
         for &piece_type in player_captures {
-            score += self.get_hand_piece_value(piece_type);
+            let value = self.get_hand_piece_value(piece_type);
+            contribution.add_hand(piece_type, value, true);
+            score += value;
         }
 
         // Subtract value for pieces opponent can drop
         for &piece_type in opponent_captures {
-            score -= self.get_hand_piece_value(piece_type);
+            let value = self.get_hand_piece_value(piece_type);
+            contribution.add_hand(piece_type, value, false);
+            score -= value;
         }
 
         score
@@ -499,6 +573,10 @@ impl MaterialEvaluator {
         &self.stats
     }
 
+    pub fn stats_mut(&mut self) -> &mut MaterialEvaluationStats {
+        &mut self.stats
+    }
+
     /// Reset statistics
     pub fn reset_stats(&mut self) {
         self.stats = MaterialEvaluationStats::default();
@@ -533,15 +611,95 @@ impl Default for MaterialEvaluationConfig {
 }
 
 /// Statistics for monitoring material evaluation
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MaterialEvaluationStats {
-    /// Number of evaluations performed
     pub evaluations: u64,
+    board_contributions: [AggregateScore; PieceType::COUNT],
+    hand_contributions: [AggregateScore; PieceType::COUNT],
+    hand_balance: AggregateScore,
+    phase_weighted_total: i64,
+    preset_usage: MaterialPresetUsage,
+}
+
+impl MaterialEvaluationStats {
+    pub fn new() -> Self {
+        Self {
+            evaluations: 0,
+            board_contributions: [AggregateScore::default(); PieceType::COUNT],
+            hand_contributions: [AggregateScore::default(); PieceType::COUNT],
+            hand_balance: AggregateScore::default(),
+            phase_weighted_total: 0,
+            preset_usage: MaterialPresetUsage::default(),
+        }
+    }
+
+    fn register_value_set(&mut self, value_set: &MaterialValueSet) {
+        match value_set.id.as_str() {
+            "research" => self.preset_usage.research += 1,
+            "classic" => self.preset_usage.classic += 1,
+            _ => self.preset_usage.custom += 1,
+        }
+    }
+
+    fn record_contribution(&mut self, contribution: &MaterialContribution) {
+        self.evaluations += 1;
+        for idx in 0..PieceType::COUNT {
+            self.board_contributions[idx].mg += contribution.board[idx].mg;
+            self.board_contributions[idx].eg += contribution.board[idx].eg;
+            self.hand_contributions[idx].mg += contribution.hand[idx].mg;
+            self.hand_contributions[idx].eg += contribution.hand[idx].eg;
+        }
+        self.hand_balance.mg += contribution.hand_balance.mg;
+        self.hand_balance.eg += contribution.hand_balance.eg;
+    }
+
+    pub(crate) fn record_phase_weighted(&mut self, score: i32) {
+        self.phase_weighted_total += score as i64;
+    }
+
+    pub fn board_contribution(&self, piece_type: PieceType) -> AggregateScore {
+        self.board_contributions[piece_type.as_index()]
+    }
+
+    pub fn hand_contribution(&self, piece_type: PieceType) -> AggregateScore {
+        self.hand_contributions[piece_type.as_index()]
+    }
+
+    pub fn hand_balance(&self) -> AggregateScore {
+        self.hand_balance
+    }
+
+    pub fn phase_weighted_total(&self) -> i64 {
+        self.phase_weighted_total
+    }
+
+    pub fn preset_usage(&self) -> MaterialPresetUsage {
+        self.preset_usage
+    }
+
+    pub fn snapshot(&self) -> MaterialTelemetry {
+        MaterialTelemetry {
+            evaluations: self.evaluations,
+            board_contributions: self.board_contributions.to_vec(),
+            hand_contributions: self.hand_contributions.to_vec(),
+            hand_balance: self.hand_balance,
+            phase_weighted_total: self.phase_weighted_total,
+            preset_usage: self.preset_usage,
+        }
+    }
+}
+
+impl Default for MaterialEvaluationStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Piece, Position};
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_material_evaluator_creation() {
@@ -721,6 +879,87 @@ mod tests {
             (research_score.mg, research_score.eg),
             (classic_score.mg, classic_score.eg)
         );
+    }
+
+    #[test]
+    fn test_material_stats_track_contributions() {
+        let mut evaluator = MaterialEvaluator::new();
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::Rook, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Bishop, Player::White),
+            Position::new(4, 5),
+        );
+
+        let mut captured = CapturedPieces::new();
+        captured.add_piece(PieceType::Pawn, Player::Black);
+        captured.add_piece(PieceType::Silver, Player::White);
+
+        evaluator.evaluate_material(&board, Player::Black, &captured);
+
+        let stats = evaluator.stats();
+        assert_eq!(stats.evaluations, 1);
+
+        let rook_value = evaluator.get_piece_value(PieceType::Rook);
+        let rook_contrib = stats.board_contribution(PieceType::Rook);
+        assert_eq!(rook_contrib.mg, rook_value.mg as i64);
+        assert_eq!(rook_contrib.eg, rook_value.eg as i64);
+
+        let bishop_value = evaluator.get_piece_value(PieceType::Bishop);
+        let bishop_contrib = stats.board_contribution(PieceType::Bishop);
+        assert_eq!(bishop_contrib.mg, -(bishop_value.mg as i64));
+        assert_eq!(bishop_contrib.eg, -(bishop_value.eg as i64));
+
+        let pawn_value = evaluator.get_hand_piece_value(PieceType::Pawn);
+        let pawn_contrib = stats.hand_contribution(PieceType::Pawn);
+        assert_eq!(pawn_contrib.mg, pawn_value.mg as i64);
+        assert_eq!(pawn_contrib.eg, pawn_value.eg as i64);
+
+        let silver_value = evaluator.get_hand_piece_value(PieceType::Silver);
+        let silver_contrib = stats.hand_contribution(PieceType::Silver);
+        assert_eq!(silver_contrib.mg, -(silver_value.mg as i64));
+        assert_eq!(silver_contrib.eg, -(silver_value.eg as i64));
+
+        let hand_balance = stats.hand_balance();
+        assert_eq!(
+            hand_balance.mg,
+            pawn_value.mg as i64 - silver_value.mg as i64
+        );
+        assert_eq!(
+            hand_balance.eg,
+            pawn_value.eg as i64 - silver_value.eg as i64
+        );
+    }
+
+    #[test]
+    fn test_material_preset_usage_tracking() {
+        let mut evaluator = MaterialEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
+        evaluator.evaluate_material(&board, Player::Black, &captured);
+        let preset_usage = evaluator.stats().preset_usage();
+        assert_eq!(preset_usage.research, 1);
+        assert_eq!(preset_usage.classic, 0);
+        assert_eq!(preset_usage.custom, 0);
+
+        let mut custom_set = MaterialValueSet::classic();
+        custom_set.id = "custom".into();
+        custom_set.board_values[PieceType::Pawn.as_index()].mg += 10;
+        let mut temp_file = NamedTempFile::new().expect("temp material file");
+        custom_set
+            .to_writer(&mut temp_file)
+            .expect("write custom material file");
+
+        let mut config = MaterialEvaluationConfig::default();
+        config.use_research_values = true;
+        config.values_path = Some(temp_file.path().to_string_lossy().to_string());
+        let mut custom_eval = MaterialEvaluator::with_config(config);
+        custom_eval.evaluate_material(&board, Player::Black, &captured);
+        let usage = custom_eval.stats().preset_usage();
+        assert_eq!(usage.custom, 1);
     }
 
     #[test]

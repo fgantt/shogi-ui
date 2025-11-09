@@ -31,6 +31,10 @@ fn integrated_evaluator_material_toggle_updates_scores_and_clears_caches() {
     let research_score = evaluator.evaluate(&board, Player::Black, &captured);
     assert_ne!(research_score, 0);
     assert!(evaluator.cache_stats().eval_cache_size > 0);
+    assert!(evaluator
+        .telemetry_snapshot()
+        .and_then(|t| t.material)
+        .is_some());
 
     let mut updated_config = config;
     updated_config.material.use_research_values = false;
@@ -43,6 +47,10 @@ fn integrated_evaluator_material_toggle_updates_scores_and_clears_caches() {
 
     let classic_score = evaluator.evaluate(&board, Player::Black, &captured);
     assert_ne!(classic_score, research_score);
+    assert!(evaluator
+        .telemetry_snapshot()
+        .and_then(|t| t.material)
+        .is_some());
 }
 
 #[test]
