@@ -334,3 +334,4 @@ The Criterion bench suite covers evaluator creation, piece lookups, board evalua
 The material evaluation module is reliable and Shogi-aware, but its configurability and telemetry lag behind the promises made in the configuration layer. Implementing value-set selection, wiring configuration through the integrated evaluator, and enriching observability will unlock meaningful tuning experiments and align the subsystem with broader evaluation modernization goals. Immediate focus should fall on honoring `use_research_values` and exposing configuration to downstream consumers; subsequent iterations can optimize performance and expand diagnostics to support future tuning initiatives.
 
 ---
+

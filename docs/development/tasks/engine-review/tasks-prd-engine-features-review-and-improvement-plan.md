@@ -169,15 +169,15 @@
   - [x] 11.7 Identify strengths and weaknesses
   - [x] 11.8 Generate improvement recommendations
 
-- [ ] 12.0 Feature: Piece-Square Tables (PST)
-  - [ ] 12.1 Review piece_square_tables.rs implementation
-  - [ ] 12.2 Verify all piece types have tables
-  - [ ] 12.3 Check opening vs. endgame table values
-  - [ ] 12.4 Assess table values quality and tuning
-  - [ ] 12.5 Review table optimization and memory layout
-  - [ ] 12.6 Measure evaluation contribution
-  - [ ] 12.7 Identify strengths and weaknesses
-  - [ ] 12.8 Generate improvement recommendations
+- [x] 12.0 Feature: Piece-Square Tables (PST)
+  - [x] 12.1 Review piece_square_tables.rs implementation
+  - [x] 12.2 Verify all piece types have tables
+  - [x] 12.3 Check opening vs. endgame table values
+  - [x] 12.4 Assess table values quality and tuning
+  - [x] 12.5 Review table optimization and memory layout
+  - [x] 12.6 Measure evaluation contribution
+  - [x] 12.7 Identify strengths and weaknesses
+  - [x] 12.8 Generate improvement recommendations
 
 - [ ] 13.0 Feature: Position Features Evaluation
   - [ ] 13.1 Review position_features.rs implementation
