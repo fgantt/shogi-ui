@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GameSettings } from '../types';
 import { Record } from 'tsshogi';
 import { EngineSelector } from './EngineSelector';
 import { EngineOptionsModal } from './EngineOptionsModal';
 import type { EngineConfig } from '../types/engine';
 import { invoke } from '@tauri-apps/api/core';
+import { loadNewGameSettings, saveNewGameSettings } from '../utils/persistence';
 
 interface StartGameModalProps {
   isOpen: boolean;
@@ -35,18 +36,39 @@ const CANNED_POSITIONS = [
 ];
 
 const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStartGame }) => {
-  const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>('human');
-  const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>('ai');
-  const [player1EngineId, setPlayer1EngineId] = useState<string | null>(null);
-  const [player2EngineId, setPlayer2EngineId] = useState<string | null>(null);
-  const [initialSfen, setInitialSfen] = useState<string>('');
+  const storedSettings = useMemo(() => loadNewGameSettings(), []);
+  const isValidStoredPosition =
+    storedSettings &&
+    (storedSettings.selectedCannedPosition === 'Custom' ||
+      CANNED_POSITIONS.some((pos) => pos.name === storedSettings.selectedCannedPosition));
+  const defaultCannedPosition = isValidStoredPosition
+    ? storedSettings!.selectedCannedPosition
+    : 'Standard';
+
+  const [player1Type, setPlayer1Type] = useState<'human' | 'ai'>(storedSettings?.player1Type ?? 'human');
+  const [player2Type, setPlayer2Type] = useState<'human' | 'ai'>(storedSettings?.player2Type ?? 'ai');
+  const [player1EngineId, setPlayer1EngineId] = useState<string | null>(storedSettings?.player1EngineId ?? null);
+  const [player2EngineId, setPlayer2EngineId] = useState<string | null>(storedSettings?.player2EngineId ?? null);
+  const [initialSfen, setInitialSfen] = useState<string>(storedSettings?.initialSfen ?? '');
   const [sfenError, setSfenError] = useState<string>('');
-  const [selectedCannedPosition, setSelectedCannedPosition] = useState<string>('Standard');
-  const [isInitialPositionCollapsed, setIsInitialPositionCollapsed] = useState(true);
+  const [selectedCannedPosition, setSelectedCannedPosition] = useState<string>(defaultCannedPosition);
+  const [isInitialPositionCollapsed, setIsInitialPositionCollapsed] = useState(
+    storedSettings?.isInitialPositionCollapsed ?? true
+  );
+  const [minutesPerSide, setMinutesPerSide] = useState<string>(
+    String(storedSettings?.minutesPerSide ?? 30)
+  );
+  const [byoyomiInSeconds, setByoyomiInSeconds] = useState<string>(
+    String(storedSettings?.byoyomiInSeconds ?? 10)
+  );
   
   // Temporary options for this game only
-  const [player1TempOptions, setPlayer1TempOptions] = useState<{[key: string]: string} | null>(null);
-  const [player2TempOptions, setPlayer2TempOptions] = useState<{[key: string]: string} | null>(null);
+  const [player1TempOptions, setPlayer1TempOptions] = useState<{[key: string]: string} | null>(
+    storedSettings?.player1TempOptions ?? null
+  );
+  const [player2TempOptions, setPlayer2TempOptions] = useState<{[key: string]: string} | null>(
+    storedSettings?.player2TempOptions ?? null
+  );
   
   // Options modal state
   const [optionsModalOpen, setOptionsModalOpen] = useState(false);
@@ -58,22 +80,6 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
   React.useEffect(() => {
     if (isOpen) {
       loadEngines();
-    }
-  }, [isOpen]);
-
-  // Reset form when modal opens
-  React.useEffect(() => {
-    if (isOpen) {
-      setPlayer1Type('human');
-      setPlayer2Type('ai');
-      setPlayer1EngineId(null);
-      setPlayer2EngineId(null);
-      setPlayer1TempOptions(null);
-      setPlayer2TempOptions(null);
-      setInitialSfen('');
-      setSfenError('');
-      setSelectedCannedPosition('Standard');
-      setIsInitialPositionCollapsed(true);
     }
   }, [isOpen]);
 
@@ -114,13 +120,7 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
     handleCloseOptions();
   };
 
-  const toggleInitialPositionCollapse = () => {
-    setIsInitialPositionCollapsed(!isInitialPositionCollapsed);
-  };
-
-  if (!isOpen) return null;
-
-  const validateSfen = (sfen: string): string => {
+  const validateSfen = React.useCallback((sfen: string): string => {
     if (!sfen.trim()) {
       return ''; // Empty SFEN is valid (will use default startpos)
     }
@@ -134,7 +134,27 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
     } catch (error) {
       return 'Invalid SFEN format';
     }
+  }, []);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (!initialSfen.trim()) {
+      setSfenError('');
+      return;
+    }
+
+    const error = validateSfen(initialSfen);
+    setSfenError(error);
+  }, [initialSfen, isOpen, validateSfen]);
+
+  const toggleInitialPositionCollapse = () => {
+    setIsInitialPositionCollapsed((prev) => !prev);
   };
+
+  if (!isOpen) return null;
 
   const handleSfenChange = (value: string) => {
     setInitialSfen(value);
@@ -175,19 +195,44 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
+    const minutesValue = parseInt(minutesPerSide, 10);
+    const byoyomiValue = parseInt(byoyomiInSeconds, 10);
+
+    const sanitizedMinutes = Number.isFinite(minutesValue) && minutesValue > 0 ? minutesValue : 30;
+    const sanitizedByoyomi = Number.isFinite(byoyomiValue) && byoyomiValue >= 0 ? byoyomiValue : 10;
+    const trimmedSfen = initialSfen.trim();
+    const effectiveInitialSfen =
+      selectedCannedPosition === 'Standard' || !trimmedSfen ? undefined : trimmedSfen;
+
     const settings: GameSettings = {
-      player1Type: formData.get('player1Type') as GameSettings['player1Type'],
-      player2Type: formData.get('player2Type') as GameSettings['player2Type'],
-      minutesPerSide: parseInt(formData.get('minutesPerSide') as string, 10) || 30,
-      byoyomiInSeconds: parseInt(formData.get('byoyomiInSeconds') as string, 10) || 10,
-      initialSfen: (selectedCannedPosition === 'Standard' || !initialSfen.trim()) ? undefined : initialSfen.trim(),
+      player1Type,
+      player2Type,
+      minutesPerSide: sanitizedMinutes,
+      byoyomiInSeconds: sanitizedByoyomi,
+      initialSfen: effectiveInitialSfen,
       player1EngineId,
       player2EngineId,
       player1TempOptions: player1TempOptions || undefined,
       player2TempOptions: player2TempOptions || undefined,
       useTauriEngine: !!(player1EngineId || player2EngineId),
     };
+
+    saveNewGameSettings({
+      player1Type,
+      player2Type,
+      minutesPerSide: sanitizedMinutes,
+      byoyomiInSeconds: sanitizedByoyomi,
+      initialSfen: trimmedSfen,
+      selectedCannedPosition,
+      isInitialPositionCollapsed,
+      player1EngineId,
+      player2EngineId,
+      player1TempOptions,
+      player2TempOptions,
+    });
+
+    setMinutesPerSide(String(sanitizedMinutes));
+    setByoyomiInSeconds(String(sanitizedByoyomi));
     onStartGame(settings);
     onClose();
   };
@@ -201,7 +246,12 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
           <section>
             <h3>Player 1 (Black)</h3>
             <div className="setting-group">
-              <select id="player1Type" name="player1Type" defaultValue="human" onChange={(e) => setPlayer1Type(e.target.value as 'human' | 'ai')}>
+              <select
+                id="player1Type"
+                name="player1Type"
+                value={player1Type}
+                onChange={(e) => setPlayer1Type(e.target.value as 'human' | 'ai')}
+              >
                 <option value="human">Human</option>
                 <option value="ai">AI</option>
               </select>
@@ -229,7 +279,12 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
           <section>
             <h3>Player 2 (White)</h3>
             <div className="setting-group">
-              <select id="player2Type" name="player2Type" defaultValue="ai" onChange={(e) => setPlayer2Type(e.target.value as 'human' | 'ai')}>
+              <select
+                id="player2Type"
+                name="player2Type"
+                value={player2Type}
+                onChange={(e) => setPlayer2Type(e.target.value as 'human' | 'ai')}
+              >
                 <option value="human">Human</option>
                 <option value="ai">AI</option>
               </select>
@@ -258,11 +313,25 @@ const StartGameModal: React.FC<StartGameModalProps> = ({ isOpen, onClose, onStar
             <h3>Time Controls</h3>
             <div className="setting-group">
               <label htmlFor="minutesPerSide">Minutes per side</label>
-              <input id="minutesPerSide" name="minutesPerSide" type="number" min="1" defaultValue="30" />
+              <input
+                id="minutesPerSide"
+                name="minutesPerSide"
+                type="number"
+                min="1"
+                value={minutesPerSide}
+                onChange={(e) => setMinutesPerSide(e.target.value)}
+              />
             </div>
             <div className="setting-group">
               <label htmlFor="byoyomiInSeconds">Byoyomi in seconds</label>
-              <input id="byoyomiInSeconds" name="byoyomiInSeconds" type="number" min="0" defaultValue="10" />
+              <input
+                id="byoyomiInSeconds"
+                name="byoyomiInSeconds"
+                type="number"
+                min="0"
+                value={byoyomiInSeconds}
+                onChange={(e) => setByoyomiInSeconds(e.target.value)}
+              />
             </div>
           </section>
           <section>

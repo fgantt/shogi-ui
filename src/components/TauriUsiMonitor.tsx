@@ -3,6 +3,7 @@ import { useMultipleEngineEvents } from '../hooks/useTauriEvents';
 import { parseEngineInfo } from '../utils/tauriEngine';
 import type { EngineConfig } from '../types/engine';
 import './UsiMonitor.css';
+import { loadUsiMonitorState, saveUsiMonitorState } from '../utils/persistence';
 
 interface UsiMessage {
   id: string;
@@ -51,11 +52,16 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   player1Type,
   player2Type,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('engine');
+  const [activeTab, setActiveTab] = useState<TabType>(() => loadUsiMonitorState().activeTab);
   const [communicationHistory, setCommunicationHistory] = useState<UsiMessage[]>([]);
   const [searchInfoByEngine, setSearchInfoByEngine] = useState<Map<string, SearchInfo[]>>(new Map());
   const [manualCommands, setManualCommands] = useState<Map<string, string>>(new Map());
   const [npsPerEngine, setNpsPerEngine] = useState<Map<string, number>>(new Map());
+  const setActiveTabWithPersistence = (tab: TabType) => {
+    setActiveTab(tab);
+    saveUsiMonitorState({ activeTab: tab });
+  };
+
 
   // Helper to get engine display name
   const getEngineDisplayName = (engineId: string): string => {
@@ -308,15 +314,15 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
       </div>
       
       <div className="usi-monitor-tabs">
-        <button 
+        <button
           className={`tab-button ${activeTab === 'engine' ? 'active' : ''}`}
-          onClick={() => setActiveTab('engine')}
+          onClick={() => setActiveTabWithPersistence('engine')}
         >
           Engine Monitor
         </button>
-        <button 
+        <button
           className={`tab-button ${activeTab === 'search' ? 'active' : ''}`}
-          onClick={() => setActiveTab('search')}
+          onClick={() => setActiveTabWithPersistence('search')}
         >
           Search
         </button>

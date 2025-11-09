@@ -17,6 +17,9 @@ import './App.css';
 import './styles/shogi.css';
 import './styles/settings.css';
 import { useEffect, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { PhysicalSize } from '@tauri-apps/api/dpi';
+import { loadUsiMonitorState, saveUsiMonitorState, loadWindowSize, saveWindowSize } from './utils/persistence';
 
 // --- Singleton ShogiController ---
 const shogiController = new ShogiController();
@@ -26,7 +29,7 @@ function App() {
   const [isControllerInitialized, setIsControllerInitialized] = useState(shogiController.isInitialized());
 
   // USI Monitor state
-  const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(false);
+  const [isUsiMonitorVisible, setIsUsiMonitorVisible] = useState(() => loadUsiMonitorState().isVisible);
   const [lastSentCommand, setLastSentCommand] = useState<string>('');
   const [lastReceivedCommand, setLastReceivedCommand] = useState<string>('');
   const [communicationHistory, setCommunicationHistory] = useState<Array<{
@@ -37,6 +40,58 @@ function App() {
     sessionId: string;
   }>>([]);
   const [sessions, setSessions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI__);
+    if (!isTauri) {
+      return;
+    }
+
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    let unlisten: (() => void) | null = null;
+    let isCancelled = false;
+
+    const setupWindowSizePersistence = async () => {
+      try {
+        const currentWindow = getCurrentWindow();
+        const storedSize = loadWindowSize();
+        if (storedSize) {
+          await currentWindow.setSize(new PhysicalSize(storedSize.width, storedSize.height));
+        }
+
+        unlisten = await currentWindow.onResized(({ payload }) => {
+          if (resizeTimer) {
+            clearTimeout(resizeTimer);
+          }
+          resizeTimer = setTimeout(() => {
+            saveWindowSize({ width: payload.width, height: payload.height });
+          }, 200);
+        });
+
+        if (isCancelled && unlisten) {
+          unlisten();
+        }
+      } catch (error) {
+        console.error('Failed to restore or persist window size:', error);
+      }
+    };
+
+    setupWindowSizePersistence();
+
+    return () => {
+      isCancelled = true;
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    saveUsiMonitorState({ isVisible: isUsiMonitorVisible });
+  }, [isUsiMonitorVisible]);
 
   useEffect(() => {
     // USI communication event handlers
@@ -102,6 +157,10 @@ function App() {
     };
   }, []); // Empty dependency array to run only once
 
+  const handleToggleUsiMonitor = () => {
+    setIsUsiMonitorVisible(prev => !prev);
+  };
+
   if (!isControllerInitialized) {
     return <div className="loading-screen">Initializing Engine...</div>;
   }
@@ -119,7 +178,7 @@ function App() {
               lastReceivedCommand={lastReceivedCommand}
               communicationHistory={communicationHistory}
               sessions={sessions}
-              onToggleUsiMonitor={() => setIsUsiMonitorVisible(!isUsiMonitorVisible)}
+              onToggleUsiMonitor={handleToggleUsiMonitor}
               clearUsiHistory={() => {
                 setCommunicationHistory([]);
                 setLastSentCommand('');
