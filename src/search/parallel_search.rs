@@ -25,7 +25,7 @@ use crate::search::search_engine::SearchEngine;
 use crate::search::search_engine::GLOBAL_NODES_SEARCHED;
 use crate::search::ThreadSafeTranspositionTable;
 use crate::time_utils::TimeSource;
-use crate::types::{CapturedPieces, Move, Player};
+use crate::types::{CapturedPieces, Move, ParallelOptions, Player};
 use crossbeam_deque::{Injector, Steal};
 use num_cpus;
 use parking_lot::{Condvar, Mutex as ParkingMutex};
@@ -369,6 +369,30 @@ pub struct ParallelSearchConfig {
     /// Whether parallel search is enabled.
     pub enable_parallel: bool,
 
+    /// Hash table size for worker contexts (MB).
+    pub hash_size_mb: usize,
+
+    /// Whether YBWC coordination is enabled.
+    pub ybwc_enabled: bool,
+
+    /// Minimum depth before YBWC engages.
+    pub ybwc_min_depth: u8,
+
+    /// Minimum branching factor required for YBWC trigger.
+    pub ybwc_min_branch: usize,
+
+    /// Maximum sibling searches allowed when YBWC triggers.
+    pub ybwc_max_siblings: usize,
+
+    /// Divisor for shallow depth YBWC scaling.
+    pub ybwc_shallow_divisor: usize,
+
+    /// Divisor for mid depth YBWC scaling.
+    pub ybwc_mid_divisor: usize,
+
+    /// Divisor for deep depth YBWC scaling.
+    pub ybwc_deep_divisor: usize,
+
     /// Mode controlling work distribution metrics collection.
     pub work_metrics_mode: WorkMetricsMode,
 }
@@ -380,6 +404,14 @@ impl Default for ParallelSearchConfig {
             num_threads: num_threads.clamp(1, 32),
             min_depth_parallel: 4,
             enable_parallel: num_threads > 1,
+            hash_size_mb: 16,
+            ybwc_enabled: false,
+            ybwc_min_depth: 2,
+            ybwc_min_branch: 8,
+            ybwc_max_siblings: 8,
+            ybwc_shallow_divisor: 6,
+            ybwc_mid_divisor: 4,
+            ybwc_deep_divisor: 2,
             work_metrics_mode: WorkMetricsMode::Disabled,
         }
     }
@@ -400,6 +432,14 @@ impl ParallelSearchConfig {
             num_threads: num_threads.clamp(1, 32),
             min_depth_parallel: 4,
             enable_parallel: num_threads > 1,
+            hash_size_mb: 16,
+            ybwc_enabled: false,
+            ybwc_min_depth: 2,
+            ybwc_min_branch: 8,
+            ybwc_max_siblings: 8,
+            ybwc_shallow_divisor: 6,
+            ybwc_mid_divisor: 4,
+            ybwc_deep_divisor: 2,
             work_metrics_mode: WorkMetricsMode::Disabled,
         }
     }
@@ -422,6 +462,27 @@ impl ParallelSearchConfig {
         } else {
             WorkMetricsMode::Disabled
         };
+    }
+
+    pub fn from_parallel_options(options: &ParallelOptions, threads: usize) -> Self {
+        let mut config = Self::default();
+        config.num_threads = threads.clamp(1, 32);
+        config.enable_parallel = options.enable_parallel && config.num_threads > 1;
+        config.min_depth_parallel = options.min_depth_parallel;
+        config.hash_size_mb = options.hash_size_mb.clamp(1, 512);
+        config.ybwc_enabled = options.ybwc_enabled;
+        config.ybwc_min_depth = options.ybwc_min_depth;
+        config.ybwc_min_branch = options.ybwc_min_branch.max(1);
+        config.ybwc_max_siblings = options.ybwc_max_siblings.max(1);
+        config.ybwc_shallow_divisor = options.ybwc_shallow_divisor.max(1);
+        config.ybwc_mid_divisor = options.ybwc_mid_divisor.max(1);
+        config.ybwc_deep_divisor = options.ybwc_deep_divisor.max(1);
+        config.work_metrics_mode = if options.enable_metrics {
+            WorkMetricsMode::Basic
+        } else {
+            WorkMetricsMode::Disabled
+        };
+        config
     }
 }
 
@@ -677,6 +738,17 @@ impl ParallelSearchEngine {
         })
     }
 
+    fn configure_worker_engine(&self, engine: &mut SearchEngine) {
+        engine.set_ybwc(self.config.ybwc_enabled, self.config.ybwc_min_depth);
+        engine.set_ybwc_branch(self.config.ybwc_min_branch);
+        engine.set_ybwc_max_siblings(self.config.ybwc_max_siblings);
+        engine.set_ybwc_scaling(
+            self.config.ybwc_shallow_divisor,
+            self.config.ybwc_mid_divisor,
+            self.config.ybwc_deep_divisor,
+        );
+    }
+
     /// Create a new parallel search engine with stop flag.
     ///
     /// # Arguments
@@ -751,13 +823,15 @@ impl ParallelSearchEngine {
         player: Player,
         hash_size_mb: usize,
     ) -> ThreadLocalSearchContext {
-        ThreadLocalSearchContext::new(
+        let mut context = ThreadLocalSearchContext::new(
             board,
             captured_pieces,
             player,
             self.stop_flag.clone(),
             hash_size_mb,
-        )
+        );
+        self.configure_worker_engine(context.search_engine_mut());
+        context
     }
 
     /// Get reference to the shared transposition table.
@@ -856,7 +930,7 @@ impl ParallelSearchEngine {
         }
 
         // Use thread pool to parallelize search across moves, while streaming results
-        let hash_size_mb = 16; // Default hash size, will be configurable later
+        let hash_size_mb = self.config.hash_size_mb;
         let (tx, rx) = std::sync::mpsc::channel::<(Move, i32, String)>();
         // Reset global nodes counter and seldepth for this depth
         GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
@@ -958,10 +1032,7 @@ impl ParallelSearchEngine {
                 context.search_engine_mut().set_shared_transposition_table(self.transposition_table.clone());
                 // Enable intra-node YBWC for worker engines with reasonable defaults
                 // (These can be tuned in the main SearchEngine as needed.)
-                context.search_engine_mut().set_ybwc(true, 2);
-                context.search_engine_mut().set_ybwc_branch(8);
-                context.search_engine_mut().set_ybwc_max_siblings(8);
-                context.search_engine_mut().set_ybwc_scaling(6, 4, 2);
+                self.configure_worker_engine(context.search_engine_mut());
 
                 // Clone board and apply move
                 let mut test_board = board.clone();

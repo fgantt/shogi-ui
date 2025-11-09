@@ -140,10 +140,67 @@ impl UsiHandler {
 
     fn handle_usi(&self) -> Vec<String> {
         let thread_count = num_cpus::get();
+        let parallel_options = self.engine.parallel_search_options();
         vec![
             "id name Shogi Engine".to_string(),
             "id author Gemini".to_string(),
             "option name USI_Hash type spin default 16 min 1 max 1024".to_string(),
+            format!(
+                "option name ParallelEnable type check default {}",
+                if parallel_options.enable_parallel {
+                    "true"
+                } else {
+                    "false"
+                }
+            ),
+            format!(
+                "option name ParallelHash type spin default {} min 1 max 512",
+                parallel_options.hash_size_mb
+            ),
+            format!(
+                "option name ParallelMinDepth type spin default {} min 0 max 32",
+                parallel_options.min_depth_parallel
+            ),
+            format!(
+                "option name ParallelMetrics type check default {}",
+                if parallel_options.enable_metrics {
+                    "true"
+                } else {
+                    "false"
+                }
+            ),
+            format!(
+                "option name YBWCEnable type check default {}",
+                if parallel_options.ybwc_enabled {
+                    "true"
+                } else {
+                    "false"
+                }
+            ),
+            format!(
+                "option name YBWCMinDepth type spin default {} min 0 max 32",
+                parallel_options.ybwc_min_depth
+            ),
+            format!(
+                "option name YBWCMinBranch type spin default {} min 1 max 256",
+                parallel_options.ybwc_min_branch
+            ),
+            format!(
+                "option name YBWCMaxSiblings type spin default {} min 1 max 256",
+                parallel_options.ybwc_max_siblings
+            ),
+            format!(
+                "option name YBWCScalingShallow type spin default {} min 1 max 32",
+                parallel_options.ybwc_shallow_divisor
+            ),
+            format!(
+                "option name YBWCScalingMid type spin default {} min 1 max 32",
+                parallel_options.ybwc_mid_divisor
+            ),
+            format!(
+                "option name YBWCScalingDeep type spin default {} min 1 max 32",
+                parallel_options.ybwc_deep_divisor
+            ),
             // Fixed: MaxDepth now allows 0-100 (0 = unlimited/adaptive), default 0
             "option name MaxDepth type spin default 0 min 0 max 100".to_string(),
             format!("option name USI_Threads type spin default {} min 1 max 32", thread_count),

@@ -2,6 +2,7 @@
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::moves::MoveGenerator;
 use shogi_engine::search::search_engine::{IterativeDeepening, SearchEngine};
+use shogi_engine::search::ParallelSearchConfig;
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn parse_fen(fen: &str) -> (BitboardBoard, Player, CapturedPieces) {
@@ -20,7 +21,13 @@ fn best_move_threads(fen: &str, depth: u8, threads: usize) -> Option<String> {
     let (board, player, captured) = parse_fen(fen);
     let mut engine = SearchEngine::new(None, 16);
     let mut id = if threads > 1 {
-        IterativeDeepening::new_with_threads(depth, 1000, None, threads)
+        IterativeDeepening::new_with_threads(
+            depth,
+            1000,
+            None,
+            threads,
+            ParallelSearchConfig::new(threads),
+        )
     } else {
         IterativeDeepening::new(depth, 1000, None)
     };

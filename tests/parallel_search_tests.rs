@@ -99,6 +99,26 @@ fn test_usi_option_registration() {
     assert!(threads_line.contains("type spin"));
     assert!(threads_line.contains("min 1"));
     assert!(threads_line.contains("max 32"));
+
+    for opt in [
+        "ParallelEnable",
+        "ParallelHash",
+        "ParallelMinDepth",
+        "ParallelMetrics",
+        "YBWCEnable",
+        "YBWCMinDepth",
+        "YBWCMinBranch",
+        "YBWCMaxSiblings",
+        "YBWCScalingShallow",
+        "YBWCScalingMid",
+        "YBWCScalingDeep",
+    ] {
+        assert!(
+            usi_response.iter().any(|line| line.contains(opt)),
+            "Expected option {} in USI response",
+            opt
+        );
+    }
 }
 
 #[test]

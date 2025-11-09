@@ -1,6 +1,7 @@
 #![cfg(feature = "legacy-tests")]
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::search::search_engine::{IterativeDeepening, SearchEngine};
+use shogi_engine::search::ParallelSearchConfig;
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn parse_fen(fen: &str) -> Option<(BitboardBoard, Player, CapturedPieces)> {
@@ -23,7 +24,8 @@ fn best_move_threads(fen: &str, depth: u8, threads: usize) -> Option<String> {
     };
     let mut engine = SearchEngine::new(None, 16);
     let mut id = if threads > 1 {
-        IterativeDeepening::new_with_threads(depth, 1000, None, threads)
+        let config = ParallelSearchConfig::new(threads);
+        IterativeDeepening::new_with_threads(depth, 1000, None, threads, config)
     } else {
         IterativeDeepening::new(depth, 1000, None)
     };

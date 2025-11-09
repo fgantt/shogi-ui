@@ -5837,6 +5837,82 @@ impl RealTimePerformance {
     }
 }
 
+/// Parallel search configuration exposed to frontends and USI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ParallelOptions {
+    /// Enable or disable the parallel search engine entirely.
+    pub enable_parallel: bool,
+    /// Minimum depth at which to fan out parallel workers.
+    pub min_depth_parallel: u8,
+    /// Hash size in MB allocated for each parallel worker.
+    pub hash_size_mb: usize,
+    /// Enable Young Brothers Wait Concept coordination.
+    pub ybwc_enabled: bool,
+    /// Minimum depth before YBWC is allowed to trigger.
+    pub ybwc_min_depth: u8,
+    /// Minimum branch factor (number of moves) required to trigger YBWC.
+    pub ybwc_min_branch: usize,
+    /// Maximum number of sibling moves evaluated in parallel once YBWC triggers.
+    pub ybwc_max_siblings: usize,
+    /// Shallow depth divisor for dynamic sibling cap.
+    pub ybwc_shallow_divisor: usize,
+    /// Mid depth divisor for dynamic sibling cap.
+    pub ybwc_mid_divisor: usize,
+    /// Deep depth divisor for dynamic sibling cap.
+    pub ybwc_deep_divisor: usize,
+    /// Enable contention-free work metrics collection.
+    pub enable_metrics: bool,
+}
+
+impl Default for ParallelOptions {
+    fn default() -> Self {
+        Self {
+            enable_parallel: true,
+            min_depth_parallel: 4,
+            hash_size_mb: 16,
+            ybwc_enabled: false,
+            ybwc_min_depth: 2,
+            ybwc_min_branch: 8,
+            ybwc_max_siblings: 8,
+            ybwc_shallow_divisor: 6,
+            ybwc_mid_divisor: 4,
+            ybwc_deep_divisor: 2,
+            enable_metrics: false,
+        }
+    }
+}
+
+impl ParallelOptions {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.hash_size_mb == 0 || self.hash_size_mb > 512 {
+            return Err("ParallelHash must be between 1 and 512 MB".to_string());
+        }
+        if self.ybwc_min_branch == 0 {
+            return Err("YBWCMinBranch must be at least 1".to_string());
+        }
+        if self.ybwc_max_siblings == 0 {
+            return Err("YBWCMaxSiblings must be at least 1".to_string());
+        }
+        if self.ybwc_shallow_divisor == 0
+            || self.ybwc_mid_divisor == 0
+            || self.ybwc_deep_divisor == 0
+        {
+            return Err("YBWC scaling divisors must be at least 1".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn clamp(&mut self) {
+        self.hash_size_mb = self.hash_size_mb.clamp(1, 512);
+        self.ybwc_min_depth = self.ybwc_min_depth.clamp(0, 32);
+        self.ybwc_min_branch = self.ybwc_min_branch.max(1);
+        self.ybwc_max_siblings = self.ybwc_max_siblings.max(1);
+        self.ybwc_shallow_divisor = self.ybwc_shallow_divisor.max(1);
+        self.ybwc_mid_divisor = self.ybwc_mid_divisor.max(1);
+        self.ybwc_deep_divisor = self.ybwc_deep_divisor.max(1);
+    }
+}
+
 /// Main engine configuration containing all search optimization settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineConfig {
@@ -5864,6 +5940,8 @@ pub struct EngineConfig {
     pub prefill_opening_book: bool,
     /// Depth to assign to prefilled opening book entries
     pub opening_book_prefill_depth: u8,
+    /// Parallel search options
+    pub parallel: ParallelOptions,
 }
 
 impl Default for EngineConfig {
@@ -5881,6 +5959,7 @@ impl Default for EngineConfig {
             thread_count: num_cpus::get(),
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
+            parallel: ParallelOptions::default(),
         }
     }
 }
@@ -5902,6 +5981,7 @@ impl EngineConfig {
         debug_logging: bool,
         max_depth: u8,
         time_management: TimeManagementConfig,
+        parallel: ParallelOptions,
     ) -> Self {
         Self {
             quiescence,
@@ -5916,6 +5996,7 @@ impl EngineConfig {
             thread_count: num_cpus::get(),
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
+            parallel,
         }
     }
 
@@ -5928,6 +6009,7 @@ impl EngineConfig {
         self.aspiration_windows.validate()?;
         self.iid.validate()?;
         self.time_management.validate()?;
+        self.parallel.validate()?;
 
         // Validate global settings
         if self.tt_size_mb == 0 || self.tt_size_mb > 1024 {
@@ -6076,6 +6158,7 @@ impl EngineConfig {
                 thread_count: num_cpus::get(),
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
+                parallel: ParallelOptions::default(),
             },
             EnginePreset::Conservative => Self {
                 quiescence: QuiescenceConfig {
@@ -6202,6 +6285,7 @@ impl EngineConfig {
                 thread_count: num_cpus::get(),
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
+                parallel: ParallelOptions::default(),
             },
             EnginePreset::Balanced => Self {
                 quiescence: QuiescenceConfig::default(),
@@ -6216,6 +6300,7 @@ impl EngineConfig {
                 thread_count: num_cpus::get(),
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
+                parallel: ParallelOptions::default(),
             },
         }
     }
@@ -6431,6 +6516,7 @@ impl ConfigMigration {
             thread_count: num_cpus::get(),
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
+            parallel: ParallelOptions::default(),
         }
     }
 
@@ -6456,6 +6542,7 @@ impl ConfigMigration {
             debug_logging,
             max_depth,
             time_management,
+            ParallelOptions::default(),
         )
     }
 
@@ -6471,6 +6558,7 @@ impl ConfigMigration {
         if config.max_depth > 50 {
             config.max_depth = 50;
         }
+        config.parallel.clamp();
 
         // Validate the fixed configuration
         config.validate()?;
@@ -6485,12 +6573,15 @@ impl ConfigMigration {
         if available_memory_mb >= 1024 {
             config.tt_size_mb = 256;
             config.quiescence.tt_size_mb = 64;
+            config.parallel.hash_size_mb = 32;
         } else if available_memory_mb >= 512 {
             config.tt_size_mb = 128;
             config.quiescence.tt_size_mb = 32;
+            config.parallel.hash_size_mb = 24;
         } else {
             config.tt_size_mb = 64;
             config.quiescence.tt_size_mb = 16;
+            config.parallel.hash_size_mb = 16;
         }
 
         // Adjust max depth based on available memory
@@ -6527,6 +6618,7 @@ impl ConfigMigration {
             tt_size_different: config1.tt_size_mb != config2.tt_size_mb,
             max_depth_different: config1.max_depth != config2.max_depth,
             time_management_different: config1.time_management != config2.time_management,
+            parallel_different: config1.parallel != config2.parallel,
         }
     }
 }
@@ -6541,6 +6633,7 @@ pub struct ConfigComparison {
     pub tt_size_different: bool,
     pub max_depth_different: bool,
     pub time_management_different: bool,
+    pub parallel_different: bool,
 }
 
 impl ConfigComparison {
@@ -6553,6 +6646,7 @@ impl ConfigComparison {
             || self.tt_size_different
             || self.max_depth_different
             || self.time_management_different
+            || self.parallel_different
     }
 
     /// Get summary of differences
@@ -6579,6 +6673,9 @@ impl ConfigComparison {
         }
         if self.time_management_different {
             differences.push("Time management configuration".to_string());
+        }
+        if self.parallel_different {
+            differences.push("Parallel search configuration".to_string());
         }
 
         differences

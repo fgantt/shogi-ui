@@ -26,6 +26,7 @@ use shogi_engine::moves::MoveGenerator;
 use shogi_engine::search::search_engine::{
     snapshot_and_reset_metrics, IterativeDeepening, SearchEngine,
 };
+use shogi_engine::search::ParallelSearchConfig;
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn bench_root_search(c: &mut Criterion) {
@@ -174,7 +175,13 @@ fn bench_root_search(c: &mut Criterion) {
                             }
                         };
                         let mut id = if t > 1 {
-                            IterativeDeepening::new_with_threads(depth, time_limit, None, t)
+                            IterativeDeepening::new_with_threads(
+                                depth,
+                                time_limit,
+                                None,
+                                t,
+                                ParallelSearchConfig::new(t),
+                            )
                         } else {
                             IterativeDeepening::new(depth, time_limit, None)
                         };

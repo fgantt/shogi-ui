@@ -44,6 +44,7 @@ pub mod usi;
 use moves::*;
 use opening_book::OpeningBook;
 use search::search_engine::SearchEngine;
+use search::ParallelSearchConfig;
 use tablebase::MicroTablebase;
 use types::*;
 
@@ -83,6 +84,7 @@ pub struct ShogiEngine {
     pondering: bool,
     depth: u8,
     thread_count: usize,
+    parallel_options: ParallelOptions,
 }
 
 impl ShogiEngine {
@@ -102,7 +104,14 @@ impl ShogiEngine {
             pondering: false,
             depth: 0, // Default to 0 (unlimited/adaptive), like YaneuraOu
             thread_count,
+            parallel_options: ParallelOptions::default(),
         };
+        engine.parallel_options.enable_parallel = thread_count > 1;
+        engine.parallel_options.hash_size_mb = 16;
+
+        if let Ok(mut search_engine_guard) = engine.search_engine.lock() {
+            search_engine_guard.set_parallel_options(engine.parallel_options.clone());
+        }
 
         // Try to load persisted preferences (thread count)
         engine.load_prefs();
@@ -133,6 +142,8 @@ impl ShogiEngine {
                 }
             }
         }
+        self.parallel_options.enable_parallel = self.thread_count > 1;
+        self.sync_parallel_options();
     }
 
     fn save_prefs(&self) {
@@ -141,6 +152,12 @@ impl ShogiEngine {
             "thread_count": self.thread_count
         });
         let _ = std::fs::write(path, serde_json::to_vec_pretty(&obj).unwrap_or_default());
+    }
+
+    fn sync_parallel_options(&mut self) {
+        if let Ok(mut search_engine_guard) = self.search_engine.lock() {
+            search_engine_guard.set_parallel_options(self.parallel_options.clone());
+        }
     }
 
     /// Load default opening book from embedded data
@@ -428,6 +445,10 @@ impl ShogiEngine {
         crate::debug_utils::is_debug_enabled()
     }
 
+    pub fn parallel_search_options(&self) -> ParallelOptions {
+        self.parallel_options.clone()
+    }
+
     pub fn get_best_move(
         &mut self,
         depth: u8,
@@ -529,11 +550,14 @@ impl ShogiEngine {
             "Creating searcher with depth: {} (requested: {}, 0 = unlimited), time_limit: {}ms",
             actual_depth, depth, time_limit_ms
         ));
+        let parallel_config =
+            ParallelSearchConfig::from_parallel_options(&self.parallel_options, self.thread_count);
         let mut searcher = search::search_engine::IterativeDeepening::new_with_threads(
             actual_depth,
             time_limit_ms,
             stop_flag,
             self.thread_count,
+            parallel_config,
         );
 
         crate::debug_utils::debug_log("Trying to get search engine lock");
@@ -757,9 +781,12 @@ impl ShogiEngine {
             match parts[1] {
                 "USI_Hash" => {
                     if let Ok(size) = parts[3].parse::<usize>() {
+                        let size = size.clamp(1, 1024);
                         if let Ok(mut search_engine_guard) = self.search_engine.lock() {
                             *search_engine_guard =
                                 SearchEngine::new(Some(self.stop_flag.clone()), size);
+                            self.parallel_options.hash_size_mb = size.min(512);
+                            search_engine_guard.set_parallel_options(self.parallel_options.clone());
                             output.push(format!("info string Set USI_Hash to {} MB", size));
                         }
                         self.opening_book_prefilled = false;
@@ -826,14 +853,17 @@ impl ShogiEngine {
                     if let Ok(depth) = parts[3].parse::<u8>() {
                         if depth <= 100 {
                             self.set_max_depth(depth);
-                            if depth == 0 {
-                                output.push(
-                                    "info string Set MaxDepth to 0 (unlimited/adaptive)"
-                                        .to_string(),
-                                );
+                            let label = if parts[1] == "depth" {
+                                "depth"
                             } else {
-                                output.push(format!("info string Set MaxDepth to {}", depth));
-                            }
+                                "MaxDepth"
+                            };
+                            let message = if depth == 0 {
+                                format!("info string Set {} to 0 (unlimited/adaptive)", label)
+                            } else {
+                                format!("info string Set {} to {}", label, depth)
+                            };
+                            output.push(message);
                         } else {
                             output.push(
                                 "info string error MaxDepth must be between 0 and 100".to_string(),
@@ -1080,6 +1110,10 @@ impl ShogiEngine {
                 "USI_Threads" => {
                     if let Ok(threads) = parts[3].parse::<usize>() {
                         self.thread_count = threads.clamp(1, 32);
+                        if self.thread_count <= 1 {
+                            self.parallel_options.enable_parallel = false;
+                        }
+                        self.sync_parallel_options();
                         self.save_prefs();
                         output.push(format!(
                             "info string Set USI_Threads to {}",
@@ -1087,6 +1121,110 @@ impl ShogiEngine {
                         ));
                     } else {
                         output.push("info string error Invalid thread count value".to_string());
+                    }
+                }
+                "ParallelEnable" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        self.parallel_options.enable_parallel = enabled;
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string {} parallel search",
+                            if enabled { "Enabled" } else { "Disabled" }
+                        ));
+                    }
+                }
+                "ParallelHash" => {
+                    if let Ok(size) = parts[3].parse::<usize>() {
+                        self.parallel_options.hash_size_mb = size.clamp(1, 512);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set ParallelHash to {} MB",
+                            self.parallel_options.hash_size_mb
+                        ));
+                    }
+                }
+                "ParallelMinDepth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        self.parallel_options.min_depth_parallel = depth;
+                        self.sync_parallel_options();
+                        output.push(format!("info string Set ParallelMinDepth to {}", depth));
+                    }
+                }
+                "ParallelMetrics" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        self.parallel_options.enable_metrics = enabled;
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string {} parallel work metrics",
+                            if enabled { "Enabled" } else { "Disabled" }
+                        ));
+                    }
+                }
+                "YBWCEnable" => {
+                    if let Ok(enabled) = parts[3].parse::<bool>() {
+                        self.parallel_options.ybwc_enabled = enabled;
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string {} YBWC",
+                            if enabled { "Enabled" } else { "Disabled" }
+                        ));
+                    }
+                }
+                "YBWCMinDepth" => {
+                    if let Ok(depth) = parts[3].parse::<u8>() {
+                        self.parallel_options.ybwc_min_depth = depth;
+                        self.sync_parallel_options();
+                        output.push(format!("info string Set YBWCMinDepth to {}", depth));
+                    }
+                }
+                "YBWCMinBranch" => {
+                    if let Ok(branch) = parts[3].parse::<usize>() {
+                        self.parallel_options.ybwc_min_branch = branch.max(1);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set YBWCMinBranch to {}",
+                            self.parallel_options.ybwc_min_branch
+                        ));
+                    }
+                }
+                "YBWCMaxSiblings" => {
+                    if let Ok(max) = parts[3].parse::<usize>() {
+                        self.parallel_options.ybwc_max_siblings = max.max(1);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set YBWCMaxSiblings to {}",
+                            self.parallel_options.ybwc_max_siblings
+                        ));
+                    }
+                }
+                "YBWCScalingShallow" => {
+                    if let Ok(divisor) = parts[3].parse::<usize>() {
+                        self.parallel_options.ybwc_shallow_divisor = divisor.max(1);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set YBWCScalingShallow to {}",
+                            self.parallel_options.ybwc_shallow_divisor
+                        ));
+                    }
+                }
+                "YBWCScalingMid" => {
+                    if let Ok(divisor) = parts[3].parse::<usize>() {
+                        self.parallel_options.ybwc_mid_divisor = divisor.max(1);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set YBWCScalingMid to {}",
+                            self.parallel_options.ybwc_mid_divisor
+                        ));
+                    }
+                }
+                "YBWCScalingDeep" => {
+                    if let Ok(divisor) = parts[3].parse::<usize>() {
+                        self.parallel_options.ybwc_deep_divisor = divisor.max(1);
+                        self.sync_parallel_options();
+                        output.push(format!(
+                            "info string Set YBWCScalingDeep to {}",
+                            self.parallel_options.ybwc_deep_divisor
+                        ));
                     }
                 }
                 _ => {

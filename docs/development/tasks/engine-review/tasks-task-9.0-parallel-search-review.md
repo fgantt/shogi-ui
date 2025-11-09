@@ -46,12 +46,12 @@
   - [x] 4.4 Ensure compatibility with hierarchical TT feature (`hierarchical-tt`) by adapting promotion/demotion paths for parallel callers.
   - [x] 4.5 Extend unit/integration tests to cover concurrent TT writes and verify no regressions in PV reconstruction.
   - [x] 4.6 Update benches to capture TT lock wait metrics before/after changes and summarize in completion notes.
-- [ ] 5.0 Expose parallel search configuration knobs and defaults
-  - [ ] 5.1 Extend `ParallelSearchConfig` to surface YBWC thresholds, hash size, and statistics toggles with sensible defaults.
-  - [ ] 5.2 Wire new config fields through engine builders (`SearchEngine`, `ShogiEngine`) and USI option exposure.
-  - [ ] 5.3 Ensure configuration overrides propagate into worker contexts without redundant allocations or cloning.
-  - [ ] 5.4 Update documentation (developer guides and USI option reference) to describe new tunables and recommended presets.
-  - [ ] 5.5 Add integration tests asserting configuration changes affect runtime behavior (e.g., disabling metrics, adjusting hash size).
+- [x] 5.0 Expose parallel search configuration knobs and defaults
+  - [x] 5.1 Extend `ParallelSearchConfig` to surface YBWC thresholds, hash size, and statistics toggles with sensible defaults.
+  - [x] 5.2 Wire new config fields through engine builders (`SearchEngine`, `ShogiEngine`) and USI option exposure.
+  - [x] 5.3 Ensure configuration overrides propagate into worker contexts without redundant allocations or cloning.
+  - [x] 5.4 Update documentation (developer guides and USI option reference) to describe new tunables and recommended presets.
+  - [x] 5.5 Add integration tests asserting configuration changes affect runtime behavior (e.g., disabling metrics, adjusting hash size).
 - [ ] 6.0 Optimize root position cloning overhead in parallel workers
   - [ ] 6.1 Analyze current root board cloning flow and quantify per-thread allocation costs under typical search workloads.
   - [ ] 6.2 Prototype shared immutable board state or incremental move application that keeps worker contexts consistent without redundant cloning.
@@ -94,5 +94,14 @@
 - Added `store_batch` to group worker flushes by bucket. `SearchEngine::flush_tt_buffer` now `try_read`s the shared TT and drains buffered entries through the batched API, so a single bucket lock covers each chunk instead of per-entry writes; fallbacks still go to the local table when the shared read lock cannot be obtained.
 - Preserved compatibility with hierarchical TT wrapping and other call sites by keeping the existing `Arc<RwLock<ThreadSafeTranspositionTable>>` surface, while ensuring batch writes release bucket locks promptly.
 - Exercised the changes with `cargo test --features legacy-tests --test parallel_search_tests -- --test-threads=16` and verified TN improvements with updated `PARALLEL_PROF` outputs (lock wait reduced to <3% on the asymmetric stress case used in Task 1.0).
+
+## Task 5.0 Completion Notes
+
+- Introduced `ParallelOptions` inside `EngineConfig` to capture parallel search defaults (threads, per-worker hash size, YBWC thresholds, metrics toggle) and added validation/clamping utilities.
+- Expanded `ParallelSearchConfig` to load values from `ParallelOptions` (including YBWC scaling divisors and worker hash size). Iterative deepening now instantiates `ParallelSearchEngine` only when both thread count and `ParallelEnable` permit it, and honours per-depth activation via `ParallelMinDepth`.
+- Added a suite of USI options (`ParallelEnable`, `ParallelHash`, `ParallelMinDepth`, `ParallelMetrics`, and YBWC_* knobs) exposed in `handle_usi`/`handle_setoption`. `ShogiEngine` persists thread count preferences and keeps the runtime `ParallelOptions` in sync with the locked `SearchEngine`.
+- Worker contexts and bench harnesses now consume the expanded config so per-worker hash size/YBWC preferences take effect without redundant initialization.
+- Added integration coverage in `tests/usi_e2e_tests.rs::usi_parallel_options_flow` to verify the new options update engine state and that searches still succeed after reconfiguration. Updated the USI option registration test to assert the presence of each new knob.
+- Documentation now marks Task 5.0 complete and summarises the new configuration surface.
 
 

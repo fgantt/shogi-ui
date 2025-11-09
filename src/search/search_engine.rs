@@ -60,6 +60,7 @@ pub struct SearchEngine {
     previous_scores: Vec<i32>,
     /// Time management configuration (Task 4.5-4.8)
     time_management_config: TimeManagementConfig,
+    parallel_options: ParallelOptions,
     /// Whether to prefill the TT from the opening book at startup
     prefill_opening_book: bool,
     /// Depth assigned to opening book prefill entries
@@ -254,6 +255,28 @@ impl SearchEngine {
         self.ybwc_div_deep = deep_divisor.max(1);
     }
 
+    fn apply_parallel_options(&mut self) {
+        let opts = self.parallel_options.clone();
+        self.set_ybwc(opts.ybwc_enabled, opts.ybwc_min_depth);
+        self.set_ybwc_branch(opts.ybwc_min_branch);
+        self.set_ybwc_max_siblings(opts.ybwc_max_siblings);
+        self.set_ybwc_scaling(
+            opts.ybwc_shallow_divisor,
+            opts.ybwc_mid_divisor,
+            opts.ybwc_deep_divisor,
+        );
+    }
+
+    pub fn set_parallel_options(&mut self, mut options: ParallelOptions) {
+        options.clamp();
+        self.parallel_options = options;
+        self.apply_parallel_options();
+    }
+
+    pub fn parallel_options(&self) -> &ParallelOptions {
+        &self.parallel_options
+    }
+
     pub fn flush_tt_buffer(&mut self) {
         if self.tt_write_buffer.is_empty() {
             return;
@@ -368,7 +391,7 @@ impl SearchEngine {
         };
         const BYTES_PER_ENTRY: usize = 100; // Approximate size of a TT entry
         let quiescence_capacity = quiescence_config.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
-        Self {
+        let mut engine = Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
@@ -397,6 +420,7 @@ impl SearchEngine {
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
             time_management_config: TimeManagementConfig::default(),
+            parallel_options: ParallelOptions::default(),
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
             time_budget_stats: TimeBudgetStats::default(),
@@ -443,7 +467,10 @@ impl SearchEngine {
             shared_tt_store_writes: 0,
             tt_buffer_flushes: 0,
             tt_buffer_entries_written: 0,
-        }
+        };
+        engine.parallel_options.hash_size_mb = hash_size_mb;
+        engine.apply_parallel_options();
+        engine
     }
 
     /// Initialize the move orderer with the transposition table
@@ -703,7 +730,7 @@ impl SearchEngine {
         };
         let quiescence_capacity = config.quiescence.tt_size_mb * 1024 * 1024 / BYTES_PER_ENTRY;
 
-        Self {
+        let mut engine = Self {
             evaluator: PositionEvaluator::new(),
             move_generator: MoveGenerator::new(),
             tablebase: MicroTablebase::new(),
@@ -728,6 +755,7 @@ impl SearchEngine {
             aspiration_config: config.aspiration_windows,
             aspiration_stats: AspirationWindowStats::default(),
             time_management_config: config.time_management.clone(),
+            parallel_options: config.parallel.clone(),
             prefill_opening_book: config.prefill_opening_book,
             opening_book_prefill_depth: config.opening_book_prefill_depth,
             time_budget_stats: TimeBudgetStats::default(),
@@ -777,7 +805,9 @@ impl SearchEngine {
             shared_tt_store_writes: 0,
             tt_buffer_flushes: 0,
             tt_buffer_entries_written: 0,
-        }
+        };
+        engine.apply_parallel_options();
+        engine
     }
 
     /// Create a new SearchEngine with a preset configuration
@@ -798,6 +828,7 @@ impl SearchEngine {
         self.aspiration_config = config.aspiration_windows;
         self.iid_config = config.iid;
         self.time_management_config = config.time_management.clone();
+        self.parallel_options = config.parallel.clone();
         self.prefill_opening_book = config.prefill_opening_book;
         self.opening_book_prefill_depth = config.opening_book_prefill_depth;
 
@@ -810,6 +841,7 @@ impl SearchEngine {
 
         // Reinitialize performance monitoring with new max depth
         self.initialize_performance_monitoring(config.max_depth);
+        self.apply_parallel_options();
 
         Ok(())
     }
@@ -829,6 +861,7 @@ impl SearchEngine {
             thread_count: num_cpus::get(),
             prefill_opening_book: self.prefill_opening_book,
             opening_book_prefill_depth: self.opening_book_prefill_depth,
+            parallel: self.parallel_options.clone(),
         }
     }
 
@@ -12575,6 +12608,7 @@ pub struct IterativeDeepening {
     thread_count: usize,
     /// Optional parallel search engine for root move search
     parallel_engine: Option<ParallelSearchEngine>,
+    parallel_min_depth: u8,
 }
 impl IterativeDeepening {
     pub fn new(max_depth: u8, time_limit_ms: u32, stop_flag: Option<Arc<AtomicBool>>) -> Self {
@@ -12584,6 +12618,7 @@ impl IterativeDeepening {
             stop_flag,
             thread_count: 1,
             parallel_engine: None,
+            parallel_min_depth: 0,
         }
     }
 
@@ -12592,6 +12627,7 @@ impl IterativeDeepening {
         time_limit_ms: u32,
         stop_flag: Option<Arc<AtomicBool>>,
         thread_count: usize,
+        mut parallel_config: ParallelSearchConfig,
     ) -> Self {
         let base_threads = thread_count.clamp(1, 32);
         #[cfg(not(test))]
@@ -12605,9 +12641,16 @@ impl IterativeDeepening {
                 threads = 1;
             }
         }
-        let parallel_engine = if threads > 1 {
-            let config = ParallelSearchConfig::new(threads);
-            match ParallelSearchEngine::new_with_stop_flag(config, stop_flag.clone()) {
+        parallel_config.num_threads = threads.clamp(1, 32);
+        if parallel_config.num_threads <= 1 {
+            parallel_config.enable_parallel = false;
+        }
+        let parallel_min_depth = parallel_config.min_depth_parallel;
+        let parallel_engine = if threads > 1 && parallel_config.enable_parallel {
+            match ParallelSearchEngine::new_with_stop_flag(
+                parallel_config.clone(),
+                stop_flag.clone(),
+            ) {
                 Ok(engine) => Some(engine),
                 Err(_e) => None, // Fallback to single-threaded if thread pool creation fails
             }
@@ -12621,6 +12664,7 @@ impl IterativeDeepening {
             stop_flag,
             thread_count: threads,
             parallel_engine,
+            parallel_min_depth,
         }
     }
 
@@ -12930,7 +12974,7 @@ impl IterativeDeepening {
                     depth,
                 );
 
-                let parallel_result = if self.thread_count > 1 {
+                let parallel_result = if self.thread_count > 1 && depth >= self.parallel_min_depth {
                     if let Some(ref parallel_engine) = self.parallel_engine {
                         parallel_engine.search_root_moves(
                             board,
