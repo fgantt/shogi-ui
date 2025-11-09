@@ -35,6 +35,9 @@
 //! println!("{}", report);
 //! ```
 
+use crate::evaluation::performance::PerformanceReport;
+use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
+use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
@@ -55,6 +58,30 @@ pub struct EvaluationStatistics {
     performance_metrics: PerformanceMetrics,
     /// Start time for session tracking
     session_start: Option<Instant>,
+    /// Latest telemetry snapshot from the evaluator
+    telemetry: Option<EvaluationTelemetry>,
+}
+
+/// Aggregated telemetry emitted by the integrated evaluator.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EvaluationTelemetry {
+    pub tapered: Option<TaperedEvaluationSnapshot>,
+    pub phase_transition: Option<PhaseTransitionSnapshot>,
+    pub performance: Option<PerformanceReport>,
+}
+
+impl EvaluationTelemetry {
+    pub fn from_snapshots(
+        tapered: TaperedEvaluationSnapshot,
+        phase_transition: PhaseTransitionSnapshot,
+        performance: Option<PerformanceReport>,
+    ) -> Self {
+        Self {
+            tapered: Some(tapered),
+            phase_transition: Some(phase_transition),
+            performance,
+        }
+    }
 }
 
 impl EvaluationStatistics {
@@ -68,6 +95,7 @@ impl EvaluationStatistics {
             accuracy_metrics: AccuracyMetrics::default(),
             performance_metrics: PerformanceMetrics::default(),
             session_start: None,
+            telemetry: None,
         }
     }
 
@@ -121,6 +149,16 @@ impl EvaluationStatistics {
         self.performance_metrics.record_timing(duration_ns);
     }
 
+    /// Update the latest telemetry snapshot captured from the evaluator.
+    pub fn update_telemetry(&mut self, telemetry: EvaluationTelemetry) {
+        self.telemetry = Some(telemetry);
+    }
+
+    /// Access the most recent telemetry snapshot, if any.
+    pub fn telemetry(&self) -> Option<&EvaluationTelemetry> {
+        self.telemetry.as_ref()
+    }
+
     /// Generate comprehensive report
     pub fn generate_report(&self) -> StatisticsReport {
         let session_duration = self
@@ -141,6 +179,7 @@ impl EvaluationStatistics {
             } else {
                 0.0
             },
+            telemetry: self.telemetry.clone(),
         }
     }
 
@@ -158,6 +197,7 @@ impl EvaluationStatistics {
         self.accuracy_metrics = AccuracyMetrics::default();
         self.performance_metrics = PerformanceMetrics::default();
         self.session_start = Some(Instant::now());
+        self.telemetry = None;
     }
 
     /// Get evaluation count
@@ -396,6 +436,8 @@ pub struct StatisticsReport {
     pub session_duration_secs: f64,
     /// Evaluations per second
     pub evaluations_per_second: f64,
+    /// Latest telemetry snapshot, if available
+    pub telemetry: Option<EvaluationTelemetry>,
 }
 
 impl std::fmt::Display for StatisticsReport {
@@ -464,6 +506,54 @@ impl std::fmt::Display for StatisticsReport {
             "  Throughput: {:.0} evals/sec",
             self.performance_metrics.throughput_per_second()
         )?;
+        if let Some(telemetry) = &self.telemetry {
+            writeln!(f)?;
+            writeln!(f, "Evaluation Telemetry:")?;
+            if let Some(tapered) = telemetry.tapered {
+                writeln!(
+                    f,
+                    "  Tapered Phase Calculations: {}",
+                    tapered.phase_calculations
+                )?;
+                writeln!(f, "  Tapered Cache Hits: {}", tapered.cache_hits)?;
+                writeln!(
+                    f,
+                    "  Tapered Cache Hit Rate: {:.2}%",
+                    tapered.cache_hit_rate * 100.0
+                )?;
+                writeln!(
+                    f,
+                    "  Tapered Interpolations: {}",
+                    tapered.total_interpolations
+                )?;
+            }
+            if let Some(phase) = telemetry.phase_transition {
+                writeln!(
+                    f,
+                    "  Phase Transition Interpolations: {}",
+                    phase.interpolations
+                )?;
+            }
+            if let Some(performance) = telemetry.performance.as_ref() {
+                writeln!(f)?;
+                writeln!(f, "  Profiler Snapshot:")?;
+                writeln!(
+                    f,
+                    "    Avg Evaluation: {:.2} ns",
+                    performance.avg_evaluation_ns
+                )?;
+                writeln!(
+                    f,
+                    "    Avg Phase Calc: {:.2} ns",
+                    performance.avg_phase_calc_ns
+                )?;
+                writeln!(
+                    f,
+                    "    Avg Interpolation: {:.2} ns",
+                    performance.avg_interpolation_ns
+                )?;
+            }
+        }
         Ok(())
     }
 }

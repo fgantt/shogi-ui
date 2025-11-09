@@ -37,6 +37,7 @@ use advanced_integration::AdvancedIntegration;
 use eval_cache::{EvaluationCache, MultiLevelCache};
 use integration::IntegratedEvaluator;
 use king_safety::KingSafetyEvaluator;
+use statistics::EvaluationTelemetry;
 
 /// Position evaluator for the Shogi engine
 pub struct PositionEvaluator {
@@ -210,6 +211,13 @@ impl PositionEvaluator {
         }
     }
 
+    /// Disable statistics tracking in integrated evaluator
+    pub fn disable_integrated_statistics(&self) {
+        if let Some(ref integrated) = self.integrated_evaluator {
+            integrated.disable_statistics();
+        }
+    }
+
     /// Get statistics from integrated evaluator (returns a clone)
     pub fn get_integrated_statistics(
         &self,
@@ -217,6 +225,13 @@ impl PositionEvaluator {
         self.integrated_evaluator
             .as_ref()
             .map(|e| e.get_statistics())
+    }
+
+    /// Get the latest telemetry snapshot from the integrated evaluator.
+    pub fn get_evaluation_telemetry(&self) -> Option<EvaluationTelemetry> {
+        self.integrated_evaluator
+            .as_ref()
+            .and_then(|e| e.telemetry_snapshot())
     }
 
     /// Get reference to advanced integration

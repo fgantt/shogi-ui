@@ -71,6 +71,8 @@ pub struct SearchEngine {
     time_pressure_thresholds: crate::types::TimePressureThresholds,
     /// Core search metrics for performance monitoring (Task 5.7-5.8)
     core_search_metrics: crate::types::CoreSearchMetrics,
+    /// Whether verbose debug logging is enabled
+    debug_logging: bool,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     // Tapered evaluation search integration
@@ -426,6 +428,7 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
+            debug_logging: false,
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -469,6 +472,11 @@ impl SearchEngine {
             tt_buffer_entries_written: 0,
         };
         engine.parallel_options.hash_size_mb = hash_size_mb;
+        if engine.debug_logging {
+            engine.evaluator.enable_integrated_statistics();
+        } else {
+            engine.evaluator.disable_integrated_statistics();
+        }
         engine.apply_parallel_options();
         engine
     }
@@ -805,7 +813,13 @@ impl SearchEngine {
             shared_tt_store_writes: 0,
             tt_buffer_flushes: 0,
             tt_buffer_entries_written: 0,
+            debug_logging: config.debug_logging,
         };
+        if engine.debug_logging {
+            engine.evaluator.enable_integrated_statistics();
+        } else {
+            engine.evaluator.disable_integrated_statistics();
+        }
         engine.apply_parallel_options();
         engine
     }
@@ -842,6 +856,12 @@ impl SearchEngine {
         // Reinitialize performance monitoring with new max depth
         self.initialize_performance_monitoring(config.max_depth);
         self.apply_parallel_options();
+        self.debug_logging = config.debug_logging;
+        if self.debug_logging {
+            self.evaluator.enable_integrated_statistics();
+        } else {
+            self.evaluator.disable_integrated_statistics();
+        }
 
         Ok(())
     }
@@ -859,8 +879,8 @@ impl SearchEngine {
             aspiration_windows: self.aspiration_config.clone(),
             iid: self.iid_config.clone(),
             tt_size_mb: self.transposition_table.size() * 100 / (1024 * 1024), // Approximate
-            debug_logging: false, // This would need to be tracked separately
-            max_depth: 20,        // This would need to be tracked separately
+            debug_logging: self.debug_logging,
+            max_depth: 20, // This would need to be tracked separately
             time_management: self.time_management_config.clone(),
             thread_count: num_cpus::get(),
             prefill_opening_book: self.prefill_opening_book,
@@ -12394,7 +12414,46 @@ impl SearchEngine {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> i32 {
-        self.evaluator.evaluate(board, player, captured_pieces)
+        let score = self.evaluator.evaluate(board, player, captured_pieces);
+        if self.debug_logging {
+            self.log_evaluation_telemetry();
+        }
+        score
+    }
+
+    /// Retrieve the latest evaluation telemetry snapshot.
+    pub fn evaluation_telemetry(
+        &self,
+    ) -> Option<crate::evaluation::statistics::EvaluationTelemetry> {
+        self.evaluator.get_evaluation_telemetry()
+    }
+
+    fn log_evaluation_telemetry(&self) {
+        if let Some(telemetry) = self.evaluation_telemetry() {
+            if let Some(tapered) = telemetry.tapered {
+                crate::debug_utils::debug_log(&format!(
+                    "[EvalTelemetry] phase_calcs={} cache_hits={} hit_rate={:.2}% interpolations={}",
+                    tapered.phase_calculations,
+                    tapered.cache_hits,
+                    tapered.cache_hit_rate * 100.0,
+                    tapered.total_interpolations
+                ));
+            }
+            if let Some(phase) = telemetry.phase_transition {
+                crate::debug_utils::debug_log(&format!(
+                    "[EvalTelemetry] transition_interpolations={}",
+                    phase.interpolations
+                ));
+            }
+            if let Some(performance) = telemetry.performance {
+                crate::debug_utils::debug_log(&format!(
+                    "[EvalTelemetry] profiler avg_eval_ns={:.2} avg_phase_ns={:.2} avg_interp_ns={:.2}",
+                    performance.avg_evaluation_ns,
+                    performance.avg_phase_calc_ns,
+                    performance.avg_interpolation_ns
+                ));
+            }
+        }
     }
 
     // ============================================================================

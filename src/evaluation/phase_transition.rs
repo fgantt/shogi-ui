@@ -373,6 +373,20 @@ pub struct PhaseTransitionStats {
     pub interpolations: u64,
 }
 
+/// Snapshot of phase transition telemetry.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct PhaseTransitionSnapshot {
+    pub interpolations: u64,
+}
+
+impl PhaseTransitionStats {
+    pub fn snapshot(&self) -> PhaseTransitionSnapshot {
+        PhaseTransitionSnapshot {
+            interpolations: self.interpolations,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

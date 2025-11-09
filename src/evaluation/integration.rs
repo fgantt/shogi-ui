@@ -27,12 +27,18 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::{
-    endgame_patterns::EndgamePatternEvaluator, material::MaterialEvaluator,
-    opening_principles::OpeningPrincipleEvaluator, pattern_cache::PatternCache,
-    performance::OptimizedEvaluator, phase_transition::PhaseTransition,
-    piece_square_tables::PieceSquareTables, position_features::PositionFeatureEvaluator,
-    positional_patterns::PositionalPatternAnalyzer, statistics::EvaluationStatistics,
-    tactical_patterns::TacticalPatternRecognizer, tapered_eval::TaperedEvaluation,
+    endgame_patterns::EndgamePatternEvaluator,
+    material::MaterialEvaluator,
+    opening_principles::OpeningPrincipleEvaluator,
+    pattern_cache::PatternCache,
+    performance::OptimizedEvaluator,
+    phase_transition::PhaseTransition,
+    piece_square_tables::PieceSquareTables,
+    position_features::PositionFeatureEvaluator,
+    positional_patterns::PositionalPatternAnalyzer,
+    statistics::{EvaluationStatistics, EvaluationTelemetry},
+    tactical_patterns::TacticalPatternRecognizer,
+    tapered_eval::TaperedEvaluation,
 };
 use crate::types::*;
 use std::cell::RefCell;
@@ -68,6 +74,8 @@ pub struct IntegratedEvaluator {
     optimized_eval: Option<OptimizedEvaluator>,
     /// Statistics tracker (uses interior mutability)
     statistics: RefCell<EvaluationStatistics>,
+    /// Latest telemetry snapshot
+    telemetry: RefCell<Option<EvaluationTelemetry>>,
     /// Phase cache (uses interior mutability)
     phase_cache: RefCell<HashMap<u64, i32>>,
     /// Evaluation cache (uses interior mutability)
@@ -102,6 +110,7 @@ impl IntegratedEvaluator {
             pattern_cache: RefCell::new(PatternCache::new(config.pattern_cache_size)),
             optimized_eval,
             statistics: RefCell::new(EvaluationStatistics::new()),
+            telemetry: RefCell::new(None),
             phase_cache: RefCell::new(HashMap::new()),
             eval_cache: RefCell::new(HashMap::new()),
         }
@@ -157,6 +166,7 @@ impl IntegratedEvaluator {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> i32 {
+        let stats_enabled = { self.statistics.borrow().is_enabled() };
         // Calculate phase
         let phase = self.calculate_phase_cached(board, captured_pieces);
 
@@ -249,6 +259,32 @@ impl IntegratedEvaluator {
                     phase,
                 },
             );
+        }
+
+        let tapered_snapshot = {
+            let evaluator = self.tapered_eval.borrow();
+            evaluator.stats().snapshot()
+        };
+        let phase_snapshot = {
+            let transition = self.phase_transition.borrow();
+            transition.stats().snapshot()
+        };
+        let performance_snapshot = self.optimized_eval.as_ref().and_then(|opt| {
+            let profiler = opt.profiler();
+            if profiler.enabled {
+                Some(profiler.report())
+            } else {
+                None
+            }
+        });
+        let telemetry = EvaluationTelemetry::from_snapshots(
+            tapered_snapshot,
+            phase_snapshot,
+            performance_snapshot,
+        );
+        self.telemetry.borrow_mut().replace(telemetry.clone());
+        if stats_enabled {
+            self.statistics.borrow_mut().update_telemetry(telemetry);
         }
 
         final_score
@@ -415,6 +451,12 @@ impl IntegratedEvaluator {
     /// Reset statistics
     pub fn reset_statistics(&self) {
         self.statistics.borrow_mut().reset();
+        self.telemetry.borrow_mut().take();
+    }
+
+    /// Get the latest telemetry snapshot (cloned).
+    pub fn telemetry_snapshot(&self) -> Option<EvaluationTelemetry> {
+        self.telemetry.borrow().clone()
     }
 
     /// Get current configuration

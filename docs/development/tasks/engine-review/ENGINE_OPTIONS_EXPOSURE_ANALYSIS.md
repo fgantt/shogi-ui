@@ -119,6 +119,12 @@ Based on Task 1.0-8.0 improvements, here are options that should be exposed:
 - **Range**: `0-60000`
 - **Description**: Maximum time to spend on each depth iteration (0 = no limit).
 
+#### 13. **Enable Debug Telemetry** (Task 10.0)
+- **Name**: `DebugLogging`
+- **Type**: `check`
+- **Default**: `false`
+- **Description**: When enabled, emits evaluation telemetry (cache hit rates, interpolation counts, profiler averages) to the debug log to assist tuning sessions.
+
 ---
 
 ## Implementation Plan

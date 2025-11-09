@@ -44,11 +44,11 @@
   - [x] 4.2 Integrate `PhaseTransition::validate_smooth_transitions()` into default test suite to enforce smoothness constraints automatically.
   - [x] 4.3 Add integration tests using `IntegratedEvaluator` on representative shogi positions to confirm phase accuracy with new hand/promotion logic.
   - [x] 4.4 Supplement performance regression tests/benchmarks capturing interpolation cost comparisons (linear vs sigmoid vs smoothstep vs cubic).
-- [ ] 5.0 Observability & Instrumentation Surfacing
-  - [ ] 5.1 Surface `TaperedEvaluationStats` and `PhaseTransitionStats` via existing search telemetry or debug logging hooks.
-  - [ ] 5.2 Implement RAII guard or scoped helper around `PerformanceProfiler` to simplify enabling/disabling during evaluation runs.
-  - [ ] 5.3 Wire interpolation statistics into search diagnostic output so tuning sessions can track cache hit rates and interpolation counts.
-  - [ ] 5.4 Update documentation/operational guides (e.g., `ENGINE_OPTIONS_EXPOSURE_ANALYSIS.md`, performance notes) with new telemetry usage and interpretation tips.
+- [x] 5.0 Observability & Instrumentation Surfacing
+  - [x] 5.1 Surface `TaperedEvaluationStats` and `PhaseTransitionStats` via existing search telemetry or debug logging hooks.
+  - [x] 5.2 Implement RAII guard or scoped helper around `PerformanceProfiler` to simplify enabling/disabling during evaluation runs.
+  - [x] 5.3 Wire interpolation statistics into search diagnostic output so tuning sessions can track cache hit rates and interpolation counts.
+  - [x] 5.4 Update documentation/operational guides (e.g., `ENGINE_OPTIONS_EXPOSURE_ANALYSIS.md`, performance notes) with new telemetry usage and interpretation tips.
 
 ### Task 1.0 Completion Notes
 
@@ -74,4 +74,10 @@
 - **Implementation**: Introduced a default-enabled regression harness (`tests/phase_transition_validation_tests.rs`) that exercises every interpolation method across the standard phase checkpoints and cross-checks the smoothness validator, plus new integrated evaluator tests ensuring hand/promotion material drives phase calculations.
 - **Testing**: Added non-gated coverage that compares phase values for promoted vs. base pieces and verifies integrated scores react to captured-piece pools; expanded performance benchmarks now sample the advanced interpolator alongside legacy curves.
 - **Documentation**: Updated the task tracking doc with the new validation scope and recorded the broadened benchmark coverage for interpolation cost comparisons.
+
+### Task 5.0 Completion Notes
+
+- **Instrumentation**: Added scoped telemetry plumbing to `IntegratedEvaluator`, exposing `TaperedEvaluationStats` snapshots, phase-transition interpolation counters, and optional profiler reports through `EvaluationStatistics`.
+- **Telemetry**: Search debug logging now emits cache hit rates and interpolation counts via `SearchEngine::log_evaluation_telemetry`, with RAII-based `PerformanceProfilerGuard` simplifying scoped profiling enablement.
+- **Documentation**: Extended `ENGINE_OPTIONS_EXPOSURE_ANALYSIS.md` with guidance on enabling debug logging / telemetry and interpreting the new evaluation metrics.
 

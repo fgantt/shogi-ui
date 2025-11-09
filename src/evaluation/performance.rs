@@ -38,6 +38,7 @@ use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransition};
 use crate::evaluation::piece_square_tables::PieceSquareTables;
 use crate::evaluation::tapered_eval::TaperedEvaluation;
 use crate::types::*;
+use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
 /// Optimized evaluator combining all components
@@ -370,6 +371,28 @@ impl PerformanceProfiler {
     pub fn sample_count(&self) -> usize {
         self.evaluation_times.len()
     }
+
+    /// Enable the profiler for the duration of the returned guard, restoring the previous state on drop.
+    pub fn scoped_enable(&mut self) -> PerformanceProfilerGuard<'_> {
+        let previous_state = self.enabled;
+        self.enabled = true;
+        PerformanceProfilerGuard {
+            profiler: self,
+            previous_state,
+        }
+    }
+}
+
+/// RAII helper returned by [`PerformanceProfiler::scoped_enable`].
+pub struct PerformanceProfilerGuard<'a> {
+    profiler: &'a mut PerformanceProfiler,
+    previous_state: bool,
+}
+
+impl<'a> Drop for PerformanceProfilerGuard<'a> {
+    fn drop(&mut self) {
+        self.profiler.enabled = self.previous_state;
+    }
 }
 
 impl Default for PerformanceProfiler {
@@ -379,7 +402,7 @@ impl Default for PerformanceProfiler {
 }
 
 /// Performance report
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceReport {
     /// Total number of evaluations
     pub total_evaluations: usize,
@@ -470,6 +493,23 @@ mod tests {
 
         profiler.disable();
         assert!(!profiler.enabled);
+    }
+
+    #[test]
+    fn test_profiler_scoped_enable_guard() {
+        let mut profiler = PerformanceProfiler::new();
+        {
+            let _guard = profiler.scoped_enable();
+            assert!(profiler.enabled);
+        }
+        assert!(!profiler.enabled);
+
+        profiler.enable();
+        {
+            let _guard = profiler.scoped_enable();
+            assert!(profiler.enabled);
+        }
+        assert!(profiler.enabled);
     }
 
     #[test]

@@ -27,6 +27,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::*;
+use serde::{Deserialize, Serialize};
 use std::cmp;
 
 /// Coordination struct for managing tapered evaluation
@@ -320,6 +321,15 @@ pub struct TaperedEvaluationStats {
     pub interpolations: std::sync::atomic::AtomicU64,
 }
 
+/// Snapshot of tapered evaluation metrics with atomics resolved into scalar values.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct TaperedEvaluationSnapshot {
+    pub phase_calculations: u64,
+    pub cache_hits: u64,
+    pub total_interpolations: u64,
+    pub cache_hit_rate: f64,
+}
+
 impl Clone for TaperedEvaluationStats {
     fn clone(&self) -> Self {
         Self {
@@ -347,6 +357,16 @@ impl TaperedEvaluationStats {
     pub fn total_interpolations(&self) -> u64 {
         self.interpolations
             .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Produce an immutable snapshot of current statistics.
+    pub fn snapshot(&self) -> TaperedEvaluationSnapshot {
+        TaperedEvaluationSnapshot {
+            phase_calculations: self.phase_calculations,
+            cache_hits: self.cache_hits,
+            total_interpolations: self.total_interpolations(),
+            cache_hit_rate: self.cache_hit_rate(),
+        }
     }
 }
 
