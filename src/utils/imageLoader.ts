@@ -9,32 +9,70 @@
  * @param extensions - Array of file extensions to include (e.g., ['jpg', 'png', 'svg', 'jpeg', 'webp'])
  * @returns Promise<string[]> - Array of image paths
  */
+const wallpaperModules = import.meta.glob('/wallpapers/**/*.{jpg,png,svg,jpeg,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+const boardModules = import.meta.glob('/boards/**/*.{jpg,png,svg,jpeg,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+type SupportedDirectory = '/wallpapers' | '/boards';
+
+const directoryToModules: Record<SupportedDirectory, Record<string, string>> = {
+  '/wallpapers': wallpaperModules,
+  '/boards': boardModules,
+};
+
+function normalizeToPublicPath(path: string, directory: string): string {
+  if (path.startsWith('/public')) {
+    return path.replace('/public', '');
+  }
+
+  const directoryIndex = path.indexOf(directory);
+  if (directoryIndex !== -1) {
+    return path.slice(directoryIndex);
+  }
+
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
+function extractImagePaths(
+  modules: Record<string, string>,
+  directory: string,
+  extensions: string[]
+): string[] {
+  const allowedExtensions = new Set(extensions.map(ext => ext.toLowerCase()));
+  const results = new Set<string>();
+
+  Object.entries(modules).forEach(([key, url]) => {
+    const candidate = normalizeToPublicPath(url, directory) || normalizeToPublicPath(key, directory);
+    const extension = candidate.split('.').pop()?.toLowerCase();
+
+    if (candidate.startsWith(directory) && (!extension || allowedExtensions.has(extension))) {
+      results.add(candidate);
+    }
+  });
+
+  return Array.from(results).sort();
+}
+
 export async function loadImagesFromDirectory(
   directory: string,
   extensions: string[] = ['jpg', 'png', 'svg', 'jpeg', 'webp']
 ): Promise<string[]> {
   try {
-    // Create a glob pattern for the directory
-    const globPattern = `${directory}/**/*.{${extensions.join(',')}}`;
-    
-    // Use import.meta.glob to dynamically import all matching files
-    const modules = import.meta.glob('/public/**/*.{jpg,png,svg,jpeg,webp}', { eager: true });
-    
-    // Filter modules that match our directory and extensions
-    const imagePaths: string[] = [];
-    
-    for (const [path, module] of Object.entries(modules)) {
-      // Convert the import path to a public URL path
-      // e.g., '/public/wallpapers/image.jpg' -> '/wallpapers/image.jpg'
-      const publicPath = path.replace('/public', '');
-      
-      // Check if this path is in our target directory
-      if (publicPath.startsWith(directory)) {
-        imagePaths.push(publicPath);
-      }
+    const modules = directoryToModules[directory as SupportedDirectory];
+
+    if (!modules) {
+      return [];
     }
-    
-    return imagePaths.sort();
+
+    return extractImagePaths(modules, directory, extensions);
   } catch (error) {
     console.error(`Error loading images from ${directory}:`, error);
     return [];

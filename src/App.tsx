@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { PhysicalSize } from '@tauri-apps/api/dpi';
 import { loadUsiMonitorState, saveUsiMonitorState, loadWindowSize, saveWindowSize } from './utils/persistence';
+import { getFallbackWallpaperImages, loadWallpaperImages } from './utils/imageLoader';
 
 // --- Singleton ShogiController ---
 const shogiController = new ShogiController();
@@ -136,18 +137,24 @@ function App() {
 
     // Initialize default wallpaper for all routes
     const initializeDefaultWallpaper = async () => {
-      const modules = import.meta.glob('/public/wallpapers/*.{jpg,svg}');
-      const paths = Object.keys(modules).map(path => path.replace('/public', ''));
-      if (paths.length > 0) {
-        // Set photo1.jpg as the default wallpaper
-        const defaultWallpaper = '/wallpapers/photo1.jpg';
-        const initialWallpaper = paths.includes(defaultWallpaper) ? defaultWallpaper : paths[0];
-        document.body.style.backgroundImage = `url('${initialWallpaper}')`;
-        document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundRepeat = 'no-repeat';
-        document.body.style.backgroundPosition = 'center center';
-        document.body.style.backgroundAttachment = 'fixed';
+      const wallpapers = await loadWallpaperImages();
+      const wallpaperPaths = wallpapers.length > 0 ? wallpapers : getFallbackWallpaperImages();
+
+      if (wallpaperPaths.length === 0) {
+        return;
       }
+
+      // Set photo1.jpg as the default wallpaper when available
+      const defaultWallpaper = '/wallpapers/photo1.jpg';
+      const initialWallpaper = wallpaperPaths.includes(defaultWallpaper)
+        ? defaultWallpaper
+        : wallpaperPaths[0];
+
+      document.body.style.backgroundImage = `url('${initialWallpaper}')`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundRepeat = 'no-repeat';
+      document.body.style.backgroundPosition = 'center center';
+      document.body.style.backgroundAttachment = 'fixed';
     };
     
     initializeDefaultWallpaper();
