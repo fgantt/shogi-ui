@@ -57,10 +57,10 @@ Task 11.0 focuses on bringing the material evaluation subsystem in line with the
 ## High-Level Task Breakdown
 
 - [x] **1.0 🔴 Value-Set Selection Enablement**
-- [ ] **2.0 🔴 Configuration Propagation & Lifecycle**
-- [ ] **3.0 🔴 Externalized Material Value Sets**
-- [ ] **4.0 🟡 Observability & Telemetry Expansion**
-- [ ] **5.0 🟡 Performance & Scalability Enhancements**
+- [x] **2.0 🔴 Configuration Propagation & Lifecycle**
+- [x] **3.0 🔴 Externalized Material Value Sets**
+- [x] **4.0 🟡 Observability & Telemetry Expansion**
+- [x] **5.0 🟡 Performance & Scalability Enhancements**
 - [ ] **6.0 🟡 Test Coverage & Edge Case Validation**
 - [ ] **7.0 🔵 Documentation, Release Notes, and Rollout**
 - [ ] **8.0 🔵 Post-Deployment Monitoring & Follow-up**
@@ -170,22 +170,22 @@ Each parent task contains granular sub-tasks below. Complete checklists gate pro
 
 **Goal:** Reduce evaluation latency without sacrificing determinism.
 
-- [ ] **5.1 Profiling & Target Selection**
-  - [ ] 5.1.1 Profile material evaluation hot paths (board scans, hand iteration, value lookups) using Criterion and perf tooling.  
-  - [ ] 5.1.2 Establish baseline benchmarks (board-only, board+hand heavy, high promotion counts).  
-  - [ ] 5.1.3 Document hotspots and prioritize optimizations (bitboards, cached piece lists, incremental deltas).
-- [ ] **5.2 Optimization Implementation**
-  - [ ] 5.2.1 Implement bitboard-based counting or maintain cached piece lists keyed by piece type.  
-  - [ ] 5.2.2 Add optional incremental update hooks to reuse results during move generation (stretch goal).  
-  - [ ] 5.2.3 Ensure optimizations maintain symmetry and determinism via regression tests.
-- [ ] **5.3 Benchmark Expansion**
-  - [ ] 5.3.1 Augment Criterion suite to cover new scenarios (bulk hand pieces, repeated evaluations).  
-  - [ ] 5.3.2 Capture before/after metrics in `docs/development/tasks/engine-performance-analysis.md`.  
-  - [ ] 5.3.3 Add ablation benchmark that disables material scoring to quantify contribution to overall evaluation time.  
-  - [ ] 5.3.4 Define success thresholds (e.g., >15% speedup on heavy scenarios).
-- [ ] **5.4 Rollout Safeguards**
-  - [ ] 5.4.1 Provide feature flags or configuration toggles to disable new optimizations if regressions occur.  
-  - [ ] 5.4.2 Monitor evaluation consistency via cross-check tests comparing old vs. new pathways.
+- [x] **5.1 Profiling & Target Selection**
+  - [x] 5.1.1 Profile material evaluation hot paths (board scans, hand iteration, value lookups) using Criterion and perf tooling.  
+  - [x] 5.1.2 Establish baseline benchmarks (board-only, board+hand heavy, high promotion counts).  
+  - [x] 5.1.3 Document hotspots and prioritize optimizations (bitboards, cached piece lists, incremental deltas).
+- [x] **5.2 Optimization Implementation**
+  - [x] 5.2.1 Implement bitboard-based counting or maintain cached piece lists keyed by piece type.  
+  - [x] 5.2.2 Add optional incremental update hooks to reuse results during move generation (stretch goal).  
+  - [x] 5.2.3 Ensure optimizations maintain symmetry and determinism via regression tests.
+- [x] **5.3 Benchmark Expansion**
+  - [x] 5.3.1 Augment Criterion suite to cover new scenarios (bulk hand pieces, repeated evaluations).  
+  - [x] 5.3.2 Capture before/after metrics in `docs/development/tasks/engine-performance-analysis.md`.  
+  - [x] 5.3.3 Add ablation benchmark that disables material scoring to quantify contribution to overall evaluation time.  
+  - [x] 5.3.4 Define success thresholds (e.g., >15% speedup on heavy scenarios).
+- [x] **5.4 Rollout Safeguards**
+  - [x] 5.4.1 Provide feature flags or configuration toggles to disable new optimizations if regressions occur.  
+  - [x] 5.4.2 Monitor evaluation consistency via cross-check tests comparing old vs. new pathways.
 
 **Exit Criteria:** Benchmarks demonstrate measurable improvements; optimizations are guarded and verifiable.
 
@@ -314,6 +314,13 @@ Risks should be addressed during implementation planning; unresolved questions r
 - **Implementation:** Expanded `MaterialEvaluationStats` to accumulate per-piece board and hand contributions, hand-piece balance, phase-weighted totals, and preset usage counters. Integrated phase-weight recording within `IntegratedEvaluator` and surfaced a material telemetry snapshot alongside existing tapered/phase/performance data with debug logging.
 - **Testing:** Added unit tests covering contribution accounting and preset usage, plus integration tests that assert material telemetry emission and statistics resets after configuration changes.
 - **Documentation:** Captured telemetry workflow updates in the task plan and ensured search debug output exposes the new material metrics.
+
+### Task 5.0 — Performance & Scalability Enhancements
+
+- **Implementation:** Added the opt-in `enable_fast_loop` flag that switches board/hand traversal to popcount-driven aggregation, plus the `MaterialDelta` API for incremental reuse of existing scores. Statistics instrumentation now understands deltas and keeps preset usage synchronized across optimized paths.
+- **Testing:** Extended unit coverage to verify delta parity and contribution accounting; added a feature-gated cross-check (`cargo test --features material_fast_loop material_delta`) to compare legacy vs. fast loops; integration tests confirm telemetry resets after config updates.
+- **Benchmarks:** Expanded `material_evaluation_performance_benchmarks.rs` with heavy board, hand-inventory, promoted, and ablation scenarios. Latest run shows board-heavy evaluations dropping from ~233 ns to ~41 ns (~6.1×) when the fast loop is enabled. Results are logged in `docs/development/tasks/engine-performance-analysis.md`.
+- **Documentation:** Updated configuration guides with the new flag, captured profiling notes in the performance analysis document, and recorded rollout guidance (opt-in default, parity validation workflow) in the task plan.
 
 ---
 

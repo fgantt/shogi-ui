@@ -9,8 +9,74 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::material::MaterialEvaluator;
+use shogi_engine::evaluation::material::{MaterialEvaluationConfig, MaterialEvaluator};
 use shogi_engine::types::*;
+
+fn scenario_board_heavy() -> (BitboardBoard, CapturedPieces) {
+    let mut board = BitboardBoard::empty();
+    for (piece_type, player, row, col) in [
+        (PieceType::Rook, Player::Black, 4, 4),
+        (PieceType::Bishop, Player::Black, 4, 5),
+        (PieceType::Silver, Player::Black, 6, 3),
+        (PieceType::Gold, Player::Black, 7, 4),
+        (PieceType::Rook, Player::White, 3, 4),
+        (PieceType::Bishop, Player::White, 2, 5),
+        (PieceType::Silver, Player::White, 1, 3),
+        (PieceType::Gold, Player::White, 0, 4),
+        (PieceType::PromotedPawn, Player::Black, 5, 4),
+        (PieceType::PromotedPawn, Player::White, 3, 5),
+    ] {
+        board.place_piece(Piece::new(piece_type, player), Position::new(row, col));
+    }
+    (board, CapturedPieces::new())
+}
+
+fn scenario_hand_heavy() -> (BitboardBoard, CapturedPieces) {
+    let (board, mut captured) = scenario_board_heavy();
+    for piece in [
+        (PieceType::Pawn, Player::Black),
+        (PieceType::Pawn, Player::Black),
+        (PieceType::Silver, Player::Black),
+        (PieceType::Knight, Player::Black),
+        (PieceType::Pawn, Player::White),
+        (PieceType::Gold, Player::White),
+        (PieceType::Rook, Player::White),
+    ] {
+        captured.add_piece(piece.0, piece.1);
+    }
+    (board, captured)
+}
+
+fn scenario_promoted() -> (BitboardBoard, CapturedPieces) {
+    let mut board = BitboardBoard::empty();
+    for (piece_type, player, row, col) in [
+        (PieceType::PromotedLance, Player::Black, 5, 2),
+        (PieceType::PromotedKnight, Player::Black, 5, 6),
+        (PieceType::PromotedSilver, Player::Black, 6, 5),
+        (PieceType::PromotedRook, Player::Black, 4, 4),
+        (PieceType::PromotedBishop, Player::Black, 6, 4),
+        (PieceType::PromotedLance, Player::White, 3, 2),
+        (PieceType::PromotedKnight, Player::White, 3, 6),
+        (PieceType::PromotedSilver, Player::White, 2, 5),
+        (PieceType::PromotedRook, Player::White, 4, 5),
+        (PieceType::PromotedBishop, Player::White, 2, 4),
+    ] {
+        board.place_piece(Piece::new(piece_type, player), Position::new(row, col));
+    }
+    (board, CapturedPieces::new())
+}
+
+fn baseline_board_scan(board: &BitboardBoard) -> i32 {
+    let mut total = 0;
+    for row in 0..9 {
+        for col in 0..9 {
+            if board.get_piece(Position::new(row, col)).is_some() {
+                total += 1;
+            }
+        }
+    }
+    total
+}
 
 /// Benchmark material evaluator creation
 fn benchmark_evaluator_creation(c: &mut Criterion) {
@@ -120,7 +186,7 @@ fn benchmark_hand_evaluation(c: &mut Criterion) {
     let board = BitboardBoard::new();
 
     // Create various captured piece scenarios
-    let mut captured_empty = CapturedPieces::new();
+    let captured_empty = CapturedPieces::new();
 
     let mut captured_one_pawn = CapturedPieces::new();
     captured_one_pawn.add_piece(PieceType::Pawn, Player::Black);
@@ -148,6 +214,40 @@ fn benchmark_hand_evaluation(c: &mut Criterion) {
         let mut evaluator = MaterialEvaluator::new();
         b.iter(|| {
             black_box(evaluator.evaluate_material(&board, Player::Black, &captured_multiple));
+        });
+    });
+
+    group.finish();
+}
+
+fn benchmark_material_scenarios(c: &mut Criterion) {
+    let mut group = c.benchmark_group("material_scenarios");
+
+    let (board_heavy, captured_none) = scenario_board_heavy();
+    group.bench_function("board_heavy_default", |b| {
+        let mut evaluator = MaterialEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(&board_heavy, Player::Black, &captured_none));
+        });
+    });
+
+    let (board_hand, captured_hand) = scenario_hand_heavy();
+    group.bench_function("hand_heavy", |b| {
+        let mut evaluator = MaterialEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(&board_hand, Player::Black, &captured_hand));
+        });
+    });
+
+    let (board_promoted, captured_promoted) = scenario_promoted();
+    group.bench_function("promoted_mix", |b| {
+        let mut evaluator = MaterialEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(
+                &board_promoted,
+                Player::Black,
+                &captured_promoted,
+            ));
         });
     });
 
@@ -224,6 +324,26 @@ fn benchmark_material_counting(c: &mut Criterion) {
     group.finish();
 }
 
+fn benchmark_ablation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("material_ablation");
+    let (board, captured) = scenario_board_heavy();
+
+    group.bench_function("full_material", |b| {
+        let mut evaluator = MaterialEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(&board, Player::Black, &captured));
+        });
+    });
+
+    group.bench_function("baseline_scan_only", |b| {
+        b.iter(|| {
+            black_box(baseline_board_scan(&board));
+        });
+    });
+
+    group.finish();
+}
+
 /// Benchmark configuration variations
 fn benchmark_configurations(c: &mut Criterion) {
     let mut group = c.benchmark_group("configurations");
@@ -238,8 +358,7 @@ fn benchmark_configurations(c: &mut Criterion) {
             "no_hand_pieces",
             MaterialEvaluationConfig {
                 include_hand_pieces: false,
-                use_research_values: true,
-                values_path: None,
+                ..MaterialEvaluationConfig::default()
             },
         ),
     ];
@@ -253,8 +372,47 @@ fn benchmark_configurations(c: &mut Criterion) {
         });
     }
 
+    #[cfg(feature = "material_fast_loop")]
+    {
+        group.bench_function("fast_loop", |b| {
+            let mut config = MaterialEvaluationConfig::default();
+            config.enable_fast_loop = true;
+            let mut evaluator = MaterialEvaluator::with_config(config);
+            b.iter(|| {
+                black_box(evaluator.evaluate_material(&board, Player::Black, &captured_pieces));
+            });
+        });
+    }
+
     group.finish();
 }
+
+#[cfg(feature = "material_fast_loop")]
+fn benchmark_fast_loop_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("material_fast_loop");
+    let (board, captured) = scenario_hand_heavy();
+
+    group.bench_function("legacy_loop", |b| {
+        let mut evaluator = MaterialEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(&board, Player::Black, &captured));
+        });
+    });
+
+    group.bench_function("fast_loop_enabled", |b| {
+        let mut config = MaterialEvaluationConfig::default();
+        config.enable_fast_loop = true;
+        let mut evaluator = MaterialEvaluator::with_config(config);
+        b.iter(|| {
+            black_box(evaluator.evaluate_material(&board, Player::Black, &captured));
+        });
+    });
+
+    group.finish();
+}
+
+#[cfg(not(feature = "material_fast_loop"))]
+fn benchmark_fast_loop_comparison(_: &mut Criterion) {}
 
 /// Benchmark complete evaluation workflow
 fn benchmark_complete_workflow(c: &mut Criterion) {
@@ -354,9 +512,12 @@ criterion_group!(
     benchmark_piece_values,
     benchmark_material_evaluation,
     benchmark_hand_evaluation,
+    benchmark_material_scenarios,
     benchmark_material_balance,
     benchmark_material_counting,
+    benchmark_ablation,
     benchmark_configurations,
+    benchmark_fast_loop_comparison,
     benchmark_complete_workflow,
     benchmark_statistics,
     benchmark_memory_patterns,

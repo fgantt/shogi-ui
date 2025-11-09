@@ -51,8 +51,8 @@ MaterialValueLoader::save(&value_set, std::path::Path::new("weights/material/exp
 
 let config = MaterialEvaluationConfig {
     include_hand_pieces: true,
-    use_research_values: true,
     values_path: Some("weights/material/experiment-042.json".into()),
+    ..MaterialEvaluationConfig::default()
 };
 ```
 

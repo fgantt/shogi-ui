@@ -16,6 +16,7 @@ fn loads_builtin_value_set_from_path() {
         include_hand_pieces: true,
         use_research_values: false,
         values_path: Some(path.to_string_lossy().to_string()),
+        ..MaterialEvaluationConfig::default()
     };
 
     let evaluator = MaterialEvaluator::with_config(config);
@@ -37,8 +38,8 @@ fn loads_custom_json_value_set() {
 
     let config = MaterialEvaluationConfig {
         include_hand_pieces: true,
-        use_research_values: true,
         values_path: Some(temp_path.to_string_lossy().to_string()),
+        ..MaterialEvaluationConfig::default()
     };
 
     let evaluator = MaterialEvaluator::with_config(config);
@@ -50,8 +51,8 @@ fn loads_custom_json_value_set() {
 fn fallback_to_builtin_on_missing_file() {
     let config = MaterialEvaluationConfig {
         include_hand_pieces: true,
-        use_research_values: true,
         values_path: Some("missing/path/value_set.json".into()),
+        ..MaterialEvaluationConfig::default()
     };
 
     let evaluator = MaterialEvaluator::with_config(config);

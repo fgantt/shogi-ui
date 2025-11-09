@@ -119,8 +119,8 @@ impl TaperedEvalConfig {
             enabled: true,
             material: MaterialEvaluationConfig {
                 include_hand_pieces: true,
-                use_research_values: true,
-                values_path: None,
+                enable_fast_loop: true,
+                ..MaterialEvaluationConfig::default()
             },
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,
@@ -145,11 +145,7 @@ impl TaperedEvalConfig {
     pub fn strength_optimized() -> Self {
         Self {
             enabled: true,
-            material: MaterialEvaluationConfig {
-                include_hand_pieces: true,
-                use_research_values: true,
-                values_path: None,
-            },
+            material: MaterialEvaluationConfig::default(),
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Advanced,
                 use_phase_boundaries: true,
@@ -187,8 +183,7 @@ impl TaperedEvalConfig {
             enabled: true,
             material: MaterialEvaluationConfig {
                 include_hand_pieces: true,
-                use_research_values: true,
-                values_path: None,
+                ..MaterialEvaluationConfig::default()
             },
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,

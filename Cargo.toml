@@ -19,6 +19,8 @@ legacy-tests = []
 legacy-examples = []
 # Enable hierarchical transposition table support (Task 9.x)
 hierarchical-tt = []
+# Enable fast-loop material evaluation optimization (Task 5.0)
+material_fast_loop = []
 
 [lib]
 crate-type = ["rlib"]

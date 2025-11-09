@@ -22,8 +22,7 @@ fn integrated_evaluator_material_toggle_updates_scores_and_clears_caches() {
     config.use_optimized_path = false;
     config.material = MaterialEvaluationConfig {
         include_hand_pieces: true,
-        use_research_values: true,
-        values_path: None,
+        ..MaterialEvaluationConfig::default()
     };
 
     let mut evaluator = IntegratedEvaluator::with_config(config.clone());
@@ -70,8 +69,7 @@ fn integrated_evaluator_resets_material_stats_on_config_update() {
     config.use_optimized_path = false;
     config.material = MaterialEvaluationConfig {
         include_hand_pieces: true,
-        use_research_values: true,
-        values_path: None,
+        ..MaterialEvaluationConfig::default()
     };
 
     let mut evaluator = IntegratedEvaluator::with_config(config.clone());

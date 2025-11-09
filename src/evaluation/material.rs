@@ -42,6 +42,35 @@ macro_rules! ts {
     };
 }
 
+#[cfg(feature = "material_fast_loop")]
+const ALL_PIECE_TYPES: [PieceType; PieceType::COUNT] = [
+    PieceType::Pawn,
+    PieceType::Lance,
+    PieceType::Knight,
+    PieceType::Silver,
+    PieceType::Gold,
+    PieceType::Bishop,
+    PieceType::Rook,
+    PieceType::King,
+    PieceType::PromotedPawn,
+    PieceType::PromotedLance,
+    PieceType::PromotedKnight,
+    PieceType::PromotedSilver,
+    PieceType::PromotedBishop,
+    PieceType::PromotedRook,
+];
+
+#[cfg(feature = "material_fast_loop")]
+const HAND_PIECE_TYPES: [PieceType; 7] = [
+    PieceType::Pawn,
+    PieceType::Lance,
+    PieceType::Knight,
+    PieceType::Silver,
+    PieceType::Gold,
+    PieceType::Bishop,
+    PieceType::Rook,
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialValueSet {
     pub id: String,
@@ -314,6 +343,38 @@ pub struct MaterialTelemetry {
     pub preset_usage: MaterialPresetUsage,
 }
 
+/// Represents incremental changes to material state for optimized updates.
+#[derive(Debug, Clone, Default)]
+pub struct MaterialDelta {
+    board_deltas: [i32; PieceType::COUNT],
+    hand_deltas: [i32; PieceType::COUNT],
+}
+
+impl MaterialDelta {
+    pub fn add_board(&mut self, piece_type: PieceType, delta: i32) {
+        let idx = piece_type.as_index();
+        self.board_deltas[idx] += delta;
+    }
+
+    pub fn add_hand(&mut self, piece_type: PieceType, delta: i32) {
+        let idx = piece_type.as_index();
+        self.hand_deltas[idx] += delta;
+    }
+
+    pub fn board_delta(&self, piece_type: PieceType) -> i32 {
+        self.board_deltas[piece_type.as_index()]
+    }
+
+    pub fn hand_delta(&self, piece_type: PieceType) -> i32 {
+        self.hand_deltas[piece_type.as_index()]
+    }
+
+    pub fn clear(&mut self) {
+        self.board_deltas = [0; PieceType::COUNT];
+        self.hand_deltas = [0; PieceType::COUNT];
+    }
+}
+
 #[derive(Debug, Clone)]
 struct MaterialContribution {
     board: [AggregateScore; PieceType::COUNT],
@@ -431,6 +492,46 @@ impl MaterialEvaluator {
         score
     }
 
+    /// Compute a tapered score delta for incremental updates.
+    pub fn evaluate_delta(&self, delta: &MaterialDelta) -> TaperedScore {
+        let mut score = TaperedScore::default();
+        for idx in 0..PieceType::COUNT {
+            let board_delta = delta.board_deltas[idx];
+            if board_delta != 0 {
+                let piece_type = PieceType::from_u8(idx as u8);
+                let value = self.get_piece_value(piece_type);
+                score.mg += value.mg * board_delta;
+                score.eg += value.eg * board_delta;
+            }
+
+            let hand_delta = delta.hand_deltas[idx];
+            if hand_delta != 0 {
+                let piece_type = PieceType::from_u8(idx as u8);
+                let value = self.get_hand_piece_value(piece_type);
+                score.mg += value.mg * hand_delta;
+                score.eg += value.eg * hand_delta;
+            }
+        }
+        score
+    }
+
+    /// Apply an incremental delta to an existing score, updating statistics.
+    pub fn apply_delta(
+        &mut self,
+        current_score: TaperedScore,
+        delta: &MaterialDelta,
+    ) -> TaperedScore {
+        let delta_score = self.evaluate_delta(delta);
+        let mut updated = current_score;
+        updated += delta_score;
+
+        self.stats.register_value_set(&self.value_set);
+        self.stats.apply_delta(delta, &self.value_set);
+        self.stats.record_phase_weighted(updated.mg);
+
+        updated
+    }
+
     /// Evaluate material for pieces on the board
     fn evaluate_board_material(
         &self,
@@ -438,6 +539,11 @@ impl MaterialEvaluator {
         player: Player,
         contribution: &mut MaterialContribution,
     ) -> TaperedScore {
+        #[cfg(feature = "material_fast_loop")]
+        if self.config.enable_fast_loop {
+            return self.evaluate_board_material_fast(board, player, contribution);
+        }
+
         let mut score = TaperedScore::default();
 
         for row in 0..9 {
@@ -460,6 +566,47 @@ impl MaterialEvaluator {
         score
     }
 
+    #[cfg(feature = "material_fast_loop")]
+    fn evaluate_board_material_fast(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        contribution: &mut MaterialContribution,
+    ) -> TaperedScore {
+        let mut score = TaperedScore::default();
+        let player_idx = if player == Player::Black { 0 } else { 1 };
+        let opponent_idx = 1 - player_idx;
+        let pieces = board.get_pieces();
+
+        for piece_type in ALL_PIECE_TYPES.iter().copied() {
+            let idx = piece_type.as_index();
+            let bitboard_self = pieces[player_idx][idx];
+            let bitboard_opponent = pieces[opponent_idx][idx];
+            if bitboard_self == 0 && bitboard_opponent == 0 {
+                continue;
+            }
+            let value = self.get_piece_value(piece_type);
+            let player_count = bitboard_self.count_ones() as i64;
+            let opponent_count = bitboard_opponent.count_ones() as i64;
+            if player_count > 0 {
+                contribution.board[idx].add_tapered(value, player_count);
+                score += TaperedScore::new_tapered(
+                    value.mg * player_count as i32,
+                    value.eg * player_count as i32,
+                );
+            }
+            if opponent_count > 0 {
+                contribution.board[idx].add_tapered(value, -opponent_count);
+                score -= TaperedScore::new_tapered(
+                    value.mg * opponent_count as i32,
+                    value.eg * opponent_count as i32,
+                );
+            }
+        }
+
+        score
+    }
+
     /// Evaluate material for captured pieces (pieces in hand)
     fn evaluate_hand_material(
         &self,
@@ -467,6 +614,11 @@ impl MaterialEvaluator {
         player: Player,
         contribution: &mut MaterialContribution,
     ) -> TaperedScore {
+        #[cfg(feature = "material_fast_loop")]
+        if self.config.enable_fast_loop {
+            return self.evaluate_hand_material_fast(captured_pieces, player, contribution);
+        }
+
         let mut score = TaperedScore::default();
 
         // Get captured pieces for this player
@@ -495,6 +647,37 @@ impl MaterialEvaluator {
             score -= value;
         }
 
+        score
+    }
+
+    #[cfg(feature = "material_fast_loop")]
+    fn evaluate_hand_material_fast(
+        &self,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+        contribution: &mut MaterialContribution,
+    ) -> TaperedScore {
+        let mut score = TaperedScore::default();
+        for piece_type in HAND_PIECE_TYPES.iter().copied() {
+            let value = self.get_hand_piece_value(piece_type);
+            let player_count = captured_pieces.count(piece_type, player) as i64;
+            let opponent_count = captured_pieces.count(piece_type, player.opposite()) as i64;
+
+            if player_count > 0 {
+                contribution.add_hand(piece_type, value, true);
+                score += TaperedScore::new_tapered(
+                    value.mg * player_count as i32,
+                    value.eg * player_count as i32,
+                );
+            }
+            if opponent_count > 0 {
+                contribution.add_hand(piece_type, value, false);
+                score -= TaperedScore::new_tapered(
+                    value.mg * opponent_count as i32,
+                    value.eg * opponent_count as i32,
+                );
+            }
+        }
         score
     }
 
@@ -598,6 +781,9 @@ pub struct MaterialEvaluationConfig {
     pub use_research_values: bool,
     /// Optional path to a custom material value set (JSON/TOML)
     pub values_path: Option<String>,
+    /// Enable optimized fast-loop traversal for board/hand evaluation
+    #[serde(default)]
+    pub enable_fast_loop: bool,
 }
 
 impl Default for MaterialEvaluationConfig {
@@ -606,6 +792,7 @@ impl Default for MaterialEvaluationConfig {
             include_hand_pieces: true,
             use_research_values: true,
             values_path: None,
+            enable_fast_loop: false,
         }
     }
 }
@@ -655,6 +842,26 @@ impl MaterialEvaluationStats {
 
     pub(crate) fn record_phase_weighted(&mut self, score: i32) {
         self.phase_weighted_total += score as i64;
+    }
+
+    fn apply_delta(&mut self, delta: &MaterialDelta, value_set: &MaterialValueSet) {
+        self.evaluations += 1;
+        for idx in 0..PieceType::COUNT {
+            let board_delta = delta.board_deltas[idx];
+            if board_delta != 0 {
+                let piece_type = PieceType::from_u8(idx as u8);
+                let value = value_set.board_value(piece_type);
+                self.board_contributions[idx].add_tapered(value, board_delta as i64);
+            }
+
+            let hand_delta = delta.hand_deltas[idx];
+            if hand_delta != 0 {
+                let piece_type = PieceType::from_u8(idx as u8);
+                let value = value_set.hand_value(piece_type);
+                self.hand_contributions[idx].add_tapered(value, hand_delta as i64);
+                self.hand_balance.add_tapered(value, hand_delta as i64);
+            }
+        }
     }
 
     pub fn board_contribution(&self, piece_type: PieceType) -> AggregateScore {
@@ -712,7 +919,7 @@ mod tests {
         let config = MaterialEvaluationConfig {
             include_hand_pieces: false,
             use_research_values: false,
-            values_path: None,
+            ..MaterialEvaluationConfig::default()
         };
         let evaluator = MaterialEvaluator::with_config(config);
         assert!(!evaluator.config().include_hand_pieces);
@@ -803,8 +1010,7 @@ mod tests {
     fn test_evaluate_without_hand_pieces() {
         let config = MaterialEvaluationConfig {
             include_hand_pieces: false,
-            use_research_values: true,
-            values_path: None,
+            ..MaterialEvaluationConfig::default()
         };
         let mut evaluator = MaterialEvaluator::with_config(config);
         let board = BitboardBoard::new();
@@ -837,9 +1043,8 @@ mod tests {
     fn test_value_sets_change_piece_values() {
         let research_eval = MaterialEvaluator::new();
         let classic_eval = MaterialEvaluator::with_config(MaterialEvaluationConfig {
-            include_hand_pieces: true,
             use_research_values: false,
-            values_path: None,
+            ..MaterialEvaluationConfig::default()
         });
 
         let research_rook = research_eval.get_piece_value(PieceType::Rook);
@@ -857,15 +1062,10 @@ mod tests {
         let position = Position::new(4, 4);
         board.place_piece(Piece::new(PieceType::Rook, Player::Black), position);
 
-        let config_research = MaterialEvaluationConfig {
-            include_hand_pieces: true,
-            use_research_values: true,
-            values_path: None,
-        };
+        let config_research = MaterialEvaluationConfig::default();
         let config_classic = MaterialEvaluationConfig {
-            include_hand_pieces: true,
             use_research_values: false,
-            values_path: None,
+            ..MaterialEvaluationConfig::default()
         };
 
         let mut research_eval = MaterialEvaluator::with_config(config_research);
@@ -960,6 +1160,84 @@ mod tests {
         custom_eval.evaluate_material(&board, Player::Black, &captured);
         let usage = custom_eval.stats().preset_usage();
         assert_eq!(usage.custom, 1);
+    }
+
+    #[test]
+    fn test_material_delta_matches_full_evaluation() {
+        let mut base_board = BitboardBoard::empty();
+        base_board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+        base_board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 4),
+        );
+        let base_captured = CapturedPieces::new();
+
+        let mut full_evaluator = MaterialEvaluator::new();
+        let _ = full_evaluator.evaluate_material(&base_board, Player::Black, &base_captured);
+
+        let mut updated_board = base_board.clone();
+        updated_board.place_piece(
+            Piece::new(PieceType::Rook, Player::Black),
+            Position::new(4, 4),
+        );
+        updated_board.place_piece(
+            Piece::new(PieceType::Silver, Player::White),
+            Position::new(3, 3),
+        );
+
+        let mut updated_captured = CapturedPieces::new();
+        updated_captured.add_piece(PieceType::Pawn, Player::Black);
+        updated_captured.add_piece(PieceType::Bishop, Player::White);
+
+        let updated_full =
+            full_evaluator.evaluate_material(&updated_board, Player::Black, &updated_captured);
+
+        let mut delta = MaterialDelta::default();
+        delta.add_board(PieceType::Rook, 1);
+        delta.add_board(PieceType::Silver, -1);
+        delta.add_hand(PieceType::Pawn, 1);
+        delta.add_hand(PieceType::Bishop, -1);
+
+        let mut incremental_evaluator = MaterialEvaluator::new();
+        let base_score =
+            incremental_evaluator.evaluate_material(&base_board, Player::Black, &base_captured);
+        let via_delta = incremental_evaluator.apply_delta(base_score, &delta);
+
+        assert_eq!(updated_full, via_delta);
+    }
+
+    #[cfg(feature = "material_fast_loop")]
+    #[test]
+    fn test_fast_loop_matches_legacy_path() {
+        let mut board = BitboardBoard::empty();
+        for (piece_type, player, row, col) in [
+            (PieceType::Rook, Player::Black, 4, 4),
+            (PieceType::Bishop, Player::Black, 5, 5),
+            (PieceType::Silver, Player::White, 2, 2),
+            (PieceType::Gold, Player::White, 3, 6),
+        ] {
+            board.place_piece(Piece::new(piece_type, player), Position::new(row, col));
+        }
+
+        let mut captured = CapturedPieces::new();
+        captured.add_piece(PieceType::Pawn, Player::Black);
+        captured.add_piece(PieceType::Knight, Player::White);
+
+        let slow_score =
+            MaterialEvaluator::new().evaluate_material(&board, Player::Black, &captured);
+
+        let mut fast_config = MaterialEvaluationConfig::default();
+        fast_config.enable_fast_loop = true;
+        let fast_score = MaterialEvaluator::with_config(fast_config).evaluate_material(
+            &board,
+            Player::Black,
+            &captured,
+        );
+
+        assert_eq!(slow_score, fast_score);
     }
 
     #[test]
@@ -1069,11 +1347,7 @@ mod tests {
 
     #[test]
     fn test_apply_config_resets_stats_and_updates_values() {
-        let mut evaluator = MaterialEvaluator::with_config(MaterialEvaluationConfig {
-            include_hand_pieces: true,
-            use_research_values: true,
-            values_path: None,
-        });
+        let mut evaluator = MaterialEvaluator::with_config(MaterialEvaluationConfig::default());
 
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
@@ -1086,7 +1360,7 @@ mod tests {
         evaluator.apply_config(MaterialEvaluationConfig {
             include_hand_pieces: false,
             use_research_values: false,
-            values_path: None,
+            ..MaterialEvaluationConfig::default()
         });
 
         assert_eq!(evaluator.stats().evaluations, 0);
