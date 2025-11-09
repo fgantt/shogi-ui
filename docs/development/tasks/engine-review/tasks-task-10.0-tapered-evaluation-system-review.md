@@ -34,11 +34,11 @@
   - [x] 2.3 Honor `PhaseTransitionConfig.sigmoid_steepness` in `interpolate_sigmoid`, wiring configuration through all call sites.
   - [x] 2.4 Expand sigmoid unit tests to verify different steepness values alter transition gradients as configured.
   - [x] 2.5 Refresh interpolation documentation (inline + doc files) to reflect corrected behavior and tuning guidance.
-- [ ] 3.0 Advanced Interpolator Productionization
-  - [ ] 3.1 Introduce configuration flag (or preset) that enables `AdvancedInterpolator` within `IntegratedEvaluator` for production trials.
-  - [ ] 3.2 Refactor advanced interpolation tests out of `legacy-tests` feature gating so they run under default CI.
-  - [ ] 3.3 Ensure graceful fallback to standard interpolators when advanced module is disabled or misconfigured.
-  - [ ] 3.4 Document usage patterns and configuration steps for advanced interpolators in evaluation config docs.
+- [x] 3.0 Advanced Interpolator Productionization
+  - [x] 3.1 Introduce configuration flag (or preset) that enables `AdvancedInterpolator` within `IntegratedEvaluator` for production trials.
+  - [x] 3.2 Refactor advanced interpolation tests out of `legacy-tests` feature gating so they run under default CI.
+  - [x] 3.3 Ensure graceful fallback to standard interpolators when advanced module is disabled or misconfigured.
+  - [x] 3.4 Document usage patterns and configuration steps for advanced interpolators in evaluation config docs.
 - [ ] 4.0 Validation & Test Coverage Expansion
   - [ ] 4.1 Build a parameterized test harness exercising all interpolation methods across key phase checkpoints (0, 64, 128, 192, 256).
   - [ ] 4.2 Integrate `PhaseTransition::validate_smooth_transitions()` into default test suite to enforce smoothness constraints automatically.
@@ -62,4 +62,10 @@
 - **Implementation**: Swapped the cubic interpolator to a symmetric ease-in-out curve and wired `sigmoid_steepness` through the logistic interpolation path so tuning knobs have effect.
 - **Testing**: Updated cubic midpoint assertions and added a steepness regression to ensure shallow vs. steep sigmoid curves diverge as expected.
 - **Documentation**: Inlined comments describe the new easing behavior; task list updated with completion details.
+
+### Task 3.0 Completion Notes
+
+- **Implementation**: Added an `Advanced` interpolation mode with configuration/plumbing so `PhaseTransition` can host an `AdvancedInterpolator`, including presets via `PhaseTransitionConfig` and the strength-optimized eval preset.
+- **Testing**: Promoted advanced interpolation tests to run unconditionally and added coverage for both fallback and enabled paths.
+- **Documentation**: Updated the task plan to outline the new toggle and usage guidance; advanced tests now part of default CI signal.
 

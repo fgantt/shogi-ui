@@ -234,7 +234,7 @@ impl Default for AdvancedInterpolator {
 }
 
 /// Advanced interpolation configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AdvancedInterpolationConfig {
     /// Enable spline interpolation
     pub use_spline: bool,
@@ -263,7 +263,7 @@ impl Default for AdvancedInterpolationConfig {
 }
 
 /// Phase boundaries for multi-phase evaluation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhaseBoundaries {
     /// Phase threshold for opening (≥ this = opening)
     pub opening_threshold: i32,
@@ -390,7 +390,7 @@ impl SplineSegment {
     }
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -26,6 +26,7 @@
 //! assert!(config.validate().is_ok());
 //! ```
 
+use crate::evaluation::advanced_interpolation::AdvancedInterpolationConfig;
 use crate::evaluation::material::MaterialEvaluationConfig;
 use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransitionConfig};
 use crate::evaluation::position_features::PositionFeatureConfig;
@@ -124,6 +125,8 @@ impl TaperedEvalConfig {
                 default_method: InterpolationMethod::Linear,
                 use_phase_boundaries: false, // Disabled for performance
                 sigmoid_steepness: 6.0,
+                use_advanced_interpolator: false,
+                advanced_config: AdvancedInterpolationConfig::default(),
             },
             position_features: PositionFeatureConfig {
                 enable_king_safety: true,
@@ -146,9 +149,15 @@ impl TaperedEvalConfig {
                 use_research_values: true,
             },
             phase_transition: PhaseTransitionConfig {
-                default_method: InterpolationMethod::Smoothstep,
+                default_method: InterpolationMethod::Advanced,
                 use_phase_boundaries: true,
                 sigmoid_steepness: 6.0,
+                use_advanced_interpolator: true,
+                advanced_config: AdvancedInterpolationConfig {
+                    use_spline: true,
+                    enable_adaptive: true,
+                    ..AdvancedInterpolationConfig::default()
+                },
             },
             position_features: PositionFeatureConfig {
                 enable_king_safety: true,
@@ -182,6 +191,8 @@ impl TaperedEvalConfig {
                 default_method: InterpolationMethod::Linear,
                 use_phase_boundaries: false,
                 sigmoid_steepness: 6.0,
+                use_advanced_interpolator: false,
+                advanced_config: AdvancedInterpolationConfig::default(),
             },
             position_features: PositionFeatureConfig {
                 enable_king_safety: true,

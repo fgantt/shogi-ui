@@ -222,11 +222,7 @@ impl TaperedEvaluation {
     ///
     /// This is a simplified hash for phase caching purposes.
     /// For more sophisticated hashing, use the Zobrist hash system.
-    fn get_position_hash(
-        &self,
-        board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
-    ) -> u64 {
+    fn get_position_hash(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> u64 {
         let mut hash = 0u64;
 
         for row in 0..9 {
@@ -285,7 +281,11 @@ impl TaperedEvaluation {
             return;
         }
 
-        if let Some(pos) = self.phase_cache.iter().position(|(existing, _)| *existing == hash) {
+        if let Some(pos) = self
+            .phase_cache
+            .iter()
+            .position(|(existing, _)| *existing == hash)
+        {
             self.phase_cache.remove(pos);
         }
 
@@ -599,10 +599,7 @@ mod tests {
         let pawn_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         board.remove_piece(position);
-        board.place_piece(
-            Piece::new(PieceType::PromotedPawn, Player::Black),
-            position,
-        );
+        board.place_piece(Piece::new(PieceType::PromotedPawn, Player::Black), position);
         let promoted_phase = evaluator.calculate_game_phase(&board, &captured_pieces);
 
         assert!(
@@ -625,14 +622,16 @@ mod tests {
 
         let phase_with = evaluator.calculate_game_phase(&board, &captured_with);
         assert_eq!(
-            evaluator.stats().cache_hits, 0,
+            evaluator.stats().cache_hits,
+            0,
             "Different captured sets should not hit the cache"
         );
         assert!(phase_with > phase_empty);
 
         let phase_empty_again = evaluator.calculate_game_phase(&board, &empty_captured);
         assert_eq!(
-            evaluator.stats().cache_hits, 1,
+            evaluator.stats().cache_hits,
+            1,
             "Reusing identical captured sets should hit the cache"
         );
         assert_eq!(phase_empty, phase_empty_again);

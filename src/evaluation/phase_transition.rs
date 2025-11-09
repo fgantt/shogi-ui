@@ -30,6 +30,9 @@
 //! let cubic_result = transition.interpolate(score, phase, InterpolationMethod::Cubic);
 //! ```
 
+use crate::evaluation::advanced_interpolation::{
+    AdvancedInterpolationConfig, AdvancedInterpolator, PositionCharacteristics, PositionType,
+};
 use crate::types::*;
 
 use serde::{Deserialize, Serialize};
@@ -52,6 +55,9 @@ pub enum InterpolationMethod {
     /// Smoothstep interpolation (polynomial smoothing)
     /// Formula: 3t² - 2t³ where t = phase/256
     Smoothstep,
+
+    /// Advanced interpolator (spline/multi-phase/adaptive)
+    Advanced,
 }
 
 /// Phase transition coordinator
@@ -63,24 +69,31 @@ pub struct PhaseTransition {
     config: PhaseTransitionConfig,
     /// Statistics tracking
     stats: PhaseTransitionStats,
+    /// Optional advanced interpolator
+    advanced_interpolator: Option<AdvancedInterpolator>,
 }
 
 impl PhaseTransition {
     /// Create a new PhaseTransition with default configuration
     pub fn new() -> Self {
+        let config = PhaseTransitionConfig::default();
+        let advanced_interpolator = PhaseTransition::initialize_advanced(&config);
         Self {
-            default_method: InterpolationMethod::Linear,
-            config: PhaseTransitionConfig::default(),
+            default_method: config.default_method,
+            config,
             stats: PhaseTransitionStats::default(),
+            advanced_interpolator,
         }
     }
 
     /// Create a PhaseTransition with custom configuration
     pub fn with_config(config: PhaseTransitionConfig) -> Self {
+        let advanced_interpolator = PhaseTransition::initialize_advanced(&config);
         Self {
             default_method: config.default_method,
             config,
             stats: PhaseTransitionStats::default(),
+            advanced_interpolator,
         }
     }
 
@@ -119,6 +132,7 @@ impl PhaseTransition {
             InterpolationMethod::Cubic => self.interpolate_cubic(score, adjusted_phase),
             InterpolationMethod::Sigmoid => self.interpolate_sigmoid(score, adjusted_phase),
             InterpolationMethod::Smoothstep => self.interpolate_smoothstep(score, adjusted_phase),
+            InterpolationMethod::Advanced => self.interpolate_advanced(score, adjusted_phase),
         };
 
         result
@@ -183,6 +197,21 @@ impl PhaseTransition {
         let eg_weight = 1.0 - smoothstep_t;
 
         (score.mg as f64 * mg_weight + score.eg as f64 * eg_weight) as i32
+    }
+
+    fn interpolate_advanced(&self, score: TaperedScore, phase: i32) -> i32 {
+        if let Some(ref advanced) = self.advanced_interpolator {
+            let advanced_config = &self.config.advanced_config;
+            if advanced_config.enable_adaptive {
+                advanced.interpolate_adaptive(score, phase, &PositionCharacteristics::default())
+            } else if advanced_config.use_spline {
+                advanced.interpolate_spline(score, phase)
+            } else {
+                advanced.interpolate_multi_phase(score, phase, PositionType::Standard)
+            }
+        } else {
+            self.interpolate_linear(score, phase)
+        }
     }
 
     /// Apply phase boundaries for smoother transitions
@@ -292,6 +321,16 @@ impl PhaseTransition {
     pub fn reset_stats(&mut self) {
         self.stats = PhaseTransitionStats::default();
     }
+
+    fn initialize_advanced(config: &PhaseTransitionConfig) -> Option<AdvancedInterpolator> {
+        if config.use_advanced_interpolator {
+            Some(AdvancedInterpolator::with_config(
+                config.advanced_config.clone(),
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for PhaseTransition {
@@ -309,6 +348,10 @@ pub struct PhaseTransitionConfig {
     pub use_phase_boundaries: bool,
     /// Steepness for sigmoid interpolation
     pub sigmoid_steepness: f64,
+    /// Enable advanced interpolator integration
+    pub use_advanced_interpolator: bool,
+    /// Advanced interpolation configuration
+    pub advanced_config: AdvancedInterpolationConfig,
 }
 
 impl Default for PhaseTransitionConfig {
@@ -317,6 +360,8 @@ impl Default for PhaseTransitionConfig {
             default_method: InterpolationMethod::Linear,
             use_phase_boundaries: false,
             sigmoid_steepness: 6.0,
+            use_advanced_interpolator: false,
+            advanced_config: AdvancedInterpolationConfig::default(),
         }
     }
 }
@@ -328,7 +373,7 @@ pub struct PhaseTransitionStats {
     pub interpolations: u64,
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -396,11 +441,13 @@ mod tests {
             default_method: InterpolationMethod::Linear,
             use_phase_boundaries: false,
             sigmoid_steepness: 2.0,
+            ..PhaseTransitionConfig::default()
         });
         let mut steep = PhaseTransition::with_config(PhaseTransitionConfig {
             default_method: InterpolationMethod::Linear,
             use_phase_boundaries: false,
             sigmoid_steepness: 12.0,
+            ..PhaseTransitionConfig::default()
         });
 
         let phase = 64; // Early-game leaning
@@ -410,6 +457,36 @@ mod tests {
         assert!(
             shallow_result < steep_result,
             "Lower steepness should keep the score closer to middlegame values"
+        );
+    }
+
+    #[test]
+    fn test_advanced_interpolation_fallback_when_disabled() {
+        let mut transition = PhaseTransition::new();
+        let score = TaperedScore::new_tapered(100, 200);
+        let result = transition.interpolate(score, 128, InterpolationMethod::Advanced);
+        assert_eq!(
+            result, 150,
+            "Without advanced interpolator enabled, fallback should behave like linear"
+        );
+    }
+
+    #[test]
+    fn test_advanced_interpolation_enabled() {
+        let mut config = PhaseTransitionConfig::default();
+        config.use_advanced_interpolator = true;
+        config.advanced_config.use_spline = true;
+        config.default_method = InterpolationMethod::Advanced;
+
+        let mut transition = PhaseTransition::with_config(config);
+        let score = TaperedScore::new_tapered(100, 200);
+
+        let advanced_result = transition.interpolate(score, 96, InterpolationMethod::Advanced);
+        let linear_result = transition.interpolate(score, 96, InterpolationMethod::Linear);
+
+        assert_ne!(
+            advanced_result, linear_result,
+            "Advanced interpolation should differ from linear when enabled"
         );
     }
 
@@ -568,6 +645,7 @@ mod tests {
             InterpolationMethod::Cubic,
             InterpolationMethod::Sigmoid,
             InterpolationMethod::Smoothstep,
+            InterpolationMethod::Advanced,
         ];
 
         for method in methods {
@@ -596,6 +674,7 @@ mod tests {
             default_method: InterpolationMethod::Cubic,
             use_phase_boundaries: true,
             sigmoid_steepness: 8.0,
+            ..PhaseTransitionConfig::default()
         };
 
         let mut transition = PhaseTransition::with_config(config);

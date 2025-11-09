@@ -353,11 +353,7 @@ impl IntegratedEvaluator {
     }
 
     /// Compute phase hash (material-based)
-    fn compute_phase_hash(
-        &self,
-        board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
-    ) -> u64 {
+    fn compute_phase_hash(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> u64 {
         let mut hash = 0u64;
 
         for row in 0..9 {
