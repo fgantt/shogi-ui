@@ -136,15 +136,17 @@ impl PhaseTransition {
         (score.mg * phase + score.eg * (GAME_PHASE_MAX - phase)) / GAME_PHASE_MAX
     }
 
-    /// Cubic interpolation (smoother transitions)
+    /// Cubic interpolation (ease-in-out cubic, symmetric smoothing)
     fn interpolate_cubic(&self, score: TaperedScore, phase: i32) -> i32 {
-        // Cubic easing: t³ where t = phase/256
-        // This creates a smoother curve than linear
+        // Symmetric cubic easing (ease-in-out):
+        // For t < 0.5 → 4t³, otherwise → 1 - ((-2t + 2)³) / 2
         let t = phase as f64 / GAME_PHASE_MAX as f64;
-        let cubic_t = t * t * t;
-
-        let mg_weight = cubic_t;
-        let eg_weight = 1.0 - cubic_t;
+        let mg_weight = if t < 0.5 {
+            4.0 * t * t * t
+        } else {
+            1.0 - f64::powi(-2.0 * t + 2.0, 3) / 2.0
+        };
+        let eg_weight = 1.0 - mg_weight;
 
         (score.mg as f64 * mg_weight + score.eg as f64 * eg_weight) as i32
     }
@@ -152,9 +154,14 @@ impl PhaseTransition {
     /// Sigmoid interpolation (S-curve, gradual at extremes)
     fn interpolate_sigmoid(&self, score: TaperedScore, phase: i32) -> i32 {
         // Sigmoid function: 1 / (1 + exp(-k*(t-0.5)))
-        // where t = phase/256, k = steepness (default 6)
+        // where t = phase/256, k = configurable steepness
         let t = phase as f64 / GAME_PHASE_MAX as f64;
-        let k = 6.0; // Steepness parameter
+        let configured_k = self.config.sigmoid_steepness;
+        let k = if configured_k.is_finite() && configured_k > 0.0 {
+            configured_k
+        } else {
+            PhaseTransitionConfig::default().sigmoid_steepness
+        };
 
         // Sigmoid centered at 0.5
         let sigmoid_t = 1.0 / (1.0 + f64::exp(-k * (t - 0.5)));
@@ -362,7 +369,10 @@ mod tests {
 
         // Cubic should differ from linear in the middle
         let result_128 = transition.interpolate(score, 128, InterpolationMethod::Cubic);
-        assert!(result_128 >= 145 && result_128 <= 155); // Close to middle but not exactly 150
+        assert_eq!(
+            result_128, 150,
+            "Cubic midpoint should stay balanced after easing adjustment"
+        );
     }
 
     #[test]
@@ -377,6 +387,30 @@ mod tests {
         // Should be close to endpoints
         assert!(result_0 >= 195 && result_0 <= 200);
         assert!(result_256 >= 100 && result_256 <= 105);
+    }
+
+    #[test]
+    fn test_sigmoid_steepness_configuration() {
+        let score = TaperedScore::new_tapered(100, 200);
+        let mut shallow = PhaseTransition::with_config(PhaseTransitionConfig {
+            default_method: InterpolationMethod::Linear,
+            use_phase_boundaries: false,
+            sigmoid_steepness: 2.0,
+        });
+        let mut steep = PhaseTransition::with_config(PhaseTransitionConfig {
+            default_method: InterpolationMethod::Linear,
+            use_phase_boundaries: false,
+            sigmoid_steepness: 12.0,
+        });
+
+        let phase = 64; // Early-game leaning
+        let shallow_result = shallow.interpolate(score, phase, InterpolationMethod::Sigmoid);
+        let steep_result = steep.interpolate(score, phase, InterpolationMethod::Sigmoid);
+
+        assert!(
+            shallow_result < steep_result,
+            "Lower steepness should keep the score closer to middlegame values"
+        );
     }
 
     #[test]

@@ -28,12 +28,12 @@
   - [x] 1.4 Amend position hashing for phase caching to incorporate captured-piece pools (both hands) to avoid stale cache hits.
   - [x] 1.5 Add regression tests covering drop-heavy middlegame and promoted-piece scenarios to confirm accurate phase classification.
   - [x] 1.6 Evaluate replacing the single-entry cache with a small LRU or caller-provided cache hook and benchmark the impact on cache hit rate.
-- [ ] 2.0 Interpolation Fidelity Corrections
-  - [ ] 2.1 Replace cubic interpolation weighting with symmetric easing (or rename current variant) and document expected behavior.
-  - [ ] 2.2 Add mid-phase assertions ensuring cubic weights remain balanced and update docs to match new curve characteristics.
-  - [ ] 2.3 Honor `PhaseTransitionConfig.sigmoid_steepness` in `interpolate_sigmoid`, wiring configuration through all call sites.
-  - [ ] 2.4 Expand sigmoid unit tests to verify different steepness values alter transition gradients as configured.
-  - [ ] 2.5 Refresh interpolation documentation (inline + doc files) to reflect corrected behavior and tuning guidance.
+- [x] 2.0 Interpolation Fidelity Corrections
+  - [x] 2.1 Replace cubic interpolation weighting with symmetric easing (or rename current variant) and document expected behavior.
+  - [x] 2.2 Add mid-phase assertions ensuring cubic weights remain balanced and update docs to match new curve characteristics.
+  - [x] 2.3 Honor `PhaseTransitionConfig.sigmoid_steepness` in `interpolate_sigmoid`, wiring configuration through all call sites.
+  - [x] 2.4 Expand sigmoid unit tests to verify different steepness values alter transition gradients as configured.
+  - [x] 2.5 Refresh interpolation documentation (inline + doc files) to reflect corrected behavior and tuning guidance.
 - [ ] 3.0 Advanced Interpolator Productionization
   - [ ] 3.1 Introduce configuration flag (or preset) that enables `AdvancedInterpolator` within `IntegratedEvaluator` for production trials.
   - [ ] 3.2 Refactor advanced interpolation tests out of `legacy-tests` feature gating so they run under default CI.
@@ -56,4 +56,10 @@
 - **Configuration**: Introduced `phase_cache_size` on `TaperedEvaluationConfig` with sensible defaults for default/performance/memory profiles.
 - **Testing**: Expanded unit coverage in `src/evaluation/tapered_eval.rs` for promotions, captured-piece influence, and cache behavior; updated integration/bench harnesses to supply captured-piece arguments; `cargo test` (with a rerun for a flakey cache-management assertion) passes.
 - **Follow-ups**: Consider tuning promoted-piece phase weights once empirical data is available, and evaluate enabling the legacy-gated phase tests under default CI to keep future changes honest.
+
+### Task 2.0 Completion Notes
+
+- **Implementation**: Swapped the cubic interpolator to a symmetric ease-in-out curve and wired `sigmoid_steepness` through the logistic interpolation path so tuning knobs have effect.
+- **Testing**: Updated cubic midpoint assertions and added a steepness regression to ensure shallow vs. steep sigmoid curves diverge as expected.
+- **Documentation**: Inlined comments describe the new easing behavior; task list updated with completion details.
 
