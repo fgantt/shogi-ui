@@ -60,6 +60,7 @@ clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
 log = "0.4"
 env_logger = "0.10"
+libc = "0.2"
 lazy_static = "1.4"
 flate2 = "1.0"
 chrono = "0.4"
@@ -73,7 +74,7 @@ rand = "0.8"
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
+panic = "unwind"
 debug = true
 
 [profile.bench]

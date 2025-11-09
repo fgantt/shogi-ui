@@ -845,6 +845,7 @@ dependencies = [
  "flate2",
  "getrandom 0.2.16",
  "lazy_static",
+ "libc",
  "log",
  "lru",
  "num_cpus",

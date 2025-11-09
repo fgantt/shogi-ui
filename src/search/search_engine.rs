@@ -6374,7 +6374,12 @@ impl SearchEngine {
                     }
                 } else {
                     // Invalid ordering - fallback to enhanced traditional
-                    self.sort_quiescence_moves_advanced(
+                    log::warn!(
+                        "Advanced quiescence ordering produced invalid length ({} vs {}); falling back to enhanced ordering",
+                        advanced_ordered.len(),
+                        moves.len()
+                    );
+                    self.sort_quiescence_moves_enhanced(
                         moves,
                         board,
                         captured_pieces,
@@ -6385,7 +6390,10 @@ impl SearchEngine {
             }
             Err(_) => {
                 // Fallback to enhanced traditional quiescence move ordering
-                self.sort_quiescence_moves_advanced(
+                log::warn!(
+                    "Advanced quiescence ordering failed; falling back to enhanced ordering"
+                );
+                self.sort_quiescence_moves_enhanced(
                     moves,
                     board,
                     captured_pieces,
@@ -7294,7 +7302,6 @@ impl SearchEngine {
     /// - Better handling of edge cases (empty moves, single move)
     /// - Statistics tracking
     /// - Main search move ordering hints (Task 5.11)
-    #[cfg(test)]
     pub fn sort_quiescence_moves_enhanced(
         &self,
         moves: &[Move],
