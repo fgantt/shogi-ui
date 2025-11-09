@@ -159,15 +159,15 @@
   - [x] 10.8 Identify strengths and weaknesses
   - [x] 10.9 Generate improvement recommendations
 
-- [ ] 11.0 Feature: Material Evaluation
-  - [ ] 11.1 Review material.rs implementation
-  - [ ] 11.2 Verify piece values accuracy
-  - [ ] 11.3 Check captured piece handling in evaluation
-  - [ ] 11.4 Assess promoted piece values
-  - [ ] 11.5 Review research-based vs. traditional values
-  - [ ] 11.6 Measure evaluation accuracy contribution
-  - [ ] 11.7 Identify strengths and weaknesses
-  - [ ] 11.8 Generate improvement recommendations
+- [x] 11.0 Feature: Material Evaluation
+  - [x] 11.1 Review material.rs implementation
+  - [x] 11.2 Verify piece values accuracy
+  - [x] 11.3 Check captured piece handling in evaluation
+  - [x] 11.4 Assess promoted piece values
+  - [x] 11.5 Review research-based vs. traditional values
+  - [x] 11.6 Measure evaluation accuracy contribution
+  - [x] 11.7 Identify strengths and weaknesses
+  - [x] 11.8 Generate improvement recommendations
 
 - [ ] 12.0 Feature: Piece-Square Tables (PST)
   - [ ] 12.1 Review piece_square_tables.rs implementation
