@@ -111,6 +111,46 @@ fn main() {
 }
 ```
 
+### 9. Inspect PST Telemetry
+
+```rust
+use shogi_engine::evaluation::integration::IntegratedEvaluator;
+use shogi_engine::types::{BitboardBoard, CapturedPieces, Player};
+
+fn main() {
+    let mut evaluator = IntegratedEvaluator::new();
+    evaluator.enable_statistics();
+
+    let mut board = BitboardBoard::new();
+    // ... populate board with an interesting position ...
+
+    let captured = CapturedPieces::new();
+    let _score = evaluator.evaluate(&board, Player::Black, &captured);
+
+    if let Some(telemetry) = evaluator.telemetry_snapshot() {
+        if let Some(pst) = telemetry.pst {
+            println!(
+                "PST totals → mg: {}  eg: {}  |avg magnitude| ≈ {}",
+                pst.total_mg,
+                pst.total_eg,
+                pst.per_piece
+                    .iter()
+                    .map(|entry| (entry.mg.abs() + entry.eg.abs()) as f64)
+                    .sum::<f64>()
+                    / pst.per_piece.len().max(1) as f64
+            );
+
+            println!("Top contributors:");
+            for entry in pst.per_piece.iter().take(5) {
+                println!("  {:?}: mg {}  eg {}", entry.piece, entry.mg, entry.eg);
+            }
+        }
+    }
+}
+```
+
+> **Tip:** Enable `SearchEngine::debug_logging` to mirror these totals in search traces (`[EvalTelemetry] pst_total …`). With the optimized evaluator enabled, the profiler report now includes average PST contribution (mg / eg / |total|) alongside timing percentages, making it easy to spot regressions during self-play or nightly runs.
+
 ### 5. Cache Management
 
 ```rust

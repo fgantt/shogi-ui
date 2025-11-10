@@ -52,12 +52,12 @@ This task list translates the recommendations from Task 12.0 into actionable eng
   - [x] 3.5 Write unit tests for deserialization, validation (board dimensions, symmetry), and round-trip comparisons
   - [ ] 3.6 Update documentation with loader usage, override instructions, and safety guidelines (Section 12.4 reference)
 
-- [ ] 4.0 Expand PST Telemetry & Observability (Medium Priority — Est: 5-7 hours)
-  - [ ] 4.1 Extend evaluation telemetry structures (`EvaluationStatistics`, `EvaluationTelemetry`) to record PST midgame/endgame contributions and per-piece aggregates
-  - [ ] 4.2 Surface PST contribution metrics in search debug logs and optional profiler output (`PerformanceProfiler::record_pst_score`)
-  - [ ] 4.3 Update self-play/regression logging to capture PST deltas for before/after comparisons
-  - [ ] 4.4 Add integration tests asserting telemetry values align with evaluation results for known positions
-  - [ ] 4.5 Refresh documentation (`DEBUG_LOGGING_OPTIMIZATION.md`) with PST telemetry guidance (Section 12.6 reference)
+- [x] 4.0 Expand PST Telemetry & Observability (Medium Priority — Est: 5-7 hours)
+  - [x] 4.1 Extend evaluation telemetry structures (`EvaluationStatistics`, `EvaluationTelemetry`) to record PST midgame/endgame contributions and per-piece aggregates
+  - [x] 4.2 Surface PST contribution metrics in search debug logs and optional profiler output (`PerformanceProfiler::record_pst_score`)
+  - [x] 4.3 Update self-play/regression logging to capture PST deltas for before/after comparisons
+  - [x] 4.4 Add integration tests asserting telemetry values align with evaluation results for known positions
+  - [x] 4.5 Refresh documentation (`DEBUG_LOGGING_OPTIMIZATION.md`) with PST telemetry guidance (Section 12.6 reference)
 
 - [ ] 5.0 Establish Tuning Methodology & Data Pipeline (Medium Priority — Est: 6-10 hours)
   - [ ] 5.1 Create `docs/evaluation/pst-tuning-methodology.md` outlining data sources, tuning workflows, and validation criteria
@@ -130,6 +130,15 @@ Meeting these criteria confirms Task 12.0’s recommendations are fully implemen
 - **Assets:** Generated `config/pst/default.json` from the existing in-tree tables so the default preset reproduces current evaluation behaviour and provides a starting point for tuning.
 - **Testing:** Introduced unit tests exercising happy-path loading, missing-entry validation, and king-table zero enforcement; verified with `cargo test pst_loader`.
 - **Outstanding:** Runtime preset selection wiring (Task 3.3) and documentation updates (Task 3.6) remain on the backlog; follow-on work will expose the loader via engine options and author user-facing guidance.
+
+---
+
+## Task 4.0 Completion Notes
+
+- **Telemetry Surfaces:** Extended `EvaluationTelemetry` and `EvaluationStatistics` with `PieceSquareTelemetry` plus an aggregate PST tracker. Reports and JSON exports now include total middlegame/endgame deltas along with rolling per-piece averages.
+- **Runtime Visibility:** Debug logs now emit PST totals, top contributors, rolling averages, and deltas between successive evaluations; the performance profiler continues to surface average PST impact in `PerformanceReport`.
+- **Regression Coverage:** Added an integration test (`pst_telemetry_reports_breakdown`) that asserts PST telemetry accompanies evaluations and that aggregates capture per-piece contributions.
+- **Documentation:** Updated `docs/development/tasks/engine-review/DEBUG_LOGGING_OPTIMIZATION.md` with instructions for interpreting PST telemetry in logs and leveraging statistics exports during regression/self-play analysis.
 
 ---
 

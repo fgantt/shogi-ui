@@ -39,6 +39,7 @@ use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
+use crate::types::{PieceType, TaperedScore};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
@@ -61,6 +62,8 @@ pub struct EvaluationStatistics {
     session_start: Option<Instant>,
     /// Latest telemetry snapshot from the evaluator
     telemetry: Option<EvaluationTelemetry>,
+    /// Aggregated piece-square table statistics
+    pst_stats: PieceSquareStatisticsAggregate,
 }
 
 /// Aggregated telemetry emitted by the integrated evaluator.
@@ -70,6 +73,7 @@ pub struct EvaluationTelemetry {
     pub phase_transition: Option<PhaseTransitionSnapshot>,
     pub performance: Option<PerformanceReport>,
     pub material: Option<MaterialTelemetry>,
+    pub pst: Option<PieceSquareTelemetry>,
 }
 
 impl EvaluationTelemetry {
@@ -78,13 +82,223 @@ impl EvaluationTelemetry {
         phase_transition: PhaseTransitionSnapshot,
         performance: Option<PerformanceReport>,
         material: Option<MaterialTelemetry>,
+        pst: Option<PieceSquareTelemetry>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
             phase_transition: Some(phase_transition),
             performance,
             material,
+            pst,
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PieceSquarePieceTelemetry {
+    pub piece: PieceType,
+    pub mg: i32,
+    pub eg: i32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PieceSquareTelemetry {
+    pub total_mg: i32,
+    pub total_eg: i32,
+    pub per_piece: Vec<PieceSquarePieceTelemetry>,
+}
+
+impl PieceSquareTelemetry {
+    pub fn from_contributions(
+        total: TaperedScore,
+        per_piece: &[TaperedScore; PieceType::COUNT],
+    ) -> Self {
+        const PIECE_TYPES: [PieceType; PieceType::COUNT] = [
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::King,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
+        ];
+
+        let mut entries = Vec::new();
+        for (piece, contribution) in PIECE_TYPES.iter().zip(per_piece.iter()) {
+            if contribution.mg != 0 || contribution.eg != 0 {
+                entries.push(PieceSquarePieceTelemetry {
+                    piece: *piece,
+                    mg: contribution.mg,
+                    eg: contribution.eg,
+                });
+            }
+        }
+
+        Self {
+            total_mg: total.mg,
+            total_eg: total.eg,
+            per_piece: entries,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PieceSquareStatisticsAggregate {
+    total_mg_sum: i64,
+    total_eg_sum: i64,
+    sample_count: u64,
+    per_piece: Vec<PieceSquarePieceAggregate>,
+    last_total_mg: Option<i32>,
+    last_total_eg: Option<i32>,
+    previous_total_mg: Option<i32>,
+    previous_total_eg: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct PieceSquarePieceAggregate {
+    sum_mg: i64,
+    sum_eg: i64,
+    samples: u64,
+}
+
+impl PieceSquarePieceAggregate {
+    fn record(&mut self, mg: i32, eg: i32) {
+        self.sum_mg += mg as i64;
+        self.sum_eg += eg as i64;
+        self.samples += 1;
+    }
+
+    fn average(&self) -> (f64, f64) {
+        if self.samples == 0 {
+            (0.0, 0.0)
+        } else {
+            (
+                self.sum_mg as f64 / self.samples as f64,
+                self.sum_eg as f64 / self.samples as f64,
+            )
+        }
+    }
+}
+
+impl PieceSquareStatisticsAggregate {
+    fn ensure_capacity(&mut self) {
+        if self.per_piece.len() != PieceType::COUNT {
+            self.per_piece = vec![PieceSquarePieceAggregate::default(); PieceType::COUNT];
+        }
+    }
+
+    fn record(&mut self, telemetry: &PieceSquareTelemetry) {
+        self.ensure_capacity();
+        self.total_mg_sum += telemetry.total_mg as i64;
+        self.total_eg_sum += telemetry.total_eg as i64;
+        self.sample_count += 1;
+
+        self.previous_total_mg = self.last_total_mg;
+        self.previous_total_eg = self.last_total_eg;
+        self.last_total_mg = Some(telemetry.total_mg);
+        self.last_total_eg = Some(telemetry.total_eg);
+
+        for entry in &telemetry.per_piece {
+            let idx = entry.piece.as_index();
+            if let Some(aggregate) = self.per_piece.get_mut(idx) {
+                aggregate.record(entry.mg, entry.eg);
+            }
+        }
+    }
+
+    pub fn sample_count(&self) -> u64 {
+        self.sample_count
+    }
+
+    pub fn average_total_mg(&self) -> f64 {
+        if self.sample_count == 0 {
+            0.0
+        } else {
+            self.total_mg_sum as f64 / self.sample_count as f64
+        }
+    }
+
+    pub fn average_total_eg(&self) -> f64 {
+        if self.sample_count == 0 {
+            0.0
+        } else {
+            self.total_eg_sum as f64 / self.sample_count as f64
+        }
+    }
+
+    pub fn average_for_piece(&self, piece: PieceType) -> (f64, f64) {
+        let idx = piece.as_index();
+        self.per_piece
+            .get(idx)
+            .map(|entry| entry.average())
+            .unwrap_or((0.0, 0.0))
+    }
+
+    pub fn last_totals(&self) -> Option<(i32, i32)> {
+        match (self.last_total_mg, self.last_total_eg) {
+            (Some(mg), Some(eg)) => Some((mg, eg)),
+            _ => None,
+        }
+    }
+
+    pub fn previous_totals(&self) -> Option<(i32, i32)> {
+        match (self.previous_total_mg, self.previous_total_eg) {
+            (Some(mg), Some(eg)) => Some((mg, eg)),
+            _ => None,
+        }
+    }
+
+    pub fn top_contributors(&self, limit: usize) -> Vec<(PieceType, f64, f64)> {
+        if self.per_piece.len() != PieceType::COUNT {
+            return Vec::new();
+        }
+        let mut contributors: Vec<(PieceType, f64, f64)> = PieceType::iter()
+            .map(|piece| {
+                let (mg, eg) = self.average_for_piece(piece);
+                (piece, mg, eg)
+            })
+            .collect();
+
+        contributors.sort_by(|a, b| {
+            let am = a.1.abs() + a.2.abs();
+            let bm = b.1.abs() + b.2.abs();
+            bm.partial_cmp(&am).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        contributors
+            .into_iter()
+            .filter(|(_, mg, eg)| (*mg != 0.0) || (*eg != 0.0))
+            .take(limit)
+            .collect()
+    }
+}
+
+impl PieceType {
+    fn iter() -> impl Iterator<Item = PieceType> {
+        [
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::King,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
+        ]
+        .into_iter()
     }
 }
 
@@ -100,6 +314,7 @@ impl EvaluationStatistics {
             performance_metrics: PerformanceMetrics::default(),
             session_start: None,
             telemetry: None,
+            pst_stats: PieceSquareStatisticsAggregate::default(),
         }
     }
 
@@ -155,6 +370,11 @@ impl EvaluationStatistics {
 
     /// Update the latest telemetry snapshot captured from the evaluator.
     pub fn update_telemetry(&mut self, telemetry: EvaluationTelemetry) {
+        if self.enabled {
+            if let Some(ref pst) = telemetry.pst {
+                self.pst_stats.record(pst);
+            }
+        }
         self.telemetry = Some(telemetry);
     }
 
@@ -184,6 +404,7 @@ impl EvaluationStatistics {
                 0.0
             },
             telemetry: self.telemetry.clone(),
+            pst_stats: self.pst_stats.clone(),
         }
     }
 
@@ -202,6 +423,7 @@ impl EvaluationStatistics {
         self.performance_metrics = PerformanceMetrics::default();
         self.session_start = Some(Instant::now());
         self.telemetry = None;
+        self.pst_stats = PieceSquareStatisticsAggregate::default();
     }
 
     /// Get evaluation count
@@ -212,6 +434,11 @@ impl EvaluationStatistics {
     /// Check if enabled
     pub fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// Access aggregated PST statistics.
+    pub fn pst_statistics(&self) -> &PieceSquareStatisticsAggregate {
+        &self.pst_stats
     }
 }
 
@@ -442,6 +669,8 @@ pub struct StatisticsReport {
     pub evaluations_per_second: f64,
     /// Latest telemetry snapshot, if available
     pub telemetry: Option<EvaluationTelemetry>,
+    /// Aggregated PST statistics
+    pub pst_stats: PieceSquareStatisticsAggregate,
 }
 
 impl std::fmt::Display for StatisticsReport {
@@ -510,6 +739,24 @@ impl std::fmt::Display for StatisticsReport {
             "  Throughput: {:.0} evals/sec",
             self.performance_metrics.throughput_per_second()
         )?;
+        if self.pst_stats.sample_count() > 0 {
+            writeln!(f)?;
+            writeln!(f, "PST Aggregates:")?;
+            writeln!(f, "  Samples: {}", self.pst_stats.sample_count())?;
+            writeln!(
+                f,
+                "  Avg Total: mg {:.2} eg {:.2}",
+                self.pst_stats.average_total_mg(),
+                self.pst_stats.average_total_eg()
+            )?;
+            let top = self.pst_stats.top_contributors(5);
+            if !top.is_empty() {
+                writeln!(f, "  Top Average Contributors:")?;
+                for (piece, mg, eg) in top {
+                    writeln!(f, "    {:?}: mg {:.2} eg {:.2}", piece, mg, eg)?;
+                }
+            }
+        }
         if let Some(telemetry) = &self.telemetry {
             writeln!(f)?;
             writeln!(f, "Evaluation Telemetry:")?;
@@ -556,6 +803,27 @@ impl std::fmt::Display for StatisticsReport {
                     "    Avg Interpolation: {:.2} ns",
                     performance.avg_interpolation_ns
                 )?;
+            }
+            if let Some(pst) = telemetry.pst.as_ref() {
+                writeln!(f)?;
+                writeln!(
+                    f,
+                    "  PST Contribution: total mg {} | total eg {}",
+                    pst.total_mg, pst.total_eg
+                )?;
+                if !pst.per_piece.is_empty() {
+                    let mut contributors = pst.per_piece.clone();
+                    contributors
+                        .sort_by(|a, b| (b.mg.abs() + b.eg.abs()).cmp(&(a.mg.abs() + a.eg.abs())));
+                    writeln!(f, "    Top Contributors:")?;
+                    for entry in contributors.iter().take(5) {
+                        writeln!(
+                            f,
+                            "      {:?}: mg {} eg {}",
+                            entry.piece, entry.mg, entry.eg
+                        )?;
+                    }
+                }
             }
         }
         Ok(())

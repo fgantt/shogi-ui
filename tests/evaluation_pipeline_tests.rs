@@ -82,3 +82,64 @@ fn pst_contribution_increases_as_position_reaches_endgame() {
         "Endgame PST contribution ({endgame_score}) should exceed middlegame contribution ({middlegame_score}) due to higher endgame weights"
     );
 }
+
+#[test]
+fn pst_telemetry_reports_breakdown() {
+    let config = pst_only_config();
+    let evaluator = IntegratedEvaluator::with_config(config);
+    evaluator.enable_statistics();
+    let captured = CapturedPieces::new();
+
+    let mut board = base_board_with_advanced_pawn();
+    add_phase_weighting_support(&mut board);
+
+    let score = evaluator.evaluate(&board, Player::Black, &captured);
+    assert!(
+        score > 0,
+        "Expected positive PST contribution for the prepared position"
+    );
+
+    let telemetry = evaluator
+        .telemetry_snapshot()
+        .expect("Telemetry snapshot should be available after evaluation");
+    let pst = telemetry
+        .pst
+        .expect("PST telemetry should be recorded when PST component is enabled");
+
+    assert!(
+        pst.total_mg != 0 || pst.total_eg != 0,
+        "Expected non-zero PST totals, got mg {} eg {}",
+        pst.total_mg,
+        pst.total_eg
+    );
+
+    let pawn_entry = pst
+        .per_piece
+        .iter()
+        .find(|entry| entry.piece == PieceType::Pawn)
+        .expect("Pawn contribution should be present in per-piece telemetry");
+    assert!(
+        pawn_entry.mg != 0 || pawn_entry.eg != 0,
+        "Expected pawn entry to reflect contribution, got mg {} eg {}",
+        pawn_entry.mg,
+        pawn_entry.eg
+    );
+
+    let stats = evaluator.get_statistics();
+    let pst_stats = stats.pst_statistics();
+    assert_eq!(
+        pst_stats.sample_count(),
+        1,
+        "Expected aggregated PST statistics to record a single evaluation sample"
+    );
+    let (avg_mg, avg_eg) = (pst_stats.average_total_mg(), pst_stats.average_total_eg());
+    assert!(
+        avg_mg != 0.0 || avg_eg != 0.0,
+        "Expected aggregated averages to be non-zero"
+    );
+    let (pawn_avg_mg, pawn_avg_eg) = pst_stats.average_for_piece(PieceType::Pawn);
+    assert!(
+        pawn_avg_mg != 0.0 || pawn_avg_eg != 0.0,
+        "Expected pawn aggregate averages to be non-zero"
+    );
+}

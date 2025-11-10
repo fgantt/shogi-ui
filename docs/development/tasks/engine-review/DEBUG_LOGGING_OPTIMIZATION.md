@@ -113,6 +113,17 @@ cargo bench --bench debug_logging_performance_benchmarks
 
 This compares performance with and without debug logging to quantify the optimization impact.
 
+## PST Telemetry Insights
+
+When verbose debug logging is enabled and the integrated evaluator has statistics turned on (`integrated_evaluator.enable_statistics()`), the search engine now emits piece-square table diagnostics alongside existing telemetry:
+
+- `[EvalTelemetry] pst_total mg <mg> eg <eg>` — per-evaluation PST contribution relative to the side to move.
+- `[EvalTelemetry] pst_top ...` — top three contributing piece types for quick context.
+- `[EvalTelemetry] pst_avg mg <mg> eg <eg> samples <n>` — rolling averages gathered from `EvaluationStatistics`.
+- `[EvalTelemetry] pst_delta mg <Δmg> eg <Δeg>` — change in total PST contribution compared with the previous evaluation.
+
+These logs make it easier to spot regressions during self-play or regression runs. The same aggregates are exposed via `EvaluationStatistics::generate_report()` and the JSON export helpers for offline analysis.
+
 ---
 
 **Status:** Complete  

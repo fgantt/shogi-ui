@@ -201,6 +201,8 @@ impl OptimizedEvaluator {
                 .record_pst_lookup(start_time.elapsed().as_nanos() as u64);
         }
 
+        self.profiler.record_pst_score(score.mg, score.eg);
+
         score
     }
 
@@ -259,6 +261,10 @@ pub struct PerformanceProfiler {
     pub phase_calc_times: Vec<u64>,
     /// PST lookup timings
     pub pst_lookup_times: Vec<u64>,
+    /// PST middlegame contributions
+    pub pst_mg_totals: Vec<i32>,
+    /// PST endgame contributions
+    pub pst_eg_totals: Vec<i32>,
     /// Interpolation timings
     pub interpolation_times: Vec<u64>,
     /// Maximum samples to keep
@@ -273,6 +279,8 @@ impl PerformanceProfiler {
             evaluation_times: Vec::new(),
             phase_calc_times: Vec::new(),
             pst_lookup_times: Vec::new(),
+            pst_mg_totals: Vec::new(),
+            pst_eg_totals: Vec::new(),
             interpolation_times: Vec::new(),
             max_samples: 10000,
         }
@@ -312,6 +320,15 @@ impl PerformanceProfiler {
         }
     }
 
+    /// Record PST score contribution (middlegame/endgame totals)
+    #[inline]
+    pub fn record_pst_score(&mut self, mg: i32, eg: i32) {
+        if self.enabled && self.pst_mg_totals.len() < self.max_samples {
+            self.pst_mg_totals.push(mg);
+            self.pst_eg_totals.push(eg);
+        }
+    }
+
     /// Record interpolation time
     #[inline]
     pub fn record_interpolation(&mut self, nanos: u64) {
@@ -347,6 +364,38 @@ impl PerformanceProfiler {
         sum as f64 / self.pst_lookup_times.len() as f64
     }
 
+    /// Get average middlegame PST contribution
+    pub fn avg_pst_mg(&self) -> f64 {
+        if self.pst_mg_totals.is_empty() {
+            return 0.0;
+        }
+        let sum: i64 = self.pst_mg_totals.iter().map(|&v| v as i64).sum();
+        sum as f64 / self.pst_mg_totals.len() as f64
+    }
+
+    /// Get average endgame PST contribution
+    pub fn avg_pst_eg(&self) -> f64 {
+        if self.pst_eg_totals.is_empty() {
+            return 0.0;
+        }
+        let sum: i64 = self.pst_eg_totals.iter().map(|&v| v as i64).sum();
+        sum as f64 / self.pst_eg_totals.len() as f64
+    }
+
+    /// Get average absolute PST contribution magnitude.
+    pub fn avg_pst_magnitude(&self) -> f64 {
+        if self.pst_mg_totals.is_empty() {
+            return 0.0;
+        }
+        let sum: f64 = self
+            .pst_mg_totals
+            .iter()
+            .zip(self.pst_eg_totals.iter())
+            .map(|(&mg, &eg)| (mg.abs() + eg.abs()) as f64)
+            .sum();
+        sum / self.pst_mg_totals.len() as f64
+    }
+
     /// Get average interpolation time
     pub fn avg_interpolation_time(&self) -> f64 {
         if self.interpolation_times.is_empty() {
@@ -364,6 +413,9 @@ impl PerformanceProfiler {
             avg_phase_calc_ns: self.avg_phase_calc_time(),
             avg_pst_lookup_ns: self.avg_pst_lookup_time(),
             avg_interpolation_ns: self.avg_interpolation_time(),
+            avg_pst_mg: self.avg_pst_mg(),
+            avg_pst_eg: self.avg_pst_eg(),
+            avg_pst_magnitude: self.avg_pst_magnitude(),
             phase_calc_percentage: if self.avg_evaluation_time() > 0.0 {
                 (self.avg_phase_calc_time() / self.avg_evaluation_time()) * 100.0
             } else {
@@ -387,6 +439,8 @@ impl PerformanceProfiler {
         self.evaluation_times.clear();
         self.phase_calc_times.clear();
         self.pst_lookup_times.clear();
+        self.pst_mg_totals.clear();
+        self.pst_eg_totals.clear();
         self.interpolation_times.clear();
     }
 
@@ -437,6 +491,12 @@ pub struct PerformanceReport {
     pub avg_pst_lookup_ns: f64,
     /// Average interpolation time
     pub avg_interpolation_ns: f64,
+    /// Average PST middlegame contribution
+    pub avg_pst_mg: f64,
+    /// Average PST endgame contribution
+    pub avg_pst_eg: f64,
+    /// Average absolute PST contribution magnitude
+    pub avg_pst_magnitude: f64,
     /// Phase calculation as percentage of total
     pub phase_calc_percentage: f64,
     /// PST lookup as percentage of total
@@ -467,6 +527,11 @@ impl std::fmt::Display for PerformanceReport {
             f,
             "  PST Lookup: {:.2} ns ({:.1}%)",
             self.avg_pst_lookup_ns, self.pst_lookup_percentage
+        )?;
+        writeln!(
+            f,
+            "  PST Contribution (avg mg / eg / |total|): {:.2} / {:.2} / {:.2}",
+            self.avg_pst_mg, self.avg_pst_eg, self.avg_pst_magnitude
         )?;
         writeln!(
             f,

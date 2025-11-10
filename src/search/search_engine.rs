@@ -12464,6 +12464,47 @@ impl SearchEngine {
                     material.phase_weighted_total
                 ));
             }
+            if let Some(pst) = telemetry.pst {
+                crate::debug_utils::debug_log(&format!(
+                    "[EvalTelemetry] pst_total mg {} eg {}",
+                    pst.total_mg, pst.total_eg
+                ));
+                if !pst.per_piece.is_empty() {
+                    let mut contributors = pst.per_piece.clone();
+                    contributors
+                        .sort_by(|a, b| (b.mg.abs() + b.eg.abs()).cmp(&(a.mg.abs() + a.eg.abs())));
+                    let summary: Vec<String> = contributors
+                        .iter()
+                        .take(3)
+                        .map(|entry| format!("{:?}:{}|{}", entry.piece, entry.mg, entry.eg))
+                        .collect();
+                    crate::debug_utils::debug_log(&format!(
+                        "[EvalTelemetry] pst_top {}",
+                        summary.join(", ")
+                    ));
+                }
+                if let Some(stats) = self.evaluator.get_integrated_statistics() {
+                    let aggregate = stats.pst_statistics();
+                    if aggregate.sample_count() > 0 {
+                        crate::debug_utils::debug_log(&format!(
+                            "[EvalTelemetry] pst_avg mg {:.2} eg {:.2} samples {}",
+                            aggregate.average_total_mg(),
+                            aggregate.average_total_eg(),
+                            aggregate.sample_count()
+                        ));
+                    }
+                    if let (Some((last_mg, last_eg)), Some((prev_mg, prev_eg))) =
+                        (aggregate.last_totals(), aggregate.previous_totals())
+                    {
+                        let delta_mg = last_mg - prev_mg;
+                        let delta_eg = last_eg - prev_eg;
+                        crate::debug_utils::debug_log(&format!(
+                            "[EvalTelemetry] pst_delta mg {} eg {}",
+                            delta_mg, delta_eg
+                        ));
+                    }
+                }
+            }
         }
     }
 

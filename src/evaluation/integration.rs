@@ -38,7 +38,7 @@ use crate::evaluation::{
     position_features::PositionFeatureEvaluator,
     positional_patterns::PositionalPatternAnalyzer,
     pst_loader::{PieceSquareTableConfig, PieceSquareTableLoader},
-    statistics::{EvaluationStatistics, EvaluationTelemetry},
+    statistics::{EvaluationStatistics, EvaluationTelemetry, PieceSquareTelemetry},
     tactical_patterns::TacticalPatternRecognizer,
     tapered_eval::TaperedEvaluation,
 };
@@ -188,6 +188,7 @@ impl IntegratedEvaluator {
 
         // Accumulate component scores
         let mut total = TaperedScore::default();
+        let mut pst_telemetry: Option<PieceSquareTelemetry> = None;
 
         // Material
         if self.config.components.material {
@@ -199,7 +200,9 @@ impl IntegratedEvaluator {
 
         // Piece-square tables
         if self.config.components.piece_square_tables {
-            total += self.evaluate_pst(board, player);
+            let (pst_score, telemetry) = self.evaluate_pst(board, player);
+            total += pst_score;
+            pst_telemetry = Some(telemetry);
         }
 
         // Position features
@@ -304,6 +307,7 @@ impl IntegratedEvaluator {
             phase_snapshot,
             performance_snapshot,
             Some(material_snapshot),
+            pst_telemetry.clone(),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
@@ -314,25 +318,34 @@ impl IntegratedEvaluator {
     }
 
     /// Evaluate piece-square tables
-    fn evaluate_pst(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_pst(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> (TaperedScore, PieceSquareTelemetry) {
         let mut score = TaperedScore::default();
+        let mut per_piece = [TaperedScore::default(); PieceType::COUNT];
 
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     let pst_value = self.pst.get_value(piece.piece_type, pos, piece.player);
+                    let idx = piece.piece_type.as_index();
 
                     if piece.player == player {
                         score += pst_value;
+                        per_piece[idx] += pst_value;
                     } else {
                         score -= pst_value;
+                        per_piece[idx] -= pst_value;
                     }
                 }
             }
         }
 
-        score
+        let telemetry = PieceSquareTelemetry::from_contributions(score, &per_piece);
+        (score, telemetry)
     }
 
     /// Calculate phase with caching
@@ -819,10 +832,12 @@ mod tests {
         let evaluator = IntegratedEvaluator::new();
         let board = BitboardBoard::new();
 
-        let score = evaluator.evaluate_pst(&board, Player::Black);
+        let (score, telemetry) = evaluator.evaluate_pst(&board, Player::Black);
 
         // Should have some PST value
         assert!(score.mg != 0 || score.eg != 0);
+        assert_eq!(telemetry.total_mg, score.mg);
+        assert_eq!(telemetry.total_eg, score.eg);
     }
 
     #[test]
