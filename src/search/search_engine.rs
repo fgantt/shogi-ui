@@ -1,4 +1,5 @@
 use crate::bitboards::*;
+use crate::evaluation::pst_loader::{PieceSquareTableConfig, PieceSquareTablePreset};
 use crate::evaluation::*;
 use crate::moves::*;
 use crate::opening_book::OpeningBook;
@@ -864,6 +865,29 @@ impl SearchEngine {
         }
 
         Ok(())
+    }
+
+    /// Apply a piece-square table configuration at runtime.
+    pub fn set_pst_config(&mut self, pst_config: PieceSquareTableConfig) -> Result<(), String> {
+        if matches!(pst_config.preset, PieceSquareTablePreset::Custom)
+            && pst_config
+                .values_path
+                .as_ref()
+                .map(|p| p.trim().is_empty())
+                .unwrap_or(true)
+        {
+            return Err("PSTPreset=Custom requires a non-empty PSTPath value".to_string());
+        }
+
+        self.evaluator.enable_integrated_evaluator();
+        if let Some(integrated) = self.evaluator.get_integrated_evaluator_mut() {
+            let mut updated = integrated.config().clone();
+            updated.pst = pst_config;
+            integrated.set_config(updated);
+            Ok(())
+        } else {
+            Err("Integrated evaluator is not available".to_string())
+        }
     }
 
     pub fn set_stop_flag(&mut self, stop_flag: Option<Arc<AtomicBool>>) {

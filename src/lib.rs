@@ -41,6 +41,7 @@ pub mod patterns {
 
 pub mod usi;
 
+use evaluation::pst_loader::{PieceSquareTableConfig, PieceSquareTablePreset};
 use moves::*;
 use opening_book::OpeningBook;
 use search::search_engine::SearchEngine;
@@ -85,6 +86,7 @@ pub struct ShogiEngine {
     depth: u8,
     thread_count: usize,
     parallel_options: ParallelOptions,
+    pst_config: PieceSquareTableConfig,
 }
 
 impl ShogiEngine {
@@ -105,6 +107,7 @@ impl ShogiEngine {
             depth: 0, // Default to 0 (unlimited/adaptive), like YaneuraOu
             thread_count,
             parallel_options: ParallelOptions::default(),
+            pst_config: PieceSquareTableConfig::default(),
         };
         engine.parallel_options.enable_parallel = thread_count > 1;
         engine.parallel_options.hash_size_mb = 16;
@@ -117,6 +120,13 @@ impl ShogiEngine {
         engine.load_prefs();
         // Try to load default opening book if available
         engine.load_default_opening_book();
+
+        if let Err(err) = engine.apply_pst_config() {
+            crate::debug_utils::debug_log(&format!(
+                "[PST] Failed to apply default configuration: {}",
+                err
+            ));
+        }
 
         engine
     }
@@ -157,6 +167,13 @@ impl ShogiEngine {
     fn sync_parallel_options(&mut self) {
         if let Ok(mut search_engine_guard) = self.search_engine.lock() {
             search_engine_guard.set_parallel_options(self.parallel_options.clone());
+        }
+    }
+
+    fn apply_pst_config(&mut self) -> Result<(), String> {
+        match self.search_engine.lock() {
+            Ok(mut guard) => guard.set_pst_config(self.pst_config.clone()),
+            Err(_) => Err("Failed to acquire search engine lock".to_string()),
         }
     }
 
@@ -791,6 +808,83 @@ impl ShogiEngine {
                         }
                         self.opening_book_prefilled = false;
                         self.maybe_prefill_opening_book();
+                    }
+                }
+                "PSTPreset" => {
+                    let value = parts[3..].join(" ");
+                    let trimmed = value.trim();
+                    let parsed = match trimmed {
+                        "Builtin" => Some(PieceSquareTablePreset::Builtin),
+                        "Default" => Some(PieceSquareTablePreset::Default),
+                        "Custom" => Some(PieceSquareTablePreset::Custom),
+                        _ => None,
+                    };
+
+                    if let Some(preset) = parsed {
+                        let previous_config = self.pst_config.clone();
+                        let preset_is_custom =
+                            matches!(preset, PieceSquareTablePreset::Custom);
+                        self.pst_config.preset = preset;
+                        if !preset_is_custom {
+                            self.pst_config.values_path = None;
+                        }
+
+                        match self.apply_pst_config() {
+                            Ok(()) => {
+                                output.push(format!("info string PST preset set to {}", trimmed))
+                            }
+                            Err(err) => {
+                                self.pst_config = previous_config;
+                                output.push(format!(
+                                    "info string error Failed to apply PST preset '{}': {}",
+                                    trimmed, err
+                                ));
+                            }
+                        }
+                    } else {
+                        output.push(format!(
+                            "info string error Unknown PSTPreset value '{}'",
+                            trimmed
+                        ));
+                    }
+                }
+                "PSTPath" => {
+                    let value = parts[3..].join(" ");
+                    let trimmed = value.trim();
+                    let previous_config = self.pst_config.clone();
+
+                    if trimmed.is_empty() {
+                        self.pst_config.values_path = None;
+                        if matches!(self.pst_config.preset, PieceSquareTablePreset::Custom) {
+                            self.pst_config.preset = PieceSquareTablePreset::Builtin;
+                        }
+                        match self.apply_pst_config() {
+                            Ok(()) => output.push(
+                                "info string Cleared PSTPath override; using built-in tables"
+                                    .to_string(),
+                            ),
+                            Err(err) => {
+                                self.pst_config = previous_config;
+                                output.push(format!(
+                                    "info string error Failed to clear PSTPath: {}",
+                                    err
+                                ));
+                            }
+                        }
+                    } else {
+                        self.pst_config.values_path = Some(trimmed.to_string());
+                        self.pst_config.preset = PieceSquareTablePreset::Custom;
+                        match self.apply_pst_config() {
+                            Ok(()) => output
+                                .push(format!("info string Loaded PST from path '{}'", trimmed)),
+                            Err(err) => {
+                                self.pst_config = previous_config;
+                                output.push(format!(
+                                    "info string error Failed to load PST from '{}': {}",
+                                    trimmed, err
+                                ));
+                            }
+                        }
                     }
                 }
                 "PrefillOpeningBook" => {

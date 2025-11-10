@@ -161,6 +161,9 @@ impl UsiHandler {
                 "option name ParallelMinDepth type spin default {} min 0 max 32",
                 parallel_options.min_depth_parallel
             ),
+            "option name PSTPreset type combo default Builtin var Builtin var Default var Custom"
+                .to_string(),
+            "option name PSTPath type string default".to_string(),
             format!(
                 "option name ParallelMetrics type check default {}",
                 if parallel_options.enable_metrics {

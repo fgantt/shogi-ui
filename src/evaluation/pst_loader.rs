@@ -41,6 +41,8 @@ pub enum PieceSquareTableLoadError {
     MissingPiece(PieceType),
     #[error("king positional tables must be zero in both phases")]
     NonZeroKingTables,
+    #[error("custom preset selected but no PST file path was provided")]
+    MissingCustomPath,
 }
 
 pub struct PieceSquareTableLoader;
@@ -85,13 +87,19 @@ impl PieceSquareTableLoader {
     pub fn load(
         config: &PieceSquareTableConfig,
     ) -> Result<PieceSquareTables, PieceSquareTableLoadError> {
-        if let Some(path) = &config.values_path {
+        if let Some(path) =
+            config
+                .values_path
+                .as_ref()
+                .and_then(|p| if p.trim().is_empty() { None } else { Some(p) })
+        {
             return Ok(Self::from_path(path)?.tables);
         }
 
         match config.preset {
             PieceSquareTablePreset::Builtin => Ok(PieceSquareTables::new()),
             PieceSquareTablePreset::Default => Ok(Self::from_path(DEFAULT_PRESET_PATH)?.tables),
+            PieceSquareTablePreset::Custom => Err(PieceSquareTableLoadError::MissingCustomPath),
         }
     }
 }
@@ -202,6 +210,7 @@ const DEFAULT_PRESET_PATH: &str = "config/pst/default.json";
 pub enum PieceSquareTablePreset {
     Builtin,
     Default,
+    Custom,
 }
 
 impl Default for PieceSquareTablePreset {
@@ -231,8 +240,11 @@ impl Default for PieceSquareTableConfig {
 mod tests {
     use super::*;
     use crate::evaluation::piece_square_tables::PieceSquareTables;
+    use crate::types::{PieceType, Player, Position};
     use serde_json::json;
     use std::io::Cursor;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     fn zero() -> [[i32; 9]; 9] {
         [[0; 9]; 9]
@@ -309,6 +321,32 @@ mod tests {
             assert_eq!(mg, &zero);
             assert_eq!(eg, &zero);
         }
+    }
+
+    #[test]
+    fn load_custom_tables_from_path() {
+        let mut file = NamedTempFile::new().expect("temp file");
+        write!(file, "{}", sample_document().to_string()).expect("write sample document");
+
+        let mut config = PieceSquareTableConfig::default();
+        config.preset = PieceSquareTablePreset::Custom;
+        config.values_path = Some(file.path().to_string_lossy().to_string());
+
+        let tables = PieceSquareTableLoader::load(&config).expect("load custom tables");
+        let origin = Position::new(0, 0);
+        let value = tables.get_value(PieceType::Pawn, origin, Player::Black);
+        assert_eq!(value.mg, 0);
+        assert_eq!(value.eg, 0);
+    }
+
+    #[test]
+    fn custom_preset_without_path_errors() {
+        let mut config = PieceSquareTableConfig::default();
+        config.preset = PieceSquareTablePreset::Custom;
+        config.values_path = None;
+
+        let err = PieceSquareTableLoader::load(&config).unwrap_err();
+        assert!(matches!(err, PieceSquareTableLoadError::MissingCustomPath));
     }
 
     #[test]
