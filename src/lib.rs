@@ -822,8 +822,7 @@ impl ShogiEngine {
 
                     if let Some(preset) = parsed {
                         let previous_config = self.pst_config.clone();
-                        let preset_is_custom =
-                            matches!(preset, PieceSquareTablePreset::Custom);
+                        let preset_is_custom = matches!(preset, PieceSquareTablePreset::Custom);
                         self.pst_config.preset = preset;
                         if !preset_is_custom {
                             self.pst_config.values_path = None;

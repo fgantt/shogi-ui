@@ -49,6 +49,10 @@ path = "src/bin/move_assessor.rs"
 name = "puzzle-gen"
 path = "src/bin/puzzle_gen.rs"
 
+[[bin]]
+name = "pst-tuning-runner"
+path = "src/bin/pst_tuning_runner.rs"
+
 [dependencies]
 dirs = "5"
 serde = { version = "1.0", features = ["derive"] }

@@ -277,6 +277,7 @@ Missing pieces:
 1. **Unit Tests**
    - Enable existing PST tests by default; add promoted-piece coverage and white/black symmetry assertions.
    - Verify loader functionality once configuration support lands (round-trip from JSON to lookup).
+   - Ensure regression harness (`cargo test pst_regression_suite`) matches built-in vs. loader outputs.
 
 2. **Integration Tests**
    - Through `IntegratedEvaluator`, evaluate representative positions (castle structures, drop-heavy middlegames) to detect scoring drift after value updates.
@@ -289,6 +290,7 @@ Missing pieces:
 4. **Telemetry / Profiling**
    - Once PST contributions are exposed, capture snapshots during self-play and regression suites to establish baselines.
    - Integrate telemetry with `DEBUG_LOGGING_OPTIMIZATION.md` guidance for field diagnostics.
+   - Follow the staged rollout checklist in `docs/development/tasks/engine-review/PST_validation_rollout_plan.md`.
 
 ---
 

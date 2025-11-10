@@ -8461,13 +8461,7 @@ impl SearchEngine {
             }
             TimeAllocationStrategy::Exponential => {
                 // Exponential allocation: later depths get more time
-                // Use 2^(depth-1) as weighting factor
-                let total_weight: u32 = (1..=max_depth)
-                    .map(|d| 2_u32.pow(d.saturating_sub(1) as u32))
-                    .sum();
-                let depth_weight = 2_u32.pow(depth.saturating_sub(1) as u32);
-                ((available_time as f64 * depth_weight as f64 / total_weight as f64) as u32)
-                    .max(config.min_time_per_depth_ms)
+                self.calculate_exponential_budget(depth, available_time, max_depth)
             }
             TimeAllocationStrategy::Adaptive => {
                 // Adaptive allocation: use historical data if available (Task 4.6)
@@ -8516,12 +8510,14 @@ impl SearchEngine {
     /// Helper function for exponential budget calculation
     fn calculate_exponential_budget(&self, depth: u8, available_time: u32, max_depth: u8) -> u32 {
         let config = &self.time_management_config;
-        let total_weight: u32 = (1..=max_depth)
-            .map(|d| 2_u32.pow(d.saturating_sub(1) as u32))
-            .sum();
-        let depth_weight = 2_u32.pow(depth.saturating_sub(1) as u32);
-        ((available_time as f64 * depth_weight as f64 / total_weight as f64) as u32)
-            .max(config.min_time_per_depth_ms)
+        let depth_exponent = depth.saturating_sub(1) as i32;
+        let total_weight = (2_f64.powi(max_depth.max(1) as i32) - 1.0).max(1.0);
+        let depth_weight = 2_f64.powi(depth_exponent.max(0));
+
+        let allocated = (available_time as f64 * depth_weight / total_weight) as u32;
+        let lower_bound = config.min_time_per_depth_ms.min(available_time);
+        let upper_bound = available_time;
+        allocated.max(lower_bound).min(upper_bound)
     }
 
     /// Record depth completion time for adaptive allocation (Task 4.6)
