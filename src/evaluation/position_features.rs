@@ -59,6 +59,11 @@ impl PositionFeatureEvaluator {
         &self.config
     }
 
+    /// Update the evaluator configuration.
+    pub fn set_config(&mut self, config: PositionFeatureConfig) {
+        self.config = config;
+    }
+
     // =======================================================================
     // KING SAFETY EVALUATION BY PHASE
     // =======================================================================
@@ -68,6 +73,10 @@ impl PositionFeatureEvaluator {
     /// King safety is more critical in middlegame when there are more pieces
     /// that can mount an attack.
     pub fn evaluate_king_safety(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        if !self.config.enable_king_safety {
+            return TaperedScore::default();
+        }
+
         self.stats.king_safety_evals += 1;
 
         let king_pos = self.find_king_position(board, player);
@@ -262,6 +271,10 @@ impl PositionFeatureEvaluator {
         board: &BitboardBoard,
         player: Player,
     ) -> TaperedScore {
+        if !self.config.enable_pawn_structure {
+            return TaperedScore::default();
+        }
+
         self.stats.pawn_structure_evals += 1;
 
         let mut mg_score = 0;
@@ -494,6 +507,10 @@ impl PositionFeatureEvaluator {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
+        if !self.config.enable_mobility {
+            return TaperedScore::default();
+        }
+
         self.stats.mobility_evals += 1;
 
         let mut mg_score = 0;
@@ -669,6 +686,10 @@ impl PositionFeatureEvaluator {
         board: &BitboardBoard,
         player: Player,
     ) -> TaperedScore {
+        if !self.config.enable_center_control {
+            return TaperedScore::default();
+        }
+
         self.stats.center_control_evals += 1;
 
         let mut mg_score = 0;
@@ -742,6 +763,10 @@ impl PositionFeatureEvaluator {
     ///
     /// Development is critical in opening, less so in endgame.
     pub fn evaluate_development(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        if !self.config.enable_development {
+            return TaperedScore::default();
+        }
+
         self.stats.development_evals += 1;
 
         let mut mg_score = 0;

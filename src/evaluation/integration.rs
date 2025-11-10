@@ -28,6 +28,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::debug_utils::debug_log;
 use crate::evaluation::{
+    config::EvaluationWeights,
     endgame_patterns::EndgamePatternEvaluator,
     material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
     opening_principles::OpeningPrincipleEvaluator,
@@ -35,7 +36,7 @@ use crate::evaluation::{
     performance::OptimizedEvaluator,
     phase_transition::PhaseTransition,
     piece_square_tables::PieceSquareTables,
-    position_features::PositionFeatureEvaluator,
+    position_features::{PositionFeatureConfig, PositionFeatureEvaluator},
     positional_patterns::PositionalPatternAnalyzer,
     pst_loader::{PieceSquareTableConfig, PieceSquareTableLoader},
     statistics::{EvaluationStatistics, EvaluationTelemetry, PieceSquareTelemetry},
@@ -61,6 +62,8 @@ pub struct IntegratedEvaluator {
     phase_transition: RefCell<PhaseTransition>,
     /// Position features (uses interior mutability)
     position_features: RefCell<PositionFeatureEvaluator>,
+    /// Evaluation weighting configuration
+    weights: EvaluationWeights,
     /// Endgame patterns (uses interior mutability)
     endgame_patterns: RefCell<EndgamePatternEvaluator>,
     /// Opening principles (uses interior mutability)
@@ -118,7 +121,10 @@ impl IntegratedEvaluator {
             material_eval: RefCell::new(MaterialEvaluator::with_config(config.material.clone())),
             pst: pst_tables,
             phase_transition: RefCell::new(PhaseTransition::new()),
-            position_features: RefCell::new(PositionFeatureEvaluator::new()),
+            position_features: RefCell::new(PositionFeatureEvaluator::with_config(
+                config.position_features.clone(),
+            )),
+            weights: config.weights.clone(),
             endgame_patterns: RefCell::new(EndgamePatternEvaluator::new()),
             opening_principles: RefCell::new(OpeningPrincipleEvaluator::new()),
             tactical_patterns: RefCell::new(TacticalPatternRecognizer::new()),
@@ -207,27 +213,18 @@ impl IntegratedEvaluator {
 
         // Position features
         if self.config.components.position_features {
-            total += self
-                .position_features
-                .borrow_mut()
-                .evaluate_king_safety(board, player);
-            total += self
-                .position_features
-                .borrow_mut()
-                .evaluate_pawn_structure(board, player);
-            total += self.position_features.borrow_mut().evaluate_mobility(
-                board,
-                player,
-                captured_pieces,
-            );
-            total += self
-                .position_features
-                .borrow_mut()
-                .evaluate_center_control(board, player);
-            total += self
-                .position_features
-                .borrow_mut()
-                .evaluate_development(board, player);
+            let weights = self.weights.clone();
+            let mut position_features = self.position_features.borrow_mut();
+            total +=
+                position_features.evaluate_king_safety(board, player) * weights.king_safety_weight;
+            total += position_features.evaluate_pawn_structure(board, player)
+                * weights.pawn_structure_weight;
+            total += position_features.evaluate_mobility(board, player, captured_pieces)
+                * weights.mobility_weight;
+            total += position_features.evaluate_center_control(board, player)
+                * weights.center_control_weight;
+            total +=
+                position_features.evaluate_development(board, player) * weights.development_weight;
         }
 
         // Opening principles (if in opening)
@@ -521,6 +518,13 @@ impl IntegratedEvaluator {
             material_eval.apply_config(config.material.clone());
         }
 
+        {
+            let mut position_features = self.position_features.borrow_mut();
+            position_features.set_config(config.position_features.clone());
+        }
+
+        self.weights = config.weights.clone();
+
         let pst_tables = match PieceSquareTableLoader::load(&config.pst) {
             Ok(pst) => pst,
             Err(err) => {
@@ -592,6 +596,10 @@ pub struct IntegratedEvaluationConfig {
     pub material: MaterialEvaluationConfig,
     /// Piece-square table configuration
     pub pst: PieceSquareTableConfig,
+    /// Position feature configuration
+    pub position_features: PositionFeatureConfig,
+    /// Evaluation weights for combining features
+    pub weights: EvaluationWeights,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -605,6 +613,8 @@ impl Default for IntegratedEvaluationConfig {
             pattern_cache_size: 100_000,
             material: MaterialEvaluationConfig::default(),
             pst: PieceSquareTableConfig::default(),
+            position_features: PositionFeatureConfig::default(),
+            weights: EvaluationWeights::default(),
         }
     }
 }

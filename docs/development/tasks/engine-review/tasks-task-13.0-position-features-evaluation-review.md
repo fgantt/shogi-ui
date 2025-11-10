@@ -19,12 +19,12 @@
 
 ## Tasks
 
-- [ ] 1.0 Restore Position Feature Configuration Fidelity
-  - [ ] 1.1 Audit every evaluator entry point and short-circuit when the corresponding `PositionFeatureConfig` flag is disabled.
-  - [ ] 1.2 Ensure statistics counters increment only when a feature actually runs; avoid skewing metrics when disabled.
-  - [ ] 1.3 Update `IntegratedEvaluator::evaluate_standard` to respect sub-feature toggles and propagate per-feature weights if defined.
-  - [ ] 1.4 Add regression tests verifying that disabling each feature returns a zero score and leaves stats untouched.
-  - [ ] 1.5 Update configuration presets and documentation to reflect working toggles and defaults.
+- [x] 1.0 Restore Position Feature Configuration Fidelity
+  - [x] 1.1 Audit every evaluator entry point and short-circuit when the corresponding `PositionFeatureConfig` flag is disabled.
+  - [x] 1.2 Ensure statistics counters increment only when a feature actually runs; avoid skewing metrics when disabled.
+  - [x] 1.3 Update `IntegratedEvaluator::evaluate_standard` to respect sub-feature toggles and propagate per-feature weights if defined.
+- [x] 1.4 Add regression tests verifying that disabling each feature returns a zero score and leaves stats untouched.
+- [x] 1.5 Update configuration presets and documentation to reflect working toggles and defaults.
 
 - [ ] 2.0 Refactor Mobility Evaluation for Performance and Hand Pressure
   - [ ] 2.1 Replace per-piece instantiation of `MoveGenerator` with a shared or cached generator per evaluation pass.
@@ -57,5 +57,11 @@
   - [ ] 5.5 Introduce shared caching for king locations, pawn collections, and other reusable feature inputs to avoid repeated board scans across evaluators.
   - [ ] 5.6 Establish CI hooks to run the expanded tests and benchmarks (where feasible) to prevent regressions.
   - [ ] 5.7 Track post-refactor evaluation performance in telemetry dashboards and document findings for future tuning.
+
+## Task 1.0 Completion Notes
+
+- **Implementation:** `src/evaluation/position_features.rs` now short-circuits every public evaluator when the corresponding `PositionFeatureConfig` flag is disabled and only increments statistics for executed features. `PositionFeatureEvaluator` exposes `set_config`, and `IntegratedEvaluator` (via `IntegratedEvaluationConfig`) propagates both per-feature toggles and `EvaluationWeights`, multiplying each `TaperedScore` contribution accordingly.
+- **Testing:** Added `tests/position_feature_config_tests.rs` covering disabled-feature scoring/stat counters and weight propagation through the integrated evaluator (`cargo test position_feature_config_tests`). A full `cargo test` run currently surfaces pre-existing failures in `evaluation::advanced_interpolation::tests::test_bezier_endpoints`, `evaluation::config::tests::test_strength_optimized`, and `evaluation::material::tests::test_material_preset_usage_tracking`; new tests pass.
+- **Documentation:** Updated `docs/development/tasks/engine-review/task-13.0-position-features-evaluation-review.md` (Section 8) to note the restored configuration fidelity and integration behavior.
 
 

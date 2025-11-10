@@ -347,6 +347,8 @@ Impact: center and development heuristics provide coarse, chess-centric signals,
 | **Low** | Add cached king/pawn lookups and reuse `MoveGenerator` across invocations (store in evaluator struct). | Reduces redundant scans; provides incremental speedups. | 4 hrs |
 | **Low** | Ungate legacy tests or migrate key cases into default test suites; add coverage for config toggles and hand-piece scenarios. | Protects heuristics from regressions; aligns with CI expectations. | 4–6 hrs |
 
+**Update (Nov 2025):** Position feature toggles are now enforced in `position_features.rs`, and `IntegratedEvaluator` applies per-feature weights and respects the configuration during integration. Regression tests covering disabled features and weight propagation run in the default test suite.
+
 ---
 
 ## 9. Testing & Validation Plan
