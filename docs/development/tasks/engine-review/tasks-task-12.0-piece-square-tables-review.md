@@ -45,11 +45,11 @@ This task list translates the recommendations from Task 12.0 into actionable eng
   - [x] 2.4 Update CI configuration/docs to highlight PST coverage and expected runtime deltas (Section 12.4 reference)
 
 - [ ] 3.0 Introduce Configurable PST Loader (High Priority — Est: 8-12 hours)
-  - [ ] 3.1 Design a serializable PST schema (JSON or TOML) supporting piece type, phase, and symmetry metadata
-  - [ ] 3.2 Implement loader module (`src/evaluation/pst_loader.rs`) that deserializes external tables into `PieceSquareTables`
+  - [x] 3.1 Design a serializable PST schema (JSON or TOML) supporting piece type, phase, and symmetry metadata
+  - [x] 3.2 Implement loader module (`src/evaluation/pst_loader.rs`) that deserializes external tables into `PieceSquareTables`
   - [ ] 3.3 Add CLI flag and config plumbing to select PST presets at runtime (`EngineOptions` / `MaterialValueSet` integration)
-  - [ ] 3.4 Provide default schema files under `config/pst/default.json` (matching current baked-in values)
-  - [ ] 3.5 Write unit tests for deserialization, validation (board dimensions, symmetry), and round-trip comparisons
+  - [x] 3.4 Provide default schema files under `config/pst/default.json` (matching current baked-in values)
+  - [x] 3.5 Write unit tests for deserialization, validation (board dimensions, symmetry), and round-trip comparisons
   - [ ] 3.6 Update documentation with loader usage, override instructions, and safety guidelines (Section 12.4 reference)
 
 - [ ] 4.0 Expand PST Telemetry & Observability (Medium Priority — Est: 5-7 hours)
@@ -121,6 +121,15 @@ Meeting these criteria confirms Task 12.0’s recommendations are fully implemen
 - **Integration Testing:** Added `tests/evaluation_pipeline_tests.rs` to confirm PST-only configurations weight endgame values more heavily as the phase collapses, providing end-to-end validation across the integrated evaluator pipeline.
 - **Validation:** Successfully ran `cargo test piece_square_tables` and `cargo test pst_contribution_increases_as_position_reaches_endgame` to verify the ungated unit suite and new integration scenario.
 - **CI Guidance:** Documented the new default coverage expectations here (Section 2.0) so CI owners can rely on `cargo test` without feature flags; runtime impact remains minimal (~4s locally).
+
+---
+
+## Task 3.0 Progress Notes
+
+- **Schema & Loader:** Added `src/evaluation/pst_loader.rs` with JSON schema backing, preset handling, and validation for missing pieces, duplicate entries, and king-table invariants. The loader now deserializes external values into `PieceSquareTables` while defaulting to built-in tables when no override is supplied.
+- **Assets:** Generated `config/pst/default.json` from the existing in-tree tables so the default preset reproduces current evaluation behaviour and provides a starting point for tuning.
+- **Testing:** Introduced unit tests exercising happy-path loading, missing-entry validation, and king-table zero enforcement; verified with `cargo test pst_loader`.
+- **Outstanding:** Runtime preset selection wiring (Task 3.3) and documentation updates (Task 3.6) remain on the backlog; follow-on work will expose the loader via engine options and author user-facing guidance.
 
 ---
 

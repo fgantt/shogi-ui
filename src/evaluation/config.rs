@@ -30,6 +30,7 @@ use crate::evaluation::advanced_interpolation::AdvancedInterpolationConfig;
 use crate::evaluation::material::MaterialEvaluationConfig;
 use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransitionConfig};
 use crate::evaluation::position_features::PositionFeatureConfig;
+use crate::evaluation::pst_loader::PieceSquareTableConfig;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -42,6 +43,9 @@ pub struct TaperedEvalConfig {
 
     /// Configuration for material evaluation
     pub material: MaterialEvaluationConfig,
+
+    /// Configuration for piece-square tables
+    pub pst: PieceSquareTableConfig,
 
     /// Configuration for phase transitions
     pub phase_transition: PhaseTransitionConfig,
@@ -106,6 +110,7 @@ impl TaperedEvalConfig {
         Self {
             enabled: false,
             material: MaterialEvaluationConfig::default(),
+            pst: PieceSquareTableConfig::default(),
             phase_transition: PhaseTransitionConfig::default(),
             position_features: PositionFeatureConfig::default(),
             base: TaperedEvaluationConfig::disabled(),
@@ -122,6 +127,7 @@ impl TaperedEvalConfig {
                 enable_fast_loop: true,
                 ..MaterialEvaluationConfig::default()
             },
+            pst: PieceSquareTableConfig::default(),
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,
                 use_phase_boundaries: false, // Disabled for performance
@@ -146,6 +152,7 @@ impl TaperedEvalConfig {
         Self {
             enabled: true,
             material: MaterialEvaluationConfig::default(),
+            pst: PieceSquareTableConfig::default(),
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Advanced,
                 use_phase_boundaries: true,
@@ -185,6 +192,7 @@ impl TaperedEvalConfig {
                 include_hand_pieces: true,
                 ..MaterialEvaluationConfig::default()
             },
+            pst: PieceSquareTableConfig::default(),
             phase_transition: PhaseTransitionConfig {
                 default_method: InterpolationMethod::Linear,
                 use_phase_boundaries: false,
@@ -340,6 +348,7 @@ impl Default for TaperedEvalConfig {
         Self {
             enabled: true,
             material: MaterialEvaluationConfig::default(),
+            pst: PieceSquareTableConfig::default(),
             phase_transition: PhaseTransitionConfig::default(),
             position_features: PositionFeatureConfig::default(),
             base: TaperedEvaluationConfig::default(),

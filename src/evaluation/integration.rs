@@ -26,6 +26,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
+use crate::debug_utils::debug_log;
 use crate::evaluation::{
     endgame_patterns::EndgamePatternEvaluator,
     material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
@@ -36,6 +37,7 @@ use crate::evaluation::{
     piece_square_tables::PieceSquareTables,
     position_features::PositionFeatureEvaluator,
     positional_patterns::PositionalPatternAnalyzer,
+    pst_loader::{PieceSquareTableConfig, PieceSquareTableLoader},
     statistics::{EvaluationStatistics, EvaluationTelemetry},
     tactical_patterns::TacticalPatternRecognizer,
     tapered_eval::TaperedEvaluation,
@@ -90,8 +92,22 @@ impl IntegratedEvaluator {
 
     /// Create with custom configuration
     pub fn with_config(config: IntegratedEvaluationConfig) -> Self {
+        let pst_tables = match PieceSquareTableLoader::load(&config.pst) {
+            Ok(pst) => pst,
+            Err(err) => {
+                debug_log(&format!(
+                    "[IntegratedEvaluator] Failed to load PST definition: {}. Falling back to built-in tables.",
+                    err
+                ));
+                PieceSquareTables::new()
+            }
+        };
+
         let optimized_eval = if config.use_optimized_path {
-            Some(OptimizedEvaluator::with_config(&config.material))
+            Some(OptimizedEvaluator::with_components(
+                &config.material,
+                pst_tables.clone(),
+            ))
         } else {
             None
         };
@@ -100,7 +116,7 @@ impl IntegratedEvaluator {
             config: config.clone(),
             tapered_eval: RefCell::new(TaperedEvaluation::new()),
             material_eval: RefCell::new(MaterialEvaluator::with_config(config.material.clone())),
-            pst: PieceSquareTables::new(),
+            pst: pst_tables,
             phase_transition: RefCell::new(PhaseTransition::new()),
             position_features: RefCell::new(PositionFeatureEvaluator::new()),
             endgame_patterns: RefCell::new(EndgamePatternEvaluator::new()),
@@ -492,11 +508,31 @@ impl IntegratedEvaluator {
             material_eval.apply_config(config.material.clone());
         }
 
+        let pst_tables = match PieceSquareTableLoader::load(&config.pst) {
+            Ok(pst) => pst,
+            Err(err) => {
+                debug_log(&format!(
+                    "[IntegratedEvaluator] Failed to load PST definition: {}. Continuing with previous tables.",
+                    err
+                ));
+                self.pst.clone()
+            }
+        };
+
+        self.pst = pst_tables.clone();
+
         if config.use_optimized_path {
-            if let Some(opt) = self.optimized_eval.as_mut() {
-                opt.apply_material_config(&config.material);
-            } else {
-                self.optimized_eval = Some(OptimizedEvaluator::with_config(&config.material));
+            match self.optimized_eval.as_mut() {
+                Some(opt) => {
+                    opt.apply_material_config(&config.material);
+                    opt.apply_piece_square_tables(pst_tables.clone());
+                }
+                None => {
+                    self.optimized_eval = Some(OptimizedEvaluator::with_components(
+                        &config.material,
+                        pst_tables.clone(),
+                    ));
+                }
             }
         } else {
             self.optimized_eval = None;
@@ -541,6 +577,8 @@ pub struct IntegratedEvaluationConfig {
     pub pattern_cache_size: usize,
     /// Material evaluation configuration
     pub material: MaterialEvaluationConfig,
+    /// Piece-square table configuration
+    pub pst: PieceSquareTableConfig,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -553,6 +591,7 @@ impl Default for IntegratedEvaluationConfig {
             max_cache_size: 10000,
             pattern_cache_size: 100_000,
             material: MaterialEvaluationConfig::default(),
+            pst: PieceSquareTableConfig::default(),
         }
     }
 }

@@ -63,10 +63,18 @@ impl OptimizedEvaluator {
 
     /// Create a new optimized evaluator with a specific material configuration
     pub fn with_config(material_config: &MaterialEvaluationConfig) -> Self {
+        Self::with_components(material_config, PieceSquareTables::new())
+    }
+
+    /// Create a new optimized evaluator with material configuration and PST tables.
+    pub fn with_components(
+        material_config: &MaterialEvaluationConfig,
+        pst: PieceSquareTables,
+    ) -> Self {
         Self {
             tapered_eval: TaperedEvaluation::new(),
             material_eval: MaterialEvaluator::with_config(material_config.clone()),
-            pst: PieceSquareTables::new(),
+            pst,
             phase_transition: PhaseTransition::new(),
             profiler: PerformanceProfiler::new(),
         }
@@ -75,6 +83,11 @@ impl OptimizedEvaluator {
     /// Apply an updated material configuration.
     pub fn apply_material_config(&mut self, material_config: &MaterialEvaluationConfig) {
         self.material_eval.apply_config(material_config.clone());
+    }
+
+    /// Apply updated piece-square tables.
+    pub fn apply_piece_square_tables(&mut self, pst: PieceSquareTables) {
+        self.pst = pst;
     }
 
     /// Optimized evaluation with all components

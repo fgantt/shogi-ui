@@ -20,6 +20,7 @@ pub mod performance;
 pub mod phase_transition;
 pub mod piece_square_tables;
 pub mod position_features;
+pub mod pst_loader;
 pub mod statistics;
 pub mod tapered_eval;
 pub mod tuning;

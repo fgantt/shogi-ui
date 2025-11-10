@@ -26,6 +26,9 @@
 //! ```
 
 use crate::types::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use thiserror::Error;
 
 /// Piece-square tables for dual-phase positional evaluation
 #[derive(Clone, Debug)]
@@ -65,44 +68,276 @@ pub struct PieceSquareTables {
     promoted_rook_table_eg: [[i32; 9]; 9],
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PieceSquareTableRaw {
+    pub pawn_table_mg: [[i32; 9]; 9],
+    pub pawn_table_eg: [[i32; 9]; 9],
+    pub lance_table_mg: [[i32; 9]; 9],
+    pub lance_table_eg: [[i32; 9]; 9],
+    pub knight_table_mg: [[i32; 9]; 9],
+    pub knight_table_eg: [[i32; 9]; 9],
+    pub silver_table_mg: [[i32; 9]; 9],
+    pub silver_table_eg: [[i32; 9]; 9],
+    pub gold_table_mg: [[i32; 9]; 9],
+    pub gold_table_eg: [[i32; 9]; 9],
+    pub bishop_table_mg: [[i32; 9]; 9],
+    pub bishop_table_eg: [[i32; 9]; 9],
+    pub rook_table_mg: [[i32; 9]; 9],
+    pub rook_table_eg: [[i32; 9]; 9],
+    pub promoted_pawn_table_mg: [[i32; 9]; 9],
+    pub promoted_pawn_table_eg: [[i32; 9]; 9],
+    pub promoted_lance_table_mg: [[i32; 9]; 9],
+    pub promoted_lance_table_eg: [[i32; 9]; 9],
+    pub promoted_knight_table_mg: [[i32; 9]; 9],
+    pub promoted_knight_table_eg: [[i32; 9]; 9],
+    pub promoted_silver_table_mg: [[i32; 9]; 9],
+    pub promoted_silver_table_eg: [[i32; 9]; 9],
+    pub promoted_bishop_table_mg: [[i32; 9]; 9],
+    pub promoted_bishop_table_eg: [[i32; 9]; 9],
+    pub promoted_rook_table_mg: [[i32; 9]; 9],
+    pub promoted_rook_table_eg: [[i32; 9]; 9],
+}
+
+impl PieceSquareTableRaw {
+    pub fn default() -> Self {
+        Self {
+            pawn_table_mg: PieceSquareTables::init_pawn_table_mg(),
+            pawn_table_eg: PieceSquareTables::init_pawn_table_eg(),
+            lance_table_mg: PieceSquareTables::init_lance_table_mg(),
+            lance_table_eg: PieceSquareTables::init_lance_table_eg(),
+            knight_table_mg: PieceSquareTables::init_knight_table_mg(),
+            knight_table_eg: PieceSquareTables::init_knight_table_eg(),
+            silver_table_mg: PieceSquareTables::init_silver_table_mg(),
+            silver_table_eg: PieceSquareTables::init_silver_table_eg(),
+            gold_table_mg: PieceSquareTables::init_gold_table_mg(),
+            gold_table_eg: PieceSquareTables::init_gold_table_eg(),
+            bishop_table_mg: PieceSquareTables::init_bishop_table_mg(),
+            bishop_table_eg: PieceSquareTables::init_bishop_table_eg(),
+            rook_table_mg: PieceSquareTables::init_rook_table_mg(),
+            rook_table_eg: PieceSquareTables::init_rook_table_eg(),
+            promoted_pawn_table_mg: PieceSquareTables::init_promoted_pawn_table_mg(),
+            promoted_pawn_table_eg: PieceSquareTables::init_promoted_pawn_table_eg(),
+            promoted_lance_table_mg: PieceSquareTables::init_promoted_lance_table_mg(),
+            promoted_lance_table_eg: PieceSquareTables::init_promoted_lance_table_eg(),
+            promoted_knight_table_mg: PieceSquareTables::init_promoted_knight_table_mg(),
+            promoted_knight_table_eg: PieceSquareTables::init_promoted_knight_table_eg(),
+            promoted_silver_table_mg: PieceSquareTables::init_promoted_silver_table_mg(),
+            promoted_silver_table_eg: PieceSquareTables::init_promoted_silver_table_eg(),
+            promoted_bishop_table_mg: PieceSquareTables::init_promoted_bishop_table_mg(),
+            promoted_bishop_table_eg: PieceSquareTables::init_promoted_bishop_table_eg(),
+            promoted_rook_table_mg: PieceSquareTables::init_promoted_rook_table_mg(),
+            promoted_rook_table_eg: PieceSquareTables::init_promoted_rook_table_eg(),
+        }
+    }
+}
+
+/// Phase-specific table pair for a single piece type.
+#[derive(Debug, Clone, Copy)]
+pub struct PiecePhaseTables {
+    pub mg: [[i32; 9]; 9],
+    pub eg: [[i32; 9]; 9],
+}
+
+#[derive(Debug, Error)]
+pub enum PieceSquareTableError {
+    #[error("piece-square table data missing entry for {0:?}")]
+    MissingPiece(PieceType),
+    #[error("king positional tables must be zero in both phases")]
+    UnsupportedKingValues,
+}
+
 impl PieceSquareTables {
     /// Create a new PieceSquareTables with default values
     pub fn new() -> Self {
+        Self::from_raw(PieceSquareTableRaw::default())
+    }
+
+    pub fn from_raw(raw: PieceSquareTableRaw) -> Self {
         Self {
-            // Initialize middlegame tables
-            pawn_table_mg: Self::init_pawn_table_mg(),
-            lance_table_mg: Self::init_lance_table_mg(),
-            knight_table_mg: Self::init_knight_table_mg(),
-            silver_table_mg: Self::init_silver_table_mg(),
-            gold_table_mg: Self::init_gold_table_mg(),
-            bishop_table_mg: Self::init_bishop_table_mg(),
-            rook_table_mg: Self::init_rook_table_mg(),
-
-            // Initialize endgame tables
-            pawn_table_eg: Self::init_pawn_table_eg(),
-            lance_table_eg: Self::init_lance_table_eg(),
-            knight_table_eg: Self::init_knight_table_eg(),
-            silver_table_eg: Self::init_silver_table_eg(),
-            gold_table_eg: Self::init_gold_table_eg(),
-            bishop_table_eg: Self::init_bishop_table_eg(),
-            rook_table_eg: Self::init_rook_table_eg(),
-
-            // Initialize promoted piece middlegame tables
-            promoted_pawn_table_mg: Self::init_promoted_pawn_table_mg(),
-            promoted_lance_table_mg: Self::init_promoted_lance_table_mg(),
-            promoted_knight_table_mg: Self::init_promoted_knight_table_mg(),
-            promoted_silver_table_mg: Self::init_promoted_silver_table_mg(),
-            promoted_bishop_table_mg: Self::init_promoted_bishop_table_mg(),
-            promoted_rook_table_mg: Self::init_promoted_rook_table_mg(),
-
-            // Initialize promoted piece endgame tables
-            promoted_pawn_table_eg: Self::init_promoted_pawn_table_eg(),
-            promoted_lance_table_eg: Self::init_promoted_lance_table_eg(),
-            promoted_knight_table_eg: Self::init_promoted_knight_table_eg(),
-            promoted_silver_table_eg: Self::init_promoted_silver_table_eg(),
-            promoted_bishop_table_eg: Self::init_promoted_bishop_table_eg(),
-            promoted_rook_table_eg: Self::init_promoted_rook_table_eg(),
+            pawn_table_mg: raw.pawn_table_mg,
+            lance_table_mg: raw.lance_table_mg,
+            knight_table_mg: raw.knight_table_mg,
+            silver_table_mg: raw.silver_table_mg,
+            gold_table_mg: raw.gold_table_mg,
+            bishop_table_mg: raw.bishop_table_mg,
+            rook_table_mg: raw.rook_table_mg,
+            pawn_table_eg: raw.pawn_table_eg,
+            lance_table_eg: raw.lance_table_eg,
+            knight_table_eg: raw.knight_table_eg,
+            silver_table_eg: raw.silver_table_eg,
+            gold_table_eg: raw.gold_table_eg,
+            bishop_table_eg: raw.bishop_table_eg,
+            rook_table_eg: raw.rook_table_eg,
+            promoted_pawn_table_mg: raw.promoted_pawn_table_mg,
+            promoted_lance_table_mg: raw.promoted_lance_table_mg,
+            promoted_knight_table_mg: raw.promoted_knight_table_mg,
+            promoted_silver_table_mg: raw.promoted_silver_table_mg,
+            promoted_bishop_table_mg: raw.promoted_bishop_table_mg,
+            promoted_rook_table_mg: raw.promoted_rook_table_mg,
+            promoted_pawn_table_eg: raw.promoted_pawn_table_eg,
+            promoted_lance_table_eg: raw.promoted_lance_table_eg,
+            promoted_knight_table_eg: raw.promoted_knight_table_eg,
+            promoted_silver_table_eg: raw.promoted_silver_table_eg,
+            promoted_bishop_table_eg: raw.promoted_bishop_table_eg,
+            promoted_rook_table_eg: raw.promoted_rook_table_eg,
         }
+    }
+
+    pub fn to_raw(&self) -> PieceSquareTableRaw {
+        PieceSquareTableRaw {
+            pawn_table_mg: self.pawn_table_mg,
+            pawn_table_eg: self.pawn_table_eg,
+            lance_table_mg: self.lance_table_mg,
+            lance_table_eg: self.lance_table_eg,
+            knight_table_mg: self.knight_table_mg,
+            knight_table_eg: self.knight_table_eg,
+            silver_table_mg: self.silver_table_mg,
+            silver_table_eg: self.silver_table_eg,
+            gold_table_mg: self.gold_table_mg,
+            gold_table_eg: self.gold_table_eg,
+            bishop_table_mg: self.bishop_table_mg,
+            bishop_table_eg: self.bishop_table_eg,
+            rook_table_mg: self.rook_table_mg,
+            rook_table_eg: self.rook_table_eg,
+            promoted_pawn_table_mg: self.promoted_pawn_table_mg,
+            promoted_pawn_table_eg: self.promoted_pawn_table_eg,
+            promoted_lance_table_mg: self.promoted_lance_table_mg,
+            promoted_lance_table_eg: self.promoted_lance_table_eg,
+            promoted_knight_table_mg: self.promoted_knight_table_mg,
+            promoted_knight_table_eg: self.promoted_knight_table_eg,
+            promoted_silver_table_mg: self.promoted_silver_table_mg,
+            promoted_silver_table_eg: self.promoted_silver_table_eg,
+            promoted_bishop_table_mg: self.promoted_bishop_table_mg,
+            promoted_bishop_table_eg: self.promoted_bishop_table_eg,
+            promoted_rook_table_mg: self.promoted_rook_table_mg,
+            promoted_rook_table_eg: self.promoted_rook_table_eg,
+        }
+    }
+
+    /// Construct tables from externally provided phase data.
+    pub fn from_phase_tables(
+        tables: &HashMap<PieceType, PiecePhaseTables>,
+    ) -> Result<Self, PieceSquareTableError> {
+        fn get_tables<'a>(
+            tables: &'a HashMap<PieceType, PiecePhaseTables>,
+            piece: PieceType,
+        ) -> Result<PiecePhaseTables, PieceSquareTableError> {
+            tables
+                .get(&piece)
+                .copied()
+                .ok_or(PieceSquareTableError::MissingPiece(piece))
+        }
+
+        let pawn = get_tables(tables, PieceType::Pawn)?;
+        let lance = get_tables(tables, PieceType::Lance)?;
+        let knight = get_tables(tables, PieceType::Knight)?;
+        let silver = get_tables(tables, PieceType::Silver)?;
+        let gold = get_tables(tables, PieceType::Gold)?;
+        let bishop = get_tables(tables, PieceType::Bishop)?;
+        let rook = get_tables(tables, PieceType::Rook)?;
+        if let Some(king_tables) = tables.get(&PieceType::King) {
+            if king_tables.mg != [[0; 9]; 9] || king_tables.eg != [[0; 9]; 9] {
+                return Err(PieceSquareTableError::UnsupportedKingValues);
+            }
+        }
+        let promoted_pawn = get_tables(tables, PieceType::PromotedPawn)?;
+        let promoted_lance = get_tables(tables, PieceType::PromotedLance)?;
+        let promoted_knight = get_tables(tables, PieceType::PromotedKnight)?;
+        let promoted_silver = get_tables(tables, PieceType::PromotedSilver)?;
+        let promoted_bishop = get_tables(tables, PieceType::PromotedBishop)?;
+        let promoted_rook = get_tables(tables, PieceType::PromotedRook)?;
+
+        Ok(Self {
+            pawn_table_mg: pawn.mg,
+            lance_table_mg: lance.mg,
+            knight_table_mg: knight.mg,
+            silver_table_mg: silver.mg,
+            gold_table_mg: gold.mg,
+            bishop_table_mg: bishop.mg,
+            rook_table_mg: rook.mg,
+            pawn_table_eg: pawn.eg,
+            lance_table_eg: lance.eg,
+            knight_table_eg: knight.eg,
+            silver_table_eg: silver.eg,
+            gold_table_eg: gold.eg,
+            bishop_table_eg: bishop.eg,
+            rook_table_eg: rook.eg,
+            promoted_pawn_table_mg: promoted_pawn.mg,
+            promoted_lance_table_mg: promoted_lance.mg,
+            promoted_knight_table_mg: promoted_knight.mg,
+            promoted_silver_table_mg: promoted_silver.mg,
+            promoted_bishop_table_mg: promoted_bishop.mg,
+            promoted_rook_table_mg: promoted_rook.mg,
+            promoted_pawn_table_eg: promoted_pawn.eg,
+            promoted_lance_table_eg: promoted_lance.eg,
+            promoted_knight_table_eg: promoted_knight.eg,
+            promoted_silver_table_eg: promoted_silver.eg,
+            promoted_bishop_table_eg: promoted_bishop.eg,
+            promoted_rook_table_eg: promoted_rook.eg,
+        })
+    }
+
+    /// Export the tables as a map keyed by piece type.
+    pub fn to_phase_tables(&self) -> HashMap<PieceType, PiecePhaseTables> {
+        let mut map = HashMap::new();
+        macro_rules! insert {
+            ($piece:expr, $mg:expr, $eg:expr) => {
+                map.insert($piece, PiecePhaseTables { mg: $mg, eg: $eg });
+            };
+        }
+
+        insert!(PieceType::Pawn, self.pawn_table_mg, self.pawn_table_eg);
+        insert!(PieceType::Lance, self.lance_table_mg, self.lance_table_eg);
+        insert!(
+            PieceType::Knight,
+            self.knight_table_mg,
+            self.knight_table_eg
+        );
+        insert!(
+            PieceType::Silver,
+            self.silver_table_mg,
+            self.silver_table_eg
+        );
+        insert!(PieceType::Gold, self.gold_table_mg, self.gold_table_eg);
+        insert!(
+            PieceType::Bishop,
+            self.bishop_table_mg,
+            self.bishop_table_eg
+        );
+        insert!(PieceType::Rook, self.rook_table_mg, self.rook_table_eg);
+        insert!(PieceType::King, [[0; 9]; 9], [[0; 9]; 9]);
+        insert!(
+            PieceType::PromotedPawn,
+            self.promoted_pawn_table_mg,
+            self.promoted_pawn_table_eg
+        );
+        insert!(
+            PieceType::PromotedLance,
+            self.promoted_lance_table_mg,
+            self.promoted_lance_table_eg
+        );
+        insert!(
+            PieceType::PromotedKnight,
+            self.promoted_knight_table_mg,
+            self.promoted_knight_table_eg
+        );
+        insert!(
+            PieceType::PromotedSilver,
+            self.promoted_silver_table_mg,
+            self.promoted_silver_table_eg
+        );
+        insert!(
+            PieceType::PromotedBishop,
+            self.promoted_bishop_table_mg,
+            self.promoted_bishop_table_eg
+        );
+        insert!(
+            PieceType::PromotedRook,
+            self.promoted_rook_table_mg,
+            self.promoted_rook_table_eg
+        );
+
+        map
     }
 
     /// Get positional value for a piece (returns TaperedScore)

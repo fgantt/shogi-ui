@@ -1,6 +1,7 @@
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::integration::{
-    ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator,
+use shogi_engine::evaluation::{
+    integration::{ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator},
+    pst_loader::PieceSquareTableConfig,
 };
 use shogi_engine::types::{CapturedPieces, Piece, PieceType, Player, Position};
 
@@ -18,6 +19,7 @@ fn pst_only_config() -> IntegratedEvaluationConfig {
     config.enable_phase_cache = false;
     config.enable_eval_cache = false;
     config.use_optimized_path = false;
+    config.pst = PieceSquareTableConfig::default();
     config
 }
 
