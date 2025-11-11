@@ -16,6 +16,7 @@
 - Ensure scoring follows centipawn conventions: negative for our vulnerabilities, positive for threats we create.
 - Include shogi-specific scenarios (drops, promoted pieces, lance skewers) in both implementation and tests.
 - Update telemetry and configuration defaults so tactical weights are tunable without code changes.
+- Document tactical presets (`balanced`, `aggressive`, `conservative`) and telemetry toggles so runtime configuration aligns with evaluation CLI expectations.
 - Coordinate with evaluation benchmarks to quantify performance and accuracy shifts after each milestone.
 
 ## Tasks
@@ -38,12 +39,12 @@
   - [x] 3.3 Enhance detection for promoted sliders, lance skewers, and other shogi-exclusive motifs highlighted in the PRD.
   - [x] 3.4 Add configuration toggles to enable/disable motif families (drops, promoted tactics) for incremental rollout.
   - [x] 3.5 Validate new motifs against curated tactical positions to ensure correct detection and scoring.
-- [ ] 4.0 Telemetry, Weights, and Configuration Enhancements
-  - [ ] 4.1 Expand `TacticalStats` with snapshot/export APIs compatible with existing evaluation telemetry.
-  - [ ] 4.2 Wire tactical statistics into `EvaluationTelemetry` (or equivalent) for surfaced metrics during search.
-  - [ ] 4.3 Introduce runtime-configurable weights through CLI or engine options, mirroring other evaluation components.
-  - [ ] 4.4 Provide default tuning presets (aggressive, balanced, conservative) for tactical weighting.
-  - [ ] 4.5 Update docs/configuration guides with instructions for enabling telemetry and adjusting weights.
+- [x] 4.0 Telemetry, Weights, and Configuration Enhancements
+  - [x] 4.1 Expand `TacticalStats` with snapshot/export APIs compatible with existing evaluation telemetry.
+  - [x] 4.2 Wire tactical statistics into `EvaluationTelemetry` (or equivalent) for surfaced metrics during search.
+  - [x] 4.3 Introduce runtime-configurable weights through CLI or engine options, mirroring other evaluation components.
+  - [x] 4.4 Provide default tuning presets (aggressive, balanced, conservative) for tactical weighting.
+  - [x] 4.5 Update docs/configuration guides with instructions for enabling telemetry and adjusting weights.
 - [ ] 5.0 Testing, Benchmarks, and Validation Suite
   - [ ] 5.1 Create unit tests covering fork, pin, skewer, discovered attack, back-rank threat, and drop scenarios using blocker-aware fixtures.
   - [ ] 5.2 Add regression tests ensuring sign-correct scoring and weight application within the integrated evaluator.
@@ -70,4 +71,11 @@
 - **Implementation:** Threaded `CapturedPieces` through tactical evaluation, introduced drop-aware fork and pin heuristics with legal-drop gating (pawn files, final ranks, lance/knight restrictions), and added rook/bishop/lance drop pin support aligned with shogi-specific motifs.
 - **Configuration:** Reused existing toggles while enabling drop-only bonuses to respect motif phase weights; no new toggles were required because motif drops reuse the existing component flags.
 - **Testing:** Expanded `tests/tactical_patterns_accuracy_tests.rs` with drop-based fork and pin scenarios to ensure hand pieces translate into positive tactical pressure, keeping back-rank and pin regression suites intact.
+
+## Task 4.0 Completion Notes
+
+- **Implementation:** Added `TacticalStatsSnapshot` with atomic-counter exports and threaded snapshot capture through `IntegratedEvaluator`, propagating into `EvaluationTelemetry` and statistics reports alongside PST and position feature telemetry.
+- **Configuration:** Extended `IntegratedEvaluationConfig` with a dedicated `TacticalConfig`, introduced runtime setters (`update_tactical_config`), and added `TacticalPreset` helpers (`balanced`, `aggressive`, `conservative`) to mirror other configurable evaluation knobs.
+- **Telemetry:** Extended `EvaluationStatistics` to retain the latest tactical snapshot, updated `StatisticsReport` formatting, and surfaced tactical metrics in `integrated_evaluator.telemetry_snapshot()`.
+- **Documentation:** Refreshed this task file with telemetry guidance and documented preset usage; added `telemetry_includes_tactical_snapshot` regression coverage to confirm snapshots populate after evaluation.
 

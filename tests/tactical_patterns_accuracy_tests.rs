@@ -251,3 +251,53 @@ fn drop_rook_applies_pin_bonus() {
         "Dropping a rook to pin an opponent piece should yield a positive tactical bonus"
     );
 }
+
+#[test]
+fn telemetry_includes_tactical_snapshot() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(4, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::White),
+        Position::new(2, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(4, 7),
+    );
+
+    let mut config = IntegratedEvaluationConfig::default();
+    config.use_optimized_path = false;
+    config.enable_eval_cache = false;
+    config.enable_phase_cache = false;
+    config.components = ComponentFlags {
+        material: false,
+        piece_square_tables: false,
+        position_features: false,
+        opening_principles: false,
+        endgame_patterns: false,
+        tactical_patterns: true,
+        positional_patterns: false,
+    };
+
+    let evaluator = IntegratedEvaluator::with_config(config);
+    evaluator.enable_statistics();
+    let captured = CapturedPieces::new();
+
+    evaluator.evaluate(&board, Player::Black, &captured);
+
+    let telemetry = evaluator
+        .telemetry_snapshot()
+        .expect("telemetry snapshot should be present");
+
+    let tactical = telemetry
+        .tactical
+        .expect("tactical telemetry should be recorded");
+
+    assert!(
+        tactical.evaluations > 0,
+        "Expected tactical telemetry to reflect recorded evaluations"
+    );
+}

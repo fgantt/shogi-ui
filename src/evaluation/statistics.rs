@@ -39,6 +39,7 @@ use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
 use crate::evaluation::position_features::PositionFeatureStats;
+use crate::evaluation::tactical_patterns::TacticalStatsSnapshot;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
 use crate::types::{PieceType, TaperedScore};
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,8 @@ pub struct EvaluationStatistics {
     collect_position_feature_stats: bool,
     /// Latest position feature statistics snapshot
     position_feature_stats: Option<PositionFeatureStats>,
+    /// Latest tactical statistics snapshot
+    tactical_stats: Option<TacticalStatsSnapshot>,
 }
 
 /// Aggregated telemetry emitted by the integrated evaluator.
@@ -80,6 +83,7 @@ pub struct EvaluationTelemetry {
     pub material: Option<MaterialTelemetry>,
     pub pst: Option<PieceSquareTelemetry>,
     pub position_features: Option<PositionFeatureStats>,
+    pub tactical: Option<TacticalStatsSnapshot>,
 }
 
 impl EvaluationTelemetry {
@@ -90,6 +94,7 @@ impl EvaluationTelemetry {
         material: Option<MaterialTelemetry>,
         pst: Option<PieceSquareTelemetry>,
         position_features: Option<PositionFeatureStats>,
+        tactical: Option<TacticalStatsSnapshot>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
@@ -98,6 +103,7 @@ impl EvaluationTelemetry {
             material,
             pst,
             position_features,
+            tactical,
         }
     }
 }
@@ -325,6 +331,7 @@ impl EvaluationStatistics {
             pst_stats: PieceSquareStatisticsAggregate::default(),
             collect_position_feature_stats: false,
             position_feature_stats: None,
+            tactical_stats: None,
         }
     }
 
@@ -399,7 +406,9 @@ impl EvaluationStatistics {
             if let Some(ref pst) = telemetry.pst {
                 self.pst_stats.record(pst);
             }
-
+            if let Some(ref tactical) = telemetry.tactical {
+                self.tactical_stats = Some(tactical.clone());
+            }
             if self.collect_position_feature_stats {
                 if let Some(ref stats) = telemetry.position_features {
                     self.position_feature_stats = Some(stats.clone());
@@ -412,6 +421,11 @@ impl EvaluationStatistics {
     /// Access the most recent telemetry snapshot, if any.
     pub fn telemetry(&self) -> Option<&EvaluationTelemetry> {
         self.telemetry.as_ref()
+    }
+
+    /// Access the most recent tactical statistics snapshot, if any.
+    pub fn tactical_stats(&self) -> Option<&TacticalStatsSnapshot> {
+        self.tactical_stats.as_ref()
     }
 
     /// Generate comprehensive report
@@ -437,6 +451,7 @@ impl EvaluationStatistics {
             telemetry: self.telemetry.clone(),
             pst_stats: self.pst_stats.clone(),
             position_feature_stats: self.position_feature_stats.clone(),
+            tactical_stats: self.tactical_stats.clone(),
         }
     }
 
@@ -459,6 +474,7 @@ impl EvaluationStatistics {
         if self.collect_position_feature_stats {
             self.position_feature_stats = None;
         }
+        self.tactical_stats = None;
     }
 
     /// Get evaluation count
@@ -708,6 +724,8 @@ pub struct StatisticsReport {
     pub pst_stats: PieceSquareStatisticsAggregate,
     /// Latest position feature statistics snapshot
     pub position_feature_stats: Option<PositionFeatureStats>,
+    /// Latest tactical statistics snapshot
+    pub tactical_stats: Option<TacticalStatsSnapshot>,
 }
 
 impl std::fmt::Display for StatisticsReport {
@@ -803,6 +821,31 @@ impl std::fmt::Display for StatisticsReport {
             writeln!(f, "  Mobility Evals: {}", stats.mobility_evals)?;
             writeln!(f, "  Center Control Evals: {}", stats.center_control_evals)?;
             writeln!(f, "  Development Evals: {}", stats.development_evals)?;
+        }
+        if let Some(stats) = &self.tactical_stats {
+            writeln!(f)?;
+            writeln!(f, "Tactical Pattern Statistics:")?;
+            writeln!(f, "  Evaluations: {}", stats.evaluations)?;
+            writeln!(
+                f,
+                "  Checks (fork/pin/skewer/discovered/knight/back-rank): {}/{}/{}/{}/{}/{}",
+                stats.fork_checks,
+                stats.pin_checks,
+                stats.skewer_checks,
+                stats.discovered_checks,
+                stats.knight_fork_checks,
+                stats.back_rank_checks
+            )?;
+            writeln!(
+                f,
+                "  Findings (fork/pin/skewer/discovered/knight/back-rank): {}/{}/{}/{}/{}/{}",
+                stats.forks_found,
+                stats.pins_found,
+                stats.skewers_found,
+                stats.discovered_attacks_found,
+                stats.knight_forks_found,
+                stats.back_rank_threats_found
+            )?;
         }
         if let Some(telemetry) = &self.telemetry {
             writeln!(f)?;

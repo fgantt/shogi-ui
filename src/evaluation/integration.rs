@@ -40,7 +40,7 @@ use crate::evaluation::{
     positional_patterns::PositionalPatternAnalyzer,
     pst_loader::{PieceSquareTableConfig, PieceSquareTableLoader},
     statistics::{EvaluationStatistics, EvaluationTelemetry, PieceSquareTelemetry},
-    tactical_patterns::TacticalPatternRecognizer,
+    tactical_patterns::{TacticalConfig, TacticalPatternRecognizer},
     tapered_eval::TaperedEvaluation,
 };
 use crate::types::*;
@@ -127,7 +127,9 @@ impl IntegratedEvaluator {
             weights: config.weights.clone(),
             endgame_patterns: RefCell::new(EndgamePatternEvaluator::new()),
             opening_principles: RefCell::new(OpeningPrincipleEvaluator::new()),
-            tactical_patterns: RefCell::new(TacticalPatternRecognizer::new()),
+            tactical_patterns: RefCell::new(TacticalPatternRecognizer::with_config(
+                config.tactical.clone(),
+            )),
             positional_patterns: RefCell::new(PositionalPatternAnalyzer::new()),
             pattern_cache: RefCell::new(PatternCache::new(config.pattern_cache_size)),
             optimized_eval,
@@ -203,6 +205,7 @@ impl IntegratedEvaluator {
         let mut total = TaperedScore::default();
         let mut pst_telemetry: Option<PieceSquareTelemetry> = None;
         let mut position_feature_stats_snapshot = None;
+        let mut tactical_snapshot = None;
 
         // Material
         if self.config.components.material {
@@ -258,11 +261,12 @@ impl IntegratedEvaluator {
 
         // Tactical patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.tactical_patterns {
-            let tactical_score = self.tactical_patterns.borrow_mut().evaluate_tactics(
-                board,
-                player,
-                captured_pieces,
-            );
+            let tactical_score = {
+                let mut tactical = self.tactical_patterns.borrow_mut();
+                let score = tactical.evaluate_tactics(board, player, captured_pieces);
+                tactical_snapshot = Some(tactical.stats().snapshot());
+                score
+            };
             total += tactical_score * self.weights.tactical_weight;
         }
 
@@ -321,6 +325,7 @@ impl IntegratedEvaluator {
             Some(material_snapshot),
             pst_telemetry.clone(),
             position_feature_stats_snapshot.clone(),
+            tactical_snapshot.clone(),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
@@ -525,6 +530,13 @@ impl IntegratedEvaluator {
         self.set_config(updated);
     }
 
+    /// Update the tactical pattern configuration.
+    pub fn update_tactical_config(&mut self, tactical_config: TacticalConfig) {
+        let mut updated = self.config.clone();
+        updated.tactical = tactical_config;
+        self.set_config(updated);
+    }
+
     /// Retrieve material evaluation statistics.
     pub fn material_statistics(&self) -> MaterialEvaluationStats {
         self.material_eval.borrow().stats().clone()
@@ -542,6 +554,11 @@ impl IntegratedEvaluator {
         {
             let mut position_features = self.position_features.borrow_mut();
             position_features.set_config(config.position_features.clone());
+        }
+
+        {
+            let mut tactical = self.tactical_patterns.borrow_mut();
+            tactical.set_config(config.tactical.clone());
         }
 
         self.weights = config.weights.clone();
@@ -625,6 +642,8 @@ pub struct IntegratedEvaluationConfig {
     pub pst: PieceSquareTableConfig,
     /// Position feature configuration
     pub position_features: PositionFeatureConfig,
+    /// Tactical pattern configuration
+    pub tactical: TacticalConfig,
     /// Evaluation weights for combining features
     pub weights: EvaluationWeights,
 }
@@ -642,6 +661,7 @@ impl Default for IntegratedEvaluationConfig {
             material: MaterialEvaluationConfig::default(),
             pst: PieceSquareTableConfig::default(),
             position_features: PositionFeatureConfig::default(),
+            tactical: TacticalConfig::default(),
             weights: EvaluationWeights::default(),
         }
     }

@@ -21,6 +21,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
 
 /// Tactical pattern recognizer
 pub struct TacticalPatternRecognizer {
@@ -324,6 +325,16 @@ impl TacticalPatternRecognizer {
             config,
             stats: TacticalStats::default(),
         }
+    }
+
+    /// Update configuration at runtime.
+    pub fn set_config(&mut self, config: TacticalConfig) {
+        self.config = config;
+    }
+
+    /// Current configuration reference.
+    pub fn config(&self) -> &TacticalConfig {
+        &self.config
     }
 
     /// Evaluate all tactical patterns for a player
@@ -1175,6 +1186,13 @@ pub struct TacticalConfig {
     pub phase_weights: TacticalPhaseWeights,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TacticalPreset {
+    Balanced,
+    Aggressive,
+    Conservative,
+}
+
 impl Default for TacticalConfig {
     fn default() -> Self {
         Self {
@@ -1198,6 +1216,64 @@ impl Default for TacticalConfig {
     }
 }
 
+impl TacticalConfig {
+    pub fn balanced() -> Self {
+        Self::default()
+    }
+
+    pub fn aggressive() -> Self {
+        let mut config = Self::default();
+        config.fork_threat_ratio = 0.24;
+        config.knight_fork_ratio = 0.28;
+        config.king_fork_bonus_cp = 180;
+        config.pin_penalty_ratio = 0.55;
+        config.skewer_penalty_ratio = 0.42;
+        config.discovered_attack_bonus_cp = 120;
+        config.back_rank_penalty_cp = 220;
+        config.phase_weights = TacticalPhaseWeights {
+            forks: MotifPhaseWeight { mg: 1.3, eg: 0.9 },
+            knight_forks: MotifPhaseWeight { mg: 1.4, eg: 1.0 },
+            pins: MotifPhaseWeight { mg: 1.2, eg: 1.0 },
+            skewers: MotifPhaseWeight { mg: 1.2, eg: 1.0 },
+            discovered: MotifPhaseWeight { mg: 1.1, eg: 0.8 },
+            back_rank: MotifPhaseWeight { mg: 1.5, eg: 1.2 },
+        };
+        config
+    }
+
+    pub fn conservative() -> Self {
+        let mut config = Self::default();
+        config.fork_threat_ratio = 0.12;
+        config.knight_fork_ratio = 0.15;
+        config.king_fork_bonus_cp = 80;
+        config.pin_penalty_ratio = 0.25;
+        config.skewer_penalty_ratio = 0.2;
+        config.discovered_attack_bonus_cp = 40;
+        config.back_rank_penalty_cp = 90;
+        config.phase_weights = TacticalPhaseWeights {
+            forks: MotifPhaseWeight { mg: 0.7, eg: 0.4 },
+            knight_forks: MotifPhaseWeight { mg: 0.8, eg: 0.5 },
+            pins: MotifPhaseWeight { mg: 0.6, eg: 0.5 },
+            skewers: MotifPhaseWeight { mg: 0.6, eg: 0.5 },
+            discovered: MotifPhaseWeight { mg: 0.5, eg: 0.3 },
+            back_rank: MotifPhaseWeight { mg: 0.8, eg: 0.6 },
+        };
+        config
+    }
+
+    pub fn preset(preset: TacticalPreset) -> Self {
+        match preset {
+            TacticalPreset::Balanced => TacticalConfig::balanced(),
+            TacticalPreset::Aggressive => TacticalConfig::aggressive(),
+            TacticalPreset::Conservative => TacticalConfig::conservative(),
+        }
+    }
+
+    pub fn apply_preset(&mut self, preset: TacticalPreset) {
+        *self = TacticalConfig::preset(preset);
+    }
+}
+
 /// Statistics for tactical pattern recognition
 #[derive(Debug, Default)]
 pub struct TacticalStats {
@@ -1215,6 +1291,43 @@ pub struct TacticalStats {
     pub discovered_attacks_found: std::sync::atomic::AtomicU64,
     pub knight_forks_found: std::sync::atomic::AtomicU64,
     pub back_rank_threats_found: std::sync::atomic::AtomicU64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TacticalStatsSnapshot {
+    pub evaluations: u64,
+    pub fork_checks: u64,
+    pub pin_checks: u64,
+    pub skewer_checks: u64,
+    pub discovered_checks: u64,
+    pub knight_fork_checks: u64,
+    pub back_rank_checks: u64,
+    pub forks_found: u64,
+    pub pins_found: u64,
+    pub skewers_found: u64,
+    pub discovered_attacks_found: u64,
+    pub knight_forks_found: u64,
+    pub back_rank_threats_found: u64,
+}
+
+impl TacticalStats {
+    pub fn snapshot(&self) -> TacticalStatsSnapshot {
+        TacticalStatsSnapshot {
+            evaluations: self.evaluations,
+            fork_checks: self.fork_checks,
+            pin_checks: self.pin_checks,
+            skewer_checks: self.skewer_checks,
+            discovered_checks: self.discovered_checks,
+            knight_fork_checks: self.knight_fork_checks,
+            back_rank_checks: self.back_rank_checks,
+            forks_found: self.forks_found.load(Ordering::Relaxed),
+            pins_found: self.pins_found.load(Ordering::Relaxed),
+            skewers_found: self.skewers_found.load(Ordering::Relaxed),
+            discovered_attacks_found: self.discovered_attacks_found.load(Ordering::Relaxed),
+            knight_forks_found: self.knight_forks_found.load(Ordering::Relaxed),
+            back_rank_threats_found: self.back_rank_threats_found.load(Ordering::Relaxed),
+        }
+    }
 }
 
 #[cfg(test)]
