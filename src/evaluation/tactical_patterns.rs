@@ -14,7 +14,8 @@
 //! use crate::evaluation::tactical_patterns::TacticalPatternRecognizer;
 //!
 //! let recognizer = TacticalPatternRecognizer::new();
-//! let tactical_score = recognizer.evaluate_tactics(&board, Player::Black);
+//! let captured_pieces = CapturedPieces::new();
+//! let tactical_score = recognizer.evaluate_tactics(&board, Player::Black, &captured_pieces);
 //! ```
 
 use crate::bitboards::BitboardBoard;
@@ -39,10 +40,11 @@ struct TacticalDetectionContext<'a> {
     opponent: Player,
     player_pieces: Vec<(Position, Piece)>,
     opponent_pieces: Vec<(Position, Piece)>,
+    captured_pieces: &'a CapturedPieces,
 }
 
 impl<'a> TacticalDetectionContext<'a> {
-    fn new(board: &'a BitboardBoard, player: Player) -> Self {
+    fn new(board: &'a BitboardBoard, player: Player, captured_pieces: &'a CapturedPieces) -> Self {
         let opponent = player.opposite();
         let mut player_pieces = Vec::new();
         let mut opponent_pieces = Vec::new();
@@ -67,7 +69,45 @@ impl<'a> TacticalDetectionContext<'a> {
             opponent,
             player_pieces,
             opponent_pieces,
+            captured_pieces,
         }
+    }
+
+    fn player_hand(&self) -> &[PieceType] {
+        if self.player == Player::Black {
+            &self.captured_pieces.black
+        } else {
+            &self.captured_pieces.white
+        }
+    }
+
+    fn player_hand_count(&self, piece_type: PieceType) -> usize {
+        self.captured_pieces.count(piece_type, self.player)
+    }
+
+    fn empty_squares(&self) -> Vec<Position> {
+        let mut squares = Vec::new();
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if self.board.get_piece(pos).is_none() {
+                    squares.push(pos);
+                }
+            }
+        }
+        squares
+    }
+
+    fn friendly_unpromoted_pawn_on_file(&self, col: u8) -> bool {
+        for row in 0..9 {
+            let pos = Position::new(row, col);
+            if let Some(piece) = self.board.get_piece(pos) {
+                if piece.player == self.player && piece.piece_type == PieceType::Pawn {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn trace_line(&self, start: Position, dir: (i8, i8)) -> Vec<LineStep> {
@@ -287,12 +327,17 @@ impl TacticalPatternRecognizer {
     }
 
     /// Evaluate all tactical patterns for a player
-    pub fn evaluate_tactics(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    pub fn evaluate_tactics(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         self.stats.evaluations += 1;
 
         let mut mg_score = 0;
         let mut eg_score = 0;
-        let context = TacticalDetectionContext::new(board, player);
+        let context = TacticalDetectionContext::new(board, player, captured_pieces);
 
         // Detect forks (double attacks)
         if self.config.enable_forks {
@@ -363,6 +408,8 @@ impl TacticalPatternRecognizer {
             total_score += self.check_piece_for_forks(ctx, pos, piece.piece_type);
         }
 
+        total_score += self.detect_drop_fork_threats(ctx);
+
         self.apply_phase_weights(total_score, &self.config.phase_weights.forks)
     }
 
@@ -422,6 +469,207 @@ impl TacticalPatternRecognizer {
         attacked
     }
 
+    fn detect_drop_fork_threats(&self, ctx: &TacticalDetectionContext) -> i32 {
+        let mut total = 0;
+        let drop_pieces = [
+            PieceType::Rook,
+            PieceType::Bishop,
+            PieceType::Gold,
+            PieceType::Silver,
+            PieceType::Pawn,
+        ];
+
+        if ctx.player_hand().is_empty() {
+            return 0;
+        }
+
+        let empty_squares = ctx.empty_squares();
+
+        for &piece_type in &drop_pieces {
+            if ctx.player_hand_count(piece_type) == 0 {
+                continue;
+            }
+
+            for &pos in &empty_squares {
+                if !self.is_drop_legal(ctx, piece_type, pos) {
+                    continue;
+                }
+
+                let targets = self.get_attacked_pieces(ctx, pos, piece_type, ctx.player);
+                if targets.len() < 2 {
+                    continue;
+                }
+
+                let total_value: i32 = targets.iter().map(|(_, value)| *value).sum();
+                let base_bonus =
+                    (total_value as f32 * self.config.fork_threat_ratio).round() as i32;
+                let king_bonus = if targets.iter().any(|(pt, _)| *pt == PieceType::King) {
+                    self.config.king_fork_bonus_cp
+                } else {
+                    0
+                };
+                total += base_bonus + king_bonus;
+            }
+        }
+
+        total
+    }
+
+    fn detect_drop_knight_fork_threats(&self, ctx: &TacticalDetectionContext) -> i32 {
+        if ctx.player_hand_count(PieceType::Knight) == 0 {
+            return 0;
+        }
+
+        let mut total = 0;
+        let empty_squares = ctx.empty_squares();
+
+        for &pos in &empty_squares {
+            if !self.is_drop_legal(ctx, PieceType::Knight, pos) {
+                continue;
+            }
+
+            let targets = self.get_attacked_pieces(ctx, pos, PieceType::Knight, ctx.player);
+            if targets.len() < 2 {
+                continue;
+            }
+
+            let total_value: i32 = targets.iter().map(|(_, value)| *value).sum();
+            let base_bonus = (total_value as f32 * self.config.knight_fork_ratio).round() as i32;
+            let king_bonus = if targets.iter().any(|(pt, _)| *pt == PieceType::King) {
+                self.config.king_fork_bonus_cp * 2
+            } else {
+                0
+            };
+            total += base_bonus + king_bonus;
+        }
+
+        total
+    }
+
+    fn detect_drop_pin_threats(&self, ctx: &TacticalDetectionContext) -> i32 {
+        let mut total = 0;
+        let empty_squares = ctx.empty_squares();
+        let drop_pieces = [PieceType::Rook, PieceType::Bishop, PieceType::Lance];
+
+        if ctx.player_hand().is_empty() {
+            return 0;
+        }
+
+        for &piece_type in &drop_pieces {
+            if ctx.player_hand_count(piece_type) == 0 {
+                continue;
+            }
+
+            let directions: &[(i8, i8)] = match piece_type {
+                PieceType::Rook => &[(1, 0), (-1, 0), (0, 1), (0, -1)],
+                PieceType::Bishop => &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
+                PieceType::Lance => {
+                    if ctx.player == Player::Black {
+                        &[(-1, 0)]
+                    } else {
+                        &[(1, 0)]
+                    }
+                }
+                _ => &[],
+            };
+
+            for &pos in &empty_squares {
+                if !self.is_drop_legal(ctx, piece_type, pos) {
+                    continue;
+                }
+
+                total += self.evaluate_drop_pin(ctx, pos, piece_type, directions);
+            }
+        }
+
+        total
+    }
+
+    fn evaluate_drop_pin(
+        &self,
+        ctx: &TacticalDetectionContext,
+        origin: Position,
+        piece_type: PieceType,
+        directions: &[(i8, i8)],
+    ) -> i32 {
+        let mut bonus = 0;
+
+        for &(dr, dc) in directions {
+            let mut row = origin.row as i8 + dr;
+            let mut col = origin.col as i8 + dc;
+            let mut first_enemy: Option<Piece> = None;
+
+            while row >= 0 && row < 9 && col >= 0 && col < 9 {
+                let pos = Position::new(row as u8, col as u8);
+
+                if let Some(piece) = ctx.board.get_piece(pos).copied() {
+                    if piece.player == ctx.player {
+                        break;
+                    }
+
+                    if first_enemy.is_none() {
+                        first_enemy = Some(piece);
+                    } else {
+                        if piece.piece_type == PieceType::King && piece.player == ctx.opponent {
+                            if let Some(target) = first_enemy {
+                                let value = (target.piece_type.base_value() as f32
+                                    * self.config.pin_penalty_ratio)
+                                    .round() as i32;
+                                bonus += value.max(1);
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                row += dr;
+                col += dc;
+            }
+        }
+
+        bonus
+    }
+
+    fn is_drop_legal(
+        &self,
+        ctx: &TacticalDetectionContext,
+        piece_type: PieceType,
+        pos: Position,
+    ) -> bool {
+        if ctx.board.get_piece(pos).is_some() {
+            return false;
+        }
+
+        match piece_type {
+            PieceType::Pawn => {
+                if (ctx.player == Player::Black && pos.row == 0)
+                    || (ctx.player == Player::White && pos.row == 8)
+                {
+                    return false;
+                }
+                if ctx.friendly_unpromoted_pawn_on_file(pos.col) {
+                    return false;
+                }
+                true
+            }
+            PieceType::Knight => {
+                if ctx.player == Player::Black {
+                    pos.row > 1
+                } else {
+                    pos.row < 7
+                }
+            }
+            PieceType::Lance => {
+                if ctx.player == Player::Black {
+                    pos.row > 0
+                } else {
+                    pos.row < 8
+                }
+            }
+            _ => true,
+        }
+    }
+
     // ===================================================================
     // PIN DETECTION
     // ===================================================================
@@ -430,27 +678,30 @@ impl TacticalPatternRecognizer {
     fn detect_pins(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.pin_checks += 1;
 
-        // Find king position
-        let king_pos = match self.find_king_position(ctx.board, ctx.player) {
-            Some(pos) => pos,
-            None => return TaperedScore::default(),
-        };
+        let mut total_score = 0;
+        if let Some(king_pos) = self.find_king_position(ctx.board, ctx.player) {
+            total_score += self.check_pins_in_directions(
+                ctx,
+                king_pos,
+                ctx.player,
+                &[(1, 0), (-1, 0), (0, 1), (0, -1)],
+            );
+            total_score += self.check_pins_in_directions(
+                ctx,
+                king_pos,
+                ctx.player,
+                &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
+            );
+        }
 
-        let mut total_penalty = 0;
-        total_penalty += self.check_pins_in_directions(
-            ctx,
-            king_pos,
-            ctx.player,
-            &[(1, 0), (-1, 0), (0, 1), (0, -1)],
-        );
-        total_penalty += self.check_pins_in_directions(
-            ctx,
-            king_pos,
-            ctx.player,
-            &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
-        );
+        let drop_bonus = self.detect_drop_pin_threats(ctx);
+        total_score += drop_bonus;
 
-        self.apply_phase_weights(total_penalty, &self.config.phase_weights.pins)
+        if total_score == 0 {
+            TaperedScore::default()
+        } else {
+            self.apply_phase_weights(total_score, &self.config.phase_weights.pins)
+        }
     }
 
     /// Check for pins in given directions
@@ -711,6 +962,8 @@ impl TacticalPatternRecognizer {
                 total_bonus += self.check_knight_for_forks(ctx, pos);
             }
         }
+
+        total_bonus += self.detect_drop_knight_fork_threats(ctx);
 
         self.apply_phase_weights(total_bonus, &self.config.phase_weights.knight_forks)
     }
@@ -986,8 +1239,9 @@ mod tests {
     fn test_fork_detection() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = recognizer.evaluate_tactics(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black, &captured);
         assert!(score.mg >= 0);
         assert!(score.eg >= 0);
     }
@@ -996,8 +1250,9 @@ mod tests {
     fn test_pin_detection() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = recognizer.evaluate_tactics(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black, &captured);
         assert!(score.mg >= 0);
         assert!(score.eg >= 0);
     }
@@ -1006,8 +1261,9 @@ mod tests {
     fn test_knight_fork_detection() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = recognizer.evaluate_tactics(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black, &captured);
         assert!(score.mg >= 0);
     }
 
@@ -1015,8 +1271,9 @@ mod tests {
     fn test_evaluate_tactics() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = recognizer.evaluate_tactics(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black, &captured);
         assert_eq!(recognizer.stats().evaluations, 1);
     }
 
@@ -1024,8 +1281,9 @@ mod tests {
     fn test_statistics_tracking() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        recognizer.evaluate_tactics(&board, Player::Black);
+        recognizer.evaluate_tactics(&board, Player::Black, &captured);
 
         let stats = recognizer.stats();
         assert!(stats.fork_checks >= 1);
@@ -1036,8 +1294,9 @@ mod tests {
     fn test_reset_statistics() {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        recognizer.evaluate_tactics(&board, Player::Black);
+        recognizer.evaluate_tactics(&board, Player::Black, &captured);
         recognizer.reset_stats();
 
         assert_eq!(recognizer.stats().evaluations, 0);

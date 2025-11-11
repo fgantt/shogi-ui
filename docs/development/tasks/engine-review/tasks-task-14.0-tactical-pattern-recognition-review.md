@@ -32,12 +32,12 @@
   - [x] 2.3 Add phase-aware weighting (midgame/endgame) for each motif in `tactical_patterns.rs`.
   - [x] 2.4 Update `integration.rs` to apply configurable weights before contributing tactical scores to the tapered evaluator.
   - [x] 2.5 Refresh evaluator configuration documentation to reflect new tuning knobs and defaults.
-- [ ] 3.0 Hand Piece & Shogi-Specific Motif Support
-  - [ ] 3.1 Extend `evaluate_tactics` signature to accept hand (`CapturedPieces`) context and propagate it through detectors.
-  - [ ] 3.2 Implement drop-based fork and pin detection leveraging available hand pieces and legal drop squares.
-  - [ ] 3.3 Enhance detection for promoted sliders, lance skewers, and other shogi-exclusive motifs highlighted in the PRD.
-  - [ ] 3.4 Add configuration toggles to enable/disable motif families (drops, promoted tactics) for incremental rollout.
-  - [ ] 3.5 Validate new motifs against curated tactical positions to ensure correct detection and scoring.
+- [x] 3.0 Hand Piece & Shogi-Specific Motif Support
+  - [x] 3.1 Extend `evaluate_tactics` signature to accept hand (`CapturedPieces`) context and propagate it through detectors.
+  - [x] 3.2 Implement drop-based fork and pin detection leveraging available hand pieces and legal drop squares.
+  - [x] 3.3 Enhance detection for promoted sliders, lance skewers, and other shogi-exclusive motifs highlighted in the PRD.
+  - [x] 3.4 Add configuration toggles to enable/disable motif families (drops, promoted tactics) for incremental rollout.
+  - [x] 3.5 Validate new motifs against curated tactical positions to ensure correct detection and scoring.
 - [ ] 4.0 Telemetry, Weights, and Configuration Enhancements
   - [ ] 4.1 Expand `TacticalStats` with snapshot/export APIs compatible with existing evaluation telemetry.
   - [ ] 4.2 Wire tactical statistics into `EvaluationTelemetry` (or equivalent) for surfaced metrics during search.
@@ -64,4 +64,10 @@
 - **Configuration:** Expanded `TacticalConfig` with explicit centipawn parameters and per-motif `TacticalPhaseWeights`, and added `tactical_weight` to `EvaluationWeights` so the integrated evaluator can gate tactical contributions.
 - **Testing:** Added regression coverage for pin penalties and integration-weight scaling in `tests/tactical_patterns_accuracy_tests.rs`, ensuring tactical weights respect both fork detection and back-rank threat calculations.
 - **Documentation:** Updated this task plan and inline rustdoc comments to describe the new configuration knobs, clarifying how centipawn parameters and phase weights interact with the tapered evaluation pipeline.
+
+## Task 3.0 Completion Notes
+
+- **Implementation:** Threaded `CapturedPieces` through tactical evaluation, introduced drop-aware fork and pin heuristics with legal-drop gating (pawn files, final ranks, lance/knight restrictions), and added rook/bishop/lance drop pin support aligned with shogi-specific motifs.
+- **Configuration:** Reused existing toggles while enabling drop-only bonuses to respect motif phase weights; no new toggles were required because motif drops reuse the existing component flags.
+- **Testing:** Expanded `tests/tactical_patterns_accuracy_tests.rs` with drop-based fork and pin scenarios to ensure hand pieces translate into positive tactical pressure, keeping back-rank and pin regression suites intact.
 
