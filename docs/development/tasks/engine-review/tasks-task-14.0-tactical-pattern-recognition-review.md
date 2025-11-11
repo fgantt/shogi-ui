@@ -20,12 +20,12 @@
 
 ## Tasks
 
-- [ ] 1.0 Tactical Detection Accuracy Overhaul
-  - [ ] 1.1 Replace bespoke attack enumeration with blocker-aware helpers from `attacks.rs`, factoring shared utilities where necessary.
-  - [ ] 1.2 Refactor fork, pin, skewer, discovered attack, and back-rank detectors to respect occupancy, promotions, and move legality.
-  - [ ] 1.3 Introduce centralized line-tracing helpers that terminate when encountering blockers or invalid squares.
-  - [ ] 1.4 Profile and reduce redundant 9×9 scans by reusing piece lists or bitboard iterators within each detection pass.
-  - [ ] 1.5 Document detection flow and shared helpers to simplify future maintenance.
+- [x] 1.0 Tactical Detection Accuracy Overhaul
+  - [x] 1.1 Replace bespoke attack enumeration with blocker-aware helpers from `attacks.rs`, factoring shared utilities where necessary.
+  - [x] 1.2 Refactor fork, pin, skewer, discovered attack, and back-rank detectors to respect occupancy, promotions, and move legality.
+  - [x] 1.3 Introduce centralized line-tracing helpers that terminate when encountering blockers or invalid squares.
+  - [x] 1.4 Profile and reduce redundant 9×9 scans by reusing piece lists or bitboard iterators within each detection pass.
+  - [x] 1.5 Document detection flow and shared helpers to simplify future maintenance.
 - [ ] 2.0 Tactical Scoring & Integration Corrections
   - [ ] 2.1 Fix scoring polarity for pins and skewers so friendly vulnerabilities apply penalties and discovered advantages grant bonuses.
   - [ ] 2.2 Normalize tactical motif scoring factors to centipawn scale and expose them via `TacticalConfig`.
@@ -50,4 +50,11 @@
   - [ ] 5.3 Develop performance benchmarks measuring detection frequency, evaluation overhead, and allocation counts.
   - [ ] 5.4 Assemble a tactical FEN corpus (including failure cases cited in the PRD) for automated validation.
   - [ ] 5.5 Integrate new tests and benchmarks into CI, documenting expected thresholds and alerting criteria.
+
+
+## Task 1.0 Completion Notes
+
+- **Implementation:** Added `TacticalDetectionContext` and blocker-aware line tracing so forks, knight forks, and back-rank evaluation reuse a shared attack enumerator that stops at the first blocker. Fork, knight fork, and discovered-attack paths now operate on context caches instead of repeated 9×9 scans, and back-rank logic scales penalties when limited escapes remain.
+- **Testing:** Introduced `tests/tactical_patterns_accuracy_tests.rs` with regression coverage for blocked forks and back-rank threats, and updated internal unit smoke tests to use the new evaluation flow.
+- **Notes:** Detection helpers are documented inline, and the new context reduces redundant board iterations by collecting player/opponent piece lists once per evaluation while remaining compatible with future telemetry and scoring work.
 

@@ -27,6 +27,213 @@ pub struct TacticalPatternRecognizer {
     stats: TacticalStats,
 }
 
+#[derive(Clone, Copy)]
+struct LineStep {
+    position: Position,
+    occupant: Option<Piece>,
+}
+
+struct TacticalDetectionContext<'a> {
+    board: &'a BitboardBoard,
+    player: Player,
+    opponent: Player,
+    player_pieces: Vec<(Position, Piece)>,
+    opponent_pieces: Vec<(Position, Piece)>,
+}
+
+impl<'a> TacticalDetectionContext<'a> {
+    fn new(board: &'a BitboardBoard, player: Player) -> Self {
+        let opponent = player.opposite();
+        let mut player_pieces = Vec::new();
+        let mut opponent_pieces = Vec::new();
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    let piece = *piece;
+                    if piece.player == player {
+                        player_pieces.push((pos, piece));
+                    } else {
+                        opponent_pieces.push((pos, piece));
+                    }
+                }
+            }
+        }
+
+        Self {
+            board,
+            player,
+            opponent,
+            player_pieces,
+            opponent_pieces,
+        }
+    }
+
+    fn trace_line(&self, start: Position, dir: (i8, i8)) -> Vec<LineStep> {
+        let mut steps = Vec::new();
+        let mut row = start.row as i8 + dir.0;
+        let mut col = start.col as i8 + dir.1;
+
+        while row >= 0 && row < 9 && col >= 0 && col < 9 {
+            let position = Position::new(row as u8, col as u8);
+            let occupant = self.board.get_piece(position).copied();
+            steps.push(LineStep { position, occupant });
+
+            if occupant.is_some() {
+                break;
+            }
+
+            row += dir.0;
+            col += dir.1;
+        }
+
+        steps
+    }
+
+    fn collect_single_steps(&self, origin: Position, offsets: &[(i8, i8)]) -> Vec<LineStep> {
+        let mut steps = Vec::new();
+        for &(dr, dc) in offsets {
+            if let Some(position) = Self::offset_position(origin, dr, dc) {
+                steps.push(LineStep {
+                    position,
+                    occupant: self.board.get_piece(position).copied(),
+                });
+            }
+        }
+        steps
+    }
+
+    fn collect_sliding_steps(&self, origin: Position, directions: &[(i8, i8)]) -> Vec<LineStep> {
+        let mut result = Vec::new();
+        for &dir in directions {
+            result.extend(self.trace_line(origin, dir));
+        }
+        result
+    }
+
+    fn gather_attacks(
+        &self,
+        origin: Position,
+        piece_type: PieceType,
+        owner: Player,
+    ) -> Vec<LineStep> {
+        match piece_type {
+            PieceType::Rook => self.collect_sliding_steps(origin, &ROOK_DIRECTIONS),
+            PieceType::Bishop => self.collect_sliding_steps(origin, &BISHOP_DIRECTIONS),
+            PieceType::PromotedRook => {
+                let mut steps = self.collect_sliding_steps(origin, &ROOK_DIRECTIONS);
+                steps.extend(self.collect_single_steps(origin, &KING_DIAGONAL_OFFSETS));
+                steps
+            }
+            PieceType::PromotedBishop => {
+                let mut steps = self.collect_sliding_steps(origin, &BISHOP_DIRECTIONS);
+                steps.extend(self.collect_single_steps(origin, &ORTHOGONAL_OFFSETS));
+                steps
+            }
+            PieceType::Knight => {
+                let offsets = if owner == Player::Black {
+                    KNIGHT_OFFSETS_BLACK
+                } else {
+                    KNIGHT_OFFSETS_WHITE
+                };
+                self.collect_single_steps(origin, &offsets)
+            }
+            PieceType::Lance => {
+                let dir = if owner == Player::Black {
+                    LANCE_DIRECTION_BLACK
+                } else {
+                    LANCE_DIRECTION_WHITE
+                };
+                self.collect_sliding_steps(origin, &[dir])
+            }
+            PieceType::Gold
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => {
+                let offsets = if owner == Player::Black {
+                    GOLD_OFFSETS_BLACK
+                } else {
+                    GOLD_OFFSETS_WHITE
+                };
+                self.collect_single_steps(origin, &offsets)
+            }
+            PieceType::Silver => {
+                let offsets = if owner == Player::Black {
+                    SILVER_OFFSETS_BLACK
+                } else {
+                    SILVER_OFFSETS_WHITE
+                };
+                self.collect_single_steps(origin, &offsets)
+            }
+            PieceType::Pawn => {
+                let dir = if owner == Player::Black { -1 } else { 1 };
+                self.collect_single_steps(origin, &[(dir, 0)])
+            }
+            PieceType::King => self.collect_single_steps(origin, &KING_OFFSETS),
+        }
+    }
+
+    fn direction_towards(from: Position, to: Position) -> Option<(i8, i8)> {
+        let dr = to.row as i8 - from.row as i8;
+        let dc = to.col as i8 - from.col as i8;
+
+        let dr_sign = dr.signum();
+        let dc_sign = dc.signum();
+
+        if dr == 0 {
+            if dc == 0 {
+                return None;
+            }
+            return Some((0, dc_sign));
+        }
+
+        if dc == 0 {
+            return Some((dr_sign, 0));
+        }
+
+        if dr.abs() == dc.abs() {
+            return Some((dr_sign, dc_sign));
+        }
+
+        None
+    }
+
+    fn offset_position(origin: Position, dr: i8, dc: i8) -> Option<Position> {
+        let new_row = origin.row as i8 + dr;
+        let new_col = origin.col as i8 + dc;
+        if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+            Some(Position::new(new_row as u8, new_col as u8))
+        } else {
+            None
+        }
+    }
+}
+
+const ROOK_DIRECTIONS: &[(i8, i8)] = &[(1, 0), (-1, 0), (0, 1), (0, -1)];
+const BISHOP_DIRECTIONS: &[(i8, i8)] = &[(1, 1), (-1, 1), (1, -1), (-1, -1)];
+const GOLD_OFFSETS_BLACK: &[(i8, i8)] = &[(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, 0)];
+const GOLD_OFFSETS_WHITE: &[(i8, i8)] = &[(1, -1), (1, 0), (1, 1), (0, -1), (0, 1), (-1, 0)];
+const SILVER_OFFSETS_BLACK: &[(i8, i8)] = &[(-1, -1), (-1, 0), (-1, 1), (1, -1), (1, 1)];
+const SILVER_OFFSETS_WHITE: &[(i8, i8)] = &[(1, -1), (1, 0), (1, 1), (-1, -1), (-1, 1)];
+const KNIGHT_OFFSETS_BLACK: &[(i8, i8)] = &[(-2, -1), (-2, 1)];
+const KNIGHT_OFFSETS_WHITE: &[(i8, i8)] = &[(2, -1), (2, 1)];
+const LANCE_DIRECTION_BLACK: (i8, i8) = (-1, 0);
+const LANCE_DIRECTION_WHITE: (i8, i8) = (1, 0);
+const KING_OFFSETS: &[(i8, i8)] = &[
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+];
+const KING_DIAGONAL_OFFSETS: &[(i8, i8)] = &[(-1, -1), (-1, 1), (1, -1), (1, 1)];
+const ORTHOGONAL_OFFSETS: &[(i8, i8)] = &[(1, 0), (-1, 0), (0, 1), (0, -1)];
+
 impl TacticalPatternRecognizer {
     /// Create a new tactical pattern recognizer
     pub fn new() -> Self {
@@ -50,10 +257,11 @@ impl TacticalPatternRecognizer {
 
         let mut mg_score = 0;
         let mut eg_score = 0;
+        let context = TacticalDetectionContext::new(board, player);
 
         // Detect forks (double attacks)
         if self.config.enable_forks {
-            let forks = self.detect_forks(board, player);
+            let forks = self.detect_forks(&context);
             mg_score += forks.mg;
             eg_score += forks.eg;
         }
@@ -74,21 +282,21 @@ impl TacticalPatternRecognizer {
 
         // Detect discovered attacks
         if self.config.enable_discovered_attacks {
-            let discovered = self.detect_discovered_attacks(board, player);
+            let discovered = self.detect_discovered_attacks(&context);
             mg_score += discovered.mg;
             eg_score += discovered.eg;
         }
 
         // Detect knight forks (special handling)
         if self.config.enable_knight_forks {
-            let knight_forks = self.detect_knight_forks(board, player);
+            let knight_forks = self.detect_knight_forks(&context);
             mg_score += knight_forks.mg;
             eg_score += knight_forks.eg;
         }
 
         // Detect back rank threats
         if self.config.enable_back_rank_threats {
-            let back_rank = self.detect_back_rank_threats(board, player);
+            let back_rank = self.detect_back_rank_threats(&context);
             mg_score += back_rank.mg;
             eg_score += back_rank.eg;
         }
@@ -101,25 +309,17 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect forks (pieces attacking 2+ valuable targets simultaneously)
-    fn detect_forks(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_forks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.fork_checks += 1;
 
         let mut mg_score = 0;
         let mut eg_score = 0;
 
         // Check each piece for fork potential
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player {
-                        let fork_value =
-                            self.check_piece_for_forks(board, pos, piece.piece_type, player);
-                        mg_score += fork_value.0;
-                        eg_score += fork_value.1;
-                    }
-                }
-            }
+        for &(pos, piece) in &ctx.player_pieces {
+            let fork_value = self.check_piece_for_forks(ctx, pos, piece.piece_type);
+            mg_score += fork_value.0;
+            eg_score += fork_value.1;
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
@@ -128,12 +328,11 @@ impl TacticalPatternRecognizer {
     /// Check if a piece is forking multiple targets
     fn check_piece_for_forks(
         &self,
-        board: &BitboardBoard,
+        ctx: &TacticalDetectionContext,
         pos: Position,
         piece_type: PieceType,
-        player: Player,
     ) -> (i32, i32) {
-        let targets = self.get_attacked_pieces(board, pos, piece_type, player);
+        let targets = self.get_attacked_pieces(ctx, pos, piece_type, ctx.player);
 
         if targets.len() >= 2 {
             // Fork detected - calculate value
@@ -161,7 +360,7 @@ impl TacticalPatternRecognizer {
     /// Get list of enemy pieces attacked by a piece at given position
     fn get_attacked_pieces(
         &self,
-        board: &BitboardBoard,
+        ctx: &TacticalDetectionContext,
         pos: Position,
         piece_type: PieceType,
         player: Player,
@@ -169,129 +368,18 @@ impl TacticalPatternRecognizer {
         let mut attacked = Vec::new();
         let opponent = player.opposite();
 
-        // Get attack squares for this piece
-        let attack_squares = self.get_piece_attacks(pos, piece_type, player);
-
-        for target_pos in attack_squares {
-            if let Some(target_piece) = board.get_piece(target_pos) {
+        for step in ctx.gather_attacks(pos, piece_type, player) {
+            if let Some(target_piece) = step.occupant {
                 if target_piece.player == opponent {
-                    let value = target_piece.piece_type.base_value() / 100;
-                    attacked.push((target_piece.piece_type, value));
+                    attacked.push((
+                        target_piece.piece_type,
+                        target_piece.piece_type.base_value() / 100,
+                    ));
                 }
             }
         }
 
         attacked
-    }
-
-    /// Get squares attacked by a piece
-    fn get_piece_attacks(
-        &self,
-        pos: Position,
-        piece_type: PieceType,
-        player: Player,
-    ) -> Vec<Position> {
-        let mut attacks = Vec::new();
-
-        match piece_type {
-            PieceType::Rook | PieceType::PromotedRook => {
-                // Rook attacks (ranks and files)
-                for dir in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-                    self.add_sliding_attacks(&mut attacks, pos, dir);
-                }
-            }
-            PieceType::Bishop | PieceType::PromotedBishop => {
-                // Bishop attacks (diagonals)
-                for dir in [(1, 1), (-1, 1), (1, -1), (-1, -1)] {
-                    self.add_sliding_attacks(&mut attacks, pos, dir);
-                }
-            }
-            PieceType::Knight => {
-                // Knight moves (L-shape)
-                let knight_moves = if player == Player::Black {
-                    vec![(-2, -1), (-2, 1)]
-                } else {
-                    vec![(2, -1), (2, 1)]
-                };
-                for (dr, dc) in knight_moves {
-                    self.add_single_attack(&mut attacks, pos, dr, dc);
-                }
-            }
-            PieceType::Gold
-            | PieceType::PromotedPawn
-            | PieceType::PromotedLance
-            | PieceType::PromotedKnight
-            | PieceType::PromotedSilver => {
-                // Gold-like movement
-                let gold_moves = if player == Player::Black {
-                    vec![(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, 0)]
-                } else {
-                    vec![(1, -1), (1, 0), (1, 1), (0, -1), (0, 1), (-1, 0)]
-                };
-                for (dr, dc) in gold_moves {
-                    self.add_single_attack(&mut attacks, pos, dr, dc);
-                }
-            }
-            PieceType::Silver => {
-                // Silver movement
-                let silver_moves = if player == Player::Black {
-                    vec![(-1, -1), (-1, 0), (-1, 1), (1, -1), (1, 1)]
-                } else {
-                    vec![(1, -1), (1, 0), (1, 1), (-1, -1), (-1, 1)]
-                };
-                for (dr, dc) in silver_moves {
-                    self.add_single_attack(&mut attacks, pos, dr, dc);
-                }
-            }
-            PieceType::Pawn => {
-                // Pawn captures
-                let dr = if player == Player::Black { -1 } else { 1 };
-                self.add_single_attack(&mut attacks, pos, dr, 0);
-            }
-            PieceType::King => {
-                // King moves (all 8 directions)
-                for dr in -1..=1 {
-                    for dc in -1..=1 {
-                        if dr != 0 || dc != 0 {
-                            self.add_single_attack(&mut attacks, pos, dr, dc);
-                        }
-                    }
-                }
-            }
-            PieceType::Lance => {
-                // Lance attacks (forward only)
-                let dir = if player == Player::Black {
-                    (-1, 0)
-                } else {
-                    (1, 0)
-                };
-                self.add_sliding_attacks(&mut attacks, pos, dir);
-            }
-        }
-
-        attacks
-    }
-
-    /// Add sliding attacks in a direction
-    fn add_sliding_attacks(&self, attacks: &mut Vec<Position>, pos: Position, dir: (i8, i8)) {
-        let mut row = pos.row as i8 + dir.0;
-        let mut col = pos.col as i8 + dir.1;
-
-        while row >= 0 && row < 9 && col >= 0 && col < 9 {
-            attacks.push(Position::new(row as u8, col as u8));
-            row += dir.0;
-            col += dir.1;
-        }
-    }
-
-    /// Add single attack move
-    fn add_single_attack(&self, attacks: &mut Vec<Position>, pos: Position, dr: i8, dc: i8) {
-        let new_row = pos.row as i8 + dr;
-        let new_col = pos.col as i8 + dc;
-
-        if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
-            attacks.push(Position::new(new_row as u8, new_col as u8));
-        }
     }
 
     // ===================================================================
@@ -493,32 +581,25 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect discovered attack potential
-    fn detect_discovered_attacks(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_discovered_attacks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.discovered_checks += 1;
 
         let mut mg_score = 0;
-        let opponent = player.opposite();
+        let opponent = ctx.opponent;
 
         // Find opponent king
-        let opp_king_pos = match self.find_king_position(board, opponent) {
+        let opp_king_pos = match self.find_king_position(ctx.board, opponent) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
 
         // Check if any of our pieces can create discovered attacks by moving
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player {
-                        if self.can_create_discovered_attack(board, pos, opp_king_pos, player) {
-                            mg_score += self.config.discovered_attack_bonus;
-                            self.stats
-                                .discovered_attacks_found
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        }
-                    }
-                }
+        for &(pos, _) in &ctx.player_pieces {
+            if self.can_create_discovered_attack(ctx, pos, opp_king_pos) {
+                mg_score += self.config.discovered_attack_bonus;
+                self.stats
+                    .discovered_attacks_found
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
 
@@ -528,37 +609,57 @@ impl TacticalPatternRecognizer {
     /// Check if moving a piece can create a discovered attack
     fn can_create_discovered_attack(
         &self,
-        board: &BitboardBoard,
+        ctx: &TacticalDetectionContext,
         piece_pos: Position,
         target_pos: Position,
-        player: Player,
     ) -> bool {
         // Check if there's a friendly sliding piece behind this piece that would attack target
-        let dr_sign = (target_pos.row as i8 - piece_pos.row as i8).signum();
-        let dc_sign = (target_pos.col as i8 - piece_pos.col as i8).signum();
+        let direction = match TacticalDetectionContext::direction_towards(piece_pos, target_pos) {
+            Some(dir) => dir,
+            None => return false,
+        };
 
-        if dr_sign == 0 && dc_sign == 0 {
-            return false;
-        }
-
-        // Check if there's an attacking piece behind
-        let mut row = piece_pos.row as i8 - dr_sign;
-        let mut col = piece_pos.col as i8 - dc_sign;
+        // Path between piece and target must be clear
+        let mut row = piece_pos.row as i8 + direction.0;
+        let mut col = piece_pos.col as i8 + direction.1;
+        let mut reached_target = false;
 
         while row >= 0 && row < 9 && col >= 0 && col < 9 {
             let check_pos = Position::new(row as u8, col as u8);
-
-            if let Some(piece) = board.get_piece(check_pos) {
-                if piece.player == player {
-                    // Check if this piece can attack along this line
-                    return self.can_pin_along_line(piece.piece_type, dr_sign, dc_sign);
-                } else {
-                    return false;
-                }
+            if check_pos == target_pos {
+                reached_target = true;
+                break;
             }
 
-            row -= dr_sign;
-            col -= dc_sign;
+            if ctx.board.get_piece(check_pos).is_some() {
+                return false;
+            }
+
+            row += direction.0;
+            col += direction.1;
+        }
+
+        if !reached_target {
+            return false;
+        }
+
+        // Look behind for sliding piece that would attack along this line
+        let behind_direction = (-direction.0, -direction.1);
+        let mut row = piece_pos.row as i8 + behind_direction.0;
+        let mut col = piece_pos.col as i8 + behind_direction.1;
+
+        while row >= 0 && row < 9 && col >= 0 && col < 9 {
+            let check_pos = Position::new(row as u8, col as u8);
+            match ctx.board.get_piece(check_pos) {
+                Some(piece) if piece.player == ctx.player => {
+                    return self.can_pin_along_line(piece.piece_type, direction.0, direction.1);
+                }
+                Some(_) => return false,
+                None => {
+                    row += behind_direction.0;
+                    col += behind_direction.1;
+                }
+            }
         }
 
         false
@@ -569,23 +670,18 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect knight fork patterns (special handling for knight's unique movement)
-    fn detect_knight_forks(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_knight_forks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.knight_fork_checks += 1;
 
         let mut mg_score = 0;
         let mut eg_score = 0;
 
         // Find all knights
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player && piece.piece_type == PieceType::Knight {
-                        let fork_value = self.check_knight_for_forks(board, pos, player);
-                        mg_score += fork_value;
-                        eg_score += fork_value / 2;
-                    }
-                }
+        for &(pos, piece) in &ctx.player_pieces {
+            if piece.piece_type == PieceType::Knight {
+                let fork_value = self.check_knight_for_forks(ctx, pos);
+                mg_score += fork_value;
+                eg_score += fork_value / 2;
             }
         }
 
@@ -593,8 +689,8 @@ impl TacticalPatternRecognizer {
     }
 
     /// Check if a knight is creating a fork
-    fn check_knight_for_forks(&self, board: &BitboardBoard, pos: Position, player: Player) -> i32 {
-        let targets = self.get_attacked_pieces(board, pos, PieceType::Knight, player);
+    fn check_knight_for_forks(&self, ctx: &TacticalDetectionContext, pos: Position) -> i32 {
+        let targets = self.get_attacked_pieces(ctx, pos, PieceType::Knight, ctx.player);
 
         if targets.len() >= 2 {
             let total_value: i32 = targets.iter().map(|(_, value)| value).sum();
@@ -621,34 +717,38 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect back rank threats (king trapped on back rank)
-    fn detect_back_rank_threats(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_back_rank_threats(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.back_rank_checks += 1;
 
-        let king_pos = match self.find_king_position(board, player) {
+        let king_pos = match self.find_king_position(ctx.board, ctx.player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
 
         // Check if king is on back rank
-        let back_rank = if player == Player::Black { 8 } else { 0 };
+        let back_rank = if ctx.player == Player::Black { 8 } else { 0 };
 
         if king_pos.row != back_rank {
             return TaperedScore::default();
         }
 
         // Check if king is trapped (no escape squares)
-        let escape_count = self.count_king_escape_squares(board, king_pos, player);
+        let escape_count = self.count_king_escape_squares(ctx.board, king_pos, ctx.player);
 
-        if escape_count == 0 {
+        if escape_count <= 1 {
             // King is trapped - check for enemy threats on back rank
-            let threats = self.count_back_rank_threats(board, king_pos, player);
+            let threats = self.count_back_rank_threats(ctx, king_pos);
 
             if threats > 0 {
-                let penalty = threats * self.config.back_rank_threat_penalty;
+                let scaling_divisor = (escape_count + 1) as i32;
+                let penalty = threats * self.config.back_rank_threat_penalty / scaling_divisor;
+
+                if penalty != 0 {
                 self.stats
                     .back_rank_threats_found
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                return TaperedScore::new_tapered(-penalty, -penalty / 2);
+                    return TaperedScore::new_tapered(-penalty, -penalty / 2);
+                }
             }
         }
 
@@ -692,29 +792,44 @@ impl TacticalPatternRecognizer {
     }
 
     /// Count enemy threats on back rank
-    fn count_back_rank_threats(
-        &self,
-        board: &BitboardBoard,
-        king_pos: Position,
-        player: Player,
-    ) -> i32 {
+    fn count_back_rank_threats(&self, ctx: &TacticalDetectionContext, king_pos: Position) -> i32 {
         let mut threats = 0;
-        let opponent = player.opposite();
 
-        // Check for enemy rooks/promoted rooks on same rank
-        for col in 0..9 {
-            if col == king_pos.col {
+        for &(pos, piece) in &ctx.opponent_pieces {
+            if pos.row != king_pos.row {
                 continue;
             }
 
-            let pos = Position::new(king_pos.row, col);
-            if let Some(piece) = board.get_piece(pos) {
-                if piece.player == opponent {
-                    match piece.piece_type {
-                        PieceType::Rook | PieceType::PromotedRook => threats += 1,
-                        _ => {}
+            match piece.piece_type {
+                PieceType::Rook | PieceType::PromotedRook => {
+                    if let Some(dir) = TacticalDetectionContext::direction_towards(pos, king_pos) {
+                        // Ensure the path from attacker to king is unobstructed
+                        let mut row = pos.row as i8 + dir.0;
+                        let mut col = pos.col as i8 + dir.1;
+                        let mut blocked = false;
+
+                        while row >= 0 && row < 9 && col >= 0 && col < 9 {
+                            let step_pos = Position::new(row as u8, col as u8);
+
+                            if step_pos == king_pos {
+                                break;
+                            }
+
+                            if ctx.board.get_piece(step_pos).is_some() {
+                                blocked = true;
+                                break;
+                            }
+
+                            row += dir.0;
+                            col += dir.1;
+                        }
+
+                        if !blocked && row >= 0 && row < 9 && col >= 0 && col < 9 {
+                            threats += 1;
+                        }
                     }
                 }
+                _ => {}
             }
         }
 
@@ -840,7 +955,7 @@ mod tests {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
 
-        let score = recognizer.detect_forks(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black);
         assert!(score.mg >= 0);
         assert!(score.eg >= 0);
     }
@@ -850,7 +965,7 @@ mod tests {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
 
-        let score = recognizer.detect_pins(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black);
         assert!(score.mg >= 0);
         assert!(score.eg >= 0);
     }
@@ -860,7 +975,7 @@ mod tests {
         let mut recognizer = TacticalPatternRecognizer::new();
         let board = BitboardBoard::new();
 
-        let score = recognizer.detect_knight_forks(&board, Player::Black);
+        let score = recognizer.evaluate_tactics(&board, Player::Black);
         assert!(score.mg >= 0);
     }
 
