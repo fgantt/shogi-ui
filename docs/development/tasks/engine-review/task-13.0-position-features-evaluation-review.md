@@ -211,86 +211,12 @@ Impact: mobility is no longer the dominant runtime hotspot and produces shogi-aw
 
 ## 5. Center Control & Development (Tasks 13.5 & 13.6)
 
-```664:719:src/evaluation/position_features.rs
-    pub fn evaluate_center_control(
-        &mut self,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> TaperedScore {
-        self.stats.center_control_evals += 1;
-        let mut mg_score = 0;
-        let mut eg_score = 0;
-        for row in 3..=5 {
-            for col in 3..=5 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    let value = self.get_center_control_value(piece.piece_type);
-                    if piece.player == player {
-                        mg_score += value.mg;
-                        eg_score += value.eg;
-                    } else {
-                        mg_score -= value.mg;
-                        eg_score -= value.eg;
-                    }
-                }
-            }
-        }
-        // Extended center (2-6, 2-6) with reduced bonus
-        for row in 2..=6 {
-            for col in 2..=6 {
-                if row >= 3 && row <= 5 && col >= 3 && col <= 5 {
-                    continue;
-                }
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    let value = self.get_center_control_value(piece.piece_type);
-                    if piece.player == player {
-                        mg_score += value.mg / 2;
-                        eg_score += value.eg / 2;
-                    } else {
-                        mg_score -= value.mg / 2;
-                        eg_score -= value.eg / 2;
-                    }
-                }
-            }
-        }
-        TaperedScore::new_tapered(mg_score, eg_score)
-    }
-```
+Updates:
+- Center control now builds attack maps using the shared `MoveGenerator`, compares player vs opponent control over the 3×3 core, 5×5 band, edge files, and a set of castle anchor squares, and grants additional credit when gold-equivalent defenders secure those anchors.  
+- Development scoring penalises home-rank Golds/Silvers/Knights, rewards forward advancement proportionally, and applies retreat penalties when promoted pieces drift back into the rear three ranks.  
+- New regression tests (`tests/center_control_development_tests.rs`) cover attack-map superiority, edge pressure rewards, penalties for undeveloped knights, and retreating promoted defenders.
 
-- Center control uses occupancy rather than attack coverage, so a piece merely sitting on a central square scores highly even if pinned or inactive.
-- Extended center heuristics still treat board center as most valuable, ignoring shogi-specific files (e.g., 2nd/8th files for rooks/lances) and castle-centered strategies.
-- Piece values omit promoted Lances/Knights for center control; they receive default zero contributions despite acting like Golds.
-
-```741:810:src/evaluation/position_features.rs
-    pub fn evaluate_development(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
-        self.stats.development_evals += 1;
-        let mut mg_score = 0;
-        let mut eg_score = 0;
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player {
-                        if let Some(development_bonus) =
-                            self.get_development_bonus(piece.piece_type, pos, player)
-                        {
-                            mg_score += development_bonus.mg;
-                            eg_score += development_bonus.eg;
-                        }
-                    }
-                }
-            }
-        }
-        TaperedScore::new_tapered(mg_score, eg_score)
-    }
-```
-
-- Development bonuses only check whether major pieces have left their starting rank. File-based development (e.g., rook on 2nd file castle lanes) is ignored.
-- No penalties for undeveloped Silvers or knights stuck behind pawns; only positives for movement.
-- Promotions are not considered, so promoted minors returning to back rank continue to score as “developed.”
-
-Impact: center and development heuristics provide coarse, chess-centric signals, limiting evaluation accuracy in shogi-specific openings and midgames.
+Impact: center and development signals now distinguish active control from passive occupancy and deliver shogi-aware feedback for both early development and midgame castle formation.
 
 ---
 

@@ -42,12 +42,12 @@
   - [x] 3.5 Revise passed pawn detection to account for opposing hand drops and promoted blockers.
   - [x] 3.6 Create test fixtures validating shogi-specific king safety and pawn structure adjustments across common castles and attack patterns.
 
-- [ ] 4.0 Modernize Center Control and Development Signals
-  - [ ] 4.1 Replace occupancy-based center scoring with attack map analysis that differentiates active control from passive placement.
-  - [ ] 4.2 Extend control heuristics to cover key edge files and castle anchor squares with phase-aware scaling.
-  - [ ] 4.3 Add penalties for undeveloped Golds, Silvers, and knights stuck on their starting ranks; include promotion-aware adjustments.
-  - [ ] 4.4 Ensure development bonuses decay or reverse when promoted pieces retreat to back ranks without purpose.
-  - [ ] 4.5 Provide targeted unit tests comparing center/development scores across standard opening setups and stalled formations.
+- [x] 4.0 Modernize Center Control and Development Signals
+  - [x] 4.1 Replace occupancy-based center scoring with attack map analysis that differentiates active control from passive placement.
+  - [x] 4.2 Extend control heuristics to cover key edge files and castle anchor squares with phase-aware scaling.
+  - [x] 4.3 Add penalties for undeveloped Golds, Silvers, and knights stuck on their starting ranks; include promotion-aware adjustments.
+  - [x] 4.4 Ensure development bonuses decay or reverse when promoted pieces retreat to back ranks without purpose.
+  - [x] 4.5 Provide targeted unit tests comparing center/development scores across standard opening setups and stalled formations.
 
 - [ ] 5.0 Expand Instrumentation, Testing, and Documentation Coverage
   - [ ] 5.1 Surface `PositionFeatureStats` via evaluation telemetry and allow opt-in/opt-out collection through configuration.
@@ -76,6 +76,12 @@
 - **Testing:** Extended `tests/king_safety_and_pawn_structure_tests.rs` with coverage for tokins near the king, gold-in-hand chain completion, and enemy knight drop threats. Existing suites continue to run under the default feature set.  
 - **Documentation:** Updated `docs/development/tasks/engine-review/task-13.0-position-features-evaluation-review.md` to reflect the new heuristics and mitigated issues identified in the review.
 - **Performance:** Eliminated per-evaluation `HashSet` allocations and now reuse stack-allocated bitsets for hand-supported chains; Criterion (`cargo bench --bench position_features_performance_benchmarks --features "legacy-tests" king_safety pawn_structure`) reports ~0.64–0.89 µs per side, matching pre-refactor throughput.
+
+## Task 4.0 Completion Notes
+
+- **Implementation:** Center control now builds attack maps via the shared `MoveGenerator`, compares control strength on core, extended, and edge files, and recognises castle anchor squares with gold-equivalent bonuses. Development scoring penalises home-rank Golds/Silvers/Knights, rewards forward deployment, and applies retreat penalties to promoted pieces that fall back into the rear ranks.  
+- **Testing:** Added `tests/center_control_development_tests.rs` validating attack-map scoring, edge pressure, undeveloped knights, and retreating promoted defenders.  
+- **Documentation:** Refreshed `task-13.0-position-features-evaluation-review.md` to capture the new approach for center/development heuristics.
 
 
 

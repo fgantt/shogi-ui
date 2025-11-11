@@ -198,6 +198,12 @@ struct DropMobilityStats {
     central_moves: i32,
 }
 
+#[derive(Default, Clone, Copy)]
+struct ControlStrength {
+    mg: i32,
+    eg: i32,
+}
+
 /// Position feature evaluator with phase-aware evaluation
 pub struct PositionFeatureEvaluator {
     /// Configuration for position evaluation
@@ -1988,6 +1994,57 @@ impl PositionFeatureEvaluator {
         pos.row >= 3 && pos.row <= 5 && pos.col >= 3 && pos.col <= 5
     }
 
+    fn compute_control_map(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> [ControlStrength; MOBILITY_BOARD_AREA] {
+        let mut control = [ControlStrength::default(); MOBILITY_BOARD_AREA];
+
+        let moves = self.move_generator.generate_all_piece_moves(board, player);
+
+        for mv in moves {
+            if mv.is_drop() || mv.is_promotion {
+                continue;
+            }
+            let idx = index_for_position(mv.to);
+            let weight = self.get_center_control_value(mv.piece_type);
+            control[idx].mg = control[idx].mg.max(weight.mg);
+            control[idx].eg = control[idx].eg.max(weight.eg);
+        }
+
+        control
+    }
+
+    fn castle_anchor_squares(player: Player) -> &'static [(u8, u8)] {
+        const BLACK_ANCHORS: &[(u8, u8)] = &[(7, 1), (7, 7), (6, 2), (6, 6), (8, 2), (8, 6)];
+        const WHITE_ANCHORS: &[(u8, u8)] = &[(1, 7), (1, 1), (2, 6), (2, 2), (0, 6), (0, 2)];
+
+        match player {
+            Player::Black => BLACK_ANCHORS,
+            Player::White => WHITE_ANCHORS,
+        }
+    }
+
+    fn castle_anchor_occupant_bonus(piece: &Piece, player: Player) -> (i32, i32) {
+        let magnitude = if is_gold_equivalent(piece.piece_type) {
+            (18, 10)
+        } else {
+            match piece.piece_type {
+                PieceType::Silver | PieceType::PromotedSilver => (14, 8),
+                PieceType::King => (12, 6),
+                PieceType::Knight | PieceType::PromotedKnight => (10, 6),
+                _ => (6, 4),
+            }
+        };
+
+        if piece.player == player {
+            magnitude
+        } else {
+            (-magnitude.0, -magnitude.1)
+        }
+    }
+
     // =======================================================================
     // CENTER CONTROL EVALUATION BY PHASE
     // =======================================================================
@@ -2009,44 +2066,56 @@ impl PositionFeatureEvaluator {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
-        // Define center squares (3-5, 3-5)
+        let player_control = self.compute_control_map(board, player);
+        let opponent_control = self.compute_control_map(board, player.opposite());
+
         for row in 3..=5 {
             for col in 3..=5 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    let value = self.get_center_control_value(piece.piece_type);
-
-                    if piece.player == player {
-                        mg_score += value.mg;
-                        eg_score += value.eg;
-                    } else {
-                        mg_score -= value.mg;
-                        eg_score -= value.eg;
-                    }
-                }
+                let idx = index_for_position(Position::new(row, col));
+                let diff_mg = player_control[idx].mg - opponent_control[idx].mg;
+                let diff_eg = player_control[idx].eg - opponent_control[idx].eg;
+                mg_score += diff_mg;
+                eg_score += diff_eg;
             }
         }
 
-        // Extended center (2-6, 2-6) with reduced bonus
         for row in 2..=6 {
             for col in 2..=6 {
-                // Skip already counted center
                 if row >= 3 && row <= 5 && col >= 3 && col <= 5 {
                     continue;
                 }
 
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    let value = self.get_center_control_value(piece.piece_type);
+                let idx = index_for_position(Position::new(row, col));
+                let diff_mg = player_control[idx].mg - opponent_control[idx].mg;
+                let diff_eg = player_control[idx].eg - opponent_control[idx].eg;
+                mg_score += (diff_mg * 2) / 3;
+                eg_score += (diff_eg * 2) / 3;
+            }
+        }
 
-                    if piece.player == player {
-                        mg_score += value.mg / 2;
-                        eg_score += value.eg / 2;
-                    } else {
-                        mg_score -= value.mg / 2;
-                        eg_score -= value.eg / 2;
-                    }
-                }
+        const EDGE_COLUMNS: [u8; 2] = [0, 8];
+        for col in EDGE_COLUMNS {
+            for row in 2..=6 {
+                let idx = index_for_position(Position::new(row, col));
+                let diff_mg = player_control[idx].mg - opponent_control[idx].mg;
+                let diff_eg = player_control[idx].eg - opponent_control[idx].eg;
+                mg_score += diff_mg / 2;
+                eg_score += diff_eg / 2;
+            }
+        }
+
+        for &(row, col) in Self::castle_anchor_squares(player) {
+            let pos = Position::new(row, col);
+            let idx = index_for_position(pos);
+            let diff_mg = player_control[idx].mg - opponent_control[idx].mg;
+            let diff_eg = player_control[idx].eg - opponent_control[idx].eg;
+            mg_score += diff_mg / 2;
+            eg_score += diff_eg / 2;
+
+            if let Some(piece) = board.get_piece(pos) {
+                let bonus = Self::castle_anchor_occupant_bonus(piece, player);
+                mg_score += bonus.0;
+                eg_score += bonus.1;
             }
         }
 
@@ -2086,18 +2155,15 @@ impl PositionFeatureEvaluator {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
-        // Check if major pieces are developed
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        if let Some(development_bonus) =
-                            self.get_development_bonus(piece.piece_type, pos, player)
-                        {
-                            mg_score += development_bonus.mg;
-                            eg_score += development_bonus.eg;
-                        }
+                        let contribution =
+                            self.get_development_contribution(piece.piece_type, pos, player);
+                        mg_score += contribution.mg;
+                        eg_score += contribution.eg;
                     }
                 }
             }
@@ -2106,45 +2172,79 @@ impl PositionFeatureEvaluator {
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 
-    /// Get development bonus for a piece
-    fn get_development_bonus(
+    fn get_development_contribution(
         &self,
         piece_type: PieceType,
         pos: Position,
         player: Player,
-    ) -> Option<TaperedScore> {
-        let start_row = if player == Player::Black { 8 } else { 0 };
+    ) -> TaperedScore {
+        let (oriented_row, _) = oriented_coords(pos, player);
+        let advancement = (8 - oriented_row as i32).max(0);
 
         match piece_type {
             PieceType::Rook => {
-                if pos.row != start_row {
-                    Some(TaperedScore::new_tapered(30, 8)) // Very important in opening
+                if advancement == 0 {
+                    TaperedScore::new_tapered(-24, -6)
                 } else {
-                    None
+                    TaperedScore::new_tapered(advancement * 10, advancement * 4)
                 }
             }
             PieceType::Bishop => {
-                if pos.row != start_row {
-                    Some(TaperedScore::new_tapered(28, 10))
+                if advancement == 0 {
+                    TaperedScore::new_tapered(-20, -6)
                 } else {
-                    None
-                }
-            }
-            PieceType::Silver => {
-                if pos.row != start_row {
-                    Some(TaperedScore::new_tapered(20, 5))
-                } else {
-                    None
+                    TaperedScore::new_tapered(advancement * 9, advancement * 4)
                 }
             }
             PieceType::Gold => {
-                if pos.row != start_row {
-                    Some(TaperedScore::new_tapered(15, 5))
+                if advancement == 0 {
+                    TaperedScore::new_tapered(-18, -6)
                 } else {
-                    None
+                    TaperedScore::new_tapered(advancement * 6, advancement * 3)
                 }
             }
-            _ => None,
+            PieceType::Silver => {
+                if advancement == 0 {
+                    TaperedScore::new_tapered(-20, -8)
+                } else {
+                    TaperedScore::new_tapered((advancement * 7).min(24), advancement * 3)
+                }
+            }
+            PieceType::Knight => {
+                if oriented_row >= 7 {
+                    TaperedScore::new_tapered(-24, -8)
+                } else {
+                    let bonus = (advancement.max(2) - 1) * 12;
+                    TaperedScore::new_tapered(bonus, bonus / 3)
+                }
+            }
+            PieceType::Lance => {
+                if advancement == 0 {
+                    TaperedScore::new_tapered(-12, -4)
+                } else {
+                    TaperedScore::new_tapered(advancement * 5, advancement * 2)
+                }
+            }
+            PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => {
+                if oriented_row >= 6 {
+                    let retreat = oriented_row as i32 - 5;
+                    TaperedScore::new_tapered(-retreat * 8, -retreat * 4)
+                } else {
+                    TaperedScore::new_tapered(12, 6)
+                }
+            }
+            PieceType::PromotedBishop | PieceType::PromotedRook => {
+                if oriented_row >= 6 {
+                    let retreat = oriented_row as i32 - 5;
+                    TaperedScore::new_tapered(-retreat * 10, -retreat * 6)
+                } else {
+                    TaperedScore::new_tapered(advancement * 6, advancement * 4)
+                }
+            }
+            _ => TaperedScore::default(),
         }
     }
 
