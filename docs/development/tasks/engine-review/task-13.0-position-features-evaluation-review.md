@@ -209,24 +209,26 @@ Impact: mobility is no longer the dominant runtime hotspot and produces shogi-aw
 
 ---
 
-## 5. Center Control & Development (Tasks 13.5 & 13.6)
+## 5. Center Control, Development & Telemetry (Tasks 13.5 & 13.6)
 
 Updates:
-- Center control now builds attack maps using the shared `MoveGenerator`, compares player vs opponent control over the 3×3 core, 5×5 band, edge files, and a set of castle anchor squares, and grants additional credit when gold-equivalent defenders secure those anchors.  
-- Development scoring penalises home-rank Golds/Silvers/Knights, rewards forward advancement proportionally, and applies retreat penalties when promoted pieces drift back into the rear three ranks.  
-- New regression tests (`tests/center_control_development_tests.rs`) cover attack-map superiority, edge pressure rewards, penalties for undeveloped knights, and retreating promoted defenders.
+- Center control now builds attack maps using the shared `MoveGenerator`, compares player vs opponent control over the 3×3 core, 5×5 band, edge files, and castle anchor squares, and grants additional credit when gold-equivalent defenders secure anchors.  
+- Development scoring penalises home-rank Golds/Silvers/Knights, rewards forward advancement, and applies retreat penalties when promoted pieces drop back into the rear three ranks.  
+- `IntegratedEvaluationConfig` exposes `collect_position_feature_stats`; when enabled, telemetry snapshots include cloned `PositionFeatureStats` and evaluation statistics persist the latest totals.  
+- `PositionFeatureEvaluator` caches king locations and pawn collections per evaluation pass, removing redundant board scans across king-safety and pawn-structure heuristics.  
+- New regression tests (`tests/center_control_development_tests.rs`, `tests/position_feature_config_tests.rs`) exercise attack-map superiority, edge pressure rewards, telemetry opt-in/out, and midgame integration scenarios that combine king safety, pawn structure, and mobility.
 
-Impact: center and development signals now distinguish active control from passive occupancy and deliver shogi-aware feedback for both early development and midgame castle formation.
+Impact: center/development signals distinguish active control from passive occupancy, telemetry surfaces position feature workload, and cached inputs keep throughput stable while richer heuristics run.
 
 ---
 
 ## 6. Performance & Instrumentation (Task 13.6 & 13.7)
 
-- Mobility dominates runtime; repeated full move generation introduces ~35–45 µs overhead per evaluation layer even on moderate boards.
-- King safety/pawn structure loops scan the entire board repeatedly (multiple 9×9 passes), acceptable but still overhead when combined with mobility cost.
-- No memoization or caching across sub-features; king position, pawn lists, and central occupancy are recomputed for each call.
-- Statistics counters accrue but are not exported; there is no path to integrate them into `EvaluationTelemetry` or profiler outputs.
-- Feature flag gating is coarse; to disable mobility, the caller must avoid invoking `evaluate_mobility`, but configuration presets imply toggling without effect.
+- Mobility remains the dominant runtime component, but cached move aggregation keeps evaluations within ~0.7 µs per side on benchmarked positions.  
+- King safety and pawn structure reuse cached king locations and pawn lists, eliminating prior 9×9 rescans.  
+- Statistics counters feed `EvaluationTelemetry`; PST aggregates and position feature stats are exported together.  
+- CI guidance updated to run the default telemetry and center/development suites (`cargo test position_feature_config_tests` and `cargo test center_control_development_tests`).  
+- Remaining work: extend telemetry dashboards to visualise the new counters and monitor long-running evaluation workloads.
 
 ---
 

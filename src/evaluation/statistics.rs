@@ -38,6 +38,7 @@
 use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
+use crate::evaluation::position_features::PositionFeatureStats;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
 use crate::types::{PieceType, TaperedScore};
 use serde::{Deserialize, Serialize};
@@ -64,6 +65,10 @@ pub struct EvaluationStatistics {
     telemetry: Option<EvaluationTelemetry>,
     /// Aggregated piece-square table statistics
     pst_stats: PieceSquareStatisticsAggregate,
+    /// Whether to collect position feature statistics
+    collect_position_feature_stats: bool,
+    /// Latest position feature statistics snapshot
+    position_feature_stats: Option<PositionFeatureStats>,
 }
 
 /// Aggregated telemetry emitted by the integrated evaluator.
@@ -74,6 +79,7 @@ pub struct EvaluationTelemetry {
     pub performance: Option<PerformanceReport>,
     pub material: Option<MaterialTelemetry>,
     pub pst: Option<PieceSquareTelemetry>,
+    pub position_features: Option<PositionFeatureStats>,
 }
 
 impl EvaluationTelemetry {
@@ -83,6 +89,7 @@ impl EvaluationTelemetry {
         performance: Option<PerformanceReport>,
         material: Option<MaterialTelemetry>,
         pst: Option<PieceSquareTelemetry>,
+        position_features: Option<PositionFeatureStats>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
@@ -90,6 +97,7 @@ impl EvaluationTelemetry {
             performance,
             material,
             pst,
+            position_features,
         }
     }
 }
@@ -315,6 +323,8 @@ impl EvaluationStatistics {
             session_start: None,
             telemetry: None,
             pst_stats: PieceSquareStatisticsAggregate::default(),
+            collect_position_feature_stats: false,
+            position_feature_stats: None,
         }
     }
 
@@ -322,6 +332,21 @@ impl EvaluationStatistics {
     pub fn enable(&mut self) {
         self.enabled = true;
         self.session_start = Some(Instant::now());
+    }
+
+    /// Control whether position feature statistics should be collected.
+    pub fn set_collect_position_feature_stats(&mut self, collect: bool) {
+        self.collect_position_feature_stats = collect;
+        if !collect {
+            self.position_feature_stats = None;
+        }
+    }
+
+    /// Record the latest position feature statistics snapshot.
+    pub fn record_position_feature_stats(&mut self, stats: PositionFeatureStats) {
+        if self.collect_position_feature_stats {
+            self.position_feature_stats = Some(stats);
+        }
     }
 
     /// Disable statistics tracking
@@ -374,6 +399,12 @@ impl EvaluationStatistics {
             if let Some(ref pst) = telemetry.pst {
                 self.pst_stats.record(pst);
             }
+
+            if self.collect_position_feature_stats {
+                if let Some(ref stats) = telemetry.position_features {
+                    self.position_feature_stats = Some(stats.clone());
+                }
+            }
         }
         self.telemetry = Some(telemetry);
     }
@@ -405,6 +436,7 @@ impl EvaluationStatistics {
             },
             telemetry: self.telemetry.clone(),
             pst_stats: self.pst_stats.clone(),
+            position_feature_stats: self.position_feature_stats.clone(),
         }
     }
 
@@ -424,6 +456,9 @@ impl EvaluationStatistics {
         self.session_start = Some(Instant::now());
         self.telemetry = None;
         self.pst_stats = PieceSquareStatisticsAggregate::default();
+        if self.collect_position_feature_stats {
+            self.position_feature_stats = None;
+        }
     }
 
     /// Get evaluation count
@@ -671,6 +706,8 @@ pub struct StatisticsReport {
     pub telemetry: Option<EvaluationTelemetry>,
     /// Aggregated PST statistics
     pub pst_stats: PieceSquareStatisticsAggregate,
+    /// Latest position feature statistics snapshot
+    pub position_feature_stats: Option<PositionFeatureStats>,
 }
 
 impl std::fmt::Display for StatisticsReport {
@@ -756,6 +793,16 @@ impl std::fmt::Display for StatisticsReport {
                     writeln!(f, "    {:?}: mg {:.2} eg {:.2}", piece, mg, eg)?;
                 }
             }
+        }
+
+        if let Some(stats) = &self.position_feature_stats {
+            writeln!(f)?;
+            writeln!(f, "Position Feature Statistics:")?;
+            writeln!(f, "  King Safety Evals: {}", stats.king_safety_evals)?;
+            writeln!(f, "  Pawn Structure Evals: {}", stats.pawn_structure_evals)?;
+            writeln!(f, "  Mobility Evals: {}", stats.mobility_evals)?;
+            writeln!(f, "  Center Control Evals: {}", stats.center_control_evals)?;
+            writeln!(f, "  Development Evals: {}", stats.development_evals)?;
         }
         if let Some(telemetry) = &self.telemetry {
             writeln!(f)?;

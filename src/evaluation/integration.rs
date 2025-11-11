@@ -115,7 +115,7 @@ impl IntegratedEvaluator {
             None
         };
 
-        Self {
+        let evaluator = Self {
             config: config.clone(),
             tapered_eval: RefCell::new(TaperedEvaluation::new()),
             material_eval: RefCell::new(MaterialEvaluator::with_config(config.material.clone())),
@@ -135,7 +135,14 @@ impl IntegratedEvaluator {
             telemetry: RefCell::new(None),
             phase_cache: RefCell::new(HashMap::new()),
             eval_cache: RefCell::new(HashMap::new()),
-        }
+        };
+
+        evaluator
+            .statistics
+            .borrow_mut()
+            .set_collect_position_feature_stats(config.collect_position_feature_stats);
+
+        evaluator
     }
 
     /// Main evaluation entry point
@@ -195,6 +202,7 @@ impl IntegratedEvaluator {
         // Accumulate component scores
         let mut total = TaperedScore::default();
         let mut pst_telemetry: Option<PieceSquareTelemetry> = None;
+        let mut position_feature_stats_snapshot = None;
 
         // Material
         if self.config.components.material {
@@ -215,6 +223,7 @@ impl IntegratedEvaluator {
         if self.config.components.position_features {
             let weights = self.weights.clone();
             let mut position_features = self.position_features.borrow_mut();
+            position_features.begin_evaluation(board);
             total += position_features.evaluate_king_safety(board, player, captured_pieces)
                 * weights.king_safety_weight;
             total += position_features.evaluate_pawn_structure(board, player, captured_pieces)
@@ -225,6 +234,10 @@ impl IntegratedEvaluator {
                 * weights.center_control_weight;
             total +=
                 position_features.evaluate_development(board, player) * weights.development_weight;
+            if stats_enabled && self.config.collect_position_feature_stats {
+                position_feature_stats_snapshot = Some(position_features.stats().clone());
+            }
+            position_features.end_evaluation();
         }
 
         // Opening principles (if in opening)
@@ -305,9 +318,15 @@ impl IntegratedEvaluator {
             performance_snapshot,
             Some(material_snapshot),
             pst_telemetry.clone(),
+            position_feature_stats_snapshot.clone(),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
+            if let Some(stats) = position_feature_stats_snapshot {
+                self.statistics
+                    .borrow_mut()
+                    .record_position_feature_stats(stats);
+            }
             self.statistics.borrow_mut().update_telemetry(telemetry);
         }
 
@@ -556,7 +575,11 @@ impl IntegratedEvaluator {
         }
 
         self.clear_caches();
-        self.statistics.borrow_mut().reset();
+        {
+            let mut stats = self.statistics.borrow_mut();
+            stats.reset();
+            stats.set_collect_position_feature_stats(config.collect_position_feature_stats);
+        }
         self.telemetry.borrow_mut().take();
     }
 
@@ -592,6 +615,8 @@ pub struct IntegratedEvaluationConfig {
     pub max_cache_size: usize,
     /// Pattern cache size (Phase 3 - Task 3.1)
     pub pattern_cache_size: usize,
+    /// Collect position feature statistics for telemetry
+    pub collect_position_feature_stats: bool,
     /// Material evaluation configuration
     pub material: MaterialEvaluationConfig,
     /// Piece-square table configuration
@@ -611,6 +636,7 @@ impl Default for IntegratedEvaluationConfig {
             use_optimized_path: true,
             max_cache_size: 10000,
             pattern_cache_size: 100_000,
+            collect_position_feature_stats: true,
             material: MaterialEvaluationConfig::default(),
             pst: PieceSquareTableConfig::default(),
             position_features: PositionFeatureConfig::default(),

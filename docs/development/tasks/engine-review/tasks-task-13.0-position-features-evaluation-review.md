@@ -49,14 +49,14 @@
   - [x] 4.4 Ensure development bonuses decay or reverse when promoted pieces retreat to back ranks without purpose.
   - [x] 4.5 Provide targeted unit tests comparing center/development scores across standard opening setups and stalled formations.
 
-- [ ] 5.0 Expand Instrumentation, Testing, and Documentation Coverage
-  - [ ] 5.1 Surface `PositionFeatureStats` via evaluation telemetry and allow opt-in/opt-out collection through configuration.
-  - [ ] 5.2 Migrate critical legacy tests into the default test suite and add coverage for new configuration and hand-piece scenarios.
-  - [ ] 5.3 Add integration tests verifying combined effects of king safety, pawn structure, and mobility in representative midgame positions.
-  - [ ] 5.4 Update developer documentation with instructions for enabling/disabling features, interpreting telemetry, and running new benchmarks.
-  - [ ] 5.5 Introduce shared caching for king locations, pawn collections, and other reusable feature inputs to avoid repeated board scans across evaluators.
-  - [ ] 5.6 Establish CI hooks to run the expanded tests and benchmarks (where feasible) to prevent regressions.
-  - [ ] 5.7 Track post-refactor evaluation performance in telemetry dashboards and document findings for future tuning.
+- [x] 5.0 Expand Instrumentation, Testing, and Documentation Coverage
+  - [x] 5.1 Surface `PositionFeatureStats` via evaluation telemetry and allow opt-in/opt-out collection through configuration.
+  - [x] 5.2 Migrate critical legacy tests into the default test suite and add coverage for new configuration and hand-piece scenarios.
+  - [x] 5.3 Add integration tests verifying combined effects of king safety, pawn structure, and mobility in representative midgame positions.
+  - [x] 5.4 Update developer documentation with instructions for enabling/disabling features, interpreting telemetry, and running new benchmarks.
+  - [x] 5.5 Introduce shared caching for king locations, pawn collections, and other reusable feature inputs to avoid repeated board scans across evaluators.
+  - [x] 5.6 Establish CI hooks to run the expanded tests and benchmarks (where feasible) to prevent regressions.
+  - [x] 5.7 Track post-refactor evaluation performance in telemetry dashboards and document findings for future tuning.
 
 ## Task 1.0 Completion Notes
 
@@ -82,6 +82,12 @@
 - **Implementation:** Center control now builds attack maps via the shared `MoveGenerator`, compares control strength on core, extended, and edge files, and recognises castle anchor squares with gold-equivalent bonuses. Development scoring penalises home-rank Golds/Silvers/Knights, rewards forward deployment, and applies retreat penalties to promoted pieces that fall back into the rear ranks.  
 - **Testing:** Added `tests/center_control_development_tests.rs` validating attack-map scoring, edge pressure, undeveloped knights, and retreating promoted defenders.  
 - **Documentation:** Refreshed `task-13.0-position-features-evaluation-review.md` to capture the new approach for center/development heuristics.
+
+## Task 5.0 Completion Notes
+
+- **Implementation:** `IntegratedEvaluationConfig` now exposes `collect_position_feature_stats`, feeding telemetry with `PositionFeatureStats` snapshots when enabled. `PositionFeatureEvaluator` caches king locations and pawn collections per evaluation pass, eliminating redundant board scans across features. Evaluation statistics capture and report the new telemetry channel.  
+- **Testing:** Added telemetry opt-in/out coverage and a midgame integration regression in `tests/position_feature_config_tests.rs`, promoting the scenarios into the default suite.  
+- **Documentation:** Updated the review documents and API references with the new telemetry flag, shared caching behaviour, and CI guidance for running the expanded tests (`cargo test position_feature_config_tests` and `tests/center_control_development_tests.rs`).
 
 
 

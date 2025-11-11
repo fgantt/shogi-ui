@@ -4,7 +4,7 @@ use shogi_engine::evaluation::{
     integration::{ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator},
     position_features::{PositionFeatureConfig, PositionFeatureEvaluator},
 };
-use shogi_engine::types::{CapturedPieces, Player, TaperedScore};
+use shogi_engine::types::{CapturedPieces, Piece, PieceType, Player, Position, TaperedScore};
 
 #[test]
 fn position_feature_toggles_skip_computation_and_statistics() {
@@ -98,5 +98,138 @@ fn integrated_evaluator_respects_position_feature_weights() {
     assert_ne!(
         weighted_score, zero_score,
         "Changing the king safety weight should impact the final evaluation"
+    );
+}
+
+#[test]
+fn telemetry_includes_position_feature_stats_when_enabled() {
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+
+    let mut config = IntegratedEvaluationConfig::default();
+    config.components = ComponentFlags::all_disabled();
+    config.components.position_features = true;
+    config.collect_position_feature_stats = true;
+    config.enable_phase_cache = false;
+    config.enable_eval_cache = false;
+
+    let evaluator = IntegratedEvaluator::with_config(config);
+    evaluator.enable_statistics();
+    evaluator.evaluate(&board, Player::Black, &captured);
+
+    let telemetry = evaluator
+        .telemetry_snapshot()
+        .expect("Expected telemetry snapshot");
+    let stats = telemetry
+        .position_features
+        .expect("Expected position feature statistics");
+
+    assert!(
+        stats.king_safety_evals > 0 || stats.pawn_structure_evals > 0,
+        "Expected at least one position feature evaluation to be recorded"
+    );
+}
+
+#[test]
+fn telemetry_omits_position_feature_stats_when_disabled() {
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
+
+    let mut config = IntegratedEvaluationConfig::default();
+    config.components = ComponentFlags::all_disabled();
+    config.components.position_features = true;
+    config.collect_position_feature_stats = false;
+    config.enable_phase_cache = false;
+    config.enable_eval_cache = false;
+
+    let evaluator = IntegratedEvaluator::with_config(config);
+    evaluator.enable_statistics();
+    evaluator.evaluate(&board, Player::Black, &captured);
+
+    let telemetry = evaluator
+        .telemetry_snapshot()
+        .expect("Expected telemetry snapshot");
+    assert!(
+        telemetry.position_features.is_none(),
+        "Position feature statistics should be omitted when collection is disabled"
+    );
+}
+
+fn midgame_example_board() -> BitboardBoard {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::King, Player::Black),
+        Position::new(8, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(0, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(7, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::White),
+        Position::new(1, 5),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(4, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Bishop, Player::White),
+        Position::new(3, 5),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(5, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::White),
+        Position::new(2, 4),
+    );
+    board
+}
+
+#[test]
+fn combined_position_features_midgame_snapshot_responds_to_toggles() {
+    let board = midgame_example_board();
+    let captured = CapturedPieces::new();
+
+    let mut base_config = IntegratedEvaluationConfig::default();
+    base_config.components = ComponentFlags::all_disabled();
+    base_config.components.position_features = true;
+    base_config.position_features = PositionFeatureConfig {
+        enable_king_safety: true,
+        enable_pawn_structure: true,
+        enable_mobility: true,
+        enable_center_control: true,
+        enable_development: true,
+    };
+    base_config.enable_phase_cache = false;
+    base_config.enable_eval_cache = false;
+
+    let baseline_eval = IntegratedEvaluator::with_config(base_config.clone());
+    let baseline_score = baseline_eval.evaluate(&board, Player::Black, &captured);
+
+    let mut mobility_disabled = base_config.clone();
+    mobility_disabled.position_features.enable_mobility = false;
+    let mobility_eval = IntegratedEvaluator::with_config(mobility_disabled);
+    let mobility_score = mobility_eval.evaluate(&board, Player::Black, &captured);
+
+    assert_ne!(
+        baseline_score, mobility_score,
+        "Disabling mobility should impact the combined position feature evaluation"
+    );
+
+    let mut pawn_disabled = base_config;
+    pawn_disabled.position_features.enable_pawn_structure = false;
+    let pawn_eval = IntegratedEvaluator::with_config(pawn_disabled);
+    let pawn_score = pawn_eval.evaluate(&board, Player::Black, &captured);
+
+    assert_ne!(
+        baseline_score, pawn_score,
+        "Disabling pawn structure should impact the combined position feature evaluation"
     );
 }

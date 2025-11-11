@@ -204,6 +204,22 @@ struct ControlStrength {
     eg: i32,
 }
 
+#[derive(Default)]
+struct PositionFeatureInputCache {
+    prepared: bool,
+    king_positions: [Option<Position>; 2],
+    pawns: [Vec<Position>; 2],
+}
+
+impl PositionFeatureInputCache {
+    fn clear(&mut self) {
+        self.prepared = false;
+        self.king_positions = [None, None];
+        self.pawns[0].clear();
+        self.pawns[1].clear();
+    }
+}
+
 /// Position feature evaluator with phase-aware evaluation
 pub struct PositionFeatureEvaluator {
     /// Configuration for position evaluation
@@ -212,6 +228,8 @@ pub struct PositionFeatureEvaluator {
     stats: PositionFeatureStats,
     /// Shared move generator to avoid repeated construction
     move_generator: MoveGenerator,
+    /// Cached board inputs shared across feature evaluators
+    inputs_cache: PositionFeatureInputCache,
 }
 
 impl PositionFeatureEvaluator {
@@ -221,6 +239,7 @@ impl PositionFeatureEvaluator {
             config: PositionFeatureConfig::default(),
             stats: PositionFeatureStats::default(),
             move_generator: MoveGenerator::new(),
+            inputs_cache: PositionFeatureInputCache::default(),
         }
     }
 
@@ -230,7 +249,54 @@ impl PositionFeatureEvaluator {
             config,
             stats: PositionFeatureStats::default(),
             move_generator: MoveGenerator::new(),
+            inputs_cache: PositionFeatureInputCache::default(),
         }
+    }
+
+    #[inline]
+    fn player_index(player: Player) -> usize {
+        match player {
+            Player::Black => 0,
+            Player::White => 1,
+        }
+    }
+
+    fn ensure_inputs(&mut self, board: &BitboardBoard) {
+        if self.inputs_cache.prepared {
+            return;
+        }
+
+        self.inputs_cache.clear();
+        self.inputs_cache.prepared = true;
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    let idx = Self::player_index(piece.player);
+
+                    if piece.piece_type == PieceType::King
+                        && self.inputs_cache.king_positions[idx].is_none()
+                    {
+                        self.inputs_cache.king_positions[idx] = Some(pos);
+                    }
+
+                    if piece.piece_type == PieceType::Pawn {
+                        self.inputs_cache.pawns[idx].push(pos);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Prepare cached inputs for a single evaluation pass.
+    pub fn begin_evaluation(&mut self, board: &BitboardBoard) {
+        self.ensure_inputs(board);
+    }
+
+    /// Clear cached inputs after an evaluation pass.
+    pub fn end_evaluation(&mut self) {
+        self.inputs_cache.clear();
     }
 
     /// Get current configuration
@@ -1402,19 +1468,10 @@ impl PositionFeatureEvaluator {
     }
 
     /// Collect all pawns for a player
-    fn collect_pawns(&self, board: &BitboardBoard, player: Player) -> Vec<Position> {
-        let mut pawns = Vec::new();
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player == player {
-                        pawns.push(pos);
-                    }
-                }
-            }
-        }
-        pawns
+    fn collect_pawns(&mut self, board: &BitboardBoard, player: Player) -> Vec<Position> {
+        self.ensure_inputs(board);
+        let idx = Self::player_index(player);
+        self.inputs_cache.pawns[idx].clone()
     }
 
     /// Evaluate pawn chains (adjacent pawns)
@@ -2253,18 +2310,10 @@ impl PositionFeatureEvaluator {
     // =======================================================================
 
     /// Find king position for a player
-    fn find_king_position(&self, board: &BitboardBoard, player: Player) -> Option<Position> {
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == PieceType::King && piece.player == player {
-                        return Some(pos);
-                    }
-                }
-            }
-        }
-        None
+    fn find_king_position(&mut self, board: &BitboardBoard, player: Player) -> Option<Position> {
+        self.ensure_inputs(board);
+        let idx = Self::player_index(player);
+        self.inputs_cache.king_positions[idx]
     }
 
     /// Get statistics
@@ -2312,7 +2361,7 @@ impl Default for PositionFeatureConfig {
 }
 
 /// Statistics for position feature evaluation
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PositionFeatureStats {
     /// King safety evaluations performed
     pub king_safety_evals: u64,
@@ -2451,7 +2500,7 @@ mod tests {
 
     #[test]
     fn test_king_shield_evaluation() {
-        let evaluator = PositionFeatureEvaluator::new();
+        let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
 
         // Find Black's king
@@ -2573,7 +2622,7 @@ mod tests {
 
     #[test]
     fn test_king_position_finding() {
-        let evaluator = PositionFeatureEvaluator::new();
+        let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
 
         let black_king = evaluator.find_king_position(&board, Player::Black);

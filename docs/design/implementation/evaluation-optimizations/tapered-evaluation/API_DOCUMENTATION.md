@@ -205,6 +205,12 @@ pub struct IntegratedEvaluationConfig {
     pub enable_eval_cache: bool,
     pub use_optimized_path: bool,
     pub max_cache_size: usize,
+    pub pattern_cache_size: usize,
+    pub collect_position_feature_stats: bool,
+    pub material: MaterialEvaluationConfig,
+    pub pst: PieceSquareTableConfig,
+    pub position_features: PositionFeatureConfig,
+    pub weights: EvaluationWeights,
 }
 
 pub struct ComponentFlags {
@@ -256,6 +262,7 @@ impl EvaluationStatistics {
     pub fn enable(&mut self)
     pub fn disable(&mut self)
     pub fn is_enabled(&self) -> bool
+    pub fn set_collect_position_feature_stats(&mut self, collect: bool)
     
     // Recording
     pub fn record_evaluation(&mut self, score: i32, phase: i32)
