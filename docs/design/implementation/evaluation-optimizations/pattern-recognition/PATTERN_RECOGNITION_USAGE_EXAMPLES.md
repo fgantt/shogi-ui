@@ -49,7 +49,7 @@ fn analyze_position() {
     
     // Positional analysis
     let mut positional = PositionalPatternAnalyzer::new();
-    let positional_score = positional.evaluate_position(&board, player);
+    let positional_score = positional.evaluate_position(&board, player, &CapturedPieces::new());
     println!("Positional: {}mg / {}eg", positional_score.mg, positional_score.eg);
 }
 ```

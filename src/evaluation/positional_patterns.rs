@@ -163,7 +163,10 @@ impl PositionalPatternAnalyzer {
             eg_score += tempo.eg;
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config
+            .phase_weights
+            .center_control
+            .apply(TaperedScore::new_tapered(mg_score, eg_score))
     }
 
     // ===================================================================
@@ -252,7 +255,10 @@ impl PositionalPatternAnalyzer {
         mg_score += control_advantage * self.config.pawn_center_bonus;
         eg_score += control_advantage * self.config.pawn_center_bonus / 2;
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config
+            .phase_weights
+            .outposts
+            .apply(TaperedScore::new_tapered(mg_score, eg_score))
     }
 
     /// Get value of piece in center
@@ -673,7 +679,10 @@ impl PositionalPatternAnalyzer {
             }
         }
 
-        TaperedScore::new_tapered(-penalty, -penalty / 2)
+        self.config
+            .phase_weights
+            .weak_squares
+            .apply(TaperedScore::new_tapered(-penalty, -penalty / 2))
     }
 
     /// Get key squares to monitor for weaknesses
@@ -782,7 +791,10 @@ impl PositionalPatternAnalyzer {
             }
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config
+            .phase_weights
+            .piece_activity
+            .apply(TaperedScore::new_tapered(mg_score, eg_score))
     }
 
     /// Get activity score for a piece
@@ -834,7 +846,10 @@ impl PositionalPatternAnalyzer {
         let mg_score = advantage * self.config.space_advantage_bonus;
         let eg_score = advantage * self.config.space_advantage_bonus / 3; // Less important in endgame
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config
+            .phase_weights
+            .space_advantage
+            .apply(TaperedScore::new_tapered(mg_score, eg_score))
     }
 
     // ===================================================================
@@ -853,7 +868,10 @@ impl PositionalPatternAnalyzer {
         let mg_score = tempo_advantage as i32 * self.config.tempo_bonus;
         let eg_score = 0; // Tempo not relevant in endgame
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config
+            .phase_weights
+            .tempo
+            .apply(TaperedScore::new_tapered(mg_score, eg_score))
     }
 
     /// Count developed pieces (heuristic based on position)
@@ -903,6 +921,52 @@ impl Default for PositionalPatternAnalyzer {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PositionalPhaseWeight {
+    pub mg: f32,
+    pub eg: f32,
+}
+
+impl PositionalPhaseWeight {
+    fn apply(self, score: TaperedScore) -> TaperedScore {
+        TaperedScore::new_tapered(
+            ((score.mg as f32) * self.mg).round() as i32,
+            ((score.eg as f32) * self.eg).round() as i32,
+        )
+    }
+}
+
+impl Default for PositionalPhaseWeight {
+    fn default() -> Self {
+        Self { mg: 1.0, eg: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PositionalPhaseWeights {
+    pub center_control: PositionalPhaseWeight,
+    pub outposts: PositionalPhaseWeight,
+    pub weak_squares: PositionalPhaseWeight,
+    pub piece_activity: PositionalPhaseWeight,
+    pub space_advantage: PositionalPhaseWeight,
+    pub tempo: PositionalPhaseWeight,
+}
+
+impl Default for PositionalPhaseWeights {
+    fn default() -> Self {
+        Self {
+            center_control: PositionalPhaseWeight::default(),
+            outposts: PositionalPhaseWeight::default(),
+            weak_squares: PositionalPhaseWeight::default(),
+            piece_activity: PositionalPhaseWeight::default(),
+            space_advantage: PositionalPhaseWeight::default(),
+            tempo: PositionalPhaseWeight::default(),
+        }
+    }
+}
+
 /// Configuration for positional pattern analysis
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -915,6 +979,7 @@ pub struct PositionalConfig {
     pub enable_tempo: bool,
     pub enable_hand_context: bool,
     pub enable_drop_threats: bool,
+    pub phase_weights: PositionalPhaseWeights,
 
     // Bonus/penalty values
     pub pawn_center_bonus: i32,
@@ -934,6 +999,7 @@ impl Default for PositionalConfig {
             enable_tempo: true,
             enable_hand_context: true,
             enable_drop_threats: true,
+            phase_weights: PositionalPhaseWeights::default(),
 
             pawn_center_bonus: 25,
             weak_square_penalty: 40,
@@ -956,6 +1022,47 @@ pub struct PositionalStats {
 
     pub outposts_found: u64,
     pub weak_squares_found: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PositionalStatsSnapshot {
+    pub evaluations: u64,
+    pub center_control_checks: u64,
+    pub outpost_checks: u64,
+    pub weak_square_checks: u64,
+    pub activity_checks: u64,
+    pub space_checks: u64,
+    pub tempo_checks: u64,
+    pub outposts_found: u64,
+    pub weak_squares_found: u64,
+}
+
+impl PositionalStats {
+    pub fn snapshot(&self) -> PositionalStatsSnapshot {
+        PositionalStatsSnapshot {
+            evaluations: self.evaluations,
+            center_control_checks: self.center_control_checks,
+            outpost_checks: self.outpost_checks,
+            weak_square_checks: self.weak_square_checks,
+            activity_checks: self.activity_checks,
+            space_checks: self.space_checks,
+            tempo_checks: self.tempo_checks,
+            outposts_found: self.outposts_found,
+            weak_squares_found: self.weak_squares_found,
+        }
+    }
+
+    pub fn merge_from(&mut self, snapshot: &PositionalStatsSnapshot) {
+        self.evaluations += snapshot.evaluations;
+        self.center_control_checks += snapshot.center_control_checks;
+        self.outpost_checks += snapshot.outpost_checks;
+        self.weak_square_checks += snapshot.weak_square_checks;
+        self.activity_checks += snapshot.activity_checks;
+        self.space_checks += snapshot.space_checks;
+        self.tempo_checks += snapshot.tempo_checks;
+        self.outposts_found += snapshot.outposts_found;
+        self.weak_squares_found += snapshot.weak_squares_found;
+    }
 }
 
 #[cfg(test)]
@@ -1096,5 +1203,52 @@ mod tests {
             &captured_with_pawn,
         );
         assert_eq!(mitigated.mg, 0);
+    }
+
+    #[test]
+    fn test_center_control_phase_weights() {
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(4, 4),
+        );
+
+        let mut base_config = PositionalConfig::default();
+        base_config.enable_outposts = false;
+        base_config.enable_weak_squares = false;
+        base_config.enable_piece_activity = false;
+        base_config.enable_space_advantage = false;
+        base_config.enable_tempo = false;
+        base_config.enable_hand_context = false;
+        base_config.enable_drop_threats = false;
+
+        let mut baseline_analyzer = PositionalPatternAnalyzer::with_config(base_config.clone());
+        let captured = CapturedPieces::new();
+        let baseline = baseline_analyzer.evaluate_position(&board, Player::Black, &captured);
+
+        let mut weighted_config = base_config;
+        weighted_config.phase_weights.center_control = PositionalPhaseWeight { mg: 2.0, eg: 0.5 };
+        let mut weighted_analyzer = PositionalPatternAnalyzer::with_config(weighted_config);
+        let weighted = weighted_analyzer.evaluate_position(&board, Player::Black, &captured);
+
+        assert_eq!(weighted.mg, baseline.mg * 2);
+        assert_eq!(weighted.eg, ((baseline.eg as f32) * 0.5).round() as i32);
+    }
+
+    #[test]
+    fn test_positional_stats_snapshot_merge() {
+        let mut stats = PositionalStats::default();
+        stats.evaluations = 5;
+        stats.center_control_checks = 3;
+        stats.outposts_found = 1;
+
+        let snapshot = stats.snapshot();
+
+        let mut other = PositionalStats::default();
+        other.merge_from(&snapshot);
+
+        assert_eq!(other.evaluations, 5);
+        assert_eq!(other.center_control_checks, 3);
+        assert_eq!(other.outposts_found, 1);
     }
 }

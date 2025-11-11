@@ -39,6 +39,7 @@ use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
 use crate::evaluation::position_features::PositionFeatureStats;
+use crate::evaluation::positional_patterns::PositionalStatsSnapshot;
 use crate::evaluation::tactical_patterns::TacticalStatsSnapshot;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
 use crate::types::{PieceType, TaperedScore};
@@ -72,6 +73,8 @@ pub struct EvaluationStatistics {
     position_feature_stats: Option<PositionFeatureStats>,
     /// Latest tactical statistics snapshot
     tactical_stats: Option<TacticalStatsSnapshot>,
+    /// Latest positional statistics snapshot
+    positional_stats: Option<PositionalStatsSnapshot>,
 }
 
 /// Aggregated telemetry emitted by the integrated evaluator.
@@ -83,6 +86,7 @@ pub struct EvaluationTelemetry {
     pub material: Option<MaterialTelemetry>,
     pub pst: Option<PieceSquareTelemetry>,
     pub position_features: Option<PositionFeatureStats>,
+    pub positional: Option<PositionalStatsSnapshot>,
     pub tactical: Option<TacticalStatsSnapshot>,
 }
 
@@ -94,6 +98,7 @@ impl EvaluationTelemetry {
         material: Option<MaterialTelemetry>,
         pst: Option<PieceSquareTelemetry>,
         position_features: Option<PositionFeatureStats>,
+        positional: Option<PositionalStatsSnapshot>,
         tactical: Option<TacticalStatsSnapshot>,
     ) -> Self {
         Self {
@@ -103,6 +108,7 @@ impl EvaluationTelemetry {
             material,
             pst,
             position_features,
+            positional,
             tactical,
         }
     }
@@ -332,6 +338,7 @@ impl EvaluationStatistics {
             collect_position_feature_stats: false,
             position_feature_stats: None,
             tactical_stats: None,
+            positional_stats: None,
         }
     }
 
@@ -354,6 +361,11 @@ impl EvaluationStatistics {
         if self.collect_position_feature_stats {
             self.position_feature_stats = Some(stats);
         }
+    }
+
+    /// Record the latest positional pattern statistics snapshot.
+    pub fn record_positional_stats(&mut self, stats: PositionalStatsSnapshot) {
+        self.positional_stats = Some(stats);
     }
 
     /// Disable statistics tracking
@@ -414,6 +426,9 @@ impl EvaluationStatistics {
                     self.position_feature_stats = Some(stats.clone());
                 }
             }
+            if let Some(ref positional) = telemetry.positional {
+                self.positional_stats = Some(positional.clone());
+            }
         }
         self.telemetry = Some(telemetry);
     }
@@ -452,6 +467,7 @@ impl EvaluationStatistics {
             pst_stats: self.pst_stats.clone(),
             position_feature_stats: self.position_feature_stats.clone(),
             tactical_stats: self.tactical_stats.clone(),
+            positional_stats: self.positional_stats.clone(),
         }
     }
 
@@ -475,6 +491,7 @@ impl EvaluationStatistics {
             self.position_feature_stats = None;
         }
         self.tactical_stats = None;
+        self.positional_stats = None;
     }
 
     /// Get evaluation count
@@ -726,6 +743,8 @@ pub struct StatisticsReport {
     pub position_feature_stats: Option<PositionFeatureStats>,
     /// Latest tactical statistics snapshot
     pub tactical_stats: Option<TacticalStatsSnapshot>,
+    /// Latest positional statistics snapshot
+    pub positional_stats: Option<PositionalStatsSnapshot>,
 }
 
 impl std::fmt::Display for StatisticsReport {

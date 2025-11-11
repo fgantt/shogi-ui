@@ -206,6 +206,7 @@ impl IntegratedEvaluator {
         let mut pst_telemetry: Option<PieceSquareTelemetry> = None;
         let mut position_feature_stats_snapshot = None;
         let mut tactical_snapshot = None;
+        let mut positional_snapshot = None;
 
         // Material
         if self.config.components.material {
@@ -272,11 +273,15 @@ impl IntegratedEvaluator {
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.positional_patterns {
-            total += self.positional_patterns.borrow_mut().evaluate_position(
-                board,
-                player,
-                captured_pieces,
-            );
+            let positional_score = {
+                let mut positional = self.positional_patterns.borrow_mut();
+                let score = positional.evaluate_position(board, player, captured_pieces);
+                if stats_enabled {
+                    positional_snapshot = Some(positional.stats().snapshot());
+                }
+                score
+            };
+            total += positional_score * self.weights.positional_weight;
         }
 
         // Interpolate to final score
@@ -326,6 +331,7 @@ impl IntegratedEvaluator {
             Some(material_snapshot),
             pst_telemetry.clone(),
             position_feature_stats_snapshot.clone(),
+            positional_snapshot.clone(),
             tactical_snapshot.clone(),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
@@ -334,6 +340,9 @@ impl IntegratedEvaluator {
                 self.statistics
                     .borrow_mut()
                     .record_position_feature_stats(stats);
+            }
+            if let Some(stats) = positional_snapshot {
+                self.statistics.borrow_mut().record_positional_stats(stats);
             }
             self.statistics.borrow_mut().update_telemetry(telemetry);
         }

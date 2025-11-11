@@ -86,6 +86,8 @@ pub struct EvaluationWeights {
 
     /// Weight for tactical pattern contributions
     pub tactical_weight: f32,
+    /// Weight for positional pattern contributions
+    pub positional_weight: f32,
 }
 
 impl Default for EvaluationWeights {
@@ -99,6 +101,7 @@ impl Default for EvaluationWeights {
             center_control_weight: 0.7,
             development_weight: 0.5,
             tactical_weight: 1.0,
+            positional_weight: 1.0,
         }
     }
 }
@@ -185,6 +188,7 @@ impl TaperedEvalConfig {
                 center_control_weight: 0.9, // Increased
                 development_weight: 0.7,    // Increased
                 tactical_weight: 1.0,
+                positional_weight: 1.0,
             },
         }
     }

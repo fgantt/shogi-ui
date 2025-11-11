@@ -479,6 +479,8 @@ impl TaperedEvaluationTuner {
                 + parent2.development_weight * (1.0 - alpha),
             tactical_weight: parent1.tactical_weight * alpha
                 + parent2.tactical_weight * (1.0 - alpha),
+            positional_weight: parent1.positional_weight * alpha
+                + parent2.positional_weight * (1.0 - alpha),
         };
 
         let child2 = EvaluationWeights {
@@ -498,6 +500,8 @@ impl TaperedEvaluationTuner {
                 + parent1.development_weight * (1.0 - alpha),
             tactical_weight: parent2.tactical_weight * alpha
                 + parent1.tactical_weight * (1.0 - alpha),
+            positional_weight: parent2.positional_weight * alpha
+                + parent1.positional_weight * (1.0 - alpha),
         };
 
         (child1, child2)
@@ -820,6 +824,7 @@ mod tests {
             center_control_weight: 0.7,
             development_weight: 0.5,
             tactical_weight: 1.0,
+            positional_weight: 1.0,
         };
 
         let parent2 = EvaluationWeights {
@@ -831,6 +836,7 @@ mod tests {
             center_control_weight: 0.8,
             development_weight: 0.6,
             tactical_weight: 1.1,
+            positional_weight: 0.9,
         };
 
         let (child1, child2) = tuner.crossover(&parent1, &parent2);

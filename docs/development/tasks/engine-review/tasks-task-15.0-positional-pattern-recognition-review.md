@@ -31,13 +31,13 @@
   - [x] 2.4 Update configuration to toggle hand-aware heuristics and document new parameters.
   - [x] 2.5 Write regression tests covering pawn drops undermining outposts and defending weak squares via hand reinforcements.
 
-- [ ] 3.0 Add weighting, phase scaling, and telemetry export for positional patterns in the integrated evaluator
-  - [ ] 3.1 Wire `PatternWeights.positional_patterns` (or new weight fields) into `IntegratedEvaluator` and ensure tapered scaling is respected.
-  - [ ] 3.2 Introduce per-detector weights/phase multipliers within `PositionalConfig`, falling back to sensible defaults.
-  - [ ] 3.3 Implement `PositionalStats::snapshot()/merge()` APIs and integrate with existing evaluation telemetry pipelines.
-  - [ ] 3.4 Update configuration parsing/documentation to expose new weighting and telemetry options.
-  - [ ] 3.5 Add integration tests verifying weights affect final scores and stats snapshots appear in evaluator reports.
-  - [ ] 3.6 Align positional configuration defaults with PRD guidance (disable unstable detectors by default, document default values and tuning guidance).
+- [x] 3.0 Add weighting, phase scaling, and telemetry export for positional patterns in the integrated evaluator
+  - [x] 3.1 Wire `PatternWeights.positional_patterns` (or new weight fields) into `IntegratedEvaluator` and ensure tapered scaling is respected.
+  - [x] 3.2 Introduce per-detector weights/phase multipliers within `PositionalConfig`, falling back to sensible defaults.
+  - [x] 3.3 Implement `PositionalStats::snapshot()/merge()` APIs and integrate with existing evaluation telemetry pipelines.
+  - [x] 3.4 Update configuration parsing/documentation to expose new weighting and telemetry options.
+  - [x] 3.5 Add integration tests verifying weights affect final scores and stats snapshots appear in evaluator reports.
+  - [x] 3.6 Align positional configuration defaults with PRD guidance (disable unstable detectors by default, document default values and tuning guidance).
 
 - [ ] 4.0 Redesign positional heuristics for shogi fidelity and performance
   - [ ] 4.1 Rework center control to measure actual control/mobility (including promoted pieces) instead of raw occupancy.
@@ -65,3 +65,9 @@
 - **Implementation:** Threaded `CapturedPieces` through `evaluate_position`, outpost, and weak-square paths, added hand-aware toggles to `PositionalConfig`, and rewrote pawn support/threat and drop threat logic (pawn, lance, knight) using orientation-aware helpers. Weak-square defense now recognises pawn drops, and drop heuristics feed directly into outpost validation.
 - **Testing:** Added `test_outpost_rejected_by_pawn_drop` and `test_weak_square_relieved_by_pawn_drop` to validate pawn-drop threats and defenses. Unit harness updated to the new API signature. `cargo test positional_patterns` still encounters the existing rustc ICE; verified via `cargo check --lib`.
 - **Notes:** New helpers guard against illegal drops (last-rank restrictions, double pawns) and reuse shared direction utilities, keeping future heuristics consistent with shogi rules.
+
+## Task 3.0 Completion Notes
+
+- **Implementation:** Added per-component `PositionalPhaseWeights`, a global `positional_weight` in `EvaluationWeights`, and telemetry support for positional statistics. Each detector now applies mg/eg scaling before contributing to the total, and `IntegratedEvaluator` multiplies positional results by the configurable weight while exporting positional snapshots.
+- **Testing:** Introduced `test_center_control_phase_weights` and `test_positional_stats_snapshot_merge` to confirm weight scaling and snapshot aggregation. `cargo check --lib` verifies compilation; `cargo test positional_patterns` still hits the known rustc ICE.
+- **Notes:** Configuration and documentation now surface the new weighting controls and telemetry hooks, enabling tuning workflows to adjust positional influence without changing code.
