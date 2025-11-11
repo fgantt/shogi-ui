@@ -477,6 +477,8 @@ impl TaperedEvaluationTuner {
                 + parent2.center_control_weight * (1.0 - alpha),
             development_weight: parent1.development_weight * alpha
                 + parent2.development_weight * (1.0 - alpha),
+            tactical_weight: parent1.tactical_weight * alpha
+                + parent2.tactical_weight * (1.0 - alpha),
         };
 
         let child2 = EvaluationWeights {
@@ -494,6 +496,8 @@ impl TaperedEvaluationTuner {
                 + parent1.center_control_weight * (1.0 - alpha),
             development_weight: parent2.development_weight * alpha
                 + parent1.development_weight * (1.0 - alpha),
+            tactical_weight: parent2.tactical_weight * alpha
+                + parent1.tactical_weight * (1.0 - alpha),
         };
 
         (child1, child2)
@@ -506,7 +510,7 @@ impl TaperedEvaluationTuner {
         for individual in population {
             if rand::random::<f32>() < mutation_rate {
                 let mutation_strength = 0.1;
-                let weight_to_mutate = (rand::random::<f32>() * 7.0) as usize;
+                let weight_to_mutate = (rand::random::<f32>() * 8.0) as usize;
 
                 match weight_to_mutate {
                     0 => {
@@ -535,6 +539,10 @@ impl TaperedEvaluationTuner {
                     }
                     6 => {
                         individual.development_weight *=
+                            1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
+                    }
+                    7 => {
+                        individual.tactical_weight *=
                             1.0 + (rand::random::<f32>() - 0.5) * mutation_strength
                     }
                     _ => {}
@@ -811,6 +819,7 @@ mod tests {
             mobility_weight: 0.6,
             center_control_weight: 0.7,
             development_weight: 0.5,
+            tactical_weight: 1.0,
         };
 
         let parent2 = EvaluationWeights {
@@ -821,6 +830,7 @@ mod tests {
             mobility_weight: 0.5,
             center_control_weight: 0.8,
             development_weight: 0.6,
+            tactical_weight: 1.1,
         };
 
         let (child1, child2) = tuner.crossover(&parent1, &parent2);

@@ -83,6 +83,9 @@ pub struct EvaluationWeights {
 
     /// Weight for development
     pub development_weight: f32,
+
+    /// Weight for tactical pattern contributions
+    pub tactical_weight: f32,
 }
 
 impl Default for EvaluationWeights {
@@ -95,6 +98,7 @@ impl Default for EvaluationWeights {
             mobility_weight: 0.6,
             center_control_weight: 0.7,
             development_weight: 0.5,
+            tactical_weight: 1.0,
         }
     }
 }
@@ -180,6 +184,7 @@ impl TaperedEvalConfig {
                 mobility_weight: 0.8,       // Increased
                 center_control_weight: 0.9, // Increased
                 development_weight: 0.7,    // Increased
+                tactical_weight: 1.0,
             },
         }
     }
@@ -269,6 +274,10 @@ impl TaperedEvalConfig {
             return Err(ConfigError::InvalidWeight("development_weight".to_string()));
         }
 
+        if self.weights.tactical_weight < 0.0 || self.weights.tactical_weight > 10.0 {
+            return Err(ConfigError::InvalidWeight("tactical_weight".to_string()));
+        }
+
         // Validate sigmoid steepness
         if self.phase_transition.sigmoid_steepness < 1.0
             || self.phase_transition.sigmoid_steepness > 20.0
@@ -291,6 +300,7 @@ impl TaperedEvalConfig {
             "mobility" => self.weights.mobility_weight = value,
             "center_control" => self.weights.center_control_weight = value,
             "development" => self.weights.development_weight = value,
+            "tactical" => self.weights.tactical_weight = value,
             _ => return Err(ConfigError::UnknownWeight(weight_name.to_string())),
         }
 
@@ -312,6 +322,7 @@ impl TaperedEvalConfig {
             "mobility" => Some(self.weights.mobility_weight),
             "center_control" => Some(self.weights.center_control_weight),
             "development" => Some(self.weights.development_weight),
+            "tactical" => Some(self.weights.tactical_weight),
             _ => None,
         }
     }
@@ -339,6 +350,7 @@ impl TaperedEvalConfig {
             ("mobility", self.weights.mobility_weight),
             ("center_control", self.weights.center_control_weight),
             ("development", self.weights.development_weight),
+            ("tactical", self.weights.tactical_weight),
         ]
     }
 }

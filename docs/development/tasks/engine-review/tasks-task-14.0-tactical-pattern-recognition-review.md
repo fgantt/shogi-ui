@@ -26,12 +26,12 @@
   - [x] 1.3 Introduce centralized line-tracing helpers that terminate when encountering blockers or invalid squares.
   - [x] 1.4 Profile and reduce redundant 9×9 scans by reusing piece lists or bitboard iterators within each detection pass.
   - [x] 1.5 Document detection flow and shared helpers to simplify future maintenance.
-- [ ] 2.0 Tactical Scoring & Integration Corrections
-  - [ ] 2.1 Fix scoring polarity for pins and skewers so friendly vulnerabilities apply penalties and discovered advantages grant bonuses.
-  - [ ] 2.2 Normalize tactical motif scoring factors to centipawn scale and expose them via `TacticalConfig`.
-  - [ ] 2.3 Add phase-aware weighting (midgame/endgame) for each motif in `tactical_patterns.rs`.
-  - [ ] 2.4 Update `integration.rs` to apply configurable weights before contributing tactical scores to the tapered evaluator.
-  - [ ] 2.5 Refresh evaluator configuration documentation to reflect new tuning knobs and defaults.
+- [x] 2.0 Tactical Scoring & Integration Corrections
+  - [x] 2.1 Fix scoring polarity for pins and skewers so friendly vulnerabilities apply penalties and discovered advantages grant bonuses.
+  - [x] 2.2 Normalize tactical motif scoring factors to centipawn scale and expose them via `TacticalConfig`.
+  - [x] 2.3 Add phase-aware weighting (midgame/endgame) for each motif in `tactical_patterns.rs`.
+  - [x] 2.4 Update `integration.rs` to apply configurable weights before contributing tactical scores to the tapered evaluator.
+  - [x] 2.5 Refresh evaluator configuration documentation to reflect new tuning knobs and defaults.
 - [ ] 3.0 Hand Piece & Shogi-Specific Motif Support
   - [ ] 3.1 Extend `evaluate_tactics` signature to accept hand (`CapturedPieces`) context and propagate it through detectors.
   - [ ] 3.2 Implement drop-based fork and pin detection leveraging available hand pieces and legal drop squares.
@@ -57,4 +57,11 @@
 - **Implementation:** Added `TacticalDetectionContext` and blocker-aware line tracing so forks, knight forks, and back-rank evaluation reuse a shared attack enumerator that stops at the first blocker. Fork, knight fork, and discovered-attack paths now operate on context caches instead of repeated 9×9 scans, and back-rank logic scales penalties when limited escapes remain.
 - **Testing:** Introduced `tests/tactical_patterns_accuracy_tests.rs` with regression coverage for blocked forks and back-rank threats, and updated internal unit smoke tests to use the new evaluation flow.
 - **Notes:** Detection helpers are documented inline, and the new context reduces redundant board iterations by collecting player/opponent piece lists once per evaluation while remaining compatible with future telemetry and scoring work.
+
+## Task 2.0 Completion Notes
+
+- **Implementation:** Reworked scoring polarity so pinned and skewered vulnerabilities now apply negative pressure while discovered attacks and forks award positive centipawn values. Each motif funnels through `apply_phase_weights`, combining cp-based base scores with configurable midgame/endgame scaling.
+- **Configuration:** Expanded `TacticalConfig` with explicit centipawn parameters and per-motif `TacticalPhaseWeights`, and added `tactical_weight` to `EvaluationWeights` so the integrated evaluator can gate tactical contributions.
+- **Testing:** Added regression coverage for pin penalties and integration-weight scaling in `tests/tactical_patterns_accuracy_tests.rs`, ensuring tactical weights respect both fork detection and back-rank threat calculations.
+- **Documentation:** Updated this task plan and inline rustdoc comments to describe the new configuration knobs, clarifying how centipawn parameters and phase weights interact with the tapered evaluation pipeline.
 

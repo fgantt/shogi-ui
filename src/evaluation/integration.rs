@@ -258,10 +258,11 @@ impl IntegratedEvaluator {
 
         // Tactical patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.tactical_patterns {
-            total += self
+            let tactical_score = self
                 .tactical_patterns
                 .borrow_mut()
                 .evaluate_tactics(board, player);
+            total += tactical_score * self.weights.tactical_weight;
         }
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)

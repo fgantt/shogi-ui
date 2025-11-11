@@ -234,6 +234,41 @@ const KING_OFFSETS: &[(i8, i8)] = &[
 const KING_DIAGONAL_OFFSETS: &[(i8, i8)] = &[(-1, -1), (-1, 1), (1, -1), (1, 1)];
 const ORTHOGONAL_OFFSETS: &[(i8, i8)] = &[(1, 0), (-1, 0), (0, 1), (0, -1)];
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotifPhaseWeight {
+    pub mg: f32,
+    pub eg: f32,
+}
+
+impl Default for MotifPhaseWeight {
+    fn default() -> Self {
+        Self { mg: 1.0, eg: 0.7 }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TacticalPhaseWeights {
+    pub forks: MotifPhaseWeight,
+    pub knight_forks: MotifPhaseWeight,
+    pub pins: MotifPhaseWeight,
+    pub skewers: MotifPhaseWeight,
+    pub discovered: MotifPhaseWeight,
+    pub back_rank: MotifPhaseWeight,
+}
+
+impl Default for TacticalPhaseWeights {
+    fn default() -> Self {
+        Self {
+            forks: MotifPhaseWeight { mg: 1.0, eg: 0.6 },
+            knight_forks: MotifPhaseWeight { mg: 1.1, eg: 0.7 },
+            pins: MotifPhaseWeight { mg: 1.0, eg: 0.8 },
+            skewers: MotifPhaseWeight { mg: 1.0, eg: 0.8 },
+            discovered: MotifPhaseWeight { mg: 0.9, eg: 0.6 },
+            back_rank: MotifPhaseWeight { mg: 1.2, eg: 0.9 },
+        }
+    }
+}
+
 impl TacticalPatternRecognizer {
     /// Create a new tactical pattern recognizer
     pub fn new() -> Self {
@@ -268,14 +303,14 @@ impl TacticalPatternRecognizer {
 
         // Detect pins
         if self.config.enable_pins {
-            let pins = self.detect_pins(board, player);
+            let pins = self.detect_pins(&context);
             mg_score += pins.mg;
             eg_score += pins.eg;
         }
 
         // Detect skewers
         if self.config.enable_skewers {
-            let skewers = self.detect_skewers(board, player);
+            let skewers = self.detect_skewers(&context);
             mg_score += skewers.mg;
             eg_score += skewers.eg;
         }
@@ -304,6 +339,16 @@ impl TacticalPatternRecognizer {
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 
+    fn apply_phase_weights(&self, base_score: i32, weights: &MotifPhaseWeight) -> TaperedScore {
+        if base_score == 0 {
+            return TaperedScore::default();
+        }
+
+        let mg = (base_score as f32 * weights.mg).round() as i32;
+        let eg = (base_score as f32 * weights.eg).round() as i32;
+        TaperedScore::new_tapered(mg, eg)
+    }
+
     // ===================================================================
     // FORK DETECTION (Double Attacks)
     // ===================================================================
@@ -312,17 +357,13 @@ impl TacticalPatternRecognizer {
     fn detect_forks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.fork_checks += 1;
 
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+        let mut total_score = 0;
 
-        // Check each piece for fork potential
         for &(pos, piece) in &ctx.player_pieces {
-            let fork_value = self.check_piece_for_forks(ctx, pos, piece.piece_type);
-            mg_score += fork_value.0;
-            eg_score += fork_value.1;
+            total_score += self.check_piece_for_forks(ctx, pos, piece.piece_type);
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.apply_phase_weights(total_score, &self.config.phase_weights.forks)
     }
 
     /// Check if a piece is forking multiple targets
@@ -331,18 +372,17 @@ impl TacticalPatternRecognizer {
         ctx: &TacticalDetectionContext,
         pos: Position,
         piece_type: PieceType,
-    ) -> (i32, i32) {
+    ) -> i32 {
         let targets = self.get_attacked_pieces(ctx, pos, piece_type, ctx.player);
 
         if targets.len() >= 2 {
-            // Fork detected - calculate value
-            let total_value: i32 = targets.iter().map(|(_, value)| value).sum();
-            let fork_bonus = (total_value * self.config.fork_bonus_factor) / 100;
+            let total_value: i32 = targets.iter().map(|(_, value)| *value).sum();
+            let fork_bonus = (total_value as f32 * self.config.fork_threat_ratio).round() as i32;
 
             // Forking king is especially valuable
             let has_king_fork = targets.iter().any(|(pt, _)| *pt == PieceType::King);
             let king_bonus = if has_king_fork {
-                self.config.king_fork_bonus
+                self.config.king_fork_bonus_cp
             } else {
                 0
             };
@@ -351,9 +391,9 @@ impl TacticalPatternRecognizer {
                 .forks_found
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            (fork_bonus + king_bonus, (fork_bonus + king_bonus) / 2)
+            fork_bonus + king_bonus
         } else {
-            (0, 0)
+            0
         }
     }
 
@@ -373,7 +413,7 @@ impl TacticalPatternRecognizer {
                 if target_piece.player == opponent {
                     attacked.push((
                         target_piece.piece_type,
-                        target_piece.piece_type.base_value() / 100,
+                        target_piece.piece_type.base_value(),
                     ));
                 }
             }
@@ -387,49 +427,45 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect pins (pieces that cannot move without exposing valuable piece)
-    fn detect_pins(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_pins(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.pin_checks += 1;
 
-        let mut mg_score = 0;
-
         // Find king position
-        let king_pos = match self.find_king_position(board, player) {
+        let king_pos = match self.find_king_position(ctx.board, ctx.player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
 
-        // Check for pins along ranks, files, and diagonals
-        mg_score += self.check_pins_in_directions(
-            board,
+        let mut total_penalty = 0;
+        total_penalty += self.check_pins_in_directions(
+            ctx,
             king_pos,
-            player,
+            ctx.player,
             &[(1, 0), (-1, 0), (0, 1), (0, -1)],
         );
-        mg_score += self.check_pins_in_directions(
-            board,
+        total_penalty += self.check_pins_in_directions(
+            ctx,
             king_pos,
-            player,
+            ctx.player,
             &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
         );
 
-        let eg_score = mg_score / 2; // Pins slightly less critical in endgame
-
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.apply_phase_weights(total_penalty, &self.config.phase_weights.pins)
     }
 
     /// Check for pins in given directions
     fn check_pins_in_directions(
         &self,
-        board: &BitboardBoard,
+        ctx: &TacticalDetectionContext,
         king_pos: Position,
         player: Player,
         directions: &[(i8, i8)],
     ) -> i32 {
-        let mut pin_value = 0;
+        let mut pin_penalty = 0;
         let opponent = player.opposite();
 
         for &(dr, dc) in directions {
-            let mut pieces_in_line = Vec::new();
+            let mut first_friendly: Option<Piece> = None;
             let mut row = king_pos.row as i8 + dr;
             let mut col = king_pos.col as i8 + dc;
 
@@ -437,17 +473,23 @@ impl TacticalPatternRecognizer {
             while row >= 0 && row < 9 && col >= 0 && col < 9 {
                 let pos = Position::new(row as u8, col as u8);
 
-                if let Some(piece) = board.get_piece(pos) {
-                    pieces_in_line.push((pos, piece));
-
-                    // If we hit an enemy piece, check if it creates a pin
-                    if piece.player == opponent {
-                        if self.can_pin_along_line(piece.piece_type, dr, dc) {
-                            // Check if exactly one friendly piece between king and attacker
-                            if pieces_in_line.len() == 2 && pieces_in_line[0].1.player == player {
-                                let pinned_value =
-                                    pieces_in_line[0].1.piece_type.base_value() / 100;
-                                pin_value += pinned_value * self.config.pin_penalty_factor / 100;
+                if let Some(piece) = ctx.board.get_piece(pos).copied() {
+                    if piece.player == player {
+                        if first_friendly.is_some() {
+                            // Two friendly pieces before encountering attacker: no pin
+                            break;
+                        }
+                        first_friendly = Some(piece);
+                    } else {
+                        if let Some(friendly) = first_friendly {
+                            if piece.player == opponent
+                                && self.can_pin_along_line(piece.piece_type, dr, dc)
+                            {
+                                let pinned_value = friendly.piece_type.base_value();
+                                let penalty = (pinned_value as f32 * self.config.pin_penalty_ratio)
+                                    .round() as i32;
+                                let penalty = penalty.max(1);
+                                pin_penalty -= penalty;
                                 self.stats
                                     .pins_found
                                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -462,7 +504,7 @@ impl TacticalPatternRecognizer {
             }
         }
 
-        pin_value
+        pin_penalty
     }
 
     /// Check if piece type can create pins along given direction
@@ -485,85 +527,74 @@ impl TacticalPatternRecognizer {
     // ===================================================================
 
     /// Detect skewers (attacking through piece to hit more valuable target)
-    fn detect_skewers(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn detect_skewers(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.skewer_checks += 1;
 
-        let mut mg_score = 0;
+        let mut total_penalty = 0;
 
-        // Check each enemy sliding piece for skewer potential
-        let opponent = player.opposite();
-
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == opponent {
-                        match piece.piece_type {
-                            PieceType::Rook | PieceType::PromotedRook => {
-                                mg_score += self.check_skewers_from_piece(
-                                    board,
-                                    pos,
-                                    player,
-                                    &[(1, 0), (-1, 0), (0, 1), (0, -1)],
-                                );
-                            }
-                            PieceType::Bishop | PieceType::PromotedBishop => {
-                                mg_score += self.check_skewers_from_piece(
-                                    board,
-                                    pos,
-                                    player,
-                                    &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
-                                );
-                            }
-                            _ => {}
-                        }
-                    }
+        for &(pos, piece) in &ctx.opponent_pieces {
+            match piece.piece_type {
+                PieceType::Rook | PieceType::PromotedRook => {
+                    total_penalty += self.check_skewers_from_piece(
+                        ctx,
+                        pos,
+                        &[(1, 0), (-1, 0), (0, 1), (0, -1)],
+                    );
                 }
+                PieceType::Bishop | PieceType::PromotedBishop => {
+                    total_penalty += self.check_skewers_from_piece(
+                        ctx,
+                        pos,
+                        &[(1, 1), (-1, 1), (1, -1), (-1, -1)],
+                    );
+                }
+                _ => {}
             }
         }
 
-        let eg_score = mg_score / 2;
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.apply_phase_weights(total_penalty, &self.config.phase_weights.skewers)
     }
 
     /// Check for skewers from a specific piece position
     fn check_skewers_from_piece(
         &self,
-        board: &BitboardBoard,
+        ctx: &TacticalDetectionContext,
         pos: Position,
-        player: Player,
         directions: &[(i8, i8)],
     ) -> i32 {
-        let mut skewer_value = 0;
+        let mut penalty = 0;
 
         for &(dr, dc) in directions {
-            let mut pieces_in_line = Vec::new();
             let mut row = pos.row as i8 + dr;
             let mut col = pos.col as i8 + dc;
+            let mut front_piece: Option<Piece> = None;
 
             while row >= 0 && row < 9 && col >= 0 && col < 9 {
                 let check_pos = Position::new(row as u8, col as u8);
 
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.player == player {
-                        pieces_in_line.push(piece);
+                if let Some(piece) = ctx.board.get_piece(check_pos).copied() {
+                    if piece.player == ctx.player {
+                        if let Some(front) = front_piece {
+                            let front_value = front.piece_type.base_value();
+                            let back_value = piece.piece_type.base_value();
 
-                        // Check if we have a skewer (2 pieces, second more valuable)
-                        if pieces_in_line.len() == 2 {
-                            let val1 = pieces_in_line[0].piece_type.base_value();
-                            let val2 = pieces_in_line[1].piece_type.base_value();
-
-                            if val2 > val1 {
-                                skewer_value +=
-                                    (val2 - val1) * self.config.skewer_bonus_factor / 10000;
+                            if back_value > front_value {
+                                let delta = back_value - front_value;
+                                let skew_penalty = (delta as f32 * self.config.skewer_penalty_ratio)
+                                    .round()
+                                    as i32;
+                                let skew_penalty = skew_penalty.max(1);
+                                penalty -= skew_penalty;
                                 self.stats
                                     .skewers_found
                                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                             break;
+                        } else {
+                            front_piece = Some(piece);
                         }
                     } else {
-                        // Hit opponent piece, stop
+                        // Encountered opponent piece blocking line
                         break;
                     }
                 }
@@ -573,7 +604,7 @@ impl TacticalPatternRecognizer {
             }
         }
 
-        skewer_value
+        penalty
     }
 
     // ===================================================================
@@ -584,7 +615,7 @@ impl TacticalPatternRecognizer {
     fn detect_discovered_attacks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.discovered_checks += 1;
 
-        let mut mg_score = 0;
+        let mut total_bonus = 0;
         let opponent = ctx.opponent;
 
         // Find opponent king
@@ -596,14 +627,14 @@ impl TacticalPatternRecognizer {
         // Check if any of our pieces can create discovered attacks by moving
         for &(pos, _) in &ctx.player_pieces {
             if self.can_create_discovered_attack(ctx, pos, opp_king_pos) {
-                mg_score += self.config.discovered_attack_bonus;
+                total_bonus += self.config.discovered_attack_bonus_cp;
                 self.stats
                     .discovered_attacks_found
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
 
-        TaperedScore::new_tapered(mg_score, mg_score / 2)
+        self.apply_phase_weights(total_bonus, &self.config.phase_weights.discovered)
     }
 
     /// Check if moving a piece can create a discovered attack
@@ -673,19 +704,15 @@ impl TacticalPatternRecognizer {
     fn detect_knight_forks(&mut self, ctx: &TacticalDetectionContext) -> TaperedScore {
         self.stats.knight_fork_checks += 1;
 
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+        let mut total_bonus = 0;
 
-        // Find all knights
         for &(pos, piece) in &ctx.player_pieces {
             if piece.piece_type == PieceType::Knight {
-                let fork_value = self.check_knight_for_forks(ctx, pos);
-                mg_score += fork_value;
-                eg_score += fork_value / 2;
+                total_bonus += self.check_knight_for_forks(ctx, pos);
             }
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.apply_phase_weights(total_bonus, &self.config.phase_weights.knight_forks)
     }
 
     /// Check if a knight is creating a fork
@@ -693,12 +720,12 @@ impl TacticalPatternRecognizer {
         let targets = self.get_attacked_pieces(ctx, pos, PieceType::Knight, ctx.player);
 
         if targets.len() >= 2 {
-            let total_value: i32 = targets.iter().map(|(_, value)| value).sum();
+            let total_value: i32 = targets.iter().map(|(_, value)| *value).sum();
             let has_king = targets.iter().any(|(pt, _)| *pt == PieceType::King);
 
-            let base_bonus = (total_value * self.config.knight_fork_bonus_factor) / 100;
+            let base_bonus = (total_value as f32 * self.config.knight_fork_ratio).round() as i32;
             let king_bonus = if has_king {
-                self.config.king_fork_bonus * 2
+                self.config.king_fork_bonus_cp * 2
             } else {
                 0
             };
@@ -741,13 +768,14 @@ impl TacticalPatternRecognizer {
 
             if threats > 0 {
                 let scaling_divisor = (escape_count + 1) as i32;
-                let penalty = threats * self.config.back_rank_threat_penalty / scaling_divisor;
+                let penalty = threats * self.config.back_rank_penalty_cp / scaling_divisor;
 
                 if penalty != 0 {
-                self.stats
-                    .back_rank_threats_found
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    return TaperedScore::new_tapered(-penalty, -penalty / 2);
+                    self.stats
+                        .back_rank_threats_found
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    return self
+                        .apply_phase_weights(-penalty, &self.config.phase_weights.back_rank);
                 }
             }
         }
@@ -882,14 +910,16 @@ pub struct TacticalConfig {
     pub enable_knight_forks: bool,
     pub enable_back_rank_threats: bool,
 
-    // Bonus/penalty factors (percentage)
-    pub fork_bonus_factor: i32,
-    pub knight_fork_bonus_factor: i32,
-    pub king_fork_bonus: i32,
-    pub pin_penalty_factor: i32,
-    pub skewer_bonus_factor: i32,
-    pub discovered_attack_bonus: i32,
-    pub back_rank_threat_penalty: i32,
+    // Centipawn-scaled scoring parameters
+    pub fork_threat_ratio: f32,
+    pub knight_fork_ratio: f32,
+    pub king_fork_bonus_cp: i32,
+    pub pin_penalty_ratio: f32,
+    pub skewer_penalty_ratio: f32,
+    pub discovered_attack_bonus_cp: i32,
+    pub back_rank_penalty_cp: i32,
+
+    pub phase_weights: TacticalPhaseWeights,
 }
 
 impl Default for TacticalConfig {
@@ -902,13 +932,15 @@ impl Default for TacticalConfig {
             enable_knight_forks: true,
             enable_back_rank_threats: true,
 
-            fork_bonus_factor: 50,
-            knight_fork_bonus_factor: 60,
-            king_fork_bonus: 100,
-            pin_penalty_factor: 40,
-            skewer_bonus_factor: 30,
-            discovered_attack_bonus: 80,
-            back_rank_threat_penalty: 150,
+            fork_threat_ratio: 0.18,
+            knight_fork_ratio: 0.22,
+            king_fork_bonus_cp: 120,
+            pin_penalty_ratio: 0.40,
+            skewer_penalty_ratio: 0.28,
+            discovered_attack_bonus_cp: 80,
+            back_rank_penalty_cp: 140,
+
+            phase_weights: TacticalPhaseWeights::default(),
         }
     }
 }
@@ -946,8 +978,8 @@ mod tests {
     #[test]
     fn test_tactical_config_default() {
         let config = TacticalConfig::default();
-        assert_eq!(config.fork_bonus_factor, 50);
-        assert_eq!(config.king_fork_bonus, 100);
+        assert!((config.fork_threat_ratio - 0.18).abs() < f32::EPSILON);
+        assert_eq!(config.king_fork_bonus_cp, 120);
     }
 
     #[test]

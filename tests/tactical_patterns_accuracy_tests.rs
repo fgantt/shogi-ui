@@ -1,6 +1,9 @@
 use shogi_engine::bitboards::BitboardBoard;
+use shogi_engine::evaluation::integration::{
+    ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator,
+};
 use shogi_engine::evaluation::tactical_patterns::{TacticalConfig, TacticalPatternRecognizer};
-use shogi_engine::types::{Piece, PieceType, Player, Position};
+use shogi_engine::types::{CapturedPieces, Piece, PieceType, Player, Position};
 
 fn forks_only_config() -> TacticalConfig {
     TacticalConfig {
@@ -26,6 +29,18 @@ fn back_rank_only_config() -> TacticalConfig {
     }
 }
 
+fn pins_only_config() -> TacticalConfig {
+    TacticalConfig {
+        enable_forks: false,
+        enable_pins: true,
+        enable_skewers: false,
+        enable_discovered_attacks: false,
+        enable_knight_forks: false,
+        enable_back_rank_threats: false,
+        ..TacticalConfig::default()
+    }
+}
+
 #[test]
 fn forks_respect_blockers_and_line_of_sight() {
     let mut board = BitboardBoard::empty();
@@ -44,10 +59,7 @@ fn forks_respect_blockers_and_line_of_sight() {
         Position::new(4, 7),
     );
     let blocker_pos = Position::new(4, 6);
-    board.place_piece(
-        Piece::new(PieceType::Silver, Player::Black),
-        blocker_pos,
-    );
+    board.place_piece(Piece::new(PieceType::Silver, Player::Black), blocker_pos);
 
     let mut recognizer = TacticalPatternRecognizer::with_config(forks_only_config());
     let blocked_score = recognizer.evaluate_tactics(&board, Player::Black);
@@ -70,7 +82,10 @@ fn back_rank_threats_require_clear_files() {
     let mut board = BitboardBoard::empty();
     let king_pos = Position::new(0, 4);
     board.place_piece(Piece::new(PieceType::King, Player::White), king_pos);
-    board.place_piece(Piece::new(PieceType::Rook, Player::Black), Position::new(0, 8));
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(0, 8),
+    );
 
     // Friendly pieces limiting the king's mobility
     board.place_piece(
@@ -92,10 +107,7 @@ fn back_rank_threats_require_clear_files() {
 
     // Friendly blocker shielding the king along the back rank
     let blocker = Position::new(0, 6);
-    board.place_piece(
-        Piece::new(PieceType::Gold, Player::White),
-        blocker,
-    );
+    board.place_piece(Piece::new(PieceType::Gold, Player::White), blocker);
 
     let mut recognizer = TacticalPatternRecognizer::with_config(back_rank_only_config());
     let blocked_score = recognizer.evaluate_tactics(&board, Player::White);
@@ -113,4 +125,80 @@ fn back_rank_threats_require_clear_files() {
     );
 }
 
+#[test]
+fn pins_apply_negative_penalty() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(0, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::White),
+        Position::new(1, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(3, 4),
+    );
 
+    let mut recognizer = TacticalPatternRecognizer::with_config(pins_only_config());
+    let score = recognizer.evaluate_tactics(&board, Player::White);
+    assert!(
+        score.mg < 0,
+        "Pinned piece should produce a negative tactical score"
+    );
+}
+
+#[test]
+fn tactical_weight_scales_contribution() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(4, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::White),
+        Position::new(2, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(4, 7),
+    );
+
+    let captured = CapturedPieces::new();
+
+    let mut config = IntegratedEvaluationConfig::default();
+    config.use_optimized_path = false;
+    config.enable_eval_cache = false;
+    config.enable_phase_cache = false;
+    config.components = ComponentFlags {
+        material: false,
+        piece_square_tables: false,
+        position_features: false,
+        opening_principles: false,
+        endgame_patterns: false,
+        tactical_patterns: true,
+        positional_patterns: false,
+    };
+    config.weights.tactical_weight = 1.0;
+
+    let evaluator = IntegratedEvaluator::with_config(config.clone());
+    let base_score = evaluator.evaluate(&board, Player::Black, &captured);
+    assert!(
+        base_score.abs() > 0,
+        "Baseline tactical evaluation should be non-zero"
+    );
+
+    let mut scaled_config = config;
+    scaled_config.weights.tactical_weight = 0.5;
+    let scaled_evaluator = IntegratedEvaluator::with_config(scaled_config);
+    let scaled_score = scaled_evaluator.evaluate(&board, Player::Black, &captured);
+
+    let expected = (base_score as f32 * 0.5).round() as i32;
+    assert!(
+        (scaled_score - expected).abs() <= 2,
+        "Scaled tactical weight should roughly halve the contribution (expected {}, got {})",
+        expected,
+        scaled_score
+    );
+}
