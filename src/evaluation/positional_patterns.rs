@@ -27,6 +27,67 @@ pub struct PositionalPatternAnalyzer {
     stats: PositionalStats,
 }
 
+struct ControlCache<'a> {
+    board: &'a BitboardBoard,
+    cache: [[Option<bool>; 81]; 2],
+}
+
+impl<'a> ControlCache<'a> {
+    fn new(board: &'a BitboardBoard) -> Self {
+        Self {
+            board,
+            cache: [[None; 81]; 2],
+        }
+    }
+
+    fn player_index(player: Player) -> usize {
+        if player == Player::Black {
+            0
+        } else {
+            1
+        }
+    }
+
+    fn square_index(pos: Position) -> usize {
+        pos.row as usize * 9 + pos.col as usize
+    }
+
+    fn controlled_by(&mut self, player: Player, pos: Position) -> bool {
+        let player_idx = Self::player_index(player);
+        let square_idx = Self::square_index(pos);
+
+        if let Some(value) = self.cache[player_idx][square_idx] {
+            return value;
+        }
+
+        let value = self.board.is_square_attacked_by(pos, player);
+        self.cache[player_idx][square_idx] = Some(value);
+        value
+    }
+
+    fn count_all_controlled(&mut self, player: Player) -> i32 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                if self.controlled_by(player, Position::new(row, col)) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    fn count_subset_controlled(&mut self, player: Player, squares: &[(u8, u8)]) -> i32 {
+        let mut count = 0;
+        for &(row, col) in squares {
+            if self.controlled_by(player, Position::new(row, col)) {
+                count += 1;
+            }
+        }
+        count
+    }
+}
+
 impl PositionalPatternAnalyzer {
     /// Create a new positional pattern analyzer
     pub fn new() -> Self {
@@ -50,10 +111,11 @@ impl PositionalPatternAnalyzer {
 
         let mut mg_score = 0;
         let mut eg_score = 0;
+        let mut control_cache = ControlCache::new(board);
 
         // Center control
         if self.config.enable_center_control {
-            let center = self.evaluate_center_control(board, player);
+            let center = self.evaluate_center_control(board, player, &mut control_cache);
             mg_score += center.mg;
             eg_score += center.eg;
         }
@@ -67,7 +129,7 @@ impl PositionalPatternAnalyzer {
 
         // Weak squares
         if self.config.enable_weak_squares {
-            let weak = self.evaluate_weak_squares(board, player);
+            let weak = self.evaluate_weak_squares(board, player, &mut control_cache);
             mg_score += weak.mg;
             eg_score += weak.eg;
         }
@@ -81,7 +143,7 @@ impl PositionalPatternAnalyzer {
 
         // Space advantage
         if self.config.enable_space_advantage {
-            let space = self.evaluate_space_advantage(board, player);
+            let space = self.evaluate_space_advantage(board, player, &mut control_cache);
             mg_score += space.mg;
             eg_score += space.eg;
         }
@@ -101,7 +163,12 @@ impl PositionalPatternAnalyzer {
     // ===================================================================
 
     /// Evaluate center control (enhanced version of basic center control)
-    fn evaluate_center_control(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_center_control(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        control_cache: &mut ControlCache<'_>,
+    ) -> TaperedScore {
         self.stats.center_control_checks += 1;
 
         let mut mg_score = 0;
@@ -170,10 +237,11 @@ impl PositionalPatternAnalyzer {
             }
         }
 
-        // Bonus for controlling center with pawns (very important)
-        let pawn_control = self.count_pawn_center_control(board, player, &center_squares);
-        mg_score += pawn_control * self.config.pawn_center_bonus;
-        eg_score += pawn_control * self.config.pawn_center_bonus / 2;
+        // Bonus for controlling center squares (blocker-aware)
+        let control_advantage =
+            self.center_control_advantage(control_cache, player, &center_squares);
+        mg_score += control_advantage * self.config.pawn_center_bonus;
+        eg_score += control_advantage * self.config.pawn_center_bonus / 2;
 
         TaperedScore::new_tapered(mg_score, eg_score)
     }
@@ -193,25 +261,15 @@ impl PositionalPatternAnalyzer {
         }
     }
 
-    /// Count pawns controlling center squares
-    fn count_pawn_center_control(
+    fn center_control_advantage(
         &self,
-        board: &BitboardBoard,
+        control_cache: &mut ControlCache<'_>,
         player: Player,
         center: &[(u8, u8)],
     ) -> i32 {
-        let mut count = 0;
-
-        for &(row, col) in center {
-            let pos = Position::new(row, col);
-            if let Some(piece) = board.get_piece(pos) {
-                if piece.piece_type == PieceType::Pawn && piece.player == player {
-                    count += 1;
-                }
-            }
-        }
-
-        count
+        let player_control = control_cache.count_subset_controlled(player, center);
+        let opponent_control = control_cache.count_subset_controlled(player.opposite(), center);
+        player_control - opponent_control
     }
 
     // ===================================================================
@@ -371,7 +429,12 @@ impl PositionalPatternAnalyzer {
     // ===================================================================
 
     /// Evaluate weak squares in player's position
-    fn evaluate_weak_squares(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_weak_squares(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        control_cache: &mut ControlCache<'_>,
+    ) -> TaperedScore {
         self.stats.weak_square_checks += 1;
 
         let mut penalty = 0;
@@ -383,7 +446,7 @@ impl PositionalPatternAnalyzer {
         for pos in key_squares {
             if self.is_weak_square(board, pos, player) {
                 // Check if enemy has piece controlling this square
-                if self.is_controlled_by_opponent(board, pos, opponent) {
+                if control_cache.controlled_by(opponent, pos) {
                     penalty += self.config.weak_square_penalty;
                     self.stats.weak_squares_found += 1;
                 }
@@ -449,63 +512,6 @@ impl PositionalPatternAnalyzer {
         false
     }
 
-    /// Check if square is controlled by opponent
-    fn is_controlled_by_opponent(
-        &self,
-        board: &BitboardBoard,
-        pos: Position,
-        opponent: Player,
-    ) -> bool {
-        // Check if any opponent piece attacks this square
-        for row in 0..9 {
-            for col in 0..9 {
-                let check_pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.player == opponent {
-                        if self.piece_attacks_square(
-                            board,
-                            check_pos,
-                            pos,
-                            piece.piece_type,
-                            opponent,
-                        ) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
-    /// Check if piece at from_pos can attack to_pos
-    fn piece_attacks_square(
-        &self,
-        _board: &BitboardBoard,
-        from_pos: Position,
-        to_pos: Position,
-        piece_type: PieceType,
-        player: Player,
-    ) -> bool {
-        let dr = (to_pos.row as i8 - from_pos.row as i8).abs();
-        let dc = (to_pos.col as i8 - from_pos.col as i8).abs();
-
-        match piece_type {
-            PieceType::Pawn => {
-                let forward = if player == Player::Black { -1 } else { 1 };
-                from_pos.row as i8 + forward == to_pos.row as i8 && from_pos.col == to_pos.col
-            }
-            PieceType::Knight => dr == 2 && dc == 1,
-            PieceType::King | PieceType::Gold | PieceType::Silver => dr <= 1 && dc <= 1,
-            PieceType::Rook | PieceType::PromotedRook => {
-                from_pos.row == to_pos.row || from_pos.col == to_pos.col
-            }
-            PieceType::Bishop | PieceType::PromotedBishop => dr == dc,
-            _ => false,
-        }
-    }
-
     // ===================================================================
     // PIECE ACTIVITY EVALUATION
     // ===================================================================
@@ -567,33 +573,22 @@ impl PositionalPatternAnalyzer {
     // ===================================================================
 
     /// Evaluate space advantage (territory control)
-    fn evaluate_space_advantage(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_space_advantage(
+        &mut self,
+        _board: &BitboardBoard,
+        player: Player,
+        control_cache: &mut ControlCache<'_>,
+    ) -> TaperedScore {
         self.stats.space_checks += 1;
 
-        let player_squares = self.count_controlled_squares(board, player);
-        let opponent_squares = self.count_controlled_squares(board, player.opposite());
+        let player_squares = control_cache.count_all_controlled(player);
+        let opponent_squares = control_cache.count_all_controlled(player.opposite());
 
         let advantage = player_squares - opponent_squares;
         let mg_score = advantage * self.config.space_advantage_bonus;
         let eg_score = advantage * self.config.space_advantage_bonus / 3; // Less important in endgame
 
         TaperedScore::new_tapered(mg_score, eg_score)
-    }
-
-    /// Count squares controlled by player
-    fn count_controlled_squares(&self, board: &BitboardBoard, player: Player) -> i32 {
-        let mut count = 0;
-
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if self.is_controlled_by_opponent(board, pos, player) {
-                    count += 1;
-                }
-            }
-        }
-
-        count
     }
 
     // ===================================================================
@@ -727,8 +722,9 @@ mod tests {
     fn test_center_control_evaluation() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
+        let mut control_cache = ControlCache::new(&board);
 
-        let score = analyzer.evaluate_center_control(&board, Player::Black);
+        let score = analyzer.evaluate_center_control(&board, Player::Black, &mut control_cache);
         assert_eq!(analyzer.stats().center_control_checks, 1);
     }
 
@@ -760,5 +756,32 @@ mod tests {
         let stats = analyzer.stats();
         assert!(stats.center_control_checks >= 1);
         assert!(stats.outpost_checks >= 1);
+    }
+
+    #[test]
+    fn test_control_cache_matches_board_queries() {
+        let mut board = BitboardBoard::empty();
+        let rook = Piece::new(PieceType::Rook, Player::Black);
+        let pawn = Piece::new(PieceType::Pawn, Player::Black);
+        let rook_pos = Position::new(4, 4);
+        let blocking_pawn_pos = Position::new(5, 4);
+        let lateral_target = Position::new(4, 6);
+        let blocked_target = Position::new(6, 4);
+
+        board.place_piece(rook, rook_pos);
+        board.place_piece(pawn, blocking_pawn_pos);
+
+        let board_lateral = board.is_square_attacked_by(lateral_target, Player::Black);
+        let board_blocked = board.is_square_attacked_by(blocked_target, Player::Black);
+
+        let mut control_cache = ControlCache::new(&board);
+        assert_eq!(
+            control_cache.controlled_by(Player::Black, lateral_target),
+            board_lateral
+        );
+        assert_eq!(
+            control_cache.controlled_by(Player::Black, blocked_target),
+            board_blocked
+        );
     }
 }

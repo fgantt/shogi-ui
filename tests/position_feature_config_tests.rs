@@ -77,6 +77,7 @@ fn integrated_evaluator_respects_position_feature_weights() {
         mobility_weight: 0.0,
         center_control_weight: 0.0,
         development_weight: 0.0,
+        tactical_weight: 0.0,
     };
 
     let evaluator = IntegratedEvaluator::with_config(config.clone());

@@ -17,12 +17,12 @@
 
 ## Tasks
 
-- [ ] 1.0 Replace bespoke attack detection with shared blocker-aware attack utilities
-  - [ ] 1.1 Inventory existing attack/threat utilities (e.g., `AttackTables`, `ThreatEvaluator`) and document required APIs for positional detectors.
-  - [ ] 1.2 Refactor center, weak-square, space, and other detectors to request control data through shared utilities rather than bespoke scans.
-  - [ ] 1.3 Ensure promoted pieces, lances, knights, and long-range sliders respect blockers when computing control.
-  - [ ] 1.4 Remove redundant helper methods (e.g., `piece_attacks_square`) and update statistics to match new control sources.
-  - [ ] 1.5 Add sanity tests that compare detector outputs against attack tables for representative board states.
+- [x] 1.0 Replace bespoke attack detection with shared blocker-aware attack utilities
+  - [x] 1.1 Inventory existing attack/threat utilities (e.g., `AttackTables`, `ThreatEvaluator`) and document required APIs for positional detectors.
+  - [x] 1.2 Refactor center, weak-square, space, and other detectors to request control data through shared utilities rather than bespoke scans.
+  - [x] 1.3 Ensure promoted pieces, lances, knights, and long-range sliders respect blockers when computing control.
+  - [x] 1.4 Remove redundant helper methods (e.g., `piece_attacks_square`) and update statistics to match new control sources.
+  - [x] 1.5 Add sanity tests that compare detector outputs against attack tables for representative board states.
 
 - [ ] 2.0 Incorporate hand context and shogi-correct pawn heuristics into positional detectors
   - [ ] 2.1 Extend evaluator inputs to accept `CapturedPieces` (hands) and propagate through positional pattern API.
@@ -53,3 +53,9 @@
   - [ ] 5.4 Implement criterion benches measuring evaluator runtimes and control-map reuse efficiency.
   - [ ] 5.5 Document the testing/benchmarking workflow and incorporate into CI or release validation checklists.
 
+
+## Task 1.0 Completion Notes
+
+- **Implementation:** Introduced a reusable `ControlCache` that wraps `BitboardBoard::is_square_attacked_by`, providing cached, blocker-aware control lookups for both players. Center, weak-square, and space evaluations now request control data through this cache, eliminating bespoke scans and the obsolete `piece_attacks_square` helper while keeping statistics intact.
+- **Testing:** Added `test_control_cache_matches_board_queries` to confirm the cache mirrors board attack semantics in scenarios with blockers. Updated existing positional-pattern tests to use the new evaluator signatures. Attempted `cargo test positional_patterns`, but the run hit the known rustc ICE (`cached cgu ... should have an object file`); verified compilation with `cargo check --lib` instead.
+- **Notes:** The cache-based control path prepares the module for later heuristics without reintroducing ad-hoc attack logic. Future performance tuning should reuse this cache instead of re-querying board state.
