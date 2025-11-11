@@ -2078,11 +2078,11 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         // Test pawn structure evaluation
-        let pawn_score = evaluator.evaluate_pawn_structure(&board, Player::Black);
+        let pawn_score = evaluator.evaluate_pawn_structure(&board, Player::Black, &captured_pieces);
         assert!(pawn_score.mg >= 0 || pawn_score.eg >= 0); // Should have some value
 
         // Test king safety evaluation
-        let king_safety = evaluator.evaluate_king_safety(&board, Player::Black);
+        let king_safety = evaluator.evaluate_king_safety(&board, Player::Black, &captured_pieces);
         assert!(king_safety.mg >= 0 || king_safety.eg >= 0); // Should have some value
 
         // Test mobility evaluation
@@ -2109,8 +2109,8 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         // Test that different evaluation components have different mg/eg values
-        let pawn_score = evaluator.evaluate_pawn_structure(&board, Player::Black);
-        let king_safety = evaluator.evaluate_king_safety(&board, Player::Black);
+        let pawn_score = evaluator.evaluate_pawn_structure(&board, Player::Black, &captured_pieces);
+        let king_safety = evaluator.evaluate_king_safety(&board, Player::Black, &captured_pieces);
         let mobility = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
         let coordination = evaluator.evaluate_piece_coordination(&board, Player::Black);
         let center_control = evaluator.evaluate_center_control(&board, Player::Black);

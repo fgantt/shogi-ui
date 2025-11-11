@@ -215,9 +215,9 @@ impl IntegratedEvaluator {
         if self.config.components.position_features {
             let weights = self.weights.clone();
             let mut position_features = self.position_features.borrow_mut();
-            total +=
-                position_features.evaluate_king_safety(board, player) * weights.king_safety_weight;
-            total += position_features.evaluate_pawn_structure(board, player)
+            total += position_features.evaluate_king_safety(board, player, captured_pieces)
+                * weights.king_safety_weight;
+            total += position_features.evaluate_pawn_structure(board, player, captured_pieces)
                 * weights.pawn_structure_weight;
             total += position_features.evaluate_mobility(board, player, captured_pieces)
                 * weights.mobility_weight;

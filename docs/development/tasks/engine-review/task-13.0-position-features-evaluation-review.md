@@ -127,14 +127,11 @@ Impact: accuracy issues when evaluating castles vs. broken structures; underesti
     }
 ```
 
-Findings:
-- Chains detect orthogonal adjacency; diagonal support (common in shogi pawn formations) and functional chains (supported by hand drops) are not recognized.
-- Advancement bonuses assume chess-like forward progress; they reward Black pawns approaching rank 2, penalizing aggressive advances that actually happen on ranks 5–7 in shogi.
-- Isolation checks scan immediate neighbors but treat diagonals equally; they miss vertical files two squares away that still provide support via drops.
-- Passed pawn detection only inspects board pawns ahead; opposing hand pawns capable of drops are ignored, overstating passers in drop-rich situations.
-- Doubled pawn penalties assume single-file stacking, but in shogi multiple pawns on the same file are illegal (except via promotions), so penalties rarely trigger and mask illegal states.
-
-Impact: evaluation mislabels pawn structures in realistic positions, especially where hands and promotions dominate structural balance.
+Updates:
+- Pawn chains now consider diagonal and forward-support links, with hand-supported gaps filled by both pawn and gold drops when legal.
+- Advancement scoring uses shogi-specific phase tables that reward penetration into the enemy camp while tapering values near home ranks.
+- Isolation and passed-pawn heuristics factor in opponent hand drops (pawns, golds, silvers, lances, knights) and on-board promoted blockers.
+- Illegal doubled pawns receive immediate and severe penalties to reflect shogi rules while still detecting multi-file pressure.
 
 ---
 

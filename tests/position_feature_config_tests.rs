@@ -21,13 +21,13 @@ fn position_feature_toggles_skip_computation_and_statistics() {
     let captured = CapturedPieces::new();
 
     assert_eq!(
-        evaluator.evaluate_king_safety(&board, Player::Black),
+        evaluator.evaluate_king_safety(&board, Player::Black, &captured),
         TaperedScore::default()
     );
     assert_eq!(evaluator.stats().king_safety_evals, 0);
 
     assert_eq!(
-        evaluator.evaluate_pawn_structure(&board, Player::Black),
+        evaluator.evaluate_pawn_structure(&board, Player::Black, &captured),
         TaperedScore::default()
     );
     assert_eq!(evaluator.stats().pawn_structure_evals, 0);
