@@ -29,12 +29,50 @@ use crate::moves::MoveGenerator;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 
+const MOBILITY_BOARD_AREA: usize = 81;
+const ALL_PIECE_TYPES: [PieceType; PieceType::COUNT] = [
+    PieceType::Pawn,
+    PieceType::Lance,
+    PieceType::Knight,
+    PieceType::Silver,
+    PieceType::Gold,
+    PieceType::Bishop,
+    PieceType::Rook,
+    PieceType::King,
+    PieceType::PromotedPawn,
+    PieceType::PromotedLance,
+    PieceType::PromotedKnight,
+    PieceType::PromotedSilver,
+    PieceType::PromotedBishop,
+    PieceType::PromotedRook,
+];
+
+#[inline]
+fn index_for_position(pos: Position) -> usize {
+    (pos.row as usize) * 9 + pos.col as usize
+}
+
+#[derive(Default, Clone, Copy)]
+struct PieceMobilityStats {
+    total_moves: i32,
+    central_moves: i32,
+    attack_moves: i32,
+}
+
+#[derive(Default, Clone, Copy)]
+struct DropMobilityStats {
+    total_moves: i32,
+    central_moves: i32,
+}
+
 /// Position feature evaluator with phase-aware evaluation
 pub struct PositionFeatureEvaluator {
     /// Configuration for position evaluation
     config: PositionFeatureConfig,
     /// Statistics tracking
     stats: PositionFeatureStats,
+    /// Shared move generator to avoid repeated construction
+    move_generator: MoveGenerator,
 }
 
 impl PositionFeatureEvaluator {
@@ -43,6 +81,7 @@ impl PositionFeatureEvaluator {
         Self {
             config: PositionFeatureConfig::default(),
             stats: PositionFeatureStats::default(),
+            move_generator: MoveGenerator::new(),
         }
     }
 
@@ -51,6 +90,7 @@ impl PositionFeatureEvaluator {
         Self {
             config,
             stats: PositionFeatureStats::default(),
+            move_generator: MoveGenerator::new(),
         }
     }
 
@@ -513,81 +553,103 @@ impl PositionFeatureEvaluator {
 
         self.stats.mobility_evals += 1;
 
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+        let legal_moves = self
+            .move_generator
+            .generate_legal_moves(board, player, captured_pieces);
 
-        // Evaluate mobility for each piece individually
+        let mut piece_stats = vec![PieceMobilityStats::default(); MOBILITY_BOARD_AREA];
+        let mut drop_stats = [DropMobilityStats::default(); PieceType::COUNT];
+
+        for mv in &legal_moves {
+            if let Some(from) = mv.from {
+                let idx = index_for_position(from);
+                let stats = &mut piece_stats[idx];
+                stats.total_moves += 1;
+                if self.is_central_square(mv.to) {
+                    stats.central_moves += 1;
+                }
+                if mv.is_capture {
+                    stats.attack_moves += 1;
+                }
+            } else {
+                let stats = &mut drop_stats[mv.piece_type.as_index()];
+                stats.total_moves += 1;
+                if self.is_central_square(mv.to) {
+                    stats.central_moves += 1;
+                }
+            }
+        }
+
+        let mut total = TaperedScore::default();
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        let piece_mobility = self.evaluate_piece_mobility(
-                            board,
-                            pos,
-                            piece.piece_type,
-                            player,
-                            captured_pieces,
-                        );
-                        mg_score += piece_mobility.mg;
-                        eg_score += piece_mobility.eg;
+                        let stats = &piece_stats[index_for_position(pos)];
+                        total += self.evaluate_piece_mobility_from_stats(piece.piece_type, stats);
                     }
                 }
             }
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        for piece_type in ALL_PIECE_TYPES.iter().copied() {
+            let stats = &drop_stats[piece_type.as_index()];
+            total += self.evaluate_drop_mobility(piece_type, stats);
+        }
+
+        total
     }
 
-    /// Evaluate mobility for a single piece
-    fn evaluate_piece_mobility(
+    fn evaluate_piece_mobility_from_stats(
         &self,
-        board: &BitboardBoard,
-        pos: Position,
         piece_type: PieceType,
-        player: Player,
-        captured_pieces: &CapturedPieces,
+        stats: &PieceMobilityStats,
     ) -> TaperedScore {
-        let move_generator = MoveGenerator::new();
-        let all_moves = move_generator.generate_legal_moves(board, player, captured_pieces);
-
-        // Filter moves for this specific piece
-        let piece_moves: Vec<_> = all_moves.iter().filter(|m| m.from == Some(pos)).collect();
-
-        let move_count = piece_moves.len() as i32;
-
-        // Get mobility weight for this piece type
+        let move_count = stats.total_moves;
         let mobility_weight = self.get_mobility_weight(piece_type);
 
-        // Base mobility score (weighted by piece type)
         let mut mg_score = move_count * mobility_weight.0;
         let mut eg_score = move_count * mobility_weight.1;
 
-        // Restricted piece penalty (if very few moves)
         if move_count <= 2 {
             let restriction_penalty = self.get_restriction_penalty(piece_type);
             mg_score -= restriction_penalty.0;
             eg_score -= restriction_penalty.1;
         }
 
-        // Central mobility bonus (moves to/through center)
-        let central_moves = piece_moves
-            .iter()
-            .filter(|m| self.is_central_square(m.to))
-            .count() as i32;
-
-        if central_moves > 0 {
+        if stats.central_moves > 0 {
             let central_bonus = self.get_central_mobility_bonus(piece_type);
-            mg_score += central_moves * central_bonus.0;
-            eg_score += central_moves * central_bonus.1;
+            mg_score += stats.central_moves * central_bonus.0;
+            eg_score += stats.central_moves * central_bonus.1;
         }
 
-        // Attack move bonus
-        let attack_moves = piece_moves.iter().filter(|m| m.is_capture).count() as i32;
+        if stats.attack_moves > 0 {
+            mg_score += stats.attack_moves * 4;
+            eg_score += stats.attack_moves * 3;
+        }
 
-        if attack_moves > 0 {
-            mg_score += attack_moves * 3; // Attacks more important in middlegame
-            eg_score += attack_moves * 2;
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    fn evaluate_drop_mobility(
+        &self,
+        piece_type: PieceType,
+        stats: &DropMobilityStats,
+    ) -> TaperedScore {
+        if stats.total_moves == 0 {
+            return TaperedScore::default();
+        }
+
+        let drop_weight = self.get_drop_mobility_weight(piece_type);
+        let mut mg_score = stats.total_moves * drop_weight.0;
+        let mut eg_score = stats.total_moves * drop_weight.1;
+
+        if stats.central_moves > 0 {
+            let central_bonus = self.get_drop_central_bonus(piece_type);
+            mg_score += stats.central_moves * central_bonus.0;
+            eg_score += stats.central_moves * central_bonus.1;
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
@@ -597,22 +659,22 @@ impl PositionFeatureEvaluator {
     fn get_mobility_weight(&self, piece_type: PieceType) -> (i32, i32) {
         match piece_type {
             // Major pieces - high mobility value
-            PieceType::Rook => (4, 6),
-            PieceType::PromotedRook => (5, 7),
-            PieceType::Bishop => (3, 5),
-            PieceType::PromotedBishop => (4, 6),
+            PieceType::Rook => (5, 7),
+            PieceType::PromotedRook => (6, 8),
+            PieceType::Bishop => (4, 6),
+            PieceType::PromotedBishop => (5, 7),
 
             // Minor pieces - moderate mobility value
             PieceType::Gold => (2, 3),
             PieceType::Silver => (2, 3),
-            PieceType::Knight => (2, 2),
-            PieceType::Lance => (1, 2),
+            PieceType::Knight => (3, 3),
+            PieceType::Lance => (2, 2),
 
             // Promoted minor pieces
-            PieceType::PromotedPawn => (2, 3),
-            PieceType::PromotedLance => (2, 3),
-            PieceType::PromotedKnight => (2, 3),
-            PieceType::PromotedSilver => (2, 3),
+            PieceType::PromotedPawn => (3, 4),
+            PieceType::PromotedLance => (3, 4),
+            PieceType::PromotedKnight => (3, 4),
+            PieceType::PromotedSilver => (3, 4),
 
             // Pawns and King - low mobility value
             PieceType::Pawn => (1, 1),
@@ -624,22 +686,22 @@ impl PositionFeatureEvaluator {
     fn get_restriction_penalty(&self, piece_type: PieceType) -> (i32, i32) {
         match piece_type {
             // Major pieces suffer most from restriction
-            PieceType::Rook | PieceType::PromotedRook => (20, 25),
-            PieceType::Bishop | PieceType::PromotedBishop => (18, 22),
+            PieceType::Rook | PieceType::PromotedRook => (18, 24),
+            PieceType::Bishop | PieceType::PromotedBishop => (16, 22),
 
             // Minor pieces moderate penalty
-            PieceType::Gold | PieceType::Silver => (10, 12),
-            PieceType::Knight | PieceType::Lance => (8, 10),
+            PieceType::Gold | PieceType::Silver => (6, 8),
+            PieceType::Knight | PieceType::Lance => (7, 9),
 
             // Promoted minor pieces
             PieceType::PromotedPawn
             | PieceType::PromotedLance
             | PieceType::PromotedKnight
-            | PieceType::PromotedSilver => (10, 12),
+            | PieceType::PromotedSilver => (6, 8),
 
             // Pawns and King less affected
-            PieceType::Pawn => (3, 5),
-            PieceType::King => (5, 8),
+            PieceType::Pawn => (3, 4),
+            PieceType::King => (4, 6),
         }
     }
 
@@ -647,26 +709,40 @@ impl PositionFeatureEvaluator {
     fn get_central_mobility_bonus(&self, piece_type: PieceType) -> (i32, i32) {
         match piece_type {
             // Major pieces benefit most from central mobility
-            PieceType::Rook | PieceType::PromotedRook => (3, 2),
-            PieceType::Bishop | PieceType::PromotedBishop => (3, 2),
+            PieceType::Rook | PieceType::PromotedRook => (4, 3),
+            PieceType::Bishop | PieceType::PromotedBishop => (3, 3),
 
             // Knights especially strong in center
             PieceType::Knight => (4, 2),
 
             // Other pieces moderate bonus
-            PieceType::Gold | PieceType::Silver => (2, 1),
+            PieceType::Gold | PieceType::Silver => (2, 2),
             PieceType::Lance => (1, 1),
 
             // Promoted pieces
             PieceType::PromotedPawn
             | PieceType::PromotedLance
             | PieceType::PromotedKnight
-            | PieceType::PromotedSilver => (2, 1),
+            | PieceType::PromotedSilver => (3, 2),
 
             // Pawns and King minimal bonus
-            PieceType::Pawn => (1, 0),
-            PieceType::King => (0, 1), // King centralization good in endgame
+            PieceType::Pawn => (1, 1),
+            PieceType::King => (1, 1), // King centralization good in endgame
         }
+    }
+
+    fn get_drop_mobility_weight(&self, piece_type: PieceType) -> (i32, i32) {
+        let base = self.get_mobility_weight(piece_type);
+        let mg = (base.0 + 1) / 2;
+        let eg = (base.1 + 1) / 2;
+        (mg.max(1), eg.max(1))
+    }
+
+    fn get_drop_central_bonus(&self, piece_type: PieceType) -> (i32, i32) {
+        let base = self.get_central_mobility_bonus(piece_type);
+        let mg = if base.0 == 0 { 0 } else { (base.0 + 1) / 2 };
+        let eg = if base.1 == 0 { 0 } else { (base.1 + 1) / 2 };
+        (mg, eg)
     }
 
     /// Check if a square is in the center (3x3 center area)

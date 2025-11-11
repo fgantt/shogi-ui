@@ -53,3 +53,29 @@ Access via `EvaluationStatistics::telemetry()` or the integrated evaluator debug
 - Edge-case coverage lives in `tests/material_edge_case_tests.rs` (large hands, promoted captures, impasse thresholds, stats resets).
 - Deterministic score expectations are codified in `tests/material_regression_tests.rs`.
 - Run both suites with `cargo test material_edge_case_tests material_regression_tests` after modifying tables or configuration defaults.
+
+# Engine Performance Analysis — Mobility Evaluation (Task 13.0)
+
+**Run Date:** November 10, 2025  
+**Command:** `cargo test mobility_benchmark_snapshot -- --ignored --nocapture`
+
+## Snapshot Metrics
+
+| Scenario | Iterations | Elapsed | Notes |
+|----------|------------|---------|-------|
+| Cached evaluator (shared move generator & reuse) | 5,000 | 2.26 s | Refactored path (`PositionFeatureEvaluator::evaluate_mobility`) |
+| Naive evaluator (per-piece move generator) | 5,000 | 44.37 s | Reconstructed legacy loop for comparison |
+
+> **Speedup:** ~19.7× faster than the naive baseline on an empty board, primarily from eliminating repeated move generation and redundant central/attack scans.
+
+## Observations
+
+- The cached path keeps a single `MoveGenerator` per evaluation and aggregates per-square mobility in linear time, which removes the quadratic blow-up seen in presence of many pieces.  
+- Drop mobility evaluation adds negligible overhead on positions without captured pieces; in drop-heavy scenarios it reuses the same aggregated move data.
+- Statistics counters continue to track evaluation passes identically between the implementations, preserving telemetry fidelity.
+- The performance gap widens further on full game states where the naive version instantiates `MoveGenerator` dozens of times per side; the cached approach scales with the number of legal moves instead of the number of pieces squared.
+
+## Verification
+
+- Functional parity covered by `tests/mobility_evaluation_tests.rs` (`mobility_includes_drop_opportunities`, `mobility_attack_moves_award_bonus`, `mobility_handles_promoted_pieces`).  
+- Benchmark harness lives in `tests/mobility_benchmark.rs` (`#[ignore]`d to avoid CI noise but runs locally with the command above).

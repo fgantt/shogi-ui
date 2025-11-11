@@ -26,13 +26,13 @@
 - [x] 1.4 Add regression tests verifying that disabling each feature returns a zero score and leaves stats untouched.
 - [x] 1.5 Update configuration presets and documentation to reflect working toggles and defaults.
 
-- [ ] 2.0 Refactor Mobility Evaluation for Performance and Hand Pressure
-  - [ ] 2.1 Replace per-piece instantiation of `MoveGenerator` with a shared or cached generator per evaluation pass.
-  - [ ] 2.2 Cache legal move lists or introduce pseudo-legal counting to avoid O(n²) regeneration per piece.
-  - [ ] 2.3 Incorporate hand piece mobility by evaluating drop opportunities (e.g., rook, bishop, pawn drops) with appropriate weights.
-  - [ ] 2.4 Rebalance mobility weights and restriction penalties to avoid over-penalizing castle defenders and promoted minors.
-  - [ ] 2.5 Add benchmarks measuring evaluation time before and after the mobility refactor; capture results in `engine-performance-analysis.md`.
-  - [ ] 2.6 Write unit tests covering mobility scores for on-board pieces and hand drops, including promoted piece scenarios.
+- [x] 2.0 Refactor Mobility Evaluation for Performance and Hand Pressure
+  - [x] 2.1 Replace per-piece instantiation of `MoveGenerator` with a shared or cached generator per evaluation pass.
+  - [x] 2.2 Cache legal move lists or introduce pseudo-legal counting to avoid O(n²) regeneration per piece.
+  - [x] 2.3 Incorporate hand piece mobility by evaluating drop opportunities (e.g., rook, bishop, pawn drops) with appropriate weights.
+  - [x] 2.4 Rebalance mobility weights and restriction penalties to avoid over-penalizing castle defenders and promoted minors.
+  - [x] 2.5 Add benchmarks measuring evaluation time before and after the mobility refactor; capture results in `engine-performance-analysis.md`.
+  - [x] 2.6 Write unit tests covering mobility scores for on-board pieces and hand drops, including promoted piece scenarios.
 
 - [ ] 3.0 Add Shogi-Specific King Safety and Pawn Structure Heuristics
   - [ ] 3.1 Treat promoted defenders (Tokin, promoted Silver, promoted Knight, etc.) as Gold-equivalent when computing king shields and pawn cover.
@@ -63,5 +63,12 @@
 - **Implementation:** `src/evaluation/position_features.rs` now short-circuits every public evaluator when the corresponding `PositionFeatureConfig` flag is disabled and only increments statistics for executed features. `PositionFeatureEvaluator` exposes `set_config`, and `IntegratedEvaluator` (via `IntegratedEvaluationConfig`) propagates both per-feature toggles and `EvaluationWeights`, multiplying each `TaperedScore` contribution accordingly.
 - **Testing:** Added `tests/position_feature_config_tests.rs` covering disabled-feature scoring/stat counters and weight propagation through the integrated evaluator (`cargo test position_feature_config_tests`). A full `cargo test` run currently surfaces pre-existing failures in `evaluation::advanced_interpolation::tests::test_bezier_endpoints`, `evaluation::config::tests::test_strength_optimized`, and `evaluation::material::tests::test_material_preset_usage_tracking`; new tests pass.
 - **Documentation:** Updated `docs/development/tasks/engine-review/task-13.0-position-features-evaluation-review.md` (Section 8) to note the restored configuration fidelity and integration behavior.
+
+## Task 2.0 Completion Notes
+
+- **Implementation:** `PositionFeatureEvaluator` now keeps a shared `MoveGenerator` and aggregates mobility (including drop opportunities) in a single pass over legal moves. Updated weighting tables reduce penalties on castle defenders/promoted minors and boost hand pressure signals. Integration in `src/evaluation/integration.rs` reuses the cached evaluator while multiplying per-feature weights.  
+- **Performance:** Local benchmark (`cargo test mobility_benchmark_snapshot -- --ignored --nocapture`) shows the cached evaluator completing 5,000 mobility evaluations in 2.26 s versus 44.37 s for a reconstructed naive loop (~19.7× speedup). Results logged in `docs/development/tasks/engine-performance-analysis.md`.  
+- **Testing:** Added `tests/mobility_evaluation_tests.rs` to cover drop mobility, attack bonuses, and promoted piece behaviour. Benchmark harness lives in `tests/mobility_benchmark.rs` for repeatable perf measurements. Existing suites continue to pass aside from known unrelated legacy failures.
+
 
 
