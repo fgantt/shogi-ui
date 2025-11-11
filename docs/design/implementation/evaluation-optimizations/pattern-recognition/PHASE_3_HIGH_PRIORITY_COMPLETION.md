@@ -71,7 +71,7 @@ Phase 3 High Priority tasks have been successfully completed, integrating the pa
        // Positional patterns (Task 3.1)
        if self.config.components.positional_patterns {
            total += self.positional_patterns.borrow_mut()
-               .evaluate_position(board, player);
+               .evaluate_position(board, player, captured_pieces);
        }
        
        // Interpolate and return

@@ -171,7 +171,7 @@ fn analyze_position_patterns(board: &BitboardBoard, player: Player) {
     let mut positional = PositionalPatternAnalyzer::new();
     
     let tactical_score = tactical.evaluate_tactics(board, player);
-    let positional_score = positional.evaluate_position(board, player);
+    let positional_score = positional.evaluate_position(board, player, captured_pieces);
     
     println!("Tactical evaluation:");
     println!("  Middlegame: {}", tactical_score.mg);

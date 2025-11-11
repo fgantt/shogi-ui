@@ -14,7 +14,8 @@
 //! use crate::evaluation::positional_patterns::PositionalPatternAnalyzer;
 //!
 //! let analyzer = PositionalPatternAnalyzer::new();
-//! let positional_score = analyzer.evaluate_position(&board, Player::Black);
+//! let positional_score =
+//!     analyzer.evaluate_position(&board, Player::Black, &CapturedPieces::new());
 //! ```
 
 use crate::bitboards::BitboardBoard;
@@ -106,7 +107,12 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Evaluate all positional patterns for a player
-    pub fn evaluate_position(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    pub fn evaluate_position(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         self.stats.evaluations += 1;
 
         let mut mg_score = 0;
@@ -115,21 +121,23 @@ impl PositionalPatternAnalyzer {
 
         // Center control
         if self.config.enable_center_control {
-            let center = self.evaluate_center_control(board, player, &mut control_cache);
+            let center =
+                self.evaluate_center_control(board, player, &mut control_cache, captured_pieces);
             mg_score += center.mg;
             eg_score += center.eg;
         }
 
         // Outposts
         if self.config.enable_outposts {
-            let outposts = self.evaluate_outposts(board, player);
+            let outposts = self.evaluate_outposts(board, player, captured_pieces);
             mg_score += outposts.mg;
             eg_score += outposts.eg;
         }
 
         // Weak squares
         if self.config.enable_weak_squares {
-            let weak = self.evaluate_weak_squares(board, player, &mut control_cache);
+            let weak =
+                self.evaluate_weak_squares(board, player, &mut control_cache, captured_pieces);
             mg_score += weak.mg;
             eg_score += weak.eg;
         }
@@ -168,6 +176,7 @@ impl PositionalPatternAnalyzer {
         board: &BitboardBoard,
         player: Player,
         control_cache: &mut ControlCache<'_>,
+        _captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         self.stats.center_control_checks += 1;
 
@@ -277,7 +286,12 @@ impl PositionalPatternAnalyzer {
     // ===================================================================
 
     /// Evaluate outposts (strong pieces on key squares that cannot be easily attacked)
-    fn evaluate_outposts(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_outposts(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         self.stats.outpost_checks += 1;
 
         let mut mg_score = 0;
@@ -289,7 +303,7 @@ impl PositionalPatternAnalyzer {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        if self.is_outpost(board, pos, piece.piece_type, player) {
+                        if self.is_outpost(board, pos, piece.piece_type, player, captured_pieces) {
                             let value = self.get_outpost_value(piece.piece_type, pos, player);
                             mg_score += value.0;
                             eg_score += value.1;
@@ -310,6 +324,7 @@ impl PositionalPatternAnalyzer {
         pos: Position,
         piece_type: PieceType,
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
         // Outposts are typically:
         // 1. In or near enemy territory
@@ -328,10 +343,13 @@ impl PositionalPatternAnalyzer {
         }
 
         // Check if protected by own pawn
-        let has_pawn_support = self.has_pawn_support(board, pos, player);
+        let has_pawn_support = self.has_pawn_support(board, pos, player, captured_pieces);
 
         // Check if enemy pawns can easily attack
-        let enemy_pawn_threat = self.is_under_enemy_pawn_threat(board, pos, player);
+        let enemy_pawn_threat =
+            self.is_under_enemy_pawn_threat(board, pos, player, captured_pieces);
+
+        let drop_threat = self.has_drop_threat(board, pos, player, captured_pieces);
 
         // Knights and Silvers make best outposts
         let is_good_piece = matches!(
@@ -339,32 +357,232 @@ impl PositionalPatternAnalyzer {
             PieceType::Knight | PieceType::Silver | PieceType::Gold
         );
 
-        has_pawn_support && !enemy_pawn_threat && is_good_piece
+        has_pawn_support && !enemy_pawn_threat && !drop_threat && is_good_piece
     }
 
     /// Check if position has pawn support
-    fn has_pawn_support(&self, board: &BitboardBoard, pos: Position, player: Player) -> bool {
-        let support_offsets = if player == Player::Black {
-            [(1, -1), (1, 1)] // Pawns behind and diagonal
-        } else {
-            [(-1, -1), (-1, 1)]
+    fn has_pawn_support(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        let behind_row = match player {
+            Player::Black => pos.row as i8 + 1,
+            Player::White => pos.row as i8 - 1,
         };
 
-        for (dr, dc) in support_offsets {
-            let check_row = pos.row as i8 + dr;
-            let check_col = pos.col as i8 + dc;
+        if behind_row < 0 || behind_row >= 9 {
+            return false;
+        }
 
-            if check_row >= 0 && check_row < 9 && check_col >= 0 && check_col < 9 {
-                let check_pos = Position::new(check_row as u8, check_col as u8);
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player == player {
-                        return true;
-                    }
-                }
+        let support_pos = Position::new(behind_row as u8, pos.col);
+        if let Some(piece) = board.get_piece(support_pos) {
+            if piece.player == player && piece.piece_type == PieceType::Pawn {
+                return true;
             }
+        } else if self.config.enable_hand_context
+            && captured_pieces.count(PieceType::Pawn, player) > 0
+            && !self.has_unpromoted_pawn_on_file(board, player, pos.col)
+            && !self.is_illegal_drop_rank(PieceType::Pawn, player, support_pos.row)
+        {
+            return true;
         }
 
         false
+    }
+
+    fn has_drop_threat(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        if !self.config.enable_drop_threats || !self.config.enable_hand_context {
+            return false;
+        }
+
+        let opponent = player.opposite();
+        self.pawn_drop_threat(board, pos, opponent, captured_pieces)
+            || self.lance_drop_threat(board, pos, opponent, captured_pieces)
+            || self.knight_drop_threat(board, pos, opponent, captured_pieces)
+    }
+
+    fn pawn_drop_threat(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        opponent: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        if captured_pieces.count(PieceType::Pawn, opponent) == 0 {
+            return false;
+        }
+
+        let forward = self.player_forward(opponent);
+        let drop_row = pos.row as i8 - forward;
+        if drop_row < 0 || drop_row >= 9 {
+            return false;
+        }
+
+        let drop_pos = Position::new(drop_row as u8, pos.col);
+        if board.get_piece(drop_pos).is_some() {
+            return false;
+        }
+
+        if self.is_illegal_drop_rank(PieceType::Pawn, opponent, drop_pos.row)
+            || self.has_unpromoted_pawn_on_file(board, opponent, pos.col)
+        {
+            return false;
+        }
+
+        true
+    }
+
+    fn lance_drop_threat(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        opponent: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        if captured_pieces.count(PieceType::Lance, opponent) == 0 {
+            return false;
+        }
+
+        let forward = self.player_forward(opponent);
+        let mut drop_row = pos.row as i8 - forward;
+
+        while drop_row >= 0 && drop_row < 9 {
+            let drop_pos = Position::new(drop_row as u8, pos.col);
+
+            if self.is_illegal_drop_rank(PieceType::Lance, opponent, drop_pos.row) {
+                drop_row -= forward;
+                continue;
+            }
+
+            if let Some(blocker) = board.get_piece(drop_pos) {
+                if drop_pos == pos {
+                    return false;
+                }
+
+                if blocker.player == opponent {
+                    return false;
+                } else {
+                    return false;
+                }
+            }
+
+            if self.path_clear_vertical(board, drop_pos, pos, forward) {
+                return true;
+            }
+
+            drop_row -= forward;
+        }
+
+        false
+    }
+
+    fn knight_drop_threat(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        opponent: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        if captured_pieces.count(PieceType::Knight, opponent) == 0 {
+            return false;
+        }
+
+        let forward = self.player_forward(opponent);
+        let drop_row = pos.row as i8 - 2 * forward;
+        if drop_row < 0 || drop_row >= 9 {
+            return false;
+        }
+
+        let candidate_cols = [pos.col as i8 - 1, pos.col as i8 + 1];
+
+        for drop_col in candidate_cols {
+            if drop_col < 0 || drop_col >= 9 {
+                continue;
+            }
+
+            let drop_pos = Position::new(drop_row as u8, drop_col as u8);
+            if board.get_piece(drop_pos).is_some() {
+                continue;
+            }
+
+            if self.is_illegal_drop_rank(PieceType::Knight, opponent, drop_pos.row) {
+                continue;
+            }
+
+            return true;
+        }
+
+        false
+    }
+
+    fn path_clear_vertical(
+        &self,
+        board: &BitboardBoard,
+        from: Position,
+        to: Position,
+        forward: i8,
+    ) -> bool {
+        let mut current_row = from.row as i8 + forward;
+
+        while current_row >= 0 && current_row < 9 {
+            if current_row == to.row as i8 {
+                return true;
+            }
+
+            if board
+                .get_piece(Position::new(current_row as u8, from.col))
+                .is_some()
+            {
+                return false;
+            }
+
+            current_row += forward;
+        }
+
+        false
+    }
+
+    fn has_unpromoted_pawn_on_file(&self, board: &BitboardBoard, player: Player, file: u8) -> bool {
+        for row in 0..9 {
+            let pos = Position::new(row, file);
+            if let Some(piece) = board.get_piece(pos) {
+                if piece.player == player && piece.piece_type == PieceType::Pawn {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn is_illegal_drop_rank(&self, piece_type: PieceType, player: Player, row: u8) -> bool {
+        match piece_type {
+            PieceType::Pawn | PieceType::Lance => match player {
+                Player::Black => row == 0,
+                Player::White => row == 8,
+            },
+            PieceType::Knight => match player {
+                Player::Black => row <= 1,
+                Player::White => row >= 7,
+            },
+            _ => false,
+        }
+    }
+
+    fn player_forward(&self, player: Player) -> i8 {
+        if player == Player::Black {
+            -1
+        } else {
+            1
+        }
     }
 
     /// Check if under enemy pawn threat
@@ -373,25 +591,26 @@ impl PositionalPatternAnalyzer {
         board: &BitboardBoard,
         pos: Position,
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
         let opponent = player.opposite();
-        let threat_offsets = if player == Player::Black {
-            [(-1, -1), (-1, 1)] // Enemy pawns from above
-        } else {
-            [(1, -1), (1, 1)]
-        };
+        let forward = self.player_forward(opponent);
+        let source_row = pos.row as i8 - forward;
 
-        for (dr, dc) in threat_offsets {
-            let check_row = pos.row as i8 + dr;
-            let check_col = pos.col as i8 + dc;
-
-            if check_row >= 0 && check_row < 9 && check_col >= 0 && check_col < 9 {
-                let check_pos = Position::new(check_row as u8, check_col as u8);
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player == opponent {
-                        return true;
-                    }
+        if source_row >= 0 && source_row < 9 {
+            let source_pos = Position::new(source_row as u8, pos.col);
+            if let Some(piece) = board.get_piece(source_pos) {
+                if piece.player == opponent && piece.piece_type == PieceType::Pawn {
+                    return true;
                 }
+            } else if self.config.enable_hand_context
+                && self.config.enable_drop_threats
+                && captured_pieces.count(PieceType::Pawn, opponent) > 0
+                && !self.has_unpromoted_pawn_on_file(board, opponent, pos.col)
+                && !self.is_illegal_drop_rank(PieceType::Pawn, opponent, source_pos.row)
+                && board.get_piece(source_pos).is_none()
+            {
+                return true;
             }
         }
 
@@ -434,6 +653,7 @@ impl PositionalPatternAnalyzer {
         board: &BitboardBoard,
         player: Player,
         control_cache: &mut ControlCache<'_>,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         self.stats.weak_square_checks += 1;
 
@@ -444,7 +664,7 @@ impl PositionalPatternAnalyzer {
         let key_squares = self.get_key_squares(player);
 
         for pos in key_squares {
-            if self.is_weak_square(board, pos, player) {
+            if self.is_weak_square(board, pos, player, captured_pieces) {
                 // Check if enemy has piece controlling this square
                 if control_cache.controlled_by(opponent, pos) {
                     penalty += self.config.weak_square_penalty;
@@ -478,9 +698,15 @@ impl PositionalPatternAnalyzer {
     }
 
     /// Check if a square is weak (cannot be defended by pawns)
-    fn is_weak_square(&self, board: &BitboardBoard, pos: Position, player: Player) -> bool {
+    fn is_weak_square(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
         // A square is weak if no friendly pawns can defend it
-        !self.can_be_defended_by_pawn(board, pos, player)
+        !self.can_be_defended_by_pawn(board, pos, player, captured_pieces)
     }
 
     /// Check if square can be defended by pawn
@@ -489,6 +715,7 @@ impl PositionalPatternAnalyzer {
         board: &BitboardBoard,
         pos: Position,
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
         let pawn_files = [-1, 0, 1];
 
@@ -503,6 +730,25 @@ impl PositionalPatternAnalyzer {
                 let check_pos = Position::new(row, file as u8);
                 if let Some(piece) = board.get_piece(check_pos) {
                     if piece.piece_type == PieceType::Pawn && piece.player == player {
+                        return true;
+                    }
+                }
+            }
+
+            if self.config.enable_hand_context
+                && captured_pieces.count(PieceType::Pawn, player) > 0
+                && !self.has_unpromoted_pawn_on_file(board, player, file as u8)
+            {
+                let defensive_row = match player {
+                    Player::Black => pos.row.saturating_add(1),
+                    Player::White => pos.row.saturating_sub(1),
+                };
+
+                if defensive_row < 9
+                    && !self.is_illegal_drop_rank(PieceType::Pawn, player, defensive_row as u8)
+                {
+                    let defensive_pos = Position::new(defensive_row as u8, file as u8);
+                    if board.get_piece(defensive_pos).is_none() {
                         return true;
                     }
                 }
@@ -659,6 +905,7 @@ impl Default for PositionalPatternAnalyzer {
 
 /// Configuration for positional pattern analysis
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PositionalConfig {
     pub enable_center_control: bool,
     pub enable_outposts: bool,
@@ -666,6 +913,8 @@ pub struct PositionalConfig {
     pub enable_piece_activity: bool,
     pub enable_space_advantage: bool,
     pub enable_tempo: bool,
+    pub enable_hand_context: bool,
+    pub enable_drop_threats: bool,
 
     // Bonus/penalty values
     pub pawn_center_bonus: i32,
@@ -683,6 +932,8 @@ impl Default for PositionalConfig {
             enable_piece_activity: true,
             enable_space_advantage: true,
             enable_tempo: true,
+            enable_hand_context: true,
+            enable_drop_threats: true,
 
             pawn_center_bonus: 25,
             weak_square_penalty: 40,
@@ -723,8 +974,10 @@ mod tests {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
         let mut control_cache = ControlCache::new(&board);
+        let captured = CapturedPieces::new();
 
-        let score = analyzer.evaluate_center_control(&board, Player::Black, &mut control_cache);
+        let _score =
+            analyzer.evaluate_center_control(&board, Player::Black, &mut control_cache, &captured);
         assert_eq!(analyzer.stats().center_control_checks, 1);
     }
 
@@ -732,8 +985,9 @@ mod tests {
     fn test_outpost_detection() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = analyzer.evaluate_outposts(&board, Player::Black);
+        let score = analyzer.evaluate_outposts(&board, Player::Black, &captured);
         assert!(score.mg >= 0);
     }
 
@@ -741,8 +995,9 @@ mod tests {
     fn test_evaluate_position() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        let score = analyzer.evaluate_position(&board, Player::Black);
+        let _score = analyzer.evaluate_position(&board, Player::Black, &captured);
         assert_eq!(analyzer.stats().evaluations, 1);
     }
 
@@ -750,8 +1005,9 @@ mod tests {
     fn test_statistics_tracking() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
+        let captured = CapturedPieces::new();
 
-        analyzer.evaluate_position(&board, Player::Black);
+        analyzer.evaluate_position(&board, Player::Black, &captured);
 
         let stats = analyzer.stats();
         assert!(stats.center_control_checks >= 1);
@@ -783,5 +1039,62 @@ mod tests {
             control_cache.controlled_by(Player::Black, blocked_target),
             board_blocked
         );
+    }
+
+    #[test]
+    fn test_outpost_rejected_by_pawn_drop() {
+        let mut board = BitboardBoard::empty();
+        let mut analyzer = PositionalPatternAnalyzer::new();
+        let outpost_pos = Position::new(4, 4);
+
+        board.place_piece(Piece::new(PieceType::Silver, Player::Black), outpost_pos);
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(5, 4),
+        );
+
+        let captured_none = CapturedPieces::new();
+        let score_without_threat =
+            analyzer.evaluate_outposts(&board, Player::Black, &captured_none);
+        assert!(score_without_threat.mg > 0);
+
+        let mut captured_with_pawn = CapturedPieces::new();
+        captured_with_pawn.add_piece(PieceType::Pawn, Player::White);
+
+        let score_with_threat =
+            analyzer.evaluate_outposts(&board, Player::Black, &captured_with_pawn);
+        assert_eq!(score_with_threat.mg, 0);
+    }
+
+    #[test]
+    fn test_weak_square_relieved_by_pawn_drop() {
+        let mut board = BitboardBoard::empty();
+        let mut analyzer = PositionalPatternAnalyzer::new();
+        board.place_piece(
+            Piece::new(PieceType::Rook, Player::White),
+            Position::new(0, 4),
+        );
+
+        let mut cache_no_drop = ControlCache::new(&board);
+        let captured_none = CapturedPieces::new();
+        let penalty = analyzer.evaluate_weak_squares(
+            &board,
+            Player::Black,
+            &mut cache_no_drop,
+            &captured_none,
+        );
+        assert!(penalty.mg < 0);
+
+        let mut cache_with_drop = ControlCache::new(&board);
+        let mut captured_with_pawn = CapturedPieces::new();
+        captured_with_pawn.add_piece(PieceType::Pawn, Player::Black);
+
+        let mitigated = analyzer.evaluate_weak_squares(
+            &board,
+            Player::Black,
+            &mut cache_with_drop,
+            &captured_with_pawn,
+        );
+        assert_eq!(mitigated.mg, 0);
     }
 }

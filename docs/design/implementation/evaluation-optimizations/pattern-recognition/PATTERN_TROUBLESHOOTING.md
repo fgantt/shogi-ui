@@ -84,7 +84,7 @@ println!("Cache size: {} / {}", cache.size(), cache.max_size());
 ```rust
 // Check individual components
 let tactical = recognizer.evaluate_tactics(&board, player);
-let positional = analyzer.evaluate_position(&board, player);
+let positional = analyzer.evaluate_position(&board, player, &CapturedPieces::new());
 
 println!("Tactical: {}mg / {}eg", tactical.mg, tactical.eg);
 println!("Positional: {}mg / {}eg", positional.mg, positional.eg);

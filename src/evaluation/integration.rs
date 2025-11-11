@@ -272,10 +272,11 @@ impl IntegratedEvaluator {
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.positional_patterns {
-            total += self
-                .positional_patterns
-                .borrow_mut()
-                .evaluate_position(board, player);
+            total += self.positional_patterns.borrow_mut().evaluate_position(
+                board,
+                player,
+                captured_pieces,
+            );
         }
 
         // Interpolate to final score

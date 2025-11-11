@@ -155,7 +155,7 @@ Key findings:
             total += self
                 .positional_patterns
                 .borrow_mut()
-                .evaluate_position(board, player);
+                .evaluate_position(board, player, captured_pieces);
         }
 ```
 

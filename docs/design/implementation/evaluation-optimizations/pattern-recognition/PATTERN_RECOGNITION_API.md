@@ -66,7 +66,7 @@ use crate::evaluation::positional_patterns::PositionalPatternAnalyzer;
 let mut analyzer = PositionalPatternAnalyzer::new();
 
 // Evaluate all positional patterns
-let score = analyzer.evaluate_position(&board, player);
+let score = analyzer.evaluate_position(&board, player, &CapturedPieces::new());
 // Returns: TaperedScore { mg, eg }
 
 // Access statistics

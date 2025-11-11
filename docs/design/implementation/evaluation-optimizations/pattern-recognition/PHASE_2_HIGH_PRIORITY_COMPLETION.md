@@ -343,7 +343,7 @@ let tactical_score = recognizer.evaluate_tactics(&board, player);
 use crate::evaluation::positional_patterns::PositionalPatternAnalyzer;
 
 let mut analyzer = PositionalPatternAnalyzer::new();
-let positional_score = analyzer.evaluate_position(&board, player);
+let positional_score = analyzer.evaluate_position(&board, player, &CapturedPieces::new());
 
 // Endgame patterns (enhanced)
 use crate::evaluation::endgame_patterns::EndgamePatternEvaluator;

@@ -24,12 +24,12 @@
   - [x] 1.4 Remove redundant helper methods (e.g., `piece_attacks_square`) and update statistics to match new control sources.
   - [x] 1.5 Add sanity tests that compare detector outputs against attack tables for representative board states.
 
-- [ ] 2.0 Incorporate hand context and shogi-correct pawn heuristics into positional detectors
-  - [ ] 2.1 Extend evaluator inputs to accept `CapturedPieces` (hands) and propagate through positional pattern API.
-  - [ ] 2.2 Redesign pawn-support/threat logic to match shogi movement rules (forward-only capture, drop availability).
-  - [ ] 2.3 Model pawn/lance/knight drop threats for outpost and weak-square evaluation, including adjacent empty squares.
-  - [ ] 2.4 Update configuration to toggle hand-aware heuristics and document new parameters.
-  - [ ] 2.5 Write regression tests covering pawn drops undermining outposts and defending weak squares via hand reinforcements.
+- [x] 2.0 Incorporate hand context and shogi-correct pawn heuristics into positional detectors
+  - [x] 2.1 Extend evaluator inputs to accept `CapturedPieces` (hands) and propagate through positional pattern API.
+  - [x] 2.2 Redesign pawn-support/threat logic to match shogi movement rules (forward-only capture, drop availability).
+  - [x] 2.3 Model pawn/lance/knight drop threats for outpost and weak-square evaluation, including adjacent empty squares.
+  - [x] 2.4 Update configuration to toggle hand-aware heuristics and document new parameters.
+  - [x] 2.5 Write regression tests covering pawn drops undermining outposts and defending weak squares via hand reinforcements.
 
 - [ ] 3.0 Add weighting, phase scaling, and telemetry export for positional patterns in the integrated evaluator
   - [ ] 3.1 Wire `PatternWeights.positional_patterns` (or new weight fields) into `IntegratedEvaluator` and ensure tapered scaling is respected.
@@ -59,3 +59,9 @@
 - **Implementation:** Introduced a reusable `ControlCache` that wraps `BitboardBoard::is_square_attacked_by`, providing cached, blocker-aware control lookups for both players. Center, weak-square, and space evaluations now request control data through this cache, eliminating bespoke scans and the obsolete `piece_attacks_square` helper while keeping statistics intact.
 - **Testing:** Added `test_control_cache_matches_board_queries` to confirm the cache mirrors board attack semantics in scenarios with blockers. Updated existing positional-pattern tests to use the new evaluator signatures. Attempted `cargo test positional_patterns`, but the run hit the known rustc ICE (`cached cgu ... should have an object file`); verified compilation with `cargo check --lib` instead.
 - **Notes:** The cache-based control path prepares the module for later heuristics without reintroducing ad-hoc attack logic. Future performance tuning should reuse this cache instead of re-querying board state.
+
+## Task 2.0 Completion Notes
+
+- **Implementation:** Threaded `CapturedPieces` through `evaluate_position`, outpost, and weak-square paths, added hand-aware toggles to `PositionalConfig`, and rewrote pawn support/threat and drop threat logic (pawn, lance, knight) using orientation-aware helpers. Weak-square defense now recognises pawn drops, and drop heuristics feed directly into outpost validation.
+- **Testing:** Added `test_outpost_rejected_by_pawn_drop` and `test_weak_square_relieved_by_pawn_drop` to validate pawn-drop threats and defenses. Unit harness updated to the new API signature. `cargo test positional_patterns` still encounters the existing rustc ICE; verified via `cargo check --lib`.
+- **Notes:** New helpers guard against illegal drops (last-rank restrictions, double pawns) and reuse shared direction utilities, keeping future heuristics consistent with shogi rules.

@@ -101,7 +101,7 @@ fn evaluate_standard(...) -> i32 {
     // Positional patterns (Phase 3 - Task 3.1 Integration)
     if self.config.components.positional_patterns {                         // ✅ CONFIGURABLE
         total += self.positional_patterns.borrow_mut()
-            .evaluate_position(board, player);                              // ✅ CALLED
+            .evaluate_position(board, player, captured_pieces);             // ✅ CALLED
     }
     
     // Interpolate to final score

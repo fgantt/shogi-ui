@@ -88,7 +88,7 @@ fn display_pattern_analysis(board: &BitboardBoard, player: Player) {
     
     // Positional patterns
     let mut positional = PositionalPatternAnalyzer::new();
-    let positional_score = positional.evaluate_position(board, player);
+    let positional_score = positional.evaluate_position(board, player, captured_pieces);
     
     println!("\n🎯 POSITIONAL PATTERNS:");
     println!("  Score: {}mg / {}eg", positional_score.mg, positional_score.eg);
