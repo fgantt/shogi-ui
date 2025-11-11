@@ -1,0 +1,55 @@
+## Relevant Files
+
+- `src/evaluation/positional_patterns.rs` - Core positional pattern detectors that need shogi-specific control logic, blocker-aware attacks, and hand-aware heuristics.
+- `src/evaluation/integration.rs` - Integrates positional scores into `IntegratedEvaluator`; requires weighting, phase scaling, and telemetry updates.
+- `src/evaluation/pattern_config.rs` - Defines positional pattern configuration/weights that must include new knobs and defaults.
+- `src/evaluation/attack_tables.rs` - Shared attack/threat utilities to reuse for blocker-aware control (verify actual path/name before coding).
+- `src/evaluation/hand_utils.rs` - Utilities for hand (`CapturedPieces`) analysis or new module to be created for drop threat logic.
+- `tests/positional_patterns_tests.rs` - New/unit tests validating positional heuristics against shogi fixtures.
+- `tests/evaluation_integration_tests.rs` - Integration tests ensuring weighted positional signals behave correctly.
+- `benches/positional_patterns_bench.rs` - Benchmark suite measuring positional evaluator performance before/after optimizations.
+
+### Notes
+
+- Confirm actual helper module names (`attack_tables`, `hand_utils`, etc.) before implementation; adjust paths accordingly.
+- Unit tests should live next to the code when possible; integration tests belong under `tests/`.
+- Use `cargo test --lib positional_patterns` (or similar focused commands) during development; run `cargo bench benches::positional_patterns_bench` for benchmarks.
+
+## Tasks
+
+- [ ] 1.0 Replace bespoke attack detection with shared blocker-aware attack utilities
+  - [ ] 1.1 Inventory existing attack/threat utilities (e.g., `AttackTables`, `ThreatEvaluator`) and document required APIs for positional detectors.
+  - [ ] 1.2 Refactor center, weak-square, space, and other detectors to request control data through shared utilities rather than bespoke scans.
+  - [ ] 1.3 Ensure promoted pieces, lances, knights, and long-range sliders respect blockers when computing control.
+  - [ ] 1.4 Remove redundant helper methods (e.g., `piece_attacks_square`) and update statistics to match new control sources.
+  - [ ] 1.5 Add sanity tests that compare detector outputs against attack tables for representative board states.
+
+- [ ] 2.0 Incorporate hand context and shogi-correct pawn heuristics into positional detectors
+  - [ ] 2.1 Extend evaluator inputs to accept `CapturedPieces` (hands) and propagate through positional pattern API.
+  - [ ] 2.2 Redesign pawn-support/threat logic to match shogi movement rules (forward-only capture, drop availability).
+  - [ ] 2.3 Model pawn/lance/knight drop threats for outpost and weak-square evaluation, including adjacent empty squares.
+  - [ ] 2.4 Update configuration to toggle hand-aware heuristics and document new parameters.
+  - [ ] 2.5 Write regression tests covering pawn drops undermining outposts and defending weak squares via hand reinforcements.
+
+- [ ] 3.0 Add weighting, phase scaling, and telemetry export for positional patterns in the integrated evaluator
+  - [ ] 3.1 Wire `PatternWeights.positional_patterns` (or new weight fields) into `IntegratedEvaluator` and ensure tapered scaling is respected.
+  - [ ] 3.2 Introduce per-detector weights/phase multipliers within `PositionalConfig`, falling back to sensible defaults.
+  - [ ] 3.3 Implement `PositionalStats::snapshot()/merge()` APIs and integrate with existing evaluation telemetry pipelines.
+  - [ ] 3.4 Update configuration parsing/documentation to expose new weighting and telemetry options.
+  - [ ] 3.5 Add integration tests verifying weights affect final scores and stats snapshots appear in evaluator reports.
+  - [ ] 3.6 Align positional configuration defaults with PRD guidance (disable unstable detectors by default, document default values and tuning guidance).
+
+- [ ] 4.0 Redesign positional heuristics for shogi fidelity and performance
+  - [ ] 4.1 Rework center control to measure actual control/mobility (including promoted pieces) instead of raw occupancy.
+  - [ ] 4.2 Reframe outpost detection with shogi-specific piece sets, blocker-aware support, and drop-counterplay checks.
+  - [ ] 4.3 Replace weak-square identification with threat/defense balance that honors blockers, promotions, and castle structures.
+  - [ ] 4.4 Revise space evaluation to use side-relative territory metrics and cached control maps to avoid O(81²) scans.
+  - [ ] 4.5 Profile the redesigned evaluator, ensuring allocation-free hot paths and acceptable runtime across sample positions.
+
+- [ ] 5.0 Build regression tests, fixtures, and benchmarks for positional pattern evaluation
+  - [ ] 5.1 Author canonical shogi position fixtures (central fights, castle weaknesses, space clamps) with expected score deltas.
+  - [ ] 5.2 Create targeted unit tests asserting detector outputs on each fixture and guarding against regressions.
+  - [ ] 5.3 Add integration tests that compare positional scores before/after weighting changes to maintain tuning stability.
+  - [ ] 5.4 Implement criterion benches measuring evaluator runtimes and control-map reuse efficiency.
+  - [ ] 5.5 Document the testing/benchmarking workflow and incorporate into CI or release validation checklists.
+
