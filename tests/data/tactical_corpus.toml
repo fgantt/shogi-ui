@@ -1,0 +1,57 @@
+# Tactical tactical pattern corpus derived from task 14.0 PRD scenarios.
+
+[[positions]]
+name = "blocked_rook_fork"
+fen = "9/9/4g4/9/4R1Sk1/9/9/9/9 b -"
+expectation = "neutral"
+notes = ["fork", "blocker present"]
+
+[[positions]]
+name = "open_rook_fork"
+fen = "9/9/4g4/9/4R2k1/9/9/9/9 b -"
+expectation = "positive"
+notes = ["fork", "blocker removed"]
+
+[[positions]]
+name = "back_rank_blocked"
+fen = "3gk1g1R/3gsg3/9/9/9/9/9/9/9 w -"
+expectation = "negative"
+notes = ["back_rank", "escape squares contested"]
+
+[[positions]]
+name = "back_rank_exposed"
+fen = "3gk3R/3gsg3/9/9/9/9/9/9/9 w -"
+expectation = "negative"
+notes = ["back_rank", "escape squares removed"]
+
+[[positions]]
+name = "skewer_penalty"
+fen = "R1s1k4/9/9/9/9/9/9/9/9 w -"
+expectation = "negative"
+notes = ["skewer"]
+
+[[positions]]
+name = "discovered_attack"
+fen = "4k4/9/9/4P4/4R4/9/9/9/9 b -"
+expectation = "positive"
+notes = ["discovered"]
+
+[[positions]]
+name = "drop_rook_fork"
+fen = "9/9/9/9/1g5s1/9/9/9/9 b R"
+expectation = "positive"
+notes = ["drop", "fork"]
+
+[[positions]]
+name = "drop_rook_pin"
+fen = "4k4/4s4/9/9/9/9/9/9/9 b R"
+expectation = "positive"
+notes = ["drop", "pin"]
+
+[[positions]]
+name = "quiet_position"
+fen = "9/9/9/9/9/9/9/9/9 b -"
+expectation = "neutral"
+notes = ["baseline"]
+
+

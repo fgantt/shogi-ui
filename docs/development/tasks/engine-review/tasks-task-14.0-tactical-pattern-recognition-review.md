@@ -45,12 +45,12 @@
   - [x] 4.3 Introduce runtime-configurable weights through CLI or engine options, mirroring other evaluation components.
   - [x] 4.4 Provide default tuning presets (aggressive, balanced, conservative) for tactical weighting.
   - [x] 4.5 Update docs/configuration guides with instructions for enabling telemetry and adjusting weights.
-- [ ] 5.0 Testing, Benchmarks, and Validation Suite
-  - [ ] 5.1 Create unit tests covering fork, pin, skewer, discovered attack, back-rank threat, and drop scenarios using blocker-aware fixtures.
-  - [ ] 5.2 Add regression tests ensuring sign-correct scoring and weight application within the integrated evaluator.
-  - [ ] 5.3 Develop performance benchmarks measuring detection frequency, evaluation overhead, and allocation counts.
-  - [ ] 5.4 Assemble a tactical FEN corpus (including failure cases cited in the PRD) for automated validation.
-  - [ ] 5.5 Integrate new tests and benchmarks into CI, documenting expected thresholds and alerting criteria.
+- [x] 5.0 Testing, Benchmarks, and Validation Suite
+  - [x] 5.1 Create unit tests covering fork, pin, skewer, discovered attack, back-rank threat, and drop scenarios using blocker-aware fixtures.
+  - [x] 5.2 Add regression tests ensuring sign-correct scoring and weight application within the integrated evaluator.
+  - [x] 5.3 Develop performance benchmarks measuring detection frequency, evaluation overhead, and allocation counts.
+  - [x] 5.4 Assemble a tactical FEN corpus (including failure cases cited in the PRD) for automated validation.
+  - [x] 5.5 Integrate new tests and benchmarks into CI, documenting expected thresholds and alerting criteria.
 
 
 ## Task 1.0 Completion Notes
@@ -78,4 +78,11 @@
 - **Configuration:** Extended `IntegratedEvaluationConfig` with a dedicated `TacticalConfig`, introduced runtime setters (`update_tactical_config`), and added `TacticalPreset` helpers (`balanced`, `aggressive`, `conservative`) to mirror other configurable evaluation knobs.
 - **Telemetry:** Extended `EvaluationStatistics` to retain the latest tactical snapshot, updated `StatisticsReport` formatting, and surfaced tactical metrics in `integrated_evaluator.telemetry_snapshot()`.
 - **Documentation:** Refreshed this task file with telemetry guidance and documented preset usage; added `telemetry_includes_tactical_snapshot` regression coverage to confirm snapshots populate after evaluation.
+
+## Task 5.0 Completion Notes
+
+- **Testing:** Expanded `tests/tactical_patterns_accuracy_tests.rs` with skewer and discovered-attack coverage and added `integrated_evaluator_respects_tactical_polarity` to guard polarity regressions. Introduced `tests/tactical_corpus_validation_tests.rs`, which ingests `tests/data/tactical_corpus.toml` (fork/blocker, back-rank, skewer, discovered, drop, and baseline cases) to validate motif scoring from FEN snapshots.
+- **Benchmarks:** Added `benches/tactical_patterns_performance_benchmarks.rs` measuring recognizer construction plus single/batch evaluation throughput across the tactical corpus, enabling trend tracking for tactical heuristics.
+- **CI Guidance:** Documented the new regression commands (`cargo test --test tactical_patterns_accuracy_tests`, `cargo test --test tactical_corpus_validation_tests`) and benchmark entry point (`cargo bench --bench tactical_patterns_performance_benchmarks`) in this task plan and `docs/development/testing/tactical-patterns-validation.md` so CI owners can gate tactical changes and monitor criterion deltas.
+- **Artifacts:** Tactical corpus stored in `tests/data/tactical_corpus.toml` for reuse in future tests/benchmarks; data includes both successful detections and formerly mis-scored failure cases cited in the PRD.
 

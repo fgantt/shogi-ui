@@ -41,6 +41,30 @@ fn pins_only_config() -> TacticalConfig {
     }
 }
 
+fn skewers_only_config() -> TacticalConfig {
+    TacticalConfig {
+        enable_forks: false,
+        enable_pins: false,
+        enable_skewers: true,
+        enable_discovered_attacks: false,
+        enable_knight_forks: false,
+        enable_back_rank_threats: false,
+        ..TacticalConfig::default()
+    }
+}
+
+fn discovered_only_config() -> TacticalConfig {
+    TacticalConfig {
+        enable_forks: false,
+        enable_pins: false,
+        enable_skewers: false,
+        enable_discovered_attacks: true,
+        enable_knight_forks: false,
+        enable_back_rank_threats: false,
+        ..TacticalConfig::default()
+    }
+}
+
 #[test]
 fn forks_respect_blockers_and_line_of_sight() {
     let mut board = BitboardBoard::empty();
@@ -153,6 +177,56 @@ fn pins_apply_negative_penalty() {
 }
 
 #[test]
+fn skewers_penalize_exposed_high_value_piece() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(0, 0),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::White),
+        Position::new(0, 2),
+    );
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(0, 4),
+    );
+
+    let captured = CapturedPieces::new();
+    let mut recognizer = TacticalPatternRecognizer::with_config(skewers_only_config());
+    let score = recognizer.evaluate_tactics(&board, Player::White, &captured);
+    assert!(
+        score.mg < 0,
+        "Skewer exposing the king should penalize the defending side"
+    );
+}
+
+#[test]
+fn discovered_attack_awards_bonus() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(0, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(3, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(4, 4),
+    );
+
+    let captured = CapturedPieces::new();
+    let mut recognizer = TacticalPatternRecognizer::with_config(discovered_only_config());
+    let score = recognizer.evaluate_tactics(&board, Player::Black, &captured);
+    assert!(
+        score.mg > 0,
+        "Discovered attack potential should reward the attacking side"
+    );
+}
+
+#[test]
 fn tactical_weight_scales_contribution() {
     let mut board = BitboardBoard::empty();
     board.place_piece(
@@ -249,6 +323,52 @@ fn drop_rook_applies_pin_bonus() {
     assert!(
         score.mg > 0,
         "Dropping a rook to pin an opponent piece should yield a positive tactical bonus"
+    );
+}
+
+#[test]
+fn integrated_evaluator_respects_tactical_polarity() {
+    let mut board = BitboardBoard::empty();
+    board.place_piece(
+        Piece::new(PieceType::King, Player::White),
+        Position::new(0, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::White),
+        Position::new(1, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::Black),
+        Position::new(4, 4),
+    );
+
+    let captured = CapturedPieces::new();
+
+    let mut config = IntegratedEvaluationConfig::default();
+    config.use_optimized_path = false;
+    config.enable_eval_cache = false;
+    config.enable_phase_cache = false;
+    config.components = ComponentFlags {
+        material: false,
+        piece_square_tables: false,
+        position_features: false,
+        opening_principles: false,
+        endgame_patterns: false,
+        tactical_patterns: true,
+        positional_patterns: false,
+    };
+
+    let evaluator = IntegratedEvaluator::with_config(config.clone());
+    let defender_score = evaluator.evaluate(&board, Player::White, &captured);
+    assert!(
+        defender_score < 0,
+        "Pinned defender should receive a negative tactical contribution"
+    );
+
+    let attacker_score = evaluator.evaluate(&board, Player::Black, &captured);
+    assert!(
+        attacker_score > defender_score,
+        "Attacking side should evaluate better than the pinned defender (attacker {attacker_score}, defender {defender_score})"
     );
 }
 
