@@ -34,13 +34,13 @@
   - [x] 2.5 Add benchmarks measuring evaluation time before and after the mobility refactor; capture results in `engine-performance-analysis.md`.
   - [x] 2.6 Write unit tests covering mobility scores for on-board pieces and hand drops, including promoted piece scenarios.
 
-- [ ] 3.0 Add Shogi-Specific King Safety and Pawn Structure Heuristics
-  - [ ] 3.1 Treat promoted defenders (Tokin, promoted Silver, promoted Knight, etc.) as Gold-equivalent when computing king shields and pawn cover.
-  - [ ] 3.2 Incorporate hand piece coverage into king safety scoring (e.g., potential drops that guard adjacent squares or attack the king).
-  - [ ] 3.3 Introduce castle pattern recognition (Mino, Yagura, Anaguma) and adjust safety scores accordingly.
-  - [ ] 3.4 Update pawn structure evaluation to handle hand-supported chains, illegal double pawns, and shogi-specific advancement scales.
-  - [ ] 3.5 Revise passed pawn detection to account for opposing hand drops and promoted blockers.
-  - [ ] 3.6 Create test fixtures validating shogi-specific king safety and pawn structure adjustments across common castles and attack patterns.
+- [x] 3.0 Add Shogi-Specific King Safety and Pawn Structure Heuristics
+  - [x] 3.1 Treat promoted defenders (Tokin, promoted Silver, promoted Knight, etc.) as Gold-equivalent when computing king shields and pawn cover.
+  - [x] 3.2 Incorporate hand piece coverage into king safety scoring (e.g., potential drops that guard adjacent squares or attack the king).
+  - [x] 3.3 Introduce castle pattern recognition (Mino, Yagura, Anaguma) and adjust safety scores accordingly.
+  - [x] 3.4 Update pawn structure evaluation to handle hand-supported chains, illegal double pawns, and shogi-specific advancement scales.
+  - [x] 3.5 Revise passed pawn detection to account for opposing hand drops and promoted blockers.
+  - [x] 3.6 Create test fixtures validating shogi-specific king safety and pawn structure adjustments across common castles and attack patterns.
 
 - [ ] 4.0 Modernize Center Control and Development Signals
   - [ ] 4.1 Replace occupancy-based center scoring with attack map analysis that differentiates active control from passive placement.
@@ -69,6 +69,13 @@
 - **Implementation:** `PositionFeatureEvaluator` now keeps a shared `MoveGenerator` and aggregates mobility (including drop opportunities) in a single pass over legal moves. Updated weighting tables reduce penalties on castle defenders/promoted minors and boost hand pressure signals. Integration in `src/evaluation/integration.rs` reuses the cached evaluator while multiplying per-feature weights.  
 - **Performance:** Local benchmark (`cargo test mobility_benchmark_snapshot -- --ignored --nocapture`) shows the cached evaluator completing 5,000 mobility evaluations in 2.26 s versus 44.37 s for a reconstructed naive loop (~19.7× speedup). Results logged in `docs/development/tasks/engine-performance-analysis.md`.  
 - **Testing:** Added `tests/mobility_evaluation_tests.rs` to cover drop mobility, attack bonuses, and promoted piece behaviour. Benchmark harness lives in `tests/mobility_benchmark.rs` for repeatable perf measurements. Existing suites continue to pass aside from known unrelated legacy failures.
+
+## Task 3.0 Completion Notes
+
+- **Implementation:** King-safety heuristics now treat promoted defenders as gold-equivalents, recognise castle guard placements with shared move resources, and account for both friendly and enemy drop pressure (pawns, golds, silvers, lances, knights). Pawn-structure scoring rewards hand-supported chains, applies shogi-oriented advancement tables, and reduces passed-pawn value when the opponent can interpose drops or promoted blockers.  
+- **Testing:** Extended `tests/king_safety_and_pawn_structure_tests.rs` with coverage for tokins near the king, gold-in-hand chain completion, and enemy knight drop threats. Existing suites continue to run under the default feature set.  
+- **Documentation:** Updated `docs/development/tasks/engine-review/task-13.0-position-features-evaluation-review.md` to reflect the new heuristics and mitigated issues identified in the review.
+- **Performance:** Eliminated per-evaluation `HashSet` allocations and now reuse stack-allocated bitsets for hand-supported chains; Criterion (`cargo bench --bench position_features_performance_benchmarks --features "legacy-tests" king_safety pawn_structure`) reports ~0.64–0.89 µs per side, matching pre-refactor throughput.
 
 
 

@@ -20,7 +20,8 @@
 //! let board = BitboardBoard::new();
 //! let captured_pieces = CapturedPieces::new();
 //!
-//! let king_safety = evaluator.evaluate_king_safety(&board, Player::Black);
+//! let king_safety =
+//!     evaluator.evaluate_king_safety(&board, Player::Black, &CapturedPieces::new());
 //! let mobility = evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
 //! ```
 
@@ -28,6 +29,138 @@ use crate::bitboards::BitboardBoard;
 use crate::moves::MoveGenerator;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+
+fn is_gold_equivalent(piece_type: PieceType) -> bool {
+    matches!(
+        piece_type,
+        PieceType::Gold
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver
+    )
+}
+
+fn is_promoted_major(piece_type: PieceType) -> bool {
+    matches!(
+        piece_type,
+        PieceType::PromotedBishop | PieceType::PromotedRook
+    )
+}
+
+fn oriented_coords(pos: Position, player: Player) -> (i8, i8) {
+    if player == Player::Black {
+        (pos.row as i8, pos.col as i8)
+    } else {
+        ((8 - pos.row) as i8, (8 - pos.col) as i8)
+    }
+}
+
+fn oriented_offset_to_actual(base: Position, player: Player, dr: i8, dc: i8) -> Option<Position> {
+    let target_row = if player == Player::Black {
+        base.row as i8 + dr
+    } else {
+        base.row as i8 - dr
+    };
+    let target_col = if player == Player::Black {
+        base.col as i8 + dc
+    } else {
+        base.col as i8 - dc
+    };
+
+    if target_row < 0 || target_row >= 9 || target_col < 0 || target_col >= 9 {
+        None
+    } else {
+        Some(Position::new(target_row as u8, target_col as u8))
+    }
+}
+
+fn is_illegal_pawn_drop_rank(player: Player, row: u8) -> bool {
+    match player {
+        Player::Black => row == 0,
+        Player::White => row == 8,
+    }
+}
+
+fn is_illegal_lance_drop_rank(player: Player, row: u8) -> bool {
+    match player {
+        Player::Black => row == 0,
+        Player::White => row == 8,
+    }
+}
+
+fn is_illegal_knight_drop_rank(player: Player, row: u8) -> bool {
+    match player {
+        Player::Black => row <= 1,
+        Player::White => row >= 7,
+    }
+}
+
+#[derive(Copy, Clone)]
+enum HandPieceKind {
+    GoldLike,
+    Silver,
+    Pawn,
+    Lance,
+    Knight,
+}
+
+#[derive(Copy, Clone)]
+struct GuardDropTarget {
+    dr: i8,
+    dc: i8,
+    gold_bonus: (i32, i32),
+    silver_bonus: Option<(i32, i32)>,
+    pawn_bonus: Option<(i32, i32)>,
+    lance_bonus: Option<(i32, i32)>,
+    knight_bonus: Option<(i32, i32)>,
+}
+
+#[derive(Copy, Clone)]
+struct CastleGuardRequirement {
+    dr: i8,
+    dc: i8,
+    accept_gold_like: bool,
+    accept_silver: bool,
+    drop_bonus: (i32, i32),
+}
+
+#[derive(Copy, Clone)]
+struct HandCounts {
+    gold: i32,
+    silver: i32,
+}
+
+impl HandCounts {
+    fn new(captured: &CapturedPieces, player: Player) -> Self {
+        Self {
+            gold: captured.count(PieceType::Gold, player) as i32,
+            silver: captured.count(PieceType::Silver, player) as i32,
+        }
+    }
+
+    fn has_gold(&self) -> bool {
+        self.gold > 0
+    }
+
+    fn has_silver(&self) -> bool {
+        self.silver > 0
+    }
+
+    fn use_gold(&mut self) {
+        self.gold -= 1;
+    }
+
+    fn use_silver(&mut self) {
+        self.silver -= 1;
+    }
+}
+
+enum GuardState {
+    OnBoard,
+    FulfilledByDrop(i32, i32),
+    Missing,
+}
 
 const MOBILITY_BOARD_AREA: usize = 81;
 const ALL_PIECE_TYPES: [PieceType; PieceType::COUNT] = [
@@ -112,7 +245,12 @@ impl PositionFeatureEvaluator {
     ///
     /// King safety is more critical in middlegame when there are more pieces
     /// that can mount an attack.
-    pub fn evaluate_king_safety(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    pub fn evaluate_king_safety(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         if !self.config.enable_king_safety {
             return TaperedScore::default();
         }
@@ -138,17 +276,150 @@ impl PositionFeatureEvaluator {
         mg_score += pawn_cover.mg;
         eg_score += pawn_cover.eg;
 
-        // 3. Enemy attackers near king
+        // 3. Hand pieces that can reinforce the king
+        let hand_defense = self.evaluate_hand_defense(board, king_pos, player, captured_pieces);
+        mg_score += hand_defense.mg;
+        eg_score += hand_defense.eg;
+
+        // 4. Recognise castle structures
+        let castle_bonus = self.evaluate_castle_patterns(board, king_pos, player, captured_pieces);
+        mg_score += castle_bonus.mg;
+        eg_score += castle_bonus.eg;
+
+        let enemy_hand_pressure =
+            self.evaluate_enemy_hand_pressure(board, king_pos, player, captured_pieces);
+        mg_score -= enemy_hand_pressure.mg;
+        eg_score -= enemy_hand_pressure.eg;
+
+        // 5. Enemy attackers near king
         let attacker_penalty = self.evaluate_enemy_attackers(board, king_pos, player);
         mg_score -= attacker_penalty.mg;
         eg_score -= attacker_penalty.eg;
 
-        // 4. King exposure (open squares near king)
+        // 6. King exposure (open squares near king)
         let exposure = self.evaluate_king_exposure(board, king_pos, player);
         mg_score -= exposure.mg;
         eg_score -= exposure.eg;
 
         TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    fn evaluate_enemy_hand_pressure(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let opponent = player.opposite();
+        let mut mg_penalty = 0;
+        let mut eg_penalty = 0;
+
+        let pawn_in_hand = captured_pieces.count(PieceType::Pawn, opponent) as i32;
+        if pawn_in_hand > 0 {
+            if let Some(front_square) = oriented_offset_to_actual(king_pos, opponent, -1, 0) {
+                if !board.is_square_occupied(front_square)
+                    && !self.column_has_unpromoted_pawn(board, opponent, front_square.col)
+                    && !is_illegal_pawn_drop_rank(opponent, front_square.row)
+                {
+                    mg_penalty += 32;
+                    eg_penalty += 18;
+                }
+            }
+        }
+
+        let gold_in_hand = captured_pieces.count(PieceType::Gold, opponent) as i32;
+        let silver_in_hand = captured_pieces.count(PieceType::Silver, opponent) as i32;
+        if gold_in_hand > 0 || silver_in_hand > 0 {
+            const THREAT_TARGETS: &[GuardDropTarget] = &[
+                GuardDropTarget {
+                    dr: -1,
+                    dc: 0,
+                    gold_bonus: (28, 16),
+                    silver_bonus: Some((18, 10)),
+                    pawn_bonus: None,
+                    lance_bonus: None,
+                    knight_bonus: None,
+                },
+                GuardDropTarget {
+                    dr: 0,
+                    dc: -1,
+                    gold_bonus: (20, 12),
+                    silver_bonus: Some((16, 10)),
+                    pawn_bonus: None,
+                    lance_bonus: None,
+                    knight_bonus: None,
+                },
+                GuardDropTarget {
+                    dr: 0,
+                    dc: 1,
+                    gold_bonus: (20, 12),
+                    silver_bonus: Some((16, 10)),
+                    pawn_bonus: None,
+                    lance_bonus: None,
+                    knight_bonus: None,
+                },
+                GuardDropTarget {
+                    dr: -1,
+                    dc: -1,
+                    gold_bonus: (24, 14),
+                    silver_bonus: Some((20, 12)),
+                    pawn_bonus: None,
+                    lance_bonus: None,
+                    knight_bonus: None,
+                },
+                GuardDropTarget {
+                    dr: -1,
+                    dc: 1,
+                    gold_bonus: (24, 14),
+                    silver_bonus: Some((20, 12)),
+                    pawn_bonus: None,
+                    lance_bonus: None,
+                    knight_bonus: None,
+                },
+            ];
+
+            for target in THREAT_TARGETS {
+                if let Some(pos) =
+                    oriented_offset_to_actual(king_pos, opponent, target.dr, target.dc)
+                {
+                    if board.is_square_occupied(pos) {
+                        continue;
+                    }
+
+                    if gold_in_hand > 0 {
+                        mg_penalty += target.gold_bonus.0;
+                        eg_penalty += target.gold_bonus.1;
+                        break;
+                    } else if silver_in_hand > 0 {
+                        if let Some(bonus) = target.silver_bonus {
+                            mg_penalty += bonus.0;
+                            eg_penalty += bonus.1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let knight_in_hand = captured_pieces.count(PieceType::Knight, opponent) as i32;
+        if knight_in_hand > 0 {
+            let knight_sources = [(-2, -1), (-2, 1)];
+            for (dr, dc) in knight_sources {
+                if let Some(pos) = oriented_offset_to_actual(king_pos, opponent, dr, dc) {
+                    if board.is_square_occupied(pos)
+                        || is_illegal_knight_drop_rank(opponent, pos.row)
+                    {
+                        continue;
+                    }
+                    mg_penalty += 18;
+                    eg_penalty += 12;
+                    break;
+                }
+            }
+        }
+
+        TaperedScore::new_tapered(mg_penalty, eg_penalty)
     }
 
     /// Evaluate king shield (friendly pieces near king)
@@ -180,13 +451,17 @@ impl PositionFeatureEvaluator {
                 let pos = Position::new(new_row as u8, new_col as u8);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        let shield_value = match piece.piece_type {
-                            PieceType::Gold => (40, 20),   // Best defender
-                            PieceType::Silver => (30, 18), // Good defender
-                            PieceType::Pawn => (20, 12),   // Pawn shield
-                            PieceType::Knight => (15, 8),  // Less useful
-                            PieceType::Lance => (15, 8),   // Less useful
-                            _ => (10, 5),                  // Other pieces
+                        let shield_value = if is_gold_equivalent(piece.piece_type) {
+                            (48, 28)
+                        } else {
+                            match piece.piece_type {
+                                PieceType::PromotedBishop | PieceType::PromotedRook => (44, 26),
+                                PieceType::Rook | PieceType::Bishop => (26, 18),
+                                PieceType::Silver | PieceType::PromotedSilver => (28, 16),
+                                PieceType::Pawn => (18, 10),
+                                PieceType::Knight | PieceType::Lance => (14, 8),
+                                _ => (12, 6),
+                            }
                         };
                         mg_score += shield_value.0;
                         eg_score += shield_value.1;
@@ -218,9 +493,14 @@ impl PositionFeatureEvaluator {
             if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                 let pos = Position::new(new_row as u8, new_col as u8);
                 if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player && piece.piece_type == PieceType::Pawn {
-                        mg_score += 25; // Pawn cover very important in middlegame
-                        eg_score += 10; // Less critical in endgame
+                    if piece.player == player {
+                        if piece.piece_type == PieceType::Pawn {
+                            mg_score += 25; // Pawn cover very important in middlegame
+                            eg_score += 10; // Less critical in endgame
+                        } else if is_gold_equivalent(piece.piece_type) {
+                            mg_score += 32;
+                            eg_score += 14;
+                        }
                     }
                 }
             }
@@ -245,12 +525,17 @@ impl PositionFeatureEvaluator {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player != player {
-                        let threat_value = match piece.piece_type {
-                            PieceType::Rook | PieceType::PromotedRook => (50, 30),
-                            PieceType::Bishop | PieceType::PromotedBishop => (45, 28),
-                            PieceType::Gold => (30, 20),
-                            PieceType::Silver => (25, 18),
-                            _ => (15, 10),
+                        let threat_value = if is_gold_equivalent(piece.piece_type) {
+                            (32, 22)
+                        } else {
+                            match piece.piece_type {
+                                PieceType::Rook | PieceType::PromotedRook => (52, 32),
+                                PieceType::Bishop | PieceType::PromotedBishop => (46, 28),
+                                PieceType::Silver | PieceType::PromotedSilver => (26, 18),
+                                PieceType::Knight | PieceType::Lance => (18, 12),
+                                PieceType::Pawn => (12, 8),
+                                _ => (16, 10),
+                            }
                         };
                         mg_score += threat_value.0;
                         eg_score += threat_value.1;
@@ -260,6 +545,200 @@ impl PositionFeatureEvaluator {
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    fn evaluate_hand_defense(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let mut mg_score = 0;
+        let mut eg_score = 0;
+
+        let mut gold_like = captured_pieces.count(PieceType::Gold, player) as i32;
+        let mut silver = captured_pieces.count(PieceType::Silver, player) as i32;
+        let mut pawn = captured_pieces.count(PieceType::Pawn, player) as i32;
+        let mut lance = captured_pieces.count(PieceType::Lance, player) as i32;
+        let mut knight = captured_pieces.count(PieceType::Knight, player) as i32;
+
+        const GUARD_TARGETS: &[GuardDropTarget] = &[
+            GuardDropTarget {
+                dr: -1,
+                dc: 0,
+                gold_bonus: (32, 16),
+                silver_bonus: Some((18, 10)),
+                pawn_bonus: Some((14, 8)),
+                lance_bonus: Some((12, 6)),
+                knight_bonus: None,
+            },
+            GuardDropTarget {
+                dr: -1,
+                dc: -1,
+                gold_bonus: (26, 14),
+                silver_bonus: Some((22, 12)),
+                pawn_bonus: None,
+                lance_bonus: None,
+                knight_bonus: None,
+            },
+            GuardDropTarget {
+                dr: -1,
+                dc: 1,
+                gold_bonus: (26, 14),
+                silver_bonus: Some((22, 12)),
+                pawn_bonus: None,
+                lance_bonus: None,
+                knight_bonus: None,
+            },
+            GuardDropTarget {
+                dr: 0,
+                dc: -1,
+                gold_bonus: (20, 10),
+                silver_bonus: Some((16, 8)),
+                pawn_bonus: None,
+                lance_bonus: None,
+                knight_bonus: Some((10, 6)),
+            },
+            GuardDropTarget {
+                dr: 0,
+                dc: 1,
+                gold_bonus: (20, 10),
+                silver_bonus: Some((16, 8)),
+                pawn_bonus: None,
+                lance_bonus: None,
+                knight_bonus: Some((10, 6)),
+            },
+            GuardDropTarget {
+                dr: 1,
+                dc: 0,
+                gold_bonus: (12, 12),
+                silver_bonus: None,
+                pawn_bonus: None,
+                lance_bonus: None,
+                knight_bonus: Some((14, 10)),
+            },
+        ];
+
+        for target in GUARD_TARGETS {
+            if let Some(pos) = oriented_offset_to_actual(king_pos, player, target.dr, target.dc) {
+                if board.is_square_occupied(pos) {
+                    continue;
+                }
+
+                let mut best_kind = None;
+                let mut best_bonus = (0, 0);
+
+                if gold_like > 0 && target.gold_bonus.0 > best_bonus.0 {
+                    best_kind = Some(HandPieceKind::GoldLike);
+                    best_bonus = target.gold_bonus;
+                }
+
+                if silver > 0 {
+                    if let Some(bonus) = target.silver_bonus {
+                        if bonus.0 > best_bonus.0 {
+                            best_kind = Some(HandPieceKind::Silver);
+                            best_bonus = bonus;
+                        }
+                    }
+                }
+
+                if pawn > 0 {
+                    if let Some(bonus) = target.pawn_bonus {
+                        if self.can_drop_pawn_at(board, player, pos) && bonus.0 > best_bonus.0 {
+                            best_kind = Some(HandPieceKind::Pawn);
+                            best_bonus = bonus;
+                        }
+                    }
+                }
+
+                if lance > 0 {
+                    if let Some(bonus) = target.lance_bonus {
+                        if !is_illegal_lance_drop_rank(player, pos.row) && bonus.0 > best_bonus.0 {
+                            best_kind = Some(HandPieceKind::Lance);
+                            best_bonus = bonus;
+                        }
+                    }
+                }
+
+                if knight > 0 {
+                    if let Some(bonus) = target.knight_bonus {
+                        if !is_illegal_knight_drop_rank(player, pos.row) && bonus.0 > best_bonus.0 {
+                            best_kind = Some(HandPieceKind::Knight);
+                            best_bonus = bonus;
+                        }
+                    }
+                }
+
+                if let Some(kind) = best_kind {
+                    mg_score += best_bonus.0;
+                    eg_score += best_bonus.1;
+
+                    match kind {
+                        HandPieceKind::GoldLike => gold_like -= 1,
+                        HandPieceKind::Silver => silver -= 1,
+                        HandPieceKind::Pawn => pawn -= 1,
+                        HandPieceKind::Lance => lance -= 1,
+                        HandPieceKind::Knight => knight -= 1,
+                    }
+                }
+            }
+        }
+
+        if gold_like > 0 {
+            mg_score += gold_like * 6;
+            eg_score += gold_like * 3;
+        }
+
+        if silver > 0 {
+            mg_score += silver * 4;
+            eg_score += silver * 2;
+        }
+
+        if pawn > 0 {
+            mg_score += pawn * 2;
+            eg_score += pawn;
+        }
+
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    fn can_drop_pawn_at(&self, board: &BitboardBoard, player: Player, drop_pos: Position) -> bool {
+        if board.is_square_occupied(drop_pos) {
+            return false;
+        }
+        if self.column_has_unpromoted_pawn(board, player, drop_pos.col) {
+            return false;
+        }
+        if is_illegal_pawn_drop_rank(player, drop_pos.row) {
+            return false;
+        }
+        true
+    }
+
+    fn evaluate_castle_patterns(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let mut best: Option<TaperedScore> = None;
+
+        best = Self::pick_better_score(
+            best,
+            self.assess_anaguma(board, king_pos, player, captured_pieces),
+        );
+        best = Self::pick_better_score(
+            best,
+            self.assess_yagura(board, king_pos, player, captured_pieces),
+        );
+        best = Self::pick_better_score(
+            best,
+            self.assess_mino(board, king_pos, player, captured_pieces),
+        );
+
+        best.unwrap_or_default()
     }
 
     /// Evaluate king exposure (open squares near king)
@@ -301,6 +780,562 @@ impl PositionFeatureEvaluator {
         TaperedScore::new_tapered(mg_penalty, eg_penalty)
     }
 
+    fn assess_anaguma(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TaperedScore> {
+        let (row, col) = oriented_coords(king_pos, player);
+        if row != 8 {
+            return None;
+        }
+
+        let mut best = None;
+
+        if col >= 7 {
+            let requirements = [
+                CastleGuardRequirement {
+                    dr: 0,
+                    dc: -1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (6, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 0,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (5, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: -1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (6, 4),
+                },
+            ];
+            best = Self::pick_better_score(
+                best,
+                self.score_castle_pattern(
+                    board,
+                    king_pos,
+                    player,
+                    captured_pieces,
+                    &requirements,
+                    (60, 40),
+                    (46, 32),
+                    (30, 20),
+                ),
+            );
+        }
+
+        if col <= 1 {
+            let requirements = [
+                CastleGuardRequirement {
+                    dr: 0,
+                    dc: 1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (6, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 0,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (5, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (6, 4),
+                },
+            ];
+            best = Self::pick_better_score(
+                best,
+                self.score_castle_pattern(
+                    board,
+                    king_pos,
+                    player,
+                    captured_pieces,
+                    &requirements,
+                    (60, 40),
+                    (46, 32),
+                    (30, 20),
+                ),
+            );
+        }
+
+        best
+    }
+
+    fn assess_mino(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TaperedScore> {
+        let (row, col) = oriented_coords(king_pos, player);
+        if row < 7 {
+            return None;
+        }
+
+        let mut best = None;
+
+        if col >= 5 {
+            let requirements = [
+                CastleGuardRequirement {
+                    dr: 0,
+                    dc: -1,
+                    accept_gold_like: true,
+                    accept_silver: false,
+                    drop_bonus: (5, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 0,
+                    accept_gold_like: false,
+                    accept_silver: true,
+                    drop_bonus: (4, 3),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: -1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (4, 3),
+                },
+            ];
+            best = Self::pick_better_score(
+                best,
+                self.score_castle_pattern(
+                    board,
+                    king_pos,
+                    player,
+                    captured_pieces,
+                    &requirements,
+                    (45, 26),
+                    (34, 20),
+                    (22, 14),
+                ),
+            );
+        }
+
+        if col <= 3 {
+            let requirements = [
+                CastleGuardRequirement {
+                    dr: 0,
+                    dc: 1,
+                    accept_gold_like: true,
+                    accept_silver: false,
+                    drop_bonus: (5, 4),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 0,
+                    accept_gold_like: false,
+                    accept_silver: true,
+                    drop_bonus: (4, 3),
+                },
+                CastleGuardRequirement {
+                    dr: -1,
+                    dc: 1,
+                    accept_gold_like: true,
+                    accept_silver: true,
+                    drop_bonus: (4, 3),
+                },
+            ];
+            best = Self::pick_better_score(
+                best,
+                self.score_castle_pattern(
+                    board,
+                    king_pos,
+                    player,
+                    captured_pieces,
+                    &requirements,
+                    (45, 26),
+                    (34, 20),
+                    (22, 14),
+                ),
+            );
+        }
+
+        best
+    }
+
+    fn assess_yagura(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<TaperedScore> {
+        let (row, col) = oriented_coords(king_pos, player);
+        if row != 8 {
+            return None;
+        }
+
+        let mut best = None;
+
+        let left_requirements = [
+            CastleGuardRequirement {
+                dr: 0,
+                dc: -1,
+                accept_gold_like: true,
+                accept_silver: false,
+                drop_bonus: (6, 4),
+            },
+            CastleGuardRequirement {
+                dr: -1,
+                dc: 0,
+                accept_gold_like: false,
+                accept_silver: true,
+                drop_bonus: (4, 3),
+            },
+            CastleGuardRequirement {
+                dr: -1,
+                dc: -1,
+                accept_gold_like: true,
+                accept_silver: false,
+                drop_bonus: (6, 4),
+            },
+        ];
+
+        let right_requirements = [
+            CastleGuardRequirement {
+                dr: 0,
+                dc: 1,
+                accept_gold_like: true,
+                accept_silver: false,
+                drop_bonus: (6, 4),
+            },
+            CastleGuardRequirement {
+                dr: -1,
+                dc: 0,
+                accept_gold_like: false,
+                accept_silver: true,
+                drop_bonus: (4, 3),
+            },
+            CastleGuardRequirement {
+                dr: -1,
+                dc: 1,
+                accept_gold_like: true,
+                accept_silver: false,
+                drop_bonus: (6, 4),
+            },
+        ];
+
+        best = Self::pick_better_score(
+            best,
+            self.score_castle_pattern(
+                board,
+                king_pos,
+                player,
+                captured_pieces,
+                &left_requirements,
+                (52, 32),
+                (38, 24),
+                (24, 16),
+            ),
+        );
+
+        best = Self::pick_better_score(
+            best,
+            self.score_castle_pattern(
+                board,
+                king_pos,
+                player,
+                captured_pieces,
+                &right_requirements,
+                (52, 32),
+                (38, 24),
+                (24, 16),
+            ),
+        );
+
+        best
+    }
+
+    fn score_castle_pattern(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+        requirements: &[CastleGuardRequirement],
+        full_score: (i32, i32),
+        partial_score: (i32, i32),
+        near_score: (i32, i32),
+    ) -> Option<TaperedScore> {
+        let mut hand = HandCounts::new(captured_pieces, player);
+        let mut on_board = 0;
+        let mut drop_filled = 0;
+        let mut drop_bonus = (0, 0);
+        let total = requirements.len() as i32;
+
+        for requirement in requirements {
+            match self.satisfy_castle_guard(board, king_pos, player, requirement, &mut hand) {
+                GuardState::OnBoard => on_board += 1,
+                GuardState::FulfilledByDrop(mg, eg) => {
+                    drop_filled += 1;
+                    drop_bonus.0 += mg;
+                    drop_bonus.1 += eg;
+                }
+                GuardState::Missing => {}
+            }
+        }
+
+        let filled = on_board + drop_filled;
+
+        if filled == total {
+            if drop_filled == 0 {
+                return Some(TaperedScore::new_tapered(full_score.0, full_score.1));
+            }
+            return Some(TaperedScore::new_tapered(
+                partial_score.0 + drop_bonus.0,
+                partial_score.1 + drop_bonus.1,
+            ));
+        }
+
+        if filled == total - 1 && total >= 2 {
+            return Some(TaperedScore::new_tapered(
+                near_score.0 + drop_bonus.0,
+                near_score.1 + drop_bonus.1,
+            ));
+        }
+
+        if on_board >= total - 1 && drop_filled > 0 {
+            return Some(TaperedScore::new_tapered(
+                (near_score.0 / 2).max(0) + drop_bonus.0,
+                (near_score.1 / 2).max(0) + drop_bonus.1,
+            ));
+        }
+
+        None
+    }
+
+    fn satisfy_castle_guard(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        requirement: &CastleGuardRequirement,
+        hand: &mut HandCounts,
+    ) -> GuardState {
+        if let Some(pos) =
+            oriented_offset_to_actual(king_pos, player, requirement.dr, requirement.dc)
+        {
+            if let Some(piece) = board.get_piece(pos) {
+                if piece.player == player {
+                    if requirement.accept_gold_like && is_gold_equivalent(piece.piece_type) {
+                        return GuardState::OnBoard;
+                    }
+
+                    if requirement.accept_silver
+                        && (piece.piece_type == PieceType::Silver
+                            || piece.piece_type == PieceType::PromotedSilver)
+                    {
+                        return GuardState::OnBoard;
+                    }
+                }
+                return GuardState::Missing;
+            } else {
+                if requirement.accept_gold_like && hand.has_gold() {
+                    hand.use_gold();
+                    return GuardState::FulfilledByDrop(
+                        requirement.drop_bonus.0,
+                        requirement.drop_bonus.1,
+                    );
+                }
+
+                if requirement.accept_silver && hand.has_silver() {
+                    hand.use_silver();
+                    return GuardState::FulfilledByDrop(
+                        (requirement.drop_bonus.0 - 1).max(0),
+                        (requirement.drop_bonus.1 - 1).max(0),
+                    );
+                }
+
+                if requirement.accept_gold_like && hand.has_silver() {
+                    hand.use_silver();
+                    return GuardState::FulfilledByDrop(
+                        (requirement.drop_bonus.0 - 2).max(0),
+                        (requirement.drop_bonus.1 - 2).max(0),
+                    );
+                }
+            }
+        }
+
+        GuardState::Missing
+    }
+
+    fn pick_better_score(
+        current: Option<TaperedScore>,
+        candidate: Option<TaperedScore>,
+    ) -> Option<TaperedScore> {
+        match (current, candidate) {
+            (None, None) => None,
+            (Some(existing), None) => Some(existing),
+            (None, Some(new_score)) => Some(new_score),
+            (Some(existing), Some(new_score)) => {
+                if new_score.mg > existing.mg
+                    || (new_score.mg == existing.mg && new_score.eg > existing.eg)
+                {
+                    Some(new_score)
+                } else {
+                    Some(existing)
+                }
+            }
+        }
+    }
+
+    fn oriented_piece(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+        dr: i8,
+        dc: i8,
+    ) -> Option<Piece> {
+        oriented_offset_to_actual(king_pos, player, dr, dc)
+            .and_then(|pos| board.get_piece(pos))
+            .copied()
+    }
+
+    fn column_has_unpromoted_pawn(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        column: u8,
+    ) -> bool {
+        for row in 0..9 {
+            let pos = Position::new(row, column);
+            if let Some(piece) = board.get_piece(pos) {
+                if piece.player == player && piece.piece_type == PieceType::Pawn {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn enemy_can_drop_pawn_blocker(
+        &self,
+        board: &BitboardBoard,
+        pawn_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        let opponent = player.opposite();
+        if captured_pieces.count(PieceType::Pawn, opponent) == 0 {
+            return false;
+        }
+        if self.column_has_unpromoted_pawn(board, opponent, pawn_pos.col) {
+            return false;
+        }
+
+        let direction = if player == Player::Black { -1 } else { 1 };
+        let front_row = pawn_pos.row as i8 + direction;
+        if front_row < 0 || front_row >= 9 {
+            return false;
+        }
+        if is_illegal_pawn_drop_rank(opponent, front_row as u8) {
+            return false;
+        }
+
+        let front_pos = Position::new(front_row as u8, pawn_pos.col);
+        !board.is_square_occupied(front_pos)
+    }
+
+    fn enemy_promoted_blocker(
+        &self,
+        board: &BitboardBoard,
+        pawn_pos: Position,
+        player: Player,
+    ) -> bool {
+        let opponent = player.opposite();
+        let direction = if player == Player::Black { -1 } else { 1 };
+        let mut row = pawn_pos.row as i8 + direction;
+
+        while row >= 0 && row < 9 {
+            let pos = Position::new(row as u8, pawn_pos.col);
+            if let Some(piece) = board.get_piece(pos) {
+                if piece.player == opponent {
+                    if is_gold_equivalent(piece.piece_type) || is_promoted_major(piece.piece_type) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            row += direction;
+        }
+
+        false
+    }
+
+    fn enemy_can_drop_gold_wall(
+        &self,
+        board: &BitboardBoard,
+        pawn_pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        let opponent = player.opposite();
+        let gold_like = captured_pieces.count(PieceType::Gold, opponent);
+        let silvers = captured_pieces.count(PieceType::Silver, opponent);
+        let lances = captured_pieces.count(PieceType::Lance, opponent);
+        let knights = captured_pieces.count(PieceType::Knight, opponent);
+        if gold_like + silvers + lances + knights == 0 {
+            return false;
+        }
+
+        let block_offsets = [(-1, 0), (-1, -1), (-1, 1)];
+        for (dr, dc) in block_offsets {
+            if let Some(pos) = oriented_offset_to_actual(pawn_pos, opponent, dr, dc) {
+                if board.is_square_occupied(pos) {
+                    continue;
+                }
+                if gold_like > 0 {
+                    return true;
+                }
+                if silvers > 0 {
+                    return true;
+                }
+                if lances > 0 && !is_illegal_lance_drop_rank(opponent, pos.row) {
+                    return true;
+                }
+                if knights > 0 && !is_illegal_knight_drop_rank(opponent, pos.row) {
+                    return true;
+                }
+            }
+        }
+
+        if lances > 0 {
+            let direction = if player == Player::Black { -1 } else { 1 };
+            let mut row = pawn_pos.row as i8 + direction;
+            while row >= 0 && row < 9 {
+                let pos = Position::new(row as u8, pawn_pos.col);
+                if board.is_square_occupied(pos) {
+                    break;
+                }
+                if !is_illegal_lance_drop_rank(opponent, pos.row) {
+                    return true;
+                }
+                row += direction;
+            }
+        }
+
+        false
+    }
+
     // =======================================================================
     // PAWN STRUCTURE EVALUATION BY PHASE
     // =======================================================================
@@ -310,6 +1345,7 @@ impl PositionFeatureEvaluator {
         &mut self,
         board: &BitboardBoard,
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         if !self.config.enable_pawn_structure {
             return TaperedScore::default();
@@ -326,9 +1362,15 @@ impl PositionFeatureEvaluator {
         }
 
         // 1. Pawn chains (connected pawns)
-        let chains = self.evaluate_pawn_chains(&pawns);
+        let chains = self.evaluate_pawn_chains(&pawns, player);
         mg_score += chains.mg;
         eg_score += chains.eg;
+
+        // 1b. Potential chains supported by hand drops
+        let hand_chain_support =
+            self.evaluate_hand_supported_chains(board, &pawns, player, captured_pieces);
+        mg_score += hand_chain_support.mg;
+        eg_score += hand_chain_support.eg;
 
         // 2. Advanced pawns
         let advancement = self.evaluate_pawn_advancement(&pawns, player);
@@ -336,12 +1378,12 @@ impl PositionFeatureEvaluator {
         eg_score += advancement.eg;
 
         // 3. Isolated pawns
-        let isolation = self.evaluate_pawn_isolation(board, &pawns, player);
+        let isolation = self.evaluate_pawn_isolation(board, &pawns, player, captured_pieces);
         mg_score += isolation.mg;
         eg_score += isolation.eg;
 
         // 4. Passed pawns (no enemy pawns in front)
-        let passed = self.evaluate_passed_pawns(board, &pawns, player);
+        let passed = self.evaluate_passed_pawns(board, &pawns, player, captured_pieces);
         mg_score += passed.mg;
         eg_score += passed.eg;
 
@@ -370,24 +1412,172 @@ impl PositionFeatureEvaluator {
     }
 
     /// Evaluate pawn chains (adjacent pawns)
-    fn evaluate_pawn_chains(&self, pawns: &[Position]) -> TaperedScore {
-        let mut count = 0;
+    fn evaluate_pawn_chains(&self, pawns: &[Position], player: Player) -> TaperedScore {
+        let mut mg_score = 0;
+        let mut eg_score = 0;
+
+        if pawns.len() < 2 {
+            return TaperedScore::default();
+        }
+
+        let oriented: Vec<(i8, i8)> = pawns
+            .iter()
+            .map(|pawn| oriented_coords(*pawn, player))
+            .collect();
 
         for i in 0..pawns.len() {
             for j in i + 1..pawns.len() {
-                let r1 = pawns[i].row;
-                let c1 = pawns[i].col;
-                let r2 = pawns[j].row;
-                let c2 = pawns[j].col;
+                let (r1, c1) = oriented[i];
+                let (r2, c2) = oriented[j];
 
-                if (r1.abs_diff(r2) == 1 && c1 == c2) || (c1.abs_diff(c2) == 1 && r1 == r2) {
-                    count += 1;
+                let dr = r1 - r2;
+                let dc = c1 - c2;
+
+                let abs_dc = dc.abs();
+                let abs_dr = dr.abs();
+
+                if abs_dr == 0 && abs_dc == 1 {
+                    mg_score += 18;
+                    eg_score += 12;
+                } else if abs_dr == 0 && abs_dc == 2 {
+                    mg_score += 10;
+                    eg_score += 8;
+                }
+
+                if dr == 1 && abs_dc <= 1 {
+                    mg_score += 24;
+                    eg_score += 18;
+                } else if dr == -1 && abs_dc <= 1 {
+                    mg_score += 16;
+                    eg_score += 12;
+                }
+
+                if abs_dr == 1 && dc == 0 {
+                    mg_score += 14;
+                    eg_score += 10;
+                }
+
+                if abs_dr == 1 && abs_dc == 1 {
+                    if dr == 1 {
+                        mg_score += 22;
+                        eg_score += 16;
+                    } else {
+                        mg_score += 14;
+                        eg_score += 10;
+                    }
+                }
+
+                if (2..=6).contains(&c1) && (2..=6).contains(&c2) {
+                    mg_score += 4;
+                    eg_score += 2;
                 }
             }
         }
 
-        // Pawn chains more important in middlegame
-        TaperedScore::new_tapered(count * 18, count * 12)
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    fn evaluate_hand_supported_chains(
+        &self,
+        board: &BitboardBoard,
+        pawns: &[Position],
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let pawn_available = captured_pieces.count(PieceType::Pawn, player) as i32;
+        let gold_available = captured_pieces.count(PieceType::Gold, player) as i32;
+        if pawn_available == 0 && gold_available == 0 {
+            return TaperedScore::default();
+        }
+
+        let oriented: Vec<(i8, i8)> = pawns
+            .iter()
+            .map(|pawn| oriented_coords(*pawn, player))
+            .collect();
+
+        let chain_offsets = [
+            (0i8, -1i8),
+            (0, 1),
+            (-1, 0),
+            (1, 0),
+            (-1, -1),
+            (-1, 1),
+            (1, -1),
+            (1, 1),
+        ];
+
+        let mut pawn_marks = [false; 81];
+        let mut gold_marks = [false; 81];
+        let mut pawn_unique = 0i32;
+        let mut gold_unique = 0i32;
+
+        for (idx, pawn) in pawns.iter().enumerate() {
+            let oriented_pawn = oriented[idx];
+            for (dr, dc) in chain_offsets {
+                let new_row = pawn.row as i8 + dr;
+                let new_col = pawn.col as i8 + dc;
+                if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
+                    continue;
+                }
+
+                let pos = Position::new(new_row as u8, new_col as u8);
+                let board_index = (pos.row as usize) * 9 + pos.col as usize;
+                let drop_oriented = (oriented_pawn.0 + dr, oriented_pawn.1 + dc);
+
+                if pawn_available > 0
+                    && self.can_drop_pawn_at(board, player, pos)
+                    && self.drop_creates_chain_oriented(&oriented, drop_oriented)
+                {
+                    if !pawn_marks[board_index] {
+                        pawn_marks[board_index] = true;
+                        pawn_unique += 1;
+                    }
+                }
+
+                if gold_available > 0
+                    && !board.is_square_occupied(pos)
+                    && self.drop_creates_chain_oriented(&oriented, drop_oriented)
+                {
+                    if !gold_marks[board_index] {
+                        gold_marks[board_index] = true;
+                        gold_unique += 1;
+                    }
+                }
+            }
+        }
+
+        let pawn_usable = pawn_unique.min(pawn_available).max(0);
+        let gold_usable = gold_unique.min(gold_available).max(0);
+
+        let mg = pawn_usable * 12 + gold_usable * 9;
+        let eg = pawn_usable * 8 + gold_usable * 6;
+        TaperedScore::new_tapered(mg, eg)
+    }
+
+    fn drop_creates_chain_oriented(
+        &self,
+        oriented_pawns: &[(i8, i8)],
+        drop_oriented: (i8, i8),
+    ) -> bool {
+        let (drop_r, drop_c) = drop_oriented;
+        for (pawn_r, pawn_c) in oriented_pawns {
+            let dr = pawn_r - drop_r;
+            let dc = pawn_c - drop_c;
+
+            if dr == 0 && dc.abs() == 1 {
+                return true;
+            }
+            if dr.abs() == 1 && dc == 0 {
+                return true;
+            }
+            if dr == 1 && dc.abs() <= 1 {
+                return true;
+            }
+            if dr.abs() == 0 && dc.abs() == 2 {
+                return true;
+            }
+        }
+        false
     }
 
     /// Evaluate pawn advancement
@@ -395,19 +1585,17 @@ impl PositionFeatureEvaluator {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
-        let promotion_zone_start = if player == Player::Black { 2 } else { 6 };
+        const BLACK_MG_TABLE: [i32; 9] = [60, 52, 44, 34, 24, 16, 8, 2, 0];
+        const BLACK_EG_TABLE: [i32; 9] = [92, 78, 62, 46, 32, 20, 10, 3, 0];
 
         for pawn in pawns {
-            let advancement = if player == Player::Black {
-                (promotion_zone_start as i32 - pawn.row as i32).max(0)
+            let idx = if player == Player::Black {
+                pawn.row as usize
             } else {
-                (pawn.row as i32 - promotion_zone_start as i32).max(0)
+                (8 - pawn.row) as usize
             };
-
-            if advancement > 0 {
-                mg_score += advancement * 10; // Moderate in middlegame
-                eg_score += advancement * 20; // Very important in endgame
-            }
+            mg_score += BLACK_MG_TABLE[idx];
+            eg_score += BLACK_EG_TABLE[idx];
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
@@ -419,8 +1607,9 @@ impl PositionFeatureEvaluator {
         board: &BitboardBoard,
         pawns: &[Position],
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
-        let mut isolated_count = 0;
+        let mut isolated_count: i32 = 0;
 
         for pawn in pawns {
             if self.is_pawn_isolated(board, *pawn, player) {
@@ -428,8 +1617,14 @@ impl PositionFeatureEvaluator {
             }
         }
 
-        // Isolated pawns worse in endgame
-        TaperedScore::new_tapered(-(isolated_count * 18), -(isolated_count * 30))
+        let mitigation = (captured_pieces.count(PieceType::Pawn, player)
+            + captured_pieces.count(PieceType::Gold, player)) as i32;
+        let effective_isolated = (isolated_count - mitigation).max(0);
+
+        let mg_penalty = effective_isolated * 18;
+        let eg_penalty = effective_isolated * 30;
+
+        TaperedScore::new_tapered(-mg_penalty, -eg_penalty)
     }
 
     /// Check if a pawn is isolated
@@ -462,6 +1657,7 @@ impl PositionFeatureEvaluator {
         board: &BitboardBoard,
         pawns: &[Position],
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
@@ -475,9 +1671,36 @@ impl PositionFeatureEvaluator {
                     pawn.row
                 };
 
-                // Passed pawns exponentially more valuable as they advance
-                mg_score += (advancement * advancement) as i32 * 5; // Moderate in mg
-                eg_score += (advancement * advancement) as i32 * 12; // Critical in eg
+                let mut bonus_mg = (advancement * advancement) as i32 * 5;
+                let mut bonus_eg = (advancement * advancement) as i32 * 12;
+
+                if self.enemy_can_drop_pawn_blocker(board, *pawn, player, captured_pieces) {
+                    bonus_mg = (bonus_mg * 2) / 3;
+                    bonus_eg = (bonus_eg * 2) / 3;
+                }
+
+                if self.enemy_promoted_blocker(board, *pawn, player) {
+                    bonus_mg = (bonus_mg * 3) / 4;
+                    bonus_eg = (bonus_eg * 3) / 4;
+                }
+
+                if self.enemy_can_drop_gold_wall(board, *pawn, player, captured_pieces) {
+                    bonus_mg = (bonus_mg * 2) / 3;
+                    bonus_eg = (bonus_eg * 2) / 3;
+                }
+
+                let enemy_gold = captured_pieces.count(PieceType::Gold, player.opposite()) as i32;
+                if enemy_gold > 0 {
+                    let reduction = enemy_gold.min(2) * 6;
+                    bonus_mg -= reduction;
+                    bonus_eg -= reduction * 2;
+                }
+
+                bonus_mg = bonus_mg.max(0);
+                bonus_eg = bonus_eg.max(0);
+
+                mg_score += bonus_mg;
+                eg_score += bonus_eg;
             }
         }
 
@@ -499,8 +1722,13 @@ impl PositionFeatureEvaluator {
             while check_row >= 0 && check_row < 9 {
                 let pos = Position::new(check_row as u8, check_col as u8);
                 if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player != player {
-                        return false; // Enemy pawn blocks
+                    if col_offset == 0 {
+                        return false;
+                    } else if piece.player != player
+                        && (piece.piece_type == PieceType::Pawn
+                            || is_gold_equivalent(piece.piece_type))
+                    {
+                        return false;
                     }
                 }
                 check_row += direction;
@@ -519,14 +1747,24 @@ impl PositionFeatureEvaluator {
             file_counts[pawn.col as usize] += 1;
         }
 
+        let mut severe_penalty = 0;
         for count in file_counts {
             if count >= 2 {
-                doubled_count += count - 1; // Each extra pawn is doubled
+                let extras = count - 1;
+                doubled_count += extras; // Each extra pawn is doubled
+                severe_penalty += extras;
             }
         }
 
-        // Doubled pawns moderately bad (worse in endgame)
-        TaperedScore::new_tapered(-(doubled_count * 12), -(doubled_count * 18))
+        let mut mg = -(doubled_count * 12);
+        let mut eg = -(doubled_count * 18);
+
+        if severe_penalty > 0 {
+            mg -= severe_penalty * 60;
+            eg -= severe_penalty * 60;
+        }
+
+        TaperedScore::new_tapered(mg, eg)
     }
 
     // =======================================================================
@@ -1001,8 +2239,9 @@ mod tests {
     fn test_king_safety_evaluation() {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate_king_safety(&board, Player::Black);
+        let score = evaluator.evaluate_king_safety(&board, Player::Black, &captured_pieces);
 
         // Starting position should have positive king safety
         assert!(score.mg > 0 || score.eg > 0);
@@ -1012,8 +2251,9 @@ mod tests {
     fn test_pawn_structure_evaluation() {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate_pawn_structure(&board, Player::Black);
+        let score = evaluator.evaluate_pawn_structure(&board, Player::Black, &captured_pieces);
 
         // Starting position should have neutral or positive pawn structure
         assert!(score.mg >= 0);
@@ -1132,7 +2372,7 @@ mod tests {
         assert_eq!(evaluator.stats().king_safety_evals, 0);
         assert_eq!(evaluator.stats().mobility_evals, 0);
 
-        evaluator.evaluate_king_safety(&board, Player::Black);
+        evaluator.evaluate_king_safety(&board, Player::Black, &captured_pieces);
         assert_eq!(evaluator.stats().king_safety_evals, 1);
 
         evaluator.evaluate_mobility(&board, Player::Black, &captured_pieces);
@@ -1143,8 +2383,9 @@ mod tests {
     fn test_reset_statistics() {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
 
-        evaluator.evaluate_king_safety(&board, Player::Black);
+        evaluator.evaluate_king_safety(&board, Player::Black, &captured_pieces);
         assert_eq!(evaluator.stats().king_safety_evals, 1);
 
         evaluator.reset_stats();

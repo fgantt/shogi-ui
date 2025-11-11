@@ -79,3 +79,24 @@ Access via `EvaluationStatistics::telemetry()` or the integrated evaluator debug
 
 - Functional parity covered by `tests/mobility_evaluation_tests.rs` (`mobility_includes_drop_opportunities`, `mobility_attack_moves_award_bonus`, `mobility_handles_promoted_pieces`).  
 - Benchmark harness lives in `tests/mobility_benchmark.rs` (`#[ignore]`d to avoid CI noise but runs locally with the command above).
+
+# Engine Performance Analysis — King Safety & Pawn Structure (Task 13.0)
+
+**Run Date:** November 11, 2025  
+**Command:** `cargo bench --bench position_features_performance_benchmarks --features "legacy-tests" king_safety pawn_structure`
+
+## Key Measurements
+
+| Scenario | Median (ns) | Notes |
+|----------|-------------|-------|
+| `king_safety/evaluate_king_safety` | 668 ns | Shared-move heuristics, hand pressure, castle recognition active |
+| `king_safety/evaluate_both_kings` | 889 ns | Sequential evaluation for both sides reusing cached state |
+| `pawn_structure/evaluate_pawn_structure` | 638 ns | Hand-supported chain detection with stack bitsets |
+| `pawn_structure/evaluate_both_players` | 1,296 ns | Dual-side pass with shared buffers |
+
+## Observations
+
+- Replaced per-call `HashSet` allocations in hand-supported chain analysis with fixed-size bitsets; this removed allocator churn and reduced evaluation time by ~35% versus the initial implementation.  
+- Precomputing oriented pawn coordinates eliminated repeated `oriented_coords` calls inside nested loops, trimming branch overhead while keeping the heuristics intact.  
+- Benchmarks now show both evaluators completing under 0.9 µs per side, restoring parity with pre-refactor throughput while retaining the new king safety and pawn structure features.  
+- The Criterion suite currently runs without the `helper` microbenchmarks to avoid exposing private internals; future profiling should expand via dedicated public instrumentation if needed.
