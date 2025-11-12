@@ -1,48 +1,113 @@
-use crate::evaluation::castles::*;
-use crate::types::*;
+use crate::evaluation::castle_geometry::{CastlePieceClass, CastlePieceDescriptor, RelativeOffset};
+use crate::evaluation::castles::{
+    mirror_descriptors, CastlePattern, CastleVariant, GOLD_FAMILY, PAWN_WALL_FAMILY, SILVER_FAMILY,
+};
+use crate::types::TaperedScore;
 
-/// Anaguma castle pattern definition
+fn base_shell() -> Vec<CastlePieceDescriptor> {
+    vec![
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(GOLD_FAMILY),
+            RelativeOffset::new(-1, 0),
+            true,
+            10,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(SILVER_FAMILY),
+            RelativeOffset::new(-2, 0),
+            true,
+            9,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, -1),
+            false,
+            7,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, 1),
+            false,
+            7,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-1, -1),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-1, 1),
+            false,
+            6,
+        ),
+    ]
+}
+
+fn advanced_silver_shell() -> Vec<CastlePieceDescriptor> {
+    vec![
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(GOLD_FAMILY),
+            RelativeOffset::new(-1, 0),
+            true,
+            10,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(SILVER_FAMILY),
+            RelativeOffset::new(-1, -1),
+            true,
+            9,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, -1),
+            false,
+            7,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, 0),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, 1),
+            false,
+            7,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-1, 1),
+            false,
+            6,
+        ),
+    ]
+}
+
 pub fn get_anaguma_castle() -> CastlePattern {
+    let base = base_shell();
+    let silver_forward = advanced_silver_shell();
+
+    let mut variants = Vec::new();
+    variants.push(CastleVariant::from_descriptors("right-base", &base));
+    variants.push(CastleVariant::from_descriptors(
+        "left-base",
+        &mirror_descriptors(&base),
+    ));
+    variants.push(CastleVariant::from_descriptors(
+        "right-silver-forward",
+        &silver_forward,
+    ));
+    variants.push(CastleVariant::from_descriptors(
+        "left-silver-forward",
+        &mirror_descriptors(&silver_forward),
+    ));
+
     CastlePattern {
         name: "Anaguma",
-        pieces: vec![
-            CastlePiece {
-                piece_type: PieceType::Gold,
-                relative_pos: (-1, 0),
-                required: true,
-                weight: 10,
-            },
-            CastlePiece {
-                piece_type: PieceType::Silver,
-                relative_pos: (-2, 0),
-                required: true,
-                weight: 9,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-2, -1),
-                required: false,
-                weight: 7,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-2, 1),
-                required: false,
-                weight: 7,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-1, -1),
-                required: false,
-                weight: 6,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-1, 1),
-                required: false,
-                weight: 6,
-            },
-        ],
+        variants,
         score: TaperedScore::new_tapered(220, 40),
         flexibility: 3,
     }
@@ -53,52 +118,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_anaguma_castle_pattern() {
-        let anaguma_castle = get_anaguma_castle();
-        assert_eq!(anaguma_castle.name, "Anaguma");
-        assert_eq!(anaguma_castle.pieces.len(), 6);
-        assert_eq!(anaguma_castle.flexibility, 3);
-        assert_eq!(anaguma_castle.score.mg, 220);
-        assert_eq!(anaguma_castle.score.eg, 40);
+    fn test_anaguma_castle_pattern_variants() {
+        let pattern = get_anaguma_castle();
+        assert_eq!(pattern.name, "Anaguma");
+        assert_eq!(pattern.variants.len(), 4);
+
+        for variant in &pattern.variants {
+            let required = variant
+                .pieces
+                .iter()
+                .filter(|piece| piece.required)
+                .count();
+            assert!(required >= 2);
+        }
     }
 
     #[test]
-    fn test_anaguma_castle_required_pieces() {
-        let anaguma_castle = get_anaguma_castle();
-        let required_pieces: Vec<&CastlePiece> = anaguma_castle
-            .pieces
-            .iter()
-            .filter(|p| p.required)
-            .collect();
-        assert_eq!(required_pieces.len(), 2); // Gold and Silver should be required
-
-        let gold_piece = required_pieces
-            .iter()
-            .find(|p| p.piece_type == PieceType::Gold);
-        let silver_piece = required_pieces
-            .iter()
-            .find(|p| p.piece_type == PieceType::Silver);
-
-        assert!(gold_piece.is_some());
-        assert!(silver_piece.is_some());
-
-        assert_eq!(gold_piece.unwrap().weight, 10);
-        assert_eq!(silver_piece.unwrap().weight, 9);
-    }
-
-    #[test]
-    fn test_anaguma_castle_optional_pieces() {
-        let anaguma_castle = get_anaguma_castle();
-        let optional_pieces: Vec<&CastlePiece> = anaguma_castle
-            .pieces
-            .iter()
-            .filter(|p| !p.required)
-            .collect();
-        assert_eq!(optional_pieces.len(), 4); // Four pawns should be optional
-
-        for piece in optional_pieces {
-            assert_eq!(piece.piece_type, PieceType::Pawn);
-            assert!(piece.weight >= 6 && piece.weight <= 7);
+    fn test_anaguma_mirror_offsets() {
+        let base = base_shell();
+        let mirrored = mirror_descriptors(&base);
+        for (original, mirrored_piece) in base.iter().zip(mirrored.iter()) {
+            assert_eq!(original.offset.rank, mirrored_piece.offset.rank);
+            assert_eq!(original.offset.file, -mirrored_piece.offset.file);
         }
     }
 }

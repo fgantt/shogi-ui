@@ -1,130 +1,132 @@
 use crate::bitboards::*;
+use crate::evaluation::castle_geometry::{CastlePieceClass, RelativeOffset};
 use crate::evaluation::patterns::*;
 use crate::types::*;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
-/// Castle pattern recognizer for identifying defensive formations
+pub use crate::evaluation::castle_geometry::{
+    exact, mirror_descriptors, CastlePieceDescriptor, GOLD_FAMILY, KNIGHT_FAMILY, LANCE_FAMILY,
+    PAWN_WALL_FAMILY, SILVER_FAMILY,
+};
+
+const CACHE_MAX_ENTRIES: usize = 50;
+
 pub struct CastleRecognizer {
     patterns: Vec<CastlePattern>,
-    // Performance optimization: cache for pattern matching
-    pattern_cache:
-        std::cell::RefCell<std::collections::HashMap<(u64, Player, Position), Option<usize>>>,
-    // Early termination threshold
+    pattern_cache: RefCell<HashMap<(u64, Player, Position), Option<CachedMatch>>>,
     early_termination_threshold: f32,
 }
 
-/// Represents a castle pattern with its pieces and scoring
+#[derive(Debug, Clone)]
 pub struct CastlePattern {
     pub name: &'static str,
-    pub pieces: Vec<CastlePiece>,
+    pub variants: Vec<CastleVariant>,
     pub score: TaperedScore,
-    pub flexibility: u8, // How many pieces can be missing and still count
+    pub flexibility: u8,
 }
 
-/// Represents a piece in a castle pattern
+#[derive(Debug, Clone)]
+pub struct CastleVariant {
+    pub id: &'static str,
+    pub pieces: Vec<CastlePiece>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CastlePiece {
-    pub piece_type: PieceType,
-    pub relative_pos: (i8, i8), // Relative to king position
-    pub required: bool,         // Must be present for pattern match
-    pub weight: u8,             // Importance in pattern (1-10)
+    pub class: CastlePieceClass,
+    pub offset: RelativeOffset,
+    pub required: bool,
+    pub weight: u8,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CachedMatch {
+    pattern_index: usize,
+    variant_index: usize,
+    score: TaperedScore,
 }
 
 impl CastleRecognizer {
-    /// Create a new castle recognizer with default patterns
     pub fn new() -> Self {
         Self {
             patterns: vec![get_mino_castle(), get_anaguma_castle(), get_yagura_castle()],
-            pattern_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
-            early_termination_threshold: 0.8, // Stop if match quality is below 80% (more aggressive)
+            pattern_cache: RefCell::new(HashMap::new()),
+            early_termination_threshold: 0.8,
         }
     }
 
-    /// Recognize castle pattern for the given player and king position
     pub fn recognize_castle(
         &self,
         board: &BitboardBoard,
         player: Player,
         king_pos: Position,
     ) -> Option<&CastlePattern> {
-        for pattern in &self.patterns {
-            if self.matches_pattern(board, player, king_pos, pattern) {
-                return Some(pattern);
-            }
-        }
-        None
+        self.patterns
+            .iter()
+            .find(|pattern| self.matches_pattern(board, player, king_pos, pattern))
     }
 
-    /// Evaluate castle structure with flexibility scoring for incomplete patterns
     pub fn evaluate_castle_structure(
         &self,
         board: &BitboardBoard,
         player: Player,
         king_pos: Position,
     ) -> TaperedScore {
-        // Check cache first
         let board_hash = self.get_board_hash(board);
-        if let Some(cached_pattern) = self
+        if let Some(cached) = self
             .pattern_cache
             .borrow()
             .get(&(board_hash, player, king_pos))
         {
-            if let Some(pattern_index) = cached_pattern {
-                return self.patterns[*pattern_index].score;
-            } else {
-                return TaperedScore::default();
-            }
+            return cached.map(|entry| entry.score).unwrap_or_default();
         }
 
-        let mut best_score = TaperedScore::default();
-        let mut best_match_quality = 0.0;
-        let mut best_pattern_index = None;
+        let mut best_match: Option<CachedMatch> = None;
+        let mut best_quality = 0.0f32;
 
         for (pattern_index, pattern) in self.patterns.iter().enumerate() {
-            let (matches, required_matches, total_weight) =
-                self.analyze_pattern_match(board, player, king_pos, pattern);
-            let required_pieces = pattern.pieces.iter().filter(|p| p.required).count();
+            for (variant_index, variant) in pattern.variants.iter().enumerate() {
+                let stats = self.analyze_variant(board, player, king_pos, variant);
+                let required_count = variant_required_count(variant);
+                if stats.required_matches < required_count {
+                    continue;
+                }
 
-            // Must have all required pieces
-            if required_matches < required_pieces {
-                continue;
-            }
+                let match_quality = self.calculate_match_quality(
+                    stats.matches,
+                    variant.pieces.len(),
+                    stats.matched_weight,
+                    variant_total_weight(variant),
+                );
 
-            // Calculate match quality (0.0 to 1.0)
-            let match_quality =
-                self.calculate_match_quality(matches, pattern.pieces.len(), total_weight, pattern);
+                if match_quality < self.early_termination_threshold {
+                    continue;
+                }
 
-            // Early termination: if match quality is below threshold, skip this pattern
-            if match_quality < self.early_termination_threshold {
-                continue;
-            }
-
-            // Only consider if it's a reasonable match (at least 70% quality) - more aggressive
-            if match_quality >= 0.7 {
-                let adjusted_score = self.adjust_score_for_quality(pattern.score, match_quality);
-
-                // Take the best match
-                if match_quality > best_match_quality {
-                    best_score = adjusted_score;
-                    best_match_quality = match_quality;
-                    best_pattern_index = Some(pattern_index);
+                if match_quality >= 0.7 && match_quality > best_quality {
+                    let score = self.adjust_score_for_quality(pattern.score, match_quality);
+                    best_quality = match_quality;
+                    best_match = Some(CachedMatch {
+                        pattern_index,
+                        variant_index,
+                        score,
+                    });
                 }
             }
         }
 
-        // Cache the result (limit cache size) - very small for performance
-        if self.pattern_cache.borrow().len() < 50 {
-            // Reduced from 500 to 50
+        if self.pattern_cache.borrow().len() < CACHE_MAX_ENTRIES {
             self.pattern_cache
                 .borrow_mut()
-                .insert((board_hash, player, king_pos), best_pattern_index);
+                .insert((board_hash, player, king_pos), best_match);
         }
 
-        best_score
+        best_match.map(|entry| entry.score).unwrap_or_default()
     }
 
-    /// Get a simple hash for the board position around the king
     fn get_board_hash(&self, board: &BitboardBoard) -> u64 {
         let mut hash = 0u64;
-        // Only hash the area around the king (3x3 to 5x5 area)
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -139,23 +141,19 @@ impl CastleRecognizer {
         hash
     }
 
-    /// Clear the pattern cache
     pub fn clear_cache(&self) {
         self.pattern_cache.borrow_mut().clear();
     }
 
-    /// Set the early termination threshold
     pub fn set_early_termination_threshold(&mut self, threshold: f32) {
         self.early_termination_threshold = threshold;
     }
 
-    /// Get cache statistics
     pub fn get_cache_stats(&self) -> (usize, usize) {
         let cache = self.pattern_cache.borrow();
-        (cache.len(), 500) // current size, max size
+        (cache.len(), CACHE_MAX_ENTRIES)
     }
 
-    /// Check if a pattern matches the current board position
     fn matches_pattern(
         &self,
         board: &BitboardBoard,
@@ -163,108 +161,67 @@ impl CastleRecognizer {
         king_pos: Position,
         pattern: &CastlePattern,
     ) -> bool {
-        let (matches, required_matches, _) =
-            self.analyze_pattern_match(board, player, king_pos, pattern);
-        let required_pieces = pattern.pieces.iter().filter(|p| p.required).count();
-
-        // Check if all required pieces are present
-        if required_matches < required_pieces {
-            return false;
-        }
-
-        // Check if enough pieces match (considering flexibility)
-        let min_matches = pattern
-            .pieces
-            .len()
-            .saturating_sub(pattern.flexibility as usize);
-        matches >= min_matches
+        pattern.variants.iter().any(|variant| {
+            let stats = self.analyze_variant(board, player, king_pos, variant);
+            let required_count = variant_required_count(variant);
+            if stats.required_matches < required_count {
+                return false;
+            }
+            let min_matches = variant
+                .pieces
+                .len()
+                .saturating_sub(pattern.flexibility as usize);
+            stats.matches >= min_matches
+        })
     }
 
-    /// Analyze pattern match and return detailed statistics
-    fn analyze_pattern_match(
+    fn analyze_variant(
         &self,
         board: &BitboardBoard,
         player: Player,
         king_pos: Position,
-        pattern: &CastlePattern,
-    ) -> (usize, usize, u32) {
-        let mut matches = 0;
-        let mut required_matches = 0;
-        let mut total_weight = 0u32;
+        variant: &CastleVariant,
+    ) -> VariantMatchStats {
+        let mut stats = VariantMatchStats::default();
 
-        for castle_piece in &pattern.pieces {
-            let check_pos = self.get_relative_position(king_pos, castle_piece.relative_pos, player);
-
-            if let Some(check_pos) = check_pos {
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.piece_type == castle_piece.piece_type && piece.player == player {
-                        matches += 1;
-                        total_weight += castle_piece.weight as u32;
-                        if castle_piece.required {
-                            required_matches += 1;
+        for descriptor in &variant.pieces {
+            if let Some(target) = descriptor.offset.to_absolute(king_pos, player) {
+                if let Some(piece) = board.get_piece(target) {
+                    if piece.player == player && descriptor.class.matches(piece.piece_type) {
+                        stats.matches += 1;
+                        stats.matched_weight += descriptor.weight as u32;
+                        if descriptor.required {
+                            stats.required_matches += 1;
                         }
                     }
                 }
             }
         }
 
-        (matches, required_matches, total_weight)
+        stats
     }
 
-    /// Get the actual board position for a relative position, considering player orientation
-    fn get_relative_position(
-        &self,
-        king_pos: Position,
-        relative_pos: (i8, i8),
-        player: Player,
-    ) -> Option<Position> {
-        let (dr, dc) = relative_pos;
-
-        // For White player, flip the row direction (White moves "up" the board)
-        let adjusted_dr = match player {
-            Player::Black => dr,
-            Player::White => -dr,
-        };
-
-        let new_row = king_pos.row as i8 + adjusted_dr;
-        let new_col = king_pos.col as i8 + dc;
-
-        // Check bounds
-        if new_row < 0 || new_row >= 9 || new_col < 0 || new_col >= 9 {
-            return None;
-        }
-
-        Some(Position::new(new_row as u8, new_col as u8))
-    }
-
-    /// Calculate match quality based on pieces found and their weights
     fn calculate_match_quality(
         &self,
         matches: usize,
         total_pieces: usize,
-        total_weight: u32,
-        pattern: &CastlePattern,
+        matched_weight: u32,
+        max_weight: u32,
     ) -> f32 {
         if total_pieces == 0 {
             return 0.0;
         }
 
-        // Base quality from piece count
         let piece_quality = matches as f32 / total_pieces as f32;
-
-        // Weight quality (emphasize important pieces)
-        let max_weight = pattern.pieces.iter().map(|p| p.weight as u32).sum::<u32>();
         let weight_quality = if max_weight > 0 {
-            total_weight as f32 / max_weight as f32
+            matched_weight as f32 / max_weight as f32
         } else {
             0.0
         };
 
-        // Combine both factors (60% piece count, 40% weight importance)
         0.6 * piece_quality + 0.4 * weight_quality
     }
 
-    /// Adjust score based on match quality
     fn adjust_score_for_quality(&self, base_score: TaperedScore, quality: f32) -> TaperedScore {
         TaperedScore {
             mg: (base_score.mg as f32 * quality) as i32,
@@ -279,113 +236,308 @@ impl Default for CastleRecognizer {
     }
 }
 
+#[derive(Default)]
+struct VariantMatchStats {
+    matches: usize,
+    required_matches: usize,
+    matched_weight: u32,
+}
+
+fn variant_required_count(variant: &CastleVariant) -> usize {
+    variant.pieces.iter().filter(|p| p.required).count()
+}
+
+fn variant_total_weight(variant: &CastleVariant) -> u32 {
+    variant.pieces.iter().map(|p| p.weight as u32).sum()
+}
+
+impl CastlePiece {
+    pub const fn from_descriptor(descriptor: CastlePieceDescriptor) -> Self {
+        Self {
+            class: descriptor.class,
+            offset: descriptor.offset,
+            required: descriptor.required,
+            weight: descriptor.weight,
+        }
+    }
+}
+
+impl CastleVariant {
+    pub fn from_descriptors(id: &'static str, descriptors: &[CastlePieceDescriptor]) -> Self {
+        Self {
+            id,
+            pieces: descriptors
+                .iter()
+                .copied()
+                .map(CastlePiece::from_descriptor)
+                .collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Piece, PieceType};
+
+    fn build_test_variant() -> CastleVariant {
+        let descriptors = vec![
+            CastlePieceDescriptor::new(
+                exact(PieceType::Gold),
+                RelativeOffset::new(-1, 0),
+                true,
+                10,
+            ),
+            CastlePieceDescriptor::new(
+                exact(PieceType::Silver),
+                RelativeOffset::new(-2, 0),
+                true,
+                9,
+            ),
+            CastlePieceDescriptor::new(
+                exact(PieceType::Pawn),
+                RelativeOffset::new(-1, -1),
+                false,
+                6,
+            ),
+        ];
+        CastleVariant::from_descriptors("base", &descriptors)
+    }
+
+    fn place_relative(
+        board: &mut BitboardBoard,
+        player: Player,
+        king: Position,
+        offset: RelativeOffset,
+        piece_type: PieceType,
+    ) {
+        let target = offset
+            .to_absolute(king, player)
+            .expect("offset should stay on board for fixture");
+        board.place_piece(Piece::new(piece_type, player), target);
+    }
 
     #[test]
     fn test_castle_recognizer_creation() {
         let recognizer = CastleRecognizer::new();
-        assert_eq!(recognizer.patterns.len(), 3); // Should have 3 castle patterns
+        assert_eq!(recognizer.patterns.len(), 3);
     }
 
     #[test]
-    fn test_castle_pattern_creation() {
+    fn test_castle_pattern_structure() {
+        let variant = build_test_variant();
         let pattern = CastlePattern {
-            name: "Test Castle",
-            pieces: vec![CastlePiece {
-                piece_type: PieceType::Gold,
-                relative_pos: (-1, -1),
-                required: true,
-                weight: 10,
-            }],
-            score: TaperedScore::new_tapered(100, 50),
+            name: "Test",
+            variants: vec![variant],
+            score: TaperedScore::new_tapered(100, 60),
             flexibility: 1,
         };
 
-        assert_eq!(pattern.name, "Test Castle");
-        assert_eq!(pattern.pieces.len(), 1);
+        assert_eq!(pattern.name, "Test");
+        assert_eq!(pattern.variants.len(), 1);
         assert_eq!(pattern.flexibility, 1);
+        assert_eq!(pattern.score.mg, 100);
+        assert_eq!(pattern.score.eg, 60);
+        assert_eq!(pattern.variants[0].pieces.len(), 3);
     }
 
     #[test]
-    fn test_castle_piece_creation() {
-        let piece = CastlePiece {
-            piece_type: PieceType::Silver,
-            relative_pos: (-2, -1),
-            required: false,
-            weight: 8,
-        };
+    fn test_relative_offset_application() {
+        let king = Position::new(4, 4);
+        let offset = RelativeOffset::new(-1, -1);
 
-        assert_eq!(piece.piece_type, PieceType::Silver);
-        assert_eq!(piece.relative_pos, (-2, -1));
-        assert_eq!(piece.required, false);
-        assert_eq!(piece.weight, 8);
-    }
+        let black_target = offset.to_absolute(king, Player::Black).unwrap();
+        assert_eq!(black_target, Position::new(3, 3));
 
-    #[test]
-    fn test_castle_evaluation() {
-        let recognizer = CastleRecognizer::new();
-        let board = BitboardBoard::new();
-        let king_pos = Position::new(8, 4); // Black king position
-
-        let score = recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
-        // Should return a score (even if zero for starting position)
-        assert_eq!(score, TaperedScore::default());
-    }
-
-    #[test]
-    fn test_relative_position_calculation() {
-        let recognizer = CastleRecognizer::new();
-        let king_pos = Position::new(4, 4);
-
-        // Test valid position for Black
-        let pos = recognizer.get_relative_position(king_pos, (-1, -1), Player::Black);
-        assert_eq!(pos, Some(Position::new(3, 3)));
-
-        // Test valid position for White (flipped row direction)
-        let pos = recognizer.get_relative_position(king_pos, (-1, -1), Player::White);
-        assert_eq!(pos, Some(Position::new(5, 3)));
-
-        // Test out of bounds
-        let pos = recognizer.get_relative_position(king_pos, (-5, -5), Player::Black);
-        assert_eq!(pos, None);
+        let white_target = offset.to_absolute(king, Player::White).unwrap();
+        assert_eq!(white_target, Position::new(5, 5));
     }
 
     #[test]
     fn test_match_quality_calculation() {
         let recognizer = CastleRecognizer::new();
-        let pattern = get_mino_castle();
-
-        // Calculate max weight for the pattern
-        let max_weight = pattern.pieces.iter().map(|p| p.weight as u32).sum::<u32>();
-
-        // Perfect match
-        let quality = recognizer.calculate_match_quality(5, 5, max_weight, &pattern);
-        assert!((quality - 1.0).abs() < 0.01);
-
-        // Partial match
-        let quality = recognizer.calculate_match_quality(3, 5, max_weight * 3 / 5, &pattern);
+        let quality = recognizer.calculate_match_quality(3, 5, 30, 50);
         assert!(quality > 0.5 && quality < 1.0);
+
+        let perfect = recognizer.calculate_match_quality(5, 5, 50, 50);
+        assert!((perfect - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]
-    fn test_castle_recognition_both_players() {
+    fn test_adjust_score_for_quality() {
         let recognizer = CastleRecognizer::new();
-        let board = BitboardBoard::new();
+        let base = TaperedScore::new_tapered(200, 80);
+        let adjusted = recognizer.adjust_score_for_quality(base, 0.5);
+        assert_eq!(adjusted.mg, 100);
+        assert_eq!(adjusted.eg, 40);
+    }
 
-        // Test Black king position
-        let black_king_pos = Position::new(8, 4);
-        let black_score =
-            recognizer.evaluate_castle_structure(&board, Player::Black, black_king_pos);
+    #[test]
+    fn test_recognize_anaguma_with_promoted_silver() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 6);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, 0),
+            PieceType::Gold,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, 0),
+            PieceType::PromotedSilver,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -1),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, 1),
+            PieceType::PromotedPawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, -1),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, 1),
+            PieceType::Pawn,
+        );
 
-        // Test White king position
-        let white_king_pos = Position::new(0, 4);
-        let white_score =
-            recognizer.evaluate_castle_structure(&board, Player::White, white_king_pos);
+        let score = recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
+        assert!(score.mg > 0);
 
-        // Both should return scores (even if zero for starting position)
-        assert_eq!(black_score, TaperedScore::default());
-        assert_eq!(white_score, TaperedScore::default());
+        let matched = recognizer.recognize_castle(&board, Player::Black, king_pos).
+            map(|pattern| pattern.name.to_string());
+        assert_eq!(matched.as_deref(), Some("Anaguma"));
+    }
+
+    #[test]
+    fn test_mino_recognition_for_white_mirror() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(0, 2);
+        board.place_piece(Piece::new(PieceType::King, Player::White), king_pos);
+        place_relative(
+            &mut board,
+            Player::White,
+            king_pos,
+            RelativeOffset::new(-1, -1),
+            PieceType::Gold,
+        );
+        place_relative(
+            &mut board,
+            Player::White,
+            king_pos,
+            RelativeOffset::new(-2, -1),
+            PieceType::Silver,
+        );
+        place_relative(
+            &mut board,
+            Player::White,
+            king_pos,
+            RelativeOffset::new(-2, -2),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::White,
+            king_pos,
+            RelativeOffset::new(-1, -2),
+            PieceType::PromotedPawn,
+        );
+        place_relative(
+            &mut board,
+            Player::White,
+            king_pos,
+            RelativeOffset::new(0, -2),
+            PieceType::Pawn,
+        );
+
+        let score = recognizer.evaluate_castle_structure(&board, Player::White, king_pos);
+        assert!(score.mg > 0);
+
+        let matched = recognizer.recognize_castle(&board, Player::White, king_pos)
+            .map(|pattern| pattern.name.to_string());
+        assert_eq!(matched.as_deref(), Some("Mino"));
+    }
+
+    #[test]
+    fn test_yagura_requires_pawn_wall() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, -1),
+            PieceType::Gold,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -1),
+            PieceType::Silver,
+        );
+
+        let score_without_wall =
+            recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
+        assert_eq!(score_without_wall, TaperedScore::default());
+
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -2),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, -2),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -3),
+            PieceType::Knight,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(0, -3),
+            PieceType::Lance,
+        );
+
+        let score_with_wall = recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
+        assert!(score_with_wall.mg > 0);
+
+        let matched = recognizer.recognize_castle(&board, Player::Black, king_pos)
+            .map(|pattern| pattern.name.to_string());
+        assert!(matched.is_some());
     }
 }

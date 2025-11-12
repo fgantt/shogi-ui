@@ -7,6 +7,7 @@ use crate::weights::{WeightError, WeightManager};
 // Advanced evaluation modules
 pub mod advanced_interpolation;
 pub mod attacks;
+pub mod castle_geometry;
 pub mod castles;
 pub mod config;
 pub mod endgame_patterns;

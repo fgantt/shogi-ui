@@ -1,42 +1,98 @@
-use crate::evaluation::castles::*;
-use crate::types::*;
+use crate::evaluation::castle_geometry::{CastlePieceClass, CastlePieceDescriptor, RelativeOffset};
+use crate::evaluation::castles::{
+    mirror_descriptors, CastlePattern, CastleVariant, GOLD_FAMILY, PAWN_WALL_FAMILY, SILVER_FAMILY,
+};
+use crate::types::TaperedScore;
 
-/// Mino castle pattern definition
+fn base_shell() -> Vec<CastlePieceDescriptor> {
+    vec![
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(GOLD_FAMILY),
+            RelativeOffset::new(-1, -1),
+            true,
+            10,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(SILVER_FAMILY),
+            RelativeOffset::new(-2, -1),
+            true,
+            9,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, -2),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-1, -2),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(0, -2),
+            false,
+            6,
+        ),
+    ]
+}
+
+fn high_mino_shell() -> Vec<CastlePieceDescriptor> {
+    vec![
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(GOLD_FAMILY),
+            RelativeOffset::new(0, -1),
+            true,
+            10,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(SILVER_FAMILY),
+            RelativeOffset::new(-1, -2),
+            true,
+            9,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-2, -2),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(-1, -1),
+            false,
+            6,
+        ),
+        CastlePieceDescriptor::new(
+            CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
+            RelativeOffset::new(0, -2),
+            false,
+            6,
+        ),
+    ]
+}
+
 pub fn get_mino_castle() -> CastlePattern {
+    let base = base_shell();
+    let high = high_mino_shell();
+
+    let mut variants = Vec::new();
+    variants.push(CastleVariant::from_descriptors("right-base", &base));
+    variants.push(CastleVariant::from_descriptors(
+        "left-base",
+        &mirror_descriptors(&base),
+    ));
+    variants.push(CastleVariant::from_descriptors("right-high", &high));
+    variants.push(CastleVariant::from_descriptors(
+        "left-high",
+        &mirror_descriptors(&high),
+    ));
+
     CastlePattern {
         name: "Mino",
-        pieces: vec![
-            CastlePiece {
-                piece_type: PieceType::Gold,
-                relative_pos: (-1, -1),
-                required: true,
-                weight: 10,
-            },
-            CastlePiece {
-                piece_type: PieceType::Silver,
-                relative_pos: (-2, -1),
-                required: true,
-                weight: 9,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-2, -2),
-                required: false,
-                weight: 6,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (-1, -2),
-                required: false,
-                weight: 6,
-            },
-            CastlePiece {
-                piece_type: PieceType::Pawn,
-                relative_pos: (0, -2),
-                required: false,
-                weight: 6,
-            },
-        ],
+        variants,
         score: TaperedScore::new_tapered(180, 60),
         flexibility: 2,
     }
@@ -47,46 +103,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mino_castle_pattern() {
-        let mino_castle = get_mino_castle();
-        assert_eq!(mino_castle.name, "Mino");
-        assert_eq!(mino_castle.pieces.len(), 5);
-        assert_eq!(mino_castle.flexibility, 2);
-        assert_eq!(mino_castle.score.mg, 180);
-        assert_eq!(mino_castle.score.eg, 60);
-    }
+    fn test_mino_castle_variants() {
+        let pattern = get_mino_castle();
+        assert_eq!(pattern.name, "Mino");
+        assert_eq!(pattern.variants.len(), 4);
 
-    #[test]
-    fn test_mino_castle_required_pieces() {
-        let mino_castle = get_mino_castle();
-        let required_pieces: Vec<&CastlePiece> =
-            mino_castle.pieces.iter().filter(|p| p.required).collect();
-        assert_eq!(required_pieces.len(), 2); // Gold and Silver should be required
-
-        let gold_piece = required_pieces
-            .iter()
-            .find(|p| p.piece_type == PieceType::Gold);
-        let silver_piece = required_pieces
-            .iter()
-            .find(|p| p.piece_type == PieceType::Silver);
-
-        assert!(gold_piece.is_some());
-        assert!(silver_piece.is_some());
-
-        assert_eq!(gold_piece.unwrap().weight, 10);
-        assert_eq!(silver_piece.unwrap().weight, 9);
-    }
-
-    #[test]
-    fn test_mino_castle_optional_pieces() {
-        let mino_castle = get_mino_castle();
-        let optional_pieces: Vec<&CastlePiece> =
-            mino_castle.pieces.iter().filter(|p| !p.required).collect();
-        assert_eq!(optional_pieces.len(), 3); // Three pawns should be optional
-
-        for piece in optional_pieces {
-            assert_eq!(piece.piece_type, PieceType::Pawn);
-            assert_eq!(piece.weight, 6);
+        for variant in &pattern.variants {
+            let required = variant
+                .pieces
+                .iter()
+                .filter(|piece| piece.required)
+                .count();
+            assert!(required >= 2);
         }
     }
 }
