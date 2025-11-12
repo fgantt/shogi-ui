@@ -99,9 +99,9 @@ impl KingSafetyEvaluator {
             // Full evaluation
             // Castle structure evaluation
             if let Some(king_pos) = self.find_king_position(board, player) {
-                let castle_eval =
-                    self.castle_recognizer
-                        .evaluate_castle(board, player, king_pos);
+                let castle_eval = self
+                    .castle_recognizer
+                    .evaluate_castle(board, player, king_pos);
 
                 let quality = castle_eval.quality.clamp(0.0, 1.0);
 
@@ -118,9 +118,9 @@ impl KingSafetyEvaluator {
 
                 let shield_weight_sum =
                     self.config.pattern_shield_weight + self.config.zone_shield_weight;
-                let zone_shield_mix =
-                    (castle_eval.zone_shield_ratio * 0.4 + castle_eval.zone_pawn_wall_ratio * 0.6)
-                        .clamp(0.0, 1.0);
+                let zone_shield_mix = (castle_eval.zone_shield_ratio * 0.4
+                    + castle_eval.zone_pawn_wall_ratio * 0.6)
+                    .clamp(0.0, 1.0);
                 let shield_ratio = if shield_weight_sum > 0.0 {
                     (castle_eval.pattern_shield_ratio * self.config.pattern_shield_weight
                         + zone_shield_mix * self.config.zone_shield_weight)
@@ -141,12 +141,12 @@ impl KingSafetyEvaluator {
                 castle_score += self.config.primary_bonus * primary_ratio;
 
                 if castle_eval.missing_primary > 0 {
-                    castle_score += self.config.primary_defender_penalty
-                        * castle_eval.missing_primary as f32;
+                    castle_score +=
+                        self.config.primary_defender_penalty * castle_eval.missing_primary as f32;
                 }
                 if castle_eval.missing_shield > 0 {
-                    castle_score += self.config.pawn_shield_penalty
-                        * castle_eval.missing_shield as f32;
+                    castle_score +=
+                        self.config.pawn_shield_penalty * castle_eval.missing_shield as f32;
                 }
 
                 let exposure_weight_sum = self.config.exposure_zone_weight
@@ -180,8 +180,7 @@ impl KingSafetyEvaluator {
                         let span = (self.config.castle_quality_threshold
                             - self.config.partial_castle_threshold)
                             .max(1e-3);
-                        let deficit =
-                            (self.config.castle_quality_threshold - quality) / span;
+                        let deficit = (self.config.castle_quality_threshold - quality) / span;
                         castle_score += self.config.partial_castle_penalty * deficit;
                     } else {
                         let bare_scale = (self.config.partial_castle_threshold - quality)
@@ -645,24 +644,6 @@ mod tests {
         let recognizer = crate::evaluation::castles::CastleRecognizer::new();
         let full_eval = recognizer.evaluate_castle(&full_board, Player::Black, Position::new(8, 4));
 
-        let mino_pattern = crate::evaluation::patterns::get_mino_castle();
-        let right_base = mino_pattern
-            .variants
-            .iter()
-            .find(|variant| variant.id == "right-base")
-            .unwrap();
-        assert!(
-            right_base
-                .pieces
-                .iter()
-                .filter(|piece| matches!(
-                    piece.role,
-                    crate::evaluation::castle_geometry::CastlePieceRole::PawnShield
-                ))
-                .count()
-                == 0
-        );
-
         // Partial castle missing pawn shield
         let mut partial_board = BitboardBoard::empty();
         partial_board.place_piece(
@@ -683,18 +664,28 @@ mod tests {
             Position::new(7, 2),
         );
 
+        assert!(partial_board.get_piece(Position::new(6, 2)).is_none());
+        assert!(partial_board.get_piece(Position::new(8, 2)).is_none());
+
         let partial_score = evaluator.evaluate(&partial_board, Player::Black);
         let partial_eval =
             recognizer.evaluate_castle(&partial_board, Player::Black, Position::new(8, 4));
 
-        assert!(full_eval.matched_pattern, full_eval.variant_id);
         assert!(
-            partial_eval.matched_pattern,
-            partial_eval.variant_id
+            full_eval.matched_pattern,
+            "full castle should match a pattern"
         );
         assert!(
-            full_eval.pattern_shield_ratio,
-            partial_eval.pattern_shield_ratio
+            partial_eval.matched_pattern,
+            "partial castle should still register the base castle"
+        );
+        assert!(
+            full_eval.zone_pawn_wall_ratio > partial_eval.zone_pawn_wall_ratio,
+            "missing pawn shield should reduce the pawn wall ratio"
+        );
+        assert!(
+            full_eval.pattern_shield_ratio > partial_eval.pattern_shield_ratio,
+            "missing pawn shield should reduce the pattern shield ratio"
         );
 
         // Bare king
@@ -718,8 +709,6 @@ mod tests {
             partial_score.mg,
             bare_score.mg
         );
-        assert!(partial_board.get_piece(Position::new(6, 2)).is_none());
-        assert!(partial_board.get_piece(Position::new(8, 2)).is_none());
     }
 
     #[test]
@@ -735,10 +724,22 @@ mod tests {
         let mut protected_board = BitboardBoard::empty();
         let king_pos = Position::new(8, 4);
         protected_board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-        protected_board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-        protected_board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-        protected_board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-        protected_board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+        protected_board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        protected_board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 4),
+        );
+        protected_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 3),
+        );
+        protected_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 5),
+        );
 
         let protected_score = evaluator.evaluate(&protected_board, Player::Black);
 
