@@ -2,7 +2,100 @@ use crate::bitboards::*;
 use crate::evaluation::attacks::{AttackAnalyzer, ThreatEvaluator};
 use crate::evaluation::castles::CastleRecognizer;
 use crate::types::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Statistics tracking for king safety evaluation
+#[derive(Debug, Clone, Default)]
+pub struct KingSafetyStats {
+    /// Total number of evaluations performed
+    pub evaluations: u64,
+    /// Number of castle pattern matches found
+    pub castle_matches: u64,
+    /// Number of partial castles detected
+    pub partial_castles: u64,
+    /// Number of bare kings detected
+    pub bare_kings: u64,
+    /// Total missing required defenders across all evaluations
+    pub total_missing_required: u64,
+    /// Total missing primary defenders
+    pub total_missing_primary: u64,
+    /// Total missing shield pieces
+    pub total_missing_shield: u64,
+    /// Number of cache hits
+    pub cache_hits: u64,
+    /// Number of cache misses
+    pub cache_misses: u64,
+    /// Total infiltration penalties applied
+    pub infiltration_penalties: u64,
+    /// Total exposure penalties applied
+    pub exposure_penalties: u64,
+    /// Total partial castle penalties applied
+    pub partial_castle_penalties: u64,
+    /// Total bare king penalties applied
+    pub bare_king_penalties: u64,
+}
+
+/// Snapshot of king safety statistics for telemetry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KingSafetyStatsSnapshot {
+    pub evaluations: u64,
+    pub castle_matches: u64,
+    pub partial_castles: u64,
+    pub bare_kings: u64,
+    pub total_missing_required: u64,
+    pub total_missing_primary: u64,
+    pub total_missing_shield: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub infiltration_penalties: u64,
+    pub exposure_penalties: u64,
+    pub partial_castle_penalties: u64,
+    pub bare_king_penalties: u64,
+}
+
+impl KingSafetyStats {
+    /// Create a snapshot of current statistics
+    pub fn snapshot(&self) -> KingSafetyStatsSnapshot {
+        KingSafetyStatsSnapshot {
+            evaluations: self.evaluations,
+            castle_matches: self.castle_matches,
+            partial_castles: self.partial_castles,
+            bare_kings: self.bare_kings,
+            total_missing_required: self.total_missing_required,
+            total_missing_primary: self.total_missing_primary,
+            total_missing_shield: self.total_missing_shield,
+            cache_hits: self.cache_hits,
+            cache_misses: self.cache_misses,
+            infiltration_penalties: self.infiltration_penalties,
+            exposure_penalties: self.exposure_penalties,
+            partial_castle_penalties: self.partial_castle_penalties,
+            bare_king_penalties: self.bare_king_penalties,
+        }
+    }
+
+    /// Merge statistics from another snapshot
+    pub fn merge_from(&mut self, snapshot: &KingSafetyStatsSnapshot) {
+        self.evaluations += snapshot.evaluations;
+        self.castle_matches += snapshot.castle_matches;
+        self.partial_castles += snapshot.partial_castles;
+        self.bare_kings += snapshot.bare_kings;
+        self.total_missing_required += snapshot.total_missing_required;
+        self.total_missing_primary += snapshot.total_missing_primary;
+        self.total_missing_shield += snapshot.total_missing_shield;
+        self.cache_hits += snapshot.cache_hits;
+        self.cache_misses += snapshot.cache_misses;
+        self.infiltration_penalties += snapshot.infiltration_penalties;
+        self.exposure_penalties += snapshot.exposure_penalties;
+        self.partial_castle_penalties += snapshot.partial_castle_penalties;
+        self.bare_king_penalties += snapshot.bare_king_penalties;
+    }
+
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = KingSafetyStats::default();
+    }
+}
 
 /// Main king safety evaluator that combines castle recognition, attack analysis, and threat evaluation
 pub struct KingSafetyEvaluator {
@@ -14,6 +107,10 @@ pub struct KingSafetyEvaluator {
     evaluation_cache: std::cell::RefCell<HashMap<(u64, Player), TaperedScore>>,
     // Fast mode configuration
     fast_mode_threshold: u8,
+    // Statistics tracking
+    stats: std::cell::RefCell<KingSafetyStats>,
+    // Debug/trace logging enabled
+    debug_logging: bool,
 }
 
 impl KingSafetyEvaluator {
@@ -31,6 +128,8 @@ impl KingSafetyEvaluator {
             evaluation_cache: std::cell::RefCell::new(HashMap::new()),
             fast_mode_threshold: 1, // Use fast mode for depth >= 1 (very aggressive)
             config,
+            stats: std::cell::RefCell::new(KingSafetyStats::default()),
+            debug_logging: false,
         }
     }
 
@@ -42,6 +141,21 @@ impl KingSafetyEvaluator {
     /// Update the configuration
     pub fn set_config(&mut self, config: KingSafetyConfig) {
         self.config = config;
+    }
+
+    /// Enable or disable debug/trace logging
+    pub fn set_debug_logging(&mut self, enabled: bool) {
+        self.debug_logging = enabled;
+    }
+
+    /// Get statistics snapshot
+    pub fn stats(&self) -> KingSafetyStatsSnapshot {
+        self.stats.borrow().snapshot()
+    }
+
+    /// Reset statistics
+    pub fn reset_stats(&self) {
+        self.stats.borrow_mut().reset();
     }
 
     /// Main evaluation function that combines all king safety components
@@ -81,10 +195,30 @@ impl KingSafetyEvaluator {
             return TaperedScore::default();
         }
 
+        // Track evaluation count
+        {
+            let mut stats = self.stats.borrow_mut();
+            stats.evaluations += 1;
+        }
+
         // Check cache first
         let board_hash = self.get_board_hash(board);
         if let Some(cached_score) = self.evaluation_cache.borrow().get(&(board_hash, player)) {
+            let mut stats = self.stats.borrow_mut();
+            stats.cache_hits += 1;
+            if self.debug_logging {
+                crate::debug_utils::trace_log(
+                    "KING_SAFETY",
+                    &format!("Cache hit for player {:?} at depth {}", player, depth),
+                );
+            }
             return *cached_score;
+        }
+
+        // Cache miss
+        {
+            let mut stats = self.stats.borrow_mut();
+            stats.cache_misses += 1;
         }
 
         // Determine if we should use fast mode - very aggressive for performance
@@ -102,6 +236,32 @@ impl KingSafetyEvaluator {
                 let castle_eval = self
                     .castle_recognizer
                     .evaluate_castle(board, player, king_pos);
+
+                // Track castle evaluation statistics
+                {
+                    let mut stats = self.stats.borrow_mut();
+                    if castle_eval.matched_pattern.is_some() {
+                        stats.castle_matches += 1;
+                    }
+                    stats.total_missing_required += castle_eval.missing_required as u64;
+                    stats.total_missing_primary += castle_eval.missing_primary as u64;
+                    stats.total_missing_shield += castle_eval.missing_shield as u64;
+
+                    if self.debug_logging {
+                        crate::debug_utils::trace_log(
+                            "KING_SAFETY",
+                            &format!(
+                                "Castle eval: pattern={:?}, variant={:?}, quality={:.2}, missing_required={}, missing_primary={}, missing_shield={}",
+                                castle_eval.matched_pattern,
+                                castle_eval.variant_id,
+                                castle_eval.quality,
+                                castle_eval.missing_required,
+                                castle_eval.missing_primary,
+                                castle_eval.missing_shield
+                            ),
+                        );
+                    }
+                }
 
                 let quality = castle_eval.quality.clamp(0.0, 1.0);
 
@@ -167,12 +327,16 @@ impl KingSafetyEvaluator {
                     (1.0 - (0.6 * zone_exposure_component + 0.4 * shell_integrity)).clamp(0.0, 1.0);
                 if exposure_deficit > 0.0 {
                     castle_score += self.config.exposed_king_penalty * exposure_deficit;
+                    let mut stats = self.stats.borrow_mut();
+                    stats.exposure_penalties += 1;
                 }
 
                 let infiltration_pressure =
                     (castle_eval.infiltration_ratio + (1.0 - shell_integrity)).clamp(0.0, 1.0);
                 if infiltration_pressure > 0.0 {
                     castle_score += self.config.infiltration_penalty * infiltration_pressure;
+                    let mut stats = self.stats.borrow_mut();
+                    stats.infiltration_penalties += 1;
                 }
 
                 if quality < self.config.castle_quality_threshold {
@@ -182,11 +346,17 @@ impl KingSafetyEvaluator {
                             .max(1e-3);
                         let deficit = (self.config.castle_quality_threshold - quality) / span;
                         castle_score += self.config.partial_castle_penalty * deficit;
+                        let mut stats = self.stats.borrow_mut();
+                        stats.partial_castles += 1;
+                        stats.partial_castle_penalties += 1;
                     } else {
                         let bare_scale = (self.config.partial_castle_threshold - quality)
                             / self.config.partial_castle_threshold.max(1e-3);
                         castle_score += self.config.partial_castle_penalty;
                         castle_score += self.config.bare_king_penalty * bare_scale.clamp(0.0, 1.0);
+                        let mut stats = self.stats.borrow_mut();
+                        stats.bare_kings += 1;
+                        stats.bare_king_penalties += 1;
                     }
                 }
 
@@ -363,19 +533,6 @@ impl KingSafetyEvaluator {
         }
     }
 
-    /// Evaluate attacks on the king for the given player
-    pub fn evaluate_attacks(&self, _board: &BitboardBoard, _player: Player) -> TaperedScore {
-        // TODO: Implement attack analysis
-        // This is a placeholder implementation
-        TaperedScore::default()
-    }
-
-    /// Evaluate tactical threats to the king for the given player
-    pub fn evaluate_threats(&self, _board: &BitboardBoard, _player: Player) -> TaperedScore {
-        // TODO: Implement threat evaluation
-        // This is a placeholder implementation
-        TaperedScore::default()
-    }
 
     /// Fast evaluation for nodes deep in search tree
     pub fn evaluate_fast(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
@@ -756,5 +913,143 @@ mod tests {
             contested_score.mg,
             protected_score.mg
         );
+    }
+
+    #[test]
+    fn test_king_safety_stats_track_evaluations() {
+        let evaluator = KingSafetyEvaluator::new();
+        let board = BitboardBoard::new();
+
+        // Initial stats should be zero
+        let initial_stats = evaluator.stats();
+        assert_eq!(initial_stats.evaluations, 0);
+
+        // Perform evaluation
+        evaluator.evaluate(&board, Player::Black);
+
+        // Stats should be updated
+        let stats = evaluator.stats();
+        assert_eq!(stats.evaluations, 1);
+    }
+
+    #[test]
+    fn test_king_safety_stats_track_castle_matches() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 6);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 5),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 7),
+        );
+
+        evaluator.evaluate(&board, Player::Black);
+
+        let stats = evaluator.stats();
+        assert!(stats.castle_matches > 0, "Should detect castle pattern");
+    }
+
+    #[test]
+    fn test_king_safety_stats_track_missing_defenders() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+        // Bare king - no defenders
+
+        evaluator.evaluate(&board, Player::Black);
+
+        let stats = evaluator.stats();
+        assert!(stats.bare_kings > 0, "Should detect bare king");
+        assert!(stats.total_missing_required > 0, "Should track missing defenders");
+    }
+
+    #[test]
+    fn test_king_safety_stats_track_penalties() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        // Add opponent piece infiltrating
+        board.place_piece(
+            Piece::new(PieceType::Knight, Player::White),
+            Position::new(7, 3),
+        );
+
+        evaluator.evaluate(&board, Player::Black);
+
+        let stats = evaluator.stats();
+        assert!(stats.infiltration_penalties > 0, "Should track infiltration penalties");
+    }
+
+    #[test]
+    fn test_king_safety_stats_track_cache_hits() {
+        let evaluator = KingSafetyEvaluator::new();
+        let board = BitboardBoard::new();
+
+        // First evaluation - cache miss
+        evaluator.evaluate(&board, Player::Black);
+        let stats_after_first = evaluator.stats();
+        assert_eq!(stats_after_first.cache_misses, 1);
+
+        // Second evaluation - cache hit
+        evaluator.evaluate(&board, Player::Black);
+        let stats_after_second = evaluator.stats();
+        assert!(stats_after_second.cache_hits > 0, "Should have cache hits");
+    }
+
+    #[test]
+    fn test_king_safety_stats_reset() {
+        let evaluator = KingSafetyEvaluator::new();
+        let board = BitboardBoard::new();
+
+        evaluator.evaluate(&board, Player::Black);
+        let stats_before = evaluator.stats();
+        assert!(stats_before.evaluations > 0);
+
+        evaluator.reset_stats();
+        let stats_after = evaluator.stats();
+        assert_eq!(stats_after.evaluations, 0);
+        assert_eq!(stats_after.cache_hits, 0);
+        assert_eq!(stats_after.cache_misses, 0);
+    }
+
+    #[test]
+    fn test_king_safety_debug_logging_toggle() {
+        let mut evaluator = KingSafetyEvaluator::new();
+        // Verify we can toggle debug logging
+        evaluator.set_debug_logging(true);
+        evaluator.set_debug_logging(false);
+        // Note: We can't easily test that logging actually happens without
+        // capturing stdout, but we can verify the method works
+        // In practice, debug logging would be verified through integration tests
+        // that check log output
     }
 }

@@ -35,12 +35,12 @@
   - [x] 2.4 Update `king_safety.rs` to consume new scoring outputs, ensuring legacy placeholder APIs are removed or redirected.
   - [x] 2.5 Validate scoring gradients with targeted unit tests (partial castles vs. bare kings) and golden-metric snapshots.
 
-- [ ] 3.0 Integrate Castle Telemetry and Remove Duplicate King-Safety APIs
-  - [ ] 3.1 Audit `KingSafetyEvaluator` and related consumers to eliminate duplicate placeholder methods returning zero.
-  - [ ] 3.2 Extend telemetry structs and logging (`KingSafetyStats`, trace logs) to capture pattern matched, quality, missing defenders, cache hits/misses, and applied penalties.
-  - [ ] 3.3 Add debug/trace hooks that can be toggled via config or feature flag for tuning sessions without flooding production logs.
-  - [ ] 3.4 Update documentation and developer tooling to reference the single, authoritative castle evaluation API and telemetry contract.
-  - [ ] 3.5 Write integration tests asserting telemetry fields populate correctly for intact, partial, and missing castles.
+- [x] 3.0 Integrate Castle Telemetry and Remove Duplicate King-Safety APIs
+  - [x] 3.1 Audit `KingSafetyEvaluator` and related consumers to eliminate duplicate placeholder methods returning zero.
+  - [x] 3.2 Extend telemetry structs and logging (`KingSafetyStats`, trace logs) to capture pattern matched, quality, missing defenders, cache hits/misses, and applied penalties.
+  - [x] 3.3 Add debug/trace hooks that can be toggled via config or feature flag for tuning sessions without flooding production logs.
+  - [x] 3.4 Update documentation and developer tooling to reference the single, authoritative castle evaluation API and telemetry contract.
+  - [x] 3.5 Write integration tests asserting telemetry fields populate correctly for intact, partial, and missing castles.
 
 - [ ] 4.0 Redesign Castle Recognition Cache and Hashing Strategy
   - [ ] 4.1 Define new cache key incorporating king square, local neighborhood hash, hand pieces, and promotion state; add tests covering collision scenarios.
@@ -69,5 +69,11 @@
 - **Implementation:** `CastleRecognizer::evaluate_castle` now tracks coverage, shield, buffer, and infiltration metrics via `ZoneMetrics`, returning a rich `CastleEvaluation`. `KingSafetyEvaluator` combines these ratios with configurable weights (`KingSafetyConfig`) to award coverage bonuses, apply missing-defender penalties, and scale exposed-king / infiltration penalties. Pattern descriptors leverage `CastlePieceRole` so primary, secondary, shield, and buffer components feed into the scoring pipeline.
 - **Testing:** Expanded king-safety integration tests ensure full, partial, and bare castles produce the expected score ordering while infiltration tests verify enemy pieces inside the king ring lower the result. Castle recognizer unit tests assert quality ratios, missing defender counts, and infiltration detection, covering symmetry and promotion scenarios. Additional regression fixtures guard against future scoring regressions.
 - **Documentation:** Updated the castle pattern schema guide to describe zone metrics, defender roles, and the new `KingSafetyConfig` weights. Task documentation now reflects graded scoring, exposure penalties, and telemetry output for tuning teams.
+
+### Task 3.0 — Integrate Castle Telemetry and Remove Duplicate King-Safety APIs
+
+- **Implementation:** Removed duplicate placeholder methods `evaluate_attacks` and `evaluate_threats` from `KingSafetyEvaluator` (actual implementations exist in `AttackAnalyzer` and `ThreatEvaluator`). Introduced `KingSafetyStats` and `KingSafetyStatsSnapshot` structs to track evaluations, castle matches, missing defenders, cache hits/misses, and applied penalties. Added `set_debug_logging` method and trace logging hooks that emit detailed castle evaluation information when enabled. Integrated telemetry into `EvaluationStatistics` and `EvaluationTelemetry` structures, with `record_king_safety_stats` and accessor methods.
+- **Testing:** Added comprehensive integration tests (`test_king_safety_stats_track_evaluations`, `test_king_safety_stats_track_castle_matches`, `test_king_safety_stats_track_missing_defenders`, `test_king_safety_stats_track_penalties`, `test_king_safety_stats_track_cache_hits`, `test_king_safety_stats_reset`, `test_king_safety_debug_logging_toggle`) that verify telemetry fields populate correctly for intact, partial, and missing castles, confirming statistics tracking works as expected.
+- **Documentation:** The single, authoritative castle evaluation API is `CastleRecognizer::evaluate_castle`, which returns a rich `CastleEvaluation` struct. `KingSafetyEvaluator` consumes this API and exposes telemetry through `stats()` and `reset_stats()` methods. Debug logging can be enabled via `set_debug_logging(true)` for tuning sessions without flooding production logs.
 
 

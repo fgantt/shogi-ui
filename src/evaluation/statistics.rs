@@ -35,6 +35,7 @@
 //! println!("{}", report);
 //! ```
 
+use crate::evaluation::king_safety::KingSafetyStatsSnapshot;
 use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
 use crate::evaluation::phase_transition::PhaseTransitionSnapshot;
@@ -75,6 +76,8 @@ pub struct EvaluationStatistics {
     tactical_stats: Option<TacticalStatsSnapshot>,
     /// Latest positional statistics snapshot
     positional_stats: Option<PositionalStatsSnapshot>,
+    /// Latest king safety statistics snapshot
+    king_safety_stats: Option<KingSafetyStatsSnapshot>,
 }
 
 /// Aggregated telemetry emitted by the integrated evaluator.
@@ -88,6 +91,7 @@ pub struct EvaluationTelemetry {
     pub position_features: Option<PositionFeatureStats>,
     pub positional: Option<PositionalStatsSnapshot>,
     pub tactical: Option<TacticalStatsSnapshot>,
+    pub king_safety: Option<KingSafetyStatsSnapshot>,
 }
 
 impl EvaluationTelemetry {
@@ -100,6 +104,7 @@ impl EvaluationTelemetry {
         position_features: Option<PositionFeatureStats>,
         positional: Option<PositionalStatsSnapshot>,
         tactical: Option<TacticalStatsSnapshot>,
+        king_safety: Option<KingSafetyStatsSnapshot>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
@@ -110,6 +115,7 @@ impl EvaluationTelemetry {
             position_features,
             positional,
             tactical,
+            king_safety,
         }
     }
 }
@@ -339,6 +345,7 @@ impl EvaluationStatistics {
             position_feature_stats: None,
             tactical_stats: None,
             positional_stats: None,
+            king_safety_stats: None,
         }
     }
 
@@ -366,6 +373,11 @@ impl EvaluationStatistics {
     /// Record the latest positional pattern statistics snapshot.
     pub fn record_positional_stats(&mut self, stats: PositionalStatsSnapshot) {
         self.positional_stats = Some(stats);
+    }
+
+    /// Record the latest king safety statistics snapshot.
+    pub fn record_king_safety_stats(&mut self, stats: KingSafetyStatsSnapshot) {
+        self.king_safety_stats = Some(stats);
     }
 
     /// Disable statistics tracking
@@ -429,6 +441,9 @@ impl EvaluationStatistics {
             if let Some(ref positional) = telemetry.positional {
                 self.positional_stats = Some(positional.clone());
             }
+            if let Some(ref king_safety) = telemetry.king_safety {
+                self.king_safety_stats = Some(king_safety.clone());
+            }
         }
         self.telemetry = Some(telemetry);
     }
@@ -441,6 +456,11 @@ impl EvaluationStatistics {
     /// Access the most recent tactical statistics snapshot, if any.
     pub fn tactical_stats(&self) -> Option<&TacticalStatsSnapshot> {
         self.tactical_stats.as_ref()
+    }
+
+    /// Access the most recent king safety statistics snapshot, if any.
+    pub fn king_safety_stats(&self) -> Option<&KingSafetyStatsSnapshot> {
+        self.king_safety_stats.as_ref()
     }
 
     /// Generate comprehensive report
@@ -468,6 +488,7 @@ impl EvaluationStatistics {
             position_feature_stats: self.position_feature_stats.clone(),
             tactical_stats: self.tactical_stats.clone(),
             positional_stats: self.positional_stats.clone(),
+            king_safety_stats: self.king_safety_stats.clone(),
         }
     }
 
@@ -492,6 +513,7 @@ impl EvaluationStatistics {
         }
         self.tactical_stats = None;
         self.positional_stats = None;
+        self.king_safety_stats = None;
     }
 
     /// Get evaluation count
@@ -745,6 +767,8 @@ pub struct StatisticsReport {
     pub tactical_stats: Option<TacticalStatsSnapshot>,
     /// Latest positional statistics snapshot
     pub positional_stats: Option<PositionalStatsSnapshot>,
+    /// Latest king safety statistics snapshot
+    pub king_safety_stats: Option<KingSafetyStatsSnapshot>,
 }
 
 impl std::fmt::Display for StatisticsReport {

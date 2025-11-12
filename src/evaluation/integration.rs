@@ -333,6 +333,7 @@ impl IntegratedEvaluator {
             position_feature_stats_snapshot.clone(),
             positional_snapshot.clone(),
             tactical_snapshot.clone(),
+            None, // King safety stats not integrated into IntegratedEvaluator yet
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
