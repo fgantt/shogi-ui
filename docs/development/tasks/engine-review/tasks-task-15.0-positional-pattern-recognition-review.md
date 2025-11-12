@@ -46,12 +46,12 @@
   - [x] 4.4 Revise space evaluation to use side-relative territory metrics and cached control maps to avoid O(81²) scans.
   - [x] 4.5 Profile the redesigned evaluator, ensuring allocation-free hot paths and acceptable runtime across sample positions.
 
-- [ ] 5.0 Build regression tests, fixtures, and benchmarks for positional pattern evaluation
-  - [ ] 5.1 Author canonical shogi position fixtures (central fights, castle weaknesses, space clamps) with expected score deltas.
-  - [ ] 5.2 Create targeted unit tests asserting detector outputs on each fixture and guarding against regressions.
-  - [ ] 5.3 Add integration tests that compare positional scores before/after weighting changes to maintain tuning stability.
-  - [ ] 5.4 Implement criterion benches measuring evaluator runtimes and control-map reuse efficiency.
-  - [ ] 5.5 Document the testing/benchmarking workflow and incorporate into CI or release validation checklists.
+- [x] 5.0 Build regression tests, fixtures, and benchmarks for positional pattern evaluation
+  - [x] 5.1 Author canonical shogi position fixtures (central fights, castle weaknesses, space clamps) with expected score deltas.
+  - [x] 5.2 Create targeted unit tests asserting detector outputs on each fixture and guarding against regressions.
+  - [x] 5.3 Add integration tests that compare positional scores before/after weighting changes to maintain tuning stability.
+  - [x] 5.4 Implement criterion benches measuring evaluator runtimes and control-map reuse efficiency.
+  - [x] 5.5 Document the testing/benchmarking workflow and incorporate into CI or release validation checklists.
 
 
 ## Task 1.0 Completion Notes
@@ -71,6 +71,13 @@
 - **Implementation:** Added per-component `PositionalPhaseWeights`, a global `positional_weight` in `EvaluationWeights`, and telemetry support for positional statistics. Each detector now applies mg/eg scaling before contributing to the total, and `IntegratedEvaluator` multiplies positional results by the configurable weight while exporting positional snapshots.
 - **Testing:** Introduced `test_center_control_phase_weights` and `test_positional_stats_snapshot_merge` to confirm weight scaling and snapshot aggregation. `cargo check --lib` verifies compilation; `cargo test positional_patterns` still hits the known rustc ICE.
 - **Notes:** Configuration and documentation now surface the new weighting controls and telemetry hooks, enabling tuning workflows to adjust positional influence without changing code.
+
+## Task 5.0 Completion Notes
+
+- **Fixtures:** Added programmatic fixtures in `positional_fixtures.rs` (central fight, castle weakness, space clamp) and documented them in `fixtures/task-15.0-positional-pattern-fixtures.md`, including target middlegame delta thresholds.
+- **Regression Tests:** `tests/positional_patterns_regression_tests.rs` asserts each scenario’s advantage and checks that `IntegratedEvaluator` scales when positional weights change, referencing the TOML index for fixture coverage.
+- **Benchmarks:** `benches/positional_patterns_performance_benchmarks.rs` measures fresh vs. reused analyzers across the fixtures to track control-cache efficiency. Run with `cargo bench positional_patterns_performance_benchmarks`.
+- **Workflow:** Documented the validation steps; targeted test invocations avoid the known `rustc` ICE (use `cargo test positional_patterns_regression_tests -- --nocapture`), and the fixtures catalog doubles as a release checklist for positional heuristics.
 
 ## Task 4.0 Completion Notes
 

@@ -1,0 +1,18 @@
+# Canonical positional fixtures introduced in Task 15.0 (positional pattern review).
+# Each entry is referenced by regression tests and documentation.
+
+[[fixtures]]
+name = "central_file_bind"
+theme = "central_fight"
+expected_winner = "black"
+
+[[fixtures]]
+name = "castle_gap_exposed_king"
+theme = "castle_weakness"
+expected_winner = "black"
+
+[[fixtures]]
+name = "space_clamp_double_lance"
+theme = "space_clamp"
+expected_winner = "black"
+

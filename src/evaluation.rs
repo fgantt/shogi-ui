@@ -33,6 +33,7 @@ pub mod pattern_comprehensive_tests;
 pub mod pattern_config;
 pub mod pattern_optimization;
 pub mod pattern_search_integration;
+pub mod positional_fixtures;
 pub mod positional_patterns;
 pub mod tactical_patterns;
 
