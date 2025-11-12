@@ -1,5 +1,8 @@
 use crate::bitboards::*;
-use crate::evaluation::castle_geometry::{CastlePieceClass, RelativeOffset};
+use crate::evaluation::castle_geometry::{
+    CastlePieceClass, CastlePieceRole, RelativeOffset, BUFFER_RING, FORWARD_SHIELD_ARC,
+    KING_ZONE_RING, PAWN_WALL_ARC,
+};
 use crate::evaluation::patterns::*;
 use crate::types::*;
 use std::cell::RefCell;
@@ -12,9 +15,106 @@ pub use crate::evaluation::castle_geometry::{
 
 const CACHE_MAX_ENTRIES: usize = 50;
 
+#[derive(Debug, Clone, Copy)]
+pub struct CastleEvaluation {
+    pub matched_pattern: Option<&'static str>,
+    pub variant_id: Option<&'static str>,
+    pub quality: f32,
+    pub coverage_ratio: f32,
+    pub pattern_coverage_ratio: f32,
+    pub zone_coverage_ratio: f32,
+    pub primary_ratio: f32,
+    pub secondary_ratio: f32,
+    pub buffer_ratio: f32,
+    pub pawn_shield_ratio: f32,
+    pub pattern_shield_ratio: f32,
+    pub zone_shield_ratio: f32,
+    pub zone_forward_ratio: f32,
+    pub zone_pawn_wall_ratio: f32,
+    pub infiltration_ratio: f32,
+    pub missing_required: usize,
+    pub missing_optional: usize,
+    pub missing_primary: usize,
+    pub missing_shield: usize,
+    pub missing_secondary: usize,
+    pub missing_buffer: usize,
+    pub matched_pieces: usize,
+    pub total_pieces: usize,
+    pub required_ratio: f32,
+    pub base_score: TaperedScore,
+}
+
+impl Default for CastleEvaluation {
+    fn default() -> Self {
+        Self {
+            matched_pattern: None,
+            variant_id: None,
+            quality: 0.0,
+            coverage_ratio: 0.0,
+            pattern_coverage_ratio: 0.0,
+            zone_coverage_ratio: 0.0,
+            primary_ratio: 0.0,
+            secondary_ratio: 0.0,
+            buffer_ratio: 0.0,
+            pawn_shield_ratio: 0.0,
+            pattern_shield_ratio: 0.0,
+            zone_shield_ratio: 0.0,
+            zone_forward_ratio: 0.0,
+            zone_pawn_wall_ratio: 0.0,
+            infiltration_ratio: 0.0,
+            missing_required: 0,
+            missing_optional: 0,
+            missing_primary: 0,
+            missing_shield: 0,
+            missing_secondary: 0,
+            missing_buffer: 0,
+            matched_pieces: 0,
+            total_pieces: 1,
+            required_ratio: 0.0,
+            base_score: TaperedScore::default(),
+        }
+    }
+}
+
+impl CastleEvaluation {
+    pub fn score(self) -> TaperedScore {
+        self.base_score
+    }
+
+    fn is_better_than(&self, other: &CastleEvaluation) -> bool {
+        const EPS: f32 = 1e-5;
+        if (self.quality - other.quality).abs() > EPS {
+            return self.quality > other.quality;
+        }
+        if (self.zone_coverage_ratio - other.zone_coverage_ratio).abs() > EPS {
+            return self.zone_coverage_ratio > other.zone_coverage_ratio;
+        }
+        if (self.coverage_ratio - other.coverage_ratio).abs() > EPS {
+            return self.coverage_ratio > other.coverage_ratio;
+        }
+        if self.matched_pieces != other.matched_pieces {
+            return self.matched_pieces > other.matched_pieces;
+        }
+        if self.missing_required != other.missing_required {
+            return self.missing_required < other.missing_required;
+        }
+        if (self.infiltration_ratio - other.infiltration_ratio).abs() > EPS {
+            return self.infiltration_ratio < other.infiltration_ratio;
+        }
+        self.missing_optional < other.missing_optional
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CachedEvaluation {
+    pattern_index: usize,
+    variant_index: usize,
+    evaluation: CastleEvaluation,
+}
+
 pub struct CastleRecognizer {
     patterns: Vec<CastlePattern>,
-    pattern_cache: RefCell<HashMap<(u64, Player, Position), Option<CachedMatch>>>,
+    pattern_cache: RefCell<HashMap<(u64, Player, Position), Option<CachedEvaluation>>>,
     early_termination_threshold: f32,
 }
 
@@ -38,13 +138,7 @@ pub struct CastlePiece {
     pub offset: RelativeOffset,
     pub required: bool,
     pub weight: u8,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct CachedMatch {
-    pattern_index: usize,
-    variant_index: usize,
-    score: TaperedScore,
+    pub role: CastlePieceRole,
 }
 
 impl CastleRecognizer {
@@ -67,62 +161,182 @@ impl CastleRecognizer {
             .find(|pattern| self.matches_pattern(board, player, king_pos, pattern))
     }
 
-    pub fn evaluate_castle_structure(
+    pub fn evaluate_castle(
         &self,
         board: &BitboardBoard,
         player: Player,
         king_pos: Position,
-    ) -> TaperedScore {
+    ) -> CastleEvaluation {
         let board_hash = self.get_board_hash(board);
         if let Some(cached) = self
             .pattern_cache
             .borrow()
             .get(&(board_hash, player, king_pos))
         {
-            return cached.map(|entry| entry.score).unwrap_or_default();
+            if let Some(entry) = cached {
+                return entry.evaluation;
+            } else {
+                return CastleEvaluation::default();
+            }
         }
 
-        let mut best_match: Option<CachedMatch> = None;
-        let mut best_quality = 0.0f32;
+        let mut best_entry: Option<CachedEvaluation> = None;
 
         for (pattern_index, pattern) in self.patterns.iter().enumerate() {
             for (variant_index, variant) in pattern.variants.iter().enumerate() {
+                let totals = VariantTotals::from_variant(variant);
                 let stats = self.analyze_variant(board, player, king_pos, variant);
-                let required_count = variant_required_count(variant);
-                if stats.required_matches < required_count {
-                    continue;
-                }
 
-                let match_quality = self.calculate_match_quality(
+                let zone_metrics = ZoneMetrics::evaluate(board, player, king_pos);
+
+                let base_quality = self.calculate_match_quality(
                     stats.matches,
-                    variant.pieces.len(),
+                    totals.total_pieces,
                     stats.matched_weight,
-                    variant_total_weight(variant),
+                    totals.total_weight,
                 );
 
-                if match_quality < self.early_termination_threshold {
-                    continue;
-                }
+                let required_ratio = if totals.required_total > 0 {
+                    stats.required_matches as f32 / totals.required_total as f32
+                } else {
+                    1.0
+                };
 
-                if match_quality >= 0.7 && match_quality > best_quality {
-                    let score = self.adjust_score_for_quality(pattern.score, match_quality);
-                    best_quality = match_quality;
-                    best_match = Some(CachedMatch {
+                let pattern_coverage_ratio = if totals.total_weight > 0 {
+                    stats.matched_weight as f32 / totals.total_weight as f32
+                } else {
+                    0.0
+                };
+
+                let zone_coverage_ratio = zone_metrics.coverage_ratio();
+                let zone_pawn_wall_ratio = zone_metrics.pawn_wall_ratio();
+
+                let pattern_shield_ratio = if totals.shield_total > 0 {
+                    stats.pawn_shield_matches as f32 / totals.shield_total as f32
+                } else {
+                    0.0
+                };
+
+                let zone_shield_ratio = zone_metrics.forward_ratio();
+                let zone_shield_component =
+                    (0.4 * zone_shield_ratio + 0.6 * zone_pawn_wall_ratio).clamp(0.0, 1.0);
+
+                let combined_coverage_ratio =
+                    0.6 * pattern_coverage_ratio + 0.4 * zone_coverage_ratio;
+                let combined_shield_ratio =
+                    (0.6 * pattern_shield_ratio + 0.4 * zone_shield_component).clamp(0.0, 1.0);
+
+                let primary_ratio = if totals.primary_total > 0 {
+                    stats.primary_matches as f32 / totals.primary_total as f32
+                } else {
+                    required_ratio
+                };
+
+                let secondary_ratio = if totals.secondary_total > 0 {
+                    stats.secondary_matches as f32 / totals.secondary_total as f32
+                } else {
+                    1.0
+                };
+
+                let zone_buffer_ratio = zone_metrics.buffer_ratio();
+
+                let buffer_ratio = if totals.buffer_total > 0 {
+                    stats.buffer_matches as f32 / totals.buffer_total as f32
+                } else {
+                    zone_buffer_ratio
+                };
+
+                let zone_integrity =
+                    (0.4 * zone_coverage_ratio
+                        + 0.3 * zone_buffer_ratio
+                        + 0.3 * zone_shield_component)
+                        .clamp(0.1, 1.0);
+
+                let quality = (base_quality * required_ratio * (0.7 + 0.3 * zone_integrity))
+                    .clamp(0.0, 1.0);
+
+                let missing_required =
+                    totals.required_total.saturating_sub(stats.required_matches);
+                let optional_matches = stats.matches.saturating_sub(stats.required_matches);
+                let missing_optional = totals.optional_total().saturating_sub(optional_matches);
+                let missing_primary =
+                    totals.primary_total.saturating_sub(stats.primary_matches);
+                let missing_shield =
+                    totals.shield_total.saturating_sub(stats.pawn_shield_matches);
+                let missing_secondary =
+                    totals.secondary_total.saturating_sub(stats.secondary_matches);
+                let missing_buffer = totals.buffer_total.saturating_sub(stats.buffer_matches);
+
+                let infiltration_ratio = zone_metrics.infiltration_ratio();
+
+                let base_score = self.adjust_score_for_quality(pattern.score, quality);
+
+                let matched_pattern = if quality >= self.early_termination_threshold {
+                    Some(pattern.name)
+                } else {
+                    None
+                };
+
+                let evaluation = CastleEvaluation {
+                    matched_pattern,
+                    variant_id: Some(variant.id),
+                    quality,
+                    coverage_ratio: combined_coverage_ratio,
+                    pattern_coverage_ratio,
+                    zone_coverage_ratio,
+                    primary_ratio,
+                    secondary_ratio,
+                    buffer_ratio,
+                    pawn_shield_ratio: combined_shield_ratio,
+                    pattern_shield_ratio,
+                    zone_shield_ratio,
+                    zone_forward_ratio: zone_shield_ratio,
+                    zone_pawn_wall_ratio,
+                    infiltration_ratio,
+                    missing_required,
+                    missing_optional,
+                    missing_primary,
+                    missing_shield,
+                    missing_secondary,
+                    missing_buffer,
+                    matched_pieces: stats.matches,
+                    total_pieces: totals.total_pieces,
+                    required_ratio,
+                    base_score,
+                };
+
+                let should_update = best_entry
+                    .map(|entry| evaluation.is_better_than(&entry.evaluation))
+                    .unwrap_or(true);
+
+                if should_update {
+                    best_entry = Some(CachedEvaluation {
                         pattern_index,
                         variant_index,
-                        score,
+                        evaluation,
                     });
                 }
             }
         }
 
+        let result = best_entry.map(|entry| entry.evaluation).unwrap_or_default();
+
         if self.pattern_cache.borrow().len() < CACHE_MAX_ENTRIES {
             self.pattern_cache
                 .borrow_mut()
-                .insert((board_hash, player, king_pos), best_match);
+                .insert((board_hash, player, king_pos), best_entry);
         }
 
-        best_match.map(|entry| entry.score).unwrap_or_default()
+        result
+    }
+
+    pub fn evaluate_castle_structure(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        king_pos: Position,
+    ) -> TaperedScore {
+        self.evaluate_castle(board, player, king_pos).score()
     }
 
     fn get_board_hash(&self, board: &BitboardBoard) -> u64 {
@@ -162,14 +376,13 @@ impl CastleRecognizer {
         pattern: &CastlePattern,
     ) -> bool {
         pattern.variants.iter().any(|variant| {
+            let totals = VariantTotals::from_variant(variant);
             let stats = self.analyze_variant(board, player, king_pos, variant);
-            let required_count = variant_required_count(variant);
-            if stats.required_matches < required_count {
+            if stats.required_matches < totals.required_total {
                 return false;
             }
-            let min_matches = variant
-                .pieces
-                .len()
+            let min_matches = totals
+                .total_pieces
                 .saturating_sub(pattern.flexibility as usize);
             stats.matches >= min_matches
         })
@@ -192,6 +405,13 @@ impl CastleRecognizer {
                         stats.matched_weight += descriptor.weight as u32;
                         if descriptor.required {
                             stats.required_matches += 1;
+                        }
+                        match descriptor.role {
+                            CastlePieceRole::PrimaryDefender => stats.primary_matches += 1,
+                            CastlePieceRole::SecondaryDefender => stats.secondary_matches += 1,
+                            CastlePieceRole::Buffer => stats.buffer_matches += 1,
+                            CastlePieceRole::PawnShield => stats.pawn_shield_matches += 1,
+                            _ => {}
                         }
                     }
                 }
@@ -241,14 +461,179 @@ struct VariantMatchStats {
     matches: usize,
     required_matches: usize,
     matched_weight: u32,
+    primary_matches: usize,
+    secondary_matches: usize,
+    buffer_matches: usize,
+    pawn_shield_matches: usize,
 }
 
-fn variant_required_count(variant: &CastleVariant) -> usize {
-    variant.pieces.iter().filter(|p| p.required).count()
+struct VariantTotals {
+    total_pieces: usize,
+    required_total: usize,
+    total_weight: u32,
+    primary_total: usize,
+    secondary_total: usize,
+    buffer_total: usize,
+    shield_total: usize,
 }
 
-fn variant_total_weight(variant: &CastleVariant) -> u32 {
-    variant.pieces.iter().map(|p| p.weight as u32).sum()
+impl VariantTotals {
+    fn from_variant(variant: &CastleVariant) -> Self {
+        let mut required_total = 0;
+        let mut total_weight = 0u32;
+        let mut primary_total = 0;
+        let mut secondary_total = 0;
+        let mut buffer_total = 0;
+        let mut shield_total = 0;
+
+        for piece in &variant.pieces {
+            if piece.required {
+                required_total += 1;
+            }
+            total_weight += piece.weight as u32;
+            match piece.role {
+                CastlePieceRole::PrimaryDefender => primary_total += 1,
+                CastlePieceRole::SecondaryDefender => secondary_total += 1,
+                CastlePieceRole::Buffer => buffer_total += 1,
+                CastlePieceRole::PawnShield => shield_total += 1,
+                _ => {}
+            }
+        }
+
+        Self {
+            total_pieces: variant.pieces.len(),
+            required_total,
+            total_weight,
+            primary_total,
+            secondary_total,
+            buffer_total,
+            shield_total,
+        }
+    }
+
+    fn optional_total(&self) -> usize {
+        self.total_pieces.saturating_sub(self.required_total)
+    }
+}
+
+struct ZoneMetrics {
+    ring_slots: usize,
+    ring_friendly: usize,
+    ring_opponent: usize,
+    forward_slots: usize,
+    forward_pawn_hits: usize,
+    buffer_slots: usize,
+    buffer_friendly: usize,
+    pawn_wall_slots: usize,
+    pawn_wall_friendly: usize,
+}
+
+impl ZoneMetrics {
+    fn evaluate(board: &BitboardBoard, player: Player, king_pos: Position) -> Self {
+        let mut metrics = Self {
+            ring_slots: 0,
+            ring_friendly: 0,
+            ring_opponent: 0,
+            forward_slots: 0,
+            forward_pawn_hits: 0,
+            buffer_slots: 0,
+            buffer_friendly: 0,
+            pawn_wall_slots: 0,
+            pawn_wall_friendly: 0,
+        };
+
+        for offset in &KING_ZONE_RING {
+            if let Some(target) = offset.to_absolute(king_pos, player) {
+                metrics.ring_slots += 1;
+                if let Some(piece) = board.get_piece(target) {
+                    if piece.player == player {
+                        metrics.ring_friendly += 1;
+                    } else {
+                        metrics.ring_opponent += 1;
+                    }
+                }
+            }
+        }
+
+        for offset in &FORWARD_SHIELD_ARC {
+            if let Some(target) = offset.to_absolute(king_pos, player) {
+                metrics.forward_slots += 1;
+                if let Some(piece) = board.get_piece(target) {
+                    if piece.player == player
+                        && matches!(piece.piece_type, PieceType::Pawn | PieceType::PromotedPawn)
+                    {
+                        metrics.forward_pawn_hits += 1;
+                    }
+                }
+            }
+        }
+
+        for offset in &BUFFER_RING {
+            if let Some(target) = offset.to_absolute(king_pos, player) {
+                metrics.buffer_slots += 1;
+                if let Some(piece) = board.get_piece(target) {
+                    if piece.player == player {
+                        metrics.buffer_friendly += 1;
+                    }
+                }
+            }
+        }
+
+        for offset in &PAWN_WALL_ARC {
+            if let Some(target) = offset.to_absolute(king_pos, player) {
+                metrics.pawn_wall_slots += 1;
+                if let Some(piece) = board.get_piece(target) {
+                    if piece.player == player
+                        && matches!(piece.piece_type, PieceType::Pawn | PieceType::PromotedPawn)
+                    {
+                        metrics.pawn_wall_friendly += 1;
+                    }
+                }
+            }
+        }
+
+        metrics
+    }
+
+    fn coverage_ratio(&self) -> f32 {
+        if self.ring_slots == 0 {
+            0.0
+        } else {
+            self.ring_friendly as f32 / self.ring_slots as f32
+        }
+    }
+
+    fn forward_ratio(&self) -> f32 {
+        if self.forward_slots == 0 {
+            0.0
+        } else {
+            self.forward_pawn_hits as f32 / self.forward_slots as f32
+        }
+    }
+
+    fn buffer_ratio(&self) -> f32 {
+        if self.buffer_slots == 0 {
+            0.0
+        } else {
+            self.buffer_friendly as f32 / self.buffer_slots as f32
+        }
+    }
+
+    fn pawn_wall_ratio(&self) -> f32 {
+        if self.pawn_wall_slots == 0 {
+            0.0
+        } else {
+            self.pawn_wall_friendly as f32 / self.pawn_wall_slots as f32
+        }
+    }
+
+    fn infiltration_ratio(&self) -> f32 {
+        if self.ring_slots == 0 {
+            0.0
+        } else {
+            self.ring_opponent as f32 / self.ring_slots as f32
+        }
+    }
 }
 
 impl CastlePiece {
@@ -258,6 +643,7 @@ impl CastlePiece {
             offset: descriptor.offset,
             required: descriptor.required,
             weight: descriptor.weight,
+            role: descriptor.role,
         }
     }
 }
@@ -287,18 +673,21 @@ mod tests {
                 RelativeOffset::new(-1, 0),
                 true,
                 10,
+                CastlePieceRole::PrimaryDefender,
             ),
             CastlePieceDescriptor::new(
                 exact(PieceType::Silver),
                 RelativeOffset::new(-2, 0),
                 true,
                 9,
+                CastlePieceRole::PrimaryDefender,
             ),
             CastlePieceDescriptor::new(
                 exact(PieceType::Pawn),
                 RelativeOffset::new(-1, -1),
                 false,
                 6,
+                CastlePieceRole::PawnShield,
             ),
         ];
         CastleVariant::from_descriptors("base", &descriptors)
@@ -424,8 +813,9 @@ mod tests {
         let score = recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
         assert!(score.mg > 0);
 
-        let matched = recognizer.recognize_castle(&board, Player::Black, king_pos).
-            map(|pattern| pattern.name.to_string());
+        let matched = recognizer
+            .recognize_castle(&board, Player::Black, king_pos)
+            .map(|pattern| pattern.name.to_string());
         assert_eq!(matched.as_deref(), Some("Anaguma"));
     }
 
@@ -474,7 +864,8 @@ mod tests {
         let score = recognizer.evaluate_castle_structure(&board, Player::White, king_pos);
         assert!(score.mg > 0);
 
-        let matched = recognizer.recognize_castle(&board, Player::White, king_pos)
+        let matched = recognizer
+            .recognize_castle(&board, Player::White, king_pos)
             .map(|pattern| pattern.name.to_string());
         assert_eq!(matched.as_deref(), Some("Mino"));
     }
@@ -536,8 +927,108 @@ mod tests {
         let score_with_wall = recognizer.evaluate_castle_structure(&board, Player::Black, king_pos);
         assert!(score_with_wall.mg > 0);
 
-        let matched = recognizer.recognize_castle(&board, Player::Black, king_pos)
+        let matched = recognizer
+            .recognize_castle(&board, Player::Black, king_pos)
             .map(|pattern| pattern.name.to_string());
         assert!(matched.is_some());
+    }
+
+    #[test]
+    fn test_castle_evaluation_reports_quality() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 6);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-1, 0),
+            PieceType::Gold,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, 0),
+            PieceType::Silver,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -1),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, 1),
+            PieceType::Pawn,
+        );
+
+        let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        assert!(evaluation.quality > 0.6);
+        assert!(evaluation.pawn_shield_ratio > 0.4);
+        assert_eq!(evaluation.missing_required, 0);
+    }
+
+    #[test]
+    fn test_castle_evaluation_detects_missing_primary_defenders() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 6);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        // Provide only pawn shield without gold/silver defenders
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, -1),
+            PieceType::Pawn,
+        );
+        place_relative(
+            &mut board,
+            Player::Black,
+            king_pos,
+            RelativeOffset::new(-2, 1),
+            PieceType::Pawn,
+        );
+
+        let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        assert!(evaluation.quality < 0.2);
+        assert!(evaluation.missing_required >= 1);
+        assert!(evaluation.score().mg <= 0);
+    }
+
+    #[test]
+    fn test_bare_king_zone_metrics_low() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+
+        let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        assert!(evaluation.zone_coverage_ratio <= 0.25);
+        assert!(evaluation.pawn_shield_ratio <= 0.25);
+        assert!(evaluation.quality < 0.2);
+    }
+
+    #[test]
+    fn test_infiltration_ratio_detects_opponent_piece() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
+        board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
+        board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
+        board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+        // Opponent piece infiltrating the king zone
+        board.place_piece(Piece::new(PieceType::Knight, Player::White), Position::new(7, 3));
+
+        let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        assert!(evaluation.infiltration_ratio > 0.0);
     }
 }

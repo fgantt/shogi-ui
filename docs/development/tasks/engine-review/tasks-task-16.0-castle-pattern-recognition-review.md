@@ -28,12 +28,12 @@
   - [x] 1.4 Backfill unit tests validating recognition across mirrored boards, promoted defenders, and variant-specific fixtures.
   - [x] 1.5 Document pattern schema and configuration defaults in developer docs, highlighting extension process for future castles.
 
-- [ ] 2.0 Implement Zone-Based Castle Scoring and Exposed-King Penalties
-  - [ ] 2.1 Replace binary match-quality gate with graded scoring that accounts for defender coverage zones, pawn chains, hand reinforcements, and shell completeness.
-  - [ ] 2.2 Introduce explicit penalties for exposed kings (e.g., missing primary shell, breached pawn wall) and integrate them into tapered evaluation.
-  - [ ] 2.3 Extend `KingSafetyConfig` with tunable weights/thresholds for castle bonuses and exposure penalties; add serde + docs.
-  - [ ] 2.4 Update `king_safety.rs` to consume new scoring outputs, ensuring legacy placeholder APIs are removed or redirected.
-  - [ ] 2.5 Validate scoring gradients with targeted unit tests (partial castles vs. bare kings) and golden-metric snapshots.
+- [x] 2.0 Implement Zone-Based Castle Scoring and Exposed-King Penalties
+  - [x] 2.1 Replace binary match-quality gate with graded scoring that accounts for defender coverage zones, pawn chains, hand reinforcements, and shell completeness.
+  - [x] 2.2 Introduce explicit penalties for exposed kings (e.g., missing primary shell, breached pawn wall) and integrate them into tapered evaluation.
+  - [x] 2.3 Extend `KingSafetyConfig` with tunable weights/thresholds for castle bonuses and exposure penalties; add serde + docs.
+  - [x] 2.4 Update `king_safety.rs` to consume new scoring outputs, ensuring legacy placeholder APIs are removed or redirected.
+  - [x] 2.5 Validate scoring gradients with targeted unit tests (partial castles vs. bare kings) and golden-metric snapshots.
 
 - [ ] 3.0 Integrate Castle Telemetry and Remove Duplicate King-Safety APIs
   - [ ] 3.1 Audit `KingSafetyEvaluator` and related consumers to eliminate duplicate placeholder methods returning zero.
@@ -63,5 +63,11 @@
 - **Implementation:** Introduced `castle_geometry.rs` with reusable defender families (`GOLD_FAMILY`, `SILVER_FAMILY`, etc.), `RelativeOffset` mirroring, and descriptor helpers. Refactored `Anaguma`, `Mino`, and `Yagura` pattern modules to publish left/right base and advanced variants that recognise promoted defenders and alternate pawn shells. Updated `CastleRecognizer` to operate on pattern variants, cache best matches, and expose helper constructors for future templates.
 - **Testing:** Added symmetry and promotion coverage tests directly in `src/evaluation/castles.rs` along with pattern-specific variant assertions, ensuring recognition succeeds for mirrored boards, promoted silvers, and pawn-wall configurations. Supplemented fixtures with targeted recognition scenarios to guard against regressions.
 - **Documentation:** Authored `docs/development/tasks/engine-review/fixtures/castle-pattern-schema.md`, detailing the new schema, defender classes, mirroring workflow, and checklist for adding future castles.
+
+### Task 2.0 — Implement Zone-Based Castle Scoring and Exposed-King Penalties
+
+- **Implementation:** `CastleRecognizer::evaluate_castle` now tracks coverage, shield, buffer, and infiltration metrics via `ZoneMetrics`, returning a rich `CastleEvaluation`. `KingSafetyEvaluator` combines these ratios with configurable weights (`KingSafetyConfig`) to award coverage bonuses, apply missing-defender penalties, and scale exposed-king / infiltration penalties. Pattern descriptors leverage `CastlePieceRole` so primary, secondary, shield, and buffer components feed into the scoring pipeline.
+- **Testing:** Expanded king-safety integration tests ensure full, partial, and bare castles produce the expected score ordering while infiltration tests verify enemy pieces inside the king ring lower the result. Castle recognizer unit tests assert quality ratios, missing defender counts, and infiltration detection, covering symmetry and promotion scenarios. Additional regression fixtures guard against future scoring regressions.
+- **Documentation:** Updated the castle pattern schema guide to describe zone metrics, defender roles, and the new `KingSafetyConfig` weights. Task documentation now reflects graded scoring, exposure penalties, and telemetry output for tuning teams.
 
 

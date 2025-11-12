@@ -33,6 +33,27 @@ Reusable defender families live in `castle_geometry.rs` and are re-exported from
 
 Add new families here when castles need alternative defenders.
 
+### Piece Roles
+
+`CastlePieceRole` tags each descriptor with its tactical job:
+
+- `PrimaryDefender` – core gold/silver shell pieces that must survive to keep the king safe.
+- `SecondaryDefender` – outer guards (e.g., lance/knight posts) that absorb pressure and prevent infiltration.
+- `PawnShield` – frozen pawn chains and drops that block direct attacks along the king’s front.
+- `Buffer` – additional soft defenders (e.g., promoted pawns two files away) that provide depth to the castle. These are optional but improve shell integrity when present.
+
+Accurate roles ensure the recognizer can report shell completeness and compute penalties for missing coverage.
+
+### Zone Geometry Helpers
+
+`castle_geometry.rs` also exposes three pre-defined offset rings used during evaluation:
+
+- `KING_ZONE_RING` – the 3×3 halo around the king used to measure zone coverage and infiltration.
+- `FORWARD_SHIELD_ARC` – the forward-facing arc where pawn shields are expected.
+- `BUFFER_RING` – secondary squares two steps from the king that act as depth buffers.
+
+The recognizer converts these offsets using `RelativeOffset::to_absolute` so the same constants work for both players.
+
 ## Building Variants
 
 1. Define a descriptor shell with `CastlePieceDescriptor::new(class, offset, required, weight)` values.
@@ -47,6 +68,7 @@ Add new families here when castles need alternative defenders.
 - Required defenders must be present for a variant to score.
 - `flexibility` controls how many optional pieces can be missing before the variant is discarded.
 - Match quality uses both piece count (60%) and weight coverage (40%). Weights should reflect the importance of each defender relative to the overall structure.
+- Zone coverage, forward shield coverage, and buffer integrity are computed from the helpers above. These ratios, plus the pattern match quality, drive the graded castle score that KingSafety consumes.
 
 ## Unit Tests
 
@@ -59,6 +81,17 @@ When adding or updating patterns:
 ## Updating the Recognizer Cache
 
 `CastleRecognizer` now caches `CachedMatch` entries that store the winning pattern/variant and adjusted score. The cache key includes the king position and player. When patterns change significantly, consider invalidating existing caches or bumping configuration defaults to avoid stale matches.
+
+## King Safety Configuration Integration
+
+`KingSafetyConfig` exposes weights that combine pattern-derived ratios with live zone metrics:
+
+- `pattern_coverage_weight` / `zone_coverage_weight`
+- `pattern_shield_weight` / `zone_shield_weight`
+- `exposure_zone_weight`, `exposure_shield_weight`, `exposure_primary_weight`
+- `infiltration_penalty`, `exposed_king_penalty`, and per-missing defender penalties
+
+Tweaking these values lets tuning adjust how aggressively the engine rewards complete castles versus penalising exposed kings or infiltration.
 
 ## Checklist for New Castles
 

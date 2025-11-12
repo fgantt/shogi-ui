@@ -1,4 +1,6 @@
-use crate::evaluation::castle_geometry::{CastlePieceClass, CastlePieceDescriptor, RelativeOffset};
+use crate::evaluation::castle_geometry::{
+    CastlePieceClass, CastlePieceDescriptor, CastlePieceRole, RelativeOffset,
+};
 use crate::evaluation::castles::{
     mirror_descriptors, CastlePattern, CastleVariant, GOLD_FAMILY, KNIGHT_FAMILY, LANCE_FAMILY,
     PAWN_WALL_FAMILY, SILVER_FAMILY,
@@ -12,36 +14,42 @@ fn base_shell() -> Vec<CastlePieceDescriptor> {
             RelativeOffset::new(-1, -1),
             true,
             10,
+            CastlePieceRole::PrimaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(SILVER_FAMILY),
             RelativeOffset::new(-2, -1),
             true,
             9,
+            CastlePieceRole::PrimaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
             RelativeOffset::new(-2, -2),
             true,
             7,
+            CastlePieceRole::PawnShield,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
             RelativeOffset::new(-1, -2),
             false,
             6,
+            CastlePieceRole::PawnShield,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(KNIGHT_FAMILY),
             RelativeOffset::new(-2, -3),
             false,
             6,
+            CastlePieceRole::SecondaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(LANCE_FAMILY),
             RelativeOffset::new(0, -3),
             false,
             5,
+            CastlePieceRole::SecondaryDefender,
         ),
     ]
 }
@@ -53,36 +61,42 @@ fn advanced_shell() -> Vec<CastlePieceDescriptor> {
             RelativeOffset::new(-1, -1),
             true,
             10,
+            CastlePieceRole::PrimaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(SILVER_FAMILY),
             RelativeOffset::new(-1, -2),
             true,
             9,
+            CastlePieceRole::PrimaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
             RelativeOffset::new(-2, -2),
             true,
             7,
+            CastlePieceRole::PawnShield,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(PAWN_WALL_FAMILY),
             RelativeOffset::new(-3, -2),
             false,
             6,
+            CastlePieceRole::PawnShield,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(KNIGHT_FAMILY),
             RelativeOffset::new(-1, -3),
             false,
             6,
+            CastlePieceRole::SecondaryDefender,
         ),
         CastlePieceDescriptor::new(
             CastlePieceClass::AnyOf(LANCE_FAMILY),
             RelativeOffset::new(0, -2),
             false,
             5,
+            CastlePieceRole::SecondaryDefender,
         ),
     ]
 }
@@ -122,11 +136,7 @@ mod tests {
         assert_eq!(pattern.variants.len(), 4);
 
         for variant in &pattern.variants {
-            let required = variant
-                .pieces
-                .iter()
-                .filter(|piece| piece.required)
-                .count();
+            let required = variant.pieces.iter().filter(|piece| piece.required).count();
             assert!(required >= 3);
         }
     }

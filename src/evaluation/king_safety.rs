@@ -99,9 +99,98 @@ impl KingSafetyEvaluator {
             // Full evaluation
             // Castle structure evaluation
             if let Some(king_pos) = self.find_king_position(board, player) {
-                let castle_score = self
-                    .castle_recognizer
-                    .evaluate_castle_structure(board, player, king_pos);
+                let castle_eval =
+                    self.castle_recognizer
+                        .evaluate_castle(board, player, king_pos);
+
+                let quality = castle_eval.quality.clamp(0.0, 1.0);
+
+                let coverage_weight_sum =
+                    self.config.pattern_coverage_weight + self.config.zone_coverage_weight;
+                let coverage_ratio = if coverage_weight_sum > 0.0 {
+                    (castle_eval.pattern_coverage_ratio * self.config.pattern_coverage_weight
+                        + castle_eval.zone_coverage_ratio * self.config.zone_coverage_weight)
+                        / coverage_weight_sum
+                } else {
+                    castle_eval.coverage_ratio
+                }
+                .clamp(0.0, 1.0);
+
+                let shield_weight_sum =
+                    self.config.pattern_shield_weight + self.config.zone_shield_weight;
+                let zone_shield_mix =
+                    (castle_eval.zone_shield_ratio * 0.4 + castle_eval.zone_pawn_wall_ratio * 0.6)
+                        .clamp(0.0, 1.0);
+                let shield_ratio = if shield_weight_sum > 0.0 {
+                    (castle_eval.pattern_shield_ratio * self.config.pattern_shield_weight
+                        + zone_shield_mix * self.config.zone_shield_weight)
+                        / shield_weight_sum
+                } else {
+                    castle_eval.pawn_shield_ratio
+                }
+                .clamp(0.0, 1.0);
+
+                let primary_ratio = castle_eval.primary_ratio.clamp(0.0, 1.0);
+                let secondary_ratio = castle_eval.secondary_ratio.clamp(0.0, 1.0);
+                let buffer_ratio = castle_eval.buffer_ratio.clamp(0.0, 1.0);
+
+                let mut castle_score = castle_eval.base_score;
+
+                castle_score += self.config.coverage_bonus * coverage_ratio;
+                castle_score += self.config.pawn_shield_bonus * shield_ratio;
+                castle_score += self.config.primary_bonus * primary_ratio;
+
+                if castle_eval.missing_primary > 0 {
+                    castle_score += self.config.primary_defender_penalty
+                        * castle_eval.missing_primary as f32;
+                }
+                if castle_eval.missing_shield > 0 {
+                    castle_score += self.config.pawn_shield_penalty
+                        * castle_eval.missing_shield as f32;
+                }
+
+                let exposure_weight_sum = self.config.exposure_zone_weight
+                    + self.config.exposure_shield_weight
+                    + self.config.exposure_primary_weight;
+                let zone_exposure_component = if exposure_weight_sum > 0.0 {
+                    (castle_eval.zone_coverage_ratio * self.config.exposure_zone_weight
+                        + zone_shield_mix * self.config.exposure_shield_weight
+                        + primary_ratio * self.config.exposure_primary_weight)
+                        / exposure_weight_sum
+                } else {
+                    castle_eval.zone_coverage_ratio
+                };
+
+                let shell_integrity = (secondary_ratio * 0.6 + buffer_ratio * 0.4).clamp(0.0, 1.0);
+
+                let exposure_deficit =
+                    (1.0 - (0.6 * zone_exposure_component + 0.4 * shell_integrity)).clamp(0.0, 1.0);
+                if exposure_deficit > 0.0 {
+                    castle_score += self.config.exposed_king_penalty * exposure_deficit;
+                }
+
+                let infiltration_pressure =
+                    (castle_eval.infiltration_ratio + (1.0 - shell_integrity)).clamp(0.0, 1.0);
+                if infiltration_pressure > 0.0 {
+                    castle_score += self.config.infiltration_penalty * infiltration_pressure;
+                }
+
+                if quality < self.config.castle_quality_threshold {
+                    if quality >= self.config.partial_castle_threshold {
+                        let span = (self.config.castle_quality_threshold
+                            - self.config.partial_castle_threshold)
+                            .max(1e-3);
+                        let deficit =
+                            (self.config.castle_quality_threshold - quality) / span;
+                        castle_score += self.config.partial_castle_penalty * deficit;
+                    } else {
+                        let bare_scale = (self.config.partial_castle_threshold - quality)
+                            / self.config.partial_castle_threshold.max(1e-3);
+                        castle_score += self.config.partial_castle_penalty;
+                        castle_score += self.config.bare_king_penalty * bare_scale.clamp(0.0, 1.0);
+                    }
+                }
+
                 total_score += castle_score * self.config.castle_weight;
             }
 
@@ -265,14 +354,14 @@ impl KingSafetyEvaluator {
     }
 
     /// Evaluate castle structure for the given player
-    pub fn evaluate_castle_structure(
-        &self,
-        _board: &BitboardBoard,
-        _player: Player,
-    ) -> TaperedScore {
-        // TODO: Implement castle pattern recognition
-        // This is a placeholder implementation
-        TaperedScore::default()
+    pub fn evaluate_castle_structure(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+        if let Some(king_pos) = self.find_king_position(board, player) {
+            self.castle_recognizer
+                .evaluate_castle(board, player, king_pos)
+                .score()
+        } else {
+            TaperedScore::default()
+        }
     }
 
     /// Evaluate attacks on the king for the given player
@@ -384,6 +473,8 @@ impl Default for KingSafetyEvaluator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::evaluation::castles::CastleRecognizer;
+    use crate::types::Piece;
 
     #[test]
     fn test_king_safety_evaluator_creation() {
@@ -403,6 +494,7 @@ mod tests {
             threat_weight: 0.5,
             phase_adjustment: 0.6,
             performance_mode: true,
+            ..KingSafetyConfig::default()
         };
 
         let evaluator = KingSafetyEvaluator::with_config(config.clone());
@@ -448,5 +540,220 @@ mod tests {
 
         // Verify king positions are different
         assert_ne!(black_king.unwrap(), white_king.unwrap());
+    }
+
+    #[test]
+    fn test_full_castle_bonus_is_positive() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        config.castle_weight = 1.0;
+        config.attack_weight = 0.0;
+        config.threat_weight = 0.0;
+        config.phase_adjustment = 1.0;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 6);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 5),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 7),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(7, 5),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(7, 7),
+        );
+
+        let score = evaluator.evaluate(&board, Player::Black);
+        assert!(score.mg > 0);
+    }
+
+    #[test]
+    fn test_bare_king_penalty_is_negative() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        config.castle_weight = 1.0;
+        config.attack_weight = 0.0;
+        config.threat_weight = 0.0;
+        config.phase_adjustment = 1.0;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+
+        let score = evaluator.evaluate(&board, Player::Black);
+        assert!(score.mg < 0);
+    }
+
+    #[test]
+    fn test_partial_castle_scores_between_full_and_bare() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        config.castle_weight = 1.0;
+        config.attack_weight = 0.0;
+        config.threat_weight = 0.0;
+        config.phase_adjustment = 1.0;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        // Full castle setup (basic Mino shape)
+        let mut full_board = BitboardBoard::empty();
+        full_board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+        full_board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 3),
+        );
+        full_board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 3),
+        );
+        full_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 2),
+        );
+        full_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(7, 2),
+        );
+        full_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(8, 2),
+        );
+
+        let full_score = evaluator.evaluate(&full_board, Player::Black);
+        let recognizer = crate::evaluation::castles::CastleRecognizer::new();
+        let full_eval = recognizer.evaluate_castle(&full_board, Player::Black, Position::new(8, 4));
+
+        let mino_pattern = crate::evaluation::patterns::get_mino_castle();
+        let right_base = mino_pattern
+            .variants
+            .iter()
+            .find(|variant| variant.id == "right-base")
+            .unwrap();
+        assert!(
+            right_base
+                .pieces
+                .iter()
+                .filter(|piece| matches!(
+                    piece.role,
+                    crate::evaluation::castle_geometry::CastlePieceRole::PawnShield
+                ))
+                .count()
+                == 0
+        );
+
+        // Partial castle missing pawn shield
+        let mut partial_board = BitboardBoard::empty();
+        partial_board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+        partial_board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 3),
+        );
+        partial_board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 3),
+        );
+        // Only one pawn defending
+        partial_board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(7, 2),
+        );
+
+        let partial_score = evaluator.evaluate(&partial_board, Player::Black);
+        let partial_eval =
+            recognizer.evaluate_castle(&partial_board, Player::Black, Position::new(8, 4));
+
+        assert!(full_eval.matched_pattern, full_eval.variant_id);
+        assert!(
+            partial_eval.matched_pattern,
+            partial_eval.variant_id
+        );
+        assert!(
+            full_eval.pattern_shield_ratio,
+            partial_eval.pattern_shield_ratio
+        );
+
+        // Bare king
+        let mut bare_board = BitboardBoard::empty();
+        bare_board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(8, 4),
+        );
+
+        let bare_score = evaluator.evaluate(&bare_board, Player::Black);
+
+        assert!(
+            full_score.mg > partial_score.mg,
+            "full {} <= partial {}",
+            full_score.mg,
+            partial_score.mg
+        );
+        assert!(
+            partial_score.mg > bare_score.mg,
+            "partial {} <= bare {}",
+            partial_score.mg,
+            bare_score.mg
+        );
+        assert!(partial_board.get_piece(Position::new(6, 2)).is_none());
+        assert!(partial_board.get_piece(Position::new(8, 2)).is_none());
+    }
+
+    #[test]
+    fn test_infiltration_penalty_reduces_score() {
+        let mut config = KingSafetyConfig::default();
+        config.performance_mode = false;
+        config.castle_weight = 1.0;
+        config.attack_weight = 0.0;
+        config.threat_weight = 0.0;
+        config.phase_adjustment = 1.0;
+        let evaluator = KingSafetyEvaluator::with_config(config);
+
+        let mut protected_board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        protected_board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        protected_board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
+        protected_board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
+        protected_board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
+        protected_board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+
+        let protected_score = evaluator.evaluate(&protected_board, Player::Black);
+
+        let mut contested_board = protected_board.clone();
+        contested_board.place_piece(
+            Piece::new(PieceType::Knight, Player::White),
+            Position::new(7, 3),
+        );
+
+        let contested_score = evaluator.evaluate(&contested_board, Player::Black);
+        assert!(
+            contested_score.mg < protected_score.mg,
+            "contested {} >= protected {}",
+            contested_score.mg,
+            protected_score.mg
+        );
     }
 }

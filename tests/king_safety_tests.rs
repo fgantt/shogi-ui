@@ -165,6 +165,7 @@ mod king_safety_evaluator_tests {
             threat_weight: 1.2,
             phase_adjustment: 0.9,
             performance_mode: true,
+            ..Default::default()
         };
 
         let evaluator = KingSafetyEvaluator::with_config(config.clone());

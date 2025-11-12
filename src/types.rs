@@ -780,7 +780,6 @@ pub struct TaperedScore {
     /// Endgame score (0-256 phase)
     pub eg: i32,
 }
-
 impl TaperedScore {
     /// Create a new TaperedScore with both values equal
     pub fn new(value: i32) -> Self {
@@ -976,6 +975,7 @@ pub const DEVELOPMENT_CASTLING_INDEX: usize = 1002;
 
 /// Configuration for advanced king safety evaluation
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct KingSafetyConfig {
     /// Enable or disable advanced king safety evaluation
     pub enabled: bool,
@@ -989,6 +989,56 @@ pub struct KingSafetyConfig {
     pub phase_adjustment: f32,
     /// Enable performance mode for fast evaluation
     pub performance_mode: bool,
+    /// Minimum quality required to treat a castle as fully formed
+    #[serde(default = "KingSafetyConfig::default_castle_quality_threshold")]
+    pub castle_quality_threshold: f32,
+    /// Minimum quality below which the king is considered bare
+    #[serde(default = "KingSafetyConfig::default_partial_castle_threshold")]
+    pub partial_castle_threshold: f32,
+    /// Penalty applied when a partial castle is detected
+    #[serde(default = "KingSafetyConfig::default_partial_castle_penalty")]
+    pub partial_castle_penalty: TaperedScore,
+    /// Penalty applied when no meaningful castle is present
+    #[serde(default = "KingSafetyConfig::default_bare_king_penalty")]
+    pub bare_king_penalty: TaperedScore,
+    /// Bonus applied proportional to defender coverage ratio
+    #[serde(default = "KingSafetyConfig::default_coverage_bonus")]
+    pub coverage_bonus: TaperedScore,
+    /// Bonus applied proportional to pawn-shield coverage ratio
+    #[serde(default = "KingSafetyConfig::default_pawn_shield_bonus")]
+    pub pawn_shield_bonus: TaperedScore,
+    /// Bonus applied proportional to core (primary) defender retention
+    #[serde(default = "KingSafetyConfig::default_primary_bonus")]
+    pub primary_bonus: TaperedScore,
+    /// Penalty applied per missing primary defender
+    #[serde(default = "KingSafetyConfig::default_primary_defender_penalty")]
+    pub primary_defender_penalty: TaperedScore,
+    /// Penalty applied per missing pawn shield element
+    #[serde(default = "KingSafetyConfig::default_pawn_shield_penalty")]
+    pub pawn_shield_penalty: TaperedScore,
+    /// Penalty applied when the king is largely exposed (very low quality)
+    #[serde(default = "KingSafetyConfig::default_exposed_king_penalty")]
+    pub exposed_king_penalty: TaperedScore,
+    /// Weighting for combining pattern-derived coverage with zone coverage
+    #[serde(default = "KingSafetyConfig::default_pattern_coverage_weight")]
+    pub pattern_coverage_weight: f32,
+    #[serde(default = "KingSafetyConfig::default_zone_coverage_weight")]
+    pub zone_coverage_weight: f32,
+    /// Weighting for combining pawn shield sources
+    #[serde(default = "KingSafetyConfig::default_pattern_shield_weight")]
+    pub pattern_shield_weight: f32,
+    #[serde(default = "KingSafetyConfig::default_zone_shield_weight")]
+    pub zone_shield_weight: f32,
+    /// Exposure blending weights
+    #[serde(default = "KingSafetyConfig::default_exposure_zone_weight")]
+    pub exposure_zone_weight: f32,
+    #[serde(default = "KingSafetyConfig::default_exposure_shield_weight")]
+    pub exposure_shield_weight: f32,
+    #[serde(default = "KingSafetyConfig::default_exposure_primary_weight")]
+    pub exposure_primary_weight: f32,
+    /// Additional penalty when opponent pieces occupy the king zone
+    #[serde(default = "KingSafetyConfig::default_infiltration_penalty")]
+    pub infiltration_penalty: TaperedScore,
 }
 
 impl Default for KingSafetyConfig {
@@ -1000,7 +1050,99 @@ impl Default for KingSafetyConfig {
             threat_weight: 0.2, // Lowest weight since threats are most expensive
             phase_adjustment: 0.8,
             performance_mode: true, // Enable performance mode by default
+            castle_quality_threshold: Self::default_castle_quality_threshold(),
+            partial_castle_threshold: Self::default_partial_castle_threshold(),
+            partial_castle_penalty: Self::default_partial_castle_penalty(),
+            bare_king_penalty: Self::default_bare_king_penalty(),
+            coverage_bonus: Self::default_coverage_bonus(),
+            pawn_shield_bonus: Self::default_pawn_shield_bonus(),
+            primary_bonus: Self::default_primary_bonus(),
+            primary_defender_penalty: Self::default_primary_defender_penalty(),
+            pawn_shield_penalty: Self::default_pawn_shield_penalty(),
+            exposed_king_penalty: Self::default_exposed_king_penalty(),
+            pattern_coverage_weight: Self::default_pattern_coverage_weight(),
+            zone_coverage_weight: Self::default_zone_coverage_weight(),
+            pattern_shield_weight: Self::default_pattern_shield_weight(),
+            zone_shield_weight: Self::default_zone_shield_weight(),
+            exposure_zone_weight: Self::default_exposure_zone_weight(),
+            exposure_shield_weight: Self::default_exposure_shield_weight(),
+            exposure_primary_weight: Self::default_exposure_primary_weight(),
+            infiltration_penalty: Self::default_infiltration_penalty(),
         }
+    }
+}
+
+impl KingSafetyConfig {
+    fn default_castle_quality_threshold() -> f32 {
+        0.75
+    }
+
+    fn default_partial_castle_threshold() -> f32 {
+        0.4
+    }
+
+    fn default_partial_castle_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-60, -30)
+    }
+
+    fn default_bare_king_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-160, -80)
+    }
+
+    fn default_coverage_bonus() -> TaperedScore {
+        TaperedScore::new_tapered(40, 20)
+    }
+
+    fn default_pawn_shield_bonus() -> TaperedScore {
+        TaperedScore::new_tapered(60, 30)
+    }
+
+    fn default_primary_bonus() -> TaperedScore {
+        TaperedScore::new_tapered(50, 20)
+    }
+
+    fn default_primary_defender_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-80, -40)
+    }
+
+    fn default_pawn_shield_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-30, -15)
+    }
+
+    fn default_exposed_king_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-120, -60)
+    }
+
+    fn default_pattern_coverage_weight() -> f32 {
+        0.6
+    }
+
+    fn default_zone_coverage_weight() -> f32 {
+        0.4
+    }
+
+    fn default_pattern_shield_weight() -> f32 {
+        0.5
+    }
+
+    fn default_zone_shield_weight() -> f32 {
+        0.5
+    }
+
+    fn default_exposure_zone_weight() -> f32 {
+        0.5
+    }
+
+    fn default_exposure_shield_weight() -> f32 {
+        0.3
+    }
+
+    fn default_exposure_primary_weight() -> f32 {
+        0.2
+    }
+
+    fn default_infiltration_penalty() -> TaperedScore {
+        TaperedScore::new_tapered(-90, -45)
     }
 }
 
@@ -1522,7 +1664,6 @@ impl Default for DynamicReductionFormula {
         DynamicReductionFormula::Linear
     }
 }
-
 impl DynamicReductionFormula {
     /// Calculate reduction value for given depth and base reduction
     ///
@@ -1576,7 +1717,6 @@ impl DynamicReductionFormula {
         }
     }
 }
-
 /// Advanced reduction strategies for Null Move Pruning
 ///
 /// These strategies determine how the reduction factor is calculated:
@@ -2315,7 +2455,6 @@ pub struct AdvancedReductionConfig {
     /// History score threshold for history-based reduction (default: 0)
     pub history_score_threshold: i32,
 }
-
 impl Default for AdvancedReductionConfig {
     fn default() -> Self {
         Self {
@@ -2372,7 +2511,6 @@ impl Default for PositionClassificationConfig {
         }
     }
 }
-
 impl Default for LMRConfig {
     fn default() -> Self {
         Self {
@@ -3116,7 +3254,6 @@ impl LMRStats {
         )
     }
 }
-
 /// Move type classification for LMR decisions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveType {
@@ -3168,7 +3305,6 @@ pub struct IIDOverheadStats {
     /// Number of threshold adjustments made
     pub threshold_adjustments: u32,
 }
-
 /// Result of a multi-PV IID search
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IIDPVResult {
@@ -3601,7 +3737,6 @@ impl LMRProfileResult {
         self.reduction_rate > 20.0 && self.research_rate < 30.0 && self.moves_per_second > 1000.0
     }
 }
-
 #[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
@@ -4366,7 +4501,6 @@ impl IIDConfig {
         )
     }
 }
-
 /// Performance statistics for Internal Iterative Deepening
 #[derive(Debug, Clone, Default)]
 pub struct IIDStats {
@@ -5047,7 +5181,6 @@ pub struct TimeBudgetStats {
     /// Average time estimation accuracy (0.0 to 1.0)
     pub estimation_accuracy: f64,
 }
-
 impl AspirationWindowStats {
     /// Reset all statistics to zero
     pub fn reset(&mut self) {
@@ -5767,7 +5900,7 @@ impl PerformanceSummary {
             recommendations
                 .push("Low success rate: consider increasing base_window_size".to_string());
         }
-        if self.research_rate > 1.5 {
+        if self.research_rate > 2.0 {
             recommendations.push(
                 "High research rate: consider increasing base_window_size or max_researches"
                     .to_string(),
@@ -5830,7 +5963,6 @@ pub struct RealTimePerformance {
     /// Current configuration effectiveness (0.0 to 1.0)
     pub configuration_effectiveness: f64,
 }
-
 impl RealTimePerformance {
     /// Get performance status
     pub fn get_status(&self) -> String {
@@ -6534,7 +6666,6 @@ impl TimeManagementConfig {
         time_ratio < self.pressure_threshold
     }
 }
-
 /// Configuration migration utilities
 pub struct ConfigMigration;
 
@@ -7335,7 +7466,6 @@ impl CoreSearchMetrics {
         )
     }
 }
-
 /// Comprehensive performance report
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerformanceReport {
@@ -8098,7 +8228,6 @@ impl PruningManager {
 
         current
     }
-
     /// Advanced delta pruning with multiple conditions
     fn check_advanced_delta_pruning(
         &mut self,
@@ -8896,7 +9025,6 @@ impl PruningManager {
                 - baseline_effectiveness.overall_effectiveness,
         }
     }
-
     /// Calculate cache improvement metrics
     fn calculate_cache_improvement(
         &self,
@@ -9380,6 +9508,7 @@ impl AdaptiveParameters {
         }
     }
 }
+
 /// Position analyzer for adaptive parameters
 #[derive(Debug, PartialEq)]
 pub struct PositionAnalyzer;
@@ -9690,7 +9819,6 @@ pub struct PositionAnalysis {
     pub is_tactical: bool,
     pub complexity: u8,
 }
-
 /// Parameter adjustment for adaptive pruning
 #[derive(Debug, Default, PartialEq)]
 pub struct ParameterAdjustment {
@@ -9699,7 +9827,6 @@ pub struct ParameterAdjustment {
     pub delta_adjustment: i32,
     pub razoring_adjustment: i32,
 }
-
 /// Parameter snapshot for tracking changes
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParameterSnapshot {
