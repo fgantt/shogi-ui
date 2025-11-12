@@ -927,6 +927,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "smallvec",
  "tempfile",
  "thiserror",
  "toml",

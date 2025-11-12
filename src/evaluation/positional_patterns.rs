@@ -21,6 +21,44 @@
 use crate::bitboards::BitboardBoard;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
+
+const CORE_CENTER: [(u8, u8); 9] = [
+    (3, 3),
+    (3, 4),
+    (3, 5),
+    (4, 3),
+    (4, 4),
+    (4, 5),
+    (5, 3),
+    (5, 4),
+    (5, 5),
+];
+
+const EXTENDED_CENTER: [(u8, u8); 16] = [
+    (2, 2),
+    (2, 3),
+    (2, 4),
+    (2, 5),
+    (2, 6),
+    (3, 2),
+    (3, 6),
+    (4, 2),
+    (4, 6),
+    (5, 2),
+    (5, 6),
+    (6, 2),
+    (6, 3),
+    (6, 4),
+    (6, 5),
+    (6, 6),
+];
+
+const SPACE_ROW_WEIGHTS: [i32; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const WEAK_SQUARE_ROW_WEIGHTS: [i32; 9] = [7, 7, 6, 5, 4, 3, 2, 2, 1];
+const CENTER_FORWARD_BONUS: [i32; 9] = [0, 4, 6, 8, 10, 12, 14, 14, 14];
+const EXTENDED_CENTER_WEIGHT: f32 = 0.6;
+const CORE_CENTER_WEIGHT: f32 = 1.0;
 
 /// Positional pattern analyzer
 pub struct PositionalPatternAnalyzer {
@@ -89,6 +127,12 @@ impl<'a> ControlCache<'a> {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+struct OutpostContext {
+    support_margin: i32,
+    depth: u8,
+}
+
 impl PositionalPatternAnalyzer {
     /// Create a new positional pattern analyzer
     pub fn new() -> Self {
@@ -129,7 +173,8 @@ impl PositionalPatternAnalyzer {
 
         // Outposts
         if self.config.enable_outposts {
-            let outposts = self.evaluate_outposts(board, player, captured_pieces);
+            let outposts =
+                self.evaluate_outposts(board, player, &mut control_cache, captured_pieces);
             mg_score += outposts.mg;
             eg_score += outposts.eg;
         }
@@ -151,7 +196,8 @@ impl PositionalPatternAnalyzer {
 
         // Space advantage
         if self.config.enable_space_advantage {
-            let space = self.evaluate_space_advantage(board, player, &mut control_cache);
+            let space =
+                self.evaluate_space_advantage(board, player, &mut control_cache, captured_pieces);
             mg_score += space.mg;
             eg_score += space.eg;
         }
@@ -163,128 +209,249 @@ impl PositionalPatternAnalyzer {
             eg_score += tempo.eg;
         }
 
-        self.config
-            .phase_weights
-            .center_control
-            .apply(TaperedScore::new_tapered(mg_score, eg_score))
+        TaperedScore::new_tapered(mg_score, eg_score)
     }
 
     // ===================================================================
     // CENTER CONTROL EVALUATION
     // ===================================================================
 
-    /// Evaluate center control (enhanced version of basic center control)
+    fn bool_to_i32(value: bool) -> i32 {
+        if value {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn forward_steps(pos: Position, player: Player) -> u8 {
+        match player {
+            Player::Black => 8 - pos.row,
+            Player::White => pos.row,
+        }
+    }
+
+    fn home_steps(pos: Position, player: Player) -> u8 {
+        match player {
+            Player::Black => pos.row,
+            Player::White => 8 - pos.row,
+        }
+    }
+
+    /// Evaluate center control (shogi-oriented occupancy, mobility, and drop pressure)
     fn evaluate_center_control(
         &mut self,
         board: &BitboardBoard,
         player: Player,
         control_cache: &mut ControlCache<'_>,
-        _captured_pieces: &CapturedPieces,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         self.stats.center_control_checks += 1;
+        self.stats.center_control_tiles_scored +=
+            (CORE_CENTER.len() + EXTENDED_CENTER.len()) as u64;
 
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+        let opponent = player.opposite();
+        let mut score = TaperedScore::default();
 
-        // Define center (3x3 core)
-        let center_squares = [
-            (3, 3),
-            (3, 4),
-            (3, 5),
-            (4, 3),
-            (4, 4),
-            (4, 5),
-            (5, 3),
-            (5, 4),
-            (5, 5),
-        ];
-
-        // Define extended center (5x5)
-        let extended_center = [
-            (2, 2),
-            (2, 3),
-            (2, 4),
-            (2, 5),
-            (2, 6),
-            (3, 2),
-            (3, 6),
-            (4, 2),
-            (4, 6),
-            (5, 2),
-            (5, 6),
-            (6, 2),
-            (6, 3),
-            (6, 4),
-            (6, 5),
-            (6, 6),
-        ];
-
-        // Evaluate core center occupation
-        for (row, col) in center_squares {
+        for &(row, col) in CORE_CENTER.iter() {
             let pos = Position::new(row, col);
-            if let Some(piece) = board.get_piece(pos) {
-                let value = self.get_center_piece_value(piece.piece_type, true);
-                if piece.player == player {
-                    mg_score += value.0;
-                    eg_score += value.1;
-                } else {
-                    mg_score -= value.0;
-                    eg_score -= value.1;
-                }
-            }
+            score += self.center_square_contribution(
+                board,
+                player,
+                opponent,
+                control_cache,
+                pos,
+                CORE_CENTER_WEIGHT,
+            );
         }
 
-        // Evaluate extended center (half value)
-        for (row, col) in extended_center {
+        for &(row, col) in EXTENDED_CENTER.iter() {
             let pos = Position::new(row, col);
-            if let Some(piece) = board.get_piece(pos) {
-                let value = self.get_center_piece_value(piece.piece_type, false);
-                if piece.player == player {
-                    mg_score += value.0 / 2;
-                    eg_score += value.1 / 2;
-                } else {
-                    mg_score -= value.0 / 2;
-                    eg_score -= value.1 / 2;
-                }
-            }
+            score += self.center_square_contribution(
+                board,
+                player,
+                opponent,
+                control_cache,
+                pos,
+                EXTENDED_CENTER_WEIGHT,
+            );
         }
 
-        // Bonus for controlling center squares (blocker-aware)
-        let control_advantage =
-            self.center_control_advantage(control_cache, player, &center_squares);
-        mg_score += control_advantage * self.config.pawn_center_bonus;
-        eg_score += control_advantage * self.config.pawn_center_bonus / 2;
+        if self.config.enable_hand_context {
+            let drop_pressure = self.center_drop_pressure(board, player, captured_pieces);
+            let drop_relief = self.center_drop_pressure(board, opponent, captured_pieces);
+            score += drop_pressure;
+            score -= drop_relief;
+        }
 
-        self.config
-            .phase_weights
-            .outposts
-            .apply(TaperedScore::new_tapered(mg_score, eg_score))
+        self.config.phase_weights.center_control.apply(score)
     }
 
-    /// Get value of piece in center
-    fn get_center_piece_value(&self, piece_type: PieceType, is_core: bool) -> (i32, i32) {
-        let multiplier = if is_core { 1 } else { 1 };
-
-        match piece_type {
-            PieceType::Knight => (30 * multiplier, 15 * multiplier),
-            PieceType::Silver => (25 * multiplier, 20 * multiplier),
-            PieceType::Gold => (20 * multiplier, 18 * multiplier),
-            PieceType::Bishop | PieceType::PromotedBishop => (35 * multiplier, 25 * multiplier),
-            PieceType::Rook | PieceType::PromotedRook => (32 * multiplier, 28 * multiplier),
-            PieceType::Pawn => (15 * multiplier, 10 * multiplier),
-            _ => (10 * multiplier, 8 * multiplier),
-        }
-    }
-
-    fn center_control_advantage(
+    fn center_square_contribution(
         &self,
-        control_cache: &mut ControlCache<'_>,
+        board: &BitboardBoard,
         player: Player,
-        center: &[(u8, u8)],
-    ) -> i32 {
-        let player_control = control_cache.count_subset_controlled(player, center);
-        let opponent_control = control_cache.count_subset_controlled(player.opposite(), center);
-        player_control - opponent_control
+        opponent: Player,
+        control_cache: &mut ControlCache<'_>,
+        pos: Position,
+        region_weight: f32,
+    ) -> TaperedScore {
+        let mut score = TaperedScore::default();
+
+        let occupant = board.get_piece(pos);
+        if let Some(piece) = occupant {
+            let presence = self.center_piece_presence_score(&piece, pos);
+            if piece.player == player {
+                score += presence;
+            } else {
+                score -= presence;
+            }
+        }
+
+        let player_control = control_cache.controlled_by(player, pos);
+        let opponent_control = control_cache.controlled_by(opponent, pos);
+        let control_diff = Self::bool_to_i32(player_control) - Self::bool_to_i32(opponent_control);
+
+        if control_diff != 0 {
+            let player_forward = Self::forward_steps(pos, player) as usize;
+            let opponent_forward = Self::forward_steps(pos, opponent) as usize;
+            let index = if control_diff >= 0 {
+                player_forward
+            } else {
+                opponent_forward
+            };
+            let control_scale_mg = self.config.pawn_center_bonus + CENTER_FORWARD_BONUS[index] / 2;
+            let control_scale_eg =
+                self.config.pawn_center_bonus / 2 + CENTER_FORWARD_BONUS[index] / 4;
+            score += TaperedScore::new_tapered(
+                control_diff * control_scale_mg,
+                control_diff * control_scale_eg,
+            );
+        }
+
+        if player_control && occupant.map(|piece| piece.player != player).unwrap_or(true) {
+            let forward = Self::forward_steps(pos, player) as usize;
+            let mobility_bonus = CENTER_FORWARD_BONUS[forward] / 2 + 4;
+            score.mg += mobility_bonus;
+            score.eg += mobility_bonus / 2;
+        }
+
+        if opponent_control
+            && occupant
+                .map(|piece| piece.player != opponent)
+                .unwrap_or(true)
+        {
+            let forward = Self::forward_steps(pos, opponent) as usize;
+            let mobility_bonus = CENTER_FORWARD_BONUS[forward] / 2 + 4;
+            score.mg -= mobility_bonus;
+            score.eg -= mobility_bonus / 2;
+        }
+
+        score * region_weight
+    }
+
+    fn center_piece_presence_score(&self, piece: &Piece, pos: Position) -> TaperedScore {
+        let mut score = Self::center_piece_base_score(piece.piece_type);
+        let forward = Self::forward_steps(pos, piece.player) as usize;
+        let advancement = CENTER_FORWARD_BONUS[forward];
+        score.mg += advancement;
+        score.eg += advancement / 2;
+
+        if matches!(
+            piece.piece_type,
+            PieceType::PromotedPawn
+                | PieceType::PromotedLance
+                | PieceType::PromotedKnight
+                | PieceType::PromotedSilver
+        ) {
+            score.mg += 6;
+            score.eg += 4;
+        }
+
+        score
+    }
+
+    fn center_piece_base_score(piece_type: PieceType) -> TaperedScore {
+        match piece_type {
+            PieceType::Pawn => TaperedScore::new_tapered(14, 8),
+            PieceType::Lance => TaperedScore::new_tapered(18, 12),
+            PieceType::Knight => TaperedScore::new_tapered(26, 18),
+            PieceType::Silver => TaperedScore::new_tapered(32, 22),
+            PieceType::Gold => TaperedScore::new_tapered(36, 26),
+            PieceType::Bishop => TaperedScore::new_tapered(44, 34),
+            PieceType::Rook => TaperedScore::new_tapered(48, 36),
+            PieceType::PromotedBishop => TaperedScore::new_tapered(52, 44),
+            PieceType::PromotedRook => TaperedScore::new_tapered(56, 46),
+            PieceType::King => TaperedScore::new_tapered(18, 32),
+            PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => TaperedScore::new_tapered(34, 26),
+        }
+    }
+
+    fn center_drop_pressure(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let mut mg = 0;
+        let mut eg = 0;
+
+        let drop_candidates: &[(PieceType, i32, i32)] = &[
+            (PieceType::Pawn, 5, 3),
+            (PieceType::Silver, 8, 6),
+            (PieceType::Gold, 10, 10),
+            (PieceType::Knight, 7, 5),
+        ];
+
+        for &(piece_type, mg_weight, eg_weight) in drop_candidates {
+            let available = captured_pieces.count(piece_type, player) as usize;
+            if available == 0 {
+                continue;
+            }
+
+            let mut used = 0;
+            for &(row, col) in CORE_CENTER.iter() {
+                let pos = Position::new(row, col);
+                if self.drop_is_legal(piece_type, player, board, pos) {
+                    let forward = Self::forward_steps(pos, player) as usize;
+                    let positional_weight = 4 + CENTER_FORWARD_BONUS[forward] / 2;
+                    mg += positional_weight * mg_weight;
+                    eg += (positional_weight / 2 + 1) * eg_weight;
+                    used += 1;
+                    if used >= available {
+                        break;
+                    }
+                }
+            }
+        }
+
+        TaperedScore::new_tapered(mg, eg)
+    }
+
+    fn drop_is_legal(
+        &self,
+        piece_type: PieceType,
+        player: Player,
+        board: &BitboardBoard,
+        pos: Position,
+    ) -> bool {
+        if board.is_square_occupied(pos) {
+            return false;
+        }
+
+        if self.is_illegal_drop_rank(piece_type, player, pos.row) {
+            return false;
+        }
+
+        if piece_type == PieceType::Pawn && self.has_unpromoted_pawn_on_file(board, player, pos.col)
+        {
+            return false;
+        }
+
+        true
     }
 
     // ===================================================================
@@ -296,107 +463,210 @@ impl PositionalPatternAnalyzer {
         &mut self,
         board: &BitboardBoard,
         player: Player,
+        control_cache: &mut ControlCache<'_>,
         captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         self.stats.outpost_checks += 1;
 
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+        let mut score = TaperedScore::default();
 
-        // Check each piece for outpost potential
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
-                    if piece.player == player {
-                        if self.is_outpost(board, pos, piece.piece_type, player, captured_pieces) {
-                            let value = self.get_outpost_value(piece.piece_type, pos, player);
-                            mg_score += value.0;
-                            eg_score += value.1;
-                            self.stats.outposts_found += 1;
-                        }
+                    if piece.player != player {
+                        continue;
+                    }
+                    self.stats.outpost_candidates += 1;
+                    if let Some(context) =
+                        self.outpost_context(board, control_cache, pos, &piece, captured_pieces)
+                    {
+                        score += self.get_outpost_value(&piece, pos, &context);
+                        self.stats.outposts_found += 1;
                     }
                 }
             }
         }
 
-        TaperedScore::new_tapered(mg_score, eg_score)
+        self.config.phase_weights.outposts.apply(score)
     }
 
     /// Check if a square is an outpost for a piece
-    fn is_outpost(
+    fn outpost_context(
         &self,
         board: &BitboardBoard,
+        control_cache: &mut ControlCache<'_>,
         pos: Position,
-        piece_type: PieceType,
-        player: Player,
+        piece: &Piece,
         captured_pieces: &CapturedPieces,
-    ) -> bool {
-        // Outposts are typically:
-        // 1. In or near enemy territory
-        // 2. Protected by own pawns
-        // 3. Cannot be easily attacked by enemy pawns
+    ) -> Option<OutpostContext> {
+        let player = piece.player;
+        let opponent = player.opposite();
 
-        // Check if in advanced position
-        let is_advanced = if player == Player::Black {
-            pos.row <= 5 // Advanced for Black
-        } else {
-            pos.row >= 3 // Advanced for White
-        };
-
-        if !is_advanced {
-            return false;
+        if !self.is_outpost_zone(pos, player) {
+            return None;
         }
 
-        // Check if protected by own pawn
-        let has_pawn_support = self.has_pawn_support(board, pos, player, captured_pieces);
+        if !self.is_outpost_piece(piece.piece_type) {
+            return None;
+        }
 
-        // Check if enemy pawns can easily attack
-        let enemy_pawn_threat =
-            self.is_under_enemy_pawn_threat(board, pos, player, captured_pieces);
+        let support_score = self.outpost_support_score(board, pos, player, captured_pieces);
+        if support_score == 0 {
+            return None;
+        }
 
-        let drop_threat = self.has_drop_threat(board, pos, player, captured_pieces);
+        if self.is_under_enemy_pawn_threat(board, pos, player, captured_pieces) {
+            return None;
+        }
 
-        // Knights and Silvers make best outposts
-        let is_good_piece = matches!(
-            piece_type,
-            PieceType::Knight | PieceType::Silver | PieceType::Gold
-        );
+        if self.has_drop_threat(board, pos, player, captured_pieces) {
+            return None;
+        }
 
-        has_pawn_support && !enemy_pawn_threat && !drop_threat && is_good_piece
+        if !control_cache.controlled_by(player, pos) {
+            return None;
+        }
+
+        let friendly_support = self.count_controllers(board, player, pos) as i32;
+        let enemy_pressure = self.count_controllers(board, opponent, pos) as i32;
+
+        let mut total_support = friendly_support + support_score;
+        if self.config.enable_hand_context {
+            total_support += self.drop_guard_score(board, pos, player, captured_pieces);
+        }
+
+        if total_support <= enemy_pressure {
+            return None;
+        }
+
+        Some(OutpostContext {
+            support_margin: total_support - enemy_pressure,
+            depth: Self::forward_steps(pos, player),
+        })
     }
 
-    /// Check if position has pawn support
-    fn has_pawn_support(
+    fn outpost_support_score(
         &self,
         board: &BitboardBoard,
         pos: Position,
         player: Player,
         captured_pieces: &CapturedPieces,
-    ) -> bool {
+    ) -> i32 {
+        let mut score = 0;
         let behind_row = match player {
             Player::Black => pos.row as i8 + 1,
             Player::White => pos.row as i8 - 1,
         };
 
         if behind_row < 0 || behind_row >= 9 {
-            return false;
+            return 0;
         }
 
         let support_pos = Position::new(behind_row as u8, pos.col);
         if let Some(piece) = board.get_piece(support_pos) {
-            if piece.player == player && piece.piece_type == PieceType::Pawn {
-                return true;
+            if piece.player == player {
+                score += match piece.piece_type {
+                    PieceType::Pawn => 2,
+                    PieceType::Silver | PieceType::Gold => 3,
+                    PieceType::PromotedPawn
+                    | PieceType::PromotedLance
+                    | PieceType::PromotedKnight
+                    | PieceType::PromotedSilver => 3,
+                    PieceType::King => 2,
+                    _ => 1,
+                };
             }
         } else if self.config.enable_hand_context
             && captured_pieces.count(PieceType::Pawn, player) > 0
             && !self.has_unpromoted_pawn_on_file(board, player, pos.col)
             && !self.is_illegal_drop_rank(PieceType::Pawn, player, support_pos.row)
         {
-            return true;
+            score += 1;
         }
 
-        false
+        for dc in [-1, 1] {
+            let diag_col = pos.col as i8 + dc;
+            if diag_col < 0 || diag_col >= 9 {
+                continue;
+            }
+            let diag_pos = Position::new(behind_row as u8, diag_col as u8);
+            if let Some(piece) = board.get_piece(diag_pos) {
+                if piece.player == player
+                    && matches!(
+                        piece.piece_type,
+                        PieceType::Silver
+                            | PieceType::Gold
+                            | PieceType::PromotedPawn
+                            | PieceType::PromotedLance
+                            | PieceType::PromotedKnight
+                            | PieceType::PromotedSilver
+                            | PieceType::King
+                    )
+                {
+                    score += 1;
+                }
+            }
+        }
+
+        score
+    }
+
+    fn drop_guard_score(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
+        if !self.config.enable_drop_threats {
+            return 0;
+        }
+
+        let mut score = 0;
+        let guard_types: &[(PieceType, i32)] = &[
+            (PieceType::Gold, 2),
+            (PieceType::Silver, 1),
+            (PieceType::Pawn, 1),
+        ];
+
+        let guard_squares = self.guard_squares_for_player(pos, player);
+        for &(piece_type, value) in guard_types {
+            if captured_pieces.count(piece_type, player) == 0 {
+                continue;
+            }
+            for target in guard_squares.iter() {
+                if self.drop_is_legal(piece_type, player, board, *target) {
+                    score += value;
+                    break;
+                }
+            }
+        }
+
+        score
+    }
+
+    fn guard_squares_for_player(&self, pos: Position, player: Player) -> SmallVec<[Position; 5]> {
+        let mut squares: SmallVec<[Position; 5]> = SmallVec::new();
+        let behind_row = match player {
+            Player::Black => pos.row as i8 + 1,
+            Player::White => pos.row as i8 - 1,
+        };
+
+        if behind_row < 0 || behind_row >= 9 {
+            return squares;
+        }
+
+        squares.push(Position::new(behind_row as u8, pos.col));
+        for dc in [-1, 1] {
+            let diag_col = pos.col as i8 + dc;
+            if diag_col < 0 || diag_col >= 9 {
+                continue;
+            }
+            squares.push(Position::new(behind_row as u8, diag_col as u8));
+        }
+
+        squares
     }
 
     fn has_drop_threat(
@@ -626,27 +896,280 @@ impl PositionalPatternAnalyzer {
     /// Get value of an outpost
     fn get_outpost_value(
         &self,
-        piece_type: PieceType,
+        piece: &Piece,
         pos: Position,
+        context: &OutpostContext,
+    ) -> TaperedScore {
+        let base = match piece.piece_type {
+            PieceType::Knight | PieceType::PromotedKnight => TaperedScore::new_tapered(60, 40),
+            PieceType::Silver | PieceType::PromotedSilver => TaperedScore::new_tapered(58, 46),
+            PieceType::Gold
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedSilver => TaperedScore::new_tapered(52, 44),
+            PieceType::Bishop | PieceType::PromotedBishop => TaperedScore::new_tapered(64, 58),
+            PieceType::Rook | PieceType::PromotedRook => TaperedScore::new_tapered(70, 64),
+            _ => TaperedScore::new_tapered(38, 32),
+        };
+
+        let depth = context.depth as i32;
+        let support_margin = context.support_margin;
+
+        let mut score = base;
+        score.mg += depth * 6;
+        score.eg += depth * 4;
+        score.mg += support_margin * 12;
+        score.eg += support_margin * 10;
+
+        if matches!(
+            piece.piece_type,
+            PieceType::Bishop
+                | PieceType::PromotedBishop
+                | PieceType::Rook
+                | PieceType::PromotedRook
+        ) {
+            score.mg += depth * 4;
+            score.eg += depth * 4;
+        }
+
+        if matches!(
+            piece.piece_type,
+            PieceType::PromotedPawn | PieceType::PromotedLance | PieceType::PromotedKnight
+        ) {
+            score.mg += 6;
+            score.eg += 4;
+        }
+
+        if Self::home_steps(pos, piece.player) <= 1 {
+            score.eg -= 4;
+        }
+
+        score
+    }
+
+    fn is_outpost_zone(&self, pos: Position, player: Player) -> bool {
+        let depth = Self::forward_steps(pos, player);
+        depth >= 2 && depth <= 6
+    }
+
+    fn is_outpost_piece(&self, piece_type: PieceType) -> bool {
+        matches!(
+            piece_type,
+            PieceType::Knight
+                | PieceType::Silver
+                | PieceType::Gold
+                | PieceType::Bishop
+                | PieceType::Rook
+                | PieceType::PromotedPawn
+                | PieceType::PromotedKnight
+                | PieceType::PromotedLance
+                | PieceType::PromotedSilver
+                | PieceType::PromotedBishop
+                | PieceType::PromotedRook
+        )
+    }
+
+    fn count_controllers(&self, board: &BitboardBoard, player: Player, target: Position) -> u32 {
+        let mut count = 0;
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let from = Position::new(row, col);
+                if from == target {
+                    continue;
+                }
+                if let Some(piece) = board.get_piece(from) {
+                    if piece.player != player {
+                        continue;
+                    }
+                    if self.piece_controls_square(board, piece, from, target) {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    fn piece_controls_square(
+        &self,
+        board: &BitboardBoard,
+        piece: &Piece,
+        from: Position,
+        target: Position,
+    ) -> bool {
+        if from == target {
+            return false;
+        }
+
+        let dr = target.row as i8 - from.row as i8;
+        let dc = target.col as i8 - from.col as i8;
+
+        match piece.piece_type {
+            PieceType::Pawn => {
+                let forward = self.player_forward(piece.player);
+                dr == forward && dc == 0 && !board.is_square_occupied_by(target, piece.player)
+            }
+            PieceType::Lance => {
+                let forward = self.player_forward(piece.player);
+                if dc != 0 || dr == 0 || dr.signum() != forward {
+                    return false;
+                }
+                self.sliding_path_clear(board, from, target, forward, 0, piece.player)
+            }
+            PieceType::Knight => {
+                let forward = self.player_forward(piece.player);
+                if dr != 2 * forward || (dc != -1 && dc != 1) {
+                    return false;
+                }
+                !board.is_square_occupied_by(target, piece.player)
+            }
+            PieceType::Silver => self.step_controls_square(
+                board,
+                piece,
+                dr,
+                dc,
+                target,
+                &self.silver_offsets(piece.player),
+            ),
+            PieceType::Gold
+            | PieceType::PromotedPawn
+            | PieceType::PromotedLance
+            | PieceType::PromotedKnight
+            | PieceType::PromotedSilver => self.step_controls_square(
+                board,
+                piece,
+                dr,
+                dc,
+                target,
+                &self.gold_offsets(piece.player),
+            ),
+            PieceType::Bishop => {
+                if dr.abs() != dc.abs() || dr == 0 {
+                    return false;
+                }
+                self.sliding_path_clear(board, from, target, dr.signum(), dc.signum(), piece.player)
+            }
+            PieceType::Rook => {
+                if dr != 0 && dc != 0 {
+                    return false;
+                }
+                let step_r = dr.signum();
+                let step_c = dc.signum();
+                if step_r == 0 && step_c == 0 {
+                    return false;
+                }
+                self.sliding_path_clear(board, from, target, step_r, step_c, piece.player)
+            }
+            PieceType::King => {
+                self.step_controls_square(board, piece, dr, dc, target, &self.king_offsets())
+            }
+            PieceType::PromotedBishop => {
+                if dr.abs() == dc.abs() && dr != 0 {
+                    return self.sliding_path_clear(
+                        board,
+                        from,
+                        target,
+                        dr.signum(),
+                        dc.signum(),
+                        piece.player,
+                    );
+                }
+                if dr.abs() <= 1
+                    && dc.abs() <= 1
+                    && (dr == 0 || dc == 0)
+                    && !board.is_square_occupied_by(target, piece.player)
+                {
+                    return true;
+                }
+                false
+            }
+            PieceType::PromotedRook => {
+                if dr != 0 && dc != 0 {
+                    if dr.abs() == 1 && dc.abs() == 1 {
+                        return !board.is_square_occupied_by(target, piece.player);
+                    }
+                    return false;
+                }
+                let step_r = dr.signum();
+                let step_c = dc.signum();
+                if step_r == 0 && step_c == 0 {
+                    return false;
+                }
+                self.sliding_path_clear(board, from, target, step_r, step_c, piece.player)
+            }
+        }
+    }
+
+    fn step_controls_square(
+        &self,
+        board: &BitboardBoard,
+        piece: &Piece,
+        dr: i8,
+        dc: i8,
+        target: Position,
+        offsets: &[(i8, i8)],
+    ) -> bool {
+        for &(offset_r, offset_c) in offsets {
+            if dr == offset_r && dc == offset_c {
+                return !board.is_square_occupied_by(target, piece.player);
+            }
+        }
+        false
+    }
+
+    fn sliding_path_clear(
+        &self,
+        board: &BitboardBoard,
+        from: Position,
+        target: Position,
+        step_r: i8,
+        step_c: i8,
         player: Player,
-    ) -> (i32, i32) {
-        let base_value = match piece_type {
-            PieceType::Knight => (60, 40),
-            PieceType::Silver => (50, 45),
-            PieceType::Gold => (45, 40),
-            _ => (30, 25),
-        };
+    ) -> bool {
+        let mut row = from.row as i8 + step_r;
+        let mut col = from.col as i8 + step_c;
 
-        // Bonus for deeper outposts
-        let depth = if player == Player::Black {
-            8 - pos.row
-        } else {
-            pos.row
-        };
+        while row >= 0 && row < 9 && col >= 0 && col < 9 {
+            let pos = Position::new(row as u8, col as u8);
+            if pos == target {
+                return !board.is_square_occupied_by(pos, player);
+            }
+            if board.is_square_occupied(pos) {
+                return false;
+            }
+            row += step_r;
+            col += step_c;
+        }
 
-        let depth_bonus = (depth as i32 * 5, depth as i32 * 3);
+        false
+    }
 
-        (base_value.0 + depth_bonus.0, base_value.1 + depth_bonus.1)
+    fn gold_offsets(&self, player: Player) -> [(i8, i8); 6] {
+        match player {
+            Player::Black => [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, 0)],
+            Player::White => [(1, -1), (1, 0), (1, 1), (0, -1), (0, 1), (-1, 0)],
+        }
+    }
+
+    fn silver_offsets(&self, player: Player) -> [(i8, i8); 5] {
+        match player {
+            Player::Black => [(-1, -1), (-1, 0), (-1, 1), (1, -1), (1, 1)],
+            Player::White => [(1, -1), (1, 0), (1, 1), (-1, -1), (-1, 1)],
+        }
+    }
+
+    fn king_offsets(&self) -> [(i8, i8); 8] {
+        [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ]
     }
 
     // ===================================================================
@@ -663,108 +1186,191 @@ impl PositionalPatternAnalyzer {
     ) -> TaperedScore {
         self.stats.weak_square_checks += 1;
 
-        let mut penalty = 0;
         let opponent = player.opposite();
+        let mut penalty = TaperedScore::default();
 
-        // Check key squares in own territory
-        let key_squares = self.get_key_squares(player);
+        let key_squares = self.get_king_zone(board, player);
+        self.stats.weak_square_candidates += key_squares.len() as u64;
 
-        for pos in key_squares {
-            if self.is_weak_square(board, pos, player, captured_pieces) {
-                // Check if enemy has piece controlling this square
-                if control_cache.controlled_by(opponent, pos) {
-                    penalty += self.config.weak_square_penalty;
-                    self.stats.weak_squares_found += 1;
-                }
+        for pos in key_squares.into_iter() {
+            if !control_cache.controlled_by(opponent, pos) {
+                continue;
             }
+
+            let attackers = self.count_controllers(board, opponent, pos);
+            if attackers == 0 {
+                continue;
+            }
+
+            let mut defender_score = self.count_controllers(board, player, pos) as i32;
+            defender_score += self.king_zone_guard_bonus(board, pos, player);
+            if self.config.enable_hand_context {
+                defender_score += self.drop_defense_score(board, player, captured_pieces, pos);
+            }
+
+            if defender_score as u32 >= attackers {
+                continue;
+            }
+
+            let net_pressure = attackers as i32 - defender_score;
+            let severity = self.weak_square_severity(board, pos, player, net_pressure);
+            if severity.mg == 0 && severity.eg == 0 {
+                continue;
+            }
+
+            penalty -= severity;
+            self.stats.weak_squares_found += 1;
         }
 
-        self.config
-            .phase_weights
-            .weak_squares
-            .apply(TaperedScore::new_tapered(-penalty, -penalty / 2))
+        self.config.phase_weights.weak_squares.apply(penalty)
     }
 
-    /// Get key squares to monitor for weaknesses
-    fn get_key_squares(&self, player: Player) -> Vec<Position> {
-        let mut squares = Vec::new();
-
-        // Squares around king area
-        let king_area_rows = if player == Player::Black {
-            6..=8
+    fn get_king_zone(&self, board: &BitboardBoard, player: Player) -> SmallVec<[Position; 24]> {
+        let mut squares: SmallVec<[Position; 24]> = SmallVec::new();
+        if let Some(king_pos) = board.find_king_position(player) {
+            for dr in -2..=2 {
+                for dc in -2..=2 {
+                    if dr == 0 && dc == 0 {
+                        continue;
+                    }
+                    let row = king_pos.row as i8 + dr;
+                    let col = king_pos.col as i8 + dc;
+                    if row < 0 || row >= 9 || col < 0 || col >= 9 {
+                        continue;
+                    }
+                    squares.push(Position::new(row as u8, col as u8));
+                }
+            }
+            squares.push(king_pos);
         } else {
-            0..=2
-        };
-
-        for row in king_area_rows {
-            for col in 3..=5 {
-                // Central files
-                squares.push(Position::new(row, col));
+            // Fallback to default castle region if king not found
+            let base_rows = if player == Player::Black {
+                6..=8
+            } else {
+                0..=2
+            };
+            for row in base_rows {
+                for col in 3..=5 {
+                    squares.push(Position::new(row, col));
+                }
             }
         }
 
         squares
     }
 
-    /// Check if a square is weak (cannot be defended by pawns)
-    fn is_weak_square(
+    fn drop_defense_score(
         &self,
         board: &BitboardBoard,
-        pos: Position,
         player: Player,
         captured_pieces: &CapturedPieces,
-    ) -> bool {
-        // A square is weak if no friendly pawns can defend it
-        !self.can_be_defended_by_pawn(board, pos, player, captured_pieces)
-    }
-
-    /// Check if square can be defended by pawn
-    fn can_be_defended_by_pawn(
-        &self,
-        board: &BitboardBoard,
         pos: Position,
-        player: Player,
-        captured_pieces: &CapturedPieces,
-    ) -> bool {
-        let pawn_files = [-1, 0, 1];
+    ) -> i32 {
+        if !self.config.enable_hand_context {
+            return 0;
+        }
 
-        for dc in pawn_files {
-            let file = pos.col as i8 + dc;
-            if file < 0 || file >= 9 {
+        let mut score = 0;
+        for &(piece_type, value) in &[
+            (PieceType::Pawn, 1),
+            (PieceType::Silver, 2),
+            (PieceType::Gold, 3),
+            (PieceType::Knight, 1),
+        ] {
+            if captured_pieces.count(piece_type, player) == 0 {
                 continue;
             }
-
-            // Check if there's a pawn on this file that could defend
-            for row in 0..9 {
-                let check_pos = Position::new(row, file as u8);
-                if let Some(piece) = board.get_piece(check_pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player == player {
-                        return true;
-                    }
-                }
+            if self.drop_is_legal(piece_type, player, board, pos) {
+                score += value;
             }
+        }
 
-            if self.config.enable_hand_context
-                && captured_pieces.count(PieceType::Pawn, player) > 0
-                && !self.has_unpromoted_pawn_on_file(board, player, file as u8)
-            {
-                let defensive_row = match player {
-                    Player::Black => pos.row.saturating_add(1),
-                    Player::White => pos.row.saturating_sub(1),
+        score
+    }
+
+    fn king_zone_guard_bonus(&self, board: &BitboardBoard, pos: Position, player: Player) -> i32 {
+        let mut score = 0;
+
+        if let Some(piece) = board.get_piece(pos) {
+            if piece.player == player {
+                score += match piece.piece_type {
+                    PieceType::King => 3,
+                    PieceType::Gold
+                    | PieceType::Silver
+                    | PieceType::PromotedPawn
+                    | PieceType::PromotedLance
+                    | PieceType::PromotedKnight
+                    | PieceType::PromotedSilver => 3,
+                    PieceType::Pawn => 1,
+                    _ => 2,
                 };
+            }
+        }
 
-                if defensive_row < 9
-                    && !self.is_illegal_drop_rank(PieceType::Pawn, player, defensive_row as u8)
-                {
-                    let defensive_pos = Position::new(defensive_row as u8, file as u8);
-                    if board.get_piece(defensive_pos).is_none() {
-                        return true;
-                    }
+        for &(dr, dc) in &self.gold_offsets(player) {
+            let row = pos.row as i8 + dr;
+            let col = pos.col as i8 + dc;
+            if row < 0 || row >= 9 || col < 0 || col >= 9 {
+                continue;
+            }
+            let guard_pos = Position::new(row as u8, col as u8);
+            if let Some(piece) = board.get_piece(guard_pos) {
+                if piece.player == player {
+                    score += match piece.piece_type {
+                        PieceType::King => 2,
+                        PieceType::Gold
+                        | PieceType::PromotedPawn
+                        | PieceType::PromotedLance
+                        | PieceType::PromotedKnight
+                        | PieceType::PromotedSilver => 2,
+                        PieceType::Silver => 1,
+                        PieceType::Pawn => 1,
+                        _ => 1,
+                    };
                 }
             }
         }
 
-        false
+        score
+    }
+
+    fn weak_square_severity(
+        &self,
+        board: &BitboardBoard,
+        pos: Position,
+        player: Player,
+        net_pressure: i32,
+    ) -> TaperedScore {
+        if net_pressure <= 0 {
+            return TaperedScore::default();
+        }
+
+        let occupant_penalty = if let Some(piece) = board.get_piece(pos) {
+            if piece.player == player {
+                match piece.piece_type {
+                    PieceType::King => 32,
+                    PieceType::Gold
+                    | PieceType::Silver
+                    | PieceType::PromotedPawn
+                    | PieceType::PromotedLance
+                    | PieceType::PromotedKnight
+                    | PieceType::PromotedSilver => 24,
+                    PieceType::Pawn => 12,
+                    _ => 16,
+                }
+            } else {
+                10
+            }
+        } else {
+            8
+        };
+
+        let row_weight = WEAK_SQUARE_ROW_WEIGHTS[Self::home_steps(pos, player) as usize];
+        let base_penalty = self.config.weak_square_penalty + occupant_penalty;
+        let mg = base_penalty * net_pressure * row_weight / 4;
+        let eg = (base_penalty / 2) * net_pressure * row_weight / 5;
+
+        TaperedScore::new_tapered(mg, eg)
     }
 
     // ===================================================================
@@ -833,23 +1439,101 @@ impl PositionalPatternAnalyzer {
     /// Evaluate space advantage (territory control)
     fn evaluate_space_advantage(
         &mut self,
-        _board: &BitboardBoard,
+        board: &BitboardBoard,
         player: Player,
         control_cache: &mut ControlCache<'_>,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         self.stats.space_checks += 1;
 
-        let player_squares = control_cache.count_all_controlled(player);
-        let opponent_squares = control_cache.count_all_controlled(player.opposite());
+        let opponent = player.opposite();
+        let mut player_territory = 0;
+        let mut opponent_territory = 0;
+        let mut player_frontier = 0;
+        let mut opponent_frontier = 0;
 
-        let advantage = player_squares - opponent_squares;
-        let mg_score = advantage * self.config.space_advantage_bonus;
-        let eg_score = advantage * self.config.space_advantage_bonus / 3; // Less important in endgame
+        self.stats.space_frontier_samples += 81;
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                let player_controls = control_cache.controlled_by(player, pos);
+                let opponent_controls = control_cache.controlled_by(opponent, pos);
+
+                if player_controls {
+                    let depth = Self::forward_steps(pos, player) as usize;
+                    let weight = SPACE_ROW_WEIGHTS[depth];
+                    player_territory += weight + self.space_occupancy_bonus(board, pos, player);
+                    if !opponent_controls {
+                        player_frontier += (weight / 2).max(1);
+                    }
+                }
+
+                if opponent_controls {
+                    let depth = Self::forward_steps(pos, opponent) as usize;
+                    let weight = SPACE_ROW_WEIGHTS[depth];
+                    opponent_territory += weight + self.space_occupancy_bonus(board, pos, opponent);
+                    if !player_controls {
+                        opponent_frontier += (weight / 2).max(1);
+                    }
+                }
+            }
+        }
+
+        let territory_delta = player_territory - opponent_territory;
+        let frontier_delta = player_frontier - opponent_frontier;
+
+        let mut mg_score = territory_delta * self.config.space_advantage_bonus;
+        let mut eg_score = territory_delta * (self.config.space_advantage_bonus / 2);
+
+        mg_score += frontier_delta * (self.config.space_advantage_bonus * 2);
+        eg_score += frontier_delta * self.config.space_advantage_bonus;
+
+        if self.config.enable_hand_context {
+            let hand_delta = self.hand_space_pressure(captured_pieces, player)
+                - self.hand_space_pressure(captured_pieces, opponent);
+            mg_score += hand_delta;
+            eg_score += hand_delta / 2;
+        }
 
         self.config
             .phase_weights
             .space_advantage
             .apply(TaperedScore::new_tapered(mg_score, eg_score))
+    }
+
+    fn space_occupancy_bonus(&self, board: &BitboardBoard, pos: Position, player: Player) -> i32 {
+        if let Some(piece) = board.get_piece(pos) {
+            if piece.player == player {
+                let depth = Self::forward_steps(pos, player) as i32;
+                (depth / 3) + 1
+            } else {
+                -3
+            }
+        } else {
+            0
+        }
+    }
+
+    fn hand_space_pressure(&self, captured_pieces: &CapturedPieces, player: Player) -> i32 {
+        if !self.config.enable_hand_context {
+            return 0;
+        }
+
+        let mut pressure = 0;
+        for &(piece_type, weight) in &[
+            (PieceType::Pawn, 4),
+            (PieceType::Lance, 6),
+            (PieceType::Knight, 8),
+            (PieceType::Silver, 9),
+            (PieceType::Gold, 10),
+        ] {
+            let count = captured_pieces.count(piece_type, player) as i32;
+            if count > 0 {
+                pressure += count * weight;
+            }
+        }
+        pressure
     }
 
     // ===================================================================
@@ -1022,6 +1706,10 @@ pub struct PositionalStats {
 
     pub outposts_found: u64,
     pub weak_squares_found: u64,
+    pub center_control_tiles_scored: u64,
+    pub outpost_candidates: u64,
+    pub weak_square_candidates: u64,
+    pub space_frontier_samples: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1035,6 +1723,10 @@ pub struct PositionalStatsSnapshot {
     pub tempo_checks: u64,
     pub outposts_found: u64,
     pub weak_squares_found: u64,
+    pub center_control_tiles_scored: u64,
+    pub outpost_candidates: u64,
+    pub weak_square_candidates: u64,
+    pub space_frontier_samples: u64,
 }
 
 impl PositionalStats {
@@ -1049,6 +1741,10 @@ impl PositionalStats {
             tempo_checks: self.tempo_checks,
             outposts_found: self.outposts_found,
             weak_squares_found: self.weak_squares_found,
+            center_control_tiles_scored: self.center_control_tiles_scored,
+            outpost_candidates: self.outpost_candidates,
+            weak_square_candidates: self.weak_square_candidates,
+            space_frontier_samples: self.space_frontier_samples,
         }
     }
 
@@ -1062,6 +1758,10 @@ impl PositionalStats {
         self.tempo_checks += snapshot.tempo_checks;
         self.outposts_found += snapshot.outposts_found;
         self.weak_squares_found += snapshot.weak_squares_found;
+        self.center_control_tiles_scored += snapshot.center_control_tiles_scored;
+        self.outpost_candidates += snapshot.outpost_candidates;
+        self.weak_square_candidates += snapshot.weak_square_candidates;
+        self.space_frontier_samples += snapshot.space_frontier_samples;
     }
 }
 
@@ -1092,9 +1792,11 @@ mod tests {
     fn test_outpost_detection() {
         let mut analyzer = PositionalPatternAnalyzer::new();
         let board = BitboardBoard::new();
+        let mut control_cache = ControlCache::new(&board);
         let captured = CapturedPieces::new();
 
-        let score = analyzer.evaluate_outposts(&board, Player::Black, &captured);
+        let score =
+            analyzer.evaluate_outposts(&board, Player::Black, &mut control_cache, &captured);
         assert!(score.mg >= 0);
     }
 
@@ -1161,16 +1863,47 @@ mod tests {
         );
 
         let captured_none = CapturedPieces::new();
+        let mut cache_no_threat = ControlCache::new(&board);
         let score_without_threat =
-            analyzer.evaluate_outposts(&board, Player::Black, &captured_none);
+            analyzer.evaluate_outposts(&board, Player::Black, &mut cache_no_threat, &captured_none);
         assert!(score_without_threat.mg > 0);
 
         let mut captured_with_pawn = CapturedPieces::new();
         captured_with_pawn.add_piece(PieceType::Pawn, Player::White);
 
-        let score_with_threat =
-            analyzer.evaluate_outposts(&board, Player::Black, &captured_with_pawn);
-        assert_eq!(score_with_threat.mg, 0);
+        let mut cache_with_threat = ControlCache::new(&board);
+        let score_with_threat = analyzer.evaluate_outposts(
+            &board,
+            Player::Black,
+            &mut cache_with_threat,
+            &captured_with_pawn,
+        );
+        assert!(score_with_threat.mg < score_without_threat.mg);
+    }
+
+    #[test]
+    fn test_outpost_requires_structural_support() {
+        let mut board = BitboardBoard::empty();
+        let mut analyzer = PositionalPatternAnalyzer::new();
+        let captured = CapturedPieces::new();
+
+        let outpost_pos = Position::new(4, 4);
+        board.place_piece(Piece::new(PieceType::Silver, Player::Black), outpost_pos);
+
+        let mut cache_no_support = ControlCache::new(&board);
+        let unsupported =
+            analyzer.evaluate_outposts(&board, Player::Black, &mut cache_no_support, &captured);
+        assert_eq!(unsupported.mg, 0);
+
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(5, 4),
+        );
+
+        let mut cache_supported = ControlCache::new(&board);
+        let supported =
+            analyzer.evaluate_outposts(&board, Player::Black, &mut cache_supported, &captured);
+        assert!(supported.mg > unsupported.mg);
     }
 
     #[test]
@@ -1202,7 +1935,46 @@ mod tests {
             &mut cache_with_drop,
             &captured_with_pawn,
         );
-        assert_eq!(mitigated.mg, 0);
+        assert!(mitigated.mg > penalty.mg);
+    }
+
+    #[test]
+    fn test_space_advantage_rewards_forward_control() {
+        let mut board = BitboardBoard::empty();
+        let captured = CapturedPieces::new();
+
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(3, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(4, 3),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::White),
+            Position::new(6, 4),
+        );
+
+        let mut analyzer_black = PositionalPatternAnalyzer::new();
+        let mut cache_black = ControlCache::new(&board);
+        let black_score = analyzer_black.evaluate_space_advantage(
+            &board,
+            Player::Black,
+            &mut cache_black,
+            &captured,
+        );
+        assert!(black_score.mg > 0);
+
+        let mut analyzer_white = PositionalPatternAnalyzer::new();
+        let mut cache_white = ControlCache::new(&board);
+        let white_score = analyzer_white.evaluate_space_advantage(
+            &board,
+            Player::White,
+            &mut cache_white,
+            &captured,
+        );
+        assert!(white_score.mg < black_score.mg);
     }
 
     #[test]
