@@ -246,25 +246,24 @@ impl CastleRecognizer {
                     zone_buffer_ratio
                 };
 
-                let zone_integrity =
-                    (0.4 * zone_coverage_ratio
-                        + 0.3 * zone_buffer_ratio
-                        + 0.3 * zone_shield_component)
-                        .clamp(0.1, 1.0);
+                let zone_integrity = (0.4 * zone_coverage_ratio
+                    + 0.3 * zone_buffer_ratio
+                    + 0.3 * zone_shield_component)
+                    .clamp(0.1, 1.0);
 
-                let quality = (base_quality * required_ratio * (0.7 + 0.3 * zone_integrity))
-                    .clamp(0.0, 1.0);
+                let quality =
+                    (base_quality * required_ratio * (0.7 + 0.3 * zone_integrity)).clamp(0.0, 1.0);
 
-                let missing_required =
-                    totals.required_total.saturating_sub(stats.required_matches);
+                let missing_required = totals.required_total.saturating_sub(stats.required_matches);
                 let optional_matches = stats.matches.saturating_sub(stats.required_matches);
                 let missing_optional = totals.optional_total().saturating_sub(optional_matches);
-                let missing_primary =
-                    totals.primary_total.saturating_sub(stats.primary_matches);
-                let missing_shield =
-                    totals.shield_total.saturating_sub(stats.pawn_shield_matches);
-                let missing_secondary =
-                    totals.secondary_total.saturating_sub(stats.secondary_matches);
+                let missing_primary = totals.primary_total.saturating_sub(stats.primary_matches);
+                let missing_shield = totals
+                    .shield_total
+                    .saturating_sub(stats.pawn_shield_matches);
+                let missing_secondary = totals
+                    .secondary_total
+                    .saturating_sub(stats.secondary_matches);
                 let missing_buffer = totals.buffer_total.saturating_sub(stats.buffer_matches);
 
                 let infiltration_ratio = zone_metrics.infiltration_ratio();
@@ -1021,12 +1020,27 @@ mod tests {
         let mut board = BitboardBoard::empty();
         let king_pos = Position::new(8, 4);
         board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-        board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-        board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-        board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-        board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 3),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 5),
+        );
         // Opponent piece infiltrating the king zone
-        board.place_piece(Piece::new(PieceType::Knight, Player::White), Position::new(7, 3));
+        board.place_piece(
+            Piece::new(PieceType::Knight, Player::White),
+            Position::new(7, 3),
+        );
 
         let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
         assert!(evaluation.infiltration_ratio > 0.0);
