@@ -1413,11 +1413,16 @@ impl PositionFeatureEvaluator {
     // =======================================================================
 
     /// Evaluate pawn structure with phase-aware weights
+    ///
+    /// # Parameters
+    /// - `skip_passed_pawn_evaluation`: If true, skips passed pawn evaluation to avoid double-counting
+    ///   when endgame patterns are enabled (endgame patterns handle passed pawns with endgame-specific bonuses)
     pub fn evaluate_pawn_structure(
         &mut self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
+        skip_passed_pawn_evaluation: bool,
     ) -> TaperedScore {
         if !self.config.enable_pawn_structure {
             return TaperedScore::default();
@@ -1455,9 +1460,12 @@ impl PositionFeatureEvaluator {
         eg_score += isolation.eg;
 
         // 4. Passed pawns (no enemy pawns in front)
-        let passed = self.evaluate_passed_pawns(board, &pawns, player, captured_pieces);
-        mg_score += passed.mg;
-        eg_score += passed.eg;
+        // Skip if endgame patterns are handling passed pawns to avoid double-counting
+        if !skip_passed_pawn_evaluation {
+            let passed = self.evaluate_passed_pawns(board, &pawns, player, captured_pieces);
+            mg_score += passed.mg;
+            eg_score += passed.eg;
+        }
 
         // 5. Doubled pawns (same file)
         let doubled = self.evaluate_doubled_pawns(&pawns);
@@ -2109,11 +2117,19 @@ impl PositionFeatureEvaluator {
     /// Evaluate center control with phase-aware weights
     ///
     /// Center control is more important in opening/middlegame.
+    ///
+    /// # Parameters
+    /// - `skip_center_control`: If true, skips center control evaluation (optional, for future use
+    ///   when positional patterns handle center control to avoid double-counting)
     pub fn evaluate_center_control(
         &mut self,
         board: &BitboardBoard,
         player: Player,
+        skip_center_control: bool,
     ) -> TaperedScore {
+        if skip_center_control {
+            return TaperedScore::default();
+        }
         if !self.config.enable_center_control {
             return TaperedScore::default();
         }

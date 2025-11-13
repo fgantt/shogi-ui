@@ -14,6 +14,20 @@
 //! - Configuration management
 //! - Backward compatibility
 //!
+//! # Component Coordination
+//!
+//! This module coordinates between evaluation components to avoid double-counting:
+//! - **Passed Pawns**: When `endgame_patterns` is enabled and phase < 64, passed pawn evaluation
+//!   is skipped in `position_features` to avoid double-counting (endgame patterns handle passed
+//!   pawns with endgame-specific bonuses).
+//! - **Center Control**: Both `position_features` and `positional_patterns` evaluate center control,
+//!   but with different methods. Position features use control maps, while positional patterns use
+//!   more sophisticated evaluation including drop pressure and forward bonuses. A warning is logged
+//!   when both are enabled.
+//! - **King Safety**: `KingSafetyEvaluator` in position_features evaluates general king safety
+//!   (shields, attacks, etc.), while `CastleRecognizer` evaluates specific castle formation patterns.
+//!   These are complementary and should both be enabled for comprehensive king safety evaluation.
+//!
 //! # Example
 //!
 //! ```rust,ignore
@@ -229,17 +243,40 @@ impl IntegratedEvaluator {
         }
 
         // Position features
+        // Coordination: Skip passed pawn evaluation in position features when endgame patterns
+        // are enabled and we're in endgame (phase < 64) to avoid double-counting.
+        // Endgame patterns handle passed pawns with endgame-specific bonuses.
+        let skip_passed_pawn_evaluation = self.config.components.endgame_patterns && phase < 64;
+
+        // Coordination warning: Center control is evaluated in both position_features and
+        // positional_patterns. This is intentional overlap but should be monitored.
+        // Position features use control maps, while positional patterns use more sophisticated
+        // center evaluation including drop pressure and forward bonuses.
+        if self.config.components.position_features
+            && self.config.components.positional_patterns
+        {
+            debug_log(&format!(
+                "WARNING: Both position_features.center_control and positional_patterns are enabled. \
+                Center control will be evaluated twice (with different methods). \
+                Consider disabling one to avoid potential double-counting."
+            ));
+        }
+
         if self.config.components.position_features {
             let weights = self.weights.clone();
             let mut position_features = self.position_features.borrow_mut();
             position_features.begin_evaluation(board);
             total += position_features.evaluate_king_safety(board, player, captured_pieces)
                 * weights.king_safety_weight;
-            total += position_features.evaluate_pawn_structure(board, player, captured_pieces)
+            total += position_features
+                .evaluate_pawn_structure(board, player, captured_pieces, skip_passed_pawn_evaluation)
                 * weights.pawn_structure_weight;
             total += position_features.evaluate_mobility(board, player, captured_pieces)
                 * weights.mobility_weight;
-            total += position_features.evaluate_center_control(board, player)
+            // Note: skip_center_control is set to false for now (future use when positional patterns
+            // fully replace position_features center control)
+            total += position_features
+                .evaluate_center_control(board, player, false)
                 * weights.center_control_weight;
             total +=
                 position_features.evaluate_development(board, player) * weights.development_weight;
@@ -290,6 +327,10 @@ impl IntegratedEvaluator {
         }
 
         // Castle patterns (Task 17.0 - Task 1.0 Integration)
+        // Note: Castle patterns are now separate from king safety evaluation.
+        // KingSafetyEvaluator in position_features evaluates general king safety (shields, attacks, etc.),
+        // while CastleRecognizer evaluates specific castle formation patterns.
+        // These are complementary and should both be enabled for comprehensive king safety evaluation.
         if self.config.components.castle_patterns {
             let castle_score = {
                 let mut castle = self.castle_recognizer.borrow_mut();

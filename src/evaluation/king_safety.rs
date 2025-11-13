@@ -125,6 +125,24 @@ impl KingSafetyStats {
 }
 
 /// Main king safety evaluator that combines castle recognition, attack analysis, and threat evaluation
+///
+/// This evaluator focuses on general king safety aspects:
+/// - King shields (protective pieces around the king)
+/// - Attack patterns and threats
+/// - Infiltration and exposure penalties
+/// - Partial castle detection (for penalty calculation)
+///
+/// **Note on Castle Patterns**: This evaluator uses `CastleRecognizer` internally for detecting
+/// castle formations as part of king safety evaluation. However, in `IntegratedEvaluator`, castle
+/// patterns are also evaluated separately as a first-class component (`castle_patterns` flag).
+/// These are complementary:
+/// - `KingSafetyEvaluator` uses castle recognition to assess king safety (penalties for missing
+///   castle pieces, bonuses for complete castles)
+/// - `CastleRecognizer` in `IntegratedEvaluator` evaluates castle patterns as a positional feature
+///   with its own weight (`castle_weight`)
+///
+/// Both can be enabled simultaneously for comprehensive evaluation, though there may be some
+/// overlap in castle pattern detection.
 pub struct KingSafetyEvaluator {
     config: KingSafetyConfig,
     castle_recognizer: CastleRecognizer,
