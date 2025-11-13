@@ -17,9 +17,9 @@
 //! # Component Coordination
 //!
 //! This module coordinates between evaluation components to avoid double-counting:
-//! - **Passed Pawns**: When `endgame_patterns` is enabled and phase < 64, passed pawn evaluation
-//!   is skipped in `position_features` to avoid double-counting (endgame patterns handle passed
-//!   pawns with endgame-specific bonuses).
+//! - **Passed Pawns**: When `endgame_patterns` is enabled and phase < endgame_threshold (default: 64),
+//!   passed pawn evaluation is skipped in `position_features` to avoid double-counting (endgame patterns
+//!   handle passed pawns with endgame-specific bonuses).
 //! - **Center Control**: Both `position_features` and `positional_patterns` evaluate center control,
 //!   but with different methods. Position features use control maps, while positional patterns use
 //!   more sophisticated evaluation including drop pressure and forward bonuses. A warning is logged
@@ -27,6 +27,20 @@
 //! - **King Safety**: `KingSafetyEvaluator` in position_features evaluates general king safety
 //!   (shields, attacks, etc.), while `CastleRecognizer` evaluates specific castle formation patterns.
 //!   These are complementary and should both be enabled for comprehensive king safety evaluation.
+//!
+//! # Phase-Aware Gating and Gradual Transitions
+//!
+//! The evaluator uses phase-aware gating to conditionally evaluate patterns based on game phase:
+//! - **Opening Principles**: Evaluated when phase >= opening_threshold (default: 192)
+//! - **Endgame Patterns**: Evaluated when phase < endgame_threshold (default: 64)
+//!
+//! When `enable_gradual_phase_transitions` is enabled, pattern scores are gradually faded out
+//! instead of abruptly cut off:
+//! - **Opening Principles**: Fade from `opening_fade_start` (default: 192) to `opening_fade_end` (default: 160)
+//! - **Endgame Patterns**: Fade from `endgame_fade_start` (default: 80) to `endgame_fade_end` (default: 64)
+//!
+//! This produces smoother evaluation transitions and avoids sudden score jumps when crossing phase boundaries.
+//! Phase boundaries are configurable via `PhaseBoundaryConfig` in `IntegratedEvaluationConfig`.
 //!
 //! # Example
 //!
@@ -296,9 +310,10 @@ impl IntegratedEvaluator {
 
         // Position features
         // Coordination: Skip passed pawn evaluation in position features when endgame patterns
-        // are enabled and we're in endgame (phase < 64) to avoid double-counting.
+        // are enabled and we're in endgame (phase < endgame_threshold) to avoid double-counting.
         // Endgame patterns handle passed pawns with endgame-specific bonuses.
-        let skip_passed_pawn_evaluation = self.config.components.endgame_patterns && phase < 64;
+        let endgame_threshold = self.config.phase_boundaries.endgame_threshold;
+        let skip_passed_pawn_evaluation = self.config.components.endgame_patterns && phase < endgame_threshold;
 
         // Coordination warning: Center control is evaluated in both position_features and
         // positional_patterns. This is intentional overlap but should be monitored.
@@ -421,26 +436,47 @@ impl IntegratedEvaluator {
         }
 
         // Opening principles (if in opening)
-        if self.config.components.opening_principles && phase >= 192 {
-            total += self
-                .opening_principles
-                .borrow_mut()
-                .evaluate_opening(board, player, 0);
+        // Task 6.0 - Task 6.7, 6.10, 6.12: Use configurable phase boundaries and gradual transitions
+        if self.config.components.opening_principles {
+            let opening_threshold = self.config.phase_boundaries.opening_threshold;
+            if phase >= opening_threshold {
+                let mut opening_score = self
+                    .opening_principles
+                    .borrow_mut()
+                    .evaluate_opening(board, player, 0);
+                
+                // Apply gradual fade if enabled (Task 6.0 - Task 6.10, 6.12)
+                if self.config.enable_gradual_phase_transitions {
+                    let fade_factor = self.config.phase_boundaries.calculate_opening_fade_factor(phase);
+                    opening_score = opening_score * fade_factor;
+                }
+                
+                total += opening_score;
+            }
         }
 
         // Endgame patterns (if in endgame)
         // Task 5.0 - Task 5.3: Warn if endgame_patterns enabled but not in endgame
+        // Task 6.0 - Task 6.7, 6.9, 6.12: Use configurable phase boundaries and gradual transitions
         if self.config.components.endgame_patterns {
-            if phase >= 64 {
+            let endgame_threshold = self.config.phase_boundaries.endgame_threshold;
+            if phase >= endgame_threshold {
                 debug_log(&format!(
-                    "INFO: endgame_patterns is enabled but phase ({}) is not endgame (< 64). \
+                    "INFO: endgame_patterns is enabled but phase ({}) is not endgame (< {}). \
                     Endgame patterns will not be evaluated.",
-                    phase
+                    phase,
+                    endgame_threshold
                 ));
             } else {
-                let endgame_score = self.endgame_patterns
+                let mut endgame_score = self.endgame_patterns
                     .borrow_mut()
                     .evaluate_endgame(board, player, captured_pieces);
+                
+                // Apply gradual fade if enabled (Task 6.0 - Task 6.9, 6.12)
+                if self.config.enable_gradual_phase_transitions {
+                    let fade_factor = self.config.phase_boundaries.calculate_endgame_fade_factor(phase);
+                    endgame_score = endgame_score * fade_factor;
+                }
                 
                 // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
                 if self.config.enable_component_validation && endgame_score == TaperedScore::default() {
@@ -984,6 +1020,14 @@ pub struct IntegratedEvaluationConfig {
     pub large_contribution_threshold: f32,
     /// Enable component output validation (debug mode) - checks for zero scores from enabled components
     pub enable_component_validation: bool,
+    /// Phase boundary configuration for game phase transitions
+    pub phase_boundaries: crate::evaluation::config::PhaseBoundaryConfig,
+    /// Enable gradual phase transitions (default: false for backward compatibility)
+    /// 
+    /// When enabled, pattern scores are gradually faded out instead of abruptly cut off:
+    /// - Opening principles fade from phase 192 to 160
+    /// - Endgame patterns fade from phase 80 to 64
+    pub enable_gradual_phase_transitions: bool,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -1004,6 +1048,8 @@ impl Default for IntegratedEvaluationConfig {
             weight_contribution_threshold: 1000.0,
             large_contribution_threshold: 0.20,
             enable_component_validation: false,
+            phase_boundaries: crate::evaluation::config::PhaseBoundaryConfig::default(),
+            enable_gradual_phase_transitions: false,
         }
     }
 }

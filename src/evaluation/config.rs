@@ -67,34 +67,169 @@ pub struct TaperedEvalConfig {
 }
 
 /// Weights for combining different evaluation components
+///
+/// # Weight Calibration Methodology
+///
+/// Evaluation weights control the relative importance of different evaluation components.
+/// The final evaluation score is calculated as:
+/// ```
+/// total_score = material_score * material_weight
+///            + position_score * position_weight
+///            + king_safety_score * king_safety_weight
+///            + ... (for all enabled components)
+/// ```
+///
+/// ## Recommended Weight Ranges
+///
+/// - **Material weight**: 0.8-1.2 (typically 1.0). Material is fundamental and should be stable.
+/// - **Position weight (PST)**: 0.5-1.5 (typically 1.0). Piece-square tables provide positional bonuses.
+/// - **King safety weight**: 0.8-1.5 (typically 1.0). Critical for king safety evaluation.
+/// - **Pawn structure weight**: 0.6-1.2 (typically 0.8). Important but less critical than material.
+/// - **Mobility weight**: 0.4-0.8 (typically 0.6). Piece mobility is important but secondary.
+/// - **Center control weight**: 0.5-1.0 (typically 0.7). Center control is valuable but not decisive.
+/// - **Development weight**: 0.3-0.7 (typically 0.5). Development matters most in opening.
+/// - **Tactical weight**: 0.8-1.5 (typically 1.0). Tactical patterns are important in middlegame.
+/// - **Positional weight**: 0.8-1.5 (typically 1.0). Positional patterns matter throughout the game.
+/// - **Castle weight**: 0.7-1.3 (typically 1.0). Castle patterns are important for king safety.
+///
+/// ## Weight Calibration Examples
+///
+/// ### Aggressive Play Style
+/// ```rust
+/// let mut weights = EvaluationWeights::default();
+/// weights.tactical_weight = 1.5;  // Emphasize tactical patterns
+/// weights.mobility_weight = 0.8;   // Value piece activity
+/// weights.development_weight = 0.7; // Emphasize quick development
+/// ```
+///
+/// ### Positional Play Style
+/// ```rust
+/// let mut weights = EvaluationWeights::default();
+/// weights.positional_weight = 1.5;      // Emphasize positional patterns
+/// weights.pawn_structure_weight = 1.2;   // Value pawn structure
+/// weights.center_control_weight = 1.0;    // Emphasize center control
+/// ```
+///
+/// ### Defensive Play Style
+/// ```rust
+/// let mut weights = EvaluationWeights::default();
+/// weights.king_safety_weight = 1.5;      // Emphasize king safety
+/// weights.castle_weight = 1.3;            // Value castle formations
+/// weights.tactical_weight = 0.8;          // Reduce tactical emphasis
+/// ```
+///
+/// ## Weight Interaction Effects
+///
+/// Changing one weight affects the overall evaluation balance:
+///
+/// - **Increasing material_weight**: Makes material advantages more decisive. May reduce
+///   the impact of positional factors. Typical range: 0.8-1.2.
+///
+/// - **Increasing tactical_weight**: Makes tactical patterns (forks, pins, skewers) more
+///   influential. Good for aggressive play. Typical range: 0.8-1.5.
+///
+/// - **Increasing positional_weight**: Makes positional patterns (outposts, weak squares,
+///   piece activity) more influential. Good for positional play. Typical range: 0.8-1.5.
+///
+/// - **Increasing king_safety_weight**: Makes king safety more important. May reduce
+///   emphasis on material or positional factors. Typical range: 0.8-1.5.
+///
+/// - **Increasing pawn_structure_weight**: Makes pawn structure more important. Good for
+///   endgame play. Typical range: 0.6-1.2.
+///
+/// - **Increasing mobility_weight**: Makes piece mobility more important. Good for open
+///   positions. Typical range: 0.4-0.8.
+///
+/// - **Increasing center_control_weight**: Makes center control more important. Good for
+///   opening and middlegame. Typical range: 0.5-1.0.
+///
+/// - **Increasing development_weight**: Makes piece development more important. Primarily
+///   affects opening evaluation. Typical range: 0.3-0.7.
+///
+/// - **Increasing castle_weight**: Makes castle patterns more important. Good for king
+///   safety evaluation. Typical range: 0.7-1.3.
+///
+/// ## Calibration Tips
+///
+/// 1. **Start with defaults**: The default weights are balanced and work well for most positions.
+/// 2. **Adjust incrementally**: Change weights by 0.1-0.2 at a time and test the impact.
+/// 3. **Consider game phase**: Use phase-dependent weight scaling (see `enable_phase_dependent_weights`)
+///    to adjust weights based on game phase.
+/// 4. **Monitor cumulative weights**: Use `validate_cumulative_weights()` to ensure total weight
+///    sum is reasonable (typically 5.0-15.0).
+/// 5. **Test with positions**: Evaluate test positions to verify weight changes produce expected
+///    behavior.
+/// 6. **Use telemetry**: Monitor `weight_contributions` in `EvaluationTelemetry` to see which
+///    components contribute most to evaluation.
+///
+/// ## Validation
+///
+/// Weights are validated to ensure they are:
+/// - Non-negative (weights < 0.0 are invalid)
+/// - Within reasonable range (typically 0.0-10.0, though 0.5-2.0 is more common)
+/// - Finite (NaN and infinity are invalid)
+///
+/// Use `TaperedEvalConfig::validate()` to check weight validity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationWeights {
-    /// Weight for material evaluation (typically 1.0)
+    /// Weight for material evaluation (typically 1.0, range: 0.8-1.2)
+    /// 
+    /// Material is fundamental and should be stable. Increasing this weight makes
+    /// material advantages more decisive but may reduce the impact of positional factors.
     pub material_weight: f32,
 
-    /// Weight for piece-square tables
+    /// Weight for piece-square tables (typically 1.0, range: 0.5-1.5)
+    /// 
+    /// Piece-square tables provide positional bonuses based on piece placement.
+    /// Increasing this weight emphasizes piece-square table bonuses.
     pub position_weight: f32,
 
-    /// Weight for king safety
+    /// Weight for king safety (typically 1.0, range: 0.8-1.5)
+    /// 
+    /// King safety is critical for evaluation. Increasing this weight makes king
+    /// safety more important but may reduce emphasis on material or positional factors.
     pub king_safety_weight: f32,
 
-    /// Weight for pawn structure
+    /// Weight for pawn structure (typically 0.8, range: 0.6-1.2)
+    /// 
+    /// Pawn structure is important for evaluation, especially in endgame. Increasing
+    /// this weight makes pawn structure more important.
     pub pawn_structure_weight: f32,
 
-    /// Weight for mobility
+    /// Weight for mobility (typically 0.6, range: 0.4-0.8)
+    /// 
+    /// Piece mobility is important but secondary to material and position. Increasing
+    /// this weight makes piece activity more important, good for open positions.
     pub mobility_weight: f32,
 
-    /// Weight for center control
+    /// Weight for center control (typically 0.7, range: 0.5-1.0)
+    /// 
+    /// Center control is valuable but not decisive. Increasing this weight emphasizes
+    /// center control, good for opening and middlegame.
     pub center_control_weight: f32,
 
-    /// Weight for development
+    /// Weight for development (typically 0.5, range: 0.3-0.7)
+    /// 
+    /// Piece development matters most in opening. Increasing this weight emphasizes
+    /// quick development, primarily affecting opening evaluation.
     pub development_weight: f32,
 
-    /// Weight for tactical pattern contributions
+    /// Weight for tactical pattern contributions (typically 1.0, range: 0.8-1.5)
+    /// 
+    /// Tactical patterns (forks, pins, skewers) are important in middlegame.
+    /// Increasing this weight makes tactical patterns more influential, good for aggressive play.
     pub tactical_weight: f32,
-    /// Weight for positional pattern contributions
+    
+    /// Weight for positional pattern contributions (typically 1.0, range: 0.8-1.5)
+    /// 
+    /// Positional patterns (outposts, weak squares, piece activity) matter throughout the game.
+    /// Increasing this weight makes positional patterns more influential, good for positional play.
     pub positional_weight: f32,
-    /// Weight for castle pattern contributions
+    
+    /// Weight for castle pattern contributions (typically 1.0, range: 0.7-1.3)
+    /// 
+    /// Castle patterns are important for king safety evaluation. Increasing this weight
+    /// makes castle formations more important.
     pub castle_weight: f32,
 }
 
@@ -569,6 +704,106 @@ pub enum ConfigError {
         min: f32,
         max: f32,
     },
+}
+
+/// Phase boundary configuration for game phase transitions
+///
+/// Controls when the evaluation transitions between opening, middlegame, and endgame phases.
+/// Phase is calculated based on material remaining on the board (0-256 scale).
+///
+/// # Default Values
+///
+/// - `opening_threshold`: 192 (phase >= 192 is opening)
+/// - `endgame_threshold`: 64 (phase < 64 is endgame)
+/// - `opening_fade_start`: 192 (opening principles start fading at this phase)
+/// - `opening_fade_end`: 160 (opening principles fully faded by this phase)
+/// - `endgame_fade_start`: 80 (endgame patterns start fading at this phase)
+/// - `endgame_fade_end`: 64 (endgame patterns fully faded by this phase)
+///
+/// # Gradual Phase Transitions
+///
+/// When `enable_gradual_phase_transitions` is enabled, pattern scores are gradually
+/// faded out instead of abruptly cut off:
+///
+/// - Opening principles: Fade from `opening_fade_start` (192) to `opening_fade_end` (160)
+/// - Endgame patterns: Fade from `endgame_fade_start` (80) to `endgame_fade_end` (64)
+///
+/// The fade factor is calculated as:
+/// ```
+/// fade_factor = (phase - fade_end) / (fade_start - fade_end)
+/// ```
+/// This produces a linear fade from 1.0 (at fade_start) to 0.0 (at fade_end).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PhaseBoundaryConfig {
+    /// Phase threshold for opening (phase >= this is opening, default: 192)
+    pub opening_threshold: i32,
+    /// Phase threshold for endgame (phase < this is endgame, default: 64)
+    pub endgame_threshold: i32,
+    /// Phase where opening principles start fading (default: 192)
+    pub opening_fade_start: i32,
+    /// Phase where opening principles finish fading (default: 160)
+    pub opening_fade_end: i32,
+    /// Phase where endgame patterns start fading (default: 80)
+    pub endgame_fade_start: i32,
+    /// Phase where endgame patterns finish fading (default: 64)
+    pub endgame_fade_end: i32,
+}
+
+impl Default for PhaseBoundaryConfig {
+    fn default() -> Self {
+        Self {
+            opening_threshold: 192,
+            endgame_threshold: 64,
+            opening_fade_start: 192,
+            opening_fade_end: 160,
+            endgame_fade_start: 80,
+            endgame_fade_end: 64,
+        }
+    }
+}
+
+impl PhaseBoundaryConfig {
+    /// Calculate fade factor for opening principles based on current phase
+    ///
+    /// Returns:
+    /// - 1.0 if phase >= opening_fade_start (full opening evaluation)
+    /// - 0.0 if phase <= opening_fade_end (no opening evaluation)
+    /// - Linear interpolation between fade_start and fade_end
+    pub fn calculate_opening_fade_factor(&self, phase: i32) -> f32 {
+        if phase >= self.opening_fade_start {
+            return 1.0;
+        }
+        if phase <= self.opening_fade_end {
+            return 0.0;
+        }
+        let fade_range = (self.opening_fade_start - self.opening_fade_end) as f32;
+        if fade_range <= 0.0 {
+            return 1.0;
+        }
+        let phase_in_range = (phase - self.opening_fade_end) as f32;
+        (phase_in_range / fade_range).clamp(0.0, 1.0)
+    }
+
+    /// Calculate fade factor for endgame patterns based on current phase
+    ///
+    /// Returns:
+    /// - 1.0 if phase <= endgame_fade_end (full endgame evaluation)
+    /// - 0.0 if phase >= endgame_fade_start (no endgame evaluation)
+    /// - Linear interpolation between fade_end and fade_start
+    pub fn calculate_endgame_fade_factor(&self, phase: i32) -> f32 {
+        if phase <= self.endgame_fade_end {
+            return 1.0;
+        }
+        if phase >= self.endgame_fade_start {
+            return 0.0;
+        }
+        let fade_range = (self.endgame_fade_start - self.endgame_fade_end) as f32;
+        if fade_range <= 0.0 {
+            return 1.0;
+        }
+        let phase_in_range = (self.endgame_fade_start - phase) as f32;
+        (phase_in_range / fade_range).clamp(0.0, 1.0)
+    }
 }
 
 /// Component dependency warnings for configuration validation
