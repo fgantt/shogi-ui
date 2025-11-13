@@ -319,6 +319,50 @@ impl PositionEntry {
         moves
     }
 
+    /// Get moves sorted by opening principles quality score (best first)
+    /// 
+    /// This method sorts moves by a provided quality score function.
+    /// The quality_scores vector should have the same length as self.moves,
+    /// where quality_scores[i] is the quality score for self.moves[i].
+    pub fn get_moves_by_quality(&self, quality_scores: &[i32]) -> Vec<&BookMove> {
+        if quality_scores.len() != self.moves.len() {
+            return Vec::new();
+        }
+        
+        let mut moves_with_scores: Vec<(usize, i32)> = quality_scores
+            .iter()
+            .enumerate()
+            .map(|(i, &score)| (i, score))
+            .collect();
+        
+        // Sort by quality score (descending - highest first)
+        moves_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Return moves in sorted order
+        moves_with_scores
+            .iter()
+            .map(|(i, _)| &self.moves[*i])
+            .collect()
+    }
+
+    /// Get the best move by opening principles quality score
+    /// 
+    /// This method returns the move with the highest quality score.
+    /// The quality_scores vector should have the same length as self.moves.
+    pub fn get_best_move_by_quality(&self, quality_scores: &[i32]) -> Option<&BookMove> {
+        if quality_scores.is_empty() || self.moves.is_empty() {
+            return None;
+        }
+        
+        let best_idx = quality_scores
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.cmp(b))
+            .map(|(idx, _)| idx)?;
+        
+        self.moves.get(best_idx)
+    }
+
     /// Get a random move weighted by move weights
     pub fn get_random_move(&self) -> Option<&BookMove> {
         use rand::Rng;
@@ -474,6 +518,112 @@ impl OpeningBook {
         }
 
         None
+    }
+
+    /// Get the best move for a position prioritized by opening principles (Task 19.0 - Task 3.0)
+    ///
+    /// This method evaluates all book moves using opening principles and returns the best one.
+    /// If opening principles evaluation is not available, falls back to weight-based selection.
+    ///
+    /// # Arguments
+    ///
+    /// * `fen` - FEN string of the position
+    /// * `board` - Current board state (for opening principles evaluation)
+    /// * `captured_pieces` - Current captured pieces state
+    /// * `move_count` - Number of moves played so far
+    /// * `opening_evaluator` - Optional opening principles evaluator (if None, uses weight-based selection)
+    ///
+    /// # Returns
+    ///
+    /// Best move according to opening principles, or None if no moves available
+    pub fn get_best_move_with_principles(
+        &mut self,
+        fen: &str,
+        board: &crate::bitboards::BitboardBoard,
+        captured_pieces: &crate::types::CapturedPieces,
+        move_count: u32,
+        opening_evaluator: Option<&mut crate::evaluation::opening_principles::OpeningPrincipleEvaluator>,
+    ) -> Option<Move> {
+        let hash = self.hash_fen(fen);
+        let player = Self::determine_player_from_fen(fen);
+
+        // Get position entry
+        let entry = if let Some(entry) = self.position_cache.get(&hash) {
+            entry.clone()
+        } else if let Some(entry) = self.positions.get(&hash) {
+            let entry_clone = entry.clone();
+            self.position_cache.put(hash, entry_clone.clone());
+            entry_clone
+        } else if self.lazy_positions.contains_key(&hash) {
+            if let Ok(()) = self.load_lazy_position(hash) {
+                if let Some(entry) = self.positions.get(&hash) {
+                    let entry_clone = entry.clone();
+                    self.position_cache.put(hash, entry_clone.clone());
+                    entry_clone
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        };
+
+        // If no evaluator provided, fall back to weight-based selection
+        let evaluator = match opening_evaluator {
+            Some(eval) => eval,
+            None => {
+                if let Some(book_move) = entry.get_best_move() {
+                    return Some(book_move.to_engine_move(player));
+                }
+                return None;
+            }
+        };
+
+        // Evaluate all moves using opening principles
+        let mut moves_with_scores: Vec<(BookMove, i32)> = Vec::new();
+        
+        for book_move in &entry.moves {
+            let engine_move = book_move.to_engine_move(player);
+            
+            // Validate move (log warnings if violations found)
+            let is_valid = evaluator.validate_book_move(board, player, &engine_move, move_count);
+            
+            if is_valid {
+                // Evaluate move quality
+                let quality_score = evaluator.evaluate_book_move_quality(
+                    board,
+                    player,
+                    &engine_move,
+                    captured_pieces,
+                    move_count,
+                );
+                
+                moves_with_scores.push((book_move.clone(), quality_score));
+                
+                // Debug logging
+                #[cfg(debug_assertions)]
+                crate::debug_utils::debug_log(&format!(
+                    "[OPENING_BOOK] Book move {} has opening principles quality score: {}",
+                    book_move.move_notation.as_ref().unwrap_or(&engine_move.to_usi_string()),
+                    quality_score
+                ));
+            }
+        }
+
+        // Sort by quality score (highest first)
+        moves_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Track prioritization
+        if !moves_with_scores.is_empty() {
+            evaluator.stats_mut().book_moves_prioritized += 1;
+        }
+
+        // Return best move
+        moves_with_scores
+            .first()
+            .map(|(book_move, _)| book_move.to_engine_move(player))
     }
 
     /// Get a random move for a position with weighted random selection

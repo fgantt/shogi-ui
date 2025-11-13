@@ -654,6 +654,138 @@ impl OpeningPrincipleEvaluator {
     }
 
     // =======================================================================
+    // OPENING BOOK INTEGRATION (Task 19.0 - Task 3.0)
+    // =======================================================================
+
+    /// Evaluate book move quality using opening principles
+    ///
+    /// This method evaluates how well a move aligns with opening principles by:
+    /// 1. Making the move on a temporary board
+    /// 2. Evaluating the resulting position using opening principles
+    /// 3. Returning a quality score (higher = better alignment with principles)
+    ///
+    /// # Arguments
+    ///
+    /// * `board` - Current board state
+    /// * `player` - Player making the move
+    /// * `move_` - The move to evaluate
+    /// * `captured_pieces` - Current captured pieces state
+    /// * `move_count` - Number of moves played so far
+    ///
+    /// # Returns
+    ///
+    /// Quality score as i32 (higher = better alignment with opening principles)
+    pub fn evaluate_book_move_quality(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        captured_pieces: &CapturedPieces,
+        move_count: u32,
+    ) -> i32 {
+        self.stats.book_moves_evaluated += 1;
+
+        // Clone board and captured pieces to make move without modifying original
+        let mut temp_board = board.clone();
+        let mut temp_captured = captured_pieces.clone();
+
+        // Make the move
+        if let Some(captured_piece) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured_piece.piece_type, player);
+        }
+
+        // Evaluate the resulting position using opening principles
+        // Note: After making the move, it's the opponent's turn, so we evaluate for the opponent
+        // But we want to evaluate how good the position is for the player who made the move
+        // So we evaluate for the original player (the one who made the move)
+        let score = self.evaluate_opening(&temp_board, player, move_count + 1);
+        
+        // Convert TaperedScore to i32 (use interpolated score at opening phase)
+        let quality_score = score.interpolate(256); // Phase 256 = opening phase
+        
+        // Track quality scores for statistics
+        self.stats.book_move_quality_scores += quality_score as i64;
+
+        quality_score
+    }
+
+    /// Validate book move against opening principles
+    ///
+    /// Checks if a move violates opening principles (e.g., early king move, undeveloped major piece)
+    /// Returns true if move is valid, false if it violates principles
+    ///
+    /// # Arguments
+    ///
+    /// * `board` - Current board state
+    /// * `player` - Player making the move
+    /// * `move_` - The move to validate
+    /// * `move_count` - Number of moves played so far
+    ///
+    /// # Returns
+    ///
+    /// True if move is valid, false if it violates opening principles
+    pub fn validate_book_move(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        move_count: u32,
+    ) -> bool {
+        self.stats.book_moves_validated += 1;
+
+        // Early king move penalty (if move_count <= 10)
+        if move_count <= 10 {
+            if let Some(from) = move_.from {
+                if let Some(piece) = board.get_piece(from) {
+                    if piece.piece_type == PieceType::King && piece.player == player {
+                        let start_row = if player == Player::Black { 8 } else { 0 };
+                        if from.row == start_row {
+                            // King is on starting row, check if moving to non-castle position
+                            if !self.is_castle_position(move_.to, player) {
+                                // Early king move violation
+                                #[cfg(debug_assertions)]
+                                crate::debug_utils::debug_log(&format!(
+                                    "[OPENING_PRINCIPLES] Book move warning: Early king move at move {} violates opening principles",
+                                    move_count
+                                ));
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for undeveloped major pieces (rook/bishop still on starting row)
+        if move_count <= 15 {
+            if let Some(from) = move_.from {
+                if let Some(piece) = board.get_piece(from) {
+                    if piece.player == player {
+                        let start_row = if player == Player::Black { 8 } else { 0 };
+                        if from.row == start_row {
+                            match piece.piece_type {
+                                PieceType::Rook | PieceType::Bishop => {
+                                    // Major piece still on starting row - not ideal but not a violation
+                                    // Just log a warning
+                                    #[cfg(debug_assertions)]
+                                    crate::debug_utils::debug_log(&format!(
+                                        "[OPENING_PRINCIPLES] Book move note: {} still on starting row at move {}",
+                                        format!("{:?}", piece.piece_type),
+                                        move_count
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
+    // =======================================================================
     // HELPER METHODS
     // =======================================================================
 
@@ -696,6 +828,11 @@ impl OpeningPrincipleEvaluator {
     /// Get statistics
     pub fn stats(&self) -> &OpeningPrincipleStats {
         &self.stats
+    }
+
+    /// Get mutable statistics (for external updates)
+    pub fn stats_mut(&mut self) -> &mut OpeningPrincipleStats {
+        &mut self.stats
     }
 
     /// Reset statistics
@@ -745,6 +882,14 @@ impl Default for OpeningPrincipleConfig {
 pub struct OpeningPrincipleStats {
     /// Number of evaluations performed
     pub evaluations: u64,
+    /// Number of book moves evaluated using opening principles
+    pub book_moves_evaluated: u64,
+    /// Number of book moves prioritized by opening principles
+    pub book_moves_prioritized: u64,
+    /// Number of book moves validated (checked for violations)
+    pub book_moves_validated: u64,
+    /// Sum of book move quality scores (for average calculation)
+    pub book_move_quality_scores: i64,
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
