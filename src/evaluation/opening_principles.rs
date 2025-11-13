@@ -80,32 +80,56 @@ impl OpeningPrincipleEvaluator {
 
         // 1. Piece development
         if self.config.enable_development {
-            score += self.evaluate_development(board, player, move_count);
+            let dev_score = self.evaluate_development(board, player, move_count);
+            let dev_score_interp = dev_score.interpolate(256);
+            self.stats.development_score += dev_score_interp as i64;
+            self.stats.development_evaluations += 1;
+            score += dev_score;
         }
 
         // 2. Center control
         if self.config.enable_center_control {
-            score += self.evaluate_center_control_opening(board, player);
+            let center_score = self.evaluate_center_control_opening(board, player);
+            let center_score_interp = center_score.interpolate(256);
+            self.stats.center_control_score += center_score_interp as i64;
+            self.stats.center_control_evaluations += 1;
+            score += center_score;
         }
 
         // 3. Castle formation (defensive structure)
         if self.config.enable_castle_formation {
-            score += self.evaluate_castle_formation(board, player);
+            let castle_score = self.evaluate_castle_formation(board, player);
+            let castle_score_interp = castle_score.interpolate(256);
+            self.stats.castle_formation_score += castle_score_interp as i64;
+            self.stats.castle_formation_evaluations += 1;
+            score += castle_score;
         }
 
         // 4. Tempo evaluation
         if self.config.enable_tempo {
-            score += self.evaluate_tempo(board, player, move_count);
+            let tempo_score = self.evaluate_tempo(board, player, move_count);
+            let tempo_score_interp = tempo_score.interpolate(256);
+            self.stats.tempo_score += tempo_score_interp as i64;
+            self.stats.tempo_evaluations += 1;
+            score += tempo_score;
         }
 
         // 5. Opening-specific penalties
         if self.config.enable_opening_penalties {
-            score += self.evaluate_opening_penalties(board, player, move_count);
+            let penalties_score = self.evaluate_opening_penalties(board, player, move_count);
+            let penalties_score_interp = penalties_score.interpolate(256);
+            self.stats.penalties_score += penalties_score_interp as i64;
+            self.stats.penalties_evaluations += 1;
+            score += penalties_score;
         }
 
         // 6. Piece coordination (Task 19.0 - Task 2.0)
         if self.config.enable_piece_coordination {
-            score += self.evaluate_piece_coordination(board, player);
+            let coord_score = self.evaluate_piece_coordination(board, player);
+            let coord_score_interp = coord_score.interpolate(256);
+            self.stats.piece_coordination_score += coord_score_interp as i64;
+            self.stats.piece_coordination_evaluations += 1;
+            score += coord_score;
         }
 
         score
@@ -247,7 +271,7 @@ impl OpeningPrincipleEvaluator {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
-        // Core center (4,4) and surrounding squares
+        // Core center (4,4) and surrounding squares (occupied squares)
         let core_center = Position::new(4, 4);
         if let Some(piece) = board.get_piece(core_center) {
             if piece.player == player {
@@ -261,7 +285,7 @@ impl OpeningPrincipleEvaluator {
             }
         }
 
-        // Extended center squares
+        // Extended center squares (occupied squares)
         for row in 3..=5 {
             for col in 3..=5 {
                 if row == 4 && col == 4 {
@@ -281,6 +305,101 @@ impl OpeningPrincipleEvaluator {
                     }
                 }
             }
+        }
+
+        // Attack-based center control (Task 19.0 - Task 4.0)
+        if self.config.enable_attack_based_center_control {
+            let attack_score = self.evaluate_center_control_via_attacks(board, player);
+            mg_score += attack_score.mg;
+            eg_score += attack_score.eg;
+        }
+
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Evaluate center control via piece attacks (Task 19.0 - Task 4.0)
+    ///
+    /// This method evaluates center control based on pieces that attack center squares,
+    /// not just pieces that occupy them. This provides a more nuanced view of center control.
+    fn evaluate_center_control_via_attacks(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
+        let mut mg_score = 0;
+        let mut eg_score = 0;
+
+        // Center squares to evaluate
+        let center_squares = [
+            Position::new(4, 4), // Core center
+            Position::new(3, 4), Position::new(5, 4), // Vertical
+            Position::new(4, 3), Position::new(4, 5), // Horizontal
+            Position::new(3, 3), Position::new(3, 5), // Diagonals
+            Position::new(5, 3), Position::new(5, 5),
+        ];
+
+        // Check which pieces attack center squares
+        for &center_sq in &center_squares {
+            let mut our_attacks = 0;
+            let mut their_attacks = 0;
+
+            // Check all pieces that might attack this square
+            for piece_type in [
+                PieceType::Rook,
+                PieceType::Bishop,
+                PieceType::Silver,
+                PieceType::Gold,
+                PieceType::Knight,
+                PieceType::Lance,
+            ] {
+                // Check our pieces
+                for piece_pos in self.find_pieces(board, player, piece_type) {
+                    if let Some(piece) = board.get_piece(piece_pos) {
+                        // Get attack pattern for this piece
+                        let attacks = board.get_attack_pattern_precomputed(
+                            piece_pos,
+                            piece.piece_type,
+                            player,
+                        );
+                        
+                        // Check if center square is in attack pattern
+                        // Use bitwise operation: check if bit is set
+                        let center_bit = 1u128 << center_sq.to_u8();
+                        if (attacks & center_bit) != 0 {
+                            our_attacks += 1;
+                        }
+                    }
+                }
+
+                // Check opponent pieces
+                let opponent = player.opposite();
+                for piece_pos in self.find_pieces(board, opponent, piece_type) {
+                    if let Some(piece) = board.get_piece(piece_pos) {
+                        let attacks = board.get_attack_pattern_precomputed(
+                            piece_pos,
+                            piece.piece_type,
+                            opponent,
+                        );
+                        
+                        // Check if center square is in attack pattern
+                        let center_bit = 1u128 << center_sq.to_u8();
+                        if (attacks & center_bit) != 0 {
+                            their_attacks += 1;
+                        }
+                    }
+                }
+            }
+
+            // Score based on attack count difference
+            let attack_diff = our_attacks as i32 - their_attacks as i32;
+            let value = if center_sq == Position::new(4, 4) {
+                attack_diff * 8 // Core center is more valuable
+            } else {
+                attack_diff * 5 // Extended center
+            };
+            
+            mg_score += value;
+            eg_score += value / 4; // Less important in endgame
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
@@ -804,25 +923,42 @@ impl OpeningPrincipleEvaluator {
         None
     }
 
-    /// Find all pieces of a specific type
+    /// Find all pieces of a specific type (optimized with bitboard operations)
     fn find_pieces(
         &self,
         board: &BitboardBoard,
         player: Player,
         piece_type: PieceType,
     ) -> Vec<Position> {
-        let mut pieces = Vec::new();
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == piece_type && piece.player == player {
-                        pieces.push(pos);
-                    }
-                }
+        // Use bitboard operations instead of iterating over all 81 squares
+        let pieces = board.get_pieces();
+        let player_idx = if player == Player::Black { 0 } else { 1 };
+        let piece_idx = piece_type.to_u8() as usize;
+        
+        // Get the bitboard for this piece type and player
+        let piece_bitboard = pieces[player_idx][piece_idx];
+        
+        // Convert bitboard to positions efficiently
+        self.bitboard_to_positions(piece_bitboard)
+    }
+
+    /// Convert bitboard to list of positions efficiently (Task 19.0 - Task 4.0)
+    fn bitboard_to_positions(&self, bitboard: crate::types::Bitboard) -> Vec<Position> {
+        use crate::types::get_lsb;
+        
+        let mut positions = Vec::new();
+        let mut remaining = bitboard;
+        
+        while remaining != 0 {
+            if let Some(pos) = get_lsb(remaining) {
+                positions.push(pos);
+                remaining &= remaining - 1; // Clear the least significant bit
+            } else {
+                break;
             }
         }
-        pieces
+        
+        positions
     }
 
     /// Get statistics
@@ -838,6 +974,68 @@ impl OpeningPrincipleEvaluator {
     /// Reset statistics
     pub fn reset_stats(&mut self) {
         self.stats = OpeningPrincipleStats::default();
+    }
+
+    /// Get per-component statistics breakdown (Task 19.0 - Task 4.0)
+    pub fn get_component_statistics(&self) -> ComponentStatistics {
+        let stats = &self.stats;
+        
+        ComponentStatistics {
+            development: ComponentStats {
+                total_score: stats.development_score,
+                evaluation_count: stats.development_evaluations,
+                average_score: if stats.development_evaluations > 0 {
+                    stats.development_score as f64 / stats.development_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+            center_control: ComponentStats {
+                total_score: stats.center_control_score,
+                evaluation_count: stats.center_control_evaluations,
+                average_score: if stats.center_control_evaluations > 0 {
+                    stats.center_control_score as f64 / stats.center_control_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+            castle_formation: ComponentStats {
+                total_score: stats.castle_formation_score,
+                evaluation_count: stats.castle_formation_evaluations,
+                average_score: if stats.castle_formation_evaluations > 0 {
+                    stats.castle_formation_score as f64 / stats.castle_formation_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+            tempo: ComponentStats {
+                total_score: stats.tempo_score,
+                evaluation_count: stats.tempo_evaluations,
+                average_score: if stats.tempo_evaluations > 0 {
+                    stats.tempo_score as f64 / stats.tempo_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+            penalties: ComponentStats {
+                total_score: stats.penalties_score,
+                evaluation_count: stats.penalties_evaluations,
+                average_score: if stats.penalties_evaluations > 0 {
+                    stats.penalties_score as f64 / stats.penalties_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+            piece_coordination: ComponentStats {
+                total_score: stats.piece_coordination_score,
+                evaluation_count: stats.piece_coordination_evaluations,
+                average_score: if stats.piece_coordination_evaluations > 0 {
+                    stats.piece_coordination_score as f64 / stats.piece_coordination_evaluations as f64
+                } else {
+                    0.0
+                },
+            },
+        }
     }
 }
 
@@ -862,6 +1060,8 @@ pub struct OpeningPrincipleConfig {
     pub enable_opening_penalties: bool,
     /// Enable piece coordination evaluation (rook-lance batteries, bishop-lance combinations, etc.)
     pub enable_piece_coordination: bool,
+    /// Enable attack-based center control evaluation (evaluates center control from piece attacks, not just occupied squares)
+    pub enable_attack_based_center_control: bool,
 }
 
 impl Default for OpeningPrincipleConfig {
@@ -873,6 +1073,7 @@ impl Default for OpeningPrincipleConfig {
             enable_tempo: true,
             enable_opening_penalties: true,
             enable_piece_coordination: true,
+            enable_attack_based_center_control: true,
         }
     }
 }
@@ -890,6 +1091,59 @@ pub struct OpeningPrincipleStats {
     pub book_moves_validated: u64,
     /// Sum of book move quality scores (for average calculation)
     pub book_move_quality_scores: i64,
+    /// Per-component statistics (Task 19.0 - Task 4.0)
+    /// Development component score sum
+    pub development_score: i64,
+    /// Center control component score sum
+    pub center_control_score: i64,
+    /// Castle formation component score sum
+    pub castle_formation_score: i64,
+    /// Tempo component score sum
+    pub tempo_score: i64,
+    /// Penalties component score sum
+    pub penalties_score: i64,
+    /// Piece coordination component score sum
+    pub piece_coordination_score: i64,
+    /// Development component evaluation count
+    pub development_evaluations: u64,
+    /// Center control component evaluation count
+    pub center_control_evaluations: u64,
+    /// Castle formation component evaluation count
+    pub castle_formation_evaluations: u64,
+    /// Tempo component evaluation count
+    pub tempo_evaluations: u64,
+    /// Penalties component evaluation count
+    pub penalties_evaluations: u64,
+    /// Piece coordination component evaluation count
+    pub piece_coordination_evaluations: u64,
+}
+
+/// Per-component statistics breakdown (Task 19.0 - Task 4.0)
+#[derive(Debug, Clone, Default)]
+pub struct ComponentStatistics {
+    /// Development component statistics
+    pub development: ComponentStats,
+    /// Center control component statistics
+    pub center_control: ComponentStats,
+    /// Castle formation component statistics
+    pub castle_formation: ComponentStats,
+    /// Tempo component statistics
+    pub tempo: ComponentStats,
+    /// Penalties component statistics
+    pub penalties: ComponentStats,
+    /// Piece coordination component statistics
+    pub piece_coordination: ComponentStats,
+}
+
+/// Statistics for a single component
+#[derive(Debug, Clone, Default)]
+pub struct ComponentStats {
+    /// Total score sum for this component
+    pub total_score: i64,
+    /// Number of evaluations performed
+    pub evaluation_count: u64,
+    /// Average score (total_score / evaluation_count)
+    pub average_score: f64,
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
