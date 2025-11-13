@@ -64,6 +64,12 @@ pub struct TaperedEvalConfig {
 
     /// Threshold for logging large weight contributions in centipawns (default: 1000.0)
     pub weight_contribution_threshold: f32,
+
+    /// Automatically validate weights after updates (default: true) (Task 20.0 - Task 2.0)
+    pub auto_validate_weights: bool,
+
+    /// Automatically normalize weights to ensure cumulative sum is within range (default: false) (Task 20.0 - Task 2.0)
+    pub auto_normalize_weights: bool,
 }
 
 /// Weights for combining different evaluation components
@@ -250,6 +256,170 @@ impl Default for EvaluationWeights {
     }
 }
 
+impl EvaluationWeights {
+    /// Normalize weights to ensure cumulative sum is within range while maintaining ratios (Task 20.0 - Task 2.6)
+    /// 
+    /// Scales all weights proportionally to ensure cumulative sum is within 5.0-15.0 range.
+    /// This maintains the relative ratios between weights while fixing the total sum.
+    /// 
+    /// # Parameters
+    /// - `components`: Component flags indicating which weights are enabled
+    /// 
+    /// # Target Range
+    /// - Target cumulative sum: 10.0 (midpoint of 5.0-15.0 range)
+    pub fn normalize_weights(&mut self, components: &ComponentFlagsForValidation) {
+        let mut sum = 0.0;
+        if components.material {
+            sum += self.material_weight;
+        }
+        if components.piece_square_tables {
+            sum += self.position_weight;
+        }
+        if components.position_features {
+            sum += self.king_safety_weight;
+            sum += self.pawn_structure_weight;
+            sum += self.mobility_weight;
+            sum += self.center_control_weight;
+            sum += self.development_weight;
+        }
+        if components.tactical_patterns {
+            sum += self.tactical_weight;
+        }
+        if components.positional_patterns {
+            sum += self.positional_weight;
+        }
+        if components.castle_patterns {
+            sum += self.castle_weight;
+        }
+
+        const MIN_CUMULATIVE_WEIGHT: f32 = 5.0;
+        const MAX_CUMULATIVE_WEIGHT: f32 = 15.0;
+        const TARGET_CUMULATIVE_WEIGHT: f32 = 10.0; // Midpoint
+
+        // Only normalize if out of range
+        if sum < MIN_CUMULATIVE_WEIGHT || sum > MAX_CUMULATIVE_WEIGHT {
+            // Calculate scaling factor to bring sum to target
+            let scale = if sum > 0.0 {
+                TARGET_CUMULATIVE_WEIGHT / sum
+            } else {
+                1.0 // If sum is 0, don't scale
+            };
+
+            // Apply scaling to all enabled weights
+            if components.material {
+                self.material_weight *= scale;
+            }
+            if components.piece_square_tables {
+                self.position_weight *= scale;
+            }
+            if components.position_features {
+                self.king_safety_weight *= scale;
+                self.pawn_structure_weight *= scale;
+                self.mobility_weight *= scale;
+                self.center_control_weight *= scale;
+                self.development_weight *= scale;
+            }
+            if components.tactical_patterns {
+                self.tactical_weight *= scale;
+            }
+            if components.positional_patterns {
+                self.positional_weight *= scale;
+            }
+            if components.castle_patterns {
+                self.castle_weight *= scale;
+            }
+        }
+    }
+
+    /// Apply a weight preset (Task 20.0 - Task 2.10)
+    /// 
+    /// Sets all weights based on the specified preset style.
+    pub fn apply_preset(&mut self, preset: WeightPreset) {
+        match preset {
+            WeightPreset::Balanced => {
+                // Default balanced weights
+                self.material_weight = 1.0;
+                self.position_weight = 1.0;
+                self.king_safety_weight = 1.0;
+                self.pawn_structure_weight = 0.8;
+                self.mobility_weight = 0.6;
+                self.center_control_weight = 0.7;
+                self.development_weight = 0.5;
+                self.tactical_weight = 1.0;
+                self.positional_weight = 1.0;
+                self.castle_weight = 1.0;
+            }
+            WeightPreset::Aggressive => {
+                // Emphasize tactical patterns and mobility
+                self.material_weight = 1.0;
+                self.position_weight = 1.0;
+                self.king_safety_weight = 0.9;
+                self.pawn_structure_weight = 0.7;
+                self.mobility_weight = 0.8;
+                self.center_control_weight = 0.8;
+                self.development_weight = 0.7;
+                self.tactical_weight = 1.5;
+                self.positional_weight = 0.8;
+                self.castle_weight = 0.9;
+            }
+            WeightPreset::Positional => {
+                // Emphasize positional patterns and pawn structure
+                self.material_weight = 1.0;
+                self.position_weight = 1.1;
+                self.king_safety_weight = 1.0;
+                self.pawn_structure_weight = 1.2;
+                self.mobility_weight = 0.6;
+                self.center_control_weight = 1.0;
+                self.development_weight = 0.5;
+                self.tactical_weight = 0.8;
+                self.positional_weight = 1.5;
+                self.castle_weight = 1.0;
+            }
+            WeightPreset::Defensive => {
+                // Emphasize king safety and castle patterns
+                self.material_weight = 1.0;
+                self.position_weight = 1.0;
+                self.king_safety_weight = 1.5;
+                self.pawn_structure_weight = 1.0;
+                self.mobility_weight = 0.5;
+                self.center_control_weight = 0.6;
+                self.development_weight = 0.4;
+                self.tactical_weight = 0.8;
+                self.positional_weight = 1.0;
+                self.castle_weight = 1.3;
+            }
+        }
+    }
+}
+
+/// Weight preset styles (Task 20.0 - Task 2.9)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WeightPreset {
+    /// Balanced weights (default) - good for general play
+    Balanced,
+    /// Aggressive play style - emphasizes tactical patterns and mobility
+    Aggressive,
+    /// Positional play style - emphasizes positional patterns and pawn structure
+    Positional,
+    /// Defensive play style - emphasizes king safety and castle patterns
+    Defensive,
+}
+
+/// Recommended weight ranges (Task 20.0 - Task 2.4)
+/// Maps weight names to (min, max, default) tuples
+const RECOMMENDED_WEIGHT_RANGES: &[(&str, (f32, f32, f32))] = &[
+    ("material", (0.8, 1.2, 1.0)),
+    ("position", (0.5, 1.5, 1.0)),
+    ("king_safety", (0.8, 1.5, 1.0)),
+    ("pawn_structure", (0.6, 1.2, 0.8)),
+    ("mobility", (0.4, 0.8, 0.6)),
+    ("center_control", (0.5, 1.0, 0.7)),
+    ("development", (0.3, 0.7, 0.5)),
+    ("tactical", (0.8, 1.5, 1.0)),
+    ("positional", (0.8, 1.5, 1.0)),
+    ("castle", (0.7, 1.3, 1.0)),
+];
+
 impl TaperedEvalConfig {
     /// Create a new configuration with default values
     pub fn new() -> Self {
@@ -268,6 +438,8 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            auto_validate_weights: true,
+            auto_normalize_weights: false,
         }
     }
 
@@ -299,6 +471,8 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            auto_validate_weights: true,
+            auto_normalize_weights: false,
         }
     }
 
@@ -341,6 +515,8 @@ impl TaperedEvalConfig {
             },
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            auto_validate_weights: true,
+            auto_normalize_weights: false,
         }
     }
 
@@ -371,6 +547,8 @@ impl TaperedEvalConfig {
             weights: EvaluationWeights::default(),
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            auto_validate_weights: true,
+            auto_normalize_weights: false,
         }
     }
 
@@ -598,8 +776,23 @@ impl TaperedEvalConfig {
         Ok(())
     }
 
-    /// Update a specific weight at runtime
-    pub fn update_weight(&mut self, weight_name: &str, value: f32) -> Result<(), ConfigError> {
+    /// Update a specific weight at runtime (Task 20.0 - Task 2.0)
+    /// 
+    /// Automatically validates weights if `auto_validate_weights` is enabled.
+    /// Optionally normalizes weights if `auto_normalize_weights` is enabled and
+    /// cumulative sum is out of range.
+    /// 
+    /// # Parameters
+    /// - `weight_name`: Name of the weight to update
+    /// - `value`: New weight value (must be 0.0-10.0)
+    /// - `components`: Optional component flags for cumulative weight validation
+    ///   (if None, validation is skipped even if auto_validate_weights is true)
+    pub fn update_weight(
+        &mut self,
+        weight_name: &str,
+        value: f32,
+        components: Option<&ComponentFlagsForValidation>,
+    ) -> Result<(), ConfigError> {
         match weight_name {
             "material" => self.weights.material_weight = value,
             "position" => self.weights.position_weight = value,
@@ -619,7 +812,231 @@ impl TaperedEvalConfig {
             return Err(ConfigError::InvalidWeight(weight_name.to_string()));
         }
 
+        // Automatic normalization (Task 20.0 - Task 2.8)
+        if self.auto_normalize_weights {
+            if let Some(components) = components {
+                let sum = self.calculate_cumulative_sum(components);
+                const MIN_CUMULATIVE_WEIGHT: f32 = 5.0;
+                const MAX_CUMULATIVE_WEIGHT: f32 = 15.0;
+                if sum < MIN_CUMULATIVE_WEIGHT || sum > MAX_CUMULATIVE_WEIGHT {
+                    self.weights.normalize_weights(components);
+                }
+            }
+        }
+
+        // Automatic validation (Task 20.0 - Task 2.1)
+        if self.auto_validate_weights {
+            if let Some(components) = components {
+                self.validate_cumulative_weights(components)?;
+            }
+        }
+
         Ok(())
+    }
+
+    /// Calculate cumulative sum of enabled component weights
+    fn calculate_cumulative_sum(&self, components: &ComponentFlagsForValidation) -> f32 {
+        let mut sum = 0.0;
+        if components.material {
+            sum += self.weights.material_weight;
+        }
+        if components.piece_square_tables {
+            sum += self.weights.position_weight;
+        }
+        if components.position_features {
+            sum += self.weights.king_safety_weight;
+            sum += self.weights.pawn_structure_weight;
+            sum += self.weights.mobility_weight;
+            sum += self.weights.center_control_weight;
+            sum += self.weights.development_weight;
+        }
+        if components.tactical_patterns {
+            sum += self.weights.tactical_weight;
+        }
+        if components.positional_patterns {
+            sum += self.weights.positional_weight;
+        }
+        if components.castle_patterns {
+            sum += self.weights.castle_weight;
+        }
+        sum
+    }
+
+    /// Check weight ranges and return warnings for out-of-range weights (Task 20.0 - Task 2.5)
+    /// 
+    /// Returns a vector of weight names that are outside their recommended ranges.
+    /// These are warnings, not errors - weights outside ranges may still be valid.
+    pub fn check_weight_ranges(&self) -> Vec<(&'static str, f32, f32, f32)> {
+        let mut warnings = Vec::new();
+        
+        for (name, (min, max, _default)) in RECOMMENDED_WEIGHT_RANGES {
+            let value = match *name {
+                "material" => self.weights.material_weight,
+                "position" => self.weights.position_weight,
+                "king_safety" => self.weights.king_safety_weight,
+                "pawn_structure" => self.weights.pawn_structure_weight,
+                "mobility" => self.weights.mobility_weight,
+                "center_control" => self.weights.center_control_weight,
+                "development" => self.weights.development_weight,
+                "tactical" => self.weights.tactical_weight,
+                "positional" => self.weights.positional_weight,
+                "castle" => self.weights.castle_weight,
+                _ => continue,
+            };
+            
+            if value < *min || value > *max {
+                warnings.push((*name, value, *min, *max));
+            }
+        }
+        
+        warnings
+    }
+
+    /// Backward-compatible wrapper for update_weight without components (Task 20.0 - Task 2.1)
+    /// 
+    /// This allows existing code to continue working. New code should use the version
+    /// with components parameter for automatic validation.
+    pub fn update_weight_simple(&mut self, weight_name: &str, value: f32) -> Result<(), ConfigError> {
+        self.update_weight(weight_name, value, None)
+    }
+
+    /// Apply a weight preset (Task 20.0 - Task 2.11)
+    /// 
+    /// Sets all weights based on the specified preset style.
+    pub fn aggressive_preset(&mut self) {
+        self.weights.apply_preset(WeightPreset::Aggressive);
+    }
+
+    /// Apply positional preset
+    pub fn positional_preset(&mut self) {
+        self.weights.apply_preset(WeightPreset::Positional);
+    }
+
+    /// Apply defensive preset
+    pub fn defensive_preset(&mut self) {
+        self.weights.apply_preset(WeightPreset::Defensive);
+    }
+
+    /// Apply balanced preset (default)
+    pub fn balanced_preset(&mut self) {
+        self.weights.apply_preset(WeightPreset::Balanced);
+    }
+
+    /// Analyze telemetry for weight recommendations (Task 20.0 - Task 2.12)
+    /// 
+    /// Takes `EvaluationTelemetry` and suggests weight adjustments based on component
+    /// contribution imbalances. Returns a vector of recommendations (component name, suggested adjustment).
+    /// 
+    /// # Parameters
+    /// - `telemetry`: Evaluation telemetry with weight contributions
+    /// - `target_contributions`: Optional target contribution percentages (defaults to balanced distribution)
+    /// 
+    /// # Returns
+    /// Vector of recommendations: (component_name, current_contribution, target_contribution, suggested_weight_change)
+    pub fn analyze_telemetry_for_recommendations(
+        &self,
+        telemetry: &crate::evaluation::statistics::EvaluationTelemetry,
+        target_contributions: Option<&std::collections::HashMap<String, f32>>,
+    ) -> Vec<(String, f32, f32, f32)> {
+        use std::collections::HashMap;
+        let mut recommendations = Vec::new();
+        
+        // Default target contributions (balanced distribution)
+        let default_targets: HashMap<String, f32> = [
+            ("material".to_string(), 0.15),
+            ("piece_square_tables".to_string(), 0.12),
+            ("position_features".to_string(), 0.25),
+            ("tactical_patterns".to_string(), 0.15),
+            ("positional_patterns".to_string(), 0.15),
+            ("castle_patterns".to_string(), 0.10),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        
+        let targets = target_contributions.unwrap_or(&default_targets);
+        const THRESHOLD: f32 = 0.05; // 5% difference threshold
+        
+        // Analyze each component
+        for (component, current_pct) in &telemetry.weight_contributions {
+            if let Some(target_pct) = targets.get(component) {
+                let diff = current_pct - target_pct;
+                if diff.abs() > THRESHOLD {
+                    // Calculate suggested weight adjustment
+                    // If contribution is too low, increase weight; if too high, decrease weight
+                    let current_weight = self.get_weight(component).unwrap_or(1.0);
+                    let adjustment_factor = if current_pct > &0.0 {
+                        (target_pct / current_pct).clamp(0.5, 2.0) // Limit to 0.5x-2.0x
+                    } else {
+                        1.5 // If no contribution, suggest 1.5x increase
+                    };
+                    let suggested_weight = current_weight * adjustment_factor;
+                    let suggested_change = suggested_weight - current_weight;
+                    
+                    recommendations.push((
+                        component.clone(),
+                        *current_pct,
+                        *target_pct,
+                        suggested_change,
+                    ));
+                }
+            }
+        }
+        
+        recommendations
+    }
+
+    /// Automatically balance weights using telemetry (Task 20.0 - Task 2.13)
+    /// 
+    /// Uses telemetry to automatically adjust weights to achieve target contribution percentages.
+    /// This method iteratively adjusts weights based on telemetry analysis.
+    /// 
+    /// # Parameters
+    /// - `telemetry`: Evaluation telemetry with weight contributions
+    /// - `components`: Component flags for cumulative weight validation
+    /// - `target_contributions`: Optional target contribution percentages
+    /// - `learning_rate`: Adjustment rate (default: 0.1, range: 0.01-0.5)
+    /// 
+    /// # Returns
+    /// Number of weights adjusted
+    pub fn auto_balance_weights(
+        &mut self,
+        telemetry: &crate::evaluation::statistics::EvaluationTelemetry,
+        components: &ComponentFlagsForValidation,
+        target_contributions: Option<&std::collections::HashMap<String, f32>>,
+        learning_rate: f32,
+    ) -> usize {
+        let recommendations = self.analyze_telemetry_for_recommendations(telemetry, target_contributions);
+        let lr = learning_rate.clamp(0.01, 0.5);
+        let mut adjusted = 0;
+        
+        for (component_name, _current, _target, suggested_change) in recommendations {
+            // Map telemetry component names to weight names
+            let weight_name = match component_name.as_str() {
+                "material" => Some("material"),
+                "piece_square_tables" => Some("position"),
+                "position_features" => None, // Position features has multiple weights, skip aggregate
+                "tactical_patterns" => Some("tactical"),
+                "positional_patterns" => Some("positional"),
+                "castle_patterns" => Some("castle"),
+                _ => None,
+            };
+            
+            if let Some(weight_name) = weight_name {
+                if let Some(current_weight) = self.get_weight(weight_name) {
+                    // Apply adjustment with learning rate
+                    let adjustment = suggested_change * lr;
+                    let new_weight = (current_weight + adjustment).clamp(0.0, 10.0);
+                    
+                    // Update weight (validation happens automatically if enabled)
+                    if self.update_weight(weight_name, new_weight, Some(components)).is_ok() {
+                        adjusted += 1;
+                    }
+                }
+            }
+        }
+        
+        adjusted
     }
 
     /// Get a weight value by name
@@ -679,6 +1096,8 @@ impl Default for TaperedEvalConfig {
             weights: EvaluationWeights::default(),
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            auto_validate_weights: true,
+            auto_normalize_weights: false,
         }
     }
 }
@@ -943,10 +1362,10 @@ mod tests {
     fn test_update_weight() {
         let mut config = TaperedEvalConfig::default();
 
-        assert!(config.update_weight("material", 1.5).is_ok());
+        assert!(config.update_weight("material", 1.5, None).is_ok());
         assert_eq!(config.weights.material_weight, 1.5);
 
-        assert!(config.update_weight("king_safety", 0.8).is_ok());
+        assert!(config.update_weight("king_safety", 0.8, None).is_ok());
         assert_eq!(config.weights.king_safety_weight, 0.8);
     }
 
@@ -955,10 +1374,10 @@ mod tests {
         let mut config = TaperedEvalConfig::default();
 
         // Invalid weight value
-        assert!(config.update_weight("material", -1.0).is_err());
+        assert!(config.update_weight("material", -1.0, None).is_err());
 
         // Unknown weight name
-        assert!(config.update_weight("unknown", 1.0).is_err());
+        assert!(config.update_weight("unknown", 1.0, None).is_err());
     }
 
     #[test]
@@ -1030,9 +1449,9 @@ mod tests {
         let mut config = TaperedEvalConfig::default();
 
         // Update multiple weights
-        assert!(config.update_weight("material", 1.2).is_ok());
-        assert!(config.update_weight("position", 0.9).is_ok());
-        assert!(config.update_weight("king_safety", 1.1).is_ok());
+        assert!(config.update_weight("material", 1.2, None).is_ok());
+        assert!(config.update_weight("position", 0.9, None).is_ok());
+        assert!(config.update_weight("king_safety", 1.1, None).is_ok());
 
         // Verify changes
         assert_eq!(config.weights.material_weight, 1.2);
