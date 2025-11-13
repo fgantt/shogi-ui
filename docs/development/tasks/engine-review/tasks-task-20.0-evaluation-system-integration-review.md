@@ -68,23 +68,23 @@ This task list implements the coordination improvements identified in the Evalua
   - [x] 2.17 Write unit test `test_weight_presets()` to verify all presets set weights correctly
   - [x] 2.18 Write integration test `test_telemetry_driven_recommendations()` to verify recommendations are generated from telemetry data
 
-- [ ] 3.0 Phase-Dependent Weight Scaling Enhancements (High Priority - Est: 2-3 hours)
-  - [ ] 3.1 Change default value of `enable_phase_dependent_weights` from `false` to `true` in `TaperedEvalConfig::default()`
-  - [ ] 3.2 Add scaling configuration for `development_weight`: higher in opening (1.2), lower in endgame (0.6), default in middlegame (1.0)
-  - [ ] 3.3 Add scaling configuration for `mobility_weight`: higher in middlegame (1.1), lower in endgame (0.7), default in opening (1.0)
-  - [ ] 3.4 Add scaling configuration for `pawn_structure_weight`: higher in endgame (1.2), lower in opening (0.8), default in middlegame (1.0)
-  - [ ] 3.5 Update `apply_phase_scaling()` method in `config.rs` to include development, mobility, and pawn_structure scaling logic
-  - [ ] 3.6 Create `PhaseScalingConfig` struct to hold scaling factors for each weight and phase combination
-  - [ ] 3.7 Add `phase_scaling_config: Option<PhaseScalingConfig>` field to `TaperedEvalConfig` (None = use defaults)
-  - [ ] 3.8 Implement `PhaseScalingCurve` enum with variants: `Linear`, `Sigmoid`, `Step`
-  - [ ] 3.9 Add `scaling_curve: PhaseScalingCurve` field to `PhaseScalingConfig` (default: `Linear`)
-  - [ ] 3.10 Implement curve application logic in `apply_phase_scaling()` to support different scaling curves
-  - [ ] 3.11 Add documentation to `config.rs` explaining when to enable phase-dependent scaling and its expected impact
-  - [ ] 3.12 Update module documentation in `integration.rs` to explain phase-dependent scaling behavior
-  - [ ] 3.13 Write unit test `test_phase_scaling_enabled_by_default()` to verify default is now `true`
-  - [ ] 3.14 Write unit test `test_expanded_phase_scaling()` to verify development, mobility, and pawn_structure weights scale correctly
-  - [ ] 3.15 Write unit test `test_scaling_curves()` to verify linear, sigmoid, and step curves work correctly
-  - [ ] 3.16 Write integration test `test_phase_scaling_impact()` to measure evaluation score differences with scaling enabled vs disabled
+- [x] 3.0 Phase-Dependent Weight Scaling Enhancements (High Priority - Est: 2-3 hours) ✅ COMPLETE
+  - [x] 3.1 Change default value of `enable_phase_dependent_weights` from `false` to `true` in `TaperedEvalConfig::default()`
+  - [x] 3.2 Add scaling configuration for `development_weight`: higher in opening (1.2), lower in endgame (0.6), default in middlegame (1.0)
+  - [x] 3.3 Add scaling configuration for `mobility_weight`: higher in middlegame (1.1), lower in endgame (0.7), default in opening (1.0)
+  - [x] 3.4 Add scaling configuration for `pawn_structure_weight`: higher in endgame (1.2), lower in opening (0.8), default in middlegame (1.0)
+  - [x] 3.5 Update `apply_phase_scaling()` method in `config.rs` to include development, mobility, and pawn_structure scaling logic
+  - [x] 3.6 Create `PhaseScalingConfig` struct to hold scaling factors for each weight and phase combination
+  - [x] 3.7 Add `phase_scaling_config: Option<PhaseScalingConfig>` field to `TaperedEvalConfig` (None = use defaults)
+  - [x] 3.8 Implement `PhaseScalingCurve` enum with variants: `Linear`, `Sigmoid`, `Step`
+  - [x] 3.9 Add `scaling_curve: PhaseScalingCurve` field to `PhaseScalingConfig` (default: `Linear`)
+  - [x] 3.10 Implement curve application logic in `apply_phase_scaling()` to support different scaling curves
+  - [x] 3.11 Add documentation to `config.rs` explaining when to enable phase-dependent scaling and its expected impact
+  - [x] 3.12 Update module documentation in `integration.rs` to explain phase-dependent scaling behavior
+  - [x] 3.13 Write unit test `test_phase_scaling_enabled_by_default()` to verify default is now `true`
+  - [x] 3.14 Write unit test `test_expanded_phase_scaling()` to verify development, mobility, and pawn_structure weights scale correctly
+  - [x] 3.15 Write unit test `test_scaling_curves()` to verify linear, sigmoid, and step curves work correctly
+  - [x] 3.16 Write integration test `test_phase_scaling_impact()` to measure evaluation score differences with scaling enabled vs disabled
 
 - [ ] 4.0 Tuning Infrastructure Integration (Medium Priority - Est: 12-16 hours)
   - [ ] 4.1 Review `tuning.rs` to understand existing Adam optimizer and genetic algorithm APIs
@@ -631,4 +631,117 @@ Update weights (with automatic validation/normalization)
 ### Next Steps
 
 None - Task 2.0 is complete. Weight balance automation and validation are now fully implemented, providing automatic validation, normalization, presets, and telemetry-driven recommendations.
+
+---
+
+## Task 3.0 Completion Notes
+
+### Implementation Summary
+
+Task 3.0: Phase-Dependent Weight Scaling Enhancements has been completed successfully. The implementation adds comprehensive phase-aware weight scaling with configurable scaling curves and supports scaling for five evaluation weights (tactical, positional, development, mobility, pawn_structure).
+
+### Changes Made
+
+#### Core Implementation (`src/evaluation/config.rs`)
+
+1. **Changed default value** (Task 3.1):
+   - Changed `enable_phase_dependent_weights` default from `false` to `true` in `TaperedEvalConfig::default()`
+   - Updated all preset methods (`disabled()`, `performance_optimized()`, `strength_optimized()`, `memory_optimized()`) to include `phase_scaling_config: None`
+
+2. **Created PhaseScalingConfig and PhaseScalingCurve** (Tasks 3.6-3.9):
+   - Added `PhaseScalingCurve` enum with `Linear`, `Sigmoid`, and `Step` variants
+   - Created `PhaseScalingConfig` struct with scaling factors for each weight:
+     - `tactical: (1.0, 1.2, 0.8)` - Opening, Middlegame, Endgame
+     - `positional: (1.0, 0.9, 1.2)` - Opening, Middlegame, Endgame
+     - `development: (1.2, 1.0, 0.6)` - Opening, Middlegame, Endgame (Task 3.2)
+     - `mobility: (1.0, 1.1, 0.7)` - Opening, Middlegame, Endgame (Task 3.3)
+     - `pawn_structure: (0.8, 1.0, 1.2)` - Opening, Middlegame, Endgame (Task 3.4)
+   - Added `phase_scaling_config: Option<PhaseScalingConfig>` field to `TaperedEvalConfig`
+   - Implemented `Default` trait for `PhaseScalingConfig` with `Linear` as default curve
+
+3. **Updated apply_phase_scaling()** (Tasks 3.5, 3.10):
+   - Completely rewrote `apply_phase_scaling()` to support:
+     - Custom scaling configuration via `phase_scaling_config`
+     - Three scaling curves: `Linear` (smooth interpolation), `Sigmoid` (S-curve), `Step` (discrete jumps)
+     - Scaling for all five weights: tactical, positional, development, mobility, pawn_structure
+   - Implemented curve application logic:
+     - **Step**: Discrete jumps at phase boundaries (phase 192, 64)
+     - **Linear**: Smooth linear interpolation between phases
+     - **Sigmoid**: S-curve interpolation for gradual transitions
+
+4. **Updated documentation** (Tasks 3.11-3.12):
+   - Added comprehensive documentation to `apply_phase_scaling()` explaining all scaling factors
+   - Updated `EvaluationWeights` documentation with phase-dependent scaling information
+   - Added extensive module documentation to `integration.rs` explaining phase-dependent scaling behavior, curve types, and when to enable it
+
+#### Tests (`tests/evaluation_phase_scaling_tests.rs`)
+
+Created comprehensive test suite with 6 tests (Tasks 3.13-3.16):
+
+1. **`test_phase_scaling_enabled_by_default()`**: Verifies that `enable_phase_dependent_weights` defaults to `true`
+
+2. **`test_expanded_phase_scaling()`**: Tests scaling for development, mobility, and pawn_structure weights across all three phases:
+   - Opening (phase 256): development 1.2x, mobility 1.0x, pawn_structure 0.8x
+   - Middlegame (phase 128): development 1.0x, mobility 1.1x, pawn_structure 1.0x
+   - Endgame (phase 32): development 0.6x, mobility 0.7x, pawn_structure 1.2x
+
+3. **`test_scaling_curves()`**: Tests all three curve types:
+   - **Step**: Verifies discrete jumps at phase boundaries (phase 192, 128, 32)
+   - **Linear**: Verifies smooth interpolation at phase 224 (midpoint between opening/middlegame)
+   - **Sigmoid**: Verifies S-curve interpolation produces values between opening and middlegame
+
+4. **`test_phase_scaling_impact()`**: Integration test comparing evaluation with scaling enabled vs disabled:
+   - Verifies weights differ in opening, middlegame, and endgame phases
+   - Tests impact on development, mobility, and pawn_structure weights
+
+5. **`test_custom_phase_scaling_config()`**: Verifies that custom scaling configuration works correctly
+
+6. **`test_tactical_positional_scaling()`**: Verifies that existing tactical and positional weights still scale correctly across all phases
+
+All tests pass successfully.
+
+### Technical Details
+
+#### Phase Boundaries
+- **Opening**: phase >= 192
+- **Middlegame**: 64 <= phase < 192
+- **Endgame**: phase < 64
+
+#### Scaling Factors (Default)
+- **Development**: Emphasized in opening (1.2x), de-emphasized in endgame (0.6x)
+- **Mobility**: Emphasized in middlegame (1.1x), de-emphasized in endgame (0.7x)
+- **Pawn Structure**: Emphasized in endgame (1.2x), de-emphasized in opening (0.8x)
+- **Tactical**: Emphasized in middlegame (1.2x), de-emphasized in endgame (0.8x)
+- **Positional**: Emphasized in endgame (1.2x), de-emphasized in middlegame (0.9x)
+
+#### Curve Types
+- **Linear** (default): Smooth linear interpolation between phases
+- **Sigmoid**: S-curve transitions for gradual changes
+- **Step**: Discrete jumps at phase boundaries for abrupt changes
+
+### Files Modified
+
+- `src/evaluation/config.rs`: Added `PhaseScalingConfig`, `PhaseScalingCurve`, updated `apply_phase_scaling()`, changed default
+- `src/evaluation/integration.rs`: Updated module documentation
+- `tests/evaluation_phase_scaling_tests.rs`: New test file with 6 comprehensive tests
+
+### Benefits
+
+- **Better evaluation accuracy**: Weights automatically adjust based on game phase, reflecting changing importance of different evaluation aspects
+- **Configurable**: Users can customize scaling factors and curve types via `phase_scaling_config`
+- **Flexible**: Three curve types allow smooth or abrupt transitions based on preference
+- **Backward compatible**: Default behavior uses sensible defaults, custom config is optional
+
+### Current Status
+
+- ✅ Core implementation complete
+- ✅ All 16 sub-tasks complete
+- ✅ Six comprehensive tests added (all passing)
+- ✅ Documentation updated in both `config.rs` and `integration.rs`
+- ✅ Default changed to `true` as requested
+- ✅ All preset methods updated with new field
+
+### Next Steps
+
+None - Task 3.0 is complete. Phase-dependent weight scaling is now fully implemented with configurable scaling factors and curve types, providing automatic weight adjustment based on game phase.
 

@@ -49,6 +49,28 @@
 //! This produces smoother evaluation transitions and avoids sudden score jumps when crossing phase boundaries.
 //! Phase boundaries are configurable via `PhaseBoundaryConfig` in `IntegratedEvaluationConfig`.
 //!
+//! # Phase-Dependent Weight Scaling (Task 20.0 - Task 3.0)
+//!
+//! When `enable_phase_dependent_weights` is enabled (default: `true`), evaluation weights automatically
+//! adjust based on game phase to reflect the changing importance of different evaluation aspects:
+//!
+//! - **Opening (phase >= 192)**: Development weight is emphasized (1.2x), as piece development matters most
+//!   in the opening phase. Pawn structure is de-emphasized (0.8x).
+//!
+//! - **Middlegame (64 <= phase < 192)**: Tactical patterns (1.2x) and mobility (1.1x) are emphasized, as
+//!   tactical opportunities and piece activity are crucial in middlegame play.
+//!
+//! - **Endgame (phase < 64)**: Positional patterns (1.2x) and pawn structure (1.2x) are emphasized, as
+//!   positional factors and pawn structures become decisive in endgame play. Development is de-emphasized (0.6x).
+//!
+//! Weight scaling supports three curve types for transitions:
+//! - **Linear** (default): Smooth linear interpolation between phases
+//! - **Sigmoid**: Smooth S-curve transitions for gradual changes
+//! - **Step**: Discrete jumps at phase boundaries for abrupt changes
+//!
+//! Scaling factors are configurable via `phase_scaling_config` in `TaperedEvalConfig`. If `None`, defaults
+//! are used which provide good balance across all phases.
+//!
 //! # Example
 //!
 //! ```rust,ignore

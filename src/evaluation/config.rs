@@ -70,6 +70,12 @@ pub struct TaperedEvalConfig {
 
     /// Automatically normalize weights to ensure cumulative sum is within range (default: false) (Task 20.0 - Task 2.0)
     pub auto_normalize_weights: bool,
+
+    /// Phase scaling configuration (Task 20.0 - Task 3.7)
+    /// 
+    /// If None, uses default scaling factors. Custom scaling allows fine-tuning
+    /// how weights change across game phases.
+    pub phase_scaling_config: Option<PhaseScalingConfig>,
 }
 
 /// Weights for combining different evaluation components
@@ -405,6 +411,56 @@ pub enum WeightPreset {
     Defensive,
 }
 
+/// Phase scaling curve types (Task 20.0 - Task 3.8)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PhaseScalingCurve {
+    /// Linear scaling - immediate transition at phase boundaries
+    Linear,
+    /// Sigmoid scaling - smooth S-curve transition
+    Sigmoid,
+    /// Step scaling - discrete jumps at phase boundaries
+    Step,
+}
+
+/// Phase scaling configuration for weights (Task 20.0 - Task 3.6)
+/// 
+/// Holds scaling factors for each weight at different game phases:
+/// - Opening: phase >= 192
+/// - Middlegame: 64 <= phase < 192
+/// - Endgame: phase < 64
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PhaseScalingConfig {
+    /// Scaling curve type (default: Linear)
+    pub scaling_curve: PhaseScalingCurve,
+    
+    // Existing scalings (already implemented)
+    /// Tactical weight scaling: (opening, middlegame, endgame)
+    pub tactical: (f32, f32, f32),
+    /// Positional weight scaling: (opening, middlegame, endgame)
+    pub positional: (f32, f32, f32),
+    
+    // New scalings (Task 20.0 - Task 3.2-3.4)
+    /// Development weight scaling: higher in opening (1.2), lower in endgame (0.6), default in middlegame (1.0)
+    pub development: (f32, f32, f32),
+    /// Mobility weight scaling: higher in middlegame (1.1), lower in endgame (0.7), default in opening (1.0)
+    pub mobility: (f32, f32, f32),
+    /// Pawn structure weight scaling: higher in endgame (1.2), lower in opening (0.8), default in middlegame (1.0)
+    pub pawn_structure: (f32, f32, f32),
+}
+
+impl Default for PhaseScalingConfig {
+    fn default() -> Self {
+        Self {
+            scaling_curve: PhaseScalingCurve::Linear,
+            tactical: (1.0, 1.2, 0.8),      // Opening, Middlegame, Endgame
+            positional: (1.0, 0.9, 1.2),    // Opening, Middlegame, Endgame
+            development: (1.2, 1.0, 0.6),   // Opening, Middlegame, Endgame (Task 3.2)
+            mobility: (1.0, 1.1, 0.7),      // Opening, Middlegame, Endgame (Task 3.3)
+            pawn_structure: (0.8, 1.0, 1.2), // Opening, Middlegame, Endgame (Task 3.4)
+        }
+    }
+}
+
 /// Recommended weight ranges (Task 20.0 - Task 2.4)
 /// Maps weight names to (min, max, default) tuples
 const RECOMMENDED_WEIGHT_RANGES: &[(&str, (f32, f32, f32))] = &[
@@ -440,6 +496,7 @@ impl TaperedEvalConfig {
             weight_contribution_threshold: 1000.0,
             auto_validate_weights: true,
             auto_normalize_weights: false,
+            phase_scaling_config: None,
         }
     }
 
@@ -473,6 +530,7 @@ impl TaperedEvalConfig {
             weight_contribution_threshold: 1000.0,
             auto_validate_weights: true,
             auto_normalize_weights: false,
+            phase_scaling_config: None,
         }
     }
 
@@ -517,6 +575,7 @@ impl TaperedEvalConfig {
             weight_contribution_threshold: 1000.0,
             auto_validate_weights: true,
             auto_normalize_weights: false,
+            phase_scaling_config: None,
         }
     }
 
@@ -549,6 +608,7 @@ impl TaperedEvalConfig {
             weight_contribution_threshold: 1000.0,
             auto_validate_weights: true,
             auto_normalize_weights: false,
+            phase_scaling_config: None,
         }
     }
 
@@ -623,46 +683,127 @@ impl TaperedEvalConfig {
         Ok(())
     }
 
-    /// Apply phase-dependent weight scaling
+    /// Apply phase-dependent weight scaling (Task 20.0 - Task 3.0)
     /// 
     /// Adjusts weights based on game phase:
     /// - Tactical weights are higher in middlegame
     /// - Positional weights are higher in endgame
+    /// - Development weights are higher in opening
+    /// - Mobility weights are higher in middlegame
+    /// - Pawn structure weights are higher in endgame
     /// 
     /// Phase ranges:
     /// - Opening: phase >= 192
     /// - Middlegame: 64 <= phase < 192
     /// - Endgame: phase < 64
+    /// 
+    /// Supports different scaling curves (Linear, Sigmoid, Step) for smooth or abrupt transitions.
     pub fn apply_phase_scaling(&self, weights: &mut EvaluationWeights, phase: i32) {
         if !self.enable_phase_dependent_weights {
             return;
         }
 
-        // Normalize phase to 0.0-1.0 range (0 = endgame, 1 = opening)
-        // Phase range is typically 0-256
-        let phase_factor = (phase as f32 / 256.0).clamp(0.0, 1.0);
+        // Get scaling configuration (use defaults if None)
+        let default_config = PhaseScalingConfig::default();
+        let scaling_config = self.phase_scaling_config.as_ref()
+            .unwrap_or(&default_config);
 
-        // Tactical patterns are more important in middlegame
-        // Scale: 0.8 in endgame, 1.2 in middlegame, 1.0 in opening
-        let tactical_scale = if phase < 64 {
-            0.8 // Endgame: reduce tactical
-        } else if phase < 192 {
-            1.2 // Middlegame: increase tactical
+        // Determine phase category for step curve, or calculate smooth transition
+        let (opening_scale, middlegame_scale, endgame_scale) = if phase >= 192 {
+            // Opening phase
+            (1.0, 0.0, 0.0)
+        } else if phase >= 64 {
+            // Middlegame phase
+            (0.0, 1.0, 0.0)
         } else {
-            1.0 // Opening: neutral
+            // Endgame phase
+            (0.0, 0.0, 1.0)
         };
+
+        // Apply scaling with curve interpolation (Task 20.0 - Task 3.10)
+        let apply_scale = |opening: f32, middlegame: f32, endgame: f32| -> f32 {
+            match scaling_config.scaling_curve {
+                PhaseScalingCurve::Step => {
+                    // Step curve: discrete jumps at boundaries
+                    opening * opening_scale + middlegame * middlegame_scale + endgame * endgame_scale
+                }
+                PhaseScalingCurve::Linear => {
+                    // Linear interpolation between phases
+                    let normalized_phase = (phase as f32 / 256.0).clamp(0.0, 1.0);
+                    if normalized_phase >= 0.75 {
+                        // Opening to middlegame transition (phase 192-256 -> normalized 0.75-1.0)
+                        let t = (normalized_phase - 0.75) / 0.25; // 0.0 at phase 192, 1.0 at phase 256
+                        opening * (1.0 - t) + middlegame * t
+                    } else if normalized_phase >= 0.25 {
+                        // Middlegame to endgame transition (phase 64-192 -> normalized 0.25-0.75)
+                        let t = (normalized_phase - 0.25) / 0.5; // 0.0 at phase 64, 1.0 at phase 192
+                        middlegame * (1.0 - t) + endgame * t
+                    } else {
+                        // Endgame (phase 0-64 -> normalized 0.0-0.25)
+                        endgame
+                    }
+                }
+                PhaseScalingCurve::Sigmoid => {
+                    // Sigmoid interpolation for smooth transitions
+                    let normalized_phase = (phase as f32 / 256.0).clamp(0.0, 1.0);
+                    // Use sigmoid function centered at phase transitions
+                    let sigmoid = |x: f32| -> f32 {
+                        1.0 / (1.0 + (-10.0 * (x - 0.5)).exp())
+                    };
+                    if normalized_phase >= 0.5 {
+                        // Opening/middlegame transition
+                        let t = (normalized_phase - 0.5) / 0.5; // 0.0-1.0 range
+                        let s = sigmoid(t);
+                        opening * (1.0 - s) + middlegame * s
+                    } else {
+                        // Middlegame/endgame transition
+                        let t = normalized_phase / 0.5; // 0.0-1.0 range
+                        let s = sigmoid(t);
+                        middlegame * (1.0 - s) + endgame * s
+                    }
+                }
+            }
+        };
+
+        // Apply scaling to tactical weight
+        let tactical_scale = apply_scale(
+            scaling_config.tactical.0,  // opening
+            scaling_config.tactical.1,  // middlegame
+            scaling_config.tactical.2,  // endgame
+        );
         weights.tactical_weight *= tactical_scale;
 
-        // Positional patterns are more important in endgame
-        // Scale: 1.2 in endgame, 0.9 in middlegame, 1.0 in opening
-        let positional_scale = if phase < 64 {
-            1.2 // Endgame: increase positional
-        } else if phase < 192 {
-            0.9 // Middlegame: reduce positional
-        } else {
-            1.0 // Opening: neutral
-        };
+        // Apply scaling to positional weight
+        let positional_scale = apply_scale(
+            scaling_config.positional.0,  // opening
+            scaling_config.positional.1,  // middlegame
+            scaling_config.positional.2,  // endgame
+        );
         weights.positional_weight *= positional_scale;
+
+        // Apply scaling to development weight (Task 20.0 - Task 3.2, 3.5)
+        let development_scale = apply_scale(
+            scaling_config.development.0,  // opening: 1.2
+            scaling_config.development.1,  // middlegame: 1.0
+            scaling_config.development.2,  // endgame: 0.6
+        );
+        weights.development_weight *= development_scale;
+
+        // Apply scaling to mobility weight (Task 20.0 - Task 3.3, 3.5)
+        let mobility_scale = apply_scale(
+            scaling_config.mobility.0,  // opening: 1.0
+            scaling_config.mobility.1,  // middlegame: 1.1
+            scaling_config.mobility.2,  // endgame: 0.7
+        );
+        weights.mobility_weight *= mobility_scale;
+
+        // Apply scaling to pawn structure weight (Task 20.0 - Task 3.4, 3.5)
+        let pawn_structure_scale = apply_scale(
+            scaling_config.pawn_structure.0,  // opening: 0.8
+            scaling_config.pawn_structure.1,  // middlegame: 1.0
+            scaling_config.pawn_structure.2,  // endgame: 1.2
+        );
+        weights.pawn_structure_weight *= pawn_structure_scale;
     }
 
     /// Suggest weight adjustments to maintain balance
@@ -1094,10 +1235,11 @@ impl Default for TaperedEvalConfig {
             position_features: PositionFeatureConfig::default(),
             base: TaperedEvaluationConfig::default(),
             weights: EvaluationWeights::default(),
-            enable_phase_dependent_weights: false,
+            enable_phase_dependent_weights: true, // Task 20.0 - Task 3.1: Changed default to true
             weight_contribution_threshold: 1000.0,
             auto_validate_weights: true,
             auto_normalize_weights: false,
+            phase_scaling_config: None, // Use defaults
         }
     }
 }
