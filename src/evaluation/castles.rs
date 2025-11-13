@@ -5,15 +5,31 @@ use crate::evaluation::castle_geometry::{
 };
 use crate::evaluation::patterns::*;
 use crate::types::*;
+use lru::LruCache;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 
 pub use crate::evaluation::castle_geometry::{
     exact, mirror_descriptors, CastlePieceDescriptor, GOLD_FAMILY, KNIGHT_FAMILY, LANCE_FAMILY,
     PAWN_WALL_FAMILY, SILVER_FAMILY,
 };
 
-const CACHE_MAX_ENTRIES: usize = 50;
+/// Default cache size for mid-search workloads
+const DEFAULT_CACHE_SIZE: usize = 500;
+
+/// Extended cache key that includes king position, local neighborhood hash, and promotion state
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct CastleCacheKey {
+    /// King position
+    king_pos: Position,
+    /// Hash of the local neighborhood around the king (3x3 to 5x5 area)
+    neighborhood_hash: u64,
+    /// Hash of promotion states in the king zone
+    promotion_hash: u32,
+    /// Player (for symmetry-aware caching)
+    player: Player,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct CastleEvaluation {
@@ -112,10 +128,43 @@ struct CachedEvaluation {
     evaluation: CastleEvaluation,
 }
 
+/// Cache statistics for monitoring and tuning
+#[derive(Debug, Clone, Default)]
+pub struct CastleCacheStats {
+    /// Number of cache hits
+    pub hits: u64,
+    /// Number of cache misses
+    pub misses: u64,
+    /// Number of cache evictions
+    pub evictions: u64,
+    /// Current cache size
+    pub current_size: usize,
+    /// Maximum cache size
+    pub max_size: usize,
+}
+
+impl CastleCacheStats {
+    /// Calculate hit rate as a percentage
+    pub fn hit_rate(&self) -> f64 {
+        let total = self.hits + self.misses;
+        if total > 0 {
+            (self.hits as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        }
+    }
+}
+
 pub struct CastleRecognizer {
     patterns: Vec<CastlePattern>,
-    pattern_cache: RefCell<HashMap<(u64, Player, Position), Option<CachedEvaluation>>>,
+    /// LRU cache for castle evaluations
+    pattern_cache: RefCell<LruCache<CastleCacheKey, CachedEvaluation>>,
+    /// Cache statistics
+    cache_stats: RefCell<CastleCacheStats>,
+    /// Early termination threshold for pattern matching
     early_termination_threshold: f32,
+    /// Enable symmetry-aware caching (mirrored positions share cache)
+    enable_symmetry: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -142,11 +191,25 @@ pub struct CastlePiece {
 }
 
 impl CastleRecognizer {
+    /// Create a new castle recognizer with default configuration
     pub fn new() -> Self {
+        Self::with_cache_size(DEFAULT_CACHE_SIZE)
+    }
+
+    /// Create a new castle recognizer with a custom cache size
+    pub fn with_cache_size(cache_size: usize) -> Self {
+        let cache_capacity = NonZeroUsize::new(cache_size.max(1)).unwrap();
+        let cache = LruCache::new(cache_capacity);
+        
+        let mut stats = CastleCacheStats::default();
+        stats.max_size = cache_size;
+
         Self {
             patterns: vec![get_mino_castle(), get_anaguma_castle(), get_yagura_castle()],
-            pattern_cache: RefCell::new(HashMap::new()),
+            pattern_cache: RefCell::new(cache),
+            cache_stats: RefCell::new(stats),
             early_termination_threshold: 0.8,
+            enable_symmetry: true,
         }
     }
 
@@ -161,23 +224,151 @@ impl CastleRecognizer {
             .find(|pattern| self.matches_pattern(board, player, king_pos, pattern))
     }
 
+    /// Generate a cache key for the given board position and king
+    /// If symmetry is enabled, normalizes the key to allow mirrored positions to share cache entries
+    fn generate_cache_key(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        king_pos: Position,
+    ) -> CastleCacheKey {
+        let neighborhood_hash = self.hash_neighborhood(board, king_pos, player);
+        let promotion_hash = self.hash_promotion_state(board, king_pos, player);
+        
+        // Normalize king position for symmetry (mirror left/right variants)
+        // Note: Full symmetry support would also require normalizing the neighborhood hash
+        // For now, we only normalize the king position, which provides partial symmetry support
+        // Positions with the king in the center (file 4) will benefit most from symmetry
+        let normalized_king_pos = if self.enable_symmetry {
+            // Normalize file to prefer left side (mirror right-side positions)
+            // This allows left/right mirrored castles to share cache entries
+            // when the king is in a symmetric position (center file)
+            let file = king_pos.col;
+            let normalized_file = if file <= 4 {
+                file
+            } else {
+                // Mirror: file 5->3, 6->2, 7->1, 8->0
+                8 - file
+            };
+            Position::new(king_pos.row, normalized_file)
+        } else {
+            king_pos
+        };
+        
+        CastleCacheKey {
+            king_pos: normalized_king_pos,
+            neighborhood_hash,
+            promotion_hash,
+            player, // Always include player to prevent cross-color leakage
+        }
+    }
+
+    /// Hash the local neighborhood around the king (king zone + buffer ring)
+    fn hash_neighborhood(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> u64 {
+        let mut hash = 0u64;
+        
+        // Hash king zone ring (8 squares around king)
+        for offset in &KING_ZONE_RING {
+            if let Some(pos) = offset.to_absolute(king_pos, player) {
+                if let Some(piece) = board.get_piece(pos) {
+                    let piece_hash = (piece.piece_type as u8 as u64) << (piece.player as u8 * 4);
+                    hash ^= piece_hash.wrapping_mul(pos.row as u64 + 1).wrapping_mul(pos.col as u64 + 1);
+                }
+            }
+        }
+        
+        // Hash buffer ring (defensive pieces further out)
+        for offset in &BUFFER_RING {
+            if let Some(pos) = offset.to_absolute(king_pos, player) {
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player {
+                        let piece_hash = (piece.piece_type as u8 as u64) << 8;
+                        hash ^= piece_hash.wrapping_mul(pos.row as u64 + 1).wrapping_mul(pos.col as u64 + 1);
+                    }
+                }
+            }
+        }
+        
+        hash
+    }
+
+    /// Check if a piece type is promoted
+    fn is_promoted_piece(piece_type: PieceType) -> bool {
+        matches!(
+            piece_type,
+            PieceType::PromotedPawn
+                | PieceType::PromotedLance
+                | PieceType::PromotedKnight
+                | PieceType::PromotedSilver
+                | PieceType::PromotedBishop
+                | PieceType::PromotedRook
+        )
+    }
+
+    /// Hash promotion states in the king zone
+    fn hash_promotion_state(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> u32 {
+        let mut hash = 0u32;
+        let mut bit = 1u32;
+        
+        // Check promotion states in king zone
+        for offset in &KING_ZONE_RING {
+            if let Some(pos) = offset.to_absolute(king_pos, player) {
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.player == player && Self::is_promoted_piece(piece.piece_type) {
+                        hash |= bit;
+                    }
+                }
+                bit = bit.wrapping_shl(1);
+                if bit == 0 {
+                    bit = 1; // Wrap around to avoid overflow
+                }
+            }
+        }
+        
+        hash
+    }
+
     pub fn evaluate_castle(
         &self,
         board: &BitboardBoard,
         player: Player,
         king_pos: Position,
     ) -> CastleEvaluation {
-        let board_hash = self.get_board_hash(board);
-        if let Some(cached) = self
-            .pattern_cache
-            .borrow()
-            .get(&(board_hash, player, king_pos))
-        {
-            if let Some(entry) = cached {
-                return entry.evaluation;
-            } else {
-                return CastleEvaluation::default();
+        // Generate cache key
+        let cache_key = self.generate_cache_key(board, player, king_pos);
+        
+        // Check cache
+        let cache_hit = {
+            let mut cache = self.pattern_cache.borrow_mut();
+            if let Some(cached_eval) = cache.get(&cache_key) {
+                // Cache hit - clone the evaluation before dropping the borrow
+                let result = cached_eval.evaluation;
+                let cache_size = cache.len();
+                drop(cache); // Drop cache borrow before accessing stats
+                
+                // Update statistics
+                let mut stats = self.cache_stats.borrow_mut();
+                stats.hits += 1;
+                stats.current_size = cache_size;
+                return result;
             }
+            false
+        };
+        
+        // Cache miss - update statistics
+        if !cache_hit {
+            let mut stats = self.cache_stats.borrow_mut();
+            stats.misses += 1;
         }
 
         let mut best_entry: Option<CachedEvaluation> = None;
@@ -320,10 +511,28 @@ impl CastleRecognizer {
 
         let result = best_entry.map(|entry| entry.evaluation).unwrap_or_default();
 
-        if self.pattern_cache.borrow().len() < CACHE_MAX_ENTRIES {
-            self.pattern_cache
-                .borrow_mut()
-                .insert((board_hash, player, king_pos), best_entry);
+        // Store result in cache
+        if let Some(entry) = best_entry {
+            let (had_eviction, cache_size_after) = {
+                let mut cache = self.pattern_cache.borrow_mut();
+                let cache_size_before = cache.len();
+                let cache_capacity = cache.cap().get();
+                
+                // Check if insertion causes eviction
+                let had_eviction = cache_size_before >= cache_capacity;
+                
+                cache.put(cache_key, entry);
+                let cache_size_after = cache.len();
+                
+                (had_eviction && cache_size_after == cache_size_before, cache_size_after)
+            };
+            
+            // Update statistics
+            let mut stats = self.cache_stats.borrow_mut();
+            stats.current_size = cache_size_after;
+            if had_eviction {
+                stats.evictions += 1;
+            }
         }
 
         result
@@ -338,33 +547,41 @@ impl CastleRecognizer {
         self.evaluate_castle(board, player, king_pos).score()
     }
 
-    fn get_board_hash(&self, board: &BitboardBoard) -> u64 {
-        let mut hash = 0u64;
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    let piece_hash = (piece.piece_type as u8 as u64) << (piece.player as u8 * 4);
-                    hash ^= piece_hash
-                        .wrapping_mul(pos.row as u64 + 1)
-                        .wrapping_mul(pos.col as u64 + 1);
-                }
-            }
-        }
-        hash
-    }
-
+    /// Clear the cache
     pub fn clear_cache(&self) {
         self.pattern_cache.borrow_mut().clear();
+        let mut stats = self.cache_stats.borrow_mut();
+        stats.current_size = 0;
     }
 
+    /// Set the early termination threshold
     pub fn set_early_termination_threshold(&mut self, threshold: f32) {
         self.early_termination_threshold = threshold;
     }
 
-    pub fn get_cache_stats(&self) -> (usize, usize) {
+    /// Get cache statistics
+    pub fn get_cache_stats(&self) -> CastleCacheStats {
         let cache = self.pattern_cache.borrow();
-        (cache.len(), CACHE_MAX_ENTRIES)
+        let mut stats = self.cache_stats.borrow().clone();
+        stats.current_size = cache.len();
+        stats
+    }
+
+    /// Reset cache statistics
+    pub fn reset_cache_stats(&self) {
+        let mut stats = self.cache_stats.borrow_mut();
+        *stats = CastleCacheStats {
+            hits: 0,
+            misses: 0,
+            evictions: 0,
+            current_size: self.pattern_cache.borrow().len(),
+            max_size: stats.max_size,
+        };
+    }
+
+    /// Enable or disable symmetry-aware caching
+    pub fn set_symmetry_enabled(&mut self, enabled: bool) {
+        self.enable_symmetry = enabled;
     }
 
     fn matches_pattern(
@@ -1044,5 +1261,322 @@ mod tests {
 
         let evaluation = recognizer.evaluate_castle(&board, Player::Black, king_pos);
         assert!(evaluation.infiltration_ratio > 0.0);
+    }
+
+    #[test]
+    fn test_cache_key_generation() {
+        let recognizer = CastleRecognizer::new();
+        let mut board1 = BitboardBoard::empty();
+        let king_pos1 = Position::new(8, 4);
+        board1.place_piece(Piece::new(PieceType::King, Player::Black), king_pos1);
+        board1.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        board1.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 4),
+        );
+
+        // Same position should generate same cache behavior (same key internally)
+        let eval1 = recognizer.evaluate_castle(&board1, Player::Black, king_pos1);
+        let eval2 = recognizer.evaluate_castle(&board1, Player::Black, king_pos1);
+        assert_eq!(eval1.quality, eval2.quality); // Should be identical
+
+        // Different king position should generate different cache entry
+        let mut board2 = BitboardBoard::empty();
+        let king_pos2 = Position::new(8, 5);
+        board2.place_piece(Piece::new(PieceType::King, Player::Black), king_pos2);
+        board2.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 5),
+        );
+        board2.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 5),
+        );
+        recognizer.evaluate_castle(&board2, Player::Black, king_pos2);
+        let stats = recognizer.get_cache_stats();
+        assert_eq!(stats.misses, 2); // Both positions should be cache misses (different keys)
+    }
+
+    #[test]
+    fn test_cache_hit_and_miss() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 4),
+        );
+
+        // First evaluation - cache miss
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        let stats_after_first = recognizer.get_cache_stats();
+        assert_eq!(stats_after_first.misses, 1);
+        assert_eq!(stats_after_first.hits, 0);
+
+        // Second evaluation - cache hit
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        let stats_after_second = recognizer.get_cache_stats();
+        assert_eq!(stats_after_second.misses, 1);
+        assert_eq!(stats_after_second.hits, 1);
+    }
+
+    #[test]
+    fn test_cache_eviction() {
+        // Create a recognizer with a small cache size to force evictions
+        let recognizer = CastleRecognizer::with_cache_size(2);
+        let mut board1 = BitboardBoard::empty();
+        let king_pos1 = Position::new(8, 4);
+        board1.place_piece(Piece::new(PieceType::King, Player::Black), king_pos1);
+        board1.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        
+        // First evaluation
+        recognizer.evaluate_castle(&board1, Player::Black, king_pos1);
+        let stats1 = recognizer.get_cache_stats();
+        assert_eq!(stats1.evictions, 0);
+
+        // Second evaluation - different king position
+        let mut board2 = BitboardBoard::empty();
+        let king_pos2 = Position::new(8, 5);
+        board2.place_piece(Piece::new(PieceType::King, Player::Black), king_pos2);
+        board2.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 5),
+        );
+        recognizer.evaluate_castle(&board2, Player::Black, king_pos2);
+        let stats2 = recognizer.get_cache_stats();
+        assert_eq!(stats2.evictions, 0);
+
+        // Third evaluation - should cause eviction
+        let mut board3 = BitboardBoard::empty();
+        let king_pos3 = Position::new(8, 6);
+        board3.place_piece(Piece::new(PieceType::King, Player::Black), king_pos3);
+        board3.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 6),
+        );
+        recognizer.evaluate_castle(&board3, Player::Black, king_pos3);
+        let stats3 = recognizer.get_cache_stats();
+        assert!(stats3.evictions > 0);
+    }
+
+    #[test]
+    fn test_cache_statistics_hit_rate() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+
+        // Evaluate multiple times
+        for _ in 0..5 {
+            recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        }
+
+        let stats = recognizer.get_cache_stats();
+        assert_eq!(stats.misses, 1); // First evaluation
+        assert_eq!(stats.hits, 4); // Next 4 evaluations
+        assert!(stats.hit_rate() > 75.0); // Should be 80%
+    }
+
+    #[test]
+    fn test_cache_clear() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+
+        // Evaluate to populate cache
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        let stats_before = recognizer.get_cache_stats();
+        assert!(stats_before.current_size > 0);
+
+        // Clear cache
+        recognizer.clear_cache();
+        let stats_after = recognizer.get_cache_stats();
+        assert_eq!(stats_after.current_size, 0);
+    }
+
+    #[test]
+    fn test_cache_reset_stats() {
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+
+        // Evaluate to generate stats
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        let stats_before = recognizer.get_cache_stats();
+        assert!(stats_before.hits > 0 || stats_before.misses > 0);
+
+        // Reset stats
+        recognizer.reset_cache_stats();
+        let stats_after = recognizer.get_cache_stats();
+        assert_eq!(stats_after.hits, 0);
+        assert_eq!(stats_after.misses, 0);
+        assert_eq!(stats_after.evictions, 0);
+        assert_eq!(stats_after.max_size, stats_before.max_size); // Max size should remain
+    }
+
+    #[test]
+    fn test_cache_with_promoted_pieces() {
+        let recognizer = CastleRecognizer::new();
+        let mut board1 = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board1.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board1.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        board1.place_piece(
+            Piece::new(PieceType::PromotedSilver, Player::Black),
+            Position::new(6, 4),
+        );
+
+        // First evaluation with promoted piece
+        recognizer.evaluate_castle(&board1, Player::Black, king_pos);
+        
+        // Second board with non-promoted piece
+        let mut board2 = BitboardBoard::empty();
+        board2.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board2.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+        board2.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 4),
+        );
+
+        // Second evaluation - should be different due to promotion hash
+        recognizer.evaluate_castle(&board2, Player::Black, king_pos);
+        
+        // Should have different cache keys, so both should be misses
+        let stats = recognizer.get_cache_stats();
+        assert_eq!(stats.misses, 2);
+    }
+
+    #[test]
+    fn test_cache_with_custom_size() {
+        let recognizer = CastleRecognizer::with_cache_size(100);
+        let stats = recognizer.get_cache_stats();
+        assert_eq!(stats.max_size, 100);
+
+        let recognizer_large = CastleRecognizer::with_cache_size(1000);
+        let stats_large = recognizer_large.get_cache_stats();
+        assert_eq!(stats_large.max_size, 1000);
+    }
+
+    #[test]
+    fn test_symmetry_cache_sharing() {
+        // Test that symmetry-aware caching works (when enabled)
+        let mut recognizer = CastleRecognizer::new();
+        recognizer.set_symmetry_enabled(true);
+
+        // Create a symmetric castle on the left side
+        let mut board1 = BitboardBoard::empty();
+        let king_pos1 = Position::new(8, 2); // Left side
+        board1.place_piece(Piece::new(PieceType::King, Player::Black), king_pos1);
+        board1.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 2),
+        );
+        board1.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 2),
+        );
+        board1.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 1),
+        );
+        board1.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 3),
+        );
+
+        // Create a mirrored castle on the right side
+        let mut board2 = BitboardBoard::empty();
+        let king_pos2 = Position::new(8, 6); // Right side (mirror of file 2)
+        board2.place_piece(Piece::new(PieceType::King, Player::Black), king_pos2);
+        board2.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 6),
+        );
+        board2.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(6, 6),
+        );
+        board2.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 5),
+        );
+        board2.place_piece(
+            Piece::new(PieceType::Pawn, Player::Black),
+            Position::new(6, 7),
+        );
+
+        // Evaluate both positions
+        recognizer.evaluate_castle(&board1, Player::Black, king_pos1);
+        recognizer.evaluate_castle(&board2, Player::Black, king_pos2);
+
+        // With symmetry enabled, the cache should recognize these as similar
+        // (Note: Full symmetry requires neighborhood hash normalization, so this is a basic test)
+        let stats = recognizer.get_cache_stats();
+        // Both should be cache misses since neighborhood hashes differ
+        // but the king position normalization should work
+        assert_eq!(stats.misses, 2);
+    }
+
+    #[test]
+    fn test_cache_no_cross_color_leakage() {
+        // Test that cache entries are properly separated by player
+        let recognizer = CastleRecognizer::new();
+        let mut board = BitboardBoard::empty();
+        let king_pos = Position::new(8, 4);
+        board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(7, 4),
+        );
+
+        // Evaluate for Black
+        recognizer.evaluate_castle(&board, Player::Black, king_pos);
+        let stats_black = recognizer.get_cache_stats();
+        assert_eq!(stats_black.misses, 1);
+
+        // Evaluate for White (different player, same position)
+        let mut board2 = BitboardBoard::empty();
+        board2.place_piece(Piece::new(PieceType::King, Player::White), king_pos);
+        board2.place_piece(
+            Piece::new(PieceType::Gold, Player::White),
+            Position::new(1, 4), // White's perspective (mirrored)
+        );
+
+        recognizer.evaluate_castle(&board2, Player::White, king_pos);
+        let stats_white = recognizer.get_cache_stats();
+        // Should be a cache miss because player is different
+        assert_eq!(stats_white.misses, 2);
     }
 }

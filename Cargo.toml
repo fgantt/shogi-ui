@@ -119,6 +119,11 @@ harness = false
 required-features = ["legacy-tests"]
 
 [[bench]]
+name = "castle_recognition_cache_benchmarks"
+harness = false
+required-features = ["legacy-tests"]
+
+[[bench]]
 name = "config_performance_benchmarks"
 harness = false
 required-features = ["legacy-tests"]

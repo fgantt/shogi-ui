@@ -1,6 +1,6 @@
 use crate::bitboards::*;
 use crate::evaluation::attacks::{AttackAnalyzer, ThreatEvaluator};
-use crate::evaluation::castles::CastleRecognizer;
+use crate::evaluation::castles::{CastleCacheStats, CastleRecognizer};
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -52,11 +52,35 @@ pub struct KingSafetyStatsSnapshot {
     pub exposure_penalties: u64,
     pub partial_castle_penalties: u64,
     pub bare_king_penalties: u64,
+    /// Castle recognition cache statistics
+    pub castle_cache_stats: Option<CastleCacheStatsTelemetry>,
+}
+
+/// Castle cache statistics for telemetry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CastleCacheStatsTelemetry {
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub current_size: usize,
+    pub max_size: usize,
+    pub hit_rate: f64,
 }
 
 impl KingSafetyStats {
     /// Create a snapshot of current statistics
-    pub fn snapshot(&self) -> KingSafetyStatsSnapshot {
+    pub fn snapshot(&self, castle_cache_stats: Option<CastleCacheStats>) -> KingSafetyStatsSnapshot {
+        let castle_cache_telemetry = castle_cache_stats.map(|stats| {
+            CastleCacheStatsTelemetry {
+                hits: stats.hits,
+                misses: stats.misses,
+                evictions: stats.evictions,
+                current_size: stats.current_size,
+                max_size: stats.max_size,
+                hit_rate: stats.hit_rate(),
+            }
+        });
+
         KingSafetyStatsSnapshot {
             evaluations: self.evaluations,
             castle_matches: self.castle_matches,
@@ -71,10 +95,12 @@ impl KingSafetyStats {
             exposure_penalties: self.exposure_penalties,
             partial_castle_penalties: self.partial_castle_penalties,
             bare_king_penalties: self.bare_king_penalties,
+            castle_cache_stats: castle_cache_telemetry,
         }
     }
 
     /// Merge statistics from another snapshot
+    /// Note: Castle cache stats are not merged as they're point-in-time snapshots
     pub fn merge_from(&mut self, snapshot: &KingSafetyStatsSnapshot) {
         self.evaluations += snapshot.evaluations;
         self.castle_matches += snapshot.castle_matches;
@@ -89,6 +115,7 @@ impl KingSafetyStats {
         self.exposure_penalties += snapshot.exposure_penalties;
         self.partial_castle_penalties += snapshot.partial_castle_penalties;
         self.bare_king_penalties += snapshot.bare_king_penalties;
+        // Castle cache stats are not merged - they represent point-in-time state
     }
 
     /// Reset all statistics to zero
@@ -150,7 +177,8 @@ impl KingSafetyEvaluator {
 
     /// Get statistics snapshot
     pub fn stats(&self) -> KingSafetyStatsSnapshot {
-        self.stats.borrow().snapshot()
+        let castle_cache_stats = Some(self.castle_recognizer.get_cache_stats());
+        self.stats.borrow().snapshot(castle_cache_stats)
     }
 
     /// Reset statistics
@@ -201,24 +229,18 @@ impl KingSafetyEvaluator {
             stats.evaluations += 1;
         }
 
-        // Check cache first
+        // Check king safety evaluation cache first (separate from castle recognition cache)
         let board_hash = self.get_board_hash(board);
         if let Some(cached_score) = self.evaluation_cache.borrow().get(&(board_hash, player)) {
-            let mut stats = self.stats.borrow_mut();
-            stats.cache_hits += 1;
+            // Note: This is the king safety evaluation cache, not the castle recognition cache
+            // Castle recognition cache stats are tracked separately in castle_recognizer
             if self.debug_logging {
                 crate::debug_utils::trace_log(
                     "KING_SAFETY",
-                    &format!("Cache hit for player {:?} at depth {}", player, depth),
+                    &format!("Evaluation cache hit for player {:?} at depth {}", player, depth),
                 );
             }
             return *cached_score;
-        }
-
-        // Cache miss
-        {
-            let mut stats = self.stats.borrow_mut();
-            stats.cache_misses += 1;
         }
 
         // Determine if we should use fast mode - very aggressive for performance
@@ -247,17 +269,22 @@ impl KingSafetyEvaluator {
                     stats.total_missing_primary += castle_eval.missing_primary as u64;
                     stats.total_missing_shield += castle_eval.missing_shield as u64;
 
+                    // Note: Castle cache stats are tracked separately and exposed through stats() snapshot
+                    // Don't overwrite king safety cache stats here - they track a different cache
+
                     if self.debug_logging {
+                        let cache_stats = self.castle_recognizer.get_cache_stats();
                         crate::debug_utils::trace_log(
                             "KING_SAFETY",
                             &format!(
-                                "Castle eval: pattern={:?}, variant={:?}, quality={:.2}, missing_required={}, missing_primary={}, missing_shield={}",
+                                "Castle eval: pattern={:?}, variant={:?}, quality={:.2}, missing_required={}, missing_primary={}, missing_shield={}, cache_hit_rate={:.1}%",
                                 castle_eval.matched_pattern,
                                 castle_eval.variant_id,
                                 castle_eval.quality,
                                 castle_eval.missing_required,
                                 castle_eval.missing_primary,
-                                castle_eval.missing_shield
+                                castle_eval.missing_shield,
+                                cache_stats.hit_rate()
                             ),
                         );
                     }
