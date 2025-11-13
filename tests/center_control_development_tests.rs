@@ -17,10 +17,10 @@ fn center_control_prefers_attack_map_over_empty_center() {
     );
 
     let mut attack_eval = PositionFeatureEvaluator::new();
-    let attack_score = attack_eval.evaluate_center_control(&attack_board, Player::Black);
+    let attack_score = attack_eval.evaluate_center_control(&attack_board, Player::Black, false);
 
     let mut passive_eval = PositionFeatureEvaluator::new();
-    let passive_score = passive_eval.evaluate_center_control(&passive_board, Player::Black);
+    let passive_score = passive_eval.evaluate_center_control(&passive_board, Player::Black, false);
 
     assert!(
         attack_score.mg > passive_score.mg,
@@ -37,7 +37,7 @@ fn center_control_rewards_edge_anchor_pressure() {
     );
 
     let mut evaluator = PositionFeatureEvaluator::new();
-    let score = evaluator.evaluate_center_control(&board, Player::Black);
+    let score = evaluator.evaluate_center_control(&board, Player::Black, false);
 
     assert!(
         score.mg > 0,

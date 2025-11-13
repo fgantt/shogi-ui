@@ -811,6 +811,9 @@ impl PhaseBoundaryConfig {
 pub enum ComponentDependencyWarning {
     /// Center control overlap: both position_features and positional_patterns evaluate center control
     CenterControlOverlap,
+    /// Development overlap: both position_features and opening_principles evaluate development
+    /// Note: Automatically handled during evaluation (opening_principles takes precedence in opening)
+    DevelopmentOverlap,
     /// Endgame patterns enabled but phase is not endgame (informational)
     EndgamePatternsNotInEndgame,
     /// Enabled component produced zero score (may indicate configuration issue)

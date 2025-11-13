@@ -1597,6 +1597,11 @@ impl PositionalPatternAnalyzer {
     pub fn reset_stats(&mut self) {
         self.stats = PositionalStats::default();
     }
+
+    /// Get mutable reference to configuration
+    pub fn config_mut(&mut self) -> &mut PositionalConfig {
+        &mut self.config
+    }
 }
 
 impl Default for PositionalPatternAnalyzer {

@@ -2218,7 +2218,15 @@ impl PositionFeatureEvaluator {
     /// Evaluate piece development with phase-aware weights
     ///
     /// Development is critical in opening, less so in endgame.
-    pub fn evaluate_development(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    /// Evaluate piece development
+    /// 
+    /// # Parameters
+    /// - `skip_development`: If true, skips development evaluation (optional, for coordination with
+    ///   opening_principles to avoid double-counting when opening_principles is enabled in opening phase)
+    pub fn evaluate_development(&mut self, board: &BitboardBoard, player: Player, skip_development: bool) -> TaperedScore {
+        if skip_development {
+            return TaperedScore::default();
+        }
         if !self.config.enable_development {
             return TaperedScore::default();
         }
@@ -2454,7 +2462,7 @@ mod tests {
         let mut evaluator = PositionFeatureEvaluator::new();
         let board = BitboardBoard::new();
 
-        let score = evaluator.evaluate_development(&board, Player::Black);
+        let score = evaluator.evaluate_development(&board, Player::Black, false);
 
         // Starting position has no development
         assert_eq!(score.mg, 0);
@@ -2601,7 +2609,7 @@ mod tests {
         // Note: This might be close in starting position
 
         // Development should be more valuable in middlegame
-        let development = evaluator.evaluate_development(&board, Player::Black);
+        let development = evaluator.evaluate_development(&board, Player::Black, false);
         // Note: Starting position has no development bonus
     }
 

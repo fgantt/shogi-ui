@@ -22,8 +22,15 @@
 //!   handle passed pawns with endgame-specific bonuses).
 //! - **Center Control**: Both `position_features` and `positional_patterns` evaluate center control,
 //!   but with different methods. Position features use control maps, while positional patterns use
-//!   more sophisticated evaluation including drop pressure and forward bonuses. A warning is logged
-//!   when both are enabled.
+//!   more sophisticated evaluation including drop pressure and forward bonuses. When both are enabled,
+//!   the `center_control_precedence` configuration option determines which to use:
+//!   - `PositionalPatterns` (default): Use positional_patterns evaluation, skip position_features
+//!   - `PositionFeatures`: Use position_features evaluation, skip positional_patterns
+//!   - `Both`: Evaluate both (not recommended due to double-counting risk)
+//! - **Development**: Both `position_features` and `opening_principles` evaluate development,
+//!   but opening_principles provides more sophisticated opening-specific evaluation. When `opening_principles`
+//!   is enabled and phase >= opening_threshold, development evaluation is automatically skipped in
+//!   `position_features` to avoid double-counting.
 //! - **King Safety**: `KingSafetyEvaluator` in position_features evaluates general king safety
 //!   (shields, attacks, etc.), while `CastleRecognizer` evaluates specific castle formation patterns.
 //!   These are complementary and should both be enabled for comprehensive king safety evaluation.
@@ -325,19 +332,42 @@ impl IntegratedEvaluator {
         let endgame_threshold = self.config.phase_boundaries.endgame_threshold;
         let skip_passed_pawn_evaluation = self.config.components.endgame_patterns && phase < endgame_threshold;
 
-        // Coordination warning: Center control is evaluated in both position_features and
-        // positional_patterns. This is intentional overlap but should be monitored.
-        // Position features use control maps, while positional patterns use more sophisticated
-        // center evaluation including drop pressure and forward bonuses.
-        if self.config.components.position_features
+        // Development overlap coordination (Task 20.0 - Task 1.0)
+        // When opening_principles is enabled and we're in opening phase, skip development
+        // evaluation in position_features to avoid double-counting.
+        let opening_threshold = self.config.phase_boundaries.opening_threshold;
+        let skip_development_in_features = self.config.components.opening_principles && phase >= opening_threshold;
+
+        // Center control conflict resolution (Task 20.0 - Task 1.0)
+        // When both position_features.center_control and positional_patterns are enabled,
+        // use center_control_precedence to determine which to use.
+        let skip_center_control_in_features = if self.config.components.position_features
             && self.config.components.positional_patterns
         {
-            debug_log(&format!(
-                "WARNING: Both position_features.center_control and positional_patterns are enabled. \
-                Center control will be evaluated twice (with different methods). \
-                Consider disabling one to avoid potential double-counting."
-            ));
-        }
+            match self.config.center_control_precedence {
+                CenterControlPrecedence::PositionalPatterns => {
+                    // Skip position_features center control, use positional_patterns
+                    true
+                }
+                CenterControlPrecedence::PositionFeatures => {
+                    // Use position_features center control, skip positional_patterns
+                    // (Note: positional_patterns center control will be skipped later)
+                    false
+                }
+                CenterControlPrecedence::Both => {
+                    // Evaluate both (not recommended, but allowed)
+                    debug_log(&format!(
+                        "WARNING: Both position_features.center_control and positional_patterns are enabled with precedence=Both. \
+                        Center control will be evaluated twice (with different methods). \
+                        This may cause double-counting. Consider using PositionalPatterns or PositionFeatures precedence."
+                    ));
+                    false
+                }
+            }
+        } else {
+            // Only one component enabled, no conflict
+            false
+        };
 
         if self.config.components.position_features {
             let mut position_features = self.position_features.borrow_mut();
@@ -400,11 +430,10 @@ impl IntegratedEvaluator {
             total += mobility_weighted;
             pf_total += mobility_weighted;
             
-            // Center control
-            // Note: skip_center_control is set to false for now (future use when positional patterns
-            // fully replace position_features center control)
+            // Center control (Task 20.0 - Task 1.0)
+            // Skip center control in position_features if positional_patterns takes precedence
             let center_score = position_features
-                .evaluate_center_control(board, player, false);
+                .evaluate_center_control(board, player, skip_center_control_in_features);
             let contribution = (center_score.interpolate(phase) as f32) * weights.center_control_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -418,8 +447,9 @@ impl IntegratedEvaluator {
             total += center_weighted;
             pf_total += center_weighted;
             
-            // Development
-            let dev_score = position_features.evaluate_development(board, player);
+            // Development (Task 20.0 - Task 1.0)
+            // Skip development in position_features if opening_principles is enabled in opening phase
+            let dev_score = position_features.evaluate_development(board, player, skip_development_in_features);
             let contribution = (dev_score.interpolate(phase) as f32) * weights.development_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -449,7 +479,6 @@ impl IntegratedEvaluator {
         // Task 6.0 - Task 6.7, 6.10, 6.12: Use configurable phase boundaries and gradual transitions
         // Task 19.0 - Task 1.0: Use actual move_count instead of hardcoded 0
         if self.config.components.opening_principles {
-            let opening_threshold = self.config.phase_boundaries.opening_threshold;
             if phase >= opening_threshold {
                 // Estimate move_count from phase if not provided
                 // Phase 256 = starting position (move 0), decreases as material is exchanged
@@ -550,10 +579,30 @@ impl IntegratedEvaluator {
         }
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
+        // Center control conflict resolution (Task 20.0 - Task 1.0)
+        // When PositionFeatures precedence is used, skip center control in positional_patterns
         if self.config.components.positional_patterns {
             let positional_score = {
                 let mut positional = self.positional_patterns.borrow_mut();
+                
+                // Temporarily disable center control if PositionFeatures takes precedence
+                let original_center_control = positional.config_mut().enable_center_control;
+                let skip_center_control_in_positional = if self.config.components.position_features
+                    && self.config.center_control_precedence == CenterControlPrecedence::PositionFeatures
+                {
+                    positional.config_mut().enable_center_control = false;
+                    true
+                } else {
+                    false
+                };
+                
                 let score = positional.evaluate_position(board, player, captured_pieces);
+                
+                // Restore original center control setting
+                if skip_center_control_in_positional {
+                    positional.config_mut().enable_center_control = original_center_control;
+                }
+                
                 if stats_enabled {
                     positional_snapshot = Some(positional.stats().snapshot());
                 }
@@ -1008,6 +1057,22 @@ impl Default for IntegratedEvaluator {
     }
 }
 
+/// Center control precedence when both position_features and positional_patterns evaluate center control
+/// 
+/// This enum determines which component takes precedence when both evaluate center control.
+/// - `PositionalPatterns`: Use positional_patterns evaluation (more sophisticated, includes drop pressure)
+/// - `PositionFeatures`: Use position_features evaluation (control maps)
+/// - `Both`: Evaluate both (may cause double-counting, not recommended)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CenterControlPrecedence {
+    /// Use positional_patterns evaluation (recommended default)
+    PositionalPatterns,
+    /// Use position_features evaluation
+    PositionFeatures,
+    /// Evaluate both components (not recommended due to double-counting risk)
+    Both,
+}
+
 /// Configuration for integrated evaluator
 #[derive(Debug, Clone)]
 pub struct IntegratedEvaluationConfig {
@@ -1052,6 +1117,10 @@ pub struct IntegratedEvaluationConfig {
     /// - Opening principles fade from phase 192 to 160
     /// - Endgame patterns fade from phase 80 to 64
     pub enable_gradual_phase_transitions: bool,
+    /// Center control precedence when both position_features and positional_patterns evaluate center control
+    /// 
+    /// Default: `PositionalPatterns` (more sophisticated evaluation)
+    pub center_control_precedence: CenterControlPrecedence,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -1074,6 +1143,7 @@ impl Default for IntegratedEvaluationConfig {
             enable_component_validation: false,
             phase_boundaries: crate::evaluation::config::PhaseBoundaryConfig::default(),
             enable_gradual_phase_transitions: false,
+            center_control_precedence: CenterControlPrecedence::PositionalPatterns,
         }
     }
 }
@@ -1109,9 +1179,17 @@ impl IntegratedEvaluationConfig {
         use crate::evaluation::config::ComponentDependencyWarning;
         let mut warnings = Vec::new();
 
-        // Check for center control overlap (Task 5.0 - Task 5.2)
+        // Check for center control overlap (Task 20.0 - Task 1.8)
+        // Note: Automatically handled via center_control_precedence, but still warn for visibility
         if self.components.position_features && self.components.positional_patterns {
             warnings.push(ComponentDependencyWarning::CenterControlOverlap);
+        }
+
+        // Check for development overlap (Task 20.0 - Task 1.8)
+        // Note: Automatically handled during evaluation (opening_principles takes precedence in opening),
+        // but still warn for visibility
+        if self.components.position_features && self.components.opening_principles {
+            warnings.push(ComponentDependencyWarning::DevelopmentOverlap);
         }
 
         // Note: Endgame patterns phase check (Task 5.3) requires runtime phase calculation,
