@@ -4688,7 +4688,21 @@ impl SearchEngine {
             ),
         );
 
-        let result = best_move.map(|m| (m, best_score));
+        // CRITICAL: Ensure we always return a move if legal moves exist
+        // This prevents the search from getting stuck when best_move is None
+        let result = if best_move.is_some() {
+            best_move.map(|m| (m, best_score))
+        } else if !sorted_moves.is_empty() {
+            // Final fallback: use first move if we somehow still don't have a best move
+            crate::debug_utils::trace_log(
+                "SEARCH_AT_DEPTH",
+                "FINAL FALLBACK: Using first move as best move",
+            );
+            Some((sorted_moves[0].clone(), best_score))
+        } else {
+            None // Only return None if there are truly no legal moves
+        };
+        
         if !self.validate_search_result(result.clone(), depth, alpha, beta) {
             crate::debug_utils::trace_log(
                 "SEARCH_AT_DEPTH",
@@ -5805,6 +5819,51 @@ impl SearchEngine {
         depth: u8,
         move_hint: Option<&Move>,
     ) -> i32 {
+        // CRITICAL: Prevent infinite recursion with recursion depth limit
+        // Use a thread-local counter to track recursion depth
+        thread_local! {
+            static QUIESCENCE_RECURSION_DEPTH: std::cell::Cell<u32> = std::cell::Cell::new(0);
+        }
+        const MAX_QUIESCENCE_RECURSION: u32 = 100; // Max recursion depth to prevent infinite loops
+        
+        let recursion_depth = QUIESCENCE_RECURSION_DEPTH.with(|cell| {
+            let current = cell.get();
+            if current > MAX_QUIESCENCE_RECURSION {
+                return (current, true); // Too deep, return early
+            }
+            cell.set(current + 1);
+            (current, false)
+        });
+        
+        // If recursion is too deep, return static evaluation immediately
+        if recursion_depth.1 {
+            let static_eval = self.evaluator.evaluate_with_context(
+                board,
+                player,
+                captured_pieces,
+                depth,
+                false,
+                false,
+                false,
+                true,
+            );
+            return static_eval;
+        }
+        
+        // Decrement recursion depth when we return (using a guard)
+        struct RecursionGuard;
+        impl Drop for RecursionGuard {
+            fn drop(&mut self) {
+                QUIESCENCE_RECURSION_DEPTH.with(|cell| {
+                    let depth = cell.get();
+                    if depth > 0 {
+                        cell.set(depth - 1);
+                    }
+                });
+            }
+        }
+        let _guard = RecursionGuard;
+        
         // Track best score from the beginning for timeout fallback
         let mut best_score_tracked: Option<i32> = None;
 
@@ -6174,13 +6233,16 @@ impl SearchEngine {
             // - Extending these moves improves tactical accuracy
             // - Depth maintenance allows extended moves to explore critical variations
             // - The max_depth limit prevents infinite recursion
-            let search_depth = if self.should_extend(&move_, depth) && depth > 1 {
-                // Extensions maintain depth to allow deeper tactical sequences
+            //
+            // CRITICAL: Always decrement depth to prevent infinite recursion
+            // Even with extensions, we must eventually decrease depth to ensure termination
+            let search_depth = if self.should_extend(&move_, depth) && depth > 2 {
+                // Extensions can maintain depth, but only if depth > 2 to ensure we eventually terminate
                 // crate::debug_utils::trace_log("QUIESCENCE", &format!("Extending search for move {}", move_.to_usi_string()));
                 self.quiescence_stats.extensions += 1;
-                depth // Extensions maintain depth to allow deeper tactical sequences
+                depth.saturating_sub(1) // Always decrement by at least 1 to prevent infinite recursion
             } else {
-                depth - 1 // Normal moves decrement depth
+                depth.saturating_sub(1) // Normal moves decrement depth
             };
             // Update seldepth for quiescence extensions - quiescence extends beyond normal depth
             // When in quiescence, we've already reached current_depth plies from root
@@ -12897,6 +12959,20 @@ impl IterativeDeepening {
                 );
                 break;
             }
+            
+            // CRITICAL: If we've been searching for too long without progress, force return
+            // This prevents the search from getting stuck indefinitely
+            let elapsed_so_far = start_time.elapsed_ms();
+            if elapsed_so_far > search_time_limit.saturating_mul(2) {
+                crate::debug_utils::trace_log(
+                    "ITERATIVE_DEEPENING",
+                    &format!(
+                        "Search exceeded 2x time limit ({}ms), forcing return with best move so far",
+                        elapsed_so_far
+                    ),
+                );
+                break;
+            }
             let elapsed_ms = start_time.elapsed_ms();
 
             // Calculate time budget for this depth (Task 4.5, 4.7)
@@ -12914,8 +12990,38 @@ impl IterativeDeepening {
             let player_clone = player;
 
             // Store best move/score/PV for periodic updates (shared state)
-            let best_move_shared =
-                Arc::new(std::sync::Mutex::new((None::<Move>, 0i32, String::new())));
+            // Initialize with previous depth's best move if available, so info sender has something to show
+            // CRITICAL: Only initialize with valid data (non-zero score or PV) to prevent sending invalid info
+            let initial_best_move = best_move.clone();
+            let initial_best_score = best_score;
+            let initial_pv_string = if let Some(ref prev_move) = best_move {
+                // Try to get PV for previous move
+                let pv_for_info = search_engine.get_pv(board, captured_pieces, player, depth.saturating_sub(1).max(1));
+                if pv_for_info.is_empty() {
+                    // If no PV, use the move itself as PV, but only if score is non-zero
+                    if initial_best_score != 0 {
+                        prev_move.to_usi_string()
+                    } else {
+                        String::new() // Don't initialize with invalid data (score 0, no PV)
+                    }
+                } else {
+                    pv_for_info
+                        .iter()
+                        .map(|m| m.to_usi_string())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                }
+            } else {
+                String::new()
+            };
+            // CRITICAL: Only initialize shared state if we have valid data (non-zero score or PV)
+            // This prevents the info sender from sending invalid messages at the start
+            let best_move_shared = if initial_best_score != 0 || !initial_pv_string.is_empty() {
+                Arc::new(std::sync::Mutex::new((initial_best_move, initial_best_score, initial_pv_string)))
+            } else {
+                // Initialize with None/empty to prevent sending invalid info
+                Arc::new(std::sync::Mutex::new((None::<Move>, 0, String::new())))
+            };
             let best_move_shared_clone = best_move_shared.clone();
 
             // Spawn info sender thread that periodically sends updates
@@ -12947,21 +13053,56 @@ impl IterativeDeepening {
                         };
 
                         // Get current best move/score/PV from shared state
-                        let (_, current_score, current_pv) = best_move_shared_clone
+                        let (current_move, current_score, current_pv) = best_move_shared_clone
                             .lock()
                             .map(|guard| guard.clone())
                             .unwrap_or((None, 0, String::new()));
 
-                        // Send info message (skip during silent benches)
-                        if std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                        // CRITICAL: Never send info with score 0 and no PV - that indicates no valid search result
+                        // This is the most important check - skip immediately if we don't have valid data
+                        // Check multiple conditions to be absolutely sure we don't send invalid info
+                        let has_pv = !current_pv.is_empty();
+                        let has_meaningful_score = current_score != 0;
+                        let has_valid_move = current_move.is_some();
+                        
+                        // ABSOLUTE REQUIREMENT: We must have EITHER a non-zero score OR a PV to send info
+                        // If score is 0 AND PV is empty, we have no valid search data - DO NOT SEND
+                        if !has_meaningful_score && !has_pv {
+                            continue; // Skip this iteration - no valid search data yet
+                        }
+                        
+                        // Additional safety: If we have a move but no score and no PV, don't send
+                        if has_valid_move && !has_meaningful_score && !has_pv {
+                            continue; // Skip - invalid data
+                        }
+                        
+                        // Only send if we have (a non-zero score OR a PV) - this is the absolute minimum requirement
+                        let should_send = has_meaningful_score || has_pv;
+                        
+                        // Send info message only if we have valid search data (skip during silent benches)
+                        // CRITICAL: Only send if we have a real PV (not just a single move) OR a non-zero score
+                        if std::env::var("SHOGI_SILENT_BENCH").is_err() && should_send {
+                            // Only send if we have a proper PV (multiple moves) OR a non-zero score
+                            // Don't send if we only have a single move with score 0
+                            if current_pv.is_empty() && current_score == 0 {
+                                continue; // Skip - no valid data
+                            }
+                            
                             let info_string = if !current_pv.is_empty() {
                                 format!("info depth {} seldepth {} score cp {} time {} nodes {} nps {} pv {}",
                                     depth_clone, seldepth, current_score, elapsed, nodes, nps, current_pv)
-                            } else {
+                            } else if let Some(ref mv) = current_move {
+                                // Only use single move as PV if score is non-zero
+                                if current_score == 0 {
+                                    continue; // Skip - score is 0, don't send
+                                }
                                 format!(
-                                    "info depth {} seldepth {} score cp {} time {} nodes {} nps {}",
-                                    depth_clone, seldepth, current_score, elapsed, nodes, nps
+                                    "info depth {} seldepth {} score cp {} time {} nodes {} nps {} pv {}",
+                                    depth_clone, seldepth, current_score, elapsed, nodes, nps, mv.to_usi_string()
                                 )
+                            } else {
+                                // Skip if we don't have valid data
+                                continue;
                             };
                             println!("{}", info_string);
                             let _ = std::io::Write::flush(&mut std::io::stdout());
@@ -13000,13 +13141,13 @@ impl IterativeDeepening {
                 search_time_limit.saturating_sub(elapsed_ms)
             };
 
-            let remaining_time = time_budget.min(search_time_limit.saturating_sub(elapsed_ms));
+            let initial_remaining_time = time_budget.min(search_time_limit.saturating_sub(elapsed_ms));
 
             crate::debug_utils::trace_log(
                 "ITERATIVE_DEEPENING",
                 &format!(
                     "Searching at depth {} (elapsed: {}ms, remaining: {}ms, budget: {}ms)",
-                    depth, elapsed_ms, remaining_time, time_budget
+                    depth, elapsed_ms, initial_remaining_time, time_budget
                 ),
             );
             crate::debug_utils::start_timing(&format!("depth_{}", depth));
@@ -13058,6 +13199,18 @@ impl IterativeDeepening {
                 (calculated_alpha, calculated_beta)
             };
 
+            // Helper function to safely update shared state - only updates if we have valid data
+            let best_move_shared_for_update = best_move_shared.clone();
+            let update_shared_state = move |move_: Option<Move>, score: i32, pv: String| {
+                // CRITICAL: Never update shared state with score 0 and no PV
+                if score == 0 && pv.is_empty() {
+                    return; // Skip update - invalid data
+                }
+                if let Ok(mut guard) = best_move_shared_for_update.lock() {
+                    *guard = (move_, score, pv);
+                }
+            };
+            
             // Perform search with aspiration window
             let mut search_result: Option<(Move, i32)> = None;
             let _ = search_result; // Suppress unused assignment warning
@@ -13083,7 +13236,70 @@ impl IterativeDeepening {
                 ),
             );
 
+            // Track depth iteration start time to detect if we're stuck
+            let depth_iteration_start = std::time::Instant::now();
+            let max_depth_iteration_time_ms = 30000u32; // Max 30 seconds per depth to prevent getting stuck
+            
             loop {
+                // Check time limit before each retry to prevent infinite loops
+                let elapsed_ms = start_time.elapsed_ms();
+                if search_engine.should_stop_force(&start_time, search_time_limit) {
+                    crate::debug_utils::trace_log(
+                        "ASPIRATION_WINDOW",
+                        "Time limit reached in aspiration window loop, breaking",
+                    );
+                    // Update shared state with previous best move before breaking
+                    if let Some(prev_move) = &best_move {
+                        let pv_string = prev_move.to_usi_string();
+                        update_shared_state(Some(prev_move.clone()), best_score, pv_string);
+                    }
+                    break;
+                }
+                
+                // CRITICAL: Detect if this depth iteration is taking too long (stuck)
+                let depth_iteration_elapsed = depth_iteration_start.elapsed().as_millis() as u32;
+                if depth_iteration_elapsed > max_depth_iteration_time_ms {
+                    crate::debug_utils::trace_log(
+                        "ASPIRATION_WINDOW",
+                        &format!(
+                            "Depth {} iteration taking too long ({}ms), forcing break with best move so far",
+                            depth, depth_iteration_elapsed
+                        ),
+                    );
+                    // Update shared state with previous best move before breaking
+                    if let Some(prev_move) = &best_move {
+                        let pv_string = prev_move.to_usi_string();
+                        update_shared_state(Some(prev_move.clone()), best_score, pv_string);
+                    }
+                    break;
+                }
+                
+                // Recalculate remaining time for this iteration
+                let remaining_time = search_time_limit.saturating_sub(elapsed_ms);
+                if remaining_time == 0 {
+                    crate::debug_utils::trace_log(
+                        "ASPIRATION_WINDOW",
+                        "No time remaining, breaking",
+                    );
+                    // Update shared state with previous best move before breaking
+                    if let Some(prev_move) = &best_move {
+                        let pv_string = prev_move.to_usi_string();
+                        update_shared_state(Some(prev_move.clone()), best_score, pv_string);
+                    }
+                    break;
+                }
+                
+                // Update shared state periodically with previous best move during retries
+                // This ensures the info sender has something to show even during retries
+                if researches > 0 && researches % 2 == 0 {
+                    if let Some(prev_move) = &best_move {
+                        let pv_string = prev_move.to_usi_string();
+                        if let Ok(mut guard) = best_move_shared.lock() {
+                            *guard = (Some(prev_move.clone()), best_score, pv_string);
+                        }
+                    }
+                }
+
                 if researches >= search_engine.aspiration_config.max_researches {
                     // Fall back to full-width search
                     crate::debug_utils::trace_log(
@@ -13164,6 +13380,24 @@ impl IterativeDeepening {
 
                     if score <= current_alpha {
                         // Fail-low: widen window downward
+                        // Update best move even on fail-low so info sender has current data
+                        let move_clone = move_.clone();
+                        best_move = Some(move_clone.clone());
+                        best_score = score;
+                        
+                        // Update shared state with current best move
+                        let pv_for_info = search_engine.get_pv(board, captured_pieces, player, depth_clone);
+                        let pv_string = if pv_for_info.is_empty() {
+                            move_clone.to_usi_string()
+                        } else {
+                            pv_for_info
+                                .iter()
+                                .map(|m| m.to_usi_string())
+                                .collect::<Vec<String>>()
+                                .join(" ")
+                        };
+                        update_shared_state(Some(move_clone), score, pv_string);
+                        
                         crate::debug_utils::log_decision(
                             "ASPIRATION_WINDOW",
                             "Fail-low",
@@ -13185,6 +13419,24 @@ impl IterativeDeepening {
 
                     if score >= current_beta {
                         // Fail-high: widen window upward
+                        // Update best move even on fail-high so info sender has current data
+                        let move_clone = move_.clone();
+                        best_move = Some(move_clone.clone());
+                        best_score = score;
+                        
+                        // Update shared state with current best move
+                        let pv_for_info = search_engine.get_pv(board, captured_pieces, player, depth_clone);
+                        let pv_string = if pv_for_info.is_empty() {
+                            move_clone.to_usi_string()
+                        } else {
+                            pv_for_info
+                                .iter()
+                                .map(|m| m.to_usi_string())
+                                .collect::<Vec<String>>()
+                                .join(" ")
+                        };
+                        update_shared_state(Some(move_clone), score, pv_string);
+                        
                         crate::debug_utils::log_decision(
                             "ASPIRATION_WINDOW",
                             "Fail-high",
@@ -13231,17 +13483,52 @@ impl IterativeDeepening {
                             .collect::<Vec<String>>()
                             .join(" ")
                     };
-                    if let Ok(mut guard) = best_move_shared.lock() {
-                        *guard = (Some(move_clone), score, pv_string);
-                    }
+                    update_shared_state(Some(move_clone), score, pv_string);
 
                     break;
                 } else {
-                    // Search failed - widen window and retry instead of giving up
+                    // Search failed - check if we should give up or retry
                     crate::debug_utils::end_timing(
                         &format!("aspiration_search_{}_{}", depth, researches),
                         "ASPIRATION_WINDOW",
                     );
+                    
+                    // Check time limit - if we're out of time, use best move from previous depth if available
+                    if search_engine.should_stop_force(&start_time, search_time_limit) {
+                        crate::debug_utils::trace_log(
+                            "ASPIRATION_WINDOW",
+                            "Time limit reached after search failure, using previous best move",
+                        );
+                        // Update shared state with previous best move if available
+                        if let Some(prev_move) = &best_move {
+                            let pv_string = prev_move.to_usi_string();
+                            if let Ok(mut guard) = best_move_shared.lock() {
+                                *guard = (Some(prev_move.clone()), best_score, pv_string);
+                            }
+                        }
+                        break;
+                    }
+                    
+                    // If we've tried multiple times and keep getting None, give up and use previous best move
+                    // This prevents infinite loops when search_at_depth keeps failing
+                    if researches >= search_engine.aspiration_config.max_researches + 2 {
+                        crate::debug_utils::trace_log(
+                            "ASPIRATION_WINDOW",
+                            &format!(
+                                "Search failed {} times, giving up and using previous best move",
+                                researches
+                            ),
+                        );
+                        // Update shared state with previous best move if available
+                        if let Some(prev_move) = &best_move {
+                            let pv_string = prev_move.to_usi_string();
+                            if let Ok(mut guard) = best_move_shared.lock() {
+                                *guard = (Some(prev_move.clone()), best_score, pv_string);
+                            }
+                        }
+                        break;
+                    }
+                    
                     crate::debug_utils::trace_log(
                         "ASPIRATION_WINDOW",
                         &format!(
@@ -13347,6 +13634,11 @@ impl IterativeDeepening {
 
             crate::debug_utils::end_timing(&format!("depth_{}", depth), "ITERATIVE_DEEPENING");
 
+            // If search_result is None but we have a best_move from a previous depth, use it
+            if search_result.is_none() && best_move.is_some() {
+                search_result = Some((best_move.clone().unwrap(), best_score));
+            }
+
             if let Some((mv_final, score)) = search_result {
                 // Ensure TT is flushed before building PV so all entries are visible
                 search_engine.flush_tt_buffer();
@@ -13387,16 +13679,26 @@ impl IterativeDeepening {
                     &pv_string,
                 );
 
-                let info_string = format!(
-                    "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
-                    depth, seldepth, score, time_searched, nodes_for_info, nps, pv_string
-                );
+                // CRITICAL: Only send info if we have a valid PV or non-zero score
+                // Never send info with score 0 and no PV
+                if score == 0 && pv_string.is_empty() {
+                    // Skip sending invalid info message
+                    crate::debug_utils::trace_log(
+                        "ITERATIVE_DEEPENING",
+                        "Skipping info message: score is 0 and PV is empty",
+                    );
+                } else {
+                    let info_string = format!(
+                        "info depth {} seldepth {} multipv 1 score cp {} time {} nodes {} nps {} pv {}",
+                        depth, seldepth, score, time_searched, nodes_for_info, nps, pv_string
+                    );
 
-                // Print the info message to stdout for USI protocol (skip during silent benches)
-                if std::env::var("SHOGI_SILENT_BENCH").is_err() {
-                    println!("{}", info_string);
-                    // Explicitly flush stdout to ensure info messages are sent immediately
-                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                    // Print the info message to stdout for USI protocol (skip during silent benches)
+                    if std::env::var("SHOGI_SILENT_BENCH").is_err() {
+                        println!("{}", info_string);
+                        // Explicitly flush stdout to ensure info messages are sent immediately
+                        let _ = std::io::Write::flush(&mut std::io::stdout());
+                    }
                 }
 
                 // Only break early for extremely winning positions (king capture level)
@@ -13486,7 +13788,23 @@ impl IterativeDeepening {
             ),
         );
 
-        best_move.map(|m| (m, best_score))
+        // CRITICAL: Always return a move if we have one, even if search didn't complete all depths
+        // This ensures we never return None when legal moves exist
+        if best_move.is_some() {
+            best_move.map(|m| (m, best_score))
+        } else if !legal_moves.is_empty() {
+            // Final fallback: use first legal move if we somehow don't have a best move
+            crate::debug_utils::trace_log(
+                "ITERATIVE_DEEPENING",
+                &format!(
+                    "FINAL FALLBACK: No best move found, using first legal move {}",
+                    legal_moves[0].to_usi_string()
+                ),
+            );
+            Some((legal_moves[0].clone(), 0))
+        } else {
+            None // Only return None if there are truly no legal moves
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMultipleEngineEvents } from '../hooks/useTauriEvents';
 import { parseEngineInfo } from '../utils/tauriEngine';
 import type { EngineConfig } from '../types/engine';
@@ -77,36 +77,22 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
   };
 
   // Helper to get player name from engine ID
-  const getPlayerFromEngineId = (engineId: string): string => {
-    console.log('[TauriUsiMonitor] getPlayerFromEngineId called:', { 
-      engineId, 
-      player1EngineId, 
-      player2EngineId,
-      player1Type,
-      player2Type,
-      engineIds 
-    });
-    
+  // Memoized to avoid recalculation on every render
+  const getPlayerFromEngineId = useCallback((engineId: string): string => {
     // Check if this engine is player 1's engine (Sente)
     if (player1EngineId === engineId) {
-      console.log('[TauriUsiMonitor] Engine matches player1EngineId, returning Sente');
       return 'Sente';
     }
     // Check if this engine is player 2's engine (Gote)
     if (player2EngineId === engineId) {
-      console.log('[TauriUsiMonitor] Engine matches player2EngineId, returning Gote');
       return 'Gote';
     }
     
-    // If the engine IDs are not set correctly, we need to fix that
-    console.log('[TauriUsiMonitor] Engine ID not found in player engine IDs - this should not happen');
-    
     // Fallback: infer from the order in engineIds (for backwards compatibility)
     const index = engineIds.indexOf(engineId);
-    console.log('[TauriUsiMonitor] Using fallback logic, index:', index);
     if (index === -1) return 'Unknown';
     return index === 0 ? 'Sente' : 'Gote';
-  };
+  }, [player1EngineId, player2EngineId, engineIds]);
 
   // Listen to sent command events
   useEffect(() => {
@@ -142,79 +128,84 @@ export const TauriUsiMonitor: React.FC<TauriUsiMonitorProps> = ({
     };
   }, [engineIds]);
 
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleUsiMessage = useCallback((engineId: string, message: string) => {
+    const newMessage: UsiMessage = {
+      id: `received-${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      direction: 'received',
+      message,
+      engineId,
+    };
+    setCommunicationHistory(prev => [...prev, newMessage]);
+
+    // Parse info messages for search tab
+    if (message.startsWith('info ')) {
+      const info = parseEngineInfo(message);
+      
+      // Update NPS if available
+      if (info.nps !== undefined) {
+        setNpsPerEngine(prev => {
+          const newMap = new Map(prev);
+          newMap.set(engineId, info.nps!);
+          return newMap;
+        });
+      } else if (info.nodes !== undefined && info.time !== undefined && info.time > 0) {
+        // Calculate NPS if not provided directly
+        const calculatedNps = Math.round((info.nodes * 1000) / info.time);
+        setNpsPerEngine(prev => {
+          const newMap = new Map(prev);
+          newMap.set(engineId, calculatedNps);
+          return newMap;
+        });
+      }
+      
+      // Only add to search info if it has the key fields
+      if (info.depth !== undefined && info.score !== undefined && info.nodes !== undefined) {
+        const searchInfo: SearchInfo = {
+          id: `search-${Date.now()}-${Math.random()}`,
+          timestamp: new Date(),
+          elapsed: info.time !== undefined ? info.time / 1000 : 0, // Convert ms to seconds
+          rank: info.multipv || 1,
+          depth: info.depth,
+          seldepth: info.seldepth,
+          nodes: info.nodes,
+          score: info.score,
+          pv: info.pv ? info.pv.join(' ') : '',
+        };
+
+        setSearchInfoByEngine(prev => {
+          const newMap = new Map(prev);
+          const engineInfo = newMap.get(engineId) || [];
+          // Add to the beginning (newest first)
+          newMap.set(engineId, [searchInfo, ...engineInfo]);
+          return newMap;
+        });
+      }
+    }
+
+    // Check for bestmove to clear search info for new move
+    if (message.startsWith('bestmove')) {
+      // Don't clear immediately - keep the last move's info visible
+      // We'll clear when a new "go" command is sent
+    }
+  }, []);
+
+  const handleUsiError = useCallback((engineId: string, error: string) => {
+    const errorMessage: UsiMessage = {
+      id: `error-${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      direction: 'received',
+      message: `ERROR: ${error}`,
+      engineId,
+    };
+    setCommunicationHistory(prev => [...prev, errorMessage]);
+  }, []);
+
   // Listen to all engine messages
   useMultipleEngineEvents(engineIds, {
-    onUsiMessage: (engineId, message) => {
-      const newMessage: UsiMessage = {
-        id: `received-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        direction: 'received',
-        message,
-        engineId,
-      };
-      setCommunicationHistory(prev => [...prev, newMessage]);
-
-      // Parse info messages for search tab
-      if (message.startsWith('info ')) {
-        const info = parseEngineInfo(message);
-        
-        // Update NPS if available
-        if (info.nps !== undefined) {
-          setNpsPerEngine(prev => {
-            const newMap = new Map(prev);
-            newMap.set(engineId, info.nps!);
-            return newMap;
-          });
-        } else if (info.nodes !== undefined && info.time !== undefined && info.time > 0) {
-          // Calculate NPS if not provided directly
-          const calculatedNps = Math.round((info.nodes * 1000) / info.time);
-          setNpsPerEngine(prev => {
-            const newMap = new Map(prev);
-            newMap.set(engineId, calculatedNps);
-            return newMap;
-          });
-        }
-        
-        // Only add to search info if it has the key fields
-        if (info.depth !== undefined && info.score !== undefined && info.nodes !== undefined) {
-          const searchInfo: SearchInfo = {
-            id: `search-${Date.now()}-${Math.random()}`,
-            timestamp: new Date(),
-            elapsed: info.time !== undefined ? info.time / 1000 : 0, // Convert ms to seconds
-            rank: info.multipv || 1,
-            depth: info.depth,
-            seldepth: info.seldepth,
-            nodes: info.nodes,
-            score: info.score,
-            pv: info.pv ? info.pv.join(' ') : '',
-          };
-
-          setSearchInfoByEngine(prev => {
-            const newMap = new Map(prev);
-            const engineInfo = newMap.get(engineId) || [];
-            // Add to the beginning (newest first)
-            newMap.set(engineId, [searchInfo, ...engineInfo]);
-            return newMap;
-          });
-        }
-      }
-
-      // Check for bestmove to clear search info for new move
-      if (message.startsWith('bestmove')) {
-        // Don't clear immediately - keep the last move's info visible
-        // We'll clear when a new "go" command is sent
-      }
-    },
-    onUsiError: (engineId, error) => {
-      const errorMessage: UsiMessage = {
-        id: `error-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        direction: 'received',
-        message: `ERROR: ${error}`,
-        engineId,
-      };
-      setCommunicationHistory(prev => [...prev, errorMessage]);
-    },
+    onUsiMessage: handleUsiMessage,
+    onUsiError: handleUsiError,
   });
 
   const handleSendCommand = (engineId: string) => {

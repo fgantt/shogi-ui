@@ -143,11 +143,7 @@ const Board = forwardRef<BoardRef, BoardProps>(({ position, onSquareClick, onDra
 
   const thinkingMoveSquares = parseThinkingMove(thinkingMove);
 
-  // Debug logging for thinking move
-  if (thinkingMove) {
-    console.log('[Board] Thinking move received:', thinkingMove);
-    console.log('[Board] Parsed squares:', thinkingMoveSquares);
-  }
+  // Removed excessive logging - thinking move is updated frequently during search
 
   return (
     <div className={`shogi-board-container`}>

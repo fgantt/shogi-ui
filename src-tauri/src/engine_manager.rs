@@ -292,11 +292,21 @@ impl EngineManager {
     }
 
     /// Send a USI command to a specific engine
+    /// Supports both runtime IDs (full ID) and config IDs (prefix match)
     pub async fn send_command(&self, engine_id: &str, command: &str) -> Result<()> {
         let engines = self.engines.read().await;
-        let engine = engines
-            .get(engine_id)
-            .ok_or_else(|| anyhow!("Engine not found: {}", engine_id))?;
+        
+        // First try exact match (runtime ID)
+        let engine = if let Some(engine) = engines.get(engine_id) {
+            Some(engine.clone())
+        } else {
+            // Try prefix match (config ID) - find engine whose ID starts with the given ID
+            engines
+                .iter()
+                .find(|(id, _)| id.starts_with(engine_id))
+                .map(|(_, engine)| engine.clone())
+        }
+        .ok_or_else(|| anyhow!("Engine not found: {}", engine_id))?;
 
         let mut engine_lock = engine.lock().await;
         engine_lock.send_command(command).await
@@ -342,7 +352,11 @@ impl EngineManager {
             }
             
             let engines = self.engines.read().await;
-            if let Some(engine) = engines.get(engine_id) {
+            // Try exact match first, then prefix match
+            let engine = engines.get(engine_id)
+                .or_else(|| engines.iter().find(|(id, _)| id.starts_with(engine_id)).map(|(_, e)| e));
+            
+            if let Some(engine) = engine {
                 let status = engine.lock().await.status.clone();
                 if matches!(status, EngineStatus::Ready) {
                     log::info!("Received usiok from engine: {}", engine_id);
@@ -400,7 +414,11 @@ impl EngineManager {
             }
             
             let engines = self.engines.read().await;
-            if let Some(engine) = engines.get(engine_id) {
+            // Try exact match first, then prefix match
+            let engine = engines.get(engine_id)
+                .or_else(|| engines.iter().find(|(id, _)| id.starts_with(engine_id)).map(|(_, e)| e));
+            
+            if let Some(engine) = engine {
                 let status = engine.lock().await.status.clone();
                 if matches!(status, EngineStatus::Ready) {
                     log::info!("Received readyok from engine: {}", engine_id);
@@ -419,11 +437,23 @@ impl EngineManager {
 
 
     /// Stop a specific engine
+    /// Supports both runtime IDs (full ID) and config IDs (prefix match)
     pub async fn stop_engine(&self, engine_id: &str) -> Result<()> {
         let engines = self.engines.read().await;
-        let engine = engines
-            .get(engine_id)
-            .ok_or_else(|| anyhow!("Engine not found: {}", engine_id))?;
+        
+        // First try exact match (runtime ID)
+        let (actual_id, engine) = if let Some(engine) = engines.get(engine_id) {
+            (engine_id.to_string(), Some(engine.clone()))
+        } else {
+            // Try prefix match (config ID) - find engine whose ID starts with the given ID
+            engines
+                .iter()
+                .find(|(id, _)| id.starts_with(engine_id))
+                .map(|(id, engine)| (id.clone(), Some(engine.clone())))
+                .unwrap_or_else(|| (engine_id.to_string(), None))
+        };
+        
+        let engine = engine.ok_or_else(|| anyhow!("Engine not found: {}", engine_id))?;
 
         let mut engine_lock = engine.lock().await;
         engine_lock.stop().await?;
@@ -431,16 +461,29 @@ impl EngineManager {
         drop(engine_lock);
         drop(engines);
 
-        // Remove from manager
-        self.engines.write().await.remove(engine_id);
+        // Remove from manager using the actual runtime ID
+        self.engines.write().await.remove(&actual_id);
 
         Ok(())
     }
 
     /// Get engine status
+    /// Supports both runtime IDs (full ID) and config IDs (prefix match)
     pub async fn get_engine_status(&self, engine_id: &str) -> Option<EngineStatus> {
         let engines = self.engines.read().await;
-        engines.get(engine_id).map(|engine| {
+        
+        // First try exact match (runtime ID)
+        let engine = if let Some(engine) = engines.get(engine_id) {
+            Some(engine.clone())
+        } else {
+            // Try prefix match (config ID) - find engine whose ID starts with the given ID
+            engines
+                .iter()
+                .find(|(id, _)| id.starts_with(engine_id))
+                .map(|(_, engine)| engine.clone())
+        };
+        
+        engine.map(|engine| {
             let engine_lock = futures::executor::block_on(engine.lock());
             engine_lock.status.clone()
         })

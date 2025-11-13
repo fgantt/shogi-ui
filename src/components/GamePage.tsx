@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useShogiController } from '../context/ShogiControllerContext';
 import { ImmutablePosition, Square, PieceType as TsshogiPieceType, isPromotableRank, Color } from 'tsshogi';
@@ -866,7 +866,7 @@ const GamePage: React.FC<GamePageProps> = ({
   };
 
   // Parse recommendation move from USI string
-  const parseRecommendationMove = (usiMove: string) => {
+  const parseRecommendationMove = useCallback((usiMove: string) => {
     try {
       console.log('Parsing recommendation move:', usiMove);
       
@@ -910,7 +910,7 @@ const GamePage: React.FC<GamePageProps> = ({
     } catch (error) {
       console.error('Error parsing recommendation move:', error);
     }
-  };
+  }, [controller]);
 
   const handleHighlightCapturedPiece = (pieceType: string | null) => {
     setHighlightedCapturedPiece(pieceType);
@@ -1390,109 +1390,114 @@ const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
+  // Memoize event handlers to prevent duplicate listeners
+  const handlePlayer1UsiMessage = useCallback((engineId: string, message: string) => {
+    if (message.startsWith('bestmove')) {
+      const { move } = parseBestMove(message);
+      
+      // Clear thinking move when bestmove is received
+      setThinkingMovePlayer1(null);
+      
+      // Only apply moves if it's an AI player's turn
+      const isBlackTurn = position?.sfen.includes(' b ');
+      const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
+      
+      if (move && move !== 'resign' && isAITurn) {
+        // Log position state before applying move for debugging
+        console.log('[Tauri Event] Applying AI move:', move);
+        console.log('[Tauri Event] Current position SFEN:', position?.sfen);
+        console.log('[Tauri Event] Current turn:', isBlackTurn ? 'Black' : 'White');
+        console.log('[Tauri Event] Record moves count:', controller.getRecord().moves.length);
+        
+        // Apply the engine's move (handleUserMove returns boolean, not Promise)
+        const moveResult = controller.handleUserMove(move);
+        if (moveResult) {
+          // Play sound for AI move
+          playPieceMoveSound();
+        } else {
+          console.error('[Tauri Event] Failed to apply AI engine move:', move);
+          console.error('[Tauri Event] Position SFEN when move failed:', position?.sfen);
+          console.error('[Tauri Event] This suggests the engine searched from a different position than the frontend has');
+        }
+      } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
+        // Parse and display recommendation instead of applying move
+        parseRecommendationMove(move);
+      }
+    }
+    
+    // Parse info messages to track thinking move
+    if (message.startsWith('info ')) {
+      const info = parseEngineInfo(message);
+      if (info.pv && info.pv.length > 0) {
+        const firstPvMove = info.pv[0];
+        setThinkingMovePlayer1(firstPvMove);
+      }
+    }
+  }, [position, player1Type, player2Type, controller, recommendationsEnabled, parseRecommendationMove]);
+
+  const handlePlayer1UsiError = useCallback((engineId: string, error: string) => {
+    console.error(`Tauri engine ${engineId} error: ${error}`);
+  }, []);
+
   // Listen to Tauri engine events
   useTauriEvents(useTauriEngine && activeEngineIds.length > 0 ? activeEngineIds[0] : null, {
-    onUsiMessage: (engineId, message) => {
-      console.log(`[Tauri Event] Engine ${engineId} message: ${message}`);
-      
-      if (message.startsWith('bestmove')) {
-        console.log('[Tauri Event] Received bestmove!');
-        const { move } = parseBestMove(message);
-        console.log('[Tauri Event] Parsed move:', move);
-        
-        // Clear thinking move when bestmove is received
-        setThinkingMovePlayer1(null);
-        
-        // Only apply moves if it's an AI player's turn
-        const isBlackTurn = position?.sfen.includes(' b ');
-        const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
-        
-        if (move && move !== 'resign' && isAITurn) {
-          console.log('[Tauri Event] Applying AI engine move to controller:', move);
-          // Apply the engine's move (handleUserMove returns boolean, not Promise)
-          const moveResult = controller.handleUserMove(move);
-          if (moveResult) {
-            // Play sound for AI move
-            console.log('[Tauri Event] AI move successful, playing piece move sound for AI');
-            playPieceMoveSound();
-          } else {
-            console.error('[Tauri Event] Failed to apply AI engine move:', move);
-          }
-        } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
-          console.log('[Tauri Event] Received recommendation for human player:', move);
-          // Parse and display recommendation instead of applying move
-          parseRecommendationMove(move);
-        } else {
-          console.log('[Tauri Event] Move is resign or invalid');
-        }
-      }
-      
-      // Parse info messages to track thinking move
-      if (message.startsWith('info ')) {
-        const info = parseEngineInfo(message);
-        console.log(`[Tauri Event] Parsed info:`, info);
-        if (info.pv && info.pv.length > 0) {
-          const firstPvMove = info.pv[0];
-          console.log(`[Tauri Event] Engine ${engineId} thinking move: ${firstPvMove}`);
-          setThinkingMovePlayer1(firstPvMove);
-        } else {
-          console.log(`[Tauri Event] No PV in info message`);
-        }
-      }
-    },
-    onUsiError: (engineId, error) => {
-      console.error(`Tauri engine ${engineId} error: ${error}`);
-    },
+    onUsiMessage: handlePlayer1UsiMessage,
+    onUsiError: handlePlayer1UsiError,
   });
+
+  // Memoize event handlers for second engine
+  const handlePlayer2UsiMessage = useCallback((engineId: string, message: string) => {
+    if (message.startsWith('bestmove')) {
+      const { move } = parseBestMove(message);
+      
+      // Clear thinking move when bestmove is received
+      setThinkingMovePlayer2(null);
+      
+      // Only apply moves if it's an AI player's turn
+      const isBlackTurn = position?.sfen.includes(' b ');
+      const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
+      
+      if (move && move !== 'resign' && isAITurn) {
+        // Log position state before applying move for debugging
+        console.log('[Tauri Event] Applying AI move (Player 2):', move);
+        console.log('[Tauri Event] Current position SFEN:', position?.sfen);
+        console.log('[Tauri Event] Current turn:', isBlackTurn ? 'Black' : 'White');
+        console.log('[Tauri Event] Record moves count:', controller.getRecord().moves.length);
+        
+        // Apply the engine's move (handleUserMove returns boolean, not Promise)
+        const moveResult = controller.handleUserMove(move);
+        if (moveResult) {
+          // Play sound for AI move
+          playPieceMoveSound();
+        } else {
+          console.error('[Tauri Event] Failed to apply second AI engine move:', move);
+          console.error('[Tauri Event] Position SFEN when move failed:', position?.sfen);
+          console.error('[Tauri Event] This suggests the engine searched from a different position than the frontend has');
+        }
+      } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
+        // Parse and display recommendation instead of applying move
+        parseRecommendationMove(move);
+      }
+    }
+    
+    // Parse info messages to track thinking move
+    if (message.startsWith('info ')) {
+      const info = parseEngineInfo(message);
+      if (info.pv && info.pv.length > 0) {
+        const firstPvMove = info.pv[0];
+        setThinkingMovePlayer2(firstPvMove);
+      }
+    }
+  }, [position, player1Type, player2Type, controller, recommendationsEnabled, parseRecommendationMove]);
+
+  const handlePlayer2UsiError = useCallback((engineId: string, error: string) => {
+    console.error(`Tauri engine ${engineId} error: ${error}`);
+  }, []);
 
   // Listen to second engine if both players are AI
   useTauriEvents(useTauriEngine && activeEngineIds.length > 1 ? activeEngineIds[1] : null, {
-    onUsiMessage: (engineId, message) => {
-      console.log(`Tauri engine ${engineId}: ${message}`);
-      
-      if (message.startsWith('bestmove')) {
-        const { move } = parseBestMove(message);
-        
-        // Clear thinking move when bestmove is received
-        setThinkingMovePlayer2(null);
-        
-        // Only apply moves if it's an AI player's turn
-        const isBlackTurn = position?.sfen.includes(' b ');
-        const isAITurn = isBlackTurn ? player1Type === 'ai' : player2Type === 'ai';
-        
-        if (move && move !== 'resign' && isAITurn) {
-          // Apply the engine's move (handleUserMove returns boolean, not Promise)
-          const moveResult = controller.handleUserMove(move);
-          if (moveResult) {
-            // Play sound for AI move
-            console.log('[Tauri Event] AI move successful, playing piece move sound for second AI');
-            playPieceMoveSound();
-          } else {
-            console.error('[Tauri Event] Failed to apply second AI engine move:', move);
-          }
-        } else if (move && move !== 'resign' && !isAITurn && recommendationsEnabled) {
-          console.log('[Tauri Event] Received recommendation for human player from second engine:', move);
-          // Parse and display recommendation instead of applying move
-          parseRecommendationMove(move);
-        }
-      }
-      
-      // Parse info messages to track thinking move
-      if (message.startsWith('info ')) {
-        const info = parseEngineInfo(message);
-        console.log(`[Tauri Event] Parsed info:`, info);
-        if (info.pv && info.pv.length > 0) {
-          const firstPvMove = info.pv[0];
-          console.log(`[Tauri Event] Engine ${engineId} thinking move: ${firstPvMove}`);
-          setThinkingMovePlayer2(firstPvMove);
-        } else {
-          console.log(`[Tauri Event] No PV in info message`);
-        }
-      }
-    },
-    onUsiError: (engineId, error) => {
-      console.error(`Tauri engine ${engineId} error: ${error}`);
-    },
+    onUsiMessage: handlePlayer2UsiMessage,
+    onUsiError: handlePlayer2UsiError,
   });
 
 
@@ -1507,14 +1512,13 @@ const GamePage: React.FC<GamePageProps> = ({
 
     try {
       const currentSfen = position.sfen;
-      const record = controller.getRecord();
-      const moveList = record.moves.map((m: any) => m.usi || '').filter(Boolean);
-
-      // Send position
-      const posCmd = moveList.length > 0
-        ? `position sfen ${currentSfen.split(' moves ')[0]} moves ${moveList.join(' ')}`
-        : `position sfen ${currentSfen}`;
+      
+      // CRITICAL: The SFEN from position.sfen already represents the current position
+      // We should NOT send moves again, as that would double-apply them
+      // Just send the current SFEN directly
+      const posCmd = `position sfen ${currentSfen}`;
       console.log('[requestTauriEngineMove] Sending position command:', posCmd);
+      console.log('[requestTauriEngineMove] Current SFEN (should be current position):', currentSfen);
       await sendUsiCommand(engineId, posCmd);
 
       // Send go command
@@ -1538,14 +1542,13 @@ const GamePage: React.FC<GamePageProps> = ({
 
     try {
       const currentSfen = position.sfen;
-      const record = controller.getRecord();
-      const moveList = record.moves.map((m: any) => m.usi || '').filter(Boolean);
-
-      // Send position
-      const posCmd = moveList.length > 0
-        ? `position sfen ${currentSfen.split(' moves ')[0]} moves ${moveList.join(' ')}`
-        : `position sfen ${currentSfen}`;
+      
+      // CRITICAL: The SFEN from position.sfen already represents the current position
+      // We should NOT send moves again, as that would double-apply them
+      // Just send the current SFEN directly
+      const posCmd = `position sfen ${currentSfen}`;
       console.log('[requestRecommendationFromEngine] Sending position command:', posCmd);
+      console.log('[requestRecommendationFromEngine] Current SFEN (should be current position):', currentSfen);
       await sendUsiCommand(engineId, posCmd);
 
       // Send go command with shorter time for recommendations
@@ -1739,18 +1742,10 @@ const GamePage: React.FC<GamePageProps> = ({
     }
   };
 
-  const getCurrentGameData = (): GameData => {
+  // Memoize game data to prevent excessive re-renders
+  const currentGameData = useMemo((): GameData => {
     const position = controller.getPosition();
     const record = controller.getRecord();
-    
-    // Debug logging - check the structure of moves
-    console.log('getCurrentGameData - record.moves length:', record.moves.length);
-    if (record.moves.length > 0) {
-      const firstMove = record.moves[0];
-      if (firstMove && typeof firstMove === 'object' && 'move' in firstMove) {
-        console.log('getCurrentGameData - first move.move.usi:', (firstMove as any).move?.usi);
-      }
-    }
     
     // Extract USI moves - based on how MoveLog component accesses them
     const moves = record.moves.map((m: any) => m.move?.usi || '').filter(Boolean);
@@ -1765,7 +1760,7 @@ const GamePage: React.FC<GamePageProps> = ({
         result: 'ongoing'
       }
     };
-  };
+  }, [controller, position?.sfen]);
 
   const handleDeleteGame = (name: string) => {
     const newSavedGames = { ...savedGames };
@@ -2010,7 +2005,7 @@ const GamePage: React.FC<GamePageProps> = ({
           isOpen={isSaveModalOpen} 
           onClose={() => setIsSaveModalOpen(false)} 
           onSave={handleSaveGame}
-          gameData={getCurrentGameData()}
+          gameData={currentGameData}
         />
         <LoadGameModal 
           isOpen={isLoadModalOpen} 
