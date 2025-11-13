@@ -47,7 +47,6 @@ use crate::evaluation::{
     endgame_patterns::EndgamePatternEvaluator,
     material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
     opening_principles::OpeningPrincipleEvaluator,
-    pattern_cache::PatternCache,
     performance::OptimizedEvaluator,
     phase_transition::PhaseTransition,
     piece_square_tables::PieceSquareTables,
@@ -89,10 +88,11 @@ pub struct IntegratedEvaluator {
     positional_patterns: RefCell<PositionalPatternAnalyzer>,
     /// Castle pattern recognizer (Task 17.0 - Task 1.0)
     castle_recognizer: RefCell<CastleRecognizer>,
-    /// Pattern result cache (Phase 2 - Task 2.4, reserved for future optimization)
-    #[allow(dead_code)]
-    pattern_cache: RefCell<PatternCache>,
     /// Optimized evaluator (for performance mode)
+    // Note: Pattern caching is handled per-module. Individual pattern recognizers
+    // (CastleRecognizer, TacticalPatternRecognizer, etc.) maintain their own internal
+    // caches optimized for their specific needs. A unified pattern cache was considered
+    // but removed as unused - each module's cache is more efficient for its use case.
     optimized_eval: Option<OptimizedEvaluator>,
     /// Statistics tracker (uses interior mutability)
     statistics: RefCell<EvaluationStatistics>,
@@ -149,7 +149,6 @@ impl IntegratedEvaluator {
             )),
             positional_patterns: RefCell::new(PositionalPatternAnalyzer::new()),
             castle_recognizer: RefCell::new(CastleRecognizer::new()),
-            pattern_cache: RefCell::new(PatternCache::new(config.pattern_cache_size)),
             optimized_eval,
             statistics: RefCell::new(EvaluationStatistics::new()),
             telemetry: RefCell::new(None),
@@ -817,9 +816,10 @@ pub struct IntegratedEvaluationConfig {
     pub use_optimized_path: bool,
     /// Maximum cache size
     pub max_cache_size: usize,
-    /// Pattern cache size (Phase 3 - Task 3.1)
-    pub pattern_cache_size: usize,
     /// Collect position feature statistics for telemetry
+    // Note: Pattern caching is handled per-module. Individual pattern recognizers
+    // maintain their own internal caches. No unified pattern cache size configuration
+    // is needed as each module manages its own cache size.
     pub collect_position_feature_stats: bool,
     /// Material evaluation configuration
     pub material: MaterialEvaluationConfig,
@@ -845,7 +845,6 @@ impl Default for IntegratedEvaluationConfig {
             enable_eval_cache: true,
             use_optimized_path: true,
             max_cache_size: 10000,
-            pattern_cache_size: 100_000,
             collect_position_feature_stats: true,
             material: MaterialEvaluationConfig::default(),
             pst: PieceSquareTableConfig::default(),
