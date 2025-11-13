@@ -571,6 +571,17 @@ pub enum ConfigError {
     },
 }
 
+/// Component dependency warnings for configuration validation
+#[derive(Debug, Clone, PartialEq)]
+pub enum ComponentDependencyWarning {
+    /// Center control overlap: both position_features and positional_patterns evaluate center control
+    CenterControlOverlap,
+    /// Endgame patterns enabled but phase is not endgame (informational)
+    EndgamePatternsNotInEndgame,
+    /// Enabled component produced zero score (may indicate configuration issue)
+    ComponentProducedZeroScore(String),
+}
+
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

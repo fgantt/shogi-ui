@@ -246,20 +246,52 @@ impl IntegratedEvaluator {
         let mut tactical_snapshot = None;
         let mut positional_snapshot = None;
         let mut castle_cache_stats = None;
+        
+        // Track component contributions for telemetry (Task 5.0 - Task 5.9, 5.10)
+        use std::collections::HashMap;
+        let mut component_contributions: HashMap<String, f32> = HashMap::new();
 
         // Material
         if self.config.components.material {
-            total +=
-                self.material_eval
-                    .borrow_mut()
-                    .evaluate_material(board, player, captured_pieces);
+            let material_score = self.material_eval
+                .borrow_mut()
+                .evaluate_material(board, player, captured_pieces);
+            
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && material_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: material component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
+            total += material_score;
+            // Track contribution for telemetry
+            if stats_enabled {
+                let material_interp = material_score.interpolate(phase);
+                component_contributions.insert("material".to_string(), material_interp as f32);
+            }
         }
 
         // Piece-square tables
         if self.config.components.piece_square_tables {
             let (pst_score, telemetry) = self.evaluate_pst(board, player);
+            
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && pst_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: piece_square_tables component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
             total += pst_score;
             pst_telemetry = Some(telemetry);
+            // Track contribution for telemetry
+            if stats_enabled {
+                let pst_interp = pst_score.interpolate(phase);
+                component_contributions.insert("piece_square_tables".to_string(), pst_interp as f32);
+            }
         }
 
         // Position features
@@ -286,6 +318,9 @@ impl IntegratedEvaluator {
             let mut position_features = self.position_features.borrow_mut();
             position_features.begin_evaluation(board);
             
+            // Track position_features aggregate contribution for telemetry
+            let mut pf_total = TaperedScore::default();
+            
             // King safety
             let king_safety_score = position_features.evaluate_king_safety(board, player, captured_pieces);
             let contribution = (king_safety_score.interpolate(phase) as f32) * weights.king_safety_weight;
@@ -297,7 +332,17 @@ impl IntegratedEvaluator {
                     contribution
                 ));
             }
-            total += king_safety_score * weights.king_safety_weight;
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && king_safety_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: king_safety component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
+            let king_safety_weighted = king_safety_score * weights.king_safety_weight;
+            total += king_safety_weighted;
+            pf_total += king_safety_weighted;
             
             // Pawn structure
             let pawn_score = position_features
@@ -311,7 +356,9 @@ impl IntegratedEvaluator {
                     contribution
                 ));
             }
-            total += pawn_score * weights.pawn_structure_weight;
+            let pawn_weighted = pawn_score * weights.pawn_structure_weight;
+            total += pawn_weighted;
+            pf_total += pawn_weighted;
             
             // Mobility
             let mobility_score = position_features.evaluate_mobility(board, player, captured_pieces);
@@ -324,7 +371,9 @@ impl IntegratedEvaluator {
                     contribution
                 ));
             }
-            total += mobility_score * weights.mobility_weight;
+            let mobility_weighted = mobility_score * weights.mobility_weight;
+            total += mobility_weighted;
+            pf_total += mobility_weighted;
             
             // Center control
             // Note: skip_center_control is set to false for now (future use when positional patterns
@@ -340,7 +389,9 @@ impl IntegratedEvaluator {
                     contribution
                 ));
             }
-            total += center_score * weights.center_control_weight;
+            let center_weighted = center_score * weights.center_control_weight;
+            total += center_weighted;
+            pf_total += center_weighted;
             
             // Development
             let dev_score = position_features.evaluate_development(board, player);
@@ -353,12 +404,20 @@ impl IntegratedEvaluator {
                     contribution
                 ));
             }
-            total += dev_score * weights.development_weight;
+            let dev_weighted = dev_score * weights.development_weight;
+            total += dev_weighted;
+            pf_total += dev_weighted;
             
             if stats_enabled && self.config.collect_position_feature_stats {
                 position_feature_stats_snapshot = Some(position_features.stats().clone());
             }
             position_features.end_evaluation();
+            
+            // Track position_features aggregate contribution for telemetry
+            if stats_enabled {
+                let pf_interp = pf_total.interpolate(phase);
+                component_contributions.insert("position_features".to_string(), pf_interp as f32);
+            }
         }
 
         // Opening principles (if in opening)
@@ -370,11 +429,29 @@ impl IntegratedEvaluator {
         }
 
         // Endgame patterns (if in endgame)
-        if self.config.components.endgame_patterns && phase < 64 {
-            total +=
-                self.endgame_patterns
+        // Task 5.0 - Task 5.3: Warn if endgame_patterns enabled but not in endgame
+        if self.config.components.endgame_patterns {
+            if phase >= 64 {
+                debug_log(&format!(
+                    "INFO: endgame_patterns is enabled but phase ({}) is not endgame (< 64). \
+                    Endgame patterns will not be evaluated.",
+                    phase
+                ));
+            } else {
+                let endgame_score = self.endgame_patterns
                     .borrow_mut()
                     .evaluate_endgame(board, player, captured_pieces);
+                
+                // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+                if self.config.enable_component_validation && endgame_score == TaperedScore::default() {
+                    debug_log(&format!(
+                        "WARNING: endgame_patterns is enabled but produced zero score. \
+                        This may indicate a configuration issue or bug."
+                    ));
+                }
+                
+                total += endgame_score;
+            }
         }
 
         // Tactical patterns (Phase 3 - Task 3.1 Integration)
@@ -396,7 +473,20 @@ impl IntegratedEvaluator {
                     self.config.weight_contribution_threshold
                 ));
             }
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && tactical_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: tactical_patterns component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
             total += tactical_score * weights.tactical_weight;
+            // Track contribution for telemetry
+            if stats_enabled {
+                let tactical_interp = (tactical_score.interpolate(phase) as f32 * weights.tactical_weight) as i32;
+                component_contributions.insert("tactical_patterns".to_string(), tactical_interp as f32);
+            }
         }
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
@@ -420,7 +510,20 @@ impl IntegratedEvaluator {
                     self.config.weight_contribution_threshold
                 ));
             }
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && positional_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: positional_patterns component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
             total += positional_score * weights.positional_weight;
+            // Track contribution for telemetry
+            if stats_enabled {
+                let positional_interp = (positional_score.interpolate(phase) as f32 * weights.positional_weight) as i32;
+                component_contributions.insert("positional_patterns".to_string(), positional_interp as f32);
+            }
         }
 
         // Castle patterns (Task 17.0 - Task 1.0 Integration)
@@ -453,14 +556,53 @@ impl IntegratedEvaluator {
                     self.config.weight_contribution_threshold
                 ));
             }
+            // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
+            if self.config.enable_component_validation && castle_score == TaperedScore::default() {
+                debug_log(&format!(
+                    "WARNING: castle_patterns component is enabled but produced zero score. \
+                    This may indicate a configuration issue or bug."
+                ));
+            }
+            
             total += castle_score * weights.castle_weight;
+            // Track contribution for telemetry
+            if stats_enabled {
+                let castle_interp = (castle_score.interpolate(phase) as f32 * weights.castle_weight) as i32;
+                component_contributions.insert("castle_patterns".to_string(), castle_interp as f32);
+            }
         }
+        
 
         // Interpolate to final score
         let final_score = self
             .phase_transition
             .borrow_mut()
             .interpolate_default(total, phase);
+        
+        // Calculate weight contributions for telemetry (Task 5.0 - Task 5.10)
+        // Convert absolute contributions to percentages
+        if stats_enabled && final_score != 0 {
+            let total_abs = final_score.abs() as f32;
+            if total_abs > 0.0 {
+                // Convert absolute contributions to percentages
+                let mut contributions_pct: HashMap<String, f32> = HashMap::new();
+                for (component, abs_contrib) in &component_contributions {
+                    let contrib_pct = abs_contrib.abs() / total_abs;
+                    contributions_pct.insert(component.clone(), contrib_pct);
+                    
+                    // Task 5.0 - Task 5.11: Log when component contributes >threshold% of total
+                    if contrib_pct > self.config.large_contribution_threshold {
+                        debug_log(&format!(
+                            "Large component contribution: {} contributes {:.1}% of total evaluation (threshold: {:.1}%)",
+                            component,
+                            contrib_pct * 100.0,
+                            self.config.large_contribution_threshold * 100.0
+                        ));
+                    }
+                }
+                component_contributions = contributions_pct;
+            }
+        }
 
         // Cache if enabled
         if self.config.enable_eval_cache {
@@ -496,7 +638,7 @@ impl IntegratedEvaluator {
             material_eval.stats().snapshot()
         };
 
-        let telemetry = EvaluationTelemetry::from_snapshots(
+        let mut telemetry = EvaluationTelemetry::from_snapshots(
             tapered_snapshot,
             phase_snapshot,
             performance_snapshot,
@@ -508,6 +650,9 @@ impl IntegratedEvaluator {
             None, // King safety stats not integrated into IntegratedEvaluator yet
             castle_cache_stats.clone(),
         );
+        
+        // Add weight contributions to telemetry (Task 5.0 - Task 5.9, 5.10)
+        telemetry.weight_contributions = component_contributions;
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
             if let Some(stats) = position_feature_stats_snapshot {
@@ -835,6 +980,10 @@ pub struct IntegratedEvaluationConfig {
     pub enable_phase_dependent_weights: bool,
     /// Threshold for logging large weight contributions in centipawns (default: 1000.0)
     pub weight_contribution_threshold: f32,
+    /// Threshold for logging large component contributions as percentage of total (default: 0.20 for 20%)
+    pub large_contribution_threshold: f32,
+    /// Enable component output validation (debug mode) - checks for zero scores from enabled components
+    pub enable_component_validation: bool,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -853,6 +1002,8 @@ impl Default for IntegratedEvaluationConfig {
             weights: EvaluationWeights::default(),
             enable_phase_dependent_weights: false,
             weight_contribution_threshold: 1000.0,
+            large_contribution_threshold: 0.20,
+            enable_component_validation: false,
         }
     }
 }
@@ -877,6 +1028,40 @@ impl IntegratedEvaluationConfig {
         temp_config.weights = self.weights.clone();
         
         temp_config.validate_cumulative_weights(&components)
+    }
+
+    /// Validate component dependencies and check for conflicts
+    /// 
+    /// Returns a vector of warnings for potential issues. These are informational
+    /// and don't prevent the configuration from being used, but may indicate
+    /// suboptimal settings.
+    pub fn validate_component_dependencies(&self) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
+        use crate::evaluation::config::ComponentDependencyWarning;
+        let mut warnings = Vec::new();
+
+        // Check for center control overlap (Task 5.0 - Task 5.2)
+        if self.components.position_features && self.components.positional_patterns {
+            warnings.push(ComponentDependencyWarning::CenterControlOverlap);
+        }
+
+        // Note: Endgame patterns phase check (Task 5.3) requires runtime phase calculation,
+        // so it's handled during evaluation, not in static validation
+
+        warnings
+    }
+
+    /// Validate the configuration
+    /// 
+    /// This validates weights and component dependencies. Returns errors for
+    /// invalid configurations and warnings for potential issues.
+    pub fn validate(&self) -> Result<Vec<crate::evaluation::config::ComponentDependencyWarning>, crate::evaluation::config::ConfigError> {
+        // Validate cumulative weights
+        self.validate_cumulative_weights()?;
+
+        // Check component dependencies (warnings, not errors)
+        let warnings = self.validate_component_dependencies();
+
+        Ok(warnings)
     }
 }
 

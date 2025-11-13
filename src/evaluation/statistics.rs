@@ -46,6 +46,7 @@ use crate::evaluation::tactical_patterns::TacticalStatsSnapshot;
 use crate::evaluation::tapered_eval::TaperedEvaluationSnapshot;
 use crate::types::{PieceType, TaperedScore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Comprehensive evaluation statistics tracker
@@ -94,6 +95,8 @@ pub struct EvaluationTelemetry {
     pub tactical: Option<TacticalStatsSnapshot>,
     pub king_safety: Option<KingSafetyStatsSnapshot>,
     pub castle_patterns: Option<CastleCacheStats>,
+    /// Weight contributions: component name -> contribution percentage (0.0-1.0)
+    pub weight_contributions: HashMap<String, f32>,
 }
 
 impl EvaluationTelemetry {
@@ -111,6 +114,7 @@ impl EvaluationTelemetry {
     ) -> Self {
         Self {
             tapered: Some(tapered),
+            weight_contributions: HashMap::new(),
             phase_transition: Some(phase_transition),
             performance,
             material,
