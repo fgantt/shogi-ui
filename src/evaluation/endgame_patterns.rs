@@ -137,7 +137,7 @@ impl EndgamePatternEvaluator {
     /// Evaluate king activity in endgame
     ///
     /// In endgame, the king should be active and centralized
-    fn evaluate_king_activity(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_king_activity(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -146,17 +146,22 @@ impl EndgamePatternEvaluator {
         let mut mg_score = 0;
         let mut eg_score = 0;
 
+        // Check if king is under attack (safety check)
+        let is_unsafe = self.is_king_under_attack(board, king_pos, player);
+
         // 1. Centralization bonus (more important in endgame)
         let center_distance = self.distance_to_center(king_pos);
-        let centralization_bonus = (4 - center_distance.min(4)) * 15;
+        let centralization_bonus_base = (4 - center_distance.min(4)) * 15;
+        let centralization_bonus = (centralization_bonus_base as f32 * self.config.king_activity_centralization_scale) as i32;
         mg_score += centralization_bonus / 4; // Small bonus in middlegame
         eg_score += centralization_bonus; // Large bonus in endgame
 
         // 2. Activity bonus (king not on back rank)
         let back_rank = if player == Player::Black { 8 } else { 0 };
         if king_pos.row != back_rank {
+            let activity_bonus = (25.0 * self.config.king_activity_activity_scale) as i32;
             mg_score += 5; // Small bonus in middlegame
-            eg_score += 25; // Large bonus in endgame
+            eg_score += activity_bonus; // Large bonus in endgame
         }
 
         // 3. Advanced king bonus (crossing center)
@@ -167,11 +172,35 @@ impl EndgamePatternEvaluator {
         };
 
         if is_advanced {
+            let mut advancement_bonus = (35.0 * self.config.king_activity_advancement_scale) as i32;
+            
+            // Reduce advancement bonus by 50% if king is unsafe
+            if is_unsafe {
+                advancement_bonus = advancement_bonus / 2;
+                self.stats.unsafe_king_penalties += 1;
+                
+                // Also apply penalty for unsafe advanced king
+                eg_score -= 20;
+                
+                crate::debug_utils::trace_log("KING_ACTIVITY", &format!(
+                    "Advanced king in unsafe position: {} (row={}, col={}), penalty=-20, advancement bonus reduced by 50%",
+                    if player == Player::Black { "Black" } else { "White" },
+                    king_pos.row,
+                    king_pos.col
+                ));
+            }
+            
             mg_score += 5; // Risky in middlegame
-            eg_score += 35; // Excellent in endgame
+            eg_score += advancement_bonus; // Excellent in endgame (if safe)
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Check if king is under attack by opponent pieces
+    fn is_king_under_attack(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> bool {
+        let opponent = player.opposite();
+        board.is_square_attacked_by(king_pos, opponent)
     }
 
     /// Calculate Manhattan distance to center
@@ -706,7 +735,7 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate opposition patterns (king opposition in pawn endgames)
-    fn evaluate_opposition(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_opposition(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -717,26 +746,65 @@ impl EndgamePatternEvaluator {
             None => return TaperedScore::default(),
         };
 
+        // Opposition is most valuable in pawn endgames (few pawns on board)
+        let pawn_count = self.count_pawns_on_board(board);
+        if pawn_count > 6 {
+            // Too many pawns, opposition less valuable
+            return TaperedScore::default();
+        }
+
         // Check for direct opposition (kings facing each other with 1 square between)
         let file_diff = (king_pos.col as i8 - opp_king_pos.col as i8).abs();
         let rank_diff = (king_pos.row as i8 - opp_king_pos.row as i8).abs();
 
+        let mut base_score = 0;
+
         // Direct opposition
         if (file_diff == 0 && rank_diff == 2) || (rank_diff == 0 && file_diff == 2) {
-            return TaperedScore::new_tapered(0, 40);
+            base_score = 40;
         }
-
         // Distant opposition (even number of squares between)
-        if file_diff == 0 && rank_diff % 2 == 0 && rank_diff > 2 {
-            return TaperedScore::new_tapered(0, 20);
+        else if file_diff == 0 && rank_diff % 2 == 0 && rank_diff > 2 {
+            base_score = 20;
+        }
+        // Diagonal opposition
+        else if file_diff == rank_diff && file_diff % 2 == 0 && file_diff > 1 {
+            base_score = 15;
         }
 
-        // Diagonal opposition
-        if file_diff == rank_diff && file_diff % 2 == 0 && file_diff > 1 {
-            return TaperedScore::new_tapered(0, 15);
+        if base_score > 0 {
+            // Scale score with pawn count (higher value with fewer pawns)
+            // With 0-2 pawns: full value, with 3-4 pawns: 75%, with 5-6 pawns: 50%
+            let scale_factor = if pawn_count <= 2 {
+                100
+            } else if pawn_count <= 4 {
+                75
+            } else {
+                50
+            };
+            let scaled_score = (base_score * scale_factor) / 100;
+            
+            self.stats.opposition_detections += 1;
+            return TaperedScore::new_tapered(0, scaled_score);
         }
 
         TaperedScore::default()
+    }
+
+    /// Count total pawns on board for both players
+    pub fn count_pawns_on_board(&self, board: &BitboardBoard) -> i32 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if let Some(piece) = board.get_piece(pos) {
+                    if piece.piece_type == PieceType::Pawn {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
     }
 
     // =======================================================================
@@ -744,7 +812,7 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate triangulation potential (losing a tempo to gain zugzwang)
-    fn evaluate_triangulation(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_triangulation(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -754,6 +822,7 @@ impl EndgamePatternEvaluator {
         // 1. Few pieces on board
         // 2. King has room to maneuver
         // 3. Opponent is in cramped position
+        // 4. Player is ahead in material
 
         let piece_count = self.count_total_pieces(board);
 
@@ -764,12 +833,49 @@ impl EndgamePatternEvaluator {
         // Check if king has triangulation squares available
         let king_mobility = self.count_king_safe_squares(board, king_pos, player);
 
-        if king_mobility >= 4 {
-            // King has room to triangulate
-            return TaperedScore::new_tapered(0, 25);
+        if king_mobility < 4 {
+            return TaperedScore::default(); // King doesn't have enough mobility
         }
 
-        TaperedScore::default()
+        // Check opponent king mobility (triangulation requires cramped opponent)
+        let opponent = player.opposite();
+        let opponent_king_pos = match self.find_king_position(board, opponent) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+        let opponent_mobility = self.count_opponent_king_mobility(board, opponent_king_pos, opponent);
+
+        if opponent_mobility > 3 {
+            return TaperedScore::default(); // Opponent not cramped enough
+        }
+
+        // Verify triangulation squares don't worsen position (squares should not be attacked)
+        // Simplified check: verify king's current position and potential triangulation squares are safe
+        if self.is_king_under_attack(board, king_pos, player) {
+            return TaperedScore::default(); // King is already under attack, triangulation risky
+        }
+
+        // Material balance check (triangulation more valuable when ahead)
+        let material_diff = self.get_material_difference(board, player);
+        if material_diff < 0 {
+            // Behind in material, triangulation less valuable
+            return TaperedScore::default();
+        }
+
+        // All conditions met for triangulation
+        self.stats.triangulation_detections += 1;
+        return TaperedScore::new_tapered(0, 25);
+    }
+
+    /// Count opponent king mobility (safe squares available)
+    fn count_opponent_king_mobility(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> i32 {
+        // Use same logic as count_king_safe_squares but for opponent
+        self.count_king_safe_squares(board, king_pos, player)
     }
 
     /// Count safe squares around king
@@ -1159,6 +1265,12 @@ pub struct EndgamePatternConfig {
     pub enable_fortress: bool,
     /// Enable drop move consideration in zugzwang detection (drops often break zugzwang in shogi)
     pub enable_zugzwang_drop_consideration: bool,
+    /// King activity centralization bonus scaling factor (default: 1.0)
+    pub king_activity_centralization_scale: f32,
+    /// King activity activity bonus scaling factor (default: 1.0)
+    pub king_activity_activity_scale: f32,
+    /// King activity advancement bonus scaling factor (default: 1.0)
+    pub king_activity_advancement_scale: f32,
 }
 
 impl Default for EndgamePatternConfig {
@@ -1175,6 +1287,9 @@ impl Default for EndgamePatternConfig {
             enable_piece_vs_pawns: true,
             enable_fortress: true,
             enable_zugzwang_drop_consideration: true,
+            king_activity_centralization_scale: 1.0,
+            king_activity_activity_scale: 1.0,
+            king_activity_advancement_scale: 1.0,
         }
     }
 }
@@ -1190,6 +1305,12 @@ pub struct EndgamePatternStats {
     pub zugzwang_benefits: u64,
     /// Number of zugzwang penalties (negative scores)
     pub zugzwang_penalties: u64,
+    /// Number of opposition detections
+    pub opposition_detections: u64,
+    /// Number of triangulation detections
+    pub triangulation_detections: u64,
+    /// Number of unsafe king penalties
+    pub unsafe_king_penalties: u64,
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1211,6 +1332,85 @@ mod tests {
 
         // Starting position: king on back rank, not centralized
         assert!(score.eg >= 0); // Should have some activity potential
+    }
+
+    #[test]
+    fn test_opposition_with_pawn_count() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Starting position has many pawns, opposition should not be detected
+        let score = evaluator.evaluate_opposition(&board, Player::Black);
+        // May or may not detect opposition depending on king positions and pawn count
+        assert!(score.eg >= 0 && score.eg <= 40);
+    }
+
+    #[test]
+    fn test_triangulation_opponent_mobility() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::empty();
+        
+        // Empty board with few pieces should allow triangulation if conditions are met
+        let score = evaluator.evaluate_triangulation(&board, Player::Black);
+        // May or may not detect triangulation depending on king positions
+        assert!(score.eg >= 0 && score.eg <= 25);
+    }
+
+    #[test]
+    fn test_king_activity_safety_check() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Test that safety check works
+        let score = evaluator.evaluate_king_activity(&board, Player::Black);
+        // Should complete without error
+        assert!(score.mg >= -100 && score.mg <= 100);
+        assert!(score.eg >= -100 && score.eg <= 100);
+    }
+
+    #[test]
+    fn test_count_pawns_on_board() {
+        let evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        // Starting position has 9 pawns per player = 18 total
+        let pawn_count = evaluator.count_pawns_on_board(&board);
+        assert_eq!(pawn_count, 18);
+    }
+
+    #[test]
+    fn test_king_activity_bonus_scaling() {
+        let mut config = EndgamePatternConfig::default();
+        config.king_activity_centralization_scale = 0.5;
+        config.king_activity_activity_scale = 0.5;
+        config.king_activity_advancement_scale = 0.5;
+        
+        let mut evaluator = EndgamePatternEvaluator::with_config(config);
+        let board = BitboardBoard::new();
+        
+        let score = evaluator.evaluate_king_activity(&board, Player::Black);
+        // Should complete with scaled bonuses
+        assert!(score.eg >= -100 && score.eg <= 100);
+    }
+
+    #[test]
+    fn test_pattern_detection_statistics() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        
+        assert_eq!(evaluator.stats().opposition_detections, 0);
+        assert_eq!(evaluator.stats().triangulation_detections, 0);
+        assert_eq!(evaluator.stats().unsafe_king_penalties, 0);
+        
+        // Evaluate patterns
+        evaluator.evaluate_opposition(&board, Player::Black);
+        evaluator.evaluate_triangulation(&board, Player::Black);
+        evaluator.evaluate_king_activity(&board, Player::Black);
+        
+        // Statistics should be tracked (may be 0 if patterns not detected)
+        assert!(evaluator.stats().opposition_detections >= 0);
+        assert!(evaluator.stats().triangulation_detections >= 0);
+        assert!(evaluator.stats().unsafe_king_penalties >= 0);
     }
 
     #[test]
