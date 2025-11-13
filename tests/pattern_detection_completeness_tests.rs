@@ -30,7 +30,8 @@ fn test_opposition_pawn_count_filtering() {
     let board = BitboardBoard::new();
     
     // Starting position has 18 pawns (too many for opposition)
-    let score1 = evaluator.evaluate_opposition(&board, Player::Black);
+    let captured_pieces = CapturedPieces::new();
+    let score1 = evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
     let initial_detections = evaluator.stats().opposition_detections;
     
     // Create a position with fewer pawns (simulated by checking behavior)
@@ -42,9 +43,10 @@ fn test_opposition_pawn_count_filtering() {
 fn test_triangulation_complete_logic() {
     let mut evaluator = EndgamePatternEvaluator::new();
     let board = BitboardBoard::empty();
+    let captured_pieces = CapturedPieces::new();
     
     // Empty board should allow triangulation if all conditions are met
-    let score = evaluator.evaluate_triangulation(&board, Player::Black);
+    let score = evaluator.evaluate_triangulation(&board, Player::Black, &captured_pieces);
     
     // May or may not detect triangulation depending on king positions and material
     assert!(score.eg >= 0 && score.eg <= 25);

@@ -109,12 +109,12 @@ impl EndgamePatternEvaluator {
 
         // 7. Opposition patterns (Phase 2 - Task 2.3.4)
         if self.config.enable_opposition {
-            score += self.evaluate_opposition(board, player);
+            score += self.evaluate_opposition(board, player, captured_pieces);
         }
 
         // 8. Triangulation detection (Phase 2 - Task 2.3.5)
         if self.config.enable_triangulation {
-            score += self.evaluate_triangulation(board, player);
+            score += self.evaluate_triangulation(board, player, captured_pieces);
         }
 
         // 9. Piece vs pawns evaluation (Phase 2 - Task 2.3.6)
@@ -386,10 +386,10 @@ impl EndgamePatternEvaluator {
 
     /// Evaluate mating patterns
     fn evaluate_mating_patterns(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         player: Player,
-        _captured_pieces: &CapturedPieces,
+        captured_pieces: &CapturedPieces,
     ) -> TaperedScore {
         let mut mg_score = 0;
         let mut eg_score = 0;
@@ -410,7 +410,198 @@ impl EndgamePatternEvaluator {
             eg_score += 90;
         }
 
+        // 4. Drop-based mate threats (shogi-specific)
+        let drop_mate_score = self.check_drop_mate_threats(board, player, captured_pieces);
+        mg_score += drop_mate_score.mg;
+        eg_score += drop_mate_score.eg;
+
+        // 5. Tokin promotion mate (shogi-specific)
+        if self.detect_tokin_promotion_mate(board, player) {
+            eg_score += 60; // Tokin can create strong mating threats
+        }
+
         TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Check if piece drops can create mate threats
+    pub fn check_drop_mate_threats(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let opponent = player.opposite();
+        let opp_king_pos = match self.find_king_position(board, opponent) {
+            Some(pos) => pos,
+            None => return TaperedScore::default(),
+        };
+
+        let mut mg_score = 0;
+        let mut eg_score = 0;
+        let mut threats_detected = 0;
+
+        // Check for back-rank mate threats via drops
+        let back_rank = if opponent == Player::Black { 8 } else { 0 };
+        if opp_king_pos.row == back_rank {
+            // Check if we can drop pieces to create mate threats
+            // Rook drop on same file as king
+            if captured_pieces.count(PieceType::Rook, player) > 0 {
+                // Check if dropping rook on same file would create mate threat
+                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Rook) {
+                    mg_score += 30;
+                    eg_score += 70;
+                    threats_detected += 1;
+                }
+            }
+
+            // Bishop drop to create mate threat
+            if captured_pieces.count(PieceType::Bishop, player) > 0 {
+                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Bishop) {
+                    mg_score += 25;
+                    eg_score += 60;
+                    threats_detected += 1;
+                }
+            }
+
+            // Gold drop to create mate threat
+            if captured_pieces.count(PieceType::Gold, player) > 0 {
+                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Gold) {
+                    mg_score += 20;
+                    eg_score += 50;
+                    threats_detected += 1;
+                }
+            }
+        }
+
+        if threats_detected > 0 {
+            self.stats.drop_mate_threats_detected += threats_detected;
+        }
+
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Check if dropping a piece can create a back-rank mate threat
+    fn can_drop_create_back_rank_mate(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        king_pos: Position,
+        piece_type: PieceType,
+    ) -> bool {
+        // Simplified check: see if dropping piece on same file/rank as king would attack it
+        // This is a heuristic - full implementation would check all legal drop squares
+        match piece_type {
+            PieceType::Rook => {
+                // Rook on same file or rank as king
+                // Check if there's a square on same file that would attack king
+                for row in 0..9 {
+                    let pos = Position::new(row, king_pos.col);
+                    if !board.is_square_occupied(pos) {
+                        // Check if rook at this position would attack king
+                        if self.would_piece_attack_square(board, pos, king_pos, PieceType::Rook, player) {
+                            return true;
+                        }
+                    }
+                }
+                // Check same rank
+                for col in 0..9 {
+                    let pos = Position::new(king_pos.row, col);
+                    if !board.is_square_occupied(pos) {
+                        if self.would_piece_attack_square(board, pos, king_pos, PieceType::Rook, player) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            PieceType::Bishop => {
+                // Bishop on diagonal with king
+                // Check diagonals
+                for dr in -4..=4 {
+                    for dc in -4..=4 {
+                        if dr == 0 || dc == 0 || dr.abs() != dc.abs() {
+                            continue;
+                        }
+                        let new_row = king_pos.row as i8 + dr;
+                        let new_col = king_pos.col as i8 + dc;
+                        if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                            let pos = Position::new(new_row as u8, new_col as u8);
+                            if !board.is_square_occupied(pos) {
+                                if self.would_piece_attack_square(board, pos, king_pos, PieceType::Bishop, player) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            PieceType::Gold => {
+                // Gold can attack adjacent squares
+                // Check squares adjacent to king
+                for dr in -1..=1 {
+                    for dc in -1..=1 {
+                        if dr == 0 && dc == 0 {
+                            continue;
+                        }
+                        let new_row = king_pos.row as i8 + dr;
+                        let new_col = king_pos.col as i8 + dc;
+                        if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
+                            let pos = Position::new(new_row as u8, new_col as u8);
+                            if !board.is_square_occupied(pos) {
+                                if self.would_piece_attack_square(board, pos, king_pos, PieceType::Gold, player) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        false
+    }
+
+    /// Check if a piece at a position would attack a target square
+    fn would_piece_attack_square(
+        &self,
+        board: &BitboardBoard,
+        piece_pos: Position,
+        target_pos: Position,
+        piece_type: PieceType,
+        player: Player,
+    ) -> bool {
+        // Use board's attack checking
+        let mut temp_board = board.clone();
+        temp_board.place_piece(Piece::new(piece_type, player), piece_pos);
+        temp_board.is_square_attacked_by(target_pos, player)
+    }
+
+    /// Detect tokin promotion mate (shogi-specific)
+    fn detect_tokin_promotion_mate(&self, board: &BitboardBoard, player: Player) -> bool {
+        let opp_king_pos = match self.find_king_position(board, player.opposite()) {
+            Some(pos) => pos,
+            None => return false,
+        };
+
+        // Check if we have pawns that can promote to tokin near opponent king
+        let pawns = self.find_pieces(board, player, PieceType::Pawn);
+        for pawn_pos in pawns {
+            // Check if pawn can promote and create mate threat
+            let distance = self.manhattan_distance(pawn_pos, opp_king_pos);
+            if distance <= 2 {
+                // Check if promoting would create mate threat
+                // Tokin (promoted pawn) attacks like gold
+                let promotion_rank = if player == Player::Black { 0..=2 } else { 6..=8 };
+                if promotion_rank.contains(&pawn_pos.row) {
+                    // Can promote, check if tokin would attack king
+                    if self.would_piece_attack_square(board, pawn_pos, opp_king_pos, PieceType::Gold, player) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     /// Detect back rank mate threat
@@ -735,7 +926,12 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate opposition patterns (king opposition in pawn endgames)
-    fn evaluate_opposition(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_opposition(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -775,13 +971,30 @@ impl EndgamePatternEvaluator {
         if base_score > 0 {
             // Scale score with pawn count (higher value with fewer pawns)
             // With 0-2 pawns: full value, with 3-4 pawns: 75%, with 5-6 pawns: 50%
-            let scale_factor = if pawn_count <= 2 {
+            let mut scale_factor = if pawn_count <= 2 {
                 100
             } else if pawn_count <= 4 {
                 75
             } else {
                 50
             };
+
+            // Shogi-specific: reduce opposition value if opponent has pieces in hand (drops can break opposition)
+            if self.config.enable_shogi_opposition_adjustment {
+                let opponent = player.opposite();
+                let pieces_in_hand = self.count_pieces_in_hand(captured_pieces, opponent);
+                
+                if pieces_in_hand > 0 {
+                    // Reduce by 25% per piece in hand, max 75% reduction
+                    let reduction = (pieces_in_hand as i32 * 25).min(75);
+                    scale_factor = (scale_factor * (100 - reduction)) / 100;
+                    
+                    if pieces_in_hand > 0 {
+                        self.stats.opposition_broken_by_drops += 1;
+                    }
+                }
+            }
+
             let scaled_score = (base_score * scale_factor) / 100;
             
             self.stats.opposition_detections += 1;
@@ -807,12 +1020,29 @@ impl EndgamePatternEvaluator {
         count
     }
 
+    /// Count total pieces in hand for a player
+    pub fn count_pieces_in_hand(&self, captured_pieces: &CapturedPieces, player: Player) -> i32 {
+        let mut count = 0;
+        for piece_type in [
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+        ] {
+            count += captured_pieces.count(piece_type, player) as i32;
+        }
+        count
+    }
+
     // =======================================================================
     // TRIANGULATION DETECTION (Phase 2 - Task 2.3.5)
     // =======================================================================
 
     /// Evaluate triangulation potential (losing a tempo to gain zugzwang)
-    fn evaluate_triangulation(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_triangulation(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -856,7 +1086,7 @@ impl EndgamePatternEvaluator {
         }
 
         // Material balance check (triangulation more valuable when ahead)
-        let material_diff = self.get_material_difference(board, player);
+        let material_diff = self.get_material_difference(board, player, captured_pieces);
         if material_diff < 0 {
             // Behind in material, triangulation less valuable
             return TaperedScore::default();
@@ -1067,16 +1297,17 @@ impl EndgamePatternEvaluator {
     }
 
     /// Get material difference (player - opponent)
-    fn get_material_difference(&self, board: &BitboardBoard, player: Player) -> i32 {
-        let player_material = self.calculate_material(board, player);
-        let opponent_material = self.calculate_material(board, player.opposite());
+    fn get_material_difference(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+        let player_material = self.calculate_material(board, player, captured_pieces);
+        let opponent_material = self.calculate_material(board, player.opposite(), captured_pieces);
         player_material - opponent_material
     }
 
-    /// Calculate material for a player
-    fn calculate_material(&self, board: &BitboardBoard, player: Player) -> i32 {
+    /// Calculate material for a player (including pieces in hand - critical in shogi)
+    fn calculate_material(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
         let mut material = 0;
 
+        // Material on board
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position::new(row, col);
@@ -1088,7 +1319,27 @@ impl EndgamePatternEvaluator {
             }
         }
 
+        // Material in hand (captured pieces)
+        for piece_type in [
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+        ] {
+            let count = captured_pieces.count(piece_type, player);
+            material += piece_type.base_value() * count as i32;
+        }
+
         material
+    }
+
+    /// Calculate material for a player (legacy method - calls new version with empty captured pieces)
+    fn calculate_material_legacy(&self, board: &BitboardBoard, player: Player) -> i32 {
+        let captured_pieces = CapturedPieces::new();
+        self.calculate_material(board, player, &captured_pieces)
     }
 
     // =======================================================================
@@ -1271,6 +1522,8 @@ pub struct EndgamePatternConfig {
     pub king_activity_activity_scale: f32,
     /// King activity advancement bonus scaling factor (default: 1.0)
     pub king_activity_advancement_scale: f32,
+    /// Enable shogi-specific opposition adjustment (reduce value when opponent has pieces in hand)
+    pub enable_shogi_opposition_adjustment: bool,
 }
 
 impl Default for EndgamePatternConfig {
@@ -1290,6 +1543,7 @@ impl Default for EndgamePatternConfig {
             king_activity_centralization_scale: 1.0,
             king_activity_activity_scale: 1.0,
             king_activity_advancement_scale: 1.0,
+            enable_shogi_opposition_adjustment: true,
         }
     }
 }
@@ -1311,6 +1565,10 @@ pub struct EndgamePatternStats {
     pub triangulation_detections: u64,
     /// Number of unsafe king penalties
     pub unsafe_king_penalties: u64,
+    /// Number of drop-based mate threats detected
+    pub drop_mate_threats_detected: u64,
+    /// Number of times opposition was broken by drops
+    pub opposition_broken_by_drops: u64,
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1338,9 +1596,10 @@ mod tests {
     fn test_opposition_with_pawn_count() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
         
         // Starting position has many pawns, opposition should not be detected
-        let score = evaluator.evaluate_opposition(&board, Player::Black);
+        let score = evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
         // May or may not detect opposition depending on king positions and pawn count
         assert!(score.eg >= 0 && score.eg <= 40);
     }
@@ -1403,14 +1662,90 @@ mod tests {
         assert_eq!(evaluator.stats().unsafe_king_penalties, 0);
         
         // Evaluate patterns
-        evaluator.evaluate_opposition(&board, Player::Black);
-        evaluator.evaluate_triangulation(&board, Player::Black);
+        let captured_pieces = CapturedPieces::new();
+        evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
+        evaluator.evaluate_triangulation(&board, Player::Black, &captured_pieces);
         evaluator.evaluate_king_activity(&board, Player::Black);
         
         // Statistics should be tracked (may be 0 if patterns not detected)
         assert!(evaluator.stats().opposition_detections >= 0);
         assert!(evaluator.stats().triangulation_detections >= 0);
         assert!(evaluator.stats().unsafe_king_penalties >= 0);
+    }
+
+    #[test]
+    fn test_drop_mate_threats() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let mut captured_pieces = CapturedPieces::new();
+        
+        // Add a rook to hand
+        captured_pieces.add_piece(PieceType::Rook, Player::Black);
+        
+        let score = evaluator.evaluate_mating_patterns(&board, Player::Black, &captured_pieces);
+        // Should complete without error
+        assert!(score.mg >= -100 && score.mg <= 200);
+        assert!(score.eg >= -100 && score.eg <= 300);
+    }
+
+    #[test]
+    fn test_opposition_with_pieces_in_hand() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let mut captured_pieces = CapturedPieces::new();
+        
+        // Add pieces to opponent's hand (should reduce opposition value)
+        captured_pieces.add_piece(PieceType::Gold, Player::White);
+        captured_pieces.add_piece(PieceType::Silver, Player::White);
+        
+        let score = evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
+        // Should complete without error
+        assert!(score.eg >= 0 && score.eg <= 40);
+    }
+
+    #[test]
+    fn test_count_pieces_in_hand() {
+        let evaluator = EndgamePatternEvaluator::new();
+        let mut captured_pieces = CapturedPieces::new();
+        
+        assert_eq!(evaluator.count_pieces_in_hand(&captured_pieces, Player::Black), 0);
+        
+        captured_pieces.add_piece(PieceType::Rook, Player::Black);
+        captured_pieces.add_piece(PieceType::Bishop, Player::Black);
+        captured_pieces.add_piece(PieceType::Gold, Player::Black);
+        
+        assert_eq!(evaluator.count_pieces_in_hand(&captured_pieces, Player::Black), 3);
+    }
+
+    #[test]
+    fn test_material_calculation_with_pieces_in_hand() {
+        let evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let mut captured_pieces = CapturedPieces::new();
+        
+        // Material on board only
+        let material1 = evaluator.calculate_material(&board, Player::Black, &captured_pieces);
+        
+        // Add pieces to hand
+        captured_pieces.add_piece(PieceType::Rook, Player::Black);
+        captured_pieces.add_piece(PieceType::Bishop, Player::Black);
+        
+        // Material should increase
+        let material2 = evaluator.calculate_material(&board, Player::Black, &captured_pieces);
+        assert!(material2 > material1);
+    }
+
+    #[test]
+    fn test_tokin_promotion_mate() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        
+        // Test that tokin promotion mate detection works
+        let score = evaluator.evaluate_mating_patterns(&board, Player::Black, &captured_pieces);
+        // Should complete without error
+        assert!(score.mg >= -100 && score.mg <= 200);
+        assert!(score.eg >= -100 && score.eg <= 300);
     }
 
     #[test]
