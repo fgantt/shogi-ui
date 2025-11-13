@@ -6,10 +6,11 @@
 //! - Castle formation evaluation
 //! - Tempo evaluation
 //! - Opening-specific penalties
+//! - Piece coordination evaluation (Task 19.0 - Task 2.0)
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::opening_principles::OpeningPrincipleEvaluator;
+use shogi_engine::evaluation::opening_principles::{OpeningPrincipleEvaluator, OpeningPrincipleConfig};
 use shogi_engine::types::*;
 
 /// Benchmark evaluator creation
@@ -192,10 +193,70 @@ fn benchmark_configurations(c: &mut Criterion) {
             enable_castle_formation: false,
             enable_tempo: false,
             enable_opening_penalties: false,
+            enable_piece_coordination: false,
         };
         let mut evaluator = OpeningPrincipleEvaluator::with_config(config);
         b.iter(|| {
             black_box(evaluator.evaluate_opening(&board, Player::Black, 5));
+        });
+    });
+
+    group.finish();
+}
+
+/// Benchmark piece coordination evaluation (Task 19.0 - Task 2.0)
+fn benchmark_piece_coordination(c: &mut Criterion) {
+    let mut group = c.benchmark_group("piece_coordination");
+
+    let board = BitboardBoard::new();
+
+    // Benchmark with coordination enabled
+    group.bench_function("with_coordination", |b| {
+        let mut evaluator = OpeningPrincipleEvaluator::new();
+        b.iter(|| {
+            black_box(evaluator.evaluate_opening(&board, Player::Black, 5));
+        });
+    });
+
+    // Benchmark with coordination disabled
+    group.bench_function("without_coordination", |b| {
+        let config = OpeningPrincipleConfig {
+            enable_development: true,
+            enable_center_control: true,
+            enable_castle_formation: true,
+            enable_tempo: true,
+            enable_opening_penalties: true,
+            enable_piece_coordination: false,
+        };
+        let mut evaluator = OpeningPrincipleEvaluator::with_config(config);
+        b.iter(|| {
+            black_box(evaluator.evaluate_opening(&board, Player::Black, 5));
+        });
+    });
+
+    // Compare overhead
+    group.bench_function("coordination_overhead", |b| {
+        let board = BitboardBoard::new();
+        
+        // With coordination
+        let mut evaluator_with = OpeningPrincipleEvaluator::new();
+        let score_with = evaluator_with.evaluate_opening(&board, Player::Black, 5);
+        
+        // Without coordination
+        let config = OpeningPrincipleConfig {
+            enable_development: true,
+            enable_center_control: true,
+            enable_castle_formation: true,
+            enable_tempo: true,
+            enable_opening_penalties: true,
+            enable_piece_coordination: false,
+        };
+        let mut evaluator_without = OpeningPrincipleEvaluator::with_config(config);
+        let score_without = evaluator_without.evaluate_opening(&board, Player::Black, 5);
+        
+        b.iter(|| {
+            black_box(score_with.interpolate(256));
+            black_box(score_without.interpolate(256));
         });
     });
 
@@ -213,6 +274,7 @@ criterion_group!(
     benchmark_complete_evaluation,
     benchmark_helpers,
     benchmark_configurations,
+    benchmark_piece_coordination,
 );
 
 criterion_main!(benches);

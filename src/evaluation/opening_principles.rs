@@ -103,6 +103,11 @@ impl OpeningPrincipleEvaluator {
             score += self.evaluate_opening_penalties(board, player, move_count);
         }
 
+        // 6. Piece coordination (Task 19.0 - Task 2.0)
+        if self.config.enable_piece_coordination {
+            score += self.evaluate_piece_coordination(board, player);
+        }
+
         score
     }
 
@@ -508,6 +513,147 @@ impl OpeningPrincipleEvaluator {
     }
 
     // =======================================================================
+    // PIECE COORDINATION EVALUATION (Task 19.0 - Task 2.0)
+    // =======================================================================
+
+    /// Evaluate piece coordination in opening
+    ///
+    /// Evaluates coordination bonuses for:
+    /// - Rook-lance batteries (same file, both developed)
+    /// - Bishop-lance combinations (same diagonal, both developed)
+    /// - Gold-silver defensive coordination (near king)
+    /// - Rook-bishop coordination (attacking combinations)
+    /// - Piece synergy bonuses (developed pieces supporting each other)
+    fn evaluate_piece_coordination(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
+        let mut mg_score = 0;
+        let start_row = if player == Player::Black { 8 } else { 0 };
+
+        // 1. Rook-lance battery detection (same file, both developed)
+        let rooks = self.find_pieces(board, player, PieceType::Rook);
+        let lances = self.find_pieces(board, player, PieceType::Lance);
+        
+        for rook_pos in &rooks {
+            // Check if rook is developed
+            let rook_developed = rook_pos.row != start_row;
+            
+            for lance_pos in &lances {
+                // Check if lance is developed
+                let lance_developed = lance_pos.row != start_row;
+                
+                // Check if on same file (same column)
+                if rook_pos.col == lance_pos.col && rook_developed && lance_developed {
+                    // Rook-lance battery bonus
+                    // Rook supports lance on same file
+                    mg_score += 25; // Good bonus for rook-lance coordination
+                }
+            }
+        }
+
+        // 2. Bishop-lance combination detection (same diagonal, both developed)
+        let bishops = self.find_pieces(board, player, PieceType::Bishop);
+        
+        for bishop_pos in &bishops {
+            let bishop_developed = bishop_pos.row != start_row;
+            
+            for lance_pos in &lances {
+                let lance_developed = lance_pos.row != start_row;
+                
+                // Check if on same diagonal
+                if self.same_diagonal(*bishop_pos, *lance_pos) && bishop_developed && lance_developed {
+                    // Bishop-lance combination bonus
+                    mg_score += 20; // Moderate bonus for bishop-lance coordination
+                }
+            }
+        }
+
+        // 3. Gold-silver defensive coordination (near king)
+        if let Some(king_pos) = self.find_king_position(board, player) {
+            let golds = self.find_pieces(board, player, PieceType::Gold);
+            let silvers = self.find_pieces(board, player, PieceType::Silver);
+            
+            // Check for gold-silver pairs near king (within 2 squares)
+            for gold_pos in &golds {
+                for silver_pos in &silvers {
+                    let distance = self.square_distance(*gold_pos, *silver_pos);
+                    let gold_near_king = self.square_distance(*gold_pos, king_pos) <= 2;
+                    let silver_near_king = self.square_distance(*silver_pos, king_pos) <= 2;
+                    
+                    // Gold and silver near king and close to each other
+                    if gold_near_king && silver_near_king && distance <= 2 {
+                        mg_score += 15; // Defensive coordination bonus
+                    }
+                }
+            }
+        }
+
+        // 4. Rook-bishop coordination (attacking combinations, both developed)
+        for rook_pos in &rooks {
+            let rook_developed = rook_pos.row != start_row;
+            
+            for bishop_pos in &bishops {
+                let bishop_developed = bishop_pos.row != start_row;
+                
+                if rook_developed && bishop_developed {
+                    // Both major pieces developed - coordination bonus
+                    // Stronger if they're in good positions (not too close to edge)
+                    let rook_central = rook_pos.col >= 2 && rook_pos.col <= 6;
+                    let bishop_central = bishop_pos.col >= 2 && bishop_pos.col <= 6;
+                    
+                    if rook_central || bishop_central {
+                        mg_score += 18; // Rook-bishop coordination bonus
+                    }
+                }
+            }
+        }
+
+        // 5. Piece synergy bonuses (developed pieces supporting each other)
+        // Check for developed rook supporting developed silver/gold
+        for rook_pos in &rooks {
+            let rook_developed = rook_pos.row != start_row;
+            
+            if rook_developed {
+                // Check if rook is on same file as developed silver/gold
+                for silver_pos in self.find_pieces(board, player, PieceType::Silver) {
+                    if silver_pos.row != start_row && silver_pos.col == rook_pos.col {
+                        mg_score += 12; // Rook supporting developed silver
+                    }
+                }
+                
+                for gold_pos in self.find_pieces(board, player, PieceType::Gold) {
+                    if gold_pos.row != start_row && gold_pos.col == rook_pos.col {
+                        mg_score += 10; // Rook supporting developed gold
+                    }
+                }
+            }
+        }
+
+        // Endgame component is less important (1/4 of middlegame)
+        let eg_score = mg_score / 4;
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Check if two positions are on the same diagonal
+    fn same_diagonal(&self, pos1: Position, pos2: Position) -> bool {
+        let rank_diff = (pos1.row as i32 - pos2.row as i32).abs();
+        let file_diff = (pos1.col as i32 - pos2.col as i32).abs();
+        
+        // Same diagonal if rank_diff == file_diff (main diagonal) or
+        // if rank_diff + file_diff forms anti-diagonal pattern
+        rank_diff == file_diff || (pos1.row + pos1.col == pos2.row + pos2.col)
+    }
+
+    /// Calculate square distance (Manhattan distance)
+    fn square_distance(&self, pos1: Position, pos2: Position) -> u8 {
+        let rank_diff = (pos1.row as i32 - pos2.row as i32).abs() as u8;
+        let file_diff = (pos1.col as i32 - pos2.col as i32).abs() as u8;
+        rank_diff + file_diff
+    }
+
+    // =======================================================================
     // HELPER METHODS
     // =======================================================================
 
@@ -577,6 +723,8 @@ pub struct OpeningPrincipleConfig {
     pub enable_tempo: bool,
     /// Enable opening penalties
     pub enable_opening_penalties: bool,
+    /// Enable piece coordination evaluation (rook-lance batteries, bishop-lance combinations, etc.)
+    pub enable_piece_coordination: bool,
 }
 
 impl Default for OpeningPrincipleConfig {
@@ -587,6 +735,7 @@ impl Default for OpeningPrincipleConfig {
             enable_castle_formation: true,
             enable_tempo: true,
             enable_opening_penalties: true,
+            enable_piece_coordination: true,
         }
     }
 }
