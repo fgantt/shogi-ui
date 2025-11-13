@@ -49,12 +49,12 @@
   - [x] 4.4 Add instrumentation to record cache effectiveness in benchmarks and expose stats through telemetry.
   - [x] 4.5 Benchmark cache behavior on recorded game traces to validate sizing assumptions and adjust defaults.
 
-- [ ] 5.0 Expand Castle Regression Coverage, Benchmarks, and CI Integration
-  - [ ] 5.1 Build fixture library (possibly under `tests/fixtures/castles/`) with canonical, mirrored, partial, broken, and attacked castle states.
-  - [ ] 5.2 Migrate legacy castle tests behind `legacy-tests` into default test suite with assertions on quality scores, penalties, and telemetry.
-  - [ ] 5.3 Add integration tests covering castle/attack interactions—ensure penalties respond to open files or mating nets flagged by threat analyzers.
-  - [ ] 5.4 Create benchmark suite measuring castle recognition throughput, cache hit rate, and telemetry overhead across opening/middlegame/endgame traces.
-  - [ ] 5.5 Update CI configuration to run new tests/benchmarks (or representative subset) and document commands for local verification.
+- [x] 5.0 Expand Castle Regression Coverage, Benchmarks, and CI Integration
+  - [x] 5.1 Build fixture library (possibly under `tests/fixtures/castles/`) with canonical, mirrored, partial, broken, and attacked castle states.
+  - [x] 5.2 Migrate legacy castle tests behind `legacy-tests` into default test suite with assertions on quality scores, penalties, and telemetry.
+  - [x] 5.3 Add integration tests covering castle/attack interactions—ensure penalties respond to open files or mating nets flagged by threat analyzers.
+  - [x] 5.4 Create benchmark suite measuring castle recognition throughput, cache hit rate, and telemetry overhead across opening/middlegame/endgame traces.
+  - [x] 5.5 Update CI configuration to run new tests/benchmarks (or representative subset) and document commands for local verification.
 
 ## Completion Notes
 
@@ -82,4 +82,11 @@
 - **Testing:** Added comprehensive tests for cache key generation, hit/miss tracking, eviction behavior, statistics reset, promoted pieces handling, custom cache sizes, symmetry cache sharing, and cross-color leakage prevention. All tests verify cache behavior and statistics tracking.
 - **Benchmarks:** Created `benches/castle_recognition_cache_benchmarks.rs` measuring cache hit rate, miss rate, eviction behavior, different castle types, cache statistics overhead, symmetry impact, and cache size impact (50, 100, 500, 1000 entries). Benchmarks validate cache sizing assumptions and performance characteristics.
 - **Documentation:** Cache key design documented with notes on symmetry support limitations (full symmetry requires neighborhood hash normalization). Default cache size (500) tuned for mid-search workloads. Cache statistics exposed through telemetry for monitoring and tuning.
+
+### Task 5.0 — Expand Castle Regression Coverage, Benchmarks, and CI Integration
+
+- **Implementation:** Created comprehensive fixture library (`src/evaluation/castle_fixtures.rs`) with 16 fixtures covering canonical, mirrored, partial, broken, and attacked castle states for Mino, Anaguma, and Yagura patterns. Built new regression test suite (`tests/castle_pattern_regression_tests.rs`) with assertions on quality scores, penalties, telemetry tracking, and cache effectiveness. Created integration test suite (`tests/castle_attack_integration_tests.rs`) covering castle/attack interactions, open file penalties, infiltration detection, mating net detection, and threat evaluation integration. Enhanced benchmark suite (`benches/castle_recognition_cache_benchmarks.rs`) with fixture-based throughput tests, telemetry overhead measurements, and phase-specific benchmarks (opening/middlegame/endgame).
+- **Testing:** Regression tests validate fixture recognition, quality score ordering (canonical > partial > broken), attacked castle infiltration detection, mirrored castle symmetry, telemetry tracking, and cache effectiveness. Integration tests verify attacked castle penalties, open file detection, infiltration penalties, mating net detection, castle quality impact on attack evaluation, threat evaluation integration, and broken castle vulnerability. All tests use the new fixture library for consistent, maintainable test cases.
+- **CI Integration:** Created GitHub Actions workflow (`.github/workflows/castle-pattern-tests.yml`) that runs regression tests, integration tests, and benchmarks on relevant file changes. Workflow triggers on pushes/PRs affecting castle evaluation code and can be manually triggered. Benchmark reports are uploaded as artifacts for performance tracking.
+- **Documentation:** Created fixture index (`tests/data/castle_pattern_fixtures_index.toml`) and comprehensive fixture documentation (`docs/development/tasks/engine-review/fixtures/task-16.0-castle-pattern-fixtures.md`) describing all fixtures, their themes, expected quality scores, and usage in tests/benchmarks. Documented test and benchmark commands for local verification.
 

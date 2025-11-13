@@ -1,6 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
+use shogi_engine::evaluation::castle_fixtures::castle_fixtures;
 use shogi_engine::evaluation::castles::CastleRecognizer;
+use shogi_engine::evaluation::king_safety::KingSafetyEvaluator;
 use shogi_engine::types::{Piece, PieceType, Player, Position};
 
 /// Create a test board with a Mino castle
@@ -205,6 +207,85 @@ fn castle_recognition_cache_benchmark(c: &mut Criterion) {
         );
     }
     
+    // Benchmark using fixtures
+    group.bench_function("fixtures_throughput", |b| {
+        let recognizer = CastleRecognizer::new();
+        let fixtures = castle_fixtures();
+
+        b.iter(|| {
+            for fixture in &fixtures {
+                let (board, king_pos) = (fixture.builder)(fixture.player);
+                black_box(recognizer.evaluate_castle(black_box(&board), fixture.player, king_pos));
+            }
+        });
+    });
+
+    // Benchmark telemetry overhead
+    group.bench_function("telemetry_overhead", |b| {
+        let evaluator = KingSafetyEvaluator::new();
+        let fixtures = castle_fixtures();
+
+        b.iter(|| {
+            for fixture in &fixtures {
+                let (board, _) = (fixture.builder)(fixture.player);
+                evaluator.evaluate(black_box(&board), fixture.player);
+                black_box(evaluator.stats());
+            }
+        });
+    });
+
+    // Benchmark across game phases (opening/middlegame/endgame)
+    group.bench_function("opening_phase_castles", |b| {
+        let recognizer = CastleRecognizer::new();
+        let fixtures = castle_fixtures();
+        let opening_fixtures: Vec<_> = fixtures
+            .iter()
+            .filter(|f| f.theme == shogi_engine::evaluation::castle_fixtures::CastleFixtureTheme::Canonical)
+            .collect();
+
+        b.iter(|| {
+            for fixture in &opening_fixtures {
+                let (board, king_pos) = (fixture.builder)(fixture.player);
+                black_box(recognizer.evaluate_castle(black_box(&board), fixture.player, king_pos));
+            }
+        });
+    });
+
+    group.bench_function("middlegame_phase_castles", |b| {
+        let recognizer = CastleRecognizer::new();
+        let fixtures = castle_fixtures();
+        let middlegame_fixtures: Vec<_> = fixtures
+            .iter()
+            .filter(|f| {
+                f.theme == shogi_engine::evaluation::castle_fixtures::CastleFixtureTheme::Partial
+                    || f.theme == shogi_engine::evaluation::castle_fixtures::CastleFixtureTheme::Attacked
+            })
+            .collect();
+
+        b.iter(|| {
+            for fixture in &middlegame_fixtures {
+                let (board, king_pos) = (fixture.builder)(fixture.player);
+                black_box(recognizer.evaluate_castle(black_box(&board), fixture.player, king_pos));
+            }
+        });
+    });
+
+    group.bench_function("endgame_phase_castles", |b| {
+        let recognizer = CastleRecognizer::new();
+        let fixtures = castle_fixtures();
+        let endgame_fixtures: Vec<_> = fixtures
+            .iter()
+            .filter(|f| f.theme == shogi_engine::evaluation::castle_fixtures::CastleFixtureTheme::Broken)
+            .collect();
+
+        b.iter(|| {
+            for fixture in &endgame_fixtures {
+                let (board, king_pos) = (fixture.builder)(fixture.player);
+                black_box(recognizer.evaluate_castle(black_box(&board), fixture.player, king_pos));
+            }
+        });
+    });
+
     group.finish();
 }
 

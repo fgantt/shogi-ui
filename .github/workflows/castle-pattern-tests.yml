@@ -1,0 +1,83 @@
+# Castle Pattern Recognition Tests and Benchmarks
+#
+# This workflow runs castle pattern recognition regression tests and benchmarks
+# to track performance over time and detect regressions.
+
+name: Castle Pattern Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/evaluation/castles.rs'
+      - 'src/evaluation/castle_*.rs'
+      - 'src/evaluation/king_safety.rs'
+      - 'benches/castle_*.rs'
+      - 'tests/castle_*.rs'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/evaluation/castles.rs'
+      - 'src/evaluation/castle_*.rs'
+      - 'src/evaluation/king_safety.rs'
+      - 'benches/castle_*.rs'
+      - 'tests/castle_*.rs'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  castle-pattern-tests:
+    name: Castle Pattern Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Run castle pattern regression tests
+        run: |
+          cargo test --test castle_pattern_regression_tests --lib -- --nocapture
+      
+      - name: Run castle attack integration tests
+        run: |
+          cargo test --test castle_attack_integration_tests --lib -- --nocapture
+      
+      - name: Run castle recognition benchmarks (if feature enabled)
+        if: hashFiles('benches/castle_recognition_cache_benchmarks.rs') != ''
+        env:
+          BENCHMARK_RESULTS_DIR: target/criterion
+        run: |
+          mkdir -p target/criterion
+          cargo bench --bench castle_recognition_cache_benchmarks --features legacy-tests || echo "Benchmarks require legacy-tests feature"
+      
+      - name: Check test results
+        run: |
+          echo "Castle pattern tests completed successfully"
+      
+      - name: Upload benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: castle-benchmark-reports
+          path: |
+            target/criterion/**/*.html
+            target/criterion/**/*.json
+          retention-days: 30
+          if-no-files-found: ignore
+

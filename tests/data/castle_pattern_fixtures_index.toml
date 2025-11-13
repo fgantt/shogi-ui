@@ -1,0 +1,99 @@
+# Canonical castle fixtures introduced in Task 16.0 (castle pattern recognition review).
+# Each entry is referenced by regression tests and documentation.
+
+[[fixtures]]
+name = "mino_canonical_black"
+theme = "canonical"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "mino_canonical_white"
+theme = "canonical"
+castle_type = "mino"
+player = "white"
+
+[[fixtures]]
+name = "anaguma_canonical_black"
+theme = "canonical"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "yagura_canonical_black"
+theme = "canonical"
+castle_type = "yagura"
+player = "black"
+
+[[fixtures]]
+name = "mino_mirrored_left_black"
+theme = "mirrored"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "mino_mirrored_right_black"
+theme = "mirrored"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "anaguma_mirrored_left_black"
+theme = "mirrored"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "anaguma_mirrored_right_black"
+theme = "mirrored"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "mino_partial_missing_silver"
+theme = "partial"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "mino_partial_missing_pawns"
+theme = "partial"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "anaguma_partial_missing_gold"
+theme = "partial"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "mino_broken_breached_wall"
+theme = "broken"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "anaguma_broken_missing_defenders"
+theme = "broken"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "mino_attacked_rook_file"
+theme = "attacked"
+castle_type = "mino"
+player = "black"
+
+[[fixtures]]
+name = "anaguma_attacked_infiltration"
+theme = "attacked"
+castle_type = "anaguma"
+player = "black"
+
+[[fixtures]]
+name = "yagura_attacked_mating_net"
+theme = "attacked"
+castle_type = "yagura"
+player = "black"
+
