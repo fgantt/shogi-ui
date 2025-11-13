@@ -194,6 +194,11 @@ impl EndgamePatternEvaluator {
             eg_score += advancement_bonus; // Excellent in endgame (if safe)
         }
 
+        // Track king activity bonuses
+        if mg_score > 0 || eg_score > 0 {
+            self.stats.king_activity_bonuses += 1;
+        }
+
         TaperedScore::new_tapered(mg_score, eg_score)
     }
 
@@ -215,7 +220,7 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate passed pawns with endgame emphasis
-    fn evaluate_passed_pawns_endgame(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_passed_pawns_endgame(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let pawns = self.collect_pawns(board, player);
         let mut mg_score = 0;
         let mut eg_score = 0;
@@ -250,6 +255,7 @@ impl EndgamePatternEvaluator {
 
                 mg_score += base_mg;
                 eg_score += base_eg;
+                self.stats.passed_pawn_bonuses += 1;
             }
         }
 
@@ -418,6 +424,11 @@ impl EndgamePatternEvaluator {
         // 5. Tokin promotion mate (shogi-specific)
         if self.detect_tokin_promotion_mate(board, player) {
             eg_score += 60; // Tokin can create strong mating threats
+        }
+
+        // Track mating pattern detections
+        if mg_score > 0 || eg_score > 0 {
+            self.stats.mating_pattern_detections += 1;
         }
 
         TaperedScore::new_tapered(mg_score, eg_score)
@@ -1226,7 +1237,7 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate fortress patterns (defensive structures that are hard to break)
-    fn evaluate_fortress(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_fortress(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -1246,12 +1257,15 @@ impl EndgamePatternEvaluator {
         // Fortress is strong with 2-3 defenders
         if defenders >= 2 {
             // Check material disadvantage - fortress more valuable when behind
-            let material_diff = self.get_material_difference(board, player);
+            let captured_pieces = CapturedPieces::new();
+            let material_diff = self.get_material_difference(board, player, &captured_pieces);
 
             if material_diff < -500 {
                 // Significant material disadvantage - fortress is crucial
+                self.stats.fortress_detections += 1;
                 return TaperedScore::new_tapered(0, 120);
             } else if material_diff < 0 {
+                self.stats.fortress_detections += 1;
                 return TaperedScore::new_tapered(0, 60);
             }
         }
@@ -1481,7 +1495,12 @@ impl EndgamePatternEvaluator {
 
     /// Reset statistics
     pub fn reset_stats(&mut self) {
-        self.stats = EndgamePatternStats::default();
+        self.stats.reset();
+    }
+
+    /// Get statistics summary as a string
+    pub fn stats_summary(&self) -> String {
+        self.stats.summary()
     }
 }
 
@@ -1569,9 +1588,54 @@ pub struct EndgamePatternStats {
     pub drop_mate_threats_detected: u64,
     /// Number of times opposition was broken by drops
     pub opposition_broken_by_drops: u64,
+    /// Number of king activity bonuses applied
+    pub king_activity_bonuses: u64,
+    /// Number of passed pawn bonuses applied
+    pub passed_pawn_bonuses: u64,
+    /// Number of mating pattern detections
+    pub mating_pattern_detections: u64,
+    /// Number of fortress detections
+    pub fortress_detections: u64,
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
+impl EndgamePatternStats {
+    /// Reset all statistics to zero
+    pub fn reset(&mut self) {
+        *self = EndgamePatternStats::default();
+    }
+
+    /// Generate a summary string of all statistics
+    pub fn summary(&self) -> String {
+        format!(
+            "EndgamePatternStats:\n\
+            \tEvaluations: {}\n\
+            \tZugzwang detections: {} (benefits: {}, penalties: {})\n\
+            \tOpposition detections: {} (broken by drops: {})\n\
+            \tTriangulation detections: {}\n\
+            \tUnsafe king penalties: {}\n\
+            \tDrop mate threats: {}\n\
+            \tKing activity bonuses: {}\n\
+            \tPassed pawn bonuses: {}\n\
+            \tMating pattern detections: {}\n\
+            \tFortress detections: {}",
+            self.evaluations,
+            self.zugzwang_detections,
+            self.zugzwang_benefits,
+            self.zugzwang_penalties,
+            self.opposition_detections,
+            self.opposition_broken_by_drops,
+            self.triangulation_detections,
+            self.unsafe_king_penalties,
+            self.drop_mate_threats_detected,
+            self.king_activity_bonuses,
+            self.passed_pawn_bonuses,
+            self.mating_pattern_detections,
+            self.fortress_detections
+        )
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
