@@ -219,6 +219,27 @@ impl IntegratedEvaluator {
         // Calculate phase
         let phase = self.calculate_phase_cached(board, captured_pieces);
 
+        // Apply phase-dependent weight scaling if enabled
+        let mut weights = self.weights.clone();
+        if self.config.enable_phase_dependent_weights {
+            // Create a temporary TaperedEvalConfig to use its phase scaling method
+            let mut temp_config = crate::evaluation::config::TaperedEvalConfig::default();
+            temp_config.enable_phase_dependent_weights = true;
+            temp_config.apply_phase_scaling(&mut weights, phase);
+        }
+
+        // Clamp weights to valid range (0.0-10.0) if needed
+        weights.material_weight = weights.material_weight.clamp(0.0, 10.0);
+        weights.position_weight = weights.position_weight.clamp(0.0, 10.0);
+        weights.king_safety_weight = weights.king_safety_weight.clamp(0.0, 10.0);
+        weights.pawn_structure_weight = weights.pawn_structure_weight.clamp(0.0, 10.0);
+        weights.mobility_weight = weights.mobility_weight.clamp(0.0, 10.0);
+        weights.center_control_weight = weights.center_control_weight.clamp(0.0, 10.0);
+        weights.development_weight = weights.development_weight.clamp(0.0, 10.0);
+        weights.tactical_weight = weights.tactical_weight.clamp(0.0, 10.0);
+        weights.positional_weight = weights.positional_weight.clamp(0.0, 10.0);
+        weights.castle_weight = weights.castle_weight.clamp(0.0, 10.0);
+
         // Accumulate component scores
         let mut total = TaperedScore::default();
         let mut pst_telemetry: Option<PieceSquareTelemetry> = None;
@@ -263,23 +284,78 @@ impl IntegratedEvaluator {
         }
 
         if self.config.components.position_features {
-            let weights = self.weights.clone();
             let mut position_features = self.position_features.borrow_mut();
             position_features.begin_evaluation(board);
-            total += position_features.evaluate_king_safety(board, player, captured_pieces)
-                * weights.king_safety_weight;
-            total += position_features
-                .evaluate_pawn_structure(board, player, captured_pieces, skip_passed_pawn_evaluation)
-                * weights.pawn_structure_weight;
-            total += position_features.evaluate_mobility(board, player, captured_pieces)
-                * weights.mobility_weight;
+            
+            // King safety
+            let king_safety_score = position_features.evaluate_king_safety(board, player, captured_pieces);
+            let contribution = (king_safety_score.interpolate(phase) as f32) * weights.king_safety_weight;
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large king_safety contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
+                    king_safety_score.interpolate(phase),
+                    weights.king_safety_weight,
+                    contribution
+                ));
+            }
+            total += king_safety_score * weights.king_safety_weight;
+            
+            // Pawn structure
+            let pawn_score = position_features
+                .evaluate_pawn_structure(board, player, captured_pieces, skip_passed_pawn_evaluation);
+            let contribution = (pawn_score.interpolate(phase) as f32) * weights.pawn_structure_weight;
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large pawn_structure contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
+                    pawn_score.interpolate(phase),
+                    weights.pawn_structure_weight,
+                    contribution
+                ));
+            }
+            total += pawn_score * weights.pawn_structure_weight;
+            
+            // Mobility
+            let mobility_score = position_features.evaluate_mobility(board, player, captured_pieces);
+            let contribution = (mobility_score.interpolate(phase) as f32) * weights.mobility_weight;
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large mobility contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
+                    mobility_score.interpolate(phase),
+                    weights.mobility_weight,
+                    contribution
+                ));
+            }
+            total += mobility_score * weights.mobility_weight;
+            
+            // Center control
             // Note: skip_center_control is set to false for now (future use when positional patterns
             // fully replace position_features center control)
-            total += position_features
-                .evaluate_center_control(board, player, false)
-                * weights.center_control_weight;
-            total +=
-                position_features.evaluate_development(board, player) * weights.development_weight;
+            let center_score = position_features
+                .evaluate_center_control(board, player, false);
+            let contribution = (center_score.interpolate(phase) as f32) * weights.center_control_weight;
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large center_control contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
+                    center_score.interpolate(phase),
+                    weights.center_control_weight,
+                    contribution
+                ));
+            }
+            total += center_score * weights.center_control_weight;
+            
+            // Development
+            let dev_score = position_features.evaluate_development(board, player);
+            let contribution = (dev_score.interpolate(phase) as f32) * weights.development_weight;
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large development contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
+                    dev_score.interpolate(phase),
+                    weights.development_weight,
+                    contribution
+                ));
+            }
+            total += dev_score * weights.development_weight;
+            
             if stats_enabled && self.config.collect_position_feature_stats {
                 position_feature_stats_snapshot = Some(position_features.stats().clone());
             }
@@ -310,7 +386,18 @@ impl IntegratedEvaluator {
                 tactical_snapshot = Some(tactical.stats().snapshot());
                 score
             };
-            total += tactical_score * self.weights.tactical_weight;
+            let contribution = (tactical_score.interpolate(phase) as f32) * weights.tactical_weight;
+            // Log large contributions (Task 3.0 - Task 3.12)
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large tactical contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp (threshold={:.1})",
+                    tactical_score.interpolate(phase),
+                    weights.tactical_weight,
+                    contribution,
+                    self.config.weight_contribution_threshold
+                ));
+            }
+            total += tactical_score * weights.tactical_weight;
         }
 
         // Positional patterns (Phase 3 - Task 3.1 Integration)
@@ -323,7 +410,18 @@ impl IntegratedEvaluator {
                 }
                 score
             };
-            total += positional_score * self.weights.positional_weight;
+            let contribution = (positional_score.interpolate(phase) as f32) * weights.positional_weight;
+            // Log large contributions (Task 3.0 - Task 3.12)
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large positional contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp (threshold={:.1})",
+                    positional_score.interpolate(phase),
+                    weights.positional_weight,
+                    contribution,
+                    self.config.weight_contribution_threshold
+                ));
+            }
+            total += positional_score * weights.positional_weight;
         }
 
         // Castle patterns (Task 17.0 - Task 1.0 Integration)
@@ -345,7 +443,18 @@ impl IntegratedEvaluator {
                     TaperedScore::default()
                 }
             };
-            total += castle_score * self.weights.castle_weight;
+            let contribution = (castle_score.interpolate(phase) as f32) * weights.castle_weight;
+            // Log large contributions (Task 3.0 - Task 3.12)
+            if contribution.abs() > self.config.weight_contribution_threshold {
+                debug_log(&format!(
+                    "Large castle contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp (threshold={:.1})",
+                    castle_score.interpolate(phase),
+                    weights.castle_weight,
+                    contribution,
+                    self.config.weight_contribution_threshold
+                ));
+            }
+            total += castle_score * weights.castle_weight;
         }
 
         // Interpolate to final score
@@ -722,6 +831,10 @@ pub struct IntegratedEvaluationConfig {
     pub tactical: TacticalConfig,
     /// Evaluation weights for combining features
     pub weights: EvaluationWeights,
+    /// Enable phase-dependent weight scaling (default: false for backward compatibility)
+    pub enable_phase_dependent_weights: bool,
+    /// Threshold for logging large weight contributions in centipawns (default: 1000.0)
+    pub weight_contribution_threshold: f32,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -739,7 +852,32 @@ impl Default for IntegratedEvaluationConfig {
             position_features: PositionFeatureConfig::default(),
             tactical: TacticalConfig::default(),
             weights: EvaluationWeights::default(),
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
+    }
+}
+
+impl IntegratedEvaluationConfig {
+    /// Validate cumulative weights for enabled components
+    pub fn validate_cumulative_weights(&self) -> Result<(), crate::evaluation::config::ConfigError> {
+        use crate::evaluation::config::ComponentFlagsForValidation;
+        
+        let components = ComponentFlagsForValidation {
+            material: self.components.material,
+            piece_square_tables: self.components.piece_square_tables,
+            position_features: self.components.position_features,
+            tactical_patterns: self.components.tactical_patterns,
+            positional_patterns: self.components.positional_patterns,
+            castle_patterns: self.components.castle_patterns,
+        };
+        
+        // Create a temporary TaperedEvalConfig to use its validation method
+        // We only need the weights, so we can create a minimal config
+        let mut temp_config = crate::evaluation::config::TaperedEvalConfig::default();
+        temp_config.weights = self.weights.clone();
+        
+        temp_config.validate_cumulative_weights(&components)
     }
 }
 

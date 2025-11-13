@@ -58,6 +58,12 @@ pub struct TaperedEvalConfig {
 
     /// Evaluation weights for combining components
     pub weights: EvaluationWeights,
+
+    /// Enable phase-dependent weight scaling (default: false for backward compatibility)
+    pub enable_phase_dependent_weights: bool,
+
+    /// Threshold for logging large weight contributions in centipawns (default: 1000.0)
+    pub weight_contribution_threshold: f32,
 }
 
 /// Weights for combining different evaluation components
@@ -125,6 +131,8 @@ impl TaperedEvalConfig {
             position_features: PositionFeatureConfig::default(),
             base: TaperedEvaluationConfig::disabled(),
             weights: EvaluationWeights::default(),
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
     }
 
@@ -154,6 +162,8 @@ impl TaperedEvalConfig {
             },
             base: TaperedEvaluationConfig::performance_optimized(),
             weights: EvaluationWeights::default(),
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
     }
 
@@ -194,6 +204,8 @@ impl TaperedEvalConfig {
                 positional_weight: 1.0,
                 castle_weight: 1.0,
             },
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
     }
 
@@ -222,6 +234,8 @@ impl TaperedEvalConfig {
             },
             base: TaperedEvaluationConfig::memory_optimized(),
             weights: EvaluationWeights::default(),
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
     }
 
@@ -245,6 +259,149 @@ impl TaperedEvalConfig {
         std::fs::write(path, content).map_err(|e| ConfigError::IoError(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Validate cumulative weights for enabled components
+    /// 
+    /// Checks that the sum of all enabled component weights is within a reasonable range (5.0-15.0).
+    /// This helps ensure that the evaluation doesn't become too sensitive or too insensitive to
+    /// individual components.
+    pub fn validate_cumulative_weights(
+        &self,
+        components: &ComponentFlagsForValidation,
+    ) -> Result<(), ConfigError> {
+        let mut sum = 0.0;
+
+        if components.material {
+            sum += self.weights.material_weight;
+        }
+        if components.piece_square_tables {
+            sum += self.weights.position_weight;
+        }
+        if components.position_features {
+            // Sum all position feature weights
+            sum += self.weights.king_safety_weight;
+            sum += self.weights.pawn_structure_weight;
+            sum += self.weights.mobility_weight;
+            sum += self.weights.center_control_weight;
+            sum += self.weights.development_weight;
+        }
+        if components.tactical_patterns {
+            sum += self.weights.tactical_weight;
+        }
+        if components.positional_patterns {
+            sum += self.weights.positional_weight;
+        }
+        if components.castle_patterns {
+            sum += self.weights.castle_weight;
+        }
+
+        const MIN_CUMULATIVE_WEIGHT: f32 = 5.0;
+        const MAX_CUMULATIVE_WEIGHT: f32 = 15.0;
+
+        if sum < MIN_CUMULATIVE_WEIGHT || sum > MAX_CUMULATIVE_WEIGHT {
+            return Err(ConfigError::CumulativeWeightOutOfRange {
+                sum,
+                min: MIN_CUMULATIVE_WEIGHT,
+                max: MAX_CUMULATIVE_WEIGHT,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Apply phase-dependent weight scaling
+    /// 
+    /// Adjusts weights based on game phase:
+    /// - Tactical weights are higher in middlegame
+    /// - Positional weights are higher in endgame
+    /// 
+    /// Phase ranges:
+    /// - Opening: phase >= 192
+    /// - Middlegame: 64 <= phase < 192
+    /// - Endgame: phase < 64
+    pub fn apply_phase_scaling(&self, weights: &mut EvaluationWeights, phase: i32) {
+        if !self.enable_phase_dependent_weights {
+            return;
+        }
+
+        // Normalize phase to 0.0-1.0 range (0 = endgame, 1 = opening)
+        // Phase range is typically 0-256
+        let phase_factor = (phase as f32 / 256.0).clamp(0.0, 1.0);
+
+        // Tactical patterns are more important in middlegame
+        // Scale: 0.8 in endgame, 1.2 in middlegame, 1.0 in opening
+        let tactical_scale = if phase < 64 {
+            0.8 // Endgame: reduce tactical
+        } else if phase < 192 {
+            1.2 // Middlegame: increase tactical
+        } else {
+            1.0 // Opening: neutral
+        };
+        weights.tactical_weight *= tactical_scale;
+
+        // Positional patterns are more important in endgame
+        // Scale: 1.2 in endgame, 0.9 in middlegame, 1.0 in opening
+        let positional_scale = if phase < 64 {
+            1.2 // Endgame: increase positional
+        } else if phase < 192 {
+            0.9 // Middlegame: reduce positional
+        } else {
+            1.0 // Opening: neutral
+        };
+        weights.positional_weight *= positional_scale;
+    }
+
+    /// Suggest weight adjustments to maintain balance
+    /// 
+    /// Analyzes weight ratios and suggests adjustments to maintain a balanced evaluation.
+    /// For example, if tactical_weight is 2.0, it might suggest adjusting positional_weight
+    /// to maintain balance.
+    pub fn suggest_weight_adjustments(&self) -> Vec<String> {
+        let mut suggestions = Vec::new();
+
+        // Check tactical vs positional balance
+        let tactical = self.weights.tactical_weight;
+        let positional = self.weights.positional_weight;
+        let ratio = if positional > 0.0 {
+            tactical / positional
+        } else {
+            f32::INFINITY
+        };
+
+        if ratio > 1.5 {
+            suggestions.push(format!(
+                "Tactical weight ({:.2}) is significantly higher than positional weight ({:.2}). \
+                Consider increasing positional_weight to {:.2} for better balance.",
+                tactical,
+                positional,
+                tactical * 0.8
+            ));
+        } else if ratio < 0.67 {
+            suggestions.push(format!(
+                "Positional weight ({:.2}) is significantly higher than tactical weight ({:.2}). \
+                Consider increasing tactical_weight to {:.2} for better balance.",
+                positional,
+                tactical,
+                positional * 0.8
+            ));
+        }
+
+        // Check if any weight is unusually high
+        if tactical > 2.0 {
+            suggestions.push(format!(
+                "Tactical weight ({:.2}) is very high. Consider reducing to maintain evaluation stability.",
+                tactical
+            ));
+        }
+        if positional > 2.0 {
+            suggestions.push(format!(
+                "Positional weight ({:.2}) is very high. Consider reducing to maintain evaluation stability.",
+                positional
+            ));
+        }
+
+        suggestions
     }
 
     /// Validate the configuration
@@ -298,6 +455,10 @@ impl TaperedEvalConfig {
                 "sigmoid_steepness must be between 1.0 and 20.0".to_string(),
             ));
         }
+
+        // Note: Cumulative weight validation requires ComponentFlags, which is not available here.
+        // It should be called separately with the appropriate component flags, or from
+        // IntegratedEvaluationConfig which has both components and weights.
 
         Ok(())
     }
@@ -381,6 +542,8 @@ impl Default for TaperedEvalConfig {
             position_features: PositionFeatureConfig::default(),
             base: TaperedEvaluationConfig::default(),
             weights: EvaluationWeights::default(),
+            enable_phase_dependent_weights: false,
+            weight_contribution_threshold: 1000.0,
         }
     }
 }
@@ -400,6 +563,12 @@ pub enum ConfigError {
     InvalidParameter(String),
     /// Unknown weight name
     UnknownWeight(String),
+    /// Cumulative weight sum is out of acceptable range
+    CumulativeWeightOutOfRange {
+        sum: f32,
+        min: f32,
+        max: f32,
+    },
 }
 
 impl std::fmt::Display for ConfigError {
@@ -411,11 +580,32 @@ impl std::fmt::Display for ConfigError {
             ConfigError::InvalidWeight(name) => write!(f, "Invalid weight: {}", name),
             ConfigError::InvalidParameter(msg) => write!(f, "Invalid parameter: {}", msg),
             ConfigError::UnknownWeight(name) => write!(f, "Unknown weight: {}", name),
+            ConfigError::CumulativeWeightOutOfRange { sum, min, max } => {
+                write!(
+                    f,
+                    "Cumulative weight sum {} is out of range [{}, {}]",
+                    sum, min, max
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for ConfigError {}
+
+/// Component flags for weight validation
+/// 
+/// This is a simplified version of ComponentFlags from integration.rs
+/// used for cumulative weight validation in TaperedEvalConfig.
+#[derive(Debug, Clone)]
+pub struct ComponentFlagsForValidation {
+    pub material: bool,
+    pub piece_square_tables: bool,
+    pub position_features: bool,
+    pub tactical_patterns: bool,
+    pub positional_patterns: bool,
+    pub castle_patterns: bool,
+}
 
 #[cfg(test)]
 mod tests {
