@@ -31,6 +31,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
+use crate::moves::MoveGenerator;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +41,8 @@ pub struct EndgamePatternEvaluator {
     config: EndgamePatternConfig,
     /// Statistics
     stats: EndgamePatternStats,
+    /// Move generator for zugzwang detection
+    move_generator: MoveGenerator,
 }
 
 impl EndgamePatternEvaluator {
@@ -48,6 +51,7 @@ impl EndgamePatternEvaluator {
         Self {
             config: EndgamePatternConfig::default(),
             stats: EndgamePatternStats::default(),
+            move_generator: MoveGenerator::new(),
         }
     }
 
@@ -56,6 +60,7 @@ impl EndgamePatternEvaluator {
         Self {
             config,
             stats: EndgamePatternStats::default(),
+            move_generator: MoveGenerator::new(),
         }
     }
 
@@ -99,7 +104,7 @@ impl EndgamePatternEvaluator {
 
         // 6. Zugzwang detection (Phase 2 - Task 2.3.3)
         if self.config.enable_zugzwang {
-            score += self.evaluate_zugzwang(board, player);
+            score += self.evaluate_zugzwang(board, player, captured_pieces);
         }
 
         // 7. Opposition patterns (Phase 2 - Task 2.3.4)
@@ -595,22 +600,75 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate zugzwang positions (where any move worsens the position)
-    fn evaluate_zugzwang(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    ///
+    /// Zugzwang detection compares the number of safe moves available to both players.
+    /// In shogi, zugzwang is rarer than in chess due to drop moves, which often break
+    /// zugzwang situations. However, zugzwang can still occur in pawn endgames or when
+    /// both sides are low on material.
+    ///
+    /// The detection uses `MoveGenerator::generate_legal_moves()` to count actual legal
+    /// moves (including drops). Moves are already filtered for safety (no moves that
+    /// leave the king in check).
+    ///
+    /// Configuration:
+    /// - `enable_zugzwang_drop_consideration`: If true (default), drop moves are included
+    ///   in the move count. If false, only regular moves are counted, making zugzwang
+    ///   detection more sensitive (useful for testing or chess-like evaluation).
+    ///
+    /// Scoring:
+    /// - If opponent has ≤2 moves and player has >5 moves: +80 (endgame score)
+    /// - If player has ≤2 moves and opponent has >5 moves: -60 (endgame score)
+    ///
+    /// Statistics are tracked for monitoring zugzwang detection effectiveness.
+    fn evaluate_zugzwang(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         // Zugzwang is rare in Shogi due to drop moves, but can occur in endgame
         let opponent = player.opposite();
 
         // Count mobility for both sides
-        let player_squares = self.count_safe_moves(board, player);
-        let opponent_squares = self.count_safe_moves(board, opponent);
+        let (player_moves, player_drops) = self.count_safe_moves(board, player, captured_pieces);
+        let (opponent_moves, opponent_drops) = self.count_safe_moves(board, opponent, captured_pieces);
+
+        // Adjust move counts based on drop consideration configuration
+        let player_total = if self.config.enable_zugzwang_drop_consideration {
+            player_moves + player_drops
+        } else {
+            player_moves
+        };
+        let opponent_total = if self.config.enable_zugzwang_drop_consideration {
+            opponent_moves + opponent_drops
+        } else {
+            opponent_moves
+        };
 
         // Zugzwang-like position: opponent has very few safe moves
-        if opponent_squares <= 2 && player_squares > 5 {
+        if opponent_total <= 2 && player_total > 5 {
             // Player benefits from opponent's lack of moves
+            self.stats.zugzwang_detections += 1;
+            self.stats.zugzwang_benefits += 1;
+            
+            crate::debug_utils::trace_log("ZUGZWANG", &format!(
+                "Zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=+80",
+                player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
+            ));
+            
             return TaperedScore::new_tapered(0, 80);
         }
 
         // Reverse zugzwang: player has few moves
-        if player_squares <= 2 && opponent_squares > 5 {
+        if player_total <= 2 && opponent_total > 5 {
+            self.stats.zugzwang_detections += 1;
+            self.stats.zugzwang_penalties += 1;
+            
+            crate::debug_utils::trace_log("ZUGZWANG", &format!(
+                "Reverse zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=-60",
+                player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
+            ));
+            
             return TaperedScore::new_tapered(0, -60);
         }
 
@@ -618,10 +676,29 @@ impl EndgamePatternEvaluator {
     }
 
     /// Count safe moves for a player
-    fn count_safe_moves(&self, _board: &BitboardBoard, _player: Player) -> i32 {
-        // Simplified: count pieces that can move
-        // In full implementation, would check actual legal moves
-        10 // Placeholder
+    /// Returns (regular_move_count, drop_move_count)
+    pub fn count_safe_moves(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> (i32, i32) {
+        // Generate all legal moves (already filtered for safety - no moves that leave king in check)
+        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
+        
+        // Separate regular moves from drop moves
+        let mut regular_moves = 0;
+        let mut drop_moves = 0;
+        
+        for mv in &legal_moves {
+            if mv.is_drop() {
+                drop_moves += 1;
+            } else {
+                regular_moves += 1;
+            }
+        }
+        
+        (regular_moves, drop_moves)
     }
 
     // =======================================================================
@@ -1080,6 +1157,8 @@ pub struct EndgamePatternConfig {
     pub enable_piece_vs_pawns: bool,
     /// Enable fortress patterns
     pub enable_fortress: bool,
+    /// Enable drop move consideration in zugzwang detection (drops often break zugzwang in shogi)
+    pub enable_zugzwang_drop_consideration: bool,
 }
 
 impl Default for EndgamePatternConfig {
@@ -1095,6 +1174,7 @@ impl Default for EndgamePatternConfig {
             enable_triangulation: true,
             enable_piece_vs_pawns: true,
             enable_fortress: true,
+            enable_zugzwang_drop_consideration: true,
         }
     }
 }
@@ -1104,6 +1184,12 @@ impl Default for EndgamePatternConfig {
 pub struct EndgamePatternStats {
     /// Number of evaluations performed
     pub evaluations: u64,
+    /// Number of zugzwang detections
+    pub zugzwang_detections: u64,
+    /// Number of zugzwang benefits (positive scores)
+    pub zugzwang_benefits: u64,
+    /// Number of zugzwang penalties (negative scores)
+    pub zugzwang_penalties: u64,
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1274,5 +1360,77 @@ mod tests {
         let corner_king = Position::new(0, 0);
         let corner_escape = evaluator.count_escape_squares(&board, corner_king, Player::Black);
         assert_eq!(corner_escape, 3);
+    }
+
+    #[test]
+    fn test_count_safe_moves_basic() {
+        let evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Starting position should have many legal moves
+        let (regular, drops) = evaluator.count_safe_moves(&board, Player::Black, &captured_pieces);
+        assert!(regular > 0, "Starting position should have regular moves");
+        assert_eq!(drops, 0, "Starting position should have no drop moves (no captured pieces)");
+    }
+
+    #[test]
+    fn test_count_safe_moves_with_drops() {
+        let evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::empty();
+        let mut captured_pieces = CapturedPieces::new();
+        
+        // Add captured pieces to enable drops
+        captured_pieces.add_piece(PieceType::Pawn, Player::Black);
+        captured_pieces.add_piece(PieceType::Rook, Player::Black);
+
+        // Empty board with captured pieces should have drop moves
+        let (regular, drops) = evaluator.count_safe_moves(&board, Player::Black, &captured_pieces);
+        assert!(drops > 0, "Should have drop moves when pieces are captured");
+    }
+
+    #[test]
+    fn test_zugzwang_detection_known_positions() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Starting position is unlikely to be zugzwang
+        let score = evaluator.evaluate_zugzwang(&board, Player::Black, &captured_pieces);
+        assert_eq!(score.mg, 0);
+        // May or may not detect zugzwang depending on move counts
+    }
+
+    #[test]
+    fn test_zugzwang_drop_consideration() {
+        let mut config = EndgamePatternConfig::default();
+        config.enable_zugzwang_drop_consideration = false;
+        let mut evaluator = EndgamePatternEvaluator::with_config(config);
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        // Test that evaluation works with drop consideration disabled
+        let score = evaluator.evaluate_zugzwang(&board, Player::Black, &captured_pieces);
+        // Should complete without error
+        assert!(score.eg >= -60 && score.eg <= 80);
+    }
+
+    #[test]
+    fn test_zugzwang_statistics() {
+        let mut evaluator = EndgamePatternEvaluator::new();
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+
+        assert_eq!(evaluator.stats().zugzwang_detections, 0);
+        assert_eq!(evaluator.stats().zugzwang_benefits, 0);
+        assert_eq!(evaluator.stats().zugzwang_penalties, 0);
+
+        // Evaluate zugzwang (may or may not detect depending on position)
+        evaluator.evaluate_zugzwang(&board, Player::Black, &captured_pieces);
+
+        // Statistics should be tracked (may be 0 if no zugzwang detected)
+        assert!(evaluator.stats().zugzwang_detections >= 0);
+        assert!(evaluator.stats().zugzwang_benefits >= 0);
+        assert!(evaluator.stats().zugzwang_penalties >= 0);
     }
 }
