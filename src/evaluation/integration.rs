@@ -467,7 +467,7 @@ impl IntegratedEvaluator {
                 let mut opening_score = self
                     .opening_principles
                     .borrow_mut()
-                    .evaluate_opening(board, player, estimated_move_count);
+                    .evaluate_opening(board, player, estimated_move_count, Some(captured_pieces), None);
                 
                 // Apply gradual fade if enabled (Task 6.0 - Task 6.10, 6.12)
                 if self.config.enable_gradual_phase_transitions {

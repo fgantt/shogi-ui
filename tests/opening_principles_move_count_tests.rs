@@ -15,13 +15,13 @@ fn test_move_count_parameter_fix() {
     let board = BitboardBoard::new();
     
     // Test with move_count = 5 (should apply tempo bonus)
-    let score_with_bonus = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let score_with_bonus = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     
     // Test with move_count = 0 (should also apply tempo bonus, <= 10)
-    let _score_at_start = evaluator.evaluate_opening(&board, Player::Black, 0);
+    let _score_at_start = evaluator.evaluate_opening(&board, Player::Black, 0, None, None);
     
     // Test with move_count = 15 (should NOT apply tempo bonus, > 10)
-    let score_no_bonus = evaluator.evaluate_opening(&board, Player::Black, 15);
+    let score_no_bonus = evaluator.evaluate_opening(&board, Player::Black, 15, None, None);
     
     // Scores with tempo bonus should be higher than without
     // (assuming some pieces are developed in starting position)
@@ -72,15 +72,15 @@ fn test_tempo_development_tracking() {
     let board = BitboardBoard::new();
     
     // Evaluate at move 5
-    let score_move_5 = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let score_move_5 = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     let score_5_interp = score_move_5.interpolate(256);
     
     // Evaluate at move 10 (boundary for tempo bonus)
-    let score_move_10 = evaluator.evaluate_opening(&board, Player::Black, 10);
+    let score_move_10 = evaluator.evaluate_opening(&board, Player::Black, 10, None, None);
     let score_10_interp = score_move_10.interpolate(256);
     
     // Evaluate at move 15 (no tempo bonus)
-    let score_move_15 = evaluator.evaluate_opening(&board, Player::Black, 15);
+    let score_move_15 = evaluator.evaluate_opening(&board, Player::Black, 15, None, None);
     let score_15_interp = score_move_15.interpolate(256);
     
     // All should be valid scores
@@ -100,10 +100,10 @@ fn test_move_count_not_hardcoded() {
     let board = BitboardBoard::new();
     
     // Evaluate with move_count = 5
-    let _score_5 = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let _score_5 = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     
     // Evaluate with move_count = 0
-    let _score_0 = evaluator.evaluate_opening(&board, Player::Black, 0);
+    let _score_0 = evaluator.evaluate_opening(&board, Player::Black, 0, None, None);
     
     // If move_count was hardcoded to 0, these would be identical
     // But they should be the same since both are <= 10 and in starting position

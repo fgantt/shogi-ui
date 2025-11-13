@@ -68,11 +68,15 @@ impl OpeningPrincipleEvaluator {
     /// * `board` - Current board state
     /// * `player` - Player to evaluate for
     /// * `move_count` - Number of moves played (for tempo/development tracking)
+    /// * `captured_pieces` - Current captured pieces state (for drop pressure evaluation)
+    /// * `move_history` - Optional move history for repeated move detection
     pub fn evaluate_opening(
         &mut self,
         board: &BitboardBoard,
         player: Player,
         move_count: u32,
+        captured_pieces: Option<&CapturedPieces>,
+        move_history: Option<&[Move]>,
     ) -> TaperedScore {
         self.stats.evaluations += 1;
 
@@ -89,7 +93,16 @@ impl OpeningPrincipleEvaluator {
 
         // 2. Center control
         if self.config.enable_center_control {
-            let center_score = self.evaluate_center_control_opening(board, player);
+            let mut center_score = self.evaluate_center_control_opening(board, player);
+            
+            // Drop pressure evaluation (Task 19.0 - Task 5.0)
+            if self.config.enable_drop_pressure_evaluation {
+                if let Some(captured) = captured_pieces {
+                    let drop_score = self.evaluate_drop_pressure_on_center(board, player, captured);
+                    center_score += drop_score;
+                }
+            }
+            
             let center_score_interp = center_score.interpolate(256);
             self.stats.center_control_score += center_score_interp as i64;
             self.stats.center_control_evaluations += 1;
@@ -116,7 +129,7 @@ impl OpeningPrincipleEvaluator {
 
         // 5. Opening-specific penalties
         if self.config.enable_opening_penalties {
-            let penalties_score = self.evaluate_opening_penalties(board, player, move_count);
+            let penalties_score = self.evaluate_opening_penalties(board, player, move_count, move_history);
             let penalties_score_interp = penalties_score.interpolate(256);
             self.stats.penalties_score += penalties_score_interp as i64;
             self.stats.penalties_evaluations += 1;
@@ -132,7 +145,33 @@ impl OpeningPrincipleEvaluator {
             score += coord_score;
         }
 
+        // Telemetry: Log component contributions that exceed threshold (Task 19.0 - Task 5.0)
+        self.log_component_contributions(&score, move_count);
+
         score
+    }
+
+    /// Log component contributions when they exceed threshold (Task 19.0 - Task 5.0)
+    fn log_component_contributions(&self, total_score: &TaperedScore, move_count: u32) {
+        const THRESHOLD_CP: i32 = 100; // Log when component contributes > 100cp
+        
+        #[cfg(feature = "verbose-debug")]
+        {
+            use crate::debug_utils::debug_log_fast;
+            
+            // Check each component's contribution (simplified - would need to track per-component in real-time)
+            // For now, we log when total score is significant
+            let total_interp = total_score.interpolate(256);
+            if total_interp.abs() > THRESHOLD_CP {
+                debug_log_fast!(&format!(
+                    "[OPENING_PRINCIPLES] Significant contribution at move {}: total={}cp (mg={}, eg={})",
+                    move_count,
+                    total_interp,
+                    total_score.mg,
+                    total_score.eg
+                ));
+            }
+        }
     }
 
     // =======================================================================
@@ -314,7 +353,132 @@ impl OpeningPrincipleEvaluator {
             eg_score += attack_score.eg;
         }
 
+        // Drop pressure evaluation (Task 19.0 - Task 5.0)
+        // Note: This requires captured_pieces, so we'll add it as a parameter later
+        // For now, we'll skip it in this method signature
+
         TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Evaluate center control via drop pressure (Task 19.0 - Task 5.0)
+    ///
+    /// This method evaluates center control based on potential piece drops.
+    /// It checks which center squares could be controlled via drops of captured pieces.
+    ///
+    /// # Arguments
+    ///
+    /// * `board` - Current board state
+    /// * `player` - Player to evaluate for
+    /// * `captured_pieces` - Current captured pieces state
+    ///
+    /// # Returns
+    ///
+    /// TaperedScore representing drop pressure on center squares
+    fn evaluate_drop_pressure_on_center(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
+        let mut mg_score = 0;
+        let mut eg_score = 0;
+
+        // Center squares to evaluate
+        let center_squares = [
+            Position::new(4, 4), // Core center
+            Position::new(3, 4), Position::new(5, 4), // Vertical
+            Position::new(4, 3), Position::new(4, 5), // Horizontal
+            Position::new(3, 3), Position::new(3, 5), // Diagonals
+            Position::new(5, 3), Position::new(5, 5),
+        ];
+
+        // Pieces that can control center via drops (bishop, rook, silver, gold, knight)
+        let drop_pieces = [
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Knight,
+        ];
+
+        // Check each center square
+        for &center_sq in &center_squares {
+            let mut our_drop_pressure = 0;
+            let mut their_drop_pressure = 0;
+
+            // Check if square is empty (can be dropped on)
+            if !board.is_square_occupied(center_sq) {
+                // Check our captured pieces
+                for &piece_type in &drop_pieces {
+                    let count = captured_pieces.count(piece_type, player);
+                    if count > 0 {
+                        // Check if this piece could control center square if dropped
+                        if self.can_piece_control_square_via_drop(piece_type, center_sq, player, board) {
+                            our_drop_pressure += count as i32;
+                        }
+                    }
+                }
+
+                // Check opponent's captured pieces
+                let opponent = player.opposite();
+                for &piece_type in &drop_pieces {
+                    let count = captured_pieces.count(piece_type, opponent);
+                    if count > 0 {
+                        if self.can_piece_control_square_via_drop(piece_type, center_sq, opponent, board) {
+                            their_drop_pressure += count as i32;
+                        }
+                    }
+                }
+            }
+
+            // Score based on drop pressure difference
+            let pressure_diff = our_drop_pressure - their_drop_pressure;
+            let value = if center_sq == Position::new(4, 4) {
+                pressure_diff * 6 // Core center is more valuable
+            } else {
+                pressure_diff * 4 // Extended center
+            };
+
+            mg_score += value;
+            eg_score += value / 4; // Less important in endgame
+        }
+
+        TaperedScore::new_tapered(mg_score, eg_score)
+    }
+
+    /// Check if a piece dropped at a position could control a target square (Task 19.0 - Task 5.0)
+    fn can_piece_control_square_via_drop(
+        &self,
+        piece_type: PieceType,
+        drop_pos: Position,
+        player: Player,
+        board: &BitboardBoard,
+    ) -> bool {
+        // Get attack pattern for this piece type at drop position
+        let attacks = board.get_attack_pattern_precomputed(drop_pos, piece_type, player);
+        
+        // Check if target square is in attack pattern
+        // For now, we'll check if the piece could attack center squares
+        // This is a simplified check - in reality, we'd need to check if the drop is legal
+        // and if the piece could actually control the center from that position
+        
+        // Center squares
+        let center_squares = [
+            Position::new(4, 4),
+            Position::new(3, 4), Position::new(5, 4),
+            Position::new(4, 3), Position::new(4, 5),
+            Position::new(3, 3), Position::new(3, 5),
+            Position::new(5, 3), Position::new(5, 5),
+        ];
+
+        for &center_sq in &center_squares {
+            let center_bit = 1u128 << center_sq.to_u8();
+            if (attacks & center_bit) != 0 {
+                return true; // Piece could attack at least one center square
+            }
+        }
+
+        false
     }
 
     /// Evaluate center control via piece attacks (Task 19.0 - Task 4.0)
@@ -589,13 +753,17 @@ impl OpeningPrincipleEvaluator {
         board: &BitboardBoard,
         player: Player,
         move_count: u32,
+        move_history: Option<&[Move]>,
     ) -> TaperedScore {
         let mut mg_penalty = 0;
 
         // Early in opening (first 10 moves)
         if move_count <= 10 {
-            // 1. Penalty for moving the same piece multiple times
-            // (This would require move history, so we skip for now)
+            // 1. Penalty for moving the same piece multiple times (Task 19.0 - Task 5.0)
+            if let Some(history) = move_history {
+                let repeated_move_penalty = self.detect_repeated_piece_moves(history, player);
+                mg_penalty += repeated_move_penalty;
+            }
 
             // 2. Penalty for undeveloped major pieces
             let rooks_developed = self
@@ -629,6 +797,44 @@ impl OpeningPrincipleEvaluator {
         }
 
         TaperedScore::new_tapered(-mg_penalty, -mg_penalty / 5)
+    }
+
+    /// Detect repeated piece moves in opening (Task 19.0 - Task 5.0)
+    ///
+    /// Returns penalty for moving the same piece multiple times in the opening.
+    /// This addresses the TODO in evaluate_opening_penalties.
+    fn detect_repeated_piece_moves(&self, move_history: &[Move], player: Player) -> i32 {
+        let mut penalty = 0;
+        
+        // Track how many times each piece position has been moved
+        let mut piece_move_count: std::collections::HashMap<(Option<Position>, PieceType), u32> = 
+            std::collections::HashMap::new();
+        
+        // Count moves for this player
+        for move_ in move_history.iter() {
+            if move_.player == player {
+                // Get the piece that was moved (from position and piece type)
+                let key = (move_.from, move_.piece_type);
+                let count = piece_move_count.entry(key).or_insert(0);
+                *count += 1;
+                
+                // Penalty increases with number of times same piece is moved
+                if *count > 1 {
+                    // Penalty: 15 cp for 2nd move, 30 cp for 3rd move, etc.
+                    penalty += 15 * (*count - 1) as i32;
+                    
+                    #[cfg(debug_assertions)]
+                    crate::debug_utils::debug_log(&format!(
+                        "[OPENING_PRINCIPLES] Repeated piece move detected: {:?} moved {} times (penalty: {}cp)",
+                        move_.piece_type,
+                        *count,
+                        15 * (*count - 1)
+                    ));
+                }
+            }
+        }
+        
+        penalty
     }
 
     // =======================================================================
@@ -817,10 +1023,21 @@ impl OpeningPrincipleEvaluator {
         // Note: After making the move, it's the opponent's turn, so we evaluate for the opponent
         // But we want to evaluate how good the position is for the player who made the move
         // So we evaluate for the original player (the one who made the move)
-        let score = self.evaluate_opening(&temp_board, player, move_count + 1);
+        let score = self.evaluate_opening(&temp_board, player, move_count + 1, Some(&temp_captured), None);
         
         // Convert TaperedScore to i32 (use interpolated score at opening phase)
         let quality_score = score.interpolate(256); // Phase 256 = opening phase
+        
+        // Telemetry: Log book move quality scores (Task 19.0 - Task 5.0)
+        #[cfg(feature = "verbose-debug")]
+        {
+            use crate::debug_utils::debug_log_fast;
+            debug_log_fast!(&format!(
+                "[OPENING_PRINCIPLES] Book move quality score: {}cp (move_count={})",
+                quality_score,
+                move_count + 1
+            ));
+        }
         
         // Track quality scores for statistics
         self.stats.book_move_quality_scores += quality_score as i64;
@@ -1062,6 +1279,8 @@ pub struct OpeningPrincipleConfig {
     pub enable_piece_coordination: bool,
     /// Enable attack-based center control evaluation (evaluates center control from piece attacks, not just occupied squares)
     pub enable_attack_based_center_control: bool,
+    /// Enable drop pressure evaluation (evaluates center control via potential piece drops)
+    pub enable_drop_pressure_evaluation: bool,
 }
 
 impl Default for OpeningPrincipleConfig {
@@ -1074,6 +1293,7 @@ impl Default for OpeningPrincipleConfig {
             enable_opening_penalties: true,
             enable_piece_coordination: true,
             enable_attack_based_center_control: true,
+            enable_drop_pressure_evaluation: true,
         }
     }
 }
@@ -1116,6 +1336,20 @@ pub struct OpeningPrincipleStats {
     pub penalties_evaluations: u64,
     /// Piece coordination component evaluation count
     pub piece_coordination_evaluations: u64,
+    /// Telemetry: Track if opening principles influenced move selection (Task 19.0 - Task 5.0)
+    pub opening_principles_influenced_move: u64,
+    /// Telemetry: Moves influenced by development component
+    pub moves_influenced_by_development: u64,
+    /// Telemetry: Moves influenced by center control component
+    pub moves_influenced_by_center_control: u64,
+    /// Telemetry: Moves influenced by castle formation component
+    pub moves_influenced_by_castle_formation: u64,
+    /// Telemetry: Moves influenced by tempo component
+    pub moves_influenced_by_tempo: u64,
+    /// Telemetry: Moves influenced by penalties component
+    pub moves_influenced_by_penalties: u64,
+    /// Telemetry: Moves influenced by piece coordination component
+    pub moves_influenced_by_piece_coordination: u64,
 }
 
 /// Per-component statistics breakdown (Task 19.0 - Task 4.0)
@@ -1246,7 +1480,7 @@ mod tests {
         let mut evaluator = OpeningPrincipleEvaluator::new();
         let board = BitboardBoard::new();
 
-        let score = evaluator.evaluate_opening(&board, Player::Black, 5);
+        let score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
 
         // Should have some positive opening evaluation
         assert!(score.mg > 0);
@@ -1259,7 +1493,7 @@ mod tests {
 
         assert_eq!(evaluator.stats().evaluations, 0);
 
-        evaluator.evaluate_opening(&board, Player::Black, 5);
+        evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
         assert_eq!(evaluator.stats().evaluations, 1);
     }
 
@@ -1283,8 +1517,8 @@ mod tests {
         let mut evaluator = OpeningPrincipleEvaluator::new();
         let board = BitboardBoard::new();
 
-        let score1 = evaluator.evaluate_opening(&board, Player::Black, 5);
-        let score2 = evaluator.evaluate_opening(&board, Player::Black, 5);
+        let score1 = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
+        let score2 = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
 
         assert_eq!(score1.mg, score2.mg);
         assert_eq!(score1.eg, score2.eg);
@@ -1296,10 +1530,10 @@ mod tests {
         let board = BitboardBoard::new();
 
         // Early game (move 5)
-        let early_score = evaluator.evaluate_opening(&board, Player::Black, 5);
+        let early_score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
 
         // Later (move 20)
-        let late_score = evaluator.evaluate_opening(&board, Player::Black, 20);
+        let late_score = evaluator.evaluate_opening(&board, Player::Black, 20, None, None);
 
         // Tempo bonuses should be higher early in the game
         // (though in starting position both might be similar)

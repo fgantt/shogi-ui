@@ -16,7 +16,7 @@ fn test_bitboard_optimized_piece_finding() {
     let board = BitboardBoard::new();
     
     // Test that evaluation works correctly (uses bitboard-optimized find_pieces internally)
-    let score = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     
     // Should return valid score (bitboard optimization is transparent to caller)
     let score_interp = score.interpolate(256);
@@ -30,7 +30,7 @@ fn test_per_component_statistics() {
     let board = BitboardBoard::new();
     
     // Evaluate opening principles
-    let _score = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let _score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     
     // Check that statistics are tracked
     let stats = evaluator.stats();
@@ -52,7 +52,7 @@ fn test_component_statistics_breakdown() {
     
     // Evaluate multiple times
     for _ in 0..3 {
-        let _score = evaluator.evaluate_opening(&board, Player::Black, 5);
+        let _score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     }
     
     let component_stats = evaluator.get_component_statistics();
@@ -75,7 +75,7 @@ fn test_attack_based_center_control() {
     let mut evaluator = OpeningPrincipleEvaluator::with_config(config);
     
     let board = BitboardBoard::new();
-    let score = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     
     // Should return valid score
     let score_interp = score.interpolate(256);
@@ -89,7 +89,7 @@ fn test_statistics_reset() {
     let board = BitboardBoard::new();
     
     // Evaluate and accumulate statistics
-    let _score = evaluator.evaluate_opening(&board, Player::Black, 5);
+    let _score = evaluator.evaluate_opening(&board, Player::Black, 5, None, None);
     let stats_before = evaluator.stats().evaluations;
     assert!(stats_before > 0);
     
