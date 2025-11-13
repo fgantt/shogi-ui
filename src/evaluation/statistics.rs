@@ -35,6 +35,7 @@
 //! println!("{}", report);
 //! ```
 
+use crate::evaluation::castles::CastleCacheStats;
 use crate::evaluation::king_safety::KingSafetyStatsSnapshot;
 use crate::evaluation::material::MaterialTelemetry;
 use crate::evaluation::performance::PerformanceReport;
@@ -92,6 +93,7 @@ pub struct EvaluationTelemetry {
     pub positional: Option<PositionalStatsSnapshot>,
     pub tactical: Option<TacticalStatsSnapshot>,
     pub king_safety: Option<KingSafetyStatsSnapshot>,
+    pub castle_patterns: Option<CastleCacheStats>,
 }
 
 impl EvaluationTelemetry {
@@ -105,6 +107,7 @@ impl EvaluationTelemetry {
         positional: Option<PositionalStatsSnapshot>,
         tactical: Option<TacticalStatsSnapshot>,
         king_safety: Option<KingSafetyStatsSnapshot>,
+        castle_patterns: Option<CastleCacheStats>,
     ) -> Self {
         Self {
             tapered: Some(tapered),
@@ -116,6 +119,7 @@ impl EvaluationTelemetry {
             positional,
             tactical,
             king_safety,
+            castle_patterns,
         }
     }
 }

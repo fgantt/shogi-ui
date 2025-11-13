@@ -28,6 +28,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::debug_utils::debug_log;
 use crate::evaluation::{
+    castles::CastleRecognizer,
     config::EvaluationWeights,
     endgame_patterns::EndgamePatternEvaluator,
     material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
@@ -72,6 +73,8 @@ pub struct IntegratedEvaluator {
     tactical_patterns: RefCell<TacticalPatternRecognizer>,
     /// Positional pattern analyzer (Phase 2 - Task 2.2)
     positional_patterns: RefCell<PositionalPatternAnalyzer>,
+    /// Castle pattern recognizer (Task 17.0 - Task 1.0)
+    castle_recognizer: RefCell<CastleRecognizer>,
     /// Pattern result cache (Phase 2 - Task 2.4, reserved for future optimization)
     #[allow(dead_code)]
     pattern_cache: RefCell<PatternCache>,
@@ -131,6 +134,7 @@ impl IntegratedEvaluator {
                 config.tactical.clone(),
             )),
             positional_patterns: RefCell::new(PositionalPatternAnalyzer::new()),
+            castle_recognizer: RefCell::new(CastleRecognizer::new()),
             pattern_cache: RefCell::new(PatternCache::new(config.pattern_cache_size)),
             optimized_eval,
             statistics: RefCell::new(EvaluationStatistics::new()),
@@ -207,6 +211,7 @@ impl IntegratedEvaluator {
         let mut position_feature_stats_snapshot = None;
         let mut tactical_snapshot = None;
         let mut positional_snapshot = None;
+        let mut castle_cache_stats = None;
 
         // Material
         if self.config.components.material {
@@ -284,6 +289,24 @@ impl IntegratedEvaluator {
             total += positional_score * self.weights.positional_weight;
         }
 
+        // Castle patterns (Task 17.0 - Task 1.0 Integration)
+        if self.config.components.castle_patterns {
+            let castle_score = {
+                let mut castle = self.castle_recognizer.borrow_mut();
+                // Find king position for castle evaluation
+                if let Some(king_pos) = board.find_king_position(player) {
+                    let eval = castle.evaluate_castle(board, player, king_pos);
+                    if stats_enabled {
+                        castle_cache_stats = Some(castle.get_cache_stats());
+                    }
+                    eval.score()
+                } else {
+                    TaperedScore::default()
+                }
+            };
+            total += castle_score * self.weights.castle_weight;
+        }
+
         // Interpolate to final score
         let final_score = self
             .phase_transition
@@ -334,6 +357,7 @@ impl IntegratedEvaluator {
             positional_snapshot.clone(),
             tactical_snapshot.clone(),
             None, // King safety stats not integrated into IntegratedEvaluator yet
+            castle_cache_stats.clone(),
         );
         self.telemetry.borrow_mut().replace(telemetry.clone());
         if stats_enabled {
@@ -688,6 +712,7 @@ pub struct ComponentFlags {
     pub endgame_patterns: bool,
     pub tactical_patterns: bool,
     pub positional_patterns: bool,
+    pub castle_patterns: bool,
 }
 
 impl ComponentFlags {
@@ -700,6 +725,7 @@ impl ComponentFlags {
             endgame_patterns: true,
             tactical_patterns: true,
             positional_patterns: true,
+            castle_patterns: true,
         }
     }
 
@@ -712,6 +738,7 @@ impl ComponentFlags {
             endgame_patterns: false,
             tactical_patterns: false,
             positional_patterns: false,
+            castle_patterns: false,
         }
     }
 
@@ -724,6 +751,7 @@ impl ComponentFlags {
             endgame_patterns: false,
             tactical_patterns: false,
             positional_patterns: false,
+            castle_patterns: false,
         }
     }
 }
@@ -829,14 +857,17 @@ mod tests {
         let all_enabled = ComponentFlags::all_enabled();
         assert!(all_enabled.material);
         assert!(all_enabled.piece_square_tables);
+        assert!(all_enabled.castle_patterns);
 
         let all_disabled = ComponentFlags::all_disabled();
         assert!(!all_disabled.material);
         assert!(!all_disabled.piece_square_tables);
+        assert!(!all_disabled.castle_patterns);
 
         let minimal = ComponentFlags::minimal();
         assert!(minimal.material);
         assert!(!minimal.opening_principles);
+        assert!(!minimal.castle_patterns);
     }
 
     #[test]

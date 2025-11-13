@@ -129,7 +129,7 @@ struct CachedEvaluation {
 }
 
 /// Cache statistics for monitoring and tuning
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct CastleCacheStats {
     /// Number of cache hits
     pub hits: u64,

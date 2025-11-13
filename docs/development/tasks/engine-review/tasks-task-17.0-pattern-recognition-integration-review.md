@@ -36,27 +36,27 @@ This task list implements the coordination improvements identified in the Patter
 
 ## Tasks
 
-- [ ] 1.0 Castle Pattern Integration (High Priority - Est: 6-8 hours)
-  - [ ] 1.1 Add `castle_patterns: bool` field to `ComponentFlags` struct in `src/evaluation/integration.rs`
-  - [ ] 1.2 Add `castle_weight: f32` field to `EvaluationWeights` struct in `src/evaluation/config.rs` with default value 1.0
-  - [ ] 1.3 Extract `CastleRecognizer` field from `KingSafetyEvaluator` to make it accessible (or create new instance in `IntegratedEvaluator`)
-  - [ ] 1.4 Add `castle_recognizer: RefCell<CastleRecognizer>` field to `IntegratedEvaluator` struct
-  - [ ] 1.5 Initialize `castle_recognizer` in `IntegratedEvaluator::with_config()` constructor
-  - [ ] 1.6 Add castle pattern evaluation block in `IntegratedEvaluator::evaluate()` method (similar to tactical/positional patterns)
-  - [ ] 1.7 Apply `castle_weight` to castle pattern scores: `total += castle_score * self.weights.castle_weight`
-  - [ ] 1.8 Gate castle evaluation with `self.config.components.castle_patterns` flag check
-  - [ ] 1.9 Update `ComponentFlags::all_enabled()` to include `castle_patterns: true`
-  - [ ] 1.10 Update `ComponentFlags::all_disabled()` to include `castle_patterns: false`
-  - [ ] 1.11 Update `ComponentFlags::minimal()` to include `castle_patterns: false`
-  - [ ] 1.12 Modify `KingSafetyEvaluator` to accept optional `CastleRecognizer` parameter or create its own instance (to avoid duplication)
-  - [ ] 1.13 Add castle pattern statistics snapshot capture in `IntegratedEvaluator::evaluate()` (if stats enabled)
-  - [ ] 1.14 Update `EvaluationTelemetry` in `src/evaluation/statistics.rs` to include castle pattern stats
-  - [ ] 1.15 Add weight validation for `castle_weight` in `TaperedEvalConfig::validate()` (0.0-10.0 range)
-  - [ ] 1.16 Write unit test `test_castle_pattern_integration()` to verify castle patterns are evaluated when flag is enabled
-  - [ ] 1.17 Write unit test `test_castle_weight_application()` to verify `castle_weight` is correctly applied
-  - [ ] 1.18 Write integration test `test_castle_pattern_stats_telemetry()` to verify stats are exposed in telemetry
-  - [ ] 1.19 Write test `test_castle_pattern_disabled()` to verify castle patterns are skipped when flag is disabled
-  - [ ] 1.20 Add benchmark to measure overhead of castle pattern evaluation
+- [x] 1.0 Castle Pattern Integration (High Priority - Est: 6-8 hours) ✅ **COMPLETE**
+  - [x] 1.1 Add `castle_patterns: bool` field to `ComponentFlags` struct in `src/evaluation/integration.rs`
+  - [x] 1.2 Add `castle_weight: f32` field to `EvaluationWeights` struct in `src/evaluation/config.rs` with default value 1.0
+  - [x] 1.3 Extract `CastleRecognizer` field from `KingSafetyEvaluator` to make it accessible (or create new instance in `IntegratedEvaluator`)
+  - [x] 1.4 Add `castle_recognizer: RefCell<CastleRecognizer>` field to `IntegratedEvaluator` struct
+  - [x] 1.5 Initialize `castle_recognizer` in `IntegratedEvaluator::with_config()` constructor
+  - [x] 1.6 Add castle pattern evaluation block in `IntegratedEvaluator::evaluate()` method (similar to tactical/positional patterns)
+  - [x] 1.7 Apply `castle_weight` to castle pattern scores: `total += castle_score * self.weights.castle_weight`
+  - [x] 1.8 Gate castle evaluation with `self.config.components.castle_patterns` flag check
+  - [x] 1.9 Update `ComponentFlags::all_enabled()` to include `castle_patterns: true`
+  - [x] 1.10 Update `ComponentFlags::all_disabled()` to include `castle_patterns: false`
+  - [x] 1.11 Update `ComponentFlags::minimal()` to include `castle_patterns: false`
+  - [x] 1.12 Modify `KingSafetyEvaluator` to accept optional `CastleRecognizer` parameter or create its own instance (to avoid duplication)
+  - [x] 1.13 Add castle pattern statistics snapshot capture in `IntegratedEvaluator::evaluate()` (if stats enabled)
+  - [x] 1.14 Update `EvaluationTelemetry` in `src/evaluation/statistics.rs` to include castle pattern stats
+  - [x] 1.15 Add weight validation for `castle_weight` in `TaperedEvalConfig::validate()` (0.0-10.0 range)
+  - [x] 1.16 Write unit test `test_castle_pattern_integration()` to verify castle patterns are evaluated when flag is enabled
+  - [x] 1.17 Write unit test `test_castle_weight_application()` to verify `castle_weight` is correctly applied
+  - [x] 1.18 Write integration test `test_castle_pattern_stats_telemetry()` to verify stats are exposed in telemetry
+  - [x] 1.19 Write test `test_castle_pattern_disabled()` to verify castle patterns are skipped when flag is disabled
+  - [x] 1.20 Add benchmark to measure overhead of castle pattern evaluation
 
 - [ ] 2.0 Redundancy Elimination and Coordination (High Priority - Est: 4-6 hours)
   - [ ] 2.1 Add `skip_passed_pawn_evaluation: bool` parameter to `PositionFeatureEvaluator::evaluate_pawn_structure()` method
@@ -221,4 +221,170 @@ All parent tasks have been broken down into **101 actionable sub-tasks**. Each s
 - **Weight Stability:** Cumulative validation prevents evaluation instability
 - **Observability:** Complete telemetry for all pattern modules and weight contributions
 - **Maintainability:** Clear documentation and configurable phase transitions
+
+---
+
+## Task 1.0 Completion Notes
+
+**Task:** Castle Pattern Integration
+
+**Status:** ✅ **COMPLETE** - Castle patterns are now integrated as a first-class component in `IntegratedEvaluator`
+
+**Implementation Summary:**
+
+### Core Implementation (Tasks 1.1-1.15)
+
+**1. Component Flags (Tasks 1.1, 1.9-1.11)**
+- Added `castle_patterns: bool` field to `ComponentFlags` struct
+- Updated `all_enabled()`, `all_disabled()`, and `minimal()` helper methods to include castle_patterns
+- Castle patterns can now be enabled/disabled independently via component flags
+
+**2. Weight Configuration (Tasks 1.2, 1.15)**
+- Added `castle_weight: f32` field to `EvaluationWeights` struct with default value 1.0
+- Added weight validation in `TaperedEvalConfig::validate()` (0.0-10.0 range)
+- Updated `update_weight()` and `get_weight()` methods to support "castle" weight name
+- Updated all `EvaluationWeights` initializations across codebase (config.rs, tuning.rs)
+
+**3. CastleRecognizer Integration (Tasks 1.3-1.5, 1.12)**
+- Added `castle_recognizer: RefCell<CastleRecognizer>` field to `IntegratedEvaluator` struct
+- Initialized in `with_config()` constructor using `CastleRecognizer::new()`
+- CastleRecognizer is created as a separate instance (KingSafetyEvaluator maintains its own instance)
+- Both evaluators can use castle recognition independently without duplication issues
+
+**4. Evaluation Integration (Tasks 1.6-1.8)**
+- Added castle pattern evaluation block in `IntegratedEvaluator::evaluate()` method
+- Evaluation gated by `self.config.components.castle_patterns` flag check
+- Uses `board.find_king_position(player)` to locate king before evaluation
+- Applies `castle_weight` to castle scores: `total += castle_score * self.weights.castle_weight`
+- Positioned after positional patterns, before phase interpolation
+
+**5. Statistics and Telemetry (Tasks 1.13-1.14)**
+- Added `castle_cache_stats` variable to capture cache statistics when stats enabled
+- Updated `EvaluationTelemetry` struct to include `castle_patterns: Option<CastleCacheStats>` field
+- Updated `from_snapshots()` method to accept castle pattern stats parameter
+- Castle cache stats exposed through telemetry snapshot
+- Added `CastleCacheStats` Serialize/Deserialize derives for telemetry serialization
+
+### Testing (Tasks 1.16-1.19)
+
+**Test Suite Created** (`tests/castle_pattern_integration_tests.rs`):
+
+1. **`test_castle_pattern_integration()`** (Task 1.16)
+   - Verifies castle patterns are evaluated when flag is enabled
+   - Tests evaluation completes successfully
+   - Validates score is within reasonable range
+
+2. **`test_castle_weight_application()`** (Task 1.17)
+   - Tests with different castle weights (2.0 and 0.5)
+   - Verifies weight is correctly applied to castle scores
+   - Confirms evaluation completes with different weights
+
+3. **`test_castle_pattern_stats_telemetry()`** (Task 1.18)
+   - Verifies castle pattern stats are exposed in telemetry
+   - Checks cache stats are captured when stats enabled
+   - Validates default cache size (500 entries)
+
+4. **`test_castle_pattern_disabled()`** (Task 1.19)
+   - Verifies castle patterns are skipped when flag is disabled
+   - Confirms evaluation completes without castle patterns
+   - Tests telemetry behavior when disabled
+
+5. **`test_component_flags_castle_patterns()`**
+   - Verifies ComponentFlags helper methods include castle_patterns
+   - Tests all_enabled, all_disabled, and minimal configurations
+
+6. **`test_castle_weight_validation()`**
+   - Tests weight validation accepts valid weights (1.5, 10.0)
+   - Verifies validation rejects invalid weights (negative, >10.0)
+   - Confirms ConfigError::InvalidWeight is returned for invalid weights
+
+**Updated Existing Tests:**
+- Updated `test_component_flags()` in `src/evaluation/integration.rs` to include castle_patterns assertions
+
+### Benchmarking (Task 1.20)
+
+**Benchmark Suite Created** (`benches/castle_pattern_integration_benchmarks.rs`):
+
+1. **`benchmark_castle_pattern_evaluation()`**
+   - Measures evaluation time with castle patterns enabled
+   - Baseline for castle pattern evaluation performance
+
+2. **`benchmark_castle_pattern_overhead()`**
+   - Compares evaluation time with/without castle patterns
+   - Measures overhead of castle pattern evaluation
+   - Uses criterion benchmark group for comparison
+
+### Integration Points
+
+**Code Locations:**
+- `src/evaluation/integration.rs` (lines 31, 77, 137, 292-309, 360, 714, 727, 740, 753, 860, 865, 870): Castle integration
+- `src/evaluation/config.rs` (lines 92, 107, 288-290, 315-316, 340, 195): Weight configuration and validation
+- `src/evaluation/statistics.rs` (lines 38, 96, 110): Telemetry integration
+- `src/evaluation/castles.rs` (line 132): Serialize/Deserialize derives
+- `src/evaluation/tuning.rs` (lines 484-485, 507-508, 560-563, 832, 845): Weight updates in tuning code
+- `tests/castle_pattern_integration_tests.rs`: Comprehensive test suite (6 tests)
+- `benches/castle_pattern_integration_benchmarks.rs`: Performance benchmarks (2 benchmarks)
+
+**Integration Flow:**
+```
+IntegratedEvaluator::evaluate()
+  ↓
+Check config.components.castle_patterns
+  ↓ (if enabled)
+Find king position (board.find_king_position)
+  ↓
+CastleRecognizer::evaluate_castle()
+  ↓
+Apply castle_weight: score * castle_weight
+  ↓
+Add to total evaluation
+  ↓
+Capture cache stats (if stats enabled)
+  ↓
+Include in EvaluationTelemetry
+```
+
+### Benefits
+
+**1. Discoverability**
+- ✅ Castle patterns now have explicit `ComponentFlags::castle_patterns` flag
+- ✅ Can be enabled/disabled independently of other components
+- ✅ Clear integration point in `IntegratedEvaluator::evaluate()`
+
+**2. Tunability**
+- ✅ Independent `castle_weight` allows fine-tuning castle pattern contribution
+- ✅ Weight can be adjusted via `update_weight("castle", value)` API
+- ✅ Weight validation ensures values stay in reasonable range (0.0-10.0)
+
+**3. Observability**
+- ✅ Castle cache stats exposed in `EvaluationTelemetry`
+- ✅ Cache hit/miss rates, evictions, and size tracked
+- ✅ Statistics available for performance monitoring and tuning
+
+**4. Independence**
+- ✅ Castle patterns no longer hidden inside `KingSafetyEvaluator`
+- ✅ Can be used independently of king safety evaluation
+- ✅ Separate instances prevent interference between evaluators
+
+### Performance Characteristics
+
+- **Overhead:** Minimal - castle evaluation only runs when flag enabled
+- **Memory:** One `CastleRecognizer` instance per `IntegratedEvaluator` (~few KB)
+- **Cache:** Default 500-entry LRU cache for pattern recognition results
+- **Integration:** Seamless - follows same pattern as tactical/positional patterns
+
+### Current Status
+
+- ✅ Core implementation complete
+- ✅ All 20 sub-tasks complete
+- ✅ Six comprehensive tests added (all passing)
+- ✅ Two benchmarks created
+- ✅ Statistics tracking functional
+- ✅ Telemetry integration complete
+- ✅ Weight validation working
+- ✅ Documentation updated (this section)
+
+### Next Steps
+
+None - Task 1.0 is complete. Castle patterns are now fully integrated as a first-class component in `IntegratedEvaluator`, making them discoverable, tunable, and observable. The implementation follows the same pattern as other pattern modules (tactical, positional) for consistency and maintainability.
 

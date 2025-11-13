@@ -88,6 +88,8 @@ pub struct EvaluationWeights {
     pub tactical_weight: f32,
     /// Weight for positional pattern contributions
     pub positional_weight: f32,
+    /// Weight for castle pattern contributions
+    pub castle_weight: f32,
 }
 
 impl Default for EvaluationWeights {
@@ -102,6 +104,7 @@ impl Default for EvaluationWeights {
             development_weight: 0.5,
             tactical_weight: 1.0,
             positional_weight: 1.0,
+            castle_weight: 1.0,
         }
     }
 }
@@ -189,6 +192,7 @@ impl TaperedEvalConfig {
                 development_weight: 0.7,    // Increased
                 tactical_weight: 1.0,
                 positional_weight: 1.0,
+                castle_weight: 1.0,
             },
         }
     }
@@ -282,6 +286,10 @@ impl TaperedEvalConfig {
             return Err(ConfigError::InvalidWeight("tactical_weight".to_string()));
         }
 
+        if self.weights.castle_weight < 0.0 || self.weights.castle_weight > 10.0 {
+            return Err(ConfigError::InvalidWeight("castle_weight".to_string()));
+        }
+
         // Validate sigmoid steepness
         if self.phase_transition.sigmoid_steepness < 1.0
             || self.phase_transition.sigmoid_steepness > 20.0
@@ -305,6 +313,8 @@ impl TaperedEvalConfig {
             "center_control" => self.weights.center_control_weight = value,
             "development" => self.weights.development_weight = value,
             "tactical" => self.weights.tactical_weight = value,
+            "positional" => self.weights.positional_weight = value,
+            "castle" => self.weights.castle_weight = value,
             _ => return Err(ConfigError::UnknownWeight(weight_name.to_string())),
         }
 
@@ -327,6 +337,8 @@ impl TaperedEvalConfig {
             "center_control" => Some(self.weights.center_control_weight),
             "development" => Some(self.weights.development_weight),
             "tactical" => Some(self.weights.tactical_weight),
+            "positional" => Some(self.weights.positional_weight),
+            "castle" => Some(self.weights.castle_weight),
             _ => None,
         }
     }
