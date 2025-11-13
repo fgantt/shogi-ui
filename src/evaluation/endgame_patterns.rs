@@ -30,10 +30,78 @@
 //! let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::bitboards::BitboardBoard;
+use crate::bitboards::{BitboardBoard, bits};
 use crate::moves::MoveGenerator;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
+
+/// Cached evaluation data for a position
+#[derive(Debug, Clone)]
+struct CachedEvaluation {
+    /// King position for each player
+    king_positions: [Option<Position>; 2],
+    /// Piece positions by type (cached for common lookups)
+    piece_positions: HashMap<(Player, PieceType), Vec<Position>>,
+    /// Pawn positions for each player
+    pawn_positions: [Vec<Position>; 2],
+    /// Total piece count
+    total_pieces: i32,
+    /// Material counts (on board only, pieces in hand not cached)
+    material_counts: [i32; 2],
+}
+
+impl Default for CachedEvaluation {
+    fn default() -> Self {
+        Self {
+            king_positions: [None, None],
+            piece_positions: HashMap::new(),
+            pawn_positions: [Vec::new(), Vec::new()],
+            total_pieces: 0,
+            material_counts: [0, 0],
+        }
+    }
+}
+
+/// King-square table for endgame king activity evaluation
+/// Values are tuned for shogi: center (rank 4-5) is optimal, edges are less valuable
+static KING_SQUARE_TABLE_EG: [i32; 81] = {
+    let mut table = [0i32; 81];
+    let mut idx = 0;
+    while idx < 81 {
+        let row = (idx / 9) as i32;
+        let col = (idx % 9) as i32;
+        // Center distance (Manhattan distance from center)
+        let center_row = 4;
+        let center_col = 4;
+        let row_dist = (row - center_row).abs();
+        let col_dist = (col - center_col).abs();
+        let center_distance = row_dist + col_dist;
+        
+        // Endgame value: closer to center = higher value
+        // Rank 4-5 (rows 3-4) are optimal for king activity
+        let rank_bonus = if row >= 3 && row <= 4 {
+            30 // Optimal ranks
+        } else if row >= 2 && row <= 5 {
+            20 // Good ranks
+        } else if row >= 1 && row <= 6 {
+            10 // Acceptable ranks
+        } else {
+            0 // Back ranks
+        };
+        
+        let center_bonus = if center_distance > 4 {
+            (4 - 4) * 15
+        } else {
+            (4 - center_distance) * 15
+        };
+        table[idx] = rank_bonus + center_bonus;
+        idx += 1;
+    }
+    table
+};
 
 /// Endgame pattern evaluator
 pub struct EndgamePatternEvaluator {
@@ -43,6 +111,8 @@ pub struct EndgamePatternEvaluator {
     stats: EndgamePatternStats,
     /// Move generator for zugzwang detection
     move_generator: MoveGenerator,
+    /// Evaluation cache (keyed by position hash)
+    cache: HashMap<u64, CachedEvaluation>,
 }
 
 impl EndgamePatternEvaluator {
@@ -52,6 +122,7 @@ impl EndgamePatternEvaluator {
             config: EndgamePatternConfig::default(),
             stats: EndgamePatternStats::default(),
             move_generator: MoveGenerator::new(),
+            cache: HashMap::new(),
         }
     }
 
@@ -61,7 +132,83 @@ impl EndgamePatternEvaluator {
             config,
             stats: EndgamePatternStats::default(),
             move_generator: MoveGenerator::new(),
+            cache: HashMap::new(),
         }
+    }
+
+    /// Generate a hash key for a position (simplified for caching)
+    fn generate_position_hash(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        
+        // Hash bitboard representation (fast)
+        let pieces = board.get_pieces();
+        for player_pieces in pieces.iter() {
+            for piece_bitboard in player_pieces.iter() {
+                piece_bitboard.hash(&mut hasher);
+            }
+        }
+        
+        // Hash player to move
+        player.hash(&mut hasher);
+        
+        // Hash captured pieces (simplified - just count)
+        for piece_type in [
+            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
+            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook,
+        ] {
+            captured_pieces.count(piece_type, Player::Black).hash(&mut hasher);
+            captured_pieces.count(piece_type, Player::White).hash(&mut hasher);
+        }
+        
+        hasher.finish()
+    }
+
+    /// Get cached evaluation or compute and cache it
+    fn get_cached_or_compute(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> Option<&CachedEvaluation> {
+        if !self.config.enable_evaluation_caching {
+            return None;
+        }
+        
+        let hash = self.generate_position_hash(board, player, captured_pieces);
+        
+        if !self.cache.contains_key(&hash) {
+            // Compute and cache
+            let mut cached = CachedEvaluation::default();
+            
+            // Cache king positions (use bitboard method)
+            cached.king_positions[0] = board.find_king_position(Player::Black);
+            cached.king_positions[1] = board.find_king_position(Player::White);
+            
+            // Cache pawn positions (use bitboard operations)
+            cached.pawn_positions[0] = self.collect_pawns_bitboard(board, Player::Black);
+            cached.pawn_positions[1] = self.collect_pawns_bitboard(board, Player::White);
+            
+            // Cache total pieces (use bitboard population count)
+            cached.total_pieces = self.count_total_pieces_bitboard(board);
+            
+            // Cache material counts
+            cached.material_counts[0] = self.calculate_material(board, Player::Black, captured_pieces);
+            cached.material_counts[1] = self.calculate_material(board, Player::White, captured_pieces);
+            
+            self.cache.insert(hash, cached);
+        }
+        
+        self.cache.get(&hash)
+    }
+
+    /// Clear the evaluation cache
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
     }
 
     /// Evaluate endgame patterns
@@ -150,9 +297,17 @@ impl EndgamePatternEvaluator {
         let is_unsafe = self.is_king_under_attack(board, king_pos, player);
 
         // 1. Centralization bonus (more important in endgame)
-        let center_distance = self.distance_to_center(king_pos);
-        let centralization_bonus_base = (4 - center_distance.min(4)) * 15;
-        let centralization_bonus = (centralization_bonus_base as f32 * self.config.king_activity_centralization_scale) as i32;
+        let centralization_bonus = if self.config.use_king_square_tables {
+            // Use king-square table lookup (faster)
+            let square_idx = (king_pos.row * 9 + king_pos.col) as usize;
+            let table_value = KING_SQUARE_TABLE_EG[square_idx];
+            (table_value as f32 * self.config.king_activity_centralization_scale) as i32
+        } else {
+            // Use Manhattan distance (original method)
+            let center_distance = self.distance_to_center(king_pos);
+            let centralization_bonus_base = (4 - center_distance.min(4)) * 15;
+            (centralization_bonus_base as f32 * self.config.king_activity_centralization_scale) as i32
+        };
         mg_score += centralization_bonus / 4; // Small bonus in middlegame
         eg_score += centralization_bonus; // Large bonus in endgame
 
@@ -527,8 +682,8 @@ impl EndgamePatternEvaluator {
             PieceType::Bishop => {
                 // Bishop on diagonal with king
                 // Check diagonals
-                for dr in -4..=4 {
-                    for dc in -4..=4 {
+                for dr in -4i8..=4i8 {
+                    for dc in -4i8..=4i8 {
                         if dr == 0 || dc == 0 || dr.abs() != dc.abs() {
                             continue;
                         }
@@ -1360,19 +1515,10 @@ impl EndgamePatternEvaluator {
     // HELPER METHODS
     // =======================================================================
 
-    /// Find king position
+    /// Find king position (optimized with bitboard operations)
     fn find_king_position(&self, board: &BitboardBoard, player: Player) -> Option<Position> {
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == PieceType::King && piece.player == player {
-                        return Some(pos);
-                    }
-                }
-            }
-        }
-        None
+        // Use bitboard method if available (much faster)
+        board.find_king_position(player)
     }
 
     /// Count total pieces for a player
@@ -1391,18 +1537,24 @@ impl EndgamePatternEvaluator {
         count
     }
 
-    /// Count total pieces on board
-    fn count_total_pieces(&self, board: &BitboardBoard) -> i32 {
-        let mut count = 0;
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if board.is_square_occupied(pos) {
-                    count += 1;
-                }
+    /// Count total pieces on board (optimized with bitboard population count)
+    pub fn count_total_pieces(&self, board: &BitboardBoard) -> i32 {
+        self.count_total_pieces_bitboard(board)
+    }
+
+    /// Count total pieces using bitboard operations
+    fn count_total_pieces_bitboard(&self, board: &BitboardBoard) -> i32 {
+        let pieces = board.get_pieces();
+        let mut count = 0u32;
+        
+        // Count all pieces using bitboard population count
+        for player_pieces in pieces.iter() {
+            for piece_bitboard in player_pieces.iter() {
+                count += piece_bitboard.count_ones();
             }
         }
-        count
+        
+        count as i32
     }
 
     /// Count pieces of specific type for player
@@ -1426,20 +1578,19 @@ impl EndgamePatternEvaluator {
         count
     }
 
-    /// Collect all pawns for a player
-    fn collect_pawns(&self, board: &BitboardBoard, player: Player) -> Vec<Position> {
-        let mut pawns = Vec::new();
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == PieceType::Pawn && piece.player == player {
-                        pawns.push(pos);
-                    }
-                }
-            }
-        }
-        pawns
+    /// Collect all pawns for a player (optimized with bitboard operations)
+    pub fn collect_pawns(&self, board: &BitboardBoard, player: Player) -> Vec<Position> {
+        self.collect_pawns_bitboard(board, player)
+    }
+
+    /// Collect all pawns using bitboard operations
+    fn collect_pawns_bitboard(&self, board: &BitboardBoard, player: Player) -> Vec<Position> {
+        let pieces = board.get_pieces();
+        let player_idx = if player == Player::Black { 0 } else { 1 };
+        let pawn_bitboard = pieces[player_idx][PieceType::Pawn.to_u8() as usize];
+        
+        // Use bit iterator to get all pawn positions
+        bits(pawn_bitboard).map(|idx| Position::from_u8(idx)).collect()
     }
 
     /// Check if pawn is passed
@@ -1467,25 +1618,19 @@ impl EndgamePatternEvaluator {
         true
     }
 
-    /// Find all pieces of a specific type
-    fn find_pieces(
+    /// Find all pieces of a specific type (optimized with bitboard operations)
+    pub fn find_pieces(
         &self,
         board: &BitboardBoard,
         player: Player,
         piece_type: PieceType,
     ) -> Vec<Position> {
-        let mut pieces = Vec::new();
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == piece_type && piece.player == player {
-                        pieces.push(pos);
-                    }
-                }
-            }
-        }
-        pieces
+        let pieces = board.get_pieces();
+        let player_idx = if player == Player::Black { 0 } else { 1 };
+        let piece_bitboard = pieces[player_idx][piece_type.to_u8() as usize];
+        
+        // Use bit iterator to get all piece positions
+        bits(piece_bitboard).map(|idx| Position::from_u8(idx)).collect()
     }
 
     /// Get statistics
@@ -1543,6 +1688,10 @@ pub struct EndgamePatternConfig {
     pub king_activity_advancement_scale: f32,
     /// Enable shogi-specific opposition adjustment (reduce value when opponent has pieces in hand)
     pub enable_shogi_opposition_adjustment: bool,
+    /// Enable evaluation caching (default: true)
+    pub enable_evaluation_caching: bool,
+    /// Use king-square tables instead of Manhattan distance (default: false)
+    pub use_king_square_tables: bool,
 }
 
 impl Default for EndgamePatternConfig {
@@ -1563,6 +1712,8 @@ impl Default for EndgamePatternConfig {
             king_activity_activity_scale: 1.0,
             king_activity_advancement_scale: 1.0,
             enable_shogi_opposition_adjustment: true,
+            enable_evaluation_caching: true,
+            use_king_square_tables: false,
         }
     }
 }
