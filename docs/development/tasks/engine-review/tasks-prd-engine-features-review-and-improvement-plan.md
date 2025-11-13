@@ -209,21 +209,21 @@
   - [x] 15.7 Identify strengths and weaknesses
   - [x] 15.8 Generate improvement recommendations
 
-- [ ] 16.0 Feature: Castle Pattern Recognition
-  - [ ] 16.1 Review patterns/anaguma.rs, patterns/mino.rs, patterns/yagura.rs
-  - [ ] 16.2 Verify Anaguma recognition accuracy
-  - [ ] 16.3 Check Mino recognition
-  - [ ] 16.4 Assess Yagura recognition
-  - [ ] 16.5 Review castle quality evaluation
-  - [ ] 16.6 Measure defense assessment accuracy
-  - [ ] 16.7 Identify strengths and weaknesses
-  - [ ] 16.8 Generate improvement recommendations
+- [x] 16.0 Feature: Castle Pattern Recognition
+  - [x] 16.1 Review patterns/anaguma.rs, patterns/mino.rs, patterns/yagura.rs
+  - [x] 16.2 Verify Anaguma recognition accuracy
+  - [x] 16.3 Check Mino recognition
+  - [x] 16.4 Assess Yagura recognition
+  - [x] 16.5 Review castle quality evaluation
+  - [x] 16.6 Measure defense assessment accuracy
+  - [x] 16.7 Identify strengths and weaknesses
+  - [x] 16.8 Generate improvement recommendations
 
-- [ ] 17.0 Dependency Coordination: Pattern Recognition Integration
-  - [ ] 17.1 Analyze integration of all pattern recognition modules
-  - [ ] 17.2 Review weighted combination of patterns
-  - [ ] 17.3 Assess redundancy or conflicts between pattern types
-  - [ ] 17.4 Document coordination improvements needed
+- [x] 17.0 Dependency Coordination: Pattern Recognition Integration
+  - [x] 17.1 Analyze integration of all pattern recognition modules
+  - [x] 17.2 Review weighted combination of patterns
+  - [x] 17.3 Assess redundancy or conflicts between pattern types
+  - [x] 17.4 Document coordination improvements needed
 
 - [ ] 18.0 Feature: Endgame Patterns
   - [ ] 18.1 Review endgame_patterns.rs implementation
