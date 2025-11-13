@@ -179,11 +179,20 @@ impl IntegratedEvaluator {
     }
 
     /// Main evaluation entry point
+    ///
+    /// # Arguments
+    ///
+    /// * `board` - Current board state
+    /// * `player` - Player to evaluate for
+    /// * `captured_pieces` - Captured pieces for both players
+    /// * `move_count` - Optional move count (number of moves played in the game).
+    ///                  If None, will be estimated from phase for opening principles evaluation.
     pub fn evaluate(
         &self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
+        move_count: Option<u32>,
     ) -> i32 {
         let start = if self.statistics.borrow().is_enabled() {
             Some(Instant::now())
@@ -205,7 +214,7 @@ impl IntegratedEvaluator {
         }
 
         // Use standard path (optimized path would require &mut self)
-        let score = self.evaluate_standard(board, player, captured_pieces);
+        let score = self.evaluate_standard(board, player, captured_pieces, move_count);
 
         // Record statistics
         if let Some(start_time) = start {
@@ -227,6 +236,7 @@ impl IntegratedEvaluator {
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
+        move_count: Option<u32>,
     ) -> i32 {
         let stats_enabled = { self.statistics.borrow().is_enabled() };
         // Calculate phase
@@ -437,13 +447,27 @@ impl IntegratedEvaluator {
 
         // Opening principles (if in opening)
         // Task 6.0 - Task 6.7, 6.10, 6.12: Use configurable phase boundaries and gradual transitions
+        // Task 19.0 - Task 1.0: Use actual move_count instead of hardcoded 0
         if self.config.components.opening_principles {
             let opening_threshold = self.config.phase_boundaries.opening_threshold;
             if phase >= opening_threshold {
+                // Estimate move_count from phase if not provided
+                // Phase 256 = starting position (move 0), decreases as material is exchanged
+                // Rough estimate: phase 256 = 0, phase 240 = ~5, phase 224 = ~10, phase 192 = ~16
+                let estimated_move_count = move_count.unwrap_or_else(|| {
+                    if phase >= opening_threshold {
+                        // In opening phase, estimate based on phase
+                        // Formula: (256 - phase) / 4, clamped to reasonable range
+                        ((256 - phase) / 4).max(0).min(20) as u32
+                    } else {
+                        0
+                    }
+                });
+                
                 let mut opening_score = self
                     .opening_principles
                     .borrow_mut()
-                    .evaluate_opening(board, player, 0);
+                    .evaluate_opening(board, player, estimated_move_count);
                 
                 // Apply gradual fade if enabled (Task 6.0 - Task 6.10, 6.12)
                 if self.config.enable_gradual_phase_transitions {
@@ -1198,7 +1222,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
 
         // Should return a valid score
         assert!(score.abs() < 100000);
@@ -1317,7 +1341,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 
@@ -1332,7 +1356,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 
@@ -1383,7 +1407,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 }

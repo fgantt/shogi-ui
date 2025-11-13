@@ -441,7 +441,7 @@ impl PositionEvaluator {
         // Cache miss or cache disabled - evaluate normally
         let score = if self.use_integrated_eval {
             if let Some(ref integrated) = self.integrated_evaluator {
-                integrated.evaluate(board, player, captured_pieces)
+                integrated.evaluate(board, player, captured_pieces, None)
             } else {
                 self.evaluate_with_context(
                     board,
