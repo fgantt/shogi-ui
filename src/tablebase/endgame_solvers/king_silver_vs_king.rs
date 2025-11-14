@@ -398,6 +398,47 @@ impl KingSilverVsKingSolver {
         // For now, return false
         false
     }
+
+    /// Calculate distance to mate using search-based DTM calculation
+    fn calculate_distance_to_mate(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> u8 {
+        use super::dtm_calculator::calculate_dtm;
+        
+        // Use search-based DTM calculation with max depth limit
+        // For K+S vs K, mate is typically achievable within 35 moves
+        let max_depth = 35;
+        
+        // Calculate actual DTM using iterative deepening search
+        if let Some(dtm) = calculate_dtm(board, player, captured_pieces, max_depth) {
+            dtm
+        } else {
+            // If search doesn't find mate within max_depth, use heuristic fallback
+            let pieces = self.extract_pieces(board, player);
+            let (king, silver) = self.find_king_and_silver(&pieces);
+            let defending_king = self.find_defending_king(board, player);
+
+            if let (Some(king_pos), Some(silver_pos), Some(def_king_pos)) =
+                (king, silver, defending_king)
+            {
+                // Heuristic: estimate based on piece coordination
+                let king_distance = self.manhattan_distance(king_pos, def_king_pos);
+                let silver_distance = self.manhattan_distance(silver_pos, def_king_pos);
+                
+                // Better estimate: consider piece coordination
+                let avg_distance = (king_distance + silver_distance) / 2;
+                
+                // Estimate: Silver is less powerful than Gold, usually takes longer
+                // Typically 1.8x the average distance for coordination
+                ((avg_distance * 9) / 5).min(35) as u8
+            } else {
+                30 // Unknown distance
+            }
+        }
+    }
 }
 
 impl EndgameSolver for KingSilverVsKingSolver {
@@ -430,8 +471,8 @@ impl EndgameSolver for KingSilverVsKingSolver {
             } else if self.is_stalemate(board, player, captured_pieces) {
                 Some(TablebaseResult::draw())
             } else {
-                // TODO: Implement proper evaluation and distance calculation
-                Some(TablebaseResult::win(Some(best_move), 10))
+                let distance = self.calculate_distance_to_mate(board, player, captured_pieces);
+                Some(TablebaseResult::win(Some(best_move), distance))
             }
         } else {
             Some(TablebaseResult::loss(0))

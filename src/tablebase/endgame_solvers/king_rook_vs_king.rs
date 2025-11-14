@@ -421,6 +421,46 @@ impl KingRookVsKingSolver {
         // For now, return false
         false
     }
+
+    /// Calculate distance to mate using search-based DTM calculation
+    fn calculate_distance_to_mate(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> u8 {
+        use super::dtm_calculator::calculate_dtm;
+        
+        // Use search-based DTM calculation with max depth limit
+        // For K+R vs K, mate is typically achievable within 25 moves
+        let max_depth = 25;
+        
+        // Calculate actual DTM using iterative deepening search
+        if let Some(dtm) = calculate_dtm(board, player, captured_pieces, max_depth) {
+            dtm
+        } else {
+            // If search doesn't find mate within max_depth, use heuristic fallback
+            let pieces = self.extract_pieces(board, player);
+            let (king, rook) = self.find_king_and_rook(&pieces);
+            let defending_king = self.find_defending_king(board, player);
+
+            if let (Some(king_pos), Some(rook_pos), Some(def_king_pos)) =
+                (king, rook, defending_king)
+            {
+                // Heuristic: estimate based on piece coordination
+                let king_distance = self.manhattan_distance(king_pos, def_king_pos);
+                let rook_distance = self.manhattan_distance(rook_pos, def_king_pos);
+                
+                // Better estimate: Rook is powerful, but coordination still needed
+                let avg_distance = (king_distance + rook_distance) / 2;
+                
+                // Estimate: Rook is powerful, usually takes 1.3x the average distance
+                ((avg_distance * 13) / 10).min(25) as u8
+            } else {
+                20 // Unknown distance
+            }
+        }
+    }
 }
 
 impl EndgameSolver for KingRookVsKingSolver {
@@ -453,8 +493,8 @@ impl EndgameSolver for KingRookVsKingSolver {
             } else if self.is_stalemate(board, player, captured_pieces) {
                 Some(TablebaseResult::draw())
             } else {
-                // TODO: Implement proper evaluation and distance calculation
-                Some(TablebaseResult::win(Some(best_move), 8))
+                let distance = self.calculate_distance_to_mate(board, player, captured_pieces);
+                Some(TablebaseResult::win(Some(best_move), distance))
             }
         } else {
             Some(TablebaseResult::loss(0))

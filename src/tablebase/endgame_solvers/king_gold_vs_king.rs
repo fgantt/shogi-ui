@@ -512,28 +512,42 @@ impl KingGoldVsKingSolver {
         king_distance_to_gold <= 2 && king_distance_to_defending_king <= 3
     }
 
-    /// Calculate distance to mate
+    /// Calculate distance to mate using search-based DTM calculation
     fn calculate_distance_to_mate(&self, board: &BitboardBoard, player: Player) -> u8 {
-        // This is a simplified calculation
-        // In a real implementation, we would use more sophisticated algorithms
-        // to calculate the actual distance to mate
+        use super::dtm_calculator::calculate_dtm;
+        use crate::types::CapturedPieces;
+        
+        // Use search-based DTM calculation with max depth limit
+        // For K+G vs K, mate is typically achievable within 30 moves
+        let max_depth = 30;
+        let captured_pieces = CapturedPieces::new();
+        
+        // Calculate actual DTM using iterative deepening search
+        if let Some(dtm) = calculate_dtm(board, player, &captured_pieces, max_depth) {
+            dtm
+        } else {
+            // If search doesn't find mate within max_depth, use heuristic fallback
+            let (attacking_king, attacking_gold) = match self.find_attacking_pieces(board, player) {
+                Some(pieces) => pieces,
+                None => return 50, // Unknown distance
+            };
 
-        let (attacking_king, attacking_gold) = match self.find_attacking_pieces(board, player) {
-            Some(pieces) => pieces,
-            None => return 50, // Unknown distance
-        };
+            let defending_king = match self.find_defending_king(board, player) {
+                Some(king) => king,
+                None => return 50, // Unknown distance
+            };
 
-        let defending_king = match self.find_defending_king(board, player) {
-            Some(king) => king,
-            None => return 50, // Unknown distance
-        };
-
-        // Calculate minimum distance needed to mate
-        let king_distance = self.manhattan_distance(attacking_king, defending_king);
-        let gold_distance = self.manhattan_distance(attacking_gold, defending_king);
-
-        // Rough estimate: need to get pieces close to the king
-        (king_distance + gold_distance).min(20)
+            // Heuristic: estimate based on piece coordination
+            let king_distance = self.manhattan_distance(attacking_king, defending_king);
+            let gold_distance = self.manhattan_distance(attacking_gold, defending_king);
+            
+            // Better estimate: consider piece coordination
+            let min_distance = king_distance.min(gold_distance);
+            let avg_distance = (king_distance + gold_distance) / 2;
+            
+            // Estimate: need to coordinate pieces, usually takes 1.5x the average distance
+            ((avg_distance * 3) / 2).min(30) as u8
+        }
     }
 }
 

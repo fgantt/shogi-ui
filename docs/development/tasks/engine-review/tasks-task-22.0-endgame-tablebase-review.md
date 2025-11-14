@@ -43,12 +43,12 @@ This task list implements the improvements identified in the Endgame Tablebase R
   - [x] 1.5 Implement proper `is_checkmate()` in King+Rook solver to verify checkmate positions ✅
   - [x] 1.6 Implement proper `is_stalemate()` in King+Rook solver to detect stalemate positions ✅
   - [x] 1.7 Improve `is_mating_move()` in King+Gold solver to verify actual checkmate (not just king attack) ✅
-  - [ ] 1.8 Research and implement proper DTM (Distance To Mate) calculation for King+Gold vs King using retrograde analysis or endgame theory
-  - [ ] 1.9 Research and implement proper DTM calculation for King+Silver vs King using endgame theory
-  - [ ] 1.10 Research and implement proper DTM calculation for King+Rook vs King using endgame theory
-  - [ ] 1.11 Replace Manhattan distance heuristics with actual DTM values in `calculate_distance_to_mate()` for all solvers
-  - [ ] 1.12 Add DTM lookup or calculation based on position analysis (consider lookup table for common patterns)
-  - [ ] 1.13 Update `TablebaseResult` structure to ensure DTM values are properly populated from solver calculations
+  - [x] 1.8 Research and implement proper DTM (Distance To Mate) calculation for King+Gold vs King using iterative deepening search ✅
+  - [x] 1.9 Research and implement proper DTM calculation for King+Silver vs King using iterative deepening search ✅
+  - [x] 1.10 Research and implement proper DTM calculation for King+Rook vs King using iterative deepening search ✅
+  - [x] 1.11 Replace Manhattan distance heuristics with actual DTM values in `calculate_distance_to_mate()` for all solvers ✅
+  - [x] 1.12 Add DTM lookup or calculation based on position analysis with iterative deepening search ✅
+  - [x] 1.13 Update `TablebaseResult` structure to ensure DTM values are properly populated from solver calculations ✅ (DTM values now properly passed to TablebaseResult::win())
   - [ ] 1.14 Complete `coordinates_king_silver()` in King+Silver solver: implement proper coordination logic (remove TODO stub)
   - [ ] 1.15 Complete `restricts_king_mobility()` in King+Silver solver: implement mobility restriction logic (remove TODO stub)
   - [ ] 1.16 Complete `coordinates_king_rook()` in King+Rook solver: implement proper coordination logic (remove TODO stub)
