@@ -173,7 +173,7 @@ impl MoveGenerator {
                 let pos = Position::new(r, c);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        moves.extend(self.generate_capture_moves_for_piece(board, piece, pos));
+                        moves.extend(self.generate_capture_moves_for_piece(board, &piece, pos));
                     }
                 }
             }
@@ -200,7 +200,7 @@ impl MoveGenerator {
                     // Non-promoted move
                     let mut move_ = Move::new_move(pos, to_pos, piece.piece_type, player, false);
                     move_.is_capture = true;
-                    move_.captured_piece = board.get_piece(to_pos).cloned();
+                    move_.captured_piece = board.get_piece(to_pos);
                     moves.push(move_);
 
                     // Promoted move
@@ -210,7 +210,7 @@ impl MoveGenerator {
                         let mut promoted_move =
                             Move::new_move(pos, to_pos, piece.piece_type, player, true);
                         promoted_move.is_capture = true;
-                        promoted_move.captured_piece = board.get_piece(to_pos).cloned();
+                        promoted_move.captured_piece = board.get_piece(to_pos);
                         moves.push(promoted_move);
                     }
                 }
@@ -316,7 +316,7 @@ impl MoveGenerator {
                 let pos = Position::new(r, c);
                 if let Some(piece) = board.get_piece(pos) {
                     if piece.player == player {
-                        moves.extend(self.generate_moves_for_single_piece(board, piece, pos));
+                        moves.extend(self.generate_moves_for_single_piece(board, &piece, pos));
                     }
                 }
             }
@@ -343,7 +343,7 @@ impl MoveGenerator {
                 let mut move_ = Move::new_move(pos, to_pos, piece.piece_type, player, false);
                 if is_capture {
                     move_.is_capture = true;
-                    move_.captured_piece = board.get_piece(to_pos).cloned();
+                    move_.captured_piece = board.get_piece(to_pos);
                 }
                 moves.push(move_);
 
@@ -355,7 +355,7 @@ impl MoveGenerator {
                         Move::new_move(pos, to_pos, piece.piece_type, player, true);
                     if is_capture {
                         promoted_move.is_capture = true;
-                        promoted_move.captured_piece = board.get_piece(to_pos).cloned();
+                        promoted_move.captured_piece = board.get_piece(to_pos);
                     }
                     moves.push(promoted_move);
                 }
@@ -563,7 +563,7 @@ impl MoveGenerator {
                 let opponent = player.opposite();
                 let mut temp_board = board.clone();
                 temp_board.remove_piece(from);
-                temp_board.place_piece(*piece, move_.to);
+                temp_board.place_piece(piece, move_.to);
 
                 // Check if the piece can attack any opponent pieces from this position
                 for r in 0..9 {

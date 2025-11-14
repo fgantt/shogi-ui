@@ -159,7 +159,7 @@ pub trait EndgameSolverHelper {
         for row in 0..9 {
             for col in 0..9 {
                 if let Some(piece) = board.get_piece(crate::types::Position::new(row, col)) {
-                    pieces.push((*piece, crate::types::Position::new(row, col)));
+                    pieces.push((piece, crate::types::Position::new(row, col)));
                 }
             }
         }

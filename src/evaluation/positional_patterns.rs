@@ -982,7 +982,7 @@ impl PositionalPatternAnalyzer {
                     if piece.player != player {
                         continue;
                     }
-                    if self.piece_controls_square(board, piece, from, target) {
+                    if self.piece_controls_square(board, &piece, from, target) {
                         count += 1;
                     }
                 }

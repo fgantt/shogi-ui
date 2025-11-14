@@ -34,7 +34,7 @@ pub fn find_attackers_defenders(square: Position, board: &BitboardBoard) -> Vec<
             // Check if there's a piece at this position
             if let Some(piece) = board.get_piece(position) {
                 // Check if this specific piece attacks the target square
-                if piece_attacks_square(piece, position, square, board) {
+                if piece_attacks_square(&piece, position, square, board) {
                     all_attackers.push((position, piece.clone()));
                 }
             }

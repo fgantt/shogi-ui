@@ -1278,7 +1278,6 @@ impl PositionFeatureEvaluator {
     ) -> Option<Piece> {
         oriented_offset_to_actual(king_pos, player, dr, dc)
             .and_then(|pos| board.get_piece(pos))
-            .copied()
     }
 
     fn column_has_unpromoted_pawn(
@@ -2186,7 +2185,7 @@ impl PositionFeatureEvaluator {
             eg_score += diff_eg / 2;
 
             if let Some(piece) = board.get_piece(pos) {
-                let bonus = Self::castle_anchor_occupant_bonus(piece, player);
+                let bonus = Self::castle_anchor_occupant_bonus(&piece, player);
                 mg_score += bonus.0;
                 eg_score += bonus.1;
             }
@@ -2219,11 +2218,16 @@ impl PositionFeatureEvaluator {
     ///
     /// Development is critical in opening, less so in endgame.
     /// Evaluate piece development
-    /// 
+    ///
     /// # Parameters
     /// - `skip_development`: If true, skips development evaluation (optional, for coordination with
     ///   opening_principles to avoid double-counting when opening_principles is enabled in opening phase)
-    pub fn evaluate_development(&mut self, board: &BitboardBoard, player: Player, skip_development: bool) -> TaperedScore {
+    pub fn evaluate_development(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        skip_development: bool,
+    ) -> TaperedScore {
         if skip_development {
             return TaperedScore::default();
         }

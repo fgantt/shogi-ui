@@ -139,6 +139,8 @@ fn get_position_id(&self) -> u64 {
 
 Impact: board copies and hash collisions inflate move generation overhead and degrade repetition detection accuracy.
 
+> **Update (Nov 2025):** Task 23.0.1 replaced the HashMap with a fixed `[Option<Piece>; 81]` backing array synchronized with the bitboards, and `get_position_id` now delegates to the Zobrist hasher (callers supply the current player/captured state). Attack tables are shared behind `Arc`, so board clones used in legality checks no longer duplicate 22 KB of metadata each time.
+
 ---
 
 ## 3. Move Generation Efficiency (Task 23.3)

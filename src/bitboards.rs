@@ -1,5 +1,6 @@
+use crate::search::RepetitionState;
 use crate::types::*;
-use std::collections::HashMap;
+use std::sync::Arc;
 
 // Include the magic bitboard module
 pub mod api;
@@ -113,21 +114,60 @@ pub struct BitboardBoard {
     occupied: Bitboard,
     black_occupied: Bitboard,
     white_occupied: Bitboard,
-    piece_positions: HashMap<Position, Piece>,
+    squares: [Option<Piece>; 81],
     attack_patterns: AttackPatterns,
     /// Precomputed attack tables for non-sliding pieces
-    attack_tables: attack_patterns::AttackTables,
+    attack_tables: Arc<attack_patterns::AttackTables>,
     /// Magic bitboard table for sliding piece moves
     magic_table: Option<crate::types::MagicTable>,
     /// Sliding move generator for magic bitboard operations
     sliding_generator: Option<sliding_moves::SlidingMoveGenerator>,
+    side_to_move: Player,
+    repetition_state: RepetitionState,
 }
 
 impl BitboardBoard {
+    #[inline]
+    fn square_index(position: Position) -> usize {
+        position.to_index() as usize
+    }
+
+    #[inline]
+    fn set_square(&mut self, position: Position, piece: Option<Piece>) {
+        if position.is_valid() {
+            let idx = Self::square_index(position);
+            self.squares[idx] = piece;
+        }
+    }
+
+    #[inline]
+    fn iter_pieces(&self) -> impl Iterator<Item = (Position, Piece)> + '_ {
+        self.squares
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, piece)| piece.map(|p| (Position::from_index(idx as u8), p)))
+    }
+
     pub fn new() -> Self {
         let mut board = Self::empty();
         board.setup_initial_position();
         board
+    }
+
+    pub fn set_side_to_move(&mut self, player: Player) {
+        self.side_to_move = player;
+    }
+
+    pub fn side_to_move(&self) -> Player {
+        self.side_to_move
+    }
+
+    pub fn set_repetition_state(&mut self, state: RepetitionState) {
+        self.repetition_state = state;
+    }
+
+    pub fn repetition_state(&self) -> RepetitionState {
+        self.repetition_state
     }
 
     pub fn empty() -> Self {
@@ -136,22 +176,26 @@ impl BitboardBoard {
             occupied: EMPTY_BITBOARD,
             black_occupied: EMPTY_BITBOARD,
             white_occupied: EMPTY_BITBOARD,
-            piece_positions: HashMap::new(),
+            squares: [None; 81],
             attack_patterns: AttackPatterns::new(),
-            attack_tables: attack_patterns::AttackTables::new(),
+            attack_tables: Arc::new(attack_patterns::AttackTables::new()),
             magic_table: None,
             sliding_generator: None,
+            side_to_move: Player::Black,
+            repetition_state: RepetitionState::None,
         }
     }
 
     fn setup_initial_position(&mut self) {
         let start_fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
-        if let Ok((board, _, _)) = BitboardBoard::from_fen(start_fen) {
+        if let Ok((board, player, _)) = BitboardBoard::from_fen(start_fen) {
             self.pieces = board.pieces;
             self.occupied = board.occupied;
             self.black_occupied = board.black_occupied;
             self.white_occupied = board.white_occupied;
-            self.piece_positions = board.piece_positions;
+            self.squares = board.squares;
+            self.side_to_move = player;
+            self.repetition_state = RepetitionState::None;
         }
     }
 
@@ -199,11 +243,16 @@ impl BitboardBoard {
             Player::White => set_bit(&mut self.white_occupied, position),
         }
         set_bit(&mut self.occupied, position);
-        self.piece_positions.insert(position, piece.clone());
+        self.set_square(position, Some(piece));
     }
 
     pub fn remove_piece(&mut self, position: Position) -> Option<Piece> {
-        if let Some(piece) = self.piece_positions.remove(&position) {
+        if !position.is_valid() {
+            return None;
+        }
+
+        let idx = Self::square_index(position);
+        if let Some(piece) = self.squares[idx] {
             crate::debug_utils::debug_log(&format!(
                 "[REMOVE_PIECE] Removing {:?} {:?} from row={} col={}",
                 piece.player, piece.piece_type, position.row, position.col
@@ -221,7 +270,6 @@ impl BitboardBoard {
                     position.row,
                     position.col
                 ));
-                // Still return the piece but don't update bitboards
                 return Some(piece);
             }
 
@@ -231,14 +279,19 @@ impl BitboardBoard {
                 Player::White => clear_bit(&mut self.white_occupied, position),
             }
             clear_bit(&mut self.occupied, position);
+            self.squares[idx] = None;
             Some(piece)
         } else {
             None
         }
     }
 
-    pub fn get_piece(&self, position: Position) -> Option<&Piece> {
-        self.piece_positions.get(&position)
+    pub fn get_piece(&self, position: Position) -> Option<Piece> {
+        if !position.is_valid() {
+            return None;
+        }
+        let idx = Self::square_index(position);
+        self.squares[idx]
     }
 
     pub fn get_pieces(&self) -> &[[Bitboard; 14]; 2] {
@@ -261,7 +314,7 @@ impl BitboardBoard {
     pub fn make_move(&mut self, move_: &Move) -> Option<Piece> {
         let mut captured_piece = None;
         if let Some(from) = move_.from {
-            if let Some(piece_to_move) = self.get_piece(from).cloned() {
+            if let Some(piece_to_move) = self.get_piece(from) {
                 crate::debug_utils::debug_log(&format!(
                     "[MAKE_MOVE] Moving {:?} from row={} col={} to row={} col={}",
                     piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
@@ -307,7 +360,7 @@ impl BitboardBoard {
         let mut original_piece_type = move_.piece_type;
 
         if let Some(from) = move_.from {
-            if let Some(piece_to_move) = self.get_piece(from).cloned() {
+            if let Some(piece_to_move) = self.get_piece(from) {
                 // Capture the original piece type before any modifications
                 original_piece_type = piece_to_move.piece_type;
 
@@ -423,7 +476,7 @@ impl BitboardBoard {
                 if let Some(piece) = self.get_piece(from_pos) {
                     if piece.player == attacking_player {
                         // Check if this piece attacks the target_pos directly
-                        if self.piece_attacks_square(piece, from_pos, target_pos) {
+                        if self.piece_attacks_square(&piece, from_pos, target_pos) {
                             crate::debug_utils::debug_log(&format!(
                                 "[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}",
                                 piece.piece_type,
@@ -609,7 +662,7 @@ impl BitboardBoard {
         let mut points = 0;
 
         // Count pieces on board
-        for (_, piece) in &self.piece_positions {
+        for (_, piece) in self.iter_pieces() {
             if piece.player == player {
                 points += match piece.piece_type {
                     PieceType::Rook | PieceType::PromotedRook => 5,
@@ -811,6 +864,8 @@ impl BitboardBoard {
             "w" => Player::White,
             _ => return Err("Invalid FEN: invalid player"),
         };
+        board.side_to_move = player;
+        board.repetition_state = RepetitionState::None;
 
         // 3. Parse pieces in hand
         if parts[2] != "-" {
@@ -884,11 +939,13 @@ impl BitboardBoard {
             occupied: EMPTY_BITBOARD,
             black_occupied: EMPTY_BITBOARD,
             white_occupied: EMPTY_BITBOARD,
-            piece_positions: HashMap::new(),
+            squares: [None; 81],
             attack_patterns: AttackPatterns::new(),
-            attack_tables: attack_patterns::AttackTables::new(),
+            attack_tables: Arc::new(attack_patterns::AttackTables::new()),
             magic_table: Some(magic_table),
             sliding_generator: None,
+            side_to_move: Player::Black,
+            repetition_state: RepetitionState::None,
         })
     }
 
@@ -1024,19 +1081,14 @@ impl BitboardBoard {
 
 // Import the BoardTrait for implementation
 use crate::search::board_trait::{BoardTrait, BoardTraitExt};
-use crate::search::RepetitionState;
 
 impl BoardTrait for BitboardBoard {
     fn get_piece_at(&self, position: Position) -> Option<Piece> {
-        self.get_piece(position).cloned()
+        self.get_piece(position)
     }
 
     fn get_all_pieces(&self) -> Vec<(Position, Piece)> {
-        let mut pieces = Vec::new();
-        for (pos, piece) in &self.piece_positions {
-            pieces.push((*pos, piece.clone()));
-        }
-        pieces
+        self.iter_pieces().collect()
     }
 
     fn count_pieces(&self, piece_type: PieceType, player: Player) -> usize {
@@ -1072,13 +1124,11 @@ impl BoardTrait for BitboardBoard {
     }
 
     fn get_side_to_move(&self) -> Player {
-        // Default to Black - this should be managed by the game state
-        Player::Black
+        self.side_to_move
     }
 
     fn get_repetition_state(&self) -> RepetitionState {
-        // Default to no repetition - this should be managed by the game state
-        RepetitionState::None
+        self.repetition_state
     }
 
     fn get_captured_pieces(&self, _player: Player) -> Vec<PieceType> {
@@ -1105,18 +1155,15 @@ impl BoardTrait for BitboardBoard {
         false
     }
 
-    fn get_position_id(&self) -> u64 {
-        // Use a simple hash based on piece positions
-        let mut hash = 0u64;
-        for (pos, piece) in &self.piece_positions {
-            hash ^= (pos.row as u64) << 32 | (pos.col as u64);
-            hash ^= (piece.piece_type.to_u8() as u64) << 16
-                | (match piece.player {
-                    Player::Black => 0,
-                    Player::White => 1,
-                } as u64);
-        }
-        hash
+    fn get_position_id(
+        &self,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+        repetition_state: RepetitionState,
+    ) -> u64 {
+        use crate::search::zobrist::ZobristHasher;
+        let hasher = ZobristHasher::new();
+        hasher.hash_position(self, player, captured_pieces, repetition_state)
     }
 
     fn clone_board(&self) -> Self {
@@ -1153,7 +1200,7 @@ impl BoardTrait for BitboardBoard {
         let mut balance = 0;
 
         // Calculate material balance for the current player
-        for (_, piece) in &self.piece_positions {
+        for (_, piece) in self.iter_pieces() {
             let value = piece.piece_type.base_value();
             if piece.player == player {
                 balance += value;
@@ -1166,7 +1213,7 @@ impl BoardTrait for BitboardBoard {
     }
 
     fn get_total_material_count(&self) -> u32 {
-        self.piece_positions.len() as u32
+        self.squares.iter().filter(|slot| slot.is_some()).count() as u32
     }
 
     fn is_in_promotion_zone(&self, position: Position, player: Player) -> bool {
@@ -1266,11 +1313,13 @@ impl Clone for BitboardBoard {
             occupied: self.occupied,
             black_occupied: self.black_occupied,
             white_occupied: self.white_occupied,
-            piece_positions: self.piece_positions.clone(),
+            squares: self.squares,
             attack_patterns: self.attack_patterns.clone(),
-            attack_tables: self.attack_tables.clone(),
+            attack_tables: Arc::clone(&self.attack_tables),
             magic_table: self.magic_table.clone(),
             sliding_generator: self.sliding_generator.clone(),
+            side_to_move: self.side_to_move,
+            repetition_state: self.repetition_state,
         }
     }
 }

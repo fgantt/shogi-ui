@@ -54,7 +54,6 @@ impl<'a> TacticalDetectionContext<'a> {
             for col in 0..9 {
                 let pos = Position::new(row, col);
                 if let Some(piece) = board.get_piece(pos) {
-                    let piece = *piece;
                     if piece.player == player {
                         player_pieces.push((pos, piece));
                     } else {
@@ -118,7 +117,7 @@ impl<'a> TacticalDetectionContext<'a> {
 
         while row >= 0 && row < 9 && col >= 0 && col < 9 {
             let position = Position::new(row as u8, col as u8);
-            let occupant = self.board.get_piece(position).copied();
+            let occupant = self.board.get_piece(position);
             steps.push(LineStep { position, occupant });
 
             if occupant.is_some() {
@@ -138,7 +137,7 @@ impl<'a> TacticalDetectionContext<'a> {
             if let Some(position) = Self::offset_position(origin, dr, dc) {
                 steps.push(LineStep {
                     position,
-                    occupant: self.board.get_piece(position).copied(),
+                    occupant: self.board.get_piece(position),
                 });
             }
         }
@@ -613,7 +612,7 @@ impl TacticalPatternRecognizer {
             while row >= 0 && row < 9 && col >= 0 && col < 9 {
                 let pos = Position::new(row as u8, col as u8);
 
-                if let Some(piece) = ctx.board.get_piece(pos).copied() {
+                if let Some(piece) = ctx.board.get_piece(pos) {
                     if piece.player == ctx.player {
                         break;
                     }
@@ -735,7 +734,7 @@ impl TacticalPatternRecognizer {
             while row >= 0 && row < 9 && col >= 0 && col < 9 {
                 let pos = Position::new(row as u8, col as u8);
 
-                if let Some(piece) = ctx.board.get_piece(pos).copied() {
+                if let Some(piece) = ctx.board.get_piece(pos) {
                     if piece.player == player {
                         if first_friendly.is_some() {
                             // Two friendly pieces before encountering attacker: no pin
@@ -834,7 +833,7 @@ impl TacticalPatternRecognizer {
             while row >= 0 && row < 9 && col >= 0 && col < 9 {
                 let check_pos = Position::new(row as u8, col as u8);
 
-                if let Some(piece) = ctx.board.get_piece(check_pos).copied() {
+                if let Some(piece) = ctx.board.get_piece(check_pos) {
                     if piece.player == ctx.player {
                         if let Some(front) = front_piece {
                             let front_value = front.piece_type.base_value();

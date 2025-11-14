@@ -65,7 +65,7 @@ impl KingSilverVsKingSolver {
             for col in 0..9 {
                 if let Some(piece) = board.get_piece(Position { row, col }) {
                     if piece.player == player {
-                        pieces.push((*piece, Position { row, col }));
+                        pieces.push((piece, Position { row, col }));
                     }
                 }
             }
@@ -148,7 +148,7 @@ impl KingSilverVsKingSolver {
                     if piece.player == player {
                         let from = Position { row, col };
                         let piece_moves =
-                            self.generate_piece_moves(board, *piece, from, captured_pieces);
+                            self.generate_piece_moves(board, piece, from, captured_pieces);
                         moves.extend(piece_moves);
                     }
                 }

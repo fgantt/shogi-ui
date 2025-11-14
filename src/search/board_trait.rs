@@ -61,8 +61,13 @@ pub trait BoardTrait {
     fn has_captured_piece(&self, piece_type: PieceType, player: Player) -> bool;
 
     /// Get a unique identifier for this board position
-    /// This should be consistent for identical positions
-    fn get_position_id(&self) -> u64;
+    /// This should incorporate side-to-move, hand pieces, and repetition state
+    fn get_position_id(
+        &self,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+        repetition_state: RepetitionState,
+    ) -> u64;
 
     /// Clone the board state
     /// This is needed for move generation and position analysis
@@ -293,7 +298,9 @@ mod tests {
         assert_eq!(board.get_captured_pieces_count(Player::White), 0);
 
         // Test position ID
-        assert!(board.get_position_id() > 0);
+        assert!(
+            board.get_position_id(Player::Black, &CapturedPieces::new(), RepetitionState::None) > 0
+        );
 
         // Test game phase
         assert_eq!(board.get_game_phase(), GamePhase::Opening);

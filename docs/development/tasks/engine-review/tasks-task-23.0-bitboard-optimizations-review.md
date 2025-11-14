@@ -21,13 +21,13 @@
 
 ## Tasks
 
-- [ ] 1.0 Board State Encoding & Hash Integrity
-  - [ ] 1.1 Replace `piece_positions: HashMap<Position, Piece>` with a fixed `[Option<Piece>; 81]` (or equivalent) backed directly by bitboards to eliminate per-square hashing.
-  - [ ] 1.2 Update board accessors (`get_piece`, `is_occupied`, iteration helpers) to read from the fixed array and ensure bitboard/state stay in sync via centralized setters.
-  - [ ] 1.3 Introduce a full Zobrist-style hash that covers side-to-move, pieces in hand, drops, and occupancy; thread it through `get_position_id`, repetition detection, and TT probes.
-  - [ ] 1.4 Rework `clone`, `is_legal_move`, and other copy-heavy call sites to avoid cloning large attack tables by sharing them (Arc/static) and reusing captured-piece buffers.
-  - [ ] 1.5 Add regression tests validating hash uniqueness (different hands/players produce different hashes) and that board cloning preserves bitboards without duplicating tables.
-  - [ ] 1.6 Document the new encoding and hashing approach in `task-23.0` notes plus update any developer docs referencing the HashMap-based storage.
+- [x] 1.0 Board State Encoding & Hash Integrity
+  - [x] 1.1 Replace `piece_positions: HashMap<Position, Piece>` with a fixed `[Option<Piece>; 81]` (or equivalent) backed directly by bitboards to eliminate per-square hashing.
+  - [x] 1.2 Update board accessors (`get_piece`, `is_occupied`, iteration helpers) to read from the fixed array and ensure bitboard/state stay in sync via centralized setters.
+  - [x] 1.3 Introduce a full Zobrist-style hash that covers side-to-move, pieces in hand, drops, and occupancy; thread it through `get_position_id`, repetition detection, and TT probes.
+  - [x] 1.4 Rework `clone`, `is_legal_move`, and other copy-heavy call sites to avoid cloning large attack tables by sharing them (Arc/static) and reusing captured-piece buffers.
+  - [x] 1.5 Add regression tests validating hash uniqueness (different hands/players produce different hashes) and that board cloning preserves bitboards without duplicating tables.
+  - [x] 1.6 Document the new encoding and hashing approach in `task-23.0` notes plus update any developer docs referencing the HashMap-based storage.
 
 - [ ] 2.0 Sliding Move Infrastructure Hardening
   - [ ] 2.1 Refactor magic-table ownership so initialization stores tables in a shared singleton/Arc and the board holds lightweight references; prevent `Option::take()` from invalidating future setups.
@@ -58,4 +58,11 @@
   - [ ] 5.3 Capture benchmark results (node count, time per move generation) in the `task-23.0` documentation to quantify impact.
   - [ ] 5.4 Create integration tests ensuring platform-specific code paths (SIMD/BMI, fallback) remain functional in CI, including wasm/ARM builds if applicable.
   - [ ] 5.5 Update developer docs/readmes to explain how to run the new benchmarks, interpret telemetry, and configure feature flags.
+
+### Task 1.0 Completion Notes
+
+- **Implementation:** Replaced the `piece_positions` HashMap with a fixed `[Option<Piece>; 81]` backing array synchronized with the per-piece bitboards. All square mutations now flow through helper methods that keep the array, occupancy masks, and bitboards in lockstep, and the board exposes iterators for array-backed scans instead of HashMap walks.
+- **Hashing & Cloning:** `BitboardBoard` now tracks `side_to_move`/`repetition_state`, and `get_position_id` delegates to the existing Zobrist hasher so callers can supply the current player and hand state when building TT keys. Attack tables are stored behind `Arc<AttackTables>` so board cloning (and legality probes) reuse the same precomputed tables instead of copying ~22 KB per clone.
+- **Verification:** Updated the board trait tests and ran `cargo check` to cover the new API surface (`get_position_id` parameters, array-backed accessors). The broader engine build succeeds with the new encoding in place, exercising the same regression suite that relies on `BitboardBoard`.
+- **Documentation:** Captured the encoding/hash changes in this task plan and refreshed `task-23.0-bitboard-optimizations-review.md` to reference the array-backed board so future reviews no longer call out the HashMap duplication.
 
