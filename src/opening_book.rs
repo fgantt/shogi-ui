@@ -301,6 +301,20 @@ pub struct MemoryOptimizationResult {
 }
 
 /// High-performance opening book with HashMap-based lookup
+///
+/// # Thread Safety
+///
+/// **This struct is NOT thread-safe.** It is designed for single-threaded access only.
+/// The struct does not implement `Send` or `Sync` traits.
+///
+/// If you need thread-safe access, use `ThreadSafeOpeningBook` which wraps this
+/// struct with a `Mutex`.
+///
+/// # Performance
+///
+/// The single-threaded design allows for maximum lookup performance without
+/// synchronization overhead. Opening book lookups are typically fast enough
+/// that they don't require parallel access.
 #[derive(Debug, Clone, Serialize)]
 pub struct OpeningBook {
     /// HashMap for O(1) position lookup (FEN hash -> PositionEntry)
@@ -1308,6 +1322,18 @@ impl OpeningBook {
             .map(|vec| vec.into_boxed_slice())
     }
 
+    /// Get all position entries for validation purposes
+    ///
+    /// Returns a vector of all position entries (FEN, moves) in the book.
+    /// This is useful for validation and analysis tools.
+    pub fn get_all_positions(&self) -> Vec<(String, Vec<BookMove>)> {
+        let mut result = Vec::new();
+        for entry in self.positions.values() {
+            result.push((entry.fen.clone(), entry.moves.clone()));
+        }
+        result
+    }
+
     /// Validate the opening book integrity
     pub fn validate(&self) -> Result<(), OpeningBookError> {
         // Check if book is loaded
@@ -1378,6 +1404,48 @@ impl OpeningBook {
         }
 
         Ok(())
+    }
+
+    /// Refresh evaluations for all positions using current engine evaluation
+    ///
+    /// Re-evaluates all book positions using the current engine's evaluation function
+    /// and updates the `evaluation` field in each `BookMove`.
+    ///
+    /// Note: This requires engine integration and is a stub implementation.
+    /// In a full implementation, this would:
+    /// 1. Parse each FEN to a board state
+    /// 2. Apply each book move to get the resulting position
+    /// 3. Evaluate the resulting position using the engine
+    /// 4. Update the BookMove.evaluation field
+    pub fn refresh_evaluations(&mut self) -> Result<usize, OpeningBookError> {
+        let mut updated_count = 0;
+        
+        // Stub implementation - would need engine integration
+        // For now, just return success with 0 updates
+        Ok(updated_count)
+    }
+
+    /// Refresh evaluations incrementally in batches
+    ///
+    /// Similar to `refresh_evaluations()` but processes positions in batches
+    /// to avoid blocking for long periods. Returns the number of positions
+    /// processed in this batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_size` - Number of positions to process in this batch
+    /// * `start_index` - Index to start from (for resuming)
+    ///
+    /// # Returns
+    ///
+    /// Number of positions processed in this batch
+    pub fn refresh_evaluations_incremental(
+        &mut self,
+        _batch_size: usize,
+        _start_index: usize,
+    ) -> Result<usize, OpeningBookError> {
+        // Stub implementation - would need engine integration
+        Ok(0)
     }
 
     /// Hash a FEN string for lookup using a lightweight hash
@@ -1694,8 +1762,54 @@ pub mod statistics;
 #[path = "opening_book/coverage.rs"]
 pub mod coverage;
 
+/// Validation tools for opening book
+#[path = "opening_book/validation.rs"]
+pub mod validation;
+
 pub use statistics::BookStatistics;
 pub use coverage::{CoverageAnalyzer, CoverageReport};
+pub use validation::{BookValidator, ValidationReport};
+
+/// Thread-safe wrapper for OpeningBook
+///
+/// This wrapper provides thread-safe access to an OpeningBook by wrapping it
+/// with a Mutex. Use this if you need to share an OpeningBook across threads.
+///
+/// # Example
+///
+/// ```rust
+/// use shogi_engine::opening_book::{OpeningBook, ThreadSafeOpeningBook};
+///
+/// let book = OpeningBook::new();
+/// let thread_safe_book = ThreadSafeOpeningBook::new(book);
+/// // Now safe to share across threads
+/// ```
+#[derive(Debug)]
+pub struct ThreadSafeOpeningBook {
+    inner: std::sync::Mutex<OpeningBook>,
+}
+
+impl ThreadSafeOpeningBook {
+    /// Create a new thread-safe wrapper around an OpeningBook
+    pub fn new(book: OpeningBook) -> Self {
+        Self {
+            inner: std::sync::Mutex::new(book),
+        }
+    }
+
+    /// Get a move for a position (thread-safe)
+    pub fn get_move(&self, fen: &str) -> Option<crate::types::Move> {
+        self.inner.lock().unwrap().get_best_move(fen)
+    }
+
+    /// Get all moves for a position (thread-safe)
+    pub fn get_moves(&self, fen: &str) -> Option<Vec<BookMove>> {
+        self.inner.lock().unwrap().get_moves(fen)
+    }
+}
+
+unsafe impl Send for ThreadSafeOpeningBook {}
+unsafe impl Sync for ThreadSafeOpeningBook {}
 
 /// Helper functions for coordinate conversion
 pub mod coordinate_utils {
