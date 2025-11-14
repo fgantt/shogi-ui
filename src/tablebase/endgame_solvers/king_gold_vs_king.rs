@@ -460,15 +460,23 @@ impl KingGoldVsKingSolver {
     /// Check if a move delivers mate
     fn is_mating_move(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
+        board: &BitboardBoard,
+        player: Player,
         move_: &Move,
-        defending_king: Position,
+        _defending_king: Position,
     ) -> bool {
-        // This is a simplified check - in a real implementation, we would need to
-        // verify that the move actually puts the king in checkmate
-        // For now, we'll check if the move attacks the king's square
-        move_.to == defending_king
+        // Make the move on a temporary board
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        // Capture piece if move captures
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, player);
+        }
+        
+        // Check if the opponent is now in checkmate
+        let opponent = player.opposite();
+        temp_board.is_checkmate(opponent, &temp_captured)
     }
 
     /// Check if a move improves the mating position
