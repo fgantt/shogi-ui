@@ -291,6 +291,24 @@ impl Default for PerformanceConfig {
     }
 }
 
+/// Type of line search algorithm for LBFGS
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LineSearchType {
+    /// Armijo condition line search (sufficient decrease)
+    /// Ensures: f(x + αp) ≤ f(x) + c1 * α * ∇f(x)^T * p
+    Armijo,
+    /// Wolfe conditions (sufficient decrease + curvature condition)
+    /// Not yet implemented
+    #[allow(dead_code)]
+    Wolfe,
+}
+
+impl Default for LineSearchType {
+    fn default() -> Self {
+        LineSearchType::Armijo
+    }
+}
+
 /// Optimization algorithm to use
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationMethod {
@@ -312,10 +330,25 @@ pub enum OptimizationMethod {
         beta2: f64,
         epsilon: f64,
     },
-    /// Limited-memory BFGS quasi-Newton method
+    /// Limited-memory BFGS quasi-Newton method with line search
+    ///
+    /// Line search ensures sufficient decrease in the objective function,
+    /// preventing instability from fixed learning rates.
+    ///
+    /// Configuration parameters:
+    /// - `line_search_type`: Type of line search (currently supports Armijo)
+    /// - `initial_step_size`: Initial step size for line search (typically 1.0)
+    /// - `max_line_search_iterations`: Maximum backtracking iterations (typically 20)
+    /// - `armijo_constant`: Armijo condition constant c1 (typically 0.0001)
+    /// - `step_size_reduction`: Step size reduction factor for backtracking (typically 0.5)
     LBFGS {
         memory_size: usize,
         max_iterations: usize,
+        line_search_type: LineSearchType,
+        initial_step_size: f64,
+        max_line_search_iterations: usize,
+        armijo_constant: f64,
+        step_size_reduction: f64,
     },
     /// Genetic algorithm with population-based search
     GeneticAlgorithm {

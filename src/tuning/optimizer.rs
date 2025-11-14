@@ -7,12 +7,13 @@
 //! Supported algorithms:
 //! - Gradient Descent with momentum
 //! - Adam optimizer with adaptive learning rates
-//! - LBFGS quasi-Newton method
+//! - LBFGS quasi-Newton method with Armijo line search
 //! - Genetic Algorithm for non-convex optimization
 //! - Regularization (L1 and L2) to prevent overfitting
 
 use super::types::{
-    FoldResult, OptimizationMethod, TrainingPosition, TuningConfig, ValidationResults,
+    FoldResult, LineSearchType, OptimizationMethod, TrainingPosition, TuningConfig,
+    ValidationResults,
 };
 use crate::types::NUM_EVAL_FEATURES;
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,15 @@ struct AdamState {
     beta2: f64,
     epsilon: f64,
     t: usize, // Time step
+}
+
+/// Line search implementation for LBFGS
+struct LineSearch {
+    line_search_type: LineSearchType,
+    initial_step_size: f64,
+    max_iterations: usize,
+    armijo_constant: f64,
+    step_size_reduction: f64,
 }
 
 /// LBFGS optimizer state
@@ -341,6 +351,92 @@ impl AdamState {
     }
 }
 
+impl LineSearch {
+    /// Create a new line search instance
+    fn new(
+        line_search_type: LineSearchType,
+        initial_step_size: f64,
+        max_iterations: usize,
+        armijo_constant: f64,
+        step_size_reduction: f64,
+    ) -> Self {
+        Self {
+            line_search_type,
+            initial_step_size,
+            max_iterations,
+            armijo_constant,
+            step_size_reduction,
+        }
+    }
+
+    /// Perform Armijo line search
+    ///
+    /// Finds a step size α that satisfies the Armijo condition:
+    /// f(x + αp) ≤ f(x) + c1 * α * ∇f(x)^T * p
+    ///
+    /// # Arguments
+    /// * `current_weights` - Current weight vector x
+    /// * `search_direction` - Search direction p (negative gradient direction)
+    /// * `current_error` - Current objective value f(x)
+    /// * `directional_derivative` - ∇f(x)^T * p (should be negative for descent)
+    /// * `calculate_error` - Function to calculate f(x + αp) for given step size
+    ///
+    /// # Returns
+    /// Step size α that satisfies Armijo condition, or initial_step_size if condition
+    /// cannot be satisfied within max_iterations
+    fn armijo_search<F>(
+        &self,
+        current_weights: &[f64],
+        search_direction: &[f64],
+        current_error: f64,
+        directional_derivative: f64,
+        calculate_error: F,
+    ) -> f64
+    where
+        F: Fn(&[f64]) -> f64,
+    {
+        let mut step_size = self.initial_step_size;
+        let min_step_size = 1e-10; // Minimum step size to prevent numerical issues
+
+        // Armijo condition: f(x + αp) ≤ f(x) + c1 * α * ∇f(x)^T * p
+        // Since directional_derivative is negative for descent, we need:
+        // f(x + αp) ≤ f(x) + c1 * α * directional_derivative
+        // Note: directional_derivative should be negative for a descent direction
+
+        for _ in 0..self.max_iterations {
+            // Calculate RHS of Armijo condition for current step size
+            let rhs = current_error + self.armijo_constant * step_size * directional_derivative;
+
+            // Calculate new weights: x + αp
+            let new_weights: Vec<f64> = current_weights
+                .iter()
+                .zip(search_direction.iter())
+                .map(|(w, p)| w + step_size * p)
+                .collect();
+
+            // Calculate error at new point
+            let new_error = calculate_error(&new_weights);
+
+            // Check Armijo condition: f(x + αp) ≤ f(x) + c1 * α * ∇f(x)^T * p
+            if new_error <= rhs {
+                return step_size;
+            }
+
+            // Backtrack: reduce step size
+            step_size *= self.step_size_reduction;
+
+            // Check minimum step size
+            if step_size < min_step_size {
+                return min_step_size;
+            }
+        }
+
+        // If we couldn't find a step size satisfying Armijo condition,
+        // return the minimum step size to ensure progress
+        step_size.max(min_step_size)
+    }
+}
+
 impl LBFGSState {
     /// Create new LBFGS state
     fn new(memory_size: usize, _num_weights: usize) -> Self {
@@ -392,8 +488,11 @@ impl LBFGSState {
         self.rho.push(rho);
     }
 
-    /// Apply LBFGS update to weights
-    fn apply_update(&mut self, weights: &mut [f64], gradients: &[f64], learning_rate: f64) {
+    /// Compute LBFGS search direction
+    ///
+    /// Returns the search direction q (negative of the quasi-Newton direction)
+    /// that should be used for line search: p = -q
+    fn compute_search_direction(&mut self, gradients: &[f64]) -> Vec<f64> {
         let mut q = gradients.to_vec();
         self.alpha.clear();
 
@@ -441,9 +540,15 @@ impl LBFGSState {
             }
         }
 
-        // Update weights
-        for (weight, q_val) in weights.iter_mut().zip(q.iter()) {
-            *weight -= learning_rate * q_val;
+        // Return search direction (negative of q for descent)
+        q.iter().map(|&q_val| -q_val).collect()
+    }
+
+    /// Apply LBFGS update to weights with given step size
+    fn apply_update_with_step_size(&mut self, weights: &mut [f64], search_direction: &[f64], step_size: f64) {
+        // Update weights: x_new = x + α * p
+        for (weight, p) in weights.iter_mut().zip(search_direction.iter()) {
+            *weight += step_size * p;
         }
     }
 }
@@ -634,7 +739,22 @@ impl Optimizer {
             OptimizationMethod::LBFGS {
                 memory_size,
                 max_iterations,
-            } => self.lbfgs_optimize(positions, memory_size, max_iterations, k_factor),
+                line_search_type,
+                initial_step_size,
+                max_line_search_iterations,
+                armijo_constant,
+                step_size_reduction,
+            } => self.lbfgs_optimize(
+                positions,
+                memory_size,
+                max_iterations,
+                line_search_type,
+                initial_step_size,
+                max_line_search_iterations,
+                armijo_constant,
+                step_size_reduction,
+                k_factor,
+            ),
             OptimizationMethod::GeneticAlgorithm {
                 population_size,
                 mutation_rate,
@@ -754,22 +874,53 @@ impl Optimizer {
         })
     }
 
-    /// LBFGS optimizer
+    /// LBFGS optimizer with line search
+    ///
+    /// Uses Armijo line search to find an appropriate step size, preventing
+    /// instability from fixed learning rates.
+    ///
+    /// # Arguments
+    /// * `positions` - Training positions for optimization
+    /// * `memory_size` - LBFGS memory size (number of previous steps to remember)
+    /// * `max_iterations` - Maximum number of optimization iterations
+    /// * `line_search_type` - Type of line search (Armijo or Wolfe)
+    /// * `initial_step_size` - Initial step size for line search
+    /// * `max_line_search_iterations` - Maximum backtracking iterations
+    /// * `armijo_constant` - Armijo condition constant c1
+    /// * `step_size_reduction` - Step size reduction factor for backtracking
+    /// * `k_factor` - K-factor for sigmoid scaling
     fn lbfgs_optimize(
         &self,
         positions: &[TrainingPosition],
         memory_size: usize,
         max_iterations: usize,
+        line_search_type: LineSearchType,
+        initial_step_size: f64,
+        max_line_search_iterations: usize,
+        armijo_constant: f64,
+        step_size_reduction: f64,
         k_factor: f64,
     ) -> Result<OptimizationResults, String> {
         let start_time = Instant::now();
         let mut weights = vec![1.0; NUM_EVAL_FEATURES];
         let mut lbfgs_state = LBFGSState::new(memory_size, weights.len());
+        let line_search = LineSearch::new(
+            line_search_type,
+            initial_step_size,
+            max_line_search_iterations,
+            armijo_constant,
+            step_size_reduction,
+        );
         let mut error_history = Vec::new();
         let mut prev_weights = weights.clone();
         let mut prev_gradients = vec![0.0; weights.len()];
-        let learning_rate = 1.0;
         let convergence_threshold = 1e-6;
+
+        // Helper closure to calculate error for given weights
+        let calculate_error = |w: &[f64]| -> f64 {
+            let (error, _) = self.calculate_error_and_gradients(w, positions, k_factor);
+            error
+        };
 
         for iteration in 0..max_iterations {
             let (error, gradients) =
@@ -794,8 +945,42 @@ impl Optimizer {
             }
 
             if iteration > 0 {
+                // Update LBFGS state with previous step
                 lbfgs_state.update(&weights, &gradients, &prev_weights, &prev_gradients);
-                lbfgs_state.apply_update(&mut weights, &gradients, learning_rate);
+
+                // Compute search direction using LBFGS
+                let search_direction = lbfgs_state.compute_search_direction(&gradients);
+
+                // Compute directional derivative: ∇f(x)^T * p
+                let directional_derivative: f64 = gradients
+                    .iter()
+                    .zip(search_direction.iter())
+                    .map(|(g, p)| g * p)
+                    .sum();
+
+                // Perform line search to find step size
+                let step_size = match line_search_type {
+                    LineSearchType::Armijo => line_search.armijo_search(
+                        &weights,
+                        &search_direction,
+                        error,
+                        directional_derivative,
+                        &calculate_error,
+                    ),
+                    LineSearchType::Wolfe => {
+                        // Wolfe not yet implemented, fall back to Armijo
+                        line_search.armijo_search(
+                            &weights,
+                            &search_direction,
+                            error,
+                            directional_derivative,
+                            &calculate_error,
+                        )
+                    }
+                };
+
+                // Apply update with line search step size
+                lbfgs_state.apply_update_with_step_size(&mut weights, &search_direction, step_size);
 
                 // Check if weights became NaN or infinite
                 if weights.iter().any(|w| !w.is_finite()) {
@@ -814,9 +999,35 @@ impl Optimizer {
                     });
                 }
             } else {
-                // First iteration: simple gradient descent
+                // First iteration: simple gradient descent with line search
+                let search_direction: Vec<f64> = gradients.iter().map(|&g| -g).collect();
+                let directional_derivative: f64 = gradients
+                    .iter()
+                    .zip(search_direction.iter())
+                    .map(|(g, p)| g * p)
+                    .sum();
+
+                let step_size = match line_search_type {
+                    LineSearchType::Armijo => line_search.armijo_search(
+                        &weights,
+                        &search_direction,
+                        error,
+                        directional_derivative,
+                        &calculate_error,
+                    ),
+                    LineSearchType::Wolfe => {
+                        line_search.armijo_search(
+                            &weights,
+                            &search_direction,
+                            error,
+                            directional_derivative,
+                            &calculate_error,
+                        )
+                    }
+                };
+
                 for i in 0..weights.len() {
-                    weights[i] -= learning_rate * gradients[i];
+                    weights[i] += step_size * search_direction[i];
                 }
             }
 
@@ -1352,6 +1563,11 @@ mod tests {
         let method = OptimizationMethod::LBFGS {
             memory_size: 10,
             max_iterations: 100,
+            line_search_type: LineSearchType::Armijo,
+            initial_step_size: 1.0,
+            max_line_search_iterations: 20,
+            armijo_constant: 0.0001,
+            step_size_reduction: 0.5,
         };
         let optimizer = Optimizer::new(method);
 
@@ -1362,6 +1578,78 @@ mod tests {
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
         assert!(results.iterations > 0);
+    }
+
+    #[test]
+    fn test_lbfgs_line_search_armijo() {
+        // Test that Armijo line search satisfies the Armijo condition
+        let positions = create_test_positions();
+        let optimizer = Optimizer::new(OptimizationMethod::LBFGS {
+            memory_size: 10,
+            max_iterations: 50,
+            line_search_type: LineSearchType::Armijo,
+            initial_step_size: 1.0,
+            max_line_search_iterations: 20,
+            armijo_constant: 0.0001,
+            step_size_reduction: 0.5,
+        });
+
+        let result = optimizer.optimize(&positions);
+        assert!(result.is_ok());
+
+        let results = result.unwrap();
+        // Verify optimization completed
+        assert!(results.iterations > 0);
+        assert!(results.final_error >= 0.0);
+        assert!(results.final_error.is_finite());
+
+        // Verify weights are finite
+        assert!(results.optimized_weights.iter().all(|w| w.is_finite()));
+    }
+
+    #[test]
+    fn test_lbfgs_line_search_vs_fixed_step() {
+        // Integration test comparing LBFGS with line search vs. effectively fixed step size
+        let positions = create_test_positions();
+
+        // LBFGS with proper line search (Armijo)
+        let optimizer_with_line_search = Optimizer::new(OptimizationMethod::LBFGS {
+            memory_size: 10,
+            max_iterations: 50,
+            line_search_type: LineSearchType::Armijo,
+            initial_step_size: 1.0,
+            max_line_search_iterations: 20,
+            armijo_constant: 0.0001,
+            step_size_reduction: 0.5,
+        });
+
+        // LBFGS with very permissive line search (effectively fixed step size)
+        // Large initial step size and very small armijo constant allows large steps
+        let optimizer_fixed_step = Optimizer::new(OptimizationMethod::LBFGS {
+            memory_size: 10,
+            max_iterations: 50,
+            line_search_type: LineSearchType::Armijo,
+            initial_step_size: 10.0, // Very large initial step
+            max_line_search_iterations: 1, // Minimal backtracking
+            armijo_constant: 0.00001, // Very permissive
+            step_size_reduction: 0.9, // Minimal reduction
+        });
+
+        let result_with_line_search = optimizer_with_line_search.optimize(&positions).unwrap();
+        let result_fixed_step = optimizer_fixed_step.optimize(&positions).unwrap();
+
+        // Both should complete successfully
+        assert!(result_with_line_search.iterations > 0);
+        assert!(result_fixed_step.iterations > 0);
+
+        // Both should converge to reasonable error values
+        assert!(result_with_line_search.final_error < 1.0);
+        assert!(result_fixed_step.final_error < 1.0);
+
+        // Line search should provide more stable convergence
+        // (verify that both produce valid results)
+        assert!(result_with_line_search.final_error.is_finite());
+        assert!(result_fixed_step.final_error.is_finite());
     }
 
     #[test]

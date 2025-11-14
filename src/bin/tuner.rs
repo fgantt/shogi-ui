@@ -8,8 +8,8 @@ use shogi_engine::tuning::{
     data_processor::DataProcessor,
     optimizer::Optimizer,
     types::{
-        OptimizationMethod, PerformanceConfig, PositionFilter, TuningConfig, TuningResults,
-        ValidationConfig,
+        LineSearchType, OptimizationMethod, PerformanceConfig, PositionFilter, TuningConfig,
+        TuningResults, ValidationConfig,
     },
     validator::Validator,
 };
@@ -318,6 +318,11 @@ fn run_benchmark(_cli: &Cli, iterations: u32) -> Result<(), Box<dyn std::error::
             OptimizationMethod::LBFGS {
                 memory_size: 10,
                 max_iterations: iterations as usize,
+                line_search_type: LineSearchType::Armijo,
+                initial_step_size: 1.0,
+                max_line_search_iterations: 20,
+                armijo_constant: 0.0001,
+                step_size_reduction: 0.5,
             },
         ),
         (
@@ -377,6 +382,11 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
         "lbfgs" => OptimizationMethod::LBFGS {
             memory_size: 10,
             max_iterations: cli.iterations as usize,
+            line_search_type: LineSearchType::Armijo,
+            initial_step_size: 1.0,
+            max_line_search_iterations: 20,
+            armijo_constant: 0.0001,
+            step_size_reduction: 0.5,
         },
         "genetic" => OptimizationMethod::GeneticAlgorithm {
             population_size: 50,
