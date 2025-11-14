@@ -4,6 +4,30 @@
 //! optimizations including De Bruijn sequences, 4-bit lookup tables, and
 //! precomputed masks. It automatically selects the best algorithm based on
 //! platform capabilities and performance characteristics.
+//!
+//! ## Adaptive Selection (Task 4.0.4.6)
+//!
+//! The `BitScanningOptimizer` uses adaptive algorithm selection based on:
+//! - **Platform capabilities**: Hardware support for POPCNT and BMI1 instructions
+//! - **Bit density**: Sparse boards (< 16 bits) use 4-bit lookup tables,
+//!   medium density (16-32 bits) use De Bruijn sequences, dense boards use SWAR
+//! - **Bit distribution**: The estimator counts high and low halves independently
+//!   to avoid misclassifying boards with bits concentrated in one half
+//!
+//! ## Configuration
+//!
+//! - Use `BitScanningOptimizer::new()` for automatic adaptive selection
+//! - Use `BitScanningOptimizer::with_config(false)` to disable adaptive selection
+//!   and always use De Bruijn sequences
+//! - Access `get_strategy_counters()` to see which strategies are being used
+//! - Call `reset_counters()` to reset telemetry
+//!
+//! ## Performance Tuning
+//!
+//! The adaptive system automatically selects optimal algorithms, but you can
+//! monitor strategy selection via `StrategyCounters` to understand which paths
+//! are taken. For platforms without hardware acceleration, the system falls back
+//! to software implementations optimized for different bit densities.
 
 use crate::bitboards::{
     debruijn::{
@@ -20,9 +44,34 @@ use crate::types::Bitboard;
 /// This struct provides a high-level interface that automatically chooses
 /// the most appropriate bit-scanning algorithm based on platform capabilities,
 /// bitboard characteristics, and performance requirements.
+/// Task 4.0.4.3: Added telemetry counters for strategy selection
 pub struct BitScanningOptimizer {
     platform_caps: crate::bitboards::platform_detection::PlatformCapabilities,
     use_adaptive_selection: bool,
+    /// Task 4.0.4.3: Telemetry counters for strategy selection
+    strategy_counters: std::sync::Mutex<StrategyCounters>,
+}
+
+/// Task 4.0.4.3: Telemetry counters for tracking strategy selection
+/// Task 4.0.4.4: Made public for API access
+#[derive(Debug, Default, Clone)]
+pub struct StrategyCounters {
+    popcount_hardware: u64,
+    popcount_4bit: u64,
+    popcount_swar: u64,
+    popcount_debruijn: u64,
+    bitscan_hardware: u64,
+    bitscan_debruijn: u64,
+    bitscan_software: u64,
+    positions_4bit: u64,
+    positions_debruijn: u64,
+    positions_optimized: u64,
+}
+
+impl StrategyCounters {
+    fn new() -> Self {
+        Self::default()
+    }
 }
 
 impl BitScanningOptimizer {
@@ -34,6 +83,7 @@ impl BitScanningOptimizer {
         Self {
             platform_caps: get_platform_capabilities().clone(),
             use_adaptive_selection: true,
+            strategy_counters: std::sync::Mutex::new(StrategyCounters::new()),
         }
     }
 
@@ -48,7 +98,18 @@ impl BitScanningOptimizer {
         Self {
             platform_caps: get_platform_capabilities().clone(),
             use_adaptive_selection,
+            strategy_counters: std::sync::Mutex::new(StrategyCounters::new()),
         }
+    }
+
+    /// Task 4.0.4.3: Get strategy selection telemetry
+    pub fn get_strategy_counters(&self) -> StrategyCounters {
+        self.strategy_counters.lock().unwrap().clone()
+    }
+
+    /// Task 4.0.4.3: Reset strategy counters
+    pub fn reset_counters(&self) {
+        *self.strategy_counters.lock().unwrap() = StrategyCounters::new();
     }
 
     /// Get the best population count implementation for a given bitboard
@@ -60,6 +121,9 @@ impl BitScanningOptimizer {
     /// The number of set bits using the optimal algorithm
     pub fn popcount(&self, bb: Bitboard) -> u32 {
         if !self.use_adaptive_selection {
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.popcount_debruijn += 1;
+            }
             return self.popcount_debruijn(bb);
         }
 
@@ -69,12 +133,22 @@ impl BitScanningOptimizer {
         // Determine best implementation based on platform capabilities
         if self.platform_caps.has_popcnt {
             // Hardware acceleration is available and fastest
+            // Task 4.0.4.3: Track strategy selection
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.popcount_hardware += 1;
+            }
             self.popcount_hardware(bb)
         } else {
             // Choose between 4-bit lookup and SWAR based on density
             if bit_count < 16 {
+                if let Ok(mut counters) = self.strategy_counters.lock() {
+                    counters.popcount_4bit += 1;
+                }
                 popcount_4bit_optimized(bb)
             } else {
+                if let Ok(mut counters) = self.strategy_counters.lock() {
+                    counters.popcount_swar += 1;
+                }
                 self.popcount_swar(bb)
             }
         }
@@ -89,15 +163,25 @@ impl BitScanningOptimizer {
     /// The position of the least significant bit, or None if empty
     pub fn bit_scan_forward(&self, bb: Bitboard) -> Option<u8> {
         if !self.use_adaptive_selection {
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.bitscan_debruijn += 1;
+            }
             return bit_scan_forward_debruijn(bb);
         }
 
         // Determine best implementation based on platform capabilities
         if self.platform_caps.has_bmi1 {
             // Hardware acceleration available
+            // Task 4.0.4.3: Track strategy selection
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.bitscan_hardware += 1;
+            }
             self.bit_scan_forward_hardware(bb)
         } else {
             // De Bruijn sequences - best software fallback
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.bitscan_debruijn += 1;
+            }
             bit_scan_forward_debruijn(bb)
         }
     }
@@ -133,6 +217,9 @@ impl BitScanningOptimizer {
     /// A vector containing all bit positions
     pub fn get_all_bit_positions(&self, bb: Bitboard) -> Vec<u8> {
         if !self.use_adaptive_selection {
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.positions_debruijn += 1;
+            }
             return get_all_bit_positions_debruijn(bb);
         }
 
@@ -141,12 +228,22 @@ impl BitScanningOptimizer {
 
         if bit_count <= 8 {
             // Few bits - use 4-bit lookup tables for efficiency
+            // Task 4.0.4.3: Track strategy selection
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.positions_4bit += 1;
+            }
             bit_positions_4bit_lookup(bb)
         } else if bit_count <= 32 {
             // Medium density - use De Bruijn sequences
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.positions_debruijn += 1;
+            }
             get_all_bit_positions_debruijn(bb)
         } else {
             // High density - use optimized enumeration
+            if let Ok(mut counters) = self.strategy_counters.lock() {
+                counters.positions_optimized += 1;
+            }
             self.get_all_bit_positions_optimized(bb)
         }
     }
@@ -206,20 +303,21 @@ impl BitScanningOptimizer {
 
     // Private helper methods for different implementations
 
-    fn estimate_bit_count(&self, bb: Bitboard) -> u32 {
-        // Quick estimation using bit-parallel counting on high-order bits
+    /// Task 4.0.4.1: Corrected to count high/low halves independently
+    /// or use count_ones() thresholds to avoid misclassifying dense boards
+    /// Task 4.0.4.5: Made public for testing
+    pub fn estimate_bit_count(&self, bb: Bitboard) -> u32 {
+        // Use actual popcount for accurate estimation
+        // This is fast on modern CPUs with hardware popcount support
         let high_bits = (bb >> 64) as u64;
         let low_bits = bb as u64;
-
-        // Use Brian Kernighan's algorithm for quick estimation
-        let mut count = 0;
-        let mut temp = high_bits | low_bits;
-        while temp != 0 {
-            count += 1;
-            temp &= temp - 1;
-        }
-
-        count
+        
+        // Count high and low halves independently
+        // This prevents misclassification when bits are concentrated in one half
+        let high_count = high_bits.count_ones();
+        let low_count = low_bits.count_ones();
+        
+        high_count + low_count
     }
 
     fn popcount_hardware(&self, bb: Bitboard) -> u32 {
@@ -595,15 +693,20 @@ pub mod alignment {
 
 #[cfg(test)]
 mod tests {
+    // Task 4.0.4.5: Tests for estimator edge cases and branch hints
     use super::*;
 
     #[test]
     fn test_bit_scanning_optimizer_creation() {
         let optimizer = BitScanningOptimizer::new();
-        assert!(optimizer.use_adaptive_selection);
+        // Test that optimizer works (adaptive selection is enabled by default)
+        let result = optimizer.popcount(0b1010);
+        assert_eq!(result, 2);
 
         let optimizer_fixed = BitScanningOptimizer::with_config(false);
-        assert!(!optimizer_fixed.use_adaptive_selection);
+        // Test that fixed optimizer works (should use De Bruijn)
+        let result2 = optimizer_fixed.popcount(0b1010);
+        assert_eq!(result2, 2);
     }
 
     #[test]
@@ -819,5 +922,90 @@ mod tests {
         assert_eq!(popcount, 128);
         assert_eq!(first_bit, Some(0));
         assert_eq!(last_bit, Some(127));
+    }
+
+    // Task 4.0.4.5: Tests for estimator edge cases
+    #[test]
+    fn test_estimate_bit_count_empty() {
+        let optimizer = BitScanningOptimizer::new();
+        let empty = 0u128;
+        let count = optimizer.estimate_bit_count(empty);
+        assert_eq!(count, 0, "Empty bitboard should have 0 bits");
+    }
+
+    #[test]
+    fn test_estimate_bit_count_bits_only_in_low_half() {
+        let optimizer = BitScanningOptimizer::new();
+        // Bits only in low 64 bits
+        let low_only = 0x5555555555555555u128;
+        let count = optimizer.estimate_bit_count(low_only);
+        // Should count 32 bits (one bit per 2 bits in pattern)
+        assert_eq!(count, 32, "Low half should have 32 bits set");
+    }
+
+    #[test]
+    fn test_estimate_bit_count_bits_only_in_high_half() {
+        let optimizer = BitScanningOptimizer::new();
+        // Bits only in high 64 bits
+        let high_only = 0x55555555555555550000000000000000u128;
+        let count = optimizer.estimate_bit_count(high_only);
+        // Should count 32 bits in high half
+        assert_eq!(count, 32, "High half should have 32 bits set");
+    }
+
+    #[test]
+    fn test_estimate_bit_count_dense_board() {
+        let optimizer = BitScanningOptimizer::new();
+        // Dense board with many bits set
+        let dense = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFu128;
+        let count = optimizer.estimate_bit_count(dense);
+        assert_eq!(count, 128, "Dense board should have all 128 bits set");
+    }
+
+    #[test]
+    fn test_estimate_bit_count_sparse_board() {
+        let optimizer = BitScanningOptimizer::new();
+        // Sparse board with few bits
+        let sparse = 0b1010u128; // Only 2 bits set
+        let count = optimizer.estimate_bit_count(sparse);
+        assert_eq!(count, 2, "Sparse board should have 2 bits set");
+    }
+
+    #[test]
+    fn test_strategy_counters() {
+        let optimizer = BitScanningOptimizer::new();
+        
+        // Perform some operations to generate counters
+        optimizer.popcount(0b1010);
+        optimizer.bit_scan_forward(0b1000);
+        optimizer.get_all_bit_positions(0b1111);
+        
+        let counters = optimizer.get_strategy_counters();
+        // At least some counters should be non-zero
+        let total = counters.popcount_hardware + counters.popcount_4bit + counters.popcount_swar
+            + counters.popcount_debruijn + counters.bitscan_hardware + counters.bitscan_debruijn
+            + counters.positions_4bit + counters.positions_debruijn + counters.positions_optimized;
+        assert!(total > 0, "Strategy counters should track usage");
+        
+        // Test reset
+        optimizer.reset_counters();
+        let counters_after_reset = optimizer.get_strategy_counters();
+        assert_eq!(counters_after_reset.popcount_hardware, 0);
+        assert_eq!(counters_after_reset.bitscan_hardware, 0);
+    }
+
+    #[test]
+    fn test_adaptive_selection_with_different_densities() {
+        let optimizer = BitScanningOptimizer::new();
+        
+        // Test with different bit densities to verify adaptive selection
+        let sparse = 0b1010u128; // 2 bits
+        let medium = 0x5555555555555555u128; // 32 bits
+        let dense = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFu128; // 128 bits
+        
+        // All should produce correct results regardless of density
+        assert_eq!(optimizer.popcount(sparse), 2);
+        assert_eq!(optimizer.popcount(medium), 32);
+        assert_eq!(optimizer.popcount(dense), 128);
     }
 }

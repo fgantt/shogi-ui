@@ -144,7 +144,8 @@ pub mod squares {
 /// optimization settings for bit-scanning operations.
 pub mod platform {
     // Re-export platform detection utilities
-    pub use crate::bitboards::integration::{BitScanningOptimizer, GlobalOptimizer};
+    // Task 4.0.4.4: Expose StrategyCounters for API access
+    pub use crate::bitboards::integration::{BitScanningOptimizer, GlobalOptimizer, StrategyCounters};
     pub use crate::bitboards::platform_detection::{
         get_best_bitscan_impl, get_best_popcount_impl, get_platform_capabilities,
     };
