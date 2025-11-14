@@ -54,9 +54,10 @@ This task list implements the improvement recommendations identified in the Open
   - [ ] 1.9 Add unified `get_statistics()` method to `OpeningBook` that returns `BookStatistics`
   - [ ] 1.10 Update integration points to populate unified statistics structure
   - [ ] 1.11 Write unit tests for binary format module extraction (verify all functionality preserved)
-  - [ ] 1.12 Write unit tests for unified statistics API (verify aggregation works correctly)
-  - [ ] 1.13 Update documentation to reflect new module structure
-  - [ ] 1.14 Run benchmarks to verify no performance regression from extraction
+  - [ ] 1.12 Write unit tests for binary format edge cases: empty book, large moves (>100 moves per position), UTF-8 strings in opening names/notations
+  - [ ] 1.13 Write unit tests for unified statistics API (verify aggregation works correctly)
+  - [ ] 1.14 Update documentation to reflect new module structure
+  - [ ] 1.15 Run benchmarks to verify no performance regression from extraction
 
 - [ ] 2.0 Configuration and Flexibility (High Priority - Est: 6-10 hours)
   - [ ] 2.1 Create `OpeningBookConverterConfig` struct in `opening_book_converter.rs` with fields for weight/evaluation mappings
@@ -94,9 +95,10 @@ This task list implements the improvement recommendations identified in the Open
   - [ ] 3.14 Add `get_unified_statistics()` method to `OpeningBook` that returns complete `BookStatistics`
   - [ ] 3.15 Add telemetry hooks: expose statistics via USI option or debug command
   - [ ] 3.16 Write unit tests for collision detection and statistics tracking
-  - [ ] 3.17 Write unit tests for unified statistics aggregation
-  - [ ] 3.18 Add benchmark to measure hash function distribution quality (FNV-1a vs. alternatives)
-  - [ ] 3.19 Update documentation with statistics interpretation guide
+  - [ ] 3.17 Write unit tests for hash collision scenarios: synthetic collisions (force collisions), distribution quality tests
+  - [ ] 3.18 Write unit tests for unified statistics aggregation
+  - [ ] 3.19 Add benchmark to measure hash function distribution quality (FNV-1a vs. alternatives: djb2, SipHash)
+  - [ ] 3.20 Update documentation with statistics interpretation guide
 
 - [ ] 4.0 Feature Completion (Medium Priority - Est: 14-20 hours)
   - [ ] 4.1 Complete streaming mode chunk management: implement `ChunkManager` struct to track loaded chunks
@@ -118,9 +120,15 @@ This task list implements the improvement recommendations identified in the Open
   - [ ] 4.17 Add CLI tool or USI command to generate coverage reports from loaded opening book
   - [ ] 4.18 Write unit tests for chunk management and progress tracking
   - [ ] 4.19 Write unit tests for coverage analysis tools (depth, completeness, quality)
-  - [ ] 4.20 Write integration test for streaming mode with large book (> 100K positions)
-  - [ ] 4.21 Add benchmark measuring streaming mode memory efficiency vs. eager loading
-  - [ ] 4.22 Update documentation with streaming mode usage guide and coverage analysis examples
+  - [ ] 4.20 Write unit tests for lazy loading with various move counts (1, 10, 100 moves per position)
+  - [ ] 4.21 Write integration test for streaming mode with large book (> 100K positions)
+  - [ ] 4.22 Write integration test for transposition table prefill coverage (verify all book positions reachable at configured depth)
+  - [ ] 4.23 Write integration test for opening principles integration with various board states (opening, early middlegame)
+  - [ ] 4.24 Write integration test for move ordering integration (verify book moves appear early in search)
+  - [ ] 4.25 Add benchmark measuring lookup latency: cache hit, HashMap hit, lazy load paths
+  - [ ] 4.26 Add benchmark measuring streaming mode memory efficiency vs. eager loading
+  - [ ] 4.27 Add benchmark profiling memory usage (eager vs. lazy vs. streaming modes)
+  - [ ] 4.28 Update documentation with streaming mode usage guide and coverage analysis examples
 
 - [ ] 5.0 Quality and Validation (Low Priority - Est: 20-26 hours)
   - [ ] 5.1 Create `src/opening_book/validation.rs` module for book validation tools
@@ -155,7 +163,7 @@ This task list implements the improvement recommendations identified in the Open
 
 **Phase 2 Complete - Detailed Sub-Tasks Generated**
 
-All parent tasks have been broken down into **89 actionable sub-tasks**. Each sub-task is specific, testable, and includes:
+All parent tasks have been broken down into **98 actionable sub-tasks** (updated from 89). Each sub-task is specific, testable, and includes:
 - Implementation details based on the opening book review analysis
 - Testing requirements (unit tests, integration tests, benchmarks)
 - Statistics tracking for monitoring effectiveness
@@ -163,6 +171,18 @@ All parent tasks have been broken down into **89 actionable sub-tasks**. Each su
 - Cross-references to specific sections in the review document
 
 **Coverage Verification:**
+
+✅ **Section 7 (Strengths & Weaknesses) - All Weaknesses Addressed:**
+- Binary format embedded in `opening_book.rs` → Task 1.2-1.6 (extract to separate module)
+- Hardcoded weight/evaluation mappings → Task 2.0 (configurable mappings)
+- FEN hash collisions not explicitly handled → Task 3.1-3.9 (collision detection and statistics)
+- Streaming mode incomplete → Task 4.1-4.9 (complete chunk management, progress tracking, resume support)
+- Book size/coverage quality unknown → Task 4.10-4.17 (coverage analysis tools)
+- Opening principles integration complexity → Noted as design trade-off (requires board state, adds intelligence)
+- No collision statistics → Task 3.1-3.9 (hash collision tracking)
+- Thread safety not documented → Task 5.10-5.13 (documentation and optional wrapper)
+- Statistics scattered → Task 1.7-1.10, 3.10-3.15 (unified statistics API)
+- Evaluation quality depends on heuristics → Task 5.14-5.18 (evaluation refresh)
 
 ✅ **Section 8 (Improvement Recommendations):**
 - High Priority: Extract binary format → Task 1.2-1.6
@@ -176,11 +196,25 @@ All parent tasks have been broken down into **89 actionable sub-tasks**. Each su
 - Low Priority: Lazy loading optimization → Task 5.19-5.23
 - Low Priority: Validation tools → Task 5.1-5.9
 
+**Note:** Executive Summary concern about "JSON format conversion overhead" is a design trade-off for backward compatibility. The review recommends using binary format for production (already supported), so no task needed.
+
 ✅ **Section 9 (Testing & Validation Plan):**
-- Unit Tests → Tasks 1.11-1.12, 2.14-2.16, 3.16-3.17, 4.18-4.19, 5.24-5.26
-- Integration Tests → Tasks 1.14, 2.16, 4.20, 5.25
-- Performance Benchmarks → Tasks 1.14, 3.18, 4.21, 5.19, 5.26
-- Coverage Analysis → Task 4.10-4.17
+- Unit Tests:
+  * Binary format edge cases (empty book, large moves, UTF-8 strings) → Task 1.12
+  * Hash collision tests (synthetic collisions, distribution quality) → Task 3.17
+  * Lazy loading with various move counts (1, 10, 100) → Task 4.20
+  * All other unit tests → Tasks 1.11, 1.13, 2.14-2.16, 3.16, 3.18, 4.18-4.19, 5.24-5.26
+- Integration Tests:
+  * Transposition table prefill coverage → Task 4.22
+  * Opening principles integration with various board states → Task 4.23
+  * Move ordering integration → Task 4.24
+  * All other integration tests → Tasks 1.15, 2.16, 4.21, 5.25
+- Performance Benchmarks:
+  * Lookup latency (cache hit, HashMap hit, lazy load) → Task 4.25
+  * Hash function performance (FNV-1a vs. alternatives) → Task 3.19
+  * Memory usage profiling (eager vs. lazy vs. streaming) → Task 4.27
+  * All other benchmarks → Tasks 1.15, 4.26, 5.19, 5.26
+- Coverage Analysis → Task 4.10-4.17 (comprehensive coverage analysis tools)
 
 **Task Priorities:**
 - **Phase 1 (Immediate, 1-2 weeks):** Tasks 1.0, 2.0 - Critical code organization and configurability
