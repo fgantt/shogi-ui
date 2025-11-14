@@ -1,10 +1,13 @@
-#![cfg(feature = "legacy-tests")]
 //! Comprehensive unit tests for the tablebase system
 //!
 //! This module contains unit tests for all tablebase components including
 //! core data structures, solvers, caching, configuration, and statistics.
 
 use shogi_engine::bitboards::BitboardBoard;
+use shogi_engine::search::search_engine::SearchEngine;
+use shogi_engine::tablebase::endgame_solvers::{
+    KingGoldVsKingSolver, KingRookVsKingSolver, KingSilverVsKingSolver,
+};
 use shogi_engine::tablebase::position_cache::CacheConfig;
 use shogi_engine::tablebase::tablebase_config::{
     EvictionStrategy, KingGoldConfig, PerformanceConfig, SolverConfig,
@@ -653,5 +656,378 @@ mod regression_tests {
         let player = Player::Black;
 
         (board, captured_pieces, player)
+    }
+}
+
+/// Comprehensive endgame tablebase tests (Task 2.0 and subtasks)
+mod endgame_comprehensive_tests {
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    enum SolverKind {
+        Gold,
+        Silver,
+        Rook,
+    }
+
+    impl SolverKind {
+        fn instantiate(&self) -> Box<dyn shogi_engine::tablebase::EndgameSolver> {
+            match self {
+                SolverKind::Gold => Box::new(KingGoldVsKingSolver::new()),
+                SolverKind::Silver => Box::new(KingSilverVsKingSolver::new()),
+                SolverKind::Rook => Box::new(KingRookVsKingSolver::new()),
+            }
+        }
+
+        fn name(&self) -> &'static str {
+            match self {
+                SolverKind::Gold => "KingGoldVsKing",
+                SolverKind::Silver => "KingSilverVsKing",
+                SolverKind::Rook => "KingRookVsKing",
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct PositionFixture {
+        name: &'static str,
+        player: Player,
+        board: BitboardBoard,
+    }
+
+    impl PositionFixture {
+        fn new(name: &'static str, player: Player, board: BitboardBoard) -> Self {
+            Self { name, player, board }
+        }
+
+        fn components(&self) -> (BitboardBoard, CapturedPieces, Player) {
+            (self.board.clone(), CapturedPieces::new(), self.player)
+        }
+    }
+
+    #[derive(Clone)]
+    struct ExpectedSolution {
+        solver: SolverKind,
+        fixture: PositionFixture,
+        expected_move: Option<Move>,
+        expected_outcome: TablebaseOutcome,
+        expected_distance: Option<u8>,
+    }
+
+    mod fixtures {
+        use super::*;
+
+        fn empty_board_with(pieces: &[(Player, PieceType, (u8, u8))]) -> BitboardBoard {
+            let mut board = BitboardBoard::empty();
+            for (player, piece_type, (row, col)) in pieces {
+                board.place_piece(
+                    Piece::new(*piece_type, *player),
+                    Position::new(*row, *col),
+                );
+            }
+            board
+        }
+
+        pub fn gold_mate_in_one() -> ExpectedSolution {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (2, 4)),
+                (Player::Black, PieceType::Gold, (1, 3)),
+                (Player::White, PieceType::King, (0, 4)),
+            ]);
+            ExpectedSolution {
+                solver: SolverKind::Gold,
+                fixture: PositionFixture::new("gold_mate_in_one", Player::Black, board),
+                expected_move: Some(Move::new_move(
+                    Position::new(1, 3),
+                    Position::new(0, 4),
+                    PieceType::Gold,
+                    Player::Black,
+                    false,
+                )),
+                expected_outcome: TablebaseOutcome::Win,
+                expected_distance: Some(1),
+            }
+        }
+
+        pub fn silver_mate_in_one() -> ExpectedSolution {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (2, 3)),
+                (Player::Black, PieceType::Silver, (1, 4)),
+                (Player::White, PieceType::King, (0, 3)),
+            ]);
+            ExpectedSolution {
+                solver: SolverKind::Silver,
+                fixture: PositionFixture::new("silver_mate_in_one", Player::Black, board),
+                expected_move: Some(Move::new_move(
+                    Position::new(1, 4),
+                    Position::new(0, 3),
+                    PieceType::Silver,
+                    Player::Black,
+                    false,
+                )),
+                expected_outcome: TablebaseOutcome::Win,
+                expected_distance: Some(1),
+            }
+        }
+
+        pub fn rook_mate_in_one() -> ExpectedSolution {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (2, 4)),
+                (Player::Black, PieceType::Rook, (2, 1)),
+                (Player::White, PieceType::King, (2, 7)),
+            ]);
+            ExpectedSolution {
+                solver: SolverKind::Rook,
+                fixture: PositionFixture::new("rook_mate_in_one", Player::Black, board),
+                expected_move: Some(Move::new_move(
+                    Position::new(2, 1),
+                    Position::new(2, 7),
+                    PieceType::Rook,
+                    Player::Black,
+                    false,
+                )),
+                expected_outcome: TablebaseOutcome::Win,
+                expected_distance: Some(1),
+            }
+        }
+
+        pub fn rook_multi_move_win() -> ExpectedSolution {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (5, 4)),
+                (Player::Black, PieceType::Rook, (4, 4)),
+                (Player::White, PieceType::King, (0, 4)),
+            ]);
+            ExpectedSolution {
+                solver: SolverKind::Rook,
+                fixture: PositionFixture::new("rook_multi_move_win", Player::Black, board),
+                expected_move: Some(Move::new_move(
+                    Position::new(4, 4),
+                    Position::new(0, 4),
+                    PieceType::Rook,
+                    Player::Black,
+                    false,
+                )),
+                expected_outcome: TablebaseOutcome::Win,
+                expected_distance: Some(2),
+            }
+        }
+
+        pub fn stalemate_position() -> PositionFixture {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (1, 2)),
+                (Player::Black, PieceType::Gold, (2, 0)),
+                (Player::White, PieceType::King, (0, 0)),
+            ]);
+            PositionFixture::new("stalemate_position", Player::White, board)
+        }
+
+        pub fn invalid_extra_piece_position() -> PositionFixture {
+            let board = empty_board_with(&[
+                (Player::Black, PieceType::King, (4, 4)),
+                (Player::Black, PieceType::Gold, (4, 3)),
+                (Player::Black, PieceType::Silver, (4, 5)),
+                (Player::White, PieceType::King, (0, 4)),
+            ]);
+            PositionFixture::new("invalid_extra_piece_position", Player::Black, board)
+        }
+
+        pub fn all_expected_wins() -> Vec<ExpectedSolution> {
+            vec![
+                gold_mate_in_one(),
+                silver_mate_in_one(),
+                rook_mate_in_one(),
+                rook_multi_move_win(),
+            ]
+        }
+    }
+
+    fn solver_result(kind: SolverKind, fixture: &PositionFixture) -> TablebaseResult {
+        let solver = kind.instantiate();
+        let (board, captured, player) = fixture.components();
+        solver.solve(&board, player, &captured).expect("solver result")
+    }
+
+    fn tablebase_result(fixture: &PositionFixture) -> TablebaseResult {
+        let mut tablebase = MicroTablebase::new();
+        let (board, captured, player) = fixture.components();
+        tablebase.probe(&board, player, &captured).expect("tablebase result")
+    }
+
+    #[test]
+    fn test_pattern_recognition_recognises_valid_positions() {
+        for spec in fixtures::all_expected_wins() {
+            let solver = spec.solver.instantiate();
+            let (board, captured, player) = spec.fixture.components();
+            assert!(
+                solver.can_solve(&board, player, &captured),
+                "Solver {} should recognise {}",
+                spec.solver.name(),
+                spec.fixture.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_pattern_recognition_rejects_invalid_positions() {
+        let invalid = fixtures::invalid_extra_piece_position();
+        for solver_kind in [SolverKind::Gold, SolverKind::Silver, SolverKind::Rook] {
+            let solver = solver_kind.instantiate();
+            let (board, captured, player) = invalid.components();
+            assert!(
+                !solver.can_solve(&board, player, &captured),
+                "Solver {} should reject {}",
+                solver_kind.name(),
+                invalid.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_move_generation_matches_tablebase_results() {
+        for spec in fixtures::all_expected_wins() {
+            let solver_move = solver_result(spec.solver, &spec.fixture).best_move;
+            let tablebase_move = tablebase_result(&spec.fixture).best_move;
+            assert_eq!(
+                solver_move, tablebase_move,
+                "Solver and tablebase moves should match for {}",
+                spec.fixture.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_checkmate_and_dtm_values_match_expectations() {
+        for spec in fixtures::all_expected_wins() {
+            if let Some(expected_dtm) = spec.expected_distance {
+                assert_eq!(
+                    tablebase_result(&spec.fixture).moves_to_mate,
+                    Some(expected_dtm),
+                    "DTM mismatch for {}",
+                    spec.fixture.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_tablebase_probe_precedes_search_engine_evaluation() {
+        let spec = fixtures::gold_mate_in_one();
+        let mut search_engine = SearchEngine::new(None, 4);
+        let mut board = spec.fixture.board.clone();
+        let captured = CapturedPieces::new();
+        let tablebase_move = tablebase_result(&spec.fixture).best_move;
+        let search_move = search_engine
+            .search_at_depth_legacy(&mut board, &captured, spec.fixture.player, 2, 200)
+            .expect("search result")
+            .0;
+        assert_eq!(
+            tablebase_move,
+            Some(search_move),
+            "Search engine should adopt tablebase move"
+        );
+    }
+
+    #[test]
+    fn test_move_ordering_prioritises_tablebase_move() {
+        let spec = fixtures::rook_multi_move_win();
+        let mut search_engine = SearchEngine::new(None, 4);
+        let mut board = spec.fixture.board.clone();
+        let captured = CapturedPieces::new();
+        let tablebase_move = tablebase_result(&spec.fixture).best_move;
+        let search_move = search_engine
+            .search_at_depth_legacy(&mut board, &captured, spec.fixture.player, 3, 200)
+            .expect("search result")
+            .0;
+        assert_eq!(
+            tablebase_move,
+            Some(search_move),
+            "Move ordering should keep tablebase move on top"
+        );
+    }
+
+    #[test]
+    fn test_tablebase_cache_hits_are_tracked() {
+        let mut tablebase = MicroTablebase::new();
+        let spec = fixtures::gold_mate_in_one();
+        let (board, captured, player) = spec.fixture.components();
+        tablebase.probe(&board, player, &captured);
+        let hits_after_first = tablebase.get_stats().cache_hits;
+        let (board, captured, player) = spec.fixture.components();
+        tablebase.probe(&board, player, &captured);
+        let hits_after_second = tablebase.get_stats().cache_hits;
+        assert!(
+            hits_after_second > hits_after_first,
+            "Cache hit counter should increase after repeated probe"
+        );
+    }
+
+    #[test]
+    fn test_configuration_presets_affect_tablebase() {
+        let perf_config = TablebaseConfig::performance_optimized();
+        let tablebase = MicroTablebase::with_config(perf_config.clone());
+        assert_eq!(tablebase.get_config().max_depth, perf_config.max_depth);
+
+        let mut disabled_config = TablebaseConfig::default();
+        disabled_config.enabled = false;
+        let mut disabled_tablebase = MicroTablebase::with_config(disabled_config);
+        let spec = fixtures::gold_mate_in_one();
+        let (board, captured, player) = spec.fixture.components();
+        assert!(
+            disabled_tablebase.probe(&board, player, &captured).is_none(),
+            "Disabled tablebase should not return results"
+        );
+    }
+
+    #[test]
+    fn test_correctness_against_expected_moves() {
+        for spec in fixtures::all_expected_wins() {
+            let result = tablebase_result(&spec.fixture);
+            assert_eq!(
+                result.best_move, spec.expected_move,
+                "Unexpected move for {}",
+                spec.fixture.name
+            );
+            assert_eq!(
+                result.outcome, spec.expected_outcome,
+                "Unexpected outcome for {}",
+                spec.fixture.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_edge_cases_cover_draw_and_invalid_positions() {
+        let stalemate = fixtures::stalemate_position();
+        assert_eq!(
+            tablebase_result(&stalemate).outcome,
+            TablebaseOutcome::Draw,
+            "Stalemate fixture should be evaluated as draw"
+        );
+
+        let invalid = fixtures::invalid_extra_piece_position();
+        let mut tablebase = MicroTablebase::new();
+        let (board, captured, player) = invalid.components();
+        assert!(
+            tablebase.probe(&board, player, &captured).is_none(),
+            "Invalid fixture should not be solvable"
+        );
+    }
+
+    #[test]
+    fn test_solver_results_match_endgame_theory() {
+        for spec in fixtures::all_expected_wins() {
+            assert!(
+                tablebase_result(&spec.fixture).is_winning(),
+                "Known winning fixture should be winning"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fixture_dataset_is_non_empty() {
+        assert!(
+            !fixtures::all_expected_wins().is_empty(),
+            "Fixture dataset should not be empty"
+        );
     }
 }

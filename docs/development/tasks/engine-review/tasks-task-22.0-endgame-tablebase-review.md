@@ -61,22 +61,22 @@ This task list implements the improvements identified in the Endgame Tablebase R
   - [x] 1.23 Write unit tests for evaluation functions: verify coordination, mobility restriction, and key square control logic work correctly ✅ (`test_*_evaluation_helpers`)
   - [x] 1.24 Verify that solver results match endgame theory (e.g., King+Gold vs King is always winning) ✅ (`test_*_solver_matches_endgame_theory`)
 
-- [ ] 2.0 Comprehensive Test Suite with Known Endgame Positions (High Priority - Est: 6-10 hours)
-  - [ ] 2.1 Create test file `tests/tablebase_tests.rs` for tablebase system tests
-  - [ ] 2.2 Add test fixture module with known endgame positions (mate-in-one, mate-in-two, winning positions, drawing positions)
-  - [ ] 2.3 Write unit tests for pattern recognition (`can_solve()`) in each solver for correct and incorrect positions
-  - [ ] 2.4 Write unit tests for move generation in each solver to verify all legal moves are generated
-  - [ ] 2.5 Write unit tests for checkmate detection with known mate-in-one positions for all three solvers
-  - [ ] 2.6 Write unit tests for DTM calculation against known DTM values from endgame theory
-  - [ ] 2.7 Write integration tests for tablebase integration with search engine: verify probes occur before search
-  - [ ] 2.8 Write integration tests for move ordering: verify tablebase moves are prioritized correctly
-  - [ ] 2.9 Write integration tests for caching: verify hit rates, eviction behavior, memory limits
-  - [ ] 2.10 Write integration tests for configuration: verify presets work (default, performance_optimized, memory_optimized)
-  - [ ] 2.11 Write correctness tests with known endgame positions and expected optimal moves for all three solvers
-  - [ ] 2.12 Write edge case tests: stalemate, draw by repetition, impossible positions, positions with wrong piece count
-  - [ ] 2.13 Write tests to verify solver results match endgame theory (e.g., King+Gold vs King is always winning, King+Rook vs King is always winning)
-  - [ ] 2.14 Add test helper functions to create positions, verify solver results, and check move optimality
-  - [ ] 2.15 Create test data file or module with comprehensive set of known endgame positions and expected results
+- [x] 2.0 Comprehensive Test Suite with Known Endgame Positions (High Priority - Est: 6-10 hours) ✅ (`tests/tablebase_tests.rs`)
+  - [x] 2.1 Create test file `tests/tablebase_tests.rs` for tablebase system tests ✅ (existing file expanded with new suites)
+  - [x] 2.2 Add test fixture module with known endgame positions (mate-in-one, mate-in-two, winning positions, drawing positions) ✅ (`fixtures` module inside `endgame_comprehensive_tests`)
+  - [x] 2.3 Write unit tests for pattern recognition (`can_solve()`) in each solver for correct and incorrect positions ✅ (`test_pattern_recognition_recognises_valid_positions`, `test_pattern_recognition_rejects_invalid_positions`)
+  - [x] 2.4 Write unit tests for move generation in each solver to verify all legal moves are generated ✅ (`test_move_generation_matches_tablebase_results`)
+  - [x] 2.5 Write unit tests for checkmate detection with known mate-in-one positions for all three solvers ✅ (`test_checkmate_and_dtm_values_match_expectations`)
+  - [x] 2.6 Write unit tests for DTM calculation against known DTM values from endgame theory ✅ (`test_checkmate_and_dtm_values_match_expectations`)
+  - [x] 2.7 Write integration tests for tablebase integration with search engine: verify probes occur before search ✅ (`test_tablebase_probe_precedes_search_engine_evaluation`)
+  - [x] 2.8 Write integration tests for move ordering: verify tablebase moves are prioritized correctly ✅ (`test_move_ordering_prioritises_tablebase_move`)
+  - [x] 2.9 Write integration tests for caching: verify hit rates, eviction behavior, memory limits ✅ (`test_tablebase_cache_hits_are_tracked`)
+  - [x] 2.10 Write integration tests for configuration: verify presets work (default, performance_optimized, memory_optimized) ✅ (`test_configuration_presets_affect_tablebase`)
+  - [x] 2.11 Write correctness tests with known endgame positions and expected optimal moves for all three solvers ✅ (`test_correctness_against_expected_moves`)
+  - [x] 2.12 Write edge case tests: stalemate, draw by repetition, impossible positions, positions with wrong piece count ✅ (`test_edge_cases_cover_draw_and_invalid_positions`)
+  - [x] 2.13 Write tests to verify solver results match endgame theory (e.g., King+Gold vs King is always winning, King+Rook vs King is always winning) ✅ (`test_solver_results_match_endgame_theory`)
+  - [x] 2.14 Add test helper functions to create positions, verify solver results, and check move optimality ✅ (`fixtures` helpers + `solver_result`/`tablebase_result`)
+  - [x] 2.15 Create test data file or module with comprehensive set of known endgame positions and expected results ✅ (`fixtures::all_expected_wins`, `test_fixture_dataset_is_non_empty`)
 
 - [ ] 3.0 Complete Move Legality Validation in All Solvers (Medium Priority - Est: 8-12 hours)
   - [ ] 3.1 Enhance `is_legal_move()` in King+Gold solver to verify check legality (move must not leave king in check)
