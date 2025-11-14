@@ -29,7 +29,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let position = TuningPosition {
             board: BitboardBoard::new(),
             captured_pieces: CapturedPieces::new(),
-            player: if i % 2 == 0 { Player::Black } else { Player::White },
+            player: if i % 2 == 0 {
+                Player::Black
+            } else {
+                Player::White
+            },
             expected_score: if i % 3 == 0 {
                 0.0 // Draw
             } else if i % 3 == 1 {
@@ -88,10 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Tuning completed!");
     println!("   Iterations: {}", result.iterations);
     println!("   Final error: {:.6}", result.final_error);
-    println!(
-        "   Convergence: {:?}",
-        result.convergence_reason
-    );
+    println!("   Convergence: {:?}", result.convergence_reason);
     println!(
         "   Optimization time: {:.2}s",
         result.optimization_time.as_secs_f64()
@@ -102,28 +103,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("5. Optimized weights:");
     println!(
         "   Material: {:.3} (was {:.3})",
-        result.optimized_weights.material_weight,
-        initial_weights.material_weight
+        result.optimized_weights.material_weight, initial_weights.material_weight
     );
     println!(
         "   Position: {:.3} (was {:.3})",
-        result.optimized_weights.position_weight,
-        initial_weights.position_weight
+        result.optimized_weights.position_weight, initial_weights.position_weight
     );
     println!(
         "   King Safety: {:.3} (was {:.3})",
-        result.optimized_weights.king_safety_weight,
-        initial_weights.king_safety_weight
+        result.optimized_weights.king_safety_weight, initial_weights.king_safety_weight
     );
     println!(
         "   Tactical: {:.3} (was {:.3})",
-        result.optimized_weights.tactical_weight,
-        initial_weights.tactical_weight
+        result.optimized_weights.tactical_weight, initial_weights.tactical_weight
     );
     println!(
         "   Positional: {:.3} (was {:.3})",
-        result.optimized_weights.positional_weight,
-        initial_weights.positional_weight
+        result.optimized_weights.positional_weight, initial_weights.positional_weight
     );
     println!();
 
@@ -152,4 +148,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Tuning Complete ===");
     Ok(())
 }
-

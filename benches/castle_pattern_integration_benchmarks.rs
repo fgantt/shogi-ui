@@ -5,13 +5,13 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::integration::{IntegratedEvaluator, IntegratedEvaluationConfig};
+use shogi_engine::evaluation::integration::{IntegratedEvaluationConfig, IntegratedEvaluator};
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn benchmark_castle_pattern_evaluation(c: &mut Criterion) {
     let mut config = IntegratedEvaluationConfig::default();
     config.components.castle_patterns = true;
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
@@ -40,7 +40,7 @@ fn benchmark_castle_pattern_overhead(c: &mut Criterion) {
     let captured_pieces = CapturedPieces::new();
 
     let mut group = c.benchmark_group("castle_pattern_overhead");
-    
+
     group.bench_function("with_castle_patterns", |b| {
         b.iter(|| {
             black_box(evaluator_enabled.evaluate(
@@ -70,4 +70,3 @@ criterion_group!(
     benchmark_castle_pattern_overhead
 );
 criterion_main!(benches);
-

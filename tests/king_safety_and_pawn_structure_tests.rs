@@ -263,7 +263,12 @@ fn advanced_pawns_score_higher_than_home_rank() {
 
     let mut evaluator_advanced = pawn_structure_only();
     let advanced_score = evaluator_advanced
-        .evaluate_pawn_structure(&board_advanced, Player::Black, &CapturedPieces::new(), false)
+        .evaluate_pawn_structure(
+            &board_advanced,
+            Player::Black,
+            &CapturedPieces::new(),
+            false,
+        )
         .mg;
 
     assert!(

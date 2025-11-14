@@ -69,16 +69,17 @@ pub struct CastleCacheStatsTelemetry {
 
 impl KingSafetyStats {
     /// Create a snapshot of current statistics
-    pub fn snapshot(&self, castle_cache_stats: Option<CastleCacheStats>) -> KingSafetyStatsSnapshot {
-        let castle_cache_telemetry = castle_cache_stats.map(|stats| {
-            CastleCacheStatsTelemetry {
-                hits: stats.hits,
-                misses: stats.misses,
-                evictions: stats.evictions,
-                current_size: stats.current_size,
-                max_size: stats.max_size,
-                hit_rate: stats.hit_rate(),
-            }
+    pub fn snapshot(
+        &self,
+        castle_cache_stats: Option<CastleCacheStats>,
+    ) -> KingSafetyStatsSnapshot {
+        let castle_cache_telemetry = castle_cache_stats.map(|stats| CastleCacheStatsTelemetry {
+            hits: stats.hits,
+            misses: stats.misses,
+            evictions: stats.evictions,
+            current_size: stats.current_size,
+            max_size: stats.max_size,
+            hit_rate: stats.hit_rate(),
         });
 
         KingSafetyStatsSnapshot {
@@ -255,7 +256,10 @@ impl KingSafetyEvaluator {
             if self.debug_logging {
                 crate::debug_utils::trace_log(
                     "KING_SAFETY",
-                    &format!("Evaluation cache hit for player {:?} at depth {}", player, depth),
+                    &format!(
+                        "Evaluation cache hit for player {:?} at depth {}",
+                        player, depth
+                    ),
                 );
             }
             return *cached_score;
@@ -577,7 +581,6 @@ impl KingSafetyEvaluator {
             TaperedScore::default()
         }
     }
-
 
     /// Fast evaluation for nodes deep in search tree
     pub fn evaluate_fast(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
@@ -1026,7 +1029,10 @@ mod tests {
 
         let stats = evaluator.stats();
         assert!(stats.bare_kings > 0, "Should detect bare king");
-        assert!(stats.total_missing_required > 0, "Should track missing defenders");
+        assert!(
+            stats.total_missing_required > 0,
+            "Should track missing defenders"
+        );
     }
 
     #[test]
@@ -1051,7 +1057,10 @@ mod tests {
         evaluator.evaluate(&board, Player::Black);
 
         let stats = evaluator.stats();
-        assert!(stats.infiltration_penalties > 0, "Should track infiltration penalties");
+        assert!(
+            stats.infiltration_penalties > 0,
+            "Should track infiltration penalties"
+        );
     }
 
     #[test]

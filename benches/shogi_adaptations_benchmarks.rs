@@ -8,7 +8,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::evaluation::endgame_patterns::EndgamePatternEvaluator;
-use shogi_engine::types::{CapturedPieces, Player, PieceType};
+use shogi_engine::types::{CapturedPieces, PieceType, Player};
 
 fn benchmark_drop_mate_threats(c: &mut Criterion) {
     let mut evaluator = EndgamePatternEvaluator::new();
@@ -90,4 +90,3 @@ criterion_group!(
     benchmark_shogi_adaptations_overhead
 );
 criterion_main!(benches);
-

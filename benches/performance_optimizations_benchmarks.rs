@@ -7,7 +7,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::endgame_patterns::{EndgamePatternEvaluator, EndgamePatternConfig};
+use shogi_engine::evaluation::endgame_patterns::{EndgamePatternConfig, EndgamePatternEvaluator};
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn benchmark_caching_effectiveness(c: &mut Criterion) {
@@ -33,28 +33,28 @@ fn benchmark_king_square_tables_vs_manhattan(c: &mut Criterion) {
     let mut config_manhattan = EndgamePatternConfig::default();
     config_manhattan.use_king_square_tables = false;
     let mut evaluator_manhattan = EndgamePatternEvaluator::with_config(config_manhattan);
-    
+
     let mut config_tables = EndgamePatternConfig::default();
     config_tables.use_king_square_tables = true;
     let mut evaluator_tables = EndgamePatternEvaluator::with_config(config_tables);
-    
+
     let board = BitboardBoard::new();
 
     c.bench_function("king_activity_manhattan", |b| {
         b.iter(|| {
-            black_box(evaluator_manhattan.evaluate_king_activity(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(
+                evaluator_manhattan
+                    .evaluate_king_activity(black_box(&board), black_box(Player::Black)),
+            );
         });
     });
 
     c.bench_function("king_activity_tables", |b| {
         b.iter(|| {
-            black_box(evaluator_tables.evaluate_king_activity(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(
+                evaluator_tables
+                    .evaluate_king_activity(black_box(&board), black_box(Player::Black)),
+            );
         });
     });
 }
@@ -75,10 +75,7 @@ fn benchmark_bitboard_optimizations(c: &mut Criterion) {
 
     c.bench_function("collect_pawns_bitboard", |b| {
         b.iter(|| {
-            black_box(evaluator.collect_pawns(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(evaluator.collect_pawns(black_box(&board), black_box(Player::Black)));
         });
     });
 
@@ -113,4 +110,3 @@ criterion_group!(
     benchmark_evaluation_with_optimizations
 );
 criterion_main!(benches);
-

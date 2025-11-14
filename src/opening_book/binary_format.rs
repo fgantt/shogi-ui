@@ -2,7 +2,6 @@
 ///
 /// This module provides reading and writing of the Shogi Binary Opening Book (SBOB) format.
 /// The format is optimized for fast lookups and minimal memory usage.
-
 // Note: This module is a child module of opening_book
 // Types are imported from the parent module using super::
 use super::{
@@ -123,10 +122,7 @@ impl BinaryHeader {
 
         let mut hash_table_size_bytes = [0u8; 8];
         cursor.read_exact(&mut hash_table_size_bytes).map_err(|e| {
-            OpeningBookError::BinaryFormatError(format!(
-                "Failed to read hash table size: {}",
-                e
-            ))
+            OpeningBookError::BinaryFormatError(format!("Failed to read hash table size: {}", e))
         })?;
         let hash_table_size = u64::from_le_bytes(hash_table_size_bytes);
 
@@ -167,10 +163,7 @@ impl BinaryWriter {
     }
 
     /// Write opening book to binary format
-    pub fn write_opening_book(
-        &mut self,
-        book: &OpeningBook,
-    ) -> Result<Vec<u8>, OpeningBookError> {
+    pub fn write_opening_book(&mut self, book: &OpeningBook) -> Result<Vec<u8>, OpeningBookError> {
         self.buffer.clear();
 
         // Calculate hash table size (next power of 2 >= entry_count)
@@ -238,10 +231,7 @@ impl BinaryWriter {
     }
 
     /// Write a position entry to bytes
-    fn write_position_entry(
-        &self,
-        entry: &PositionEntry,
-    ) -> Result<Box<[u8]>, OpeningBookError> {
+    fn write_position_entry(&self, entry: &PositionEntry) -> Result<Box<[u8]>, OpeningBookError> {
         let mut bytes = Vec::new();
 
         // Write FEN string
@@ -477,10 +467,7 @@ impl BinaryReader {
         let opening_name = if name_len > 0 {
             let name_bytes = self.read_bytes(name_len)?;
             Some(String::from_utf8(name_bytes).map_err(|e| {
-                OpeningBookError::BinaryFormatError(format!(
-                    "Invalid UTF-8 in opening name: {}",
-                    e
-                ))
+                OpeningBookError::BinaryFormatError(format!("Invalid UTF-8 in opening name: {}", e))
             })?)
         } else {
             None
@@ -605,4 +592,3 @@ impl Default for BinaryWriter {
         Self::new()
     }
 }
-

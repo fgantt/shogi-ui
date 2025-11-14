@@ -5,7 +5,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::evaluation::endgame_patterns::EndgamePatternEvaluator;
-use shogi_engine::types::{CapturedPieces, Player, PieceType};
+use shogi_engine::types::{CapturedPieces, PieceType, Player};
 
 fn benchmark_statistics_overhead(c: &mut Criterion) {
     let mut evaluator = EndgamePatternEvaluator::new();
@@ -84,4 +84,3 @@ criterion_group!(
     benchmark_statistics_aggregation
 );
 criterion_main!(benches);
-

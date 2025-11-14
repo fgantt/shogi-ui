@@ -393,7 +393,12 @@ mod cache_tests {
         );
         let captured = CapturedPieces::new();
 
-        cache.put(&board, Player::Black, &captured, TablebaseResult::win(None, 1));
+        cache.put(
+            &board,
+            Player::Black,
+            &captured,
+            TablebaseResult::win(None, 1),
+        );
         cache.put(&board, Player::White, &captured, TablebaseResult::loss(2));
 
         let black_result = cache.get(&board, Player::Black, &captured).unwrap();

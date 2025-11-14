@@ -1059,8 +1059,8 @@ mod binary_format_edge_cases_tests {
 #[cfg(test)]
 mod unified_statistics_tests {
     use super::*;
-    use shogi_engine::opening_book::statistics::BookStatistics;
     use shogi_engine::evaluation::opening_principles::OpeningPrincipleStats;
+    use shogi_engine::opening_book::statistics::BookStatistics;
     use shogi_engine::search::move_ordering::AdvancedIntegrationStats;
 
     #[test]
@@ -1235,7 +1235,7 @@ mod hash_collision_tests {
             15,
         )];
         book.add_position(fen, moves);
-        
+
         let stats = book.get_hash_quality_metrics();
         assert_eq!(stats.total_positions, 1);
         assert_eq!(stats.total_collisions, 0);
@@ -1255,10 +1255,10 @@ mod hash_collision_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen.clone(), moves.clone());
         book.add_position(fen, moves); // Same FEN, should not count as collision
-        
+
         let stats = book.get_hash_quality_metrics();
         assert_eq!(stats.total_collisions, 0); // No collision (same FEN)
         assert_eq!(stats.total_positions, 2);
@@ -1279,9 +1279,9 @@ mod hash_collision_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen1, moves1);
-        
+
         // Add a different position (will have different hash in practice)
         let fen2 = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w - 1".to_string();
         let moves2 = vec![BookMove::new(
@@ -1293,9 +1293,9 @@ mod hash_collision_tests {
             800,
             10,
         )];
-        
+
         book.add_position(fen2, moves2);
-        
+
         let stats = book.get_hash_quality_metrics();
         // In practice, these should have different hashes, so no collision
         // But the test verifies the detection logic works
@@ -1317,7 +1317,7 @@ mod hash_collision_tests {
         )];
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let stats = book.get_statistics();
         assert!(stats.hash_collisions.is_some());
         let collision_stats = stats.hash_collisions.unwrap();
@@ -1327,16 +1327,16 @@ mod hash_collision_tests {
     #[test]
     fn test_collision_rate_calculation() {
         let mut stats = HashCollisionStats::new();
-        
+
         // Add 10 positions
         for _ in 0..10 {
             stats.record_position();
         }
-        
+
         // Add 2 collisions
         stats.record_collision(2);
         stats.record_collision(3);
-        
+
         // Collision rate should be 2/10 = 0.2
         assert_eq!(stats.collision_rate, 0.2);
         assert_eq!(stats.total_collisions, 2);
@@ -1378,7 +1378,7 @@ mod chunk_management_tests {
         let mut manager = ChunkManager::new(10, vec![0, 100, 200], 1000);
         manager.register_chunk(0, 100);
         manager.register_chunk(1, 200);
-        
+
         let progress = manager.get_progress();
         assert_eq!(progress.chunks_loaded, 2);
         assert_eq!(progress.chunks_total, 10);
@@ -1393,10 +1393,10 @@ mod chunk_management_tests {
         manager.register_chunk(0, 100);
         manager.register_chunk(1, 200);
         manager.register_chunk(2, 150);
-        
+
         // First chunk should be LRU
         assert_eq!(manager.get_lru_chunk(), Some(0));
-        
+
         // Evict first chunk
         assert!(manager.evict_chunk(0, 100));
         assert!(!manager.is_chunk_loaded(0));
@@ -1408,7 +1408,7 @@ mod chunk_management_tests {
     fn test_streaming_progress() {
         let mut book = OpeningBook::new();
         book.enable_streaming_mode(1024);
-        
+
         // Initially no progress
         let progress = book.get_streaming_progress();
         assert!(progress.is_some());
@@ -1421,15 +1421,15 @@ mod chunk_management_tests {
     fn test_save_load_streaming_state() {
         let mut book = OpeningBook::new();
         book.enable_streaming_mode(1024);
-        
+
         // Create some chunk data (simplified)
         let chunk_data = vec![0u8; 100];
         let _ = book.load_chunk(&chunk_data, 0);
-        
+
         // Save state
         let state = book.save_streaming_state();
         assert!(state.is_some());
-        
+
         // Create new book and load state
         let mut new_book = OpeningBook::new();
         new_book.enable_streaming_mode(1024);
@@ -1478,7 +1478,7 @@ mod coverage_analysis_tests {
         ];
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let stats = CoverageAnalyzer::analyze_depth(&book);
         assert!(stats.average_moves_per_opening > 0.0);
         assert!(stats.max_depth > 0);
@@ -1507,10 +1507,11 @@ mod coverage_analysis_tests {
         )];
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let report = CoverageAnalyzer::generate_coverage_report(&book);
         assert!(report.depth_stats.total_openings > 0);
-        assert!(!report.recommendations.is_empty() || report.recommendations.is_empty()); // May or may not have recommendations
+        assert!(!report.recommendations.is_empty() || report.recommendations.is_empty());
+        // May or may not have recommendations
     }
 }
 
@@ -1531,9 +1532,9 @@ mod lazy_loading_tests {
             850,
             15,
         )];
-        
+
         book.add_lazy_position(fen.clone(), moves).unwrap();
-        
+
         // Position should be loadable (exists in lazy storage)
         let hash = book.hash_fen(&fen);
         let result = book.load_lazy_position(hash);
@@ -1545,7 +1546,7 @@ mod lazy_loading_tests {
         let mut book = OpeningBook::new();
         let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
         let mut moves = Vec::new();
-        
+
         // Add 10 moves
         for i in 0..10 {
             moves.push(BookMove::new(
@@ -1558,13 +1559,13 @@ mod lazy_loading_tests {
                 10,
             ));
         }
-        
+
         book.add_lazy_position(fen.clone(), moves).unwrap();
-        
+
         // Load the lazy position by accessing it
         let hash = book.hash_fen(&fen);
         let _result = book.load_lazy_position(hash);
-        
+
         // Position should now be accessible
         let moves = book.get_moves(&fen);
         assert!(moves.is_some());
@@ -1576,7 +1577,7 @@ mod lazy_loading_tests {
         let mut book = OpeningBook::new();
         let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
         let mut moves = Vec::new();
-        
+
         // Add 100 moves
         for i in 0..100 {
             moves.push(BookMove::new(
@@ -1589,13 +1590,13 @@ mod lazy_loading_tests {
                 10,
             ));
         }
-        
+
         book.add_lazy_position(fen.clone(), moves).unwrap();
-        
+
         // Load the lazy position by accessing it
         let hash = book.hash_fen(&fen);
         let _result = book.load_lazy_position(hash);
-        
+
         // Verify all moves are loaded
         let moves = book.get_moves(&fen);
         assert!(moves.is_some());
@@ -1621,12 +1622,12 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen.clone(), moves.clone());
         // Add same position again (should be detected as duplicate)
         book.add_position(fen.clone(), moves);
         book = book.mark_loaded();
-        
+
         let (duplicates, duplicate_fens) = BookValidator::validate_duplicate_positions(&book);
         // Note: add_position overwrites, so we might not see duplicates
         // This test verifies the method works
@@ -1636,9 +1637,10 @@ mod validation_tests {
     #[test]
     fn test_validate_fen_format() {
         let mut book = OpeningBook::new();
-        let valid_fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+        let valid_fen =
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
         let invalid_fen = "invalid fen".to_string();
-        
+
         let moves = vec![BookMove::new(
             Some(Position::new(2, 6)),
             Position::new(2, 5),
@@ -1648,11 +1650,11 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(valid_fen, moves.clone());
         book.add_position(invalid_fen, moves);
         book = book.mark_loaded();
-        
+
         let (invalid_count, invalid_fens) = BookValidator::validate_fen_format(&book);
         assert!(invalid_count >= 0);
         // Should detect invalid FEN
@@ -1672,10 +1674,10 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let (out_of_bounds, _details) = BookValidator::validate_position_bounds(&book);
         // Valid positions should have 0 out of bounds
         assert_eq!(out_of_bounds, 0);
@@ -1692,7 +1694,7 @@ mod validation_tests {
                 PieceType::Rook,
                 false,
                 false,
-                900, // High weight
+                900,  // High weight
                 -100, // Low evaluation (inconsistent)
                 15,
             ),
@@ -1707,11 +1709,12 @@ mod validation_tests {
                 10,
             ),
         ];
-        
+
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
-        let (inconsistencies, _details) = BookValidator::validate_weight_evaluation_consistency(&book);
+
+        let (inconsistencies, _details) =
+            BookValidator::validate_weight_evaluation_consistency(&book);
         // Should detect inconsistencies
         assert!(inconsistencies >= 0);
     }
@@ -1729,10 +1732,10 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let report = BookValidator::run_full_validation(&book);
         assert!(report.is_valid || !report.is_valid); // Should have a boolean value
         assert!(report.duplicates_found >= 0);
@@ -1743,10 +1746,10 @@ mod validation_tests {
     #[test]
     fn test_thread_safe_opening_book() {
         use shogi_engine::opening_book::ThreadSafeOpeningBook;
-        
+
         let book = OpeningBook::new();
         let thread_safe_book = ThreadSafeOpeningBook::new(book);
-        
+
         // Should be able to call methods
         let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
         let _result = thread_safe_book.get_move(fen);
@@ -1766,10 +1769,10 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         // Should not panic (stub implementation)
         let result = book.refresh_evaluations();
         assert!(result.is_ok());
@@ -1789,10 +1792,10 @@ mod validation_tests {
             850,
             15,
         )];
-        
+
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         // Should not panic (stub implementation)
         let result = book.refresh_evaluations_incremental(10, 0);
         assert!(result.is_ok());

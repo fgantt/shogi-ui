@@ -11,11 +11,11 @@ fn benchmark_telemetry_collection_overhead(c: &mut Criterion) {
     config.components.positional_patterns = true;
     config.components.castle_patterns = true;
     config.collect_position_feature_stats = true;
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::default();
     let captured = CapturedPieces::default();
-    
+
     c.bench_function("telemetry_collection_enabled", |b| {
         b.iter(|| {
             let _score = evaluator.evaluate(
@@ -26,7 +26,7 @@ fn benchmark_telemetry_collection_overhead(c: &mut Criterion) {
             let _telemetry = evaluator.telemetry_snapshot();
         });
     });
-    
+
     // Compare with telemetry disabled
     let mut config_no_telemetry = IntegratedEvaluationConfig::default();
     config_no_telemetry.components.material = true;
@@ -34,9 +34,9 @@ fn benchmark_telemetry_collection_overhead(c: &mut Criterion) {
     config_no_telemetry.components.positional_patterns = true;
     config_no_telemetry.components.castle_patterns = true;
     config_no_telemetry.collect_position_feature_stats = false;
-    
+
     let evaluator_no_telemetry = IntegratedEvaluator::with_config(config_no_telemetry);
-    
+
     c.bench_function("telemetry_collection_disabled", |b| {
         b.iter(|| {
             let _score = evaluator_no_telemetry.evaluate(
@@ -53,11 +53,11 @@ fn benchmark_component_validation_overhead(c: &mut Criterion) {
     config.components.material = true;
     config.components.tactical_patterns = true;
     config.enable_component_validation = false; // Validation disabled
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::default();
     let captured = CapturedPieces::default();
-    
+
     c.bench_function("component_validation_disabled", |b| {
         b.iter(|| {
             let _score = evaluator.evaluate(
@@ -67,15 +67,15 @@ fn benchmark_component_validation_overhead(c: &mut Criterion) {
             );
         });
     });
-    
+
     // Compare with validation enabled
     let mut config_validation = IntegratedEvaluationConfig::default();
     config_validation.components.material = true;
     config_validation.components.tactical_patterns = true;
     config_validation.enable_component_validation = true; // Validation enabled
-    
+
     let evaluator_validation = IntegratedEvaluator::with_config(config_validation);
-    
+
     c.bench_function("component_validation_enabled", |b| {
         b.iter(|| {
             let _score = evaluator_validation.evaluate(
@@ -95,11 +95,11 @@ fn benchmark_weight_contributions_calculation(c: &mut Criterion) {
     config.components.positional_patterns = true;
     config.components.castle_patterns = true;
     config.collect_position_feature_stats = true;
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::default();
     let captured = CapturedPieces::default();
-    
+
     c.bench_function("weight_contributions_calculation", |b| {
         b.iter(|| {
             let _score = evaluator.evaluate(
@@ -120,4 +120,3 @@ criterion_group!(
     benchmark_weight_contributions_calculation
 );
 criterion_main!(benches);
-

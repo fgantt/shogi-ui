@@ -1,12 +1,12 @@
 //! Tests for component dependency validation and coordination (Task 20.0 - Task 5.0)
 
+use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::evaluation::config::{
     ComponentDependency, ComponentDependencyGraph, ComponentDependencyWarning, ComponentId,
 };
 use shogi_engine::evaluation::integration::{
-    ComponentFlags, IntegratedEvaluator, IntegratedEvaluationConfig,
+    ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator,
 };
-use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::types::{CapturedPieces, Player};
 
 /// Test dependency graph creation and population (Task 20.0 - Task 5.18)
@@ -35,17 +35,14 @@ fn test_dependency_graph_creation() {
     ));
 
     // Verify requirements are registered
-    assert!(graph.requires(
-        ComponentId::EndgamePatterns,
-        ComponentId::PositionFeatures
-    ));
+    assert!(graph.requires(ComponentId::EndgamePatterns, ComponentId::PositionFeatures));
 }
 
 /// Test conflict detection (Task 20.0 - Task 5.19)
 #[test]
 fn test_conflict_detection() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable conflicting components
     config.components.position_features = true;
     config.components.positional_patterns = true;
@@ -65,7 +62,9 @@ fn test_conflict_detection() {
 
     // Should detect development conflict
     assert!(
-        warnings.iter().any(|w| matches!(w, ComponentDependencyWarning::DevelopmentOverlap)),
+        warnings
+            .iter()
+            .any(|w| matches!(w, ComponentDependencyWarning::DevelopmentOverlap)),
         "Should detect development overlap"
     );
 }
@@ -74,7 +73,7 @@ fn test_conflict_detection() {
 #[test]
 fn test_complement_validation() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable king safety but not castle patterns (complements)
     config.components.position_features = true;
     config.components.castle_patterns = false;
@@ -83,21 +82,25 @@ fn test_complement_validation() {
 
     // Should warn about missing complement
     assert!(
-        warnings.iter().any(|w| matches!(w, ComponentDependencyWarning::MissingComplement { component1, component2 }
+        warnings.iter().any(
+            |w| matches!(w, ComponentDependencyWarning::MissingComplement { component1, component2 }
             if (component1.contains("KingSafety") && component2.contains("CastlePatterns")) ||
-               (component2.contains("KingSafety") && component1.contains("CastlePatterns")))),
+               (component2.contains("KingSafety") && component1.contains("CastlePatterns")))
+        ),
         "Should warn about missing complement"
     );
 
     // Enable both (should not warn)
     config.components.castle_patterns = true;
     let warnings = config.validate_component_dependencies();
-    
+
     // Should not warn about missing complement when both are enabled
     assert!(
-        !warnings.iter().any(|w| matches!(w, ComponentDependencyWarning::MissingComplement { component1, component2 }
+        !warnings.iter().any(
+            |w| matches!(w, ComponentDependencyWarning::MissingComplement { component1, component2 }
             if (component1.contains("KingSafety") && component2.contains("CastlePatterns")) ||
-               (component2.contains("KingSafety") && component1.contains("CastlePatterns")))),
+               (component2.contains("KingSafety") && component1.contains("CastlePatterns")))
+        ),
         "Should not warn when both complements are enabled"
     );
 }
@@ -106,7 +109,7 @@ fn test_complement_validation() {
 #[test]
 fn test_requirement_validation() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable endgame patterns but not position features (requires)
     config.components.endgame_patterns = true;
     config.components.position_features = false;
@@ -115,19 +118,23 @@ fn test_requirement_validation() {
 
     // Should warn about missing requirement
     assert!(
-        warnings.iter().any(|w| matches!(w, ComponentDependencyWarning::MissingRequirement { component, required }
-            if component.contains("EndgamePatterns") && required.contains("PositionFeatures"))),
+        warnings.iter().any(
+            |w| matches!(w, ComponentDependencyWarning::MissingRequirement { component, required }
+            if component.contains("EndgamePatterns") && required.contains("PositionFeatures"))
+        ),
         "Should warn about missing requirement"
     );
 
     // Enable required component (should not warn)
     config.components.position_features = true;
     let warnings = config.validate_component_dependencies();
-    
+
     // Should not warn when requirement is met
     assert!(
-        !warnings.iter().any(|w| matches!(w, ComponentDependencyWarning::MissingRequirement { component, required }
-            if component.contains("EndgamePatterns") && required.contains("PositionFeatures"))),
+        !warnings.iter().any(
+            |w| matches!(w, ComponentDependencyWarning::MissingRequirement { component, required }
+            if component.contains("EndgamePatterns") && required.contains("PositionFeatures"))
+        ),
         "Should not warn when requirement is met"
     );
 }
@@ -136,7 +143,7 @@ fn test_requirement_validation() {
 #[test]
 fn test_auto_resolve_conflicts() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable conflicting components
     config.components.position_features = true;
     config.components.positional_patterns = true;
@@ -144,7 +151,10 @@ fn test_auto_resolve_conflicts() {
 
     // Get suggestions
     let suggestions = config.suggest_component_resolution();
-    assert!(!suggestions.is_empty(), "Should provide conflict resolution suggestions");
+    assert!(
+        !suggestions.is_empty(),
+        "Should provide conflict resolution suggestions"
+    );
 
     // Test auto-resolve (logs resolutions)
     // Note: auto_resolve_conflicts may return empty if conflicts are handled during evaluation
@@ -157,7 +167,7 @@ fn test_auto_resolve_conflicts() {
 #[test]
 fn test_phase_compatibility_validation() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable opening principles
     config.components.opening_principles = true;
 
@@ -175,7 +185,7 @@ fn test_phase_compatibility_validation() {
 
     // Enable endgame patterns
     config.components.endgame_patterns = true;
-    
+
     // Create phase history with mostly opening phases (should warn)
     let phase_history: Vec<i32> = vec![200, 220, 210, 230, 240]; // All opening (>= 64)
 
@@ -202,10 +212,13 @@ fn test_comprehensive_dependency_validation() {
 
     // Validate configuration
     let result = evaluator.validate_configuration();
-    assert!(result.is_ok(), "Validation should succeed (warnings are OK)");
+    assert!(
+        result.is_ok(),
+        "Validation should succeed (warnings are OK)"
+    );
 
     let warnings = result.unwrap();
-    
+
     // Should have some warnings (depending on configuration)
     // We're not asserting specific warnings since default config may or may not have conflicts
     assert!(
@@ -283,26 +296,31 @@ fn test_component_id_enum() {
 #[test]
 fn test_suggest_component_resolution() {
     let mut config = IntegratedEvaluationConfig::default();
-    
+
     // Enable conflicting components
     config.components.position_features = true;
     config.components.positional_patterns = true;
     config.components.opening_principles = true;
 
     let suggestions = config.suggest_component_resolution();
-    
+
     // Should provide suggestions for conflicts
-    assert!(!suggestions.is_empty(), "Should provide resolution suggestions");
-    
+    assert!(
+        !suggestions.is_empty(),
+        "Should provide resolution suggestions"
+    );
+
     // Suggestions should contain helpful information
     // Note: suggestions may be empty if no conflicts are detected by the graph
     // (conflicts are handled via precedence during evaluation)
     if !suggestions.is_empty() {
         assert!(
-            suggestions.iter().any(|s| s.contains("center_control") || s.contains("development") || s.contains("precedence") || s.contains("Position")),
+            suggestions.iter().any(|s| s.contains("center_control")
+                || s.contains("development")
+                || s.contains("precedence")
+                || s.contains("Position")),
             "Suggestions should contain helpful information"
         );
     }
     // It's OK if suggestions is empty - conflicts may be handled during evaluation
 }
-

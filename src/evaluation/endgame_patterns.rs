@@ -30,13 +30,13 @@
 //! let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
 //! ```
 
-use crate::bitboards::{BitboardBoard, bits};
+use crate::bitboards::{bits, BitboardBoard};
 use crate::moves::MoveGenerator;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 /// Cached evaluation data for a position
 #[derive(Debug, Clone)]
@@ -79,7 +79,7 @@ static KING_SQUARE_TABLE_EG: [i32; 81] = {
         let row_dist = (row - center_row).abs();
         let col_dist = (col - center_col).abs();
         let center_distance = row_dist + col_dist;
-        
+
         // Endgame value: closer to center = higher value
         // Rank 4-5 (rows 3-4) are optimal for king activity
         let rank_bonus = if row >= 3 && row <= 4 {
@@ -91,7 +91,7 @@ static KING_SQUARE_TABLE_EG: [i32; 81] = {
         } else {
             0 // Back ranks
         };
-        
+
         let center_bonus = if center_distance > 4 {
             (4 - 4) * 15
         } else {
@@ -144,7 +144,7 @@ impl EndgamePatternEvaluator {
         captured_pieces: &CapturedPieces,
     ) -> u64 {
         let mut hasher = DefaultHasher::new();
-        
+
         // Hash bitboard representation (fast)
         let pieces = board.get_pieces();
         for player_pieces in pieces.iter() {
@@ -152,19 +152,28 @@ impl EndgamePatternEvaluator {
                 piece_bitboard.hash(&mut hasher);
             }
         }
-        
+
         // Hash player to move
         player.hash(&mut hasher);
-        
+
         // Hash captured pieces (simplified - just count)
         for piece_type in [
-            PieceType::Pawn, PieceType::Lance, PieceType::Knight,
-            PieceType::Silver, PieceType::Gold, PieceType::Bishop, PieceType::Rook,
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
         ] {
-            captured_pieces.count(piece_type, Player::Black).hash(&mut hasher);
-            captured_pieces.count(piece_type, Player::White).hash(&mut hasher);
+            captured_pieces
+                .count(piece_type, Player::Black)
+                .hash(&mut hasher);
+            captured_pieces
+                .count(piece_type, Player::White)
+                .hash(&mut hasher);
         }
-        
+
         hasher.finish()
     }
 
@@ -178,31 +187,33 @@ impl EndgamePatternEvaluator {
         if !self.config.enable_evaluation_caching {
             return None;
         }
-        
+
         let hash = self.generate_position_hash(board, player, captured_pieces);
-        
+
         if !self.cache.contains_key(&hash) {
             // Compute and cache
             let mut cached = CachedEvaluation::default();
-            
+
             // Cache king positions (use bitboard method)
             cached.king_positions[0] = board.find_king_position(Player::Black);
             cached.king_positions[1] = board.find_king_position(Player::White);
-            
+
             // Cache pawn positions (use bitboard operations)
             cached.pawn_positions[0] = self.collect_pawns_bitboard(board, Player::Black);
             cached.pawn_positions[1] = self.collect_pawns_bitboard(board, Player::White);
-            
+
             // Cache total pieces (use bitboard population count)
             cached.total_pieces = self.count_total_pieces_bitboard(board);
-            
+
             // Cache material counts
-            cached.material_counts[0] = self.calculate_material(board, Player::Black, captured_pieces);
-            cached.material_counts[1] = self.calculate_material(board, Player::White, captured_pieces);
-            
+            cached.material_counts[0] =
+                self.calculate_material(board, Player::Black, captured_pieces);
+            cached.material_counts[1] =
+                self.calculate_material(board, Player::White, captured_pieces);
+
             self.cache.insert(hash, cached);
         }
-        
+
         self.cache.get(&hash)
     }
 
@@ -306,7 +317,8 @@ impl EndgamePatternEvaluator {
             // Use Manhattan distance (original method)
             let center_distance = self.distance_to_center(king_pos);
             let centralization_bonus_base = (4 - center_distance.min(4)) * 15;
-            (centralization_bonus_base as f32 * self.config.king_activity_centralization_scale) as i32
+            (centralization_bonus_base as f32 * self.config.king_activity_centralization_scale)
+                as i32
         };
         mg_score += centralization_bonus / 4; // Small bonus in middlegame
         eg_score += centralization_bonus; // Large bonus in endgame
@@ -328,15 +340,15 @@ impl EndgamePatternEvaluator {
 
         if is_advanced {
             let mut advancement_bonus = (35.0 * self.config.king_activity_advancement_scale) as i32;
-            
+
             // Reduce advancement bonus by 50% if king is unsafe
             if is_unsafe {
                 advancement_bonus = advancement_bonus / 2;
                 self.stats.unsafe_king_penalties += 1;
-                
+
                 // Also apply penalty for unsafe advanced king
                 eg_score -= 20;
-                
+
                 crate::debug_utils::trace_log("KING_ACTIVITY", &format!(
                     "Advanced king in unsafe position: {} (row={}, col={}), penalty=-20, advancement bonus reduced by 50%",
                     if player == Player::Black { "Black" } else { "White" },
@@ -344,7 +356,7 @@ impl EndgamePatternEvaluator {
                     king_pos.col
                 ));
             }
-            
+
             mg_score += 5; // Risky in middlegame
             eg_score += advancement_bonus; // Excellent in endgame (if safe)
         }
@@ -358,7 +370,12 @@ impl EndgamePatternEvaluator {
     }
 
     /// Check if king is under attack by opponent pieces
-    fn is_king_under_attack(&self, board: &BitboardBoard, king_pos: Position, player: Player) -> bool {
+    fn is_king_under_attack(
+        &self,
+        board: &BitboardBoard,
+        king_pos: Position,
+        player: Player,
+    ) -> bool {
         let opponent = player.opposite();
         board.is_square_attacked_by(king_pos, opponent)
     }
@@ -375,7 +392,11 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate passed pawns with endgame emphasis
-    fn evaluate_passed_pawns_endgame(&mut self, board: &BitboardBoard, player: Player) -> TaperedScore {
+    fn evaluate_passed_pawns_endgame(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+    ) -> TaperedScore {
         let pawns = self.collect_pawns(board, player);
         let mut mg_score = 0;
         let mut eg_score = 0;
@@ -613,7 +634,8 @@ impl EndgamePatternEvaluator {
             // Rook drop on same file as king
             if captured_pieces.count(PieceType::Rook, player) > 0 {
                 // Check if dropping rook on same file would create mate threat
-                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Rook) {
+                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Rook)
+                {
                     mg_score += 30;
                     eg_score += 70;
                     threats_detected += 1;
@@ -622,7 +644,12 @@ impl EndgamePatternEvaluator {
 
             // Bishop drop to create mate threat
             if captured_pieces.count(PieceType::Bishop, player) > 0 {
-                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Bishop) {
+                if self.can_drop_create_back_rank_mate(
+                    board,
+                    player,
+                    opp_king_pos,
+                    PieceType::Bishop,
+                ) {
                     mg_score += 25;
                     eg_score += 60;
                     threats_detected += 1;
@@ -631,7 +658,8 @@ impl EndgamePatternEvaluator {
 
             // Gold drop to create mate threat
             if captured_pieces.count(PieceType::Gold, player) > 0 {
-                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Gold) {
+                if self.can_drop_create_back_rank_mate(board, player, opp_king_pos, PieceType::Gold)
+                {
                     mg_score += 20;
                     eg_score += 50;
                     threats_detected += 1;
@@ -664,7 +692,13 @@ impl EndgamePatternEvaluator {
                     let pos = Position::new(row, king_pos.col);
                     if !board.is_square_occupied(pos) {
                         // Check if rook at this position would attack king
-                        if self.would_piece_attack_square(board, pos, king_pos, PieceType::Rook, player) {
+                        if self.would_piece_attack_square(
+                            board,
+                            pos,
+                            king_pos,
+                            PieceType::Rook,
+                            player,
+                        ) {
                             return true;
                         }
                     }
@@ -673,7 +707,13 @@ impl EndgamePatternEvaluator {
                 for col in 0..9 {
                     let pos = Position::new(king_pos.row, col);
                     if !board.is_square_occupied(pos) {
-                        if self.would_piece_attack_square(board, pos, king_pos, PieceType::Rook, player) {
+                        if self.would_piece_attack_square(
+                            board,
+                            pos,
+                            king_pos,
+                            PieceType::Rook,
+                            player,
+                        ) {
                             return true;
                         }
                     }
@@ -692,7 +732,13 @@ impl EndgamePatternEvaluator {
                         if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                             let pos = Position::new(new_row as u8, new_col as u8);
                             if !board.is_square_occupied(pos) {
-                                if self.would_piece_attack_square(board, pos, king_pos, PieceType::Bishop, player) {
+                                if self.would_piece_attack_square(
+                                    board,
+                                    pos,
+                                    king_pos,
+                                    PieceType::Bishop,
+                                    player,
+                                ) {
                                     return true;
                                 }
                             }
@@ -713,7 +759,13 @@ impl EndgamePatternEvaluator {
                         if new_row >= 0 && new_row < 9 && new_col >= 0 && new_col < 9 {
                             let pos = Position::new(new_row as u8, new_col as u8);
                             if !board.is_square_occupied(pos) {
-                                if self.would_piece_attack_square(board, pos, king_pos, PieceType::Gold, player) {
+                                if self.would_piece_attack_square(
+                                    board,
+                                    pos,
+                                    king_pos,
+                                    PieceType::Gold,
+                                    player,
+                                ) {
                                     return true;
                                 }
                             }
@@ -757,10 +809,20 @@ impl EndgamePatternEvaluator {
             if distance <= 2 {
                 // Check if promoting would create mate threat
                 // Tokin (promoted pawn) attacks like gold
-                let promotion_rank = if player == Player::Black { 0..=2 } else { 6..=8 };
+                let promotion_rank = if player == Player::Black {
+                    0..=2
+                } else {
+                    6..=8
+                };
                 if promotion_rank.contains(&pawn_pos.row) {
                     // Can promote, check if tokin would attack king
-                    if self.would_piece_attack_square(board, pawn_pos, opp_king_pos, PieceType::Gold, player) {
+                    if self.would_piece_attack_square(
+                        board,
+                        pawn_pos,
+                        opp_king_pos,
+                        PieceType::Gold,
+                        player,
+                    ) {
                         return true;
                     }
                 }
@@ -1017,7 +1079,8 @@ impl EndgamePatternEvaluator {
 
         // Count mobility for both sides
         let (player_moves, player_drops) = self.count_safe_moves(board, player, captured_pieces);
-        let (opponent_moves, opponent_drops) = self.count_safe_moves(board, opponent, captured_pieces);
+        let (opponent_moves, opponent_drops) =
+            self.count_safe_moves(board, opponent, captured_pieces);
 
         // Adjust move counts based on drop consideration configuration
         let player_total = if self.config.enable_zugzwang_drop_consideration {
@@ -1036,12 +1099,12 @@ impl EndgamePatternEvaluator {
             // Player benefits from opponent's lack of moves
             self.stats.zugzwang_detections += 1;
             self.stats.zugzwang_benefits += 1;
-            
+
             crate::debug_utils::trace_log("ZUGZWANG", &format!(
                 "Zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=+80",
                 player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
             ));
-            
+
             return TaperedScore::new_tapered(0, 80);
         }
 
@@ -1049,12 +1112,12 @@ impl EndgamePatternEvaluator {
         if player_total <= 2 && opponent_total > 5 {
             self.stats.zugzwang_detections += 1;
             self.stats.zugzwang_penalties += 1;
-            
+
             crate::debug_utils::trace_log("ZUGZWANG", &format!(
                 "Reverse zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=-60",
                 player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
             ));
-            
+
             return TaperedScore::new_tapered(0, -60);
         }
 
@@ -1070,12 +1133,14 @@ impl EndgamePatternEvaluator {
         captured_pieces: &CapturedPieces,
     ) -> (i32, i32) {
         // Generate all legal moves (already filtered for safety - no moves that leave king in check)
-        let legal_moves = self.move_generator.generate_legal_moves(board, player, captured_pieces);
-        
+        let legal_moves = self
+            .move_generator
+            .generate_legal_moves(board, player, captured_pieces);
+
         // Separate regular moves from drop moves
         let mut regular_moves = 0;
         let mut drop_moves = 0;
-        
+
         for mv in &legal_moves {
             if mv.is_drop() {
                 drop_moves += 1;
@@ -1083,7 +1148,7 @@ impl EndgamePatternEvaluator {
                 regular_moves += 1;
             }
         }
-        
+
         (regular_moves, drop_moves)
     }
 
@@ -1149,12 +1214,12 @@ impl EndgamePatternEvaluator {
             if self.config.enable_shogi_opposition_adjustment {
                 let opponent = player.opposite();
                 let pieces_in_hand = self.count_pieces_in_hand(captured_pieces, opponent);
-                
+
                 if pieces_in_hand > 0 {
                     // Reduce by 25% per piece in hand, max 75% reduction
                     let reduction = (pieces_in_hand as i32 * 25).min(75);
                     scale_factor = (scale_factor * (100 - reduction)) / 100;
-                    
+
                     if pieces_in_hand > 0 {
                         self.stats.opposition_broken_by_drops += 1;
                     }
@@ -1162,7 +1227,7 @@ impl EndgamePatternEvaluator {
             }
 
             let scaled_score = (base_score * scale_factor) / 100;
-            
+
             self.stats.opposition_detections += 1;
             return TaperedScore::new_tapered(0, scaled_score);
         }
@@ -1208,7 +1273,12 @@ impl EndgamePatternEvaluator {
     // =======================================================================
 
     /// Evaluate triangulation potential (losing a tempo to gain zugzwang)
-    fn evaluate_triangulation(&mut self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> TaperedScore {
+    fn evaluate_triangulation(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> TaperedScore {
         let king_pos = match self.find_king_position(board, player) {
             Some(pos) => pos,
             None => return TaperedScore::default(),
@@ -1239,7 +1309,8 @@ impl EndgamePatternEvaluator {
             Some(pos) => pos,
             None => return TaperedScore::default(),
         };
-        let opponent_mobility = self.count_opponent_king_mobility(board, opponent_king_pos, opponent);
+        let opponent_mobility =
+            self.count_opponent_king_mobility(board, opponent_king_pos, opponent);
 
         if opponent_mobility > 3 {
             return TaperedScore::default(); // Opponent not cramped enough
@@ -1466,14 +1537,24 @@ impl EndgamePatternEvaluator {
     }
 
     /// Get material difference (player - opponent)
-    fn get_material_difference(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+    fn get_material_difference(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let player_material = self.calculate_material(board, player, captured_pieces);
         let opponent_material = self.calculate_material(board, player.opposite(), captured_pieces);
         player_material - opponent_material
     }
 
     /// Calculate material for a player (including pieces in hand - critical in shogi)
-    fn calculate_material(&self, board: &BitboardBoard, player: Player, captured_pieces: &CapturedPieces) -> i32 {
+    fn calculate_material(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> i32 {
         let mut material = 0;
 
         // Material on board
@@ -1546,14 +1627,14 @@ impl EndgamePatternEvaluator {
     fn count_total_pieces_bitboard(&self, board: &BitboardBoard) -> i32 {
         let pieces = board.get_pieces();
         let mut count = 0u32;
-        
+
         // Count all pieces using bitboard population count
         for player_pieces in pieces.iter() {
             for piece_bitboard in player_pieces.iter() {
                 count += piece_bitboard.count_ones();
             }
         }
-        
+
         count as i32
     }
 
@@ -1588,9 +1669,11 @@ impl EndgamePatternEvaluator {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let pawn_bitboard = pieces[player_idx][PieceType::Pawn.to_u8() as usize];
-        
+
         // Use bit iterator to get all pawn positions
-        bits(pawn_bitboard).map(|idx| Position::from_u8(idx)).collect()
+        bits(pawn_bitboard)
+            .map(|idx| Position::from_u8(idx))
+            .collect()
     }
 
     /// Check if pawn is passed
@@ -1628,9 +1711,11 @@ impl EndgamePatternEvaluator {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let piece_bitboard = pieces[player_idx][piece_type.to_u8() as usize];
-        
+
         // Use bit iterator to get all piece positions
-        bits(piece_bitboard).map(|idx| Position::from_u8(idx)).collect()
+        bits(piece_bitboard)
+            .map(|idx| Position::from_u8(idx))
+            .collect()
     }
 
     /// Get statistics
@@ -1812,7 +1897,7 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Starting position has many pawns, opposition should not be detected
         let score = evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
         // May or may not detect opposition depending on king positions and pawn count
@@ -1824,7 +1909,7 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::empty();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Empty board with few pieces should allow triangulation if conditions are met
         let score = evaluator.evaluate_triangulation(&board, Player::Black, &captured_pieces);
         // May or may not detect triangulation depending on king positions
@@ -1835,7 +1920,7 @@ mod tests {
     fn test_king_activity_safety_check() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         // Test that safety check works
         let score = evaluator.evaluate_king_activity(&board, Player::Black);
         // Should complete without error
@@ -1847,7 +1932,7 @@ mod tests {
     fn test_count_pawns_on_board() {
         let evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         // Starting position has 9 pawns per player = 18 total
         let pawn_count = evaluator.count_pawns_on_board(&board);
         assert_eq!(pawn_count, 18);
@@ -1859,10 +1944,10 @@ mod tests {
         config.king_activity_centralization_scale = 0.5;
         config.king_activity_activity_scale = 0.5;
         config.king_activity_advancement_scale = 0.5;
-        
+
         let mut evaluator = EndgamePatternEvaluator::with_config(config);
         let board = BitboardBoard::new();
-        
+
         let score = evaluator.evaluate_king_activity(&board, Player::Black);
         // Should complete with scaled bonuses
         assert!(score.eg >= -100 && score.eg <= 100);
@@ -1872,17 +1957,17 @@ mod tests {
     fn test_pattern_detection_statistics() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
-        
+
         assert_eq!(evaluator.stats().opposition_detections, 0);
         assert_eq!(evaluator.stats().triangulation_detections, 0);
         assert_eq!(evaluator.stats().unsafe_king_penalties, 0);
-        
+
         // Evaluate patterns
         let captured_pieces = CapturedPieces::new();
         evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
         evaluator.evaluate_triangulation(&board, Player::Black, &captured_pieces);
         evaluator.evaluate_king_activity(&board, Player::Black);
-        
+
         // Statistics should be tracked (may be 0 if patterns not detected)
         assert!(evaluator.stats().opposition_detections >= 0);
         assert!(evaluator.stats().triangulation_detections >= 0);
@@ -1894,10 +1979,10 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let mut captured_pieces = CapturedPieces::new();
-        
+
         // Add a rook to hand
         captured_pieces.add_piece(PieceType::Rook, Player::Black);
-        
+
         let score = evaluator.evaluate_mating_patterns(&board, Player::Black, &captured_pieces);
         // Should complete without error
         assert!(score.mg >= -100 && score.mg <= 200);
@@ -1909,11 +1994,11 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let mut captured_pieces = CapturedPieces::new();
-        
+
         // Add pieces to opponent's hand (should reduce opposition value)
         captured_pieces.add_piece(PieceType::Gold, Player::White);
         captured_pieces.add_piece(PieceType::Silver, Player::White);
-        
+
         let score = evaluator.evaluate_opposition(&board, Player::Black, &captured_pieces);
         // Should complete without error
         assert!(score.eg >= 0 && score.eg <= 40);
@@ -1923,14 +2008,20 @@ mod tests {
     fn test_count_pieces_in_hand() {
         let evaluator = EndgamePatternEvaluator::new();
         let mut captured_pieces = CapturedPieces::new();
-        
-        assert_eq!(evaluator.count_pieces_in_hand(&captured_pieces, Player::Black), 0);
-        
+
+        assert_eq!(
+            evaluator.count_pieces_in_hand(&captured_pieces, Player::Black),
+            0
+        );
+
         captured_pieces.add_piece(PieceType::Rook, Player::Black);
         captured_pieces.add_piece(PieceType::Bishop, Player::Black);
         captured_pieces.add_piece(PieceType::Gold, Player::Black);
-        
-        assert_eq!(evaluator.count_pieces_in_hand(&captured_pieces, Player::Black), 3);
+
+        assert_eq!(
+            evaluator.count_pieces_in_hand(&captured_pieces, Player::Black),
+            3
+        );
     }
 
     #[test]
@@ -1938,14 +2029,14 @@ mod tests {
         let evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let mut captured_pieces = CapturedPieces::new();
-        
+
         // Material on board only
         let material1 = evaluator.calculate_material(&board, Player::Black, &captured_pieces);
-        
+
         // Add pieces to hand
         captured_pieces.add_piece(PieceType::Rook, Player::Black);
         captured_pieces.add_piece(PieceType::Bishop, Player::Black);
-        
+
         // Material should increase
         let material2 = evaluator.calculate_material(&board, Player::Black, &captured_pieces);
         assert!(material2 > material1);
@@ -1956,7 +2047,7 @@ mod tests {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
-        
+
         // Test that tokin promotion mate detection works
         let score = evaluator.evaluate_mating_patterns(&board, Player::Black, &captured_pieces);
         // Should complete without error
@@ -2123,7 +2214,10 @@ mod tests {
         // Starting position should have many legal moves
         let (regular, drops) = evaluator.count_safe_moves(&board, Player::Black, &captured_pieces);
         assert!(regular > 0, "Starting position should have regular moves");
-        assert_eq!(drops, 0, "Starting position should have no drop moves (no captured pieces)");
+        assert_eq!(
+            drops, 0,
+            "Starting position should have no drop moves (no captured pieces)"
+        );
     }
 
     #[test]
@@ -2131,7 +2225,7 @@ mod tests {
         let evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::empty();
         let mut captured_pieces = CapturedPieces::new();
-        
+
         // Add captured pieces to enable drops
         captured_pieces.add_piece(PieceType::Pawn, Player::Black);
         captured_pieces.add_piece(PieceType::Rook, Player::Black);

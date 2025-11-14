@@ -73,7 +73,7 @@ pub struct TaperedEvalConfig {
     pub auto_normalize_weights: bool,
 
     /// Phase scaling configuration (Task 20.0 - Task 3.7)
-    /// 
+    ///
     /// If None, uses default scaling factors. Custom scaling allows fine-tuning
     /// how weights change across game phases.
     pub phase_scaling_config: Option<PhaseScalingConfig>,
@@ -186,61 +186,61 @@ pub struct TaperedEvalConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvaluationWeights {
     /// Weight for material evaluation (typically 1.0, range: 0.8-1.2)
-    /// 
+    ///
     /// Material is fundamental and should be stable. Increasing this weight makes
     /// material advantages more decisive but may reduce the impact of positional factors.
     pub material_weight: f32,
 
     /// Weight for piece-square tables (typically 1.0, range: 0.5-1.5)
-    /// 
+    ///
     /// Piece-square tables provide positional bonuses based on piece placement.
     /// Increasing this weight emphasizes piece-square table bonuses.
     pub position_weight: f32,
 
     /// Weight for king safety (typically 1.0, range: 0.8-1.5)
-    /// 
+    ///
     /// King safety is critical for evaluation. Increasing this weight makes king
     /// safety more important but may reduce emphasis on material or positional factors.
     pub king_safety_weight: f32,
 
     /// Weight for pawn structure (typically 0.8, range: 0.6-1.2)
-    /// 
+    ///
     /// Pawn structure is important for evaluation, especially in endgame. Increasing
     /// this weight makes pawn structure more important.
     pub pawn_structure_weight: f32,
 
     /// Weight for mobility (typically 0.6, range: 0.4-0.8)
-    /// 
+    ///
     /// Piece mobility is important but secondary to material and position. Increasing
     /// this weight makes piece activity more important, good for open positions.
     pub mobility_weight: f32,
 
     /// Weight for center control (typically 0.7, range: 0.5-1.0)
-    /// 
+    ///
     /// Center control is valuable but not decisive. Increasing this weight emphasizes
     /// center control, good for opening and middlegame.
     pub center_control_weight: f32,
 
     /// Weight for development (typically 0.5, range: 0.3-0.7)
-    /// 
+    ///
     /// Piece development matters most in opening. Increasing this weight emphasizes
     /// quick development, primarily affecting opening evaluation.
     pub development_weight: f32,
 
     /// Weight for tactical pattern contributions (typically 1.0, range: 0.8-1.5)
-    /// 
+    ///
     /// Tactical patterns (forks, pins, skewers) are important in middlegame.
     /// Increasing this weight makes tactical patterns more influential, good for aggressive play.
     pub tactical_weight: f32,
-    
+
     /// Weight for positional pattern contributions (typically 1.0, range: 0.8-1.5)
-    /// 
+    ///
     /// Positional patterns (outposts, weak squares, piece activity) matter throughout the game.
     /// Increasing this weight makes positional patterns more influential, good for positional play.
     pub positional_weight: f32,
-    
+
     /// Weight for castle pattern contributions (typically 1.0, range: 0.7-1.3)
-    /// 
+    ///
     /// Castle patterns are important for king safety evaluation. Increasing this weight
     /// makes castle formations more important.
     pub castle_weight: f32,
@@ -265,13 +265,13 @@ impl Default for EvaluationWeights {
 
 impl EvaluationWeights {
     /// Normalize weights to ensure cumulative sum is within range while maintaining ratios (Task 20.0 - Task 2.6)
-    /// 
+    ///
     /// Scales all weights proportionally to ensure cumulative sum is within 5.0-15.0 range.
     /// This maintains the relative ratios between weights while fixing the total sum.
-    /// 
+    ///
     /// # Parameters
     /// - `components`: Component flags indicating which weights are enabled
-    /// 
+    ///
     /// # Target Range
     /// - Target cumulative sum: 10.0 (midpoint of 5.0-15.0 range)
     pub fn normalize_weights(&mut self, components: &ComponentFlagsForValidation) {
@@ -339,7 +339,7 @@ impl EvaluationWeights {
     }
 
     /// Apply a weight preset (Task 20.0 - Task 2.10)
-    /// 
+    ///
     /// Sets all weights based on the specified preset style.
     pub fn apply_preset(&mut self, preset: WeightPreset) {
         match preset {
@@ -424,7 +424,7 @@ pub enum PhaseScalingCurve {
 }
 
 /// Phase scaling configuration for weights (Task 20.0 - Task 3.6)
-/// 
+///
 /// Holds scaling factors for each weight at different game phases:
 /// - Opening: phase >= 192
 /// - Middlegame: 64 <= phase < 192
@@ -433,13 +433,13 @@ pub enum PhaseScalingCurve {
 pub struct PhaseScalingConfig {
     /// Scaling curve type (default: Linear)
     pub scaling_curve: PhaseScalingCurve,
-    
+
     // Existing scalings (already implemented)
     /// Tactical weight scaling: (opening, middlegame, endgame)
     pub tactical: (f32, f32, f32),
     /// Positional weight scaling: (opening, middlegame, endgame)
     pub positional: (f32, f32, f32),
-    
+
     // New scalings (Task 20.0 - Task 3.2-3.4)
     /// Development weight scaling: higher in opening (1.2), lower in endgame (0.6), default in middlegame (1.0)
     pub development: (f32, f32, f32),
@@ -453,10 +453,10 @@ impl Default for PhaseScalingConfig {
     fn default() -> Self {
         Self {
             scaling_curve: PhaseScalingCurve::Linear,
-            tactical: (1.0, 1.2, 0.8),      // Opening, Middlegame, Endgame
-            positional: (1.0, 0.9, 1.2),    // Opening, Middlegame, Endgame
-            development: (1.2, 1.0, 0.6),   // Opening, Middlegame, Endgame (Task 3.2)
-            mobility: (1.0, 1.1, 0.7),      // Opening, Middlegame, Endgame (Task 3.3)
+            tactical: (1.0, 1.2, 0.8),       // Opening, Middlegame, Endgame
+            positional: (1.0, 0.9, 1.2),     // Opening, Middlegame, Endgame
+            development: (1.2, 1.0, 0.6),    // Opening, Middlegame, Endgame (Task 3.2)
+            mobility: (1.0, 1.1, 0.7),       // Opening, Middlegame, Endgame (Task 3.3)
             pawn_structure: (0.8, 1.0, 1.2), // Opening, Middlegame, Endgame (Task 3.4)
         }
     }
@@ -636,7 +636,7 @@ impl TaperedEvalConfig {
     }
 
     /// Validate cumulative weights for enabled components
-    /// 
+    ///
     /// Checks that the sum of all enabled component weights is within a reasonable range (5.0-15.0).
     /// This helps ensure that the evaluation doesn't become too sensitive or too insensitive to
     /// individual components.
@@ -685,19 +685,19 @@ impl TaperedEvalConfig {
     }
 
     /// Apply phase-dependent weight scaling (Task 20.0 - Task 3.0)
-    /// 
+    ///
     /// Adjusts weights based on game phase:
     /// - Tactical weights are higher in middlegame
     /// - Positional weights are higher in endgame
     /// - Development weights are higher in opening
     /// - Mobility weights are higher in middlegame
     /// - Pawn structure weights are higher in endgame
-    /// 
+    ///
     /// Phase ranges:
     /// - Opening: phase >= 192
     /// - Middlegame: 64 <= phase < 192
     /// - Endgame: phase < 64
-    /// 
+    ///
     /// Supports different scaling curves (Linear, Sigmoid, Step) for smooth or abrupt transitions.
     pub fn apply_phase_scaling(&self, weights: &mut EvaluationWeights, phase: i32) {
         if !self.enable_phase_dependent_weights {
@@ -706,7 +706,9 @@ impl TaperedEvalConfig {
 
         // Get scaling configuration (use defaults if None)
         let default_config = PhaseScalingConfig::default();
-        let scaling_config = self.phase_scaling_config.as_ref()
+        let scaling_config = self
+            .phase_scaling_config
+            .as_ref()
             .unwrap_or(&default_config);
 
         // Determine phase category for step curve, or calculate smooth transition
@@ -726,7 +728,9 @@ impl TaperedEvalConfig {
             match scaling_config.scaling_curve {
                 PhaseScalingCurve::Step => {
                     // Step curve: discrete jumps at boundaries
-                    opening * opening_scale + middlegame * middlegame_scale + endgame * endgame_scale
+                    opening * opening_scale
+                        + middlegame * middlegame_scale
+                        + endgame * endgame_scale
                 }
                 PhaseScalingCurve::Linear => {
                     // Linear interpolation between phases
@@ -748,9 +752,7 @@ impl TaperedEvalConfig {
                     // Sigmoid interpolation for smooth transitions
                     let normalized_phase = (phase as f32 / 256.0).clamp(0.0, 1.0);
                     // Use sigmoid function centered at phase transitions
-                    let sigmoid = |x: f32| -> f32 {
-                        1.0 / (1.0 + (-10.0 * (x - 0.5)).exp())
-                    };
+                    let sigmoid = |x: f32| -> f32 { 1.0 / (1.0 + (-10.0 * (x - 0.5)).exp()) };
                     if normalized_phase >= 0.5 {
                         // Opening/middlegame transition
                         let t = (normalized_phase - 0.5) / 0.5; // 0.0-1.0 range
@@ -768,47 +770,47 @@ impl TaperedEvalConfig {
 
         // Apply scaling to tactical weight
         let tactical_scale = apply_scale(
-            scaling_config.tactical.0,  // opening
-            scaling_config.tactical.1,  // middlegame
-            scaling_config.tactical.2,  // endgame
+            scaling_config.tactical.0, // opening
+            scaling_config.tactical.1, // middlegame
+            scaling_config.tactical.2, // endgame
         );
         weights.tactical_weight *= tactical_scale;
 
         // Apply scaling to positional weight
         let positional_scale = apply_scale(
-            scaling_config.positional.0,  // opening
-            scaling_config.positional.1,  // middlegame
-            scaling_config.positional.2,  // endgame
+            scaling_config.positional.0, // opening
+            scaling_config.positional.1, // middlegame
+            scaling_config.positional.2, // endgame
         );
         weights.positional_weight *= positional_scale;
 
         // Apply scaling to development weight (Task 20.0 - Task 3.2, 3.5)
         let development_scale = apply_scale(
-            scaling_config.development.0,  // opening: 1.2
-            scaling_config.development.1,  // middlegame: 1.0
-            scaling_config.development.2,  // endgame: 0.6
+            scaling_config.development.0, // opening: 1.2
+            scaling_config.development.1, // middlegame: 1.0
+            scaling_config.development.2, // endgame: 0.6
         );
         weights.development_weight *= development_scale;
 
         // Apply scaling to mobility weight (Task 20.0 - Task 3.3, 3.5)
         let mobility_scale = apply_scale(
-            scaling_config.mobility.0,  // opening: 1.0
-            scaling_config.mobility.1,  // middlegame: 1.1
-            scaling_config.mobility.2,  // endgame: 0.7
+            scaling_config.mobility.0, // opening: 1.0
+            scaling_config.mobility.1, // middlegame: 1.1
+            scaling_config.mobility.2, // endgame: 0.7
         );
         weights.mobility_weight *= mobility_scale;
 
         // Apply scaling to pawn structure weight (Task 20.0 - Task 3.4, 3.5)
         let pawn_structure_scale = apply_scale(
-            scaling_config.pawn_structure.0,  // opening: 0.8
-            scaling_config.pawn_structure.1,  // middlegame: 1.0
-            scaling_config.pawn_structure.2,  // endgame: 1.2
+            scaling_config.pawn_structure.0, // opening: 0.8
+            scaling_config.pawn_structure.1, // middlegame: 1.0
+            scaling_config.pawn_structure.2, // endgame: 1.2
         );
         weights.pawn_structure_weight *= pawn_structure_scale;
     }
 
     /// Suggest weight adjustments to maintain balance
-    /// 
+    ///
     /// Analyzes weight ratios and suggests adjustments to maintain a balanced evaluation.
     /// For example, if tactical_weight is 2.0, it might suggest adjusting positional_weight
     /// to maintain balance.
@@ -919,11 +921,11 @@ impl TaperedEvalConfig {
     }
 
     /// Update a specific weight at runtime (Task 20.0 - Task 2.0)
-    /// 
+    ///
     /// Automatically validates weights if `auto_validate_weights` is enabled.
     /// Optionally normalizes weights if `auto_normalize_weights` is enabled and
     /// cumulative sum is out of range.
-    /// 
+    ///
     /// # Parameters
     /// - `weight_name`: Name of the weight to update
     /// - `value`: New weight value (must be 0.0-10.0)
@@ -1005,12 +1007,12 @@ impl TaperedEvalConfig {
     }
 
     /// Check weight ranges and return warnings for out-of-range weights (Task 20.0 - Task 2.5)
-    /// 
+    ///
     /// Returns a vector of weight names that are outside their recommended ranges.
     /// These are warnings, not errors - weights outside ranges may still be valid.
     pub fn check_weight_ranges(&self) -> Vec<(&'static str, f32, f32, f32)> {
         let mut warnings = Vec::new();
-        
+
         for (name, (min, max, _default)) in RECOMMENDED_WEIGHT_RANGES {
             let value = match *name {
                 "material" => self.weights.material_weight,
@@ -1025,25 +1027,29 @@ impl TaperedEvalConfig {
                 "castle" => self.weights.castle_weight,
                 _ => continue,
             };
-            
+
             if value < *min || value > *max {
                 warnings.push((*name, value, *min, *max));
             }
         }
-        
+
         warnings
     }
 
     /// Backward-compatible wrapper for update_weight without components (Task 20.0 - Task 2.1)
-    /// 
+    ///
     /// This allows existing code to continue working. New code should use the version
     /// with components parameter for automatic validation.
-    pub fn update_weight_simple(&mut self, weight_name: &str, value: f32) -> Result<(), ConfigError> {
+    pub fn update_weight_simple(
+        &mut self,
+        weight_name: &str,
+        value: f32,
+    ) -> Result<(), ConfigError> {
         self.update_weight(weight_name, value, None)
     }
 
     /// Apply a weight preset (Task 20.0 - Task 2.11)
-    /// 
+    ///
     /// Sets all weights based on the specified preset style.
     pub fn aggressive_preset(&mut self) {
         self.weights.apply_preset(WeightPreset::Aggressive);
@@ -1065,14 +1071,14 @@ impl TaperedEvalConfig {
     }
 
     /// Analyze telemetry for weight recommendations (Task 20.0 - Task 2.12)
-    /// 
+    ///
     /// Takes `EvaluationTelemetry` and suggests weight adjustments based on component
     /// contribution imbalances. Returns a vector of recommendations (component name, suggested adjustment).
-    /// 
+    ///
     /// # Parameters
     /// - `telemetry`: Evaluation telemetry with weight contributions
     /// - `target_contributions`: Optional target contribution percentages (defaults to balanced distribution)
-    /// 
+    ///
     /// # Returns
     /// Vector of recommendations: (component_name, current_contribution, target_contribution, suggested_weight_change)
     pub fn analyze_telemetry_for_recommendations(
@@ -1082,7 +1088,7 @@ impl TaperedEvalConfig {
     ) -> Vec<(String, f32, f32, f32)> {
         use std::collections::HashMap;
         let mut recommendations = Vec::new();
-        
+
         // Default target contributions (balanced distribution)
         let default_targets: HashMap<String, f32> = [
             ("material".to_string(), 0.15),
@@ -1095,10 +1101,10 @@ impl TaperedEvalConfig {
         .iter()
         .cloned()
         .collect();
-        
+
         let targets = target_contributions.unwrap_or(&default_targets);
         const THRESHOLD: f32 = 0.05; // 5% difference threshold
-        
+
         // Analyze each component
         for (component, current_pct) in &telemetry.weight_contributions {
             if let Some(target_pct) = targets.get(component) {
@@ -1114,7 +1120,7 @@ impl TaperedEvalConfig {
                     };
                     let suggested_weight = current_weight * adjustment_factor;
                     let suggested_change = suggested_weight - current_weight;
-                    
+
                     recommendations.push((
                         component.clone(),
                         *current_pct,
@@ -1124,21 +1130,21 @@ impl TaperedEvalConfig {
                 }
             }
         }
-        
+
         recommendations
     }
 
     /// Automatically balance weights using telemetry (Task 20.0 - Task 2.13)
-    /// 
+    ///
     /// Uses telemetry to automatically adjust weights to achieve target contribution percentages.
     /// This method iteratively adjusts weights based on telemetry analysis.
-    /// 
+    ///
     /// # Parameters
     /// - `telemetry`: Evaluation telemetry with weight contributions
     /// - `components`: Component flags for cumulative weight validation
     /// - `target_contributions`: Optional target contribution percentages
     /// - `learning_rate`: Adjustment rate (default: 0.1, range: 0.01-0.5)
-    /// 
+    ///
     /// # Returns
     /// Number of weights adjusted
     pub fn auto_balance_weights(
@@ -1148,10 +1154,11 @@ impl TaperedEvalConfig {
         target_contributions: Option<&std::collections::HashMap<String, f32>>,
         learning_rate: f32,
     ) -> usize {
-        let recommendations = self.analyze_telemetry_for_recommendations(telemetry, target_contributions);
+        let recommendations =
+            self.analyze_telemetry_for_recommendations(telemetry, target_contributions);
         let lr = learning_rate.clamp(0.01, 0.5);
         let mut adjusted = 0;
-        
+
         for (component_name, _current, _target, suggested_change) in recommendations {
             // Map telemetry component names to weight names
             let weight_name = match component_name.as_str() {
@@ -1163,21 +1170,24 @@ impl TaperedEvalConfig {
                 "castle_patterns" => Some("castle"),
                 _ => None,
             };
-            
+
             if let Some(weight_name) = weight_name {
                 if let Some(current_weight) = self.get_weight(weight_name) {
                     // Apply adjustment with learning rate
                     let adjustment = suggested_change * lr;
                     let new_weight = (current_weight + adjustment).clamp(0.0, 10.0);
-                    
+
                     // Update weight (validation happens automatically if enabled)
-                    if self.update_weight(weight_name, new_weight, Some(components)).is_ok() {
+                    if self
+                        .update_weight(weight_name, new_weight, Some(components))
+                        .is_ok()
+                    {
                         adjusted += 1;
                     }
                 }
             }
         }
-        
+
         adjusted
     }
 
@@ -1261,11 +1271,7 @@ pub enum ConfigError {
     /// Unknown weight name
     UnknownWeight(String),
     /// Cumulative weight sum is out of acceptable range
-    CumulativeWeightOutOfRange {
-        sum: f32,
-        min: f32,
-        max: f32,
-    },
+    CumulativeWeightOutOfRange { sum: f32, min: f32, max: f32 },
 }
 
 /// Phase boundary configuration for game phase transitions
@@ -1428,7 +1434,7 @@ impl ComponentDependencyGraph {
     /// Create dependency graph with default relationships (Task 20.0 - Task 5.3)
     pub fn with_defaults() -> Self {
         let mut graph = Self::new();
-        
+
         // Conflicts: components that overlap in functionality
         // position_features.center_control CONFLICTS with positional_patterns (center control)
         graph.add_dependency(
@@ -1436,21 +1442,21 @@ impl ComponentDependencyGraph {
             ComponentId::PositionalPatterns,
             ComponentDependency::Conflicts,
         );
-        
+
         // position_features.development CONFLICTS with opening_principles (development, in opening)
         graph.add_dependency(
             ComponentId::PositionFeaturesDevelopment,
             ComponentId::OpeningPrinciples,
             ComponentDependency::Conflicts,
         );
-        
+
         // position_features.passed_pawns CONFLICTS with endgame_patterns (passed pawns, in endgame)
         graph.add_dependency(
             ComponentId::PositionFeaturesPassedPawns,
             ComponentId::EndgamePatterns,
             ComponentDependency::Conflicts,
         );
-        
+
         // Complements: components that work well together
         // position_features.king_safety COMPLEMENTS castle_patterns
         graph.add_dependency(
@@ -1458,7 +1464,7 @@ impl ComponentDependencyGraph {
             ComponentId::CastlePatterns,
             ComponentDependency::Complements,
         );
-        
+
         // Requires: dependent component requires another
         // endgame_patterns REQUIRES pawn_structure (endgame patterns handle pawn structure)
         // Note: This is handled through position_features which includes pawn_structure
@@ -1467,7 +1473,7 @@ impl ComponentDependencyGraph {
             ComponentId::PositionFeatures, // Requires position_features for pawn structure
             ComponentDependency::Requires,
         );
-        
+
         graph
     }
 
@@ -1479,12 +1485,18 @@ impl ComponentDependencyGraph {
         dependency: ComponentDependency,
     ) {
         // Add both directions for bidirectional lookups
-        self.dependencies.insert((component1, component2), dependency);
-        self.dependencies.insert((component2, component1), dependency);
+        self.dependencies
+            .insert((component1, component2), dependency);
+        self.dependencies
+            .insert((component2, component1), dependency);
     }
 
     /// Get dependency relationship between two components
-    pub fn get_dependency(&self, component1: ComponentId, component2: ComponentId) -> Option<ComponentDependency> {
+    pub fn get_dependency(
+        &self,
+        component1: ComponentId,
+        component2: ComponentId,
+    ) -> Option<ComponentDependency> {
         self.dependencies.get(&(component1, component2)).copied()
     }
 
@@ -1542,10 +1554,7 @@ pub enum ComponentDependencyWarning {
         component2: String,
     },
     /// Component requires another but it's not enabled (Task 20.0 - Task 5.8)
-    MissingRequirement {
-        component: String,
-        required: String,
-    },
+    MissingRequirement { component: String, required: String },
 }
 
 impl std::fmt::Display for ConfigError {
@@ -1571,7 +1580,7 @@ impl std::fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 /// Component flags for weight validation
-/// 
+///
 /// This is a simplified version of ComponentFlags from integration.rs
 /// used for cumulative weight validation in TaperedEvalConfig.
 #[derive(Debug, Clone)]

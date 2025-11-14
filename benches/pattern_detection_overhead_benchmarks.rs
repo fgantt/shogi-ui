@@ -7,7 +7,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::endgame_patterns::{EndgamePatternEvaluator, EndgamePatternConfig};
+use shogi_engine::evaluation::endgame_patterns::{EndgamePatternConfig, EndgamePatternEvaluator};
 use shogi_engine::types::{CapturedPieces, Player};
 
 fn benchmark_pattern_detection_overhead(c: &mut Criterion) {
@@ -32,10 +32,7 @@ fn benchmark_opposition_with_pawn_count(c: &mut Criterion) {
 
     c.bench_function("opposition_with_pawn_count", |b| {
         b.iter(|| {
-            black_box(evaluator.evaluate_opposition(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(evaluator.evaluate_opposition(black_box(&board), black_box(Player::Black)));
         });
     });
 }
@@ -46,10 +43,9 @@ fn benchmark_triangulation_complete(c: &mut Criterion) {
 
     c.bench_function("triangulation_complete_logic", |b| {
         b.iter(|| {
-            black_box(evaluator.evaluate_triangulation(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(
+                evaluator.evaluate_triangulation(black_box(&board), black_box(Player::Black)),
+            );
         });
     });
 }
@@ -60,10 +56,9 @@ fn benchmark_king_activity_safety(c: &mut Criterion) {
 
     c.bench_function("king_activity_with_safety", |b| {
         b.iter(|| {
-            black_box(evaluator.evaluate_king_activity(
-                black_box(&board),
-                black_box(Player::Black),
-            ));
+            black_box(
+                evaluator.evaluate_king_activity(black_box(&board), black_box(Player::Black)),
+            );
         });
     });
 }
@@ -76,4 +71,3 @@ criterion_group!(
     benchmark_king_activity_safety
 );
 criterion_main!(benches);
-

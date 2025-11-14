@@ -19,7 +19,7 @@ fn test_phase_scaling_enabled_by_default() {
 fn test_expanded_phase_scaling() {
     let mut config = TaperedEvalConfig::default();
     config.enable_phase_dependent_weights = true;
-    
+
     // Use Step curve for exact values at phase boundaries
     let mut scaling_config = PhaseScalingConfig::default();
     scaling_config.scaling_curve = PhaseScalingCurve::Step;
@@ -200,7 +200,8 @@ fn test_phase_scaling_impact() {
         "Mobility weight should be same (1.0x) in opening"
     );
     assert!(
-        (weights_scaled.pawn_structure_weight - weights_unscaled.pawn_structure_weight).abs() > 0.01,
+        (weights_scaled.pawn_structure_weight - weights_unscaled.pawn_structure_weight).abs()
+            > 0.01,
         "Pawn structure weight should differ between scaled and unscaled in opening"
     );
 
@@ -223,7 +224,8 @@ fn test_phase_scaling_impact() {
         "Development weight should differ between scaled and unscaled in endgame"
     );
     assert!(
-        (weights_scaled_eg.pawn_structure_weight - weights_unscaled.pawn_structure_weight).abs() > 0.01,
+        (weights_scaled_eg.pawn_structure_weight - weights_unscaled.pawn_structure_weight).abs()
+            > 0.01,
         "Pawn structure weight should differ between scaled and unscaled in endgame"
     );
 }
@@ -256,7 +258,7 @@ fn test_custom_phase_scaling_config() {
 fn test_tactical_positional_scaling() {
     let mut config = TaperedEvalConfig::default();
     config.enable_phase_dependent_weights = true;
-    
+
     // Use Step curve for exact values at phase boundaries
     let mut scaling_config = PhaseScalingConfig::default();
     scaling_config.scaling_curve = PhaseScalingCurve::Step;
@@ -301,4 +303,3 @@ fn test_tactical_positional_scaling() {
         "Positional weight should be 1.2x in endgame"
     );
 }
-

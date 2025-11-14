@@ -4,9 +4,11 @@
 //! and integrates properly with the endgame patterns module.
 
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::endgame_patterns::{EndgamePatternEvaluator, EndgamePatternConfig};
-use shogi_engine::evaluation::integration::{ComponentFlags, IntegratedEvaluator, IntegratedEvaluationConfig};
-use shogi_engine::types::{CapturedPieces, Player, PieceType};
+use shogi_engine::evaluation::endgame_patterns::{EndgamePatternConfig, EndgamePatternEvaluator};
+use shogi_engine::evaluation::integration::{
+    ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator,
+};
+use shogi_engine::types::{CapturedPieces, PieceType, Player};
 
 #[test]
 fn test_zugzwang_integration() {
@@ -16,7 +18,7 @@ fn test_zugzwang_integration() {
 
     // Zugzwang should work in full evaluation context
     let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
-    
+
     // Score should be computed (not necessarily non-zero, but evaluation should complete)
     assert!(score.mg >= -10000 && score.mg <= 10000);
     assert!(score.eg >= -10000 && score.eg <= 10000);
@@ -26,14 +28,14 @@ fn test_zugzwang_integration() {
 fn test_zugzwang_with_integrated_evaluator() {
     let mut config = IntegratedEvaluationConfig::default();
     config.components.endgame_patterns = true;
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
 
     // Zugzwang should work through IntegratedEvaluator
     let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
-    
+
     // Score should be computed
     assert!(score >= -10000 && score <= 10000);
 }
@@ -43,11 +45,11 @@ fn test_zugzwang_drop_consideration_integration() {
     let mut config = EndgamePatternConfig::default();
     config.enable_zugzwang = true;
     config.enable_zugzwang_drop_consideration = true;
-    
+
     let mut evaluator = EndgamePatternEvaluator::with_config(config);
     let board = BitboardBoard::empty();
     let mut captured_pieces = CapturedPieces::new();
-    
+
     // Add captured pieces to enable drops
     captured_pieces.add_piece(PieceType::Pawn, Player::Black);
     captured_pieces.add_piece(PieceType::Rook, Player::Black);
@@ -78,4 +80,3 @@ fn test_zugzwang_statistics_integration() {
     assert!(evaluator.stats().zugzwang_benefits >= initial_benefits);
     assert!(evaluator.stats().zugzwang_penalties >= initial_penalties);
 }
-

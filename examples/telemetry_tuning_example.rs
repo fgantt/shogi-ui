@@ -54,7 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    println!("   Collected telemetry from {} positions", telemetry_collection.len());
+    println!(
+        "   Collected telemetry from {} positions",
+        telemetry_collection.len()
+    );
     println!();
 
     // Convert telemetry to tuning position set
@@ -122,7 +125,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(first_telemetry) = telemetry_collection.first() {
         let exported_data = first_telemetry.3.export_for_tuning();
         println!("   Exported {} data points", exported_data.len());
-        println!("   Sample keys: {:?}", 
+        println!(
+            "   Sample keys: {:?}",
             exported_data.keys().take(5).collect::<Vec<_>>()
         );
     }
@@ -137,4 +141,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

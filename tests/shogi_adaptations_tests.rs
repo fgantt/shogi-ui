@@ -7,25 +7,25 @@
 //! - Tokin promotion mate detection
 
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::endgame_patterns::{EndgamePatternEvaluator, EndgamePatternConfig};
-use shogi_engine::types::{CapturedPieces, Player, PieceType};
+use shogi_engine::evaluation::endgame_patterns::{EndgamePatternConfig, EndgamePatternEvaluator};
+use shogi_engine::types::{CapturedPieces, PieceType, Player};
 
 #[test]
 fn test_drop_mate_threats_integration() {
     let mut evaluator = EndgamePatternEvaluator::new();
     let board = BitboardBoard::new();
     let mut captured_pieces = CapturedPieces::new();
-    
+
     // Add pieces to hand that could create mate threats
     captured_pieces.add_piece(PieceType::Rook, Player::Black);
     captured_pieces.add_piece(PieceType::Bishop, Player::Black);
-    
+
     let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
-    
+
     // Should complete evaluation
     assert!(score.mg >= -10000 && score.mg <= 10000);
     assert!(score.eg >= -10000 && score.eg <= 10000);
-    
+
     // Statistics should track drop mate threats if detected
     assert!(evaluator.stats().drop_mate_threats_detected >= 0);
 }
@@ -35,18 +35,18 @@ fn test_opposition_with_pieces_in_hand_integration() {
     let mut evaluator = EndgamePatternEvaluator::new();
     let board = BitboardBoard::new();
     let mut captured_pieces = CapturedPieces::new();
-    
+
     // Add pieces to opponent's hand
     captured_pieces.add_piece(PieceType::Gold, Player::White);
     captured_pieces.add_piece(PieceType::Silver, Player::White);
     captured_pieces.add_piece(PieceType::Rook, Player::White);
-    
+
     let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
-    
+
     // Should complete evaluation
     assert!(score.mg >= -10000 && score.mg <= 10000);
     assert!(score.eg >= -10000 && score.eg <= 10000);
-    
+
     // Statistics should track opposition broken by drops if detected
     assert!(evaluator.stats().opposition_broken_by_drops >= 0);
 }
@@ -99,8 +99,7 @@ fn test_shogi_opposition_adjustment_config() {
 
     let score_disabled =
         evaluator_disabled.evaluate_endgame(&board, Player::Black, &captured_pieces);
-    let score_enabled =
-        evaluator_enabled.evaluate_endgame(&board, Player::Black, &captured_pieces);
+    let score_enabled = evaluator_enabled.evaluate_endgame(&board, Player::Black, &captured_pieces);
 
     assert!(
         score_disabled.eg.abs() <= 10000 && score_enabled.eg.abs() <= 10000,
@@ -113,12 +112,11 @@ fn test_tokin_promotion_mate_integration() {
     let mut evaluator = EndgamePatternEvaluator::new();
     let board = BitboardBoard::new();
     let captured_pieces = CapturedPieces::new();
-    
+
     // Test tokin promotion mate detection in full evaluation
     let score = evaluator.evaluate_endgame(&board, Player::Black, &captured_pieces);
-    
+
     // Should complete evaluation
     assert!(score.mg >= -10000 && score.mg <= 10000);
     assert!(score.eg >= -10000 && score.eg <= 10000);
 }
-

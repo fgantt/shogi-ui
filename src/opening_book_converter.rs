@@ -668,7 +668,9 @@ mod tests {
     #[test]
     fn test_config_validation_invalid_weight() {
         let mut config = OpeningBookConverterConfig::default();
-        config.opening_weights.insert("Test Opening".to_string(), 1500);
+        config
+            .opening_weights
+            .insert("Test Opening".to_string(), 1500);
         assert!(config.validate().is_err());
     }
 
@@ -682,9 +684,11 @@ mod tests {
     #[test]
     fn test_from_config() {
         let mut config = OpeningBookConverterConfig::default();
-        config.opening_weights.insert("Custom Opening".to_string(), 900);
+        config
+            .opening_weights
+            .insert("Custom Opening".to_string(), 900);
         let converter = OpeningBookConverter::from_config(config);
-        
+
         // Verify custom weight is used
         let json_move = JsonMove {
             from: "27".to_string(),
@@ -701,7 +705,7 @@ mod tests {
         // Create a temporary config file
         let temp_dir = std::env::temp_dir();
         let config_path = temp_dir.join("test_config.json");
-        
+
         let config_content = r#"{
             "opening_weights": {
                 "Test Opening": 900
@@ -710,13 +714,12 @@ mod tests {
                 "tactical": 35
             }
         }"#;
-        
+
         std::fs::write(&config_path, config_content).unwrap();
-        
-        let converter = OpeningBookConverter::from_json_file(
-            config_path.to_str().unwrap()
-        ).unwrap();
-        
+
+        let converter =
+            OpeningBookConverter::from_json_file(config_path.to_str().unwrap()).unwrap();
+
         // Verify custom config is used
         let json_move = JsonMove {
             from: "27".to_string(),
@@ -726,7 +729,7 @@ mod tests {
         };
         let weight = converter.calculate_weight(&json_move, "Test Opening");
         assert_eq!(weight, 900);
-        
+
         // Clean up
         let _ = std::fs::remove_file(&config_path);
     }
@@ -736,19 +739,18 @@ mod tests {
         // Create a temporary config file
         let temp_dir = std::env::temp_dir();
         let config_path = temp_dir.join("test_config.yaml");
-        
+
         let config_content = r#"opening_weights:
   Test Opening: 900
 evaluation_scores:
   tactical: 35
 "#;
-        
+
         std::fs::write(&config_path, config_content).unwrap();
-        
-        let converter = OpeningBookConverter::from_yaml_file(
-            config_path.to_str().unwrap()
-        ).unwrap();
-        
+
+        let converter =
+            OpeningBookConverter::from_yaml_file(config_path.to_str().unwrap()).unwrap();
+
         // Verify custom config is used
         let json_move = JsonMove {
             from: "27".to_string(),
@@ -758,7 +760,7 @@ evaluation_scores:
         };
         let weight = converter.calculate_weight(&json_move, "Test Opening");
         assert_eq!(weight, 900);
-        
+
         // Clean up
         let _ = std::fs::remove_file(&config_path);
     }
@@ -769,14 +771,14 @@ evaluation_scores:
             .set_opening_weight("Custom Opening".to_string(), 950)
             .set_evaluation_score("tactical".to_string(), 40)
             .build();
-        
+
         let json_move = JsonMove {
             from: "27".to_string(),
             to: "26".to_string(),
             promote: false,
             piece_type: "".to_string(),
         };
-        
+
         let weight = converter.calculate_weight(&json_move, "Custom Opening");
         assert_eq!(weight, 950);
     }
@@ -786,7 +788,7 @@ evaluation_scores:
         let result = OpeningBookConverterBuilder::new()
             .set_opening_weight("Test".to_string(), 800)
             .try_build();
-        
+
         assert!(result.is_ok());
     }
 
@@ -795,7 +797,7 @@ evaluation_scores:
         let result = OpeningBookConverterBuilder::new()
             .set_opening_weight("Test".to_string(), 1500) // Invalid weight
             .try_build();
-        
+
         assert!(result.is_err());
     }
 
@@ -803,9 +805,11 @@ evaluation_scores:
     fn test_convert_from_json_uses_config() {
         // Create converter with custom config
         let mut config = OpeningBookConverterConfig::default();
-        config.opening_weights.insert("Test Opening".to_string(), 950);
+        config
+            .opening_weights
+            .insert("Test Opening".to_string(), 950);
         let converter = OpeningBookConverter::from_config(config);
-        
+
         // Create test JSON data
         let json_data = r#"[
             {
@@ -822,9 +826,9 @@ evaluation_scores:
                 }
             }
         ]"#;
-        
+
         let (mut book, _stats) = converter.convert_from_json(json_data).unwrap();
-        
+
         // Verify the book was created with custom weight
         let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
         let moves = book.get_moves(fen).unwrap();

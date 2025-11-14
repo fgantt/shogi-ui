@@ -107,7 +107,7 @@ fn find_mate_at_depth(
         }
         let mut temp_board = board.clone();
         let mut temp_captured = captured_pieces.clone();
-        
+
         // Make the move
         if let Some(captured) = temp_board.make_move(move_) {
             temp_captured.add_piece(captured.piece_type, player);
@@ -146,7 +146,7 @@ pub fn calculate_dtm_with_cache(
     let position_hash = board.get_position_hash(captured_pieces);
     let player_key = if player == Player::Black { 0u64 } else { 1u64 };
     let cache_key = position_hash ^ player_key;
-    
+
     // Check cache first
     if let Some(cached_dtm) = cache.get(&cache_key) {
         return *cached_dtm;
@@ -154,10 +154,9 @@ pub fn calculate_dtm_with_cache(
 
     // Calculate DTM
     let dtm = calculate_dtm(board, player, captured_pieces, max_depth);
-    
+
     // Cache result
     cache.insert(cache_key, dtm);
-    
+
     dtm
 }
-

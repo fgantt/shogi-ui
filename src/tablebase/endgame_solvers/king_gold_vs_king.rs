@@ -188,8 +188,7 @@ impl KingGoldVsKingSolver {
             attacking_king,
             defending_king,
             captured_pieces,
-        )
-        {
+        ) {
             let distance = self.calculate_distance_to_mate(board, player);
             return Some(TablebaseResult::win(Some(approach_move), distance));
         }

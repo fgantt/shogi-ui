@@ -142,7 +142,8 @@ impl ChunkManager {
             self.bytes_loaded += chunk_size as u64;
         }
         self.access_counter += 1;
-        self.chunk_access_times.insert(chunk_id, self.access_counter);
+        self.chunk_access_times
+            .insert(chunk_id, self.access_counter);
     }
 
     /// Check if a chunk is loaded
@@ -514,7 +515,7 @@ impl PositionEntry {
     }
 
     /// Get moves sorted by opening principles quality score (best first)
-    /// 
+    ///
     /// This method sorts moves by a provided quality score function.
     /// The quality_scores vector should have the same length as self.moves,
     /// where quality_scores[i] is the quality score for self.moves[i].
@@ -522,16 +523,16 @@ impl PositionEntry {
         if quality_scores.len() != self.moves.len() {
             return Vec::new();
         }
-        
+
         let mut moves_with_scores: Vec<(usize, i32)> = quality_scores
             .iter()
             .enumerate()
             .map(|(i, &score)| (i, score))
             .collect();
-        
+
         // Sort by quality score (descending - highest first)
         moves_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         // Return moves in sorted order
         moves_with_scores
             .iter()
@@ -540,20 +541,20 @@ impl PositionEntry {
     }
 
     /// Get the best move by opening principles quality score
-    /// 
+    ///
     /// This method returns the move with the highest quality score.
     /// The quality_scores vector should have the same length as self.moves.
     pub fn get_best_move_by_quality(&self, quality_scores: &[i32]) -> Option<&BookMove> {
         if quality_scores.is_empty() || self.moves.is_empty() {
             return None;
         }
-        
+
         let best_idx = quality_scores
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.cmp(b))
             .map(|(idx, _)| idx)?;
-        
+
         self.moves.get(best_idx)
     }
 
@@ -738,7 +739,9 @@ impl OpeningBook {
         board: &crate::bitboards::BitboardBoard,
         captured_pieces: &crate::types::CapturedPieces,
         move_count: u32,
-        opening_evaluator: Option<&mut crate::evaluation::opening_principles::OpeningPrincipleEvaluator>,
+        opening_evaluator: Option<
+            &mut crate::evaluation::opening_principles::OpeningPrincipleEvaluator,
+        >,
     ) -> Option<Move> {
         let hash = self.hash_fen(fen);
         let player = Self::determine_player_from_fen(fen);
@@ -779,13 +782,13 @@ impl OpeningBook {
 
         // Evaluate all moves using opening principles
         let mut moves_with_scores: Vec<(BookMove, i32)> = Vec::new();
-        
+
         for book_move in &entry.moves {
             let engine_move = book_move.to_engine_move(player);
-            
+
             // Validate move (log warnings if violations found)
             let is_valid = evaluator.validate_book_move(board, player, &engine_move, move_count);
-            
+
             if is_valid {
                 // Evaluate move quality
                 let quality_score = evaluator.evaluate_book_move_quality(
@@ -795,14 +798,17 @@ impl OpeningBook {
                     captured_pieces,
                     move_count,
                 );
-                
+
                 moves_with_scores.push((book_move.clone(), quality_score));
-                
+
                 // Debug logging
                 #[cfg(debug_assertions)]
                 crate::debug_utils::debug_log(&format!(
                     "[OPENING_BOOK] Book move {} has opening principles quality score: {}",
-                    book_move.move_notation.as_ref().unwrap_or(&engine_move.to_usi_string()),
+                    book_move
+                        .move_notation
+                        .as_ref()
+                        .unwrap_or(&engine_move.to_usi_string()),
                     quality_score
                 ));
             }
@@ -810,7 +816,7 @@ impl OpeningBook {
 
         // Sort by quality score (highest first)
         moves_with_scores.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         // Track prioritization
         if !moves_with_scores.is_empty() {
             evaluator.stats_mut().book_moves_prioritized += 1;
@@ -912,7 +918,7 @@ impl OpeningBook {
         let hash = self.hash_fen(&fen);
         let entry = PositionEntry::new(fen.clone(), moves);
         self.total_moves += entry.moves.len();
-        
+
         // Detect hash collisions: if insert returns Some, check if it's a true collision
         if let Some(old_entry) = self.positions.insert(hash, entry) {
             // If the FENs are different, this is a hash collision (same hash, different FEN)
@@ -920,7 +926,7 @@ impl OpeningBook {
                 // True hash collision detected
                 let chain_length = self.count_positions_with_hash(hash);
                 self.hash_collision_stats.record_collision(chain_length);
-                
+
                 // Debug logging
                 #[cfg(feature = "verbose-debug")]
                 {
@@ -935,12 +941,12 @@ impl OpeningBook {
             }
             // If FENs are the same, we're just overwriting the same position (not a collision)
         }
-        
+
         self.hash_collision_stats.record_position();
         self.metadata.position_count = self.positions.len();
         self.metadata.move_count = self.total_moves;
     }
-    
+
     /// Count positions that would hash to the same value
     /// This is an approximation since we can't access HashMap internals
     fn count_positions_with_hash(&self, hash: u64) -> usize {
@@ -1038,7 +1044,7 @@ impl OpeningBook {
         // Set up streaming parameters
         self.metadata.streaming_enabled = true;
         self.metadata.chunk_size = chunk_size;
-        
+
         // Initialize chunk manager (will be populated when chunks are loaded)
         self.chunk_manager = Some(ChunkManager::new(0, Vec::new(), 0));
     }
@@ -1078,7 +1084,7 @@ impl OpeningBook {
         // Register chunk with chunk manager
         if let Some(ref mut manager) = self.chunk_manager {
             manager.register_chunk(chunk_id, chunk_header.chunk_size);
-            
+
             #[cfg(feature = "verbose-debug")]
             {
                 log::debug!(
@@ -1101,10 +1107,10 @@ impl OpeningBook {
     /// Evict least-recently-used chunks when memory limit is reached
     pub fn evict_lru_chunks(&mut self, max_memory_bytes: u64) -> usize {
         let mut evicted_count = 0;
-        
+
         if let Some(ref mut manager) = self.chunk_manager {
             let progress = manager.get_progress();
-            
+
             // If we're over the memory limit, evict LRU chunks
             while progress.bytes_loaded > max_memory_bytes {
                 if let Some(lru_chunk_id) = manager.get_lru_chunk() {
@@ -1114,11 +1120,11 @@ impl OpeningBook {
                     } else {
                         0
                     };
-                    
+
                     // Evict the chunk
                     if manager.evict_chunk(lru_chunk_id, avg_chunk_size as usize) {
                         evicted_count += 1;
-                        
+
                         // Remove positions from this chunk from lazy_positions
                         // (In practice, we'd need to track which positions belong to which chunk)
                         // For now, we'll just evict from the manager
@@ -1130,7 +1136,7 @@ impl OpeningBook {
                 }
             }
         }
-        
+
         evicted_count
     }
 
@@ -1139,12 +1145,10 @@ impl OpeningBook {
     /// Returns a serializable state that can be saved and later loaded
     /// to resume chunk loading from where it left off.
     pub fn save_streaming_state(&self) -> Option<StreamingState> {
-        self.chunk_manager.as_ref().map(|manager| {
-            StreamingState {
-                loaded_chunks: manager.loaded_chunks.iter().copied().collect(),
-                chunks_loaded: manager.chunks_loaded,
-                bytes_loaded: manager.bytes_loaded,
-            }
+        self.chunk_manager.as_ref().map(|manager| StreamingState {
+            loaded_chunks: manager.loaded_chunks.iter().copied().collect(),
+            chunks_loaded: manager.chunks_loaded,
+            bytes_loaded: manager.bytes_loaded,
         })
     }
 
@@ -1228,7 +1232,7 @@ impl OpeningBook {
 
         // Add memory usage statistics
         stats.set_memory_stats(self.get_memory_usage());
-        
+
         // Add hash collision statistics
         stats.set_hash_collision_stats(self.get_hash_quality_metrics());
 
@@ -1419,7 +1423,7 @@ impl OpeningBook {
     /// 4. Update the BookMove.evaluation field
     pub fn refresh_evaluations(&mut self) -> Result<usize, OpeningBookError> {
         let mut updated_count = 0;
-        
+
         // Stub implementation - would need engine integration
         // For now, just return success with 0 updates
         Ok(updated_count)
@@ -1766,8 +1770,8 @@ pub mod coverage;
 #[path = "opening_book/validation.rs"]
 pub mod validation;
 
-pub use statistics::BookStatistics;
 pub use coverage::{CoverageAnalyzer, CoverageReport};
+pub use statistics::BookStatistics;
 pub use validation::{BookValidator, ValidationReport};
 
 /// Thread-safe wrapper for OpeningBook

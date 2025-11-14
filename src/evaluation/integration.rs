@@ -115,7 +115,7 @@
 //! Example usage:
 //! ```rust,ignore
 //! let mut evaluator = IntegratedEvaluator::new();
-//! 
+//!
 //! // Create training positions
 //! let position_set = TuningPositionSet::new(positions);
 //! let tuning_config = TuningConfig::default();
@@ -154,8 +154,8 @@ use crate::evaluation::{
     tactical_patterns::{TacticalConfig, TacticalPatternRecognizer},
     tapered_eval::TaperedEvaluation,
 };
-use crate::types::*;
 use crate::tuning::OptimizationMethod;
+use crate::types::*;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -341,7 +341,7 @@ impl IntegratedEvaluator {
             if self.config.enable_phase_cache {
                 let phase = self.calculate_phase_cached(board, captured_pieces);
                 self.statistics.borrow_mut().record_evaluation(score, phase);
-                
+
                 // Record phase for phase-aware validation (Task 20.0 - Task 5.14)
                 let mut phase_history = self.phase_history.borrow_mut();
                 phase_history.push(phase);
@@ -395,25 +395,27 @@ impl IntegratedEvaluator {
         let mut tactical_snapshot = None;
         let mut positional_snapshot = None;
         let mut castle_cache_stats = None;
-        
+
         // Track component contributions for telemetry (Task 5.0 - Task 5.9, 5.10)
         use std::collections::HashMap;
         let mut component_contributions: HashMap<String, f32> = HashMap::new();
 
         // Material
         if self.config.components.material {
-            let material_score = self.material_eval
-                .borrow_mut()
-                .evaluate_material(board, player, captured_pieces);
-            
+            let material_score =
+                self.material_eval
+                    .borrow_mut()
+                    .evaluate_material(board, player, captured_pieces);
+
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
-            if self.config.enable_component_validation && material_score == TaperedScore::default() {
+            if self.config.enable_component_validation && material_score == TaperedScore::default()
+            {
                 debug_log(&format!(
                     "WARNING: material component is enabled but produced zero score. \
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             total += material_score;
             // Track contribution for telemetry
             if stats_enabled {
@@ -425,7 +427,7 @@ impl IntegratedEvaluator {
         // Piece-square tables
         if self.config.components.piece_square_tables {
             let (pst_score, telemetry) = self.evaluate_pst(board, player);
-            
+
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
             if self.config.enable_component_validation && pst_score == TaperedScore::default() {
                 debug_log(&format!(
@@ -433,13 +435,14 @@ impl IntegratedEvaluator {
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             total += pst_score;
             pst_telemetry = Some(telemetry);
             // Track contribution for telemetry
             if stats_enabled {
                 let pst_interp = pst_score.interpolate(phase);
-                component_contributions.insert("piece_square_tables".to_string(), pst_interp as f32);
+                component_contributions
+                    .insert("piece_square_tables".to_string(), pst_interp as f32);
             }
         }
 
@@ -448,13 +451,15 @@ impl IntegratedEvaluator {
         // are enabled and we're in endgame (phase < endgame_threshold) to avoid double-counting.
         // Endgame patterns handle passed pawns with endgame-specific bonuses.
         let endgame_threshold = self.config.phase_boundaries.endgame_threshold;
-        let skip_passed_pawn_evaluation = self.config.components.endgame_patterns && phase < endgame_threshold;
+        let skip_passed_pawn_evaluation =
+            self.config.components.endgame_patterns && phase < endgame_threshold;
 
         // Development overlap coordination (Task 20.0 - Task 1.0)
         // When opening_principles is enabled and we're in opening phase, skip development
         // evaluation in position_features to avoid double-counting.
         let opening_threshold = self.config.phase_boundaries.opening_threshold;
-        let skip_development_in_features = self.config.components.opening_principles && phase >= opening_threshold;
+        let skip_development_in_features =
+            self.config.components.opening_principles && phase >= opening_threshold;
 
         // Center control conflict resolution (Task 20.0 - Task 1.0)
         // When both position_features.center_control and positional_patterns are enabled,
@@ -490,13 +495,15 @@ impl IntegratedEvaluator {
         if self.config.components.position_features {
             let mut position_features = self.position_features.borrow_mut();
             position_features.begin_evaluation(board);
-            
+
             // Track position_features aggregate contribution for telemetry
             let mut pf_total = TaperedScore::default();
-            
+
             // King safety
-            let king_safety_score = position_features.evaluate_king_safety(board, player, captured_pieces);
-            let contribution = (king_safety_score.interpolate(phase) as f32) * weights.king_safety_weight;
+            let king_safety_score =
+                position_features.evaluate_king_safety(board, player, captured_pieces);
+            let contribution =
+                (king_safety_score.interpolate(phase) as f32) * weights.king_safety_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
                     "Large king_safety contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
@@ -506,21 +513,28 @@ impl IntegratedEvaluator {
                 ));
             }
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
-            if self.config.enable_component_validation && king_safety_score == TaperedScore::default() {
+            if self.config.enable_component_validation
+                && king_safety_score == TaperedScore::default()
+            {
                 debug_log(&format!(
                     "WARNING: king_safety component is enabled but produced zero score. \
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             let king_safety_weighted = king_safety_score * weights.king_safety_weight;
             total += king_safety_weighted;
             pf_total += king_safety_weighted;
-            
+
             // Pawn structure
-            let pawn_score = position_features
-                .evaluate_pawn_structure(board, player, captured_pieces, skip_passed_pawn_evaluation);
-            let contribution = (pawn_score.interpolate(phase) as f32) * weights.pawn_structure_weight;
+            let pawn_score = position_features.evaluate_pawn_structure(
+                board,
+                player,
+                captured_pieces,
+                skip_passed_pawn_evaluation,
+            );
+            let contribution =
+                (pawn_score.interpolate(phase) as f32) * weights.pawn_structure_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
                     "Large pawn_structure contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
@@ -532,9 +546,10 @@ impl IntegratedEvaluator {
             let pawn_weighted = pawn_score * weights.pawn_structure_weight;
             total += pawn_weighted;
             pf_total += pawn_weighted;
-            
+
             // Mobility
-            let mobility_score = position_features.evaluate_mobility(board, player, captured_pieces);
+            let mobility_score =
+                position_features.evaluate_mobility(board, player, captured_pieces);
             let contribution = (mobility_score.interpolate(phase) as f32) * weights.mobility_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -547,12 +562,16 @@ impl IntegratedEvaluator {
             let mobility_weighted = mobility_score * weights.mobility_weight;
             total += mobility_weighted;
             pf_total += mobility_weighted;
-            
+
             // Center control (Task 20.0 - Task 1.0)
             // Skip center control in position_features if positional_patterns takes precedence
-            let center_score = position_features
-                .evaluate_center_control(board, player, skip_center_control_in_features);
-            let contribution = (center_score.interpolate(phase) as f32) * weights.center_control_weight;
+            let center_score = position_features.evaluate_center_control(
+                board,
+                player,
+                skip_center_control_in_features,
+            );
+            let contribution =
+                (center_score.interpolate(phase) as f32) * weights.center_control_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
                     "Large center_control contribution: score={:.1} cp, weight={:.2}, contribution={:.1} cp",
@@ -564,10 +583,11 @@ impl IntegratedEvaluator {
             let center_weighted = center_score * weights.center_control_weight;
             total += center_weighted;
             pf_total += center_weighted;
-            
+
             // Development (Task 20.0 - Task 1.0)
             // Skip development in position_features if opening_principles is enabled in opening phase
-            let dev_score = position_features.evaluate_development(board, player, skip_development_in_features);
+            let dev_score =
+                position_features.evaluate_development(board, player, skip_development_in_features);
             let contribution = (dev_score.interpolate(phase) as f32) * weights.development_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -580,12 +600,12 @@ impl IntegratedEvaluator {
             let dev_weighted = dev_score * weights.development_weight;
             total += dev_weighted;
             pf_total += dev_weighted;
-            
+
             if stats_enabled && self.config.collect_position_feature_stats {
                 position_feature_stats_snapshot = Some(position_features.stats().clone());
             }
             position_features.end_evaluation();
-            
+
             // Track position_features aggregate contribution for telemetry
             if stats_enabled {
                 let pf_interp = pf_total.interpolate(phase);
@@ -610,18 +630,24 @@ impl IntegratedEvaluator {
                         0
                     }
                 });
-                
-                let mut opening_score = self
-                    .opening_principles
-                    .borrow_mut()
-                    .evaluate_opening(board, player, estimated_move_count, Some(captured_pieces), None);
-                
+
+                let mut opening_score = self.opening_principles.borrow_mut().evaluate_opening(
+                    board,
+                    player,
+                    estimated_move_count,
+                    Some(captured_pieces),
+                    None,
+                );
+
                 // Apply gradual fade if enabled (Task 6.0 - Task 6.10, 6.12)
                 if self.config.enable_gradual_phase_transitions {
-                    let fade_factor = self.config.phase_boundaries.calculate_opening_fade_factor(phase);
+                    let fade_factor = self
+                        .config
+                        .phase_boundaries
+                        .calculate_opening_fade_factor(phase);
                     opening_score = opening_score * fade_factor;
                 }
-                
+
                 total += opening_score;
             }
         }
@@ -635,28 +661,34 @@ impl IntegratedEvaluator {
                 debug_log(&format!(
                     "INFO: endgame_patterns is enabled but phase ({}) is not endgame (< {}). \
                     Endgame patterns will not be evaluated.",
-                    phase,
-                    endgame_threshold
+                    phase, endgame_threshold
                 ));
             } else {
-                let mut endgame_score = self.endgame_patterns
-                    .borrow_mut()
-                    .evaluate_endgame(board, player, captured_pieces);
-                
+                let mut endgame_score = self.endgame_patterns.borrow_mut().evaluate_endgame(
+                    board,
+                    player,
+                    captured_pieces,
+                );
+
                 // Apply gradual fade if enabled (Task 6.0 - Task 6.9, 6.12)
                 if self.config.enable_gradual_phase_transitions {
-                    let fade_factor = self.config.phase_boundaries.calculate_endgame_fade_factor(phase);
+                    let fade_factor = self
+                        .config
+                        .phase_boundaries
+                        .calculate_endgame_fade_factor(phase);
                     endgame_score = endgame_score * fade_factor;
                 }
-                
+
                 // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
-                if self.config.enable_component_validation && endgame_score == TaperedScore::default() {
+                if self.config.enable_component_validation
+                    && endgame_score == TaperedScore::default()
+                {
                     debug_log(&format!(
                         "WARNING: endgame_patterns is enabled but produced zero score. \
                         This may indicate a configuration issue or bug."
                     ));
                 }
-                
+
                 total += endgame_score;
             }
         }
@@ -681,18 +713,21 @@ impl IntegratedEvaluator {
                 ));
             }
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
-            if self.config.enable_component_validation && tactical_score == TaperedScore::default() {
+            if self.config.enable_component_validation && tactical_score == TaperedScore::default()
+            {
                 debug_log(&format!(
                     "WARNING: tactical_patterns component is enabled but produced zero score. \
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             total += tactical_score * weights.tactical_weight;
             // Track contribution for telemetry
             if stats_enabled {
-                let tactical_interp = (tactical_score.interpolate(phase) as f32 * weights.tactical_weight) as i32;
-                component_contributions.insert("tactical_patterns".to_string(), tactical_interp as f32);
+                let tactical_interp =
+                    (tactical_score.interpolate(phase) as f32 * weights.tactical_weight) as i32;
+                component_contributions
+                    .insert("tactical_patterns".to_string(), tactical_interp as f32);
             }
         }
 
@@ -702,31 +737,33 @@ impl IntegratedEvaluator {
         if self.config.components.positional_patterns {
             let positional_score = {
                 let mut positional = self.positional_patterns.borrow_mut();
-                
+
                 // Temporarily disable center control if PositionFeatures takes precedence
                 let original_center_control = positional.config_mut().enable_center_control;
                 let skip_center_control_in_positional = if self.config.components.position_features
-                    && self.config.center_control_precedence == CenterControlPrecedence::PositionFeatures
+                    && self.config.center_control_precedence
+                        == CenterControlPrecedence::PositionFeatures
                 {
                     positional.config_mut().enable_center_control = false;
                     true
                 } else {
                     false
                 };
-                
+
                 let score = positional.evaluate_position(board, player, captured_pieces);
-                
+
                 // Restore original center control setting
                 if skip_center_control_in_positional {
                     positional.config_mut().enable_center_control = original_center_control;
                 }
-                
+
                 if stats_enabled {
                     positional_snapshot = Some(positional.stats().snapshot());
                 }
                 score
             };
-            let contribution = (positional_score.interpolate(phase) as f32) * weights.positional_weight;
+            let contribution =
+                (positional_score.interpolate(phase) as f32) * weights.positional_weight;
             // Log large contributions (Task 3.0 - Task 3.12)
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -738,18 +775,22 @@ impl IntegratedEvaluator {
                 ));
             }
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
-            if self.config.enable_component_validation && positional_score == TaperedScore::default() {
+            if self.config.enable_component_validation
+                && positional_score == TaperedScore::default()
+            {
                 debug_log(&format!(
                     "WARNING: positional_patterns component is enabled but produced zero score. \
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             total += positional_score * weights.positional_weight;
             // Track contribution for telemetry
             if stats_enabled {
-                let positional_interp = (positional_score.interpolate(phase) as f32 * weights.positional_weight) as i32;
-                component_contributions.insert("positional_patterns".to_string(), positional_interp as f32);
+                let positional_interp =
+                    (positional_score.interpolate(phase) as f32 * weights.positional_weight) as i32;
+                component_contributions
+                    .insert("positional_patterns".to_string(), positional_interp as f32);
             }
         }
 
@@ -790,22 +831,22 @@ impl IntegratedEvaluator {
                     This may indicate a configuration issue or bug."
                 ));
             }
-            
+
             total += castle_score * weights.castle_weight;
             // Track contribution for telemetry
             if stats_enabled {
-                let castle_interp = (castle_score.interpolate(phase) as f32 * weights.castle_weight) as i32;
+                let castle_interp =
+                    (castle_score.interpolate(phase) as f32 * weights.castle_weight) as i32;
                 component_contributions.insert("castle_patterns".to_string(), castle_interp as f32);
             }
         }
-        
 
         // Interpolate to final score
         let final_score = self
             .phase_transition
             .borrow_mut()
             .interpolate_default(total, phase);
-        
+
         // Calculate weight contributions for telemetry (Task 5.0 - Task 5.10)
         // Convert absolute contributions to percentages
         if stats_enabled && final_score != 0 {
@@ -816,7 +857,7 @@ impl IntegratedEvaluator {
                 for (component, abs_contrib) in &component_contributions {
                     let contrib_pct = abs_contrib.abs() / total_abs;
                     contributions_pct.insert(component.clone(), contrib_pct);
-                    
+
                     // Task 5.0 - Task 5.11: Log when component contributes >threshold% of total
                     if contrib_pct > self.config.large_contribution_threshold {
                         debug_log(&format!(
@@ -877,7 +918,7 @@ impl IntegratedEvaluator {
             None, // King safety stats not integrated into IntegratedEvaluator yet
             castle_cache_stats.clone(),
         );
-        
+
         // Add weight contributions to telemetry (Task 5.0 - Task 5.9, 5.10)
         telemetry.weight_contributions = component_contributions;
         self.telemetry.borrow_mut().replace(telemetry.clone());
@@ -1176,7 +1217,7 @@ impl Default for IntegratedEvaluator {
 }
 
 /// Center control precedence when both position_features and positional_patterns evaluate center control
-/// 
+///
 /// This enum determines which component takes precedence when both evaluate center control.
 /// - `PositionalPatterns`: Use positional_patterns evaluation (more sophisticated, includes drop pressure)
 /// - `PositionFeatures`: Use position_features evaluation (control maps)
@@ -1230,13 +1271,13 @@ pub struct IntegratedEvaluationConfig {
     /// Phase boundary configuration for game phase transitions
     pub phase_boundaries: crate::evaluation::config::PhaseBoundaryConfig,
     /// Enable gradual phase transitions (default: false for backward compatibility)
-    /// 
+    ///
     /// When enabled, pattern scores are gradually faded out instead of abruptly cut off:
     /// - Opening principles fade from phase 192 to 160
     /// - Endgame patterns fade from phase 80 to 64
     pub enable_gradual_phase_transitions: bool,
     /// Center control precedence when both position_features and positional_patterns evaluate center control
-    /// 
+    ///
     /// Default: `PositionalPatterns` (more sophisticated evaluation)
     pub center_control_precedence: CenterControlPrecedence,
     /// Component dependency graph (Task 20.0 - Task 5.4)
@@ -1274,9 +1315,11 @@ impl Default for IntegratedEvaluationConfig {
 
 impl IntegratedEvaluationConfig {
     /// Validate cumulative weights for enabled components
-    pub fn validate_cumulative_weights(&self) -> Result<(), crate::evaluation::config::ConfigError> {
+    pub fn validate_cumulative_weights(
+        &self,
+    ) -> Result<(), crate::evaluation::config::ConfigError> {
         use crate::evaluation::config::ComponentFlagsForValidation;
-        
+
         let components = ComponentFlagsForValidation {
             material: self.components.material,
             piece_square_tables: self.components.piece_square_tables,
@@ -1285,12 +1328,12 @@ impl IntegratedEvaluationConfig {
             positional_patterns: self.components.positional_patterns,
             castle_patterns: self.components.castle_patterns,
         };
-        
+
         // Create a temporary TaperedEvalConfig to use its validation method
         // We only need the weights, so we can create a minimal config
         let mut temp_config = crate::evaluation::config::TaperedEvalConfig::default();
         temp_config.weights = self.weights.clone();
-        
+
         temp_config.validate_cumulative_weights(&components)
     }
 
@@ -1333,11 +1376,13 @@ impl IntegratedEvaluationConfig {
     }
 
     /// Validate component dependencies and check for conflicts (Task 20.0 - Task 5.5)
-    /// 
+    ///
     /// Returns a vector of warnings for potential issues. These are informational
     /// and don't prevent the configuration from being used, but may indicate
     /// suboptimal settings.
-    pub fn validate_component_dependencies(&self) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
+    pub fn validate_component_dependencies(
+        &self,
+    ) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
         use crate::evaluation::config::{ComponentDependencyWarning, ComponentId};
         let mut warnings = Vec::new();
 
@@ -1448,14 +1493,17 @@ impl IntegratedEvaluationConfig {
             for &id2 in enabled_ids.iter().skip(i + 1) {
                 if self.dependency_graph.conflicts(id1, id2) {
                     // Suggest disabling one based on precedence or importance
-                    let suggestion = if matches!(id1, ComponentId::PositionalPatterns) 
-                        && matches!(id2, ComponentId::PositionFeaturesCenterControl) {
+                    let suggestion = if matches!(id1, ComponentId::PositionalPatterns)
+                        && matches!(id2, ComponentId::PositionFeaturesCenterControl)
+                    {
                         format!("Disable position_features.center_control (positional_patterns takes precedence)")
                     } else if matches!(id1, ComponentId::OpeningPrinciples)
-                        && matches!(id2, ComponentId::PositionFeaturesDevelopment) {
+                        && matches!(id2, ComponentId::PositionFeaturesDevelopment)
+                    {
                         format!("Disable position_features.development in opening (opening_principles takes precedence)")
                     } else if matches!(id1, ComponentId::EndgamePatterns)
-                        && matches!(id2, ComponentId::PositionFeaturesPassedPawns) {
+                        && matches!(id2, ComponentId::PositionFeaturesPassedPawns)
+                    {
                         format!("Disable position_features.passed_pawns in endgame (endgame_patterns takes precedence)")
                     } else {
                         format!("Disable either {:?} or {:?} to resolve conflict", id1, id2)
@@ -1484,7 +1532,10 @@ impl IntegratedEvaluationConfig {
                         && matches!(id2, ComponentId::PositionFeaturesCenterControl)
                     {
                         // Positional patterns take precedence - handled by center_control_precedence
-                        resolutions.push("Center control conflict resolved via center_control_precedence".to_string());
+                        resolutions.push(
+                            "Center control conflict resolved via center_control_precedence"
+                                .to_string(),
+                        );
                     } else if matches!(id1, ComponentId::OpeningPrinciples)
                         && matches!(id2, ComponentId::PositionFeaturesDevelopment)
                     {
@@ -1504,10 +1555,13 @@ impl IntegratedEvaluationConfig {
     }
 
     /// Check phase compatibility for component usage (Task 20.0 - Task 5.14)
-    /// 
+    ///
     /// Analyzes recent phase history to detect phase-component mismatches.
     /// Returns warnings if components are enabled but phase is consistently outside their effective range.
-    pub fn check_phase_compatibility(&self, phase_history: &[i32]) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
+    pub fn check_phase_compatibility(
+        &self,
+        phase_history: &[i32],
+    ) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
         use crate::evaluation::config::ComponentDependencyWarning;
         let mut warnings = Vec::new();
 
@@ -1523,7 +1577,8 @@ impl IntegratedEvaluationConfig {
 
         // Warn when opening_principles is enabled but phase is consistently < opening_threshold (Task 20.0 - Task 5.12)
         if self.components.opening_principles && avg_phase < opening_threshold {
-            warnings.push(ComponentDependencyWarning::EndgamePatternsNotInEndgame); // Reuse for now
+            warnings.push(ComponentDependencyWarning::EndgamePatternsNotInEndgame);
+            // Reuse for now
         }
 
         // Warn when endgame_patterns is enabled but phase is consistently >= endgame_threshold (Task 20.0 - Task 5.13)
@@ -1535,10 +1590,15 @@ impl IntegratedEvaluationConfig {
     }
 
     /// Validate the configuration
-    /// 
+    ///
     /// This validates weights and component dependencies. Returns errors for
     /// invalid configurations and warnings for potential issues.
-    pub fn validate(&self) -> Result<Vec<crate::evaluation::config::ComponentDependencyWarning>, crate::evaluation::config::ConfigError> {
+    pub fn validate(
+        &self,
+    ) -> Result<
+        Vec<crate::evaluation::config::ComponentDependencyWarning>,
+        crate::evaluation::config::ConfigError,
+    > {
         // Validate cumulative weights
         self.validate_cumulative_weights()?;
 
@@ -1552,12 +1612,17 @@ impl IntegratedEvaluationConfig {
 // Validation methods for IntegratedEvaluator (Task 20.0 - Task 5.0)
 impl IntegratedEvaluator {
     /// Validate configuration with all checks (Task 20.0 - Task 5.15)
-    /// 
+    ///
     /// Performs comprehensive validation including:
     /// - Cumulative weight validation
     /// - Component dependency validation
     /// - Phase compatibility validation (if phase history is available)
-    pub fn validate_configuration(&self) -> Result<Vec<crate::evaluation::config::ComponentDependencyWarning>, crate::evaluation::config::ConfigError> {
+    pub fn validate_configuration(
+        &self,
+    ) -> Result<
+        Vec<crate::evaluation::config::ComponentDependencyWarning>,
+        crate::evaluation::config::ConfigError,
+    > {
         let mut warnings = Vec::new();
 
         // Validate configuration (weights and dependencies)
@@ -1662,7 +1727,8 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
+        let score =
+            evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
 
         // Should return a valid score
         assert!(score.abs() < 100000);
@@ -1860,7 +1926,7 @@ mod tests {
 // ============================================================================
 
 /// Training position with board state and expected evaluation (Task 20.0 - Task 4.2)
-/// 
+///
 /// Note: BitboardBoard and CapturedPieces are not serializable, so this struct
 /// cannot be directly serialized. Use position hashes or FEN strings for serialization.
 #[derive(Clone)]
@@ -2004,10 +2070,7 @@ impl EvaluationWeights {
     /// Create EvaluationWeights from a vector of f64
     pub fn from_vector(weights: &[f64]) -> Result<Self, String> {
         if weights.len() != 10 {
-            return Err(format!(
-                "Expected 10 weights, got {}",
-                weights.len()
-            ));
+            return Err(format!("Expected 10 weights, got {}", weights.len()));
         }
 
         Ok(Self {
@@ -2028,17 +2091,17 @@ impl EvaluationWeights {
 // Tuning methods for IntegratedEvaluator (Task 20.0 - Task 4.0)
 impl IntegratedEvaluator {
     /// Tune evaluation weights using training positions (Task 20.0 - Task 4.3, 4.6-4.9)
-    /// 
+    ///
     /// This method optimizes the evaluation weights to minimize the error between
     /// predicted and expected scores on the training positions.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `position_set` - Collection of training positions with expected scores
     /// * `tuning_config` - Configuration for the tuning process
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `TuningResult` containing optimized weights and statistics
     pub fn tune_weights(
         &mut self,
@@ -2059,11 +2122,8 @@ impl IntegratedEvaluator {
         // Simple gradient descent optimizer for component weights
         // (Simplified version - full implementation would use the tuning infrastructure's optimizers)
         for iteration in 0..tuning_config.max_iterations {
-            let (error, gradients) = self.calculate_error_and_gradients(
-                &weights,
-                position_set,
-                tuning_config.k_factor,
-            );
+            let (error, gradients) =
+                self.calculate_error_and_gradients(&weights, position_set, tuning_config.k_factor);
             error_history.push(error);
 
             // Check for convergence
@@ -2160,7 +2220,8 @@ impl IntegratedEvaluator {
                     if let Ok(perturbed_eval_weights) =
                         EvaluationWeights::from_vector(&perturbed_weights)
                     {
-                        let mut perturbed_evaluator = IntegratedEvaluator::with_config(self.config.clone());
+                        let mut perturbed_evaluator =
+                            IntegratedEvaluator::with_config(self.config.clone());
                         perturbed_evaluator.weights = perturbed_eval_weights;
                         let perturbed_score = perturbed_evaluator.evaluate_with_move_count(
                             &position.board,
@@ -2189,7 +2250,7 @@ impl IntegratedEvaluator {
     }
 
     /// Tune weights from accumulated telemetry (Task 20.0 - Task 4.12)
-    /// 
+    ///
     /// Uses accumulated telemetry to suggest weight adjustments.
     pub fn tune_from_telemetry(
         &mut self,
@@ -2209,7 +2270,9 @@ impl IntegratedEvaluator {
         let mut aggregated_contributions = HashMap::new();
         for telemetry in telemetry_set {
             for (component, contribution) in &telemetry.weight_contributions {
-                *aggregated_contributions.entry(component.clone()).or_insert(0.0) += contribution;
+                *aggregated_contributions
+                    .entry(component.clone())
+                    .or_insert(0.0) += contribution;
             }
         }
 
@@ -2240,11 +2303,17 @@ impl IntegratedEvaluator {
     }
 
     /// Telemetry-to-tuning pipeline (Task 20.0 - Task 4.11)
-    /// 
+    ///
     /// Collects telemetry from multiple positions and converts them to a tuning position set.
     pub fn telemetry_to_tuning_pipeline(
         &self,
-        telemetry_positions: &[(BitboardBoard, CapturedPieces, Player, EvaluationTelemetry, f64)],
+        telemetry_positions: &[(
+            BitboardBoard,
+            CapturedPieces,
+            Player,
+            EvaluationTelemetry,
+            f64,
+        )],
     ) -> TuningPositionSet {
         let mut positions = Vec::new();
 

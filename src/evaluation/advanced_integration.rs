@@ -120,9 +120,9 @@ impl AdvancedIntegration {
         captured_pieces: &CapturedPieces,
     ) -> AnalysisEvaluation {
         // Get overall score
-        let total_score = self
-            .evaluator
-            .evaluate_with_move_count(board, player, captured_pieces, None);
+        let total_score =
+            self.evaluator
+                .evaluate_with_move_count(board, player, captured_pieces, None);
         let phase = self.estimate_phase(board);
 
         AnalysisEvaluation {
@@ -323,8 +323,7 @@ impl ParallelEvaluator {
                 let mut scores = Vec::new();
 
                 for (board, player, captured) in chunk_owned {
-                    let score =
-                        evaluator.evaluate_with_move_count(&board, player, &captured, None);
+                    let score = evaluator.evaluate_with_move_count(&board, player, &captured, None);
                     scores.push(score);
                 }
 

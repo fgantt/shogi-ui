@@ -4,10 +4,9 @@
 /// - Opening book operations (migration, memory usage)
 /// - Opening principles integration (book move evaluation)
 /// - Move ordering integration (opening book move prioritization)
-
 use super::{HashCollisionStats, MemoryUsageStats};
-use crate::opening_book_converter::MigrationStats;
 use crate::evaluation::opening_principles::OpeningPrincipleStats;
+use crate::opening_book_converter::MigrationStats;
 use crate::search::move_ordering::AdvancedIntegrationStats;
 
 /// Unified statistics structure for opening book
@@ -108,4 +107,3 @@ impl From<&AdvancedIntegrationStats> for MoveOrderingBookStats {
         }
     }
 }
-

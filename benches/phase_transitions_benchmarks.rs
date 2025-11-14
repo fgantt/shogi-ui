@@ -10,18 +10,18 @@ fn benchmark_abrupt_vs_gradual_phase_transitions(c: &mut Criterion) {
     config_abrupt.components.endgame_patterns = true;
     config_abrupt.components.opening_principles = true;
     config_abrupt.enable_gradual_phase_transitions = false;
-    
+
     let mut config_gradual = IntegratedEvaluationConfig::default();
     config_gradual.components.endgame_patterns = true;
     config_gradual.components.opening_principles = true;
     config_gradual.enable_gradual_phase_transitions = true;
-    
+
     let evaluator_abrupt = IntegratedEvaluator::with_config(config_abrupt);
     let evaluator_gradual = IntegratedEvaluator::with_config(config_gradual);
-    
+
     let board = BitboardBoard::default();
     let captured = CapturedPieces::default();
-    
+
     c.bench_function("evaluation_abrupt_transitions", |b| {
         b.iter(|| {
             let _score = evaluator_abrupt.evaluate(
@@ -31,7 +31,7 @@ fn benchmark_abrupt_vs_gradual_phase_transitions(c: &mut Criterion) {
             );
         });
     });
-    
+
     c.bench_function("evaluation_gradual_transitions", |b| {
         b.iter(|| {
             let _score = evaluator_gradual.evaluate(
@@ -45,7 +45,7 @@ fn benchmark_abrupt_vs_gradual_phase_transitions(c: &mut Criterion) {
 
 fn benchmark_fade_factor_calculation(c: &mut Criterion) {
     let config = PhaseBoundaryConfig::default();
-    
+
     c.bench_function("calculate_endgame_fade_factor", |b| {
         b.iter(|| {
             for phase in 64..=80 {
@@ -53,7 +53,7 @@ fn benchmark_fade_factor_calculation(c: &mut Criterion) {
             }
         });
     });
-    
+
     c.bench_function("calculate_opening_fade_factor", |b| {
         b.iter(|| {
             for phase in 160..=192 {
@@ -67,11 +67,11 @@ fn benchmark_phase_boundary_configuration(c: &mut Criterion) {
     let mut config = IntegratedEvaluationConfig::default();
     config.phase_boundaries.opening_threshold = 200;
     config.phase_boundaries.endgame_threshold = 60;
-    
+
     let evaluator = IntegratedEvaluator::with_config(config);
     let board = BitboardBoard::default();
     let captured = CapturedPieces::default();
-    
+
     c.bench_function("evaluation_with_custom_phase_boundaries", |b| {
         b.iter(|| {
             let _score = evaluator.evaluate(
@@ -90,4 +90,3 @@ criterion_group!(
     benchmark_phase_boundary_configuration
 );
 criterion_main!(benches);
-

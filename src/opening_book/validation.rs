@@ -3,7 +3,6 @@
 /// This module provides comprehensive validation of opening book data,
 /// including duplicate detection, move legality, weight/evaluation consistency,
 /// FEN format validation, and position bounds checking.
-
 use super::{BookMove, OpeningBook, PositionEntry};
 use crate::types::Position;
 use std::collections::HashSet;
@@ -66,14 +65,14 @@ impl BookValidator {
     pub fn validate_duplicate_positions(book: &OpeningBook) -> (usize, Vec<String>) {
         let mut seen_fens: HashSet<String> = HashSet::new();
         let mut duplicates = Vec::new();
-        
+
         let positions = book.get_all_positions();
         for (fen, _) in positions {
             if !seen_fens.insert(fen.clone()) {
                 duplicates.push(fen);
             }
         }
-        
+
         (duplicates.len(), duplicates)
     }
 
@@ -86,7 +85,7 @@ impl BookValidator {
         // 1. Parsing FEN to board state
         // 2. Generating legal moves from position
         // 3. Checking if book move is in legal moves list
-        // 
+        //
         // For now, return empty results (stub implementation)
         (0, Vec::new())
     }
@@ -94,16 +93,18 @@ impl BookValidator {
     /// Validate weight/evaluation consistency
     ///
     /// Checks that weights correlate with evaluations (high weight → high eval).
-    pub fn validate_weight_evaluation_consistency(book: &OpeningBook) -> (usize, Vec<(String, String)>) {
+    pub fn validate_weight_evaluation_consistency(
+        book: &OpeningBook,
+    ) -> (usize, Vec<(String, String)>) {
         let mut inconsistencies = 0;
         let mut details = Vec::new();
-        
+
         let positions = book.get_all_positions();
         for (fen, moves) in positions {
             if moves.len() < 2 {
                 continue; // Need at least 2 moves to compare
             }
-            
+
             // Find moves with high weight but low evaluation
             // or low weight but high evaluation
             for (i, move1) in moves.iter().enumerate() {
@@ -111,15 +112,17 @@ impl BookValidator {
                     if i >= j {
                         continue;
                     }
-                    
+
                     // High weight should correlate with high evaluation
                     // Flag if weight difference is large but evaluation difference is opposite
                     let weight_diff = move1.weight as i32 - move2.weight as i32;
                     let eval_diff = move1.evaluation - move2.evaluation;
-                    
+
                     // If weight difference is significant (>200) but eval difference is opposite or small
                     if weight_diff.abs() > 200 {
-                        if (weight_diff > 0 && eval_diff < -50) || (weight_diff < 0 && eval_diff > 50) {
+                        if (weight_diff > 0 && eval_diff < -50)
+                            || (weight_diff < 0 && eval_diff > 50)
+                        {
                             inconsistencies += 1;
                             details.push((
                                 fen.clone(),
@@ -133,7 +136,7 @@ impl BookValidator {
                 }
             }
         }
-        
+
         (inconsistencies, details)
     }
 
@@ -143,7 +146,7 @@ impl BookValidator {
     pub fn validate_fen_format(book: &OpeningBook) -> (usize, Vec<String>) {
         let mut invalid_count = 0;
         let mut invalid_fens = Vec::new();
-        
+
         let positions = book.get_all_positions();
         for (fen, _) in positions {
             // Basic FEN format validation:
@@ -155,7 +158,7 @@ impl BookValidator {
                 invalid_fens.push(fen);
                 continue;
             }
-            
+
             // Check that first part (board) has 9 rows separated by '/'
             let board_parts: Vec<&str> = parts[0].split('/').collect();
             if board_parts.len() != 9 {
@@ -163,14 +166,19 @@ impl BookValidator {
                 invalid_fens.push(fen);
                 continue;
             }
-            
+
             // Check that active player is 'b' or 'w'
-            if parts.len() > 3 && parts[3] != "b" && parts[3] != "w" && parts[3] != "B" && parts[3] != "W" {
+            if parts.len() > 3
+                && parts[3] != "b"
+                && parts[3] != "w"
+                && parts[3] != "B"
+                && parts[3] != "W"
+            {
                 invalid_count += 1;
                 invalid_fens.push(fen);
             }
         }
-        
+
         (invalid_count, invalid_fens)
     }
 
@@ -180,7 +188,7 @@ impl BookValidator {
     pub fn validate_position_bounds(book: &OpeningBook) -> (usize, Vec<(String, String)>) {
         let mut out_of_bounds = 0;
         let mut details = Vec::new();
-        
+
         let positions = book.get_all_positions();
         for (fen, moves) in positions {
             for (i, book_move) in moves.iter().enumerate() {
@@ -193,7 +201,7 @@ impl BookValidator {
                         ));
                     }
                 }
-                
+
                 if !book_move.to.is_valid() {
                     out_of_bounds += 1;
                     details.push((
@@ -203,7 +211,7 @@ impl BookValidator {
                 }
             }
         }
-        
+
         (out_of_bounds, details)
     }
 
@@ -222,7 +230,8 @@ impl BookValidator {
         report.illegal_moves = illegal;
         report.illegal_move_details = illegal_details;
 
-        let (inconsistencies, inconsistency_details) = Self::validate_weight_evaluation_consistency(book);
+        let (inconsistencies, inconsistency_details) =
+            Self::validate_weight_evaluation_consistency(book);
         report.inconsistencies = inconsistencies;
         report.inconsistency_details = inconsistency_details;
 
@@ -249,10 +258,9 @@ impl BookValidator {
             ));
         }
         if report.illegal_moves > 0 {
-            report.warnings.push(format!(
-                "Found {} illegal moves",
-                report.illegal_moves
-            ));
+            report
+                .warnings
+                .push(format!("Found {} illegal moves", report.illegal_moves));
         }
         if report.inconsistencies > 0 {
             report.warnings.push(format!(
@@ -276,4 +284,3 @@ impl BookValidator {
         report
     }
 }
-

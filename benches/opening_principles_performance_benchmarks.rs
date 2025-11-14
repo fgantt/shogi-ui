@@ -10,7 +10,9 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::opening_principles::{OpeningPrincipleEvaluator, OpeningPrincipleConfig};
+use shogi_engine::evaluation::opening_principles::{
+    OpeningPrincipleConfig, OpeningPrincipleEvaluator,
+};
 use shogi_engine::types::*;
 
 /// Benchmark evaluator creation
@@ -237,11 +239,11 @@ fn benchmark_piece_coordination(c: &mut Criterion) {
     // Compare overhead
     group.bench_function("coordination_overhead", |b| {
         let board = BitboardBoard::new();
-        
+
         // With coordination
         let mut evaluator_with = OpeningPrincipleEvaluator::new();
         let score_with = evaluator_with.evaluate_opening(&board, Player::Black, 5);
-        
+
         // Without coordination
         let config = OpeningPrincipleConfig {
             enable_development: true,
@@ -253,7 +255,7 @@ fn benchmark_piece_coordination(c: &mut Criterion) {
         };
         let mut evaluator_without = OpeningPrincipleEvaluator::with_config(config);
         let score_without = evaluator_without.evaluate_opening(&board, Player::Black, 5);
-        
+
         b.iter(|| {
             black_box(score_with.interpolate(256));
             black_box(score_without.interpolate(256));

@@ -42,16 +42,31 @@ fn test_open_file_penalty() {
 
     // Set up Mino castle
     board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-    board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(6, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 5),
+    );
 
     // Evaluate without attack
     let score_without_attack = evaluator.evaluate(&board, Player::Black);
 
     // Add opponent rook on the same file as the king (open file attack)
-    board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
 
     // Evaluate with attack
     let score_with_attack = evaluator.evaluate(&board, Player::Black);
@@ -123,18 +138,33 @@ fn test_castle_quality_affects_attack_evaluation() {
 
     // Set up partial castle (low quality)
     board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 4),
+    );
     // Missing silver and pawns
 
     // Add opponent attack
-    board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
 
     let partial_score = evaluator.evaluate(&board, Player::Black);
 
     // Set up full castle (high quality)
-    board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(6, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 5),
+    );
 
     let full_score = evaluator.evaluate(&board, Player::Black);
 
@@ -154,17 +184,35 @@ fn test_threat_evaluation_integration() {
 
     // Set up castle
     board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-    board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(6, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 5),
+    );
 
     // Evaluate without threat
     let score_without_threat = evaluator.evaluate(&board, Player::Black);
 
     // Add pin threat (rook pinning gold to king)
-    board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(5, 4));
-    board.place_piece(Piece::new(PieceType::Bishop, Player::White), Position::new(4, 3));
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(5, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Bishop, Player::White),
+        Position::new(4, 3),
+    );
 
     // Evaluate with threat
     let score_with_threat = evaluator.evaluate(&board, Player::Black);
@@ -196,8 +244,14 @@ fn test_broken_castle_vulnerability() {
     let (mut broken_board, _) = (broken.builder)(broken.player);
     let (mut canonical_board, _) = (canonical.builder)(canonical.player);
 
-    broken_board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
-    canonical_board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
+    broken_board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
+    canonical_board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
 
     let broken_score = evaluator.evaluate(&broken_board, broken.player);
     let canonical_score = evaluator.evaluate(&canonical_board, canonical.player);
@@ -218,19 +272,46 @@ fn test_castle_attack_combination() {
 
     // Set up strong castle
     board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 3));
-    board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 3));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(6, 5));
-    board.place_piece(Piece::new(PieceType::Pawn, Player::Black), Position::new(7, 2));
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(6, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 3),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(6, 5),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Pawn, Player::Black),
+        Position::new(7, 2),
+    );
 
     let strong_castle_score = evaluator.evaluate(&board, Player::Black);
 
     // Add coordinated attack
-    board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
-    board.place_piece(Piece::new(PieceType::Bishop, Player::White), Position::new(4, 2));
-    board.place_piece(Piece::new(PieceType::Gold, Player::White), Position::new(5, 3));
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Bishop, Player::White),
+        Position::new(4, 2),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::White),
+        Position::new(5, 3),
+    );
 
     let attacked_score = evaluator.evaluate(&board, Player::Black);
 
@@ -252,9 +333,18 @@ fn test_castle_attack_telemetry() {
 
     // Set up castle with attack
     board.place_piece(Piece::new(PieceType::King, Player::Black), king_pos);
-    board.place_piece(Piece::new(PieceType::Gold, Player::Black), Position::new(7, 4));
-    board.place_piece(Piece::new(PieceType::Silver, Player::Black), Position::new(6, 4));
-    board.place_piece(Piece::new(PieceType::Rook, Player::White), Position::new(3, 4));
+    board.place_piece(
+        Piece::new(PieceType::Gold, Player::Black),
+        Position::new(7, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Silver, Player::Black),
+        Position::new(6, 4),
+    );
+    board.place_piece(
+        Piece::new(PieceType::Rook, Player::White),
+        Position::new(3, 4),
+    );
 
     evaluator.evaluate(&board, Player::Black);
     let stats = evaluator.stats();
@@ -267,4 +357,3 @@ fn test_castle_attack_telemetry() {
         "Should track castle state"
     );
 }
-

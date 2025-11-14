@@ -3,7 +3,6 @@
 /// This module provides tools to analyze the quality and completeness
 /// of an opening book, including depth analysis, opening completeness,
 /// and move quality validation.
-
 use super::{BookMove, OpeningBook, PositionEntry};
 use std::collections::HashMap;
 
@@ -75,7 +74,7 @@ impl CoverageAnalyzer {
 
         // Group positions by opening name
         let mut openings: HashMap<String, Vec<usize>> = HashMap::new();
-        
+
         // We need to access positions, but they're private
         // For now, we'll use a simplified approach based on available data
         let metadata = book.get_stats();
@@ -85,10 +84,10 @@ impl CoverageAnalyzer {
         // Estimate depth based on positions and moves
         if total_positions > 0 {
             let avg_moves = total_moves_count as f64 / total_positions as f64;
-            
+
             // Estimate max depth (simplified - in practice would need to trace opening sequences)
             let estimated_max_depth = (avg_moves * 2.0) as usize;
-            
+
             // Create depth distribution (simplified)
             depth_distribution.insert(1, total_positions / 2);
             depth_distribution.insert(2, total_positions / 4);
@@ -136,7 +135,7 @@ impl CoverageAnalyzer {
         // In practice, we'd need to analyze the book's opening names
         // For now, we'll use a simplified check based on metadata
         let metadata = book.get_stats();
-        
+
         // If book has positions, assume some openings are present
         if metadata.position_count > 0 {
             // Simplified: assume first few standard openings are present
@@ -171,12 +170,12 @@ impl CoverageAnalyzer {
         // We need access to moves to analyze quality
         // For now, return default metrics
         // In practice, this would iterate through all positions and moves
-        
+
         QualityMetrics {
             inconsistent_moves: 0,
             outlier_weights: 0,
             outlier_evaluations: 0,
-            average_weight: 750.0, // Default estimate
+            average_weight: 750.0,    // Default estimate
             average_evaluation: 15.0, // Default estimate
         }
     }
@@ -221,4 +220,3 @@ impl CoverageAnalyzer {
         }
     }
 }
-

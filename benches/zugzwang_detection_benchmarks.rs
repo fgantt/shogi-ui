@@ -4,8 +4,8 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::endgame_patterns::{EndgamePatternEvaluator, EndgamePatternConfig};
-use shogi_engine::types::{CapturedPieces, Player, PieceType};
+use shogi_engine::evaluation::endgame_patterns::{EndgamePatternConfig, EndgamePatternEvaluator};
+use shogi_engine::types::{CapturedPieces, PieceType, Player};
 
 fn benchmark_zugzwang_detection_overhead(c: &mut Criterion) {
     let mut evaluator = EndgamePatternEvaluator::new();
@@ -27,7 +27,7 @@ fn benchmark_zugzwang_with_drops(c: &mut Criterion) {
     let mut evaluator = EndgamePatternEvaluator::new();
     let board = BitboardBoard::empty();
     let mut captured_pieces = CapturedPieces::new();
-    
+
     // Add captured pieces to enable drops
     captured_pieces.add_piece(PieceType::Pawn, Player::Black);
     captured_pieces.add_piece(PieceType::Rook, Player::Black);
@@ -86,4 +86,3 @@ criterion_group!(
     benchmark_count_safe_moves
 );
 criterion_main!(benches);
-

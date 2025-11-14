@@ -1,5 +1,7 @@
 use shogi_engine::bitboards::BitboardBoard;
-use shogi_engine::evaluation::castle_fixtures::{castle_fixtures, CastleFixture, CastleFixtureTheme};
+use shogi_engine::evaluation::castle_fixtures::{
+    castle_fixtures, CastleFixture, CastleFixtureTheme,
+};
 use shogi_engine::evaluation::castles::CastleRecognizer;
 use shogi_engine::evaluation::king_safety::KingSafetyEvaluator;
 use shogi_engine::types::Player;
@@ -121,7 +123,8 @@ fn test_canonical_vs_partial_quality_ordering() {
     let (canonical_board, canonical_king) = (canonical.builder)(canonical.player);
     let (partial_board, partial_king) = (partial.builder)(partial.player);
 
-    let canonical_eval = recognizer.evaluate_castle(&canonical_board, canonical.player, canonical_king);
+    let canonical_eval =
+        recognizer.evaluate_castle(&canonical_board, canonical.player, canonical_king);
     let partial_eval = recognizer.evaluate_castle(&partial_board, partial.player, partial_king);
 
     // Canonical should have higher quality than partial
@@ -238,7 +241,10 @@ fn test_castle_cache_effectiveness() {
     let fixtures = castle_fixtures();
 
     // Evaluate same position multiple times
-    let fixture = fixtures.iter().find(|f| f.name == "mino_canonical_black").unwrap();
+    let fixture = fixtures
+        .iter()
+        .find(|f| f.name == "mino_canonical_black")
+        .unwrap();
     let (board, king_pos) = (fixture.builder)(fixture.player);
 
     // First evaluation - cache miss
@@ -252,4 +258,3 @@ fn test_castle_cache_effectiveness() {
     assert_eq!(stats_after_second.hits, 1);
     assert_eq!(stats_after_second.misses, 1);
 }
-

@@ -542,7 +542,7 @@ mod streaming_mode_integration_tests {
     fn test_streaming_mode_enable() {
         let mut book = OpeningBook::new();
         book.enable_streaming_mode(1024);
-        
+
         assert!(book.get_stats().streaming_enabled);
         assert_eq!(book.get_stats().chunk_size, 1024);
     }
@@ -551,7 +551,7 @@ mod streaming_mode_integration_tests {
     fn test_streaming_progress_tracking() {
         let mut book = OpeningBook::new();
         book.enable_streaming_mode(1024);
-        
+
         // Initially no progress
         let progress = book.get_streaming_progress();
         assert!(progress.is_some());
@@ -564,11 +564,11 @@ mod streaming_mode_integration_tests {
     fn test_streaming_state_save_load() {
         let mut book = OpeningBook::new();
         book.enable_streaming_mode(1024);
-        
+
         // Save empty state
         let state = book.save_streaming_state();
         assert!(state.is_some());
-        
+
         // Load into new book
         let mut new_book = OpeningBook::new();
         new_book.enable_streaming_mode(1024);
@@ -597,7 +597,7 @@ mod coverage_analysis_integration_tests {
         )];
         book.add_position(fen, moves);
         book = book.mark_loaded();
-        
+
         let report = CoverageAnalyzer::generate_coverage_report(&book);
         assert!(report.depth_stats.total_openings > 0);
     }

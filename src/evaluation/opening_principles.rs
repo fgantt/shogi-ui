@@ -94,7 +94,7 @@ impl OpeningPrincipleEvaluator {
         // 2. Center control
         if self.config.enable_center_control {
             let mut center_score = self.evaluate_center_control_opening(board, player);
-            
+
             // Drop pressure evaluation (Task 19.0 - Task 5.0)
             if self.config.enable_drop_pressure_evaluation {
                 if let Some(captured) = captured_pieces {
@@ -102,7 +102,7 @@ impl OpeningPrincipleEvaluator {
                     center_score += drop_score;
                 }
             }
-            
+
             let center_score_interp = center_score.interpolate(256);
             self.stats.center_control_score += center_score_interp as i64;
             self.stats.center_control_evaluations += 1;
@@ -129,7 +129,8 @@ impl OpeningPrincipleEvaluator {
 
         // 5. Opening-specific penalties
         if self.config.enable_opening_penalties {
-            let penalties_score = self.evaluate_opening_penalties(board, player, move_count, move_history);
+            let penalties_score =
+                self.evaluate_opening_penalties(board, player, move_count, move_history);
             let penalties_score_interp = penalties_score.interpolate(256);
             self.stats.penalties_score += penalties_score_interp as i64;
             self.stats.penalties_evaluations += 1;
@@ -154,11 +155,11 @@ impl OpeningPrincipleEvaluator {
     /// Log component contributions when they exceed threshold (Task 19.0 - Task 5.0)
     fn log_component_contributions(&self, total_score: &TaperedScore, move_count: u32) {
         const THRESHOLD_CP: i32 = 100; // Log when component contributes > 100cp
-        
+
         #[cfg(feature = "verbose-debug")]
         {
             use crate::debug_utils::debug_log_fast;
-            
+
             // Check each component's contribution (simplified - would need to track per-component in real-time)
             // For now, we log when total score is significant
             let total_interp = total_score.interpolate(256);
@@ -386,10 +387,14 @@ impl OpeningPrincipleEvaluator {
         // Center squares to evaluate
         let center_squares = [
             Position::new(4, 4), // Core center
-            Position::new(3, 4), Position::new(5, 4), // Vertical
-            Position::new(4, 3), Position::new(4, 5), // Horizontal
-            Position::new(3, 3), Position::new(3, 5), // Diagonals
-            Position::new(5, 3), Position::new(5, 5),
+            Position::new(3, 4),
+            Position::new(5, 4), // Vertical
+            Position::new(4, 3),
+            Position::new(4, 5), // Horizontal
+            Position::new(3, 3),
+            Position::new(3, 5), // Diagonals
+            Position::new(5, 3),
+            Position::new(5, 5),
         ];
 
         // Pieces that can control center via drops (bishop, rook, silver, gold, knight)
@@ -413,7 +418,9 @@ impl OpeningPrincipleEvaluator {
                     let count = captured_pieces.count(piece_type, player);
                     if count > 0 {
                         // Check if this piece could control center square if dropped
-                        if self.can_piece_control_square_via_drop(piece_type, center_sq, player, board) {
+                        if self
+                            .can_piece_control_square_via_drop(piece_type, center_sq, player, board)
+                        {
                             our_drop_pressure += count as i32;
                         }
                     }
@@ -424,7 +431,9 @@ impl OpeningPrincipleEvaluator {
                 for &piece_type in &drop_pieces {
                     let count = captured_pieces.count(piece_type, opponent);
                     if count > 0 {
-                        if self.can_piece_control_square_via_drop(piece_type, center_sq, opponent, board) {
+                        if self.can_piece_control_square_via_drop(
+                            piece_type, center_sq, opponent, board,
+                        ) {
                             their_drop_pressure += count as i32;
                         }
                     }
@@ -456,19 +465,23 @@ impl OpeningPrincipleEvaluator {
     ) -> bool {
         // Get attack pattern for this piece type at drop position
         let attacks = board.get_attack_pattern_precomputed(drop_pos, piece_type, player);
-        
+
         // Check if target square is in attack pattern
         // For now, we'll check if the piece could attack center squares
         // This is a simplified check - in reality, we'd need to check if the drop is legal
         // and if the piece could actually control the center from that position
-        
+
         // Center squares
         let center_squares = [
             Position::new(4, 4),
-            Position::new(3, 4), Position::new(5, 4),
-            Position::new(4, 3), Position::new(4, 5),
-            Position::new(3, 3), Position::new(3, 5),
-            Position::new(5, 3), Position::new(5, 5),
+            Position::new(3, 4),
+            Position::new(5, 4),
+            Position::new(4, 3),
+            Position::new(4, 5),
+            Position::new(3, 3),
+            Position::new(3, 5),
+            Position::new(5, 3),
+            Position::new(5, 5),
         ];
 
         for &center_sq in &center_squares {
@@ -496,10 +509,14 @@ impl OpeningPrincipleEvaluator {
         // Center squares to evaluate
         let center_squares = [
             Position::new(4, 4), // Core center
-            Position::new(3, 4), Position::new(5, 4), // Vertical
-            Position::new(4, 3), Position::new(4, 5), // Horizontal
-            Position::new(3, 3), Position::new(3, 5), // Diagonals
-            Position::new(5, 3), Position::new(5, 5),
+            Position::new(3, 4),
+            Position::new(5, 4), // Vertical
+            Position::new(4, 3),
+            Position::new(4, 5), // Horizontal
+            Position::new(3, 3),
+            Position::new(3, 5), // Diagonals
+            Position::new(5, 3),
+            Position::new(5, 5),
         ];
 
         // Check which pieces attack center squares
@@ -525,7 +542,7 @@ impl OpeningPrincipleEvaluator {
                             piece.piece_type,
                             player,
                         );
-                        
+
                         // Check if center square is in attack pattern
                         // Use bitwise operation: check if bit is set
                         let center_bit = 1u128 << center_sq.to_u8();
@@ -544,7 +561,7 @@ impl OpeningPrincipleEvaluator {
                             piece.piece_type,
                             opponent,
                         );
-                        
+
                         // Check if center square is in attack pattern
                         let center_bit = 1u128 << center_sq.to_u8();
                         if (attacks & center_bit) != 0 {
@@ -561,7 +578,7 @@ impl OpeningPrincipleEvaluator {
             } else {
                 attack_diff * 5 // Extended center
             };
-            
+
             mg_score += value;
             eg_score += value / 4; // Less important in endgame
         }
@@ -805,11 +822,11 @@ impl OpeningPrincipleEvaluator {
     /// This addresses the TODO in evaluate_opening_penalties.
     fn detect_repeated_piece_moves(&self, move_history: &[Move], player: Player) -> i32 {
         let mut penalty = 0;
-        
+
         // Track how many times each piece position has been moved
-        let mut piece_move_count: std::collections::HashMap<(Option<Position>, PieceType), u32> = 
+        let mut piece_move_count: std::collections::HashMap<(Option<Position>, PieceType), u32> =
             std::collections::HashMap::new();
-        
+
         // Count moves for this player
         for move_ in move_history.iter() {
             if move_.player == player {
@@ -817,12 +834,12 @@ impl OpeningPrincipleEvaluator {
                 let key = (move_.from, move_.piece_type);
                 let count = piece_move_count.entry(key).or_insert(0);
                 *count += 1;
-                
+
                 // Penalty increases with number of times same piece is moved
                 if *count > 1 {
                     // Penalty: 15 cp for 2nd move, 30 cp for 3rd move, etc.
                     penalty += 15 * (*count - 1) as i32;
-                    
+
                     #[cfg(debug_assertions)]
                     crate::debug_utils::debug_log(&format!(
                         "[OPENING_PRINCIPLES] Repeated piece move detected: {:?} moved {} times (penalty: {}cp)",
@@ -833,7 +850,7 @@ impl OpeningPrincipleEvaluator {
                 }
             }
         }
-        
+
         penalty
     }
 
@@ -849,26 +866,22 @@ impl OpeningPrincipleEvaluator {
     /// - Gold-silver defensive coordination (near king)
     /// - Rook-bishop coordination (attacking combinations)
     /// - Piece synergy bonuses (developed pieces supporting each other)
-    fn evaluate_piece_coordination(
-        &self,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> TaperedScore {
+    fn evaluate_piece_coordination(&self, board: &BitboardBoard, player: Player) -> TaperedScore {
         let mut mg_score = 0;
         let start_row = if player == Player::Black { 8 } else { 0 };
 
         // 1. Rook-lance battery detection (same file, both developed)
         let rooks = self.find_pieces(board, player, PieceType::Rook);
         let lances = self.find_pieces(board, player, PieceType::Lance);
-        
+
         for rook_pos in &rooks {
             // Check if rook is developed
             let rook_developed = rook_pos.row != start_row;
-            
+
             for lance_pos in &lances {
                 // Check if lance is developed
                 let lance_developed = lance_pos.row != start_row;
-                
+
                 // Check if on same file (same column)
                 if rook_pos.col == lance_pos.col && rook_developed && lance_developed {
                     // Rook-lance battery bonus
@@ -880,15 +893,18 @@ impl OpeningPrincipleEvaluator {
 
         // 2. Bishop-lance combination detection (same diagonal, both developed)
         let bishops = self.find_pieces(board, player, PieceType::Bishop);
-        
+
         for bishop_pos in &bishops {
             let bishop_developed = bishop_pos.row != start_row;
-            
+
             for lance_pos in &lances {
                 let lance_developed = lance_pos.row != start_row;
-                
+
                 // Check if on same diagonal
-                if self.same_diagonal(*bishop_pos, *lance_pos) && bishop_developed && lance_developed {
+                if self.same_diagonal(*bishop_pos, *lance_pos)
+                    && bishop_developed
+                    && lance_developed
+                {
                     // Bishop-lance combination bonus
                     mg_score += 20; // Moderate bonus for bishop-lance coordination
                 }
@@ -899,14 +915,14 @@ impl OpeningPrincipleEvaluator {
         if let Some(king_pos) = self.find_king_position(board, player) {
             let golds = self.find_pieces(board, player, PieceType::Gold);
             let silvers = self.find_pieces(board, player, PieceType::Silver);
-            
+
             // Check for gold-silver pairs near king (within 2 squares)
             for gold_pos in &golds {
                 for silver_pos in &silvers {
                     let distance = self.square_distance(*gold_pos, *silver_pos);
                     let gold_near_king = self.square_distance(*gold_pos, king_pos) <= 2;
                     let silver_near_king = self.square_distance(*silver_pos, king_pos) <= 2;
-                    
+
                     // Gold and silver near king and close to each other
                     if gold_near_king && silver_near_king && distance <= 2 {
                         mg_score += 15; // Defensive coordination bonus
@@ -918,16 +934,16 @@ impl OpeningPrincipleEvaluator {
         // 4. Rook-bishop coordination (attacking combinations, both developed)
         for rook_pos in &rooks {
             let rook_developed = rook_pos.row != start_row;
-            
+
             for bishop_pos in &bishops {
                 let bishop_developed = bishop_pos.row != start_row;
-                
+
                 if rook_developed && bishop_developed {
                     // Both major pieces developed - coordination bonus
                     // Stronger if they're in good positions (not too close to edge)
                     let rook_central = rook_pos.col >= 2 && rook_pos.col <= 6;
                     let bishop_central = bishop_pos.col >= 2 && bishop_pos.col <= 6;
-                    
+
                     if rook_central || bishop_central {
                         mg_score += 18; // Rook-bishop coordination bonus
                     }
@@ -939,7 +955,7 @@ impl OpeningPrincipleEvaluator {
         // Check for developed rook supporting developed silver/gold
         for rook_pos in &rooks {
             let rook_developed = rook_pos.row != start_row;
-            
+
             if rook_developed {
                 // Check if rook is on same file as developed silver/gold
                 for silver_pos in self.find_pieces(board, player, PieceType::Silver) {
@@ -947,7 +963,7 @@ impl OpeningPrincipleEvaluator {
                         mg_score += 12; // Rook supporting developed silver
                     }
                 }
-                
+
                 for gold_pos in self.find_pieces(board, player, PieceType::Gold) {
                     if gold_pos.row != start_row && gold_pos.col == rook_pos.col {
                         mg_score += 10; // Rook supporting developed gold
@@ -965,7 +981,7 @@ impl OpeningPrincipleEvaluator {
     fn same_diagonal(&self, pos1: Position, pos2: Position) -> bool {
         let rank_diff = (pos1.row as i32 - pos2.row as i32).abs();
         let file_diff = (pos1.col as i32 - pos2.col as i32).abs();
-        
+
         // Same diagonal if rank_diff == file_diff (main diagonal) or
         // if rank_diff + file_diff forms anti-diagonal pattern
         rank_diff == file_diff || (pos1.row + pos1.col == pos2.row + pos2.col)
@@ -1023,11 +1039,17 @@ impl OpeningPrincipleEvaluator {
         // Note: After making the move, it's the opponent's turn, so we evaluate for the opponent
         // But we want to evaluate how good the position is for the player who made the move
         // So we evaluate for the original player (the one who made the move)
-        let score = self.evaluate_opening(&temp_board, player, move_count + 1, Some(&temp_captured), None);
-        
+        let score = self.evaluate_opening(
+            &temp_board,
+            player,
+            move_count + 1,
+            Some(&temp_captured),
+            None,
+        );
+
         // Convert TaperedScore to i32 (use interpolated score at opening phase)
         let quality_score = score.interpolate(256); // Phase 256 = opening phase
-        
+
         // Telemetry: Log book move quality scores (Task 19.0 - Task 5.0)
         #[cfg(feature = "verbose-debug")]
         {
@@ -1038,7 +1060,7 @@ impl OpeningPrincipleEvaluator {
                 move_count + 1
             ));
         }
-        
+
         // Track quality scores for statistics
         self.stats.book_move_quality_scores += quality_score as i64;
 
@@ -1151,10 +1173,10 @@ impl OpeningPrincipleEvaluator {
         let pieces = board.get_pieces();
         let player_idx = if player == Player::Black { 0 } else { 1 };
         let piece_idx = piece_type.to_u8() as usize;
-        
+
         // Get the bitboard for this piece type and player
         let piece_bitboard = pieces[player_idx][piece_idx];
-        
+
         // Convert bitboard to positions efficiently
         self.bitboard_to_positions(piece_bitboard)
     }
@@ -1162,10 +1184,10 @@ impl OpeningPrincipleEvaluator {
     /// Convert bitboard to list of positions efficiently (Task 19.0 - Task 4.0)
     fn bitboard_to_positions(&self, bitboard: crate::types::Bitboard) -> Vec<Position> {
         use crate::types::get_lsb;
-        
+
         let mut positions = Vec::new();
         let mut remaining = bitboard;
-        
+
         while remaining != 0 {
             if let Some(pos) = get_lsb(remaining) {
                 positions.push(pos);
@@ -1174,7 +1196,7 @@ impl OpeningPrincipleEvaluator {
                 break;
             }
         }
-        
+
         positions
     }
 
@@ -1196,7 +1218,7 @@ impl OpeningPrincipleEvaluator {
     /// Get per-component statistics breakdown (Task 19.0 - Task 4.0)
     pub fn get_component_statistics(&self) -> ComponentStatistics {
         let stats = &self.stats;
-        
+
         ComponentStatistics {
             development: ComponentStats {
                 total_score: stats.development_score,
@@ -1247,7 +1269,8 @@ impl OpeningPrincipleEvaluator {
                 total_score: stats.piece_coordination_score,
                 evaluation_count: stats.piece_coordination_evaluations,
                 average_score: if stats.piece_coordination_evaluations > 0 {
-                    stats.piece_coordination_score as f64 / stats.piece_coordination_evaluations as f64
+                    stats.piece_coordination_score as f64
+                        / stats.piece_coordination_evaluations as f64
                 } else {
                     0.0
                 },

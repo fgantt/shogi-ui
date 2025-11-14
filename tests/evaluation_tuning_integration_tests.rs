@@ -20,7 +20,7 @@ fn test_tune_weights_api() {
             captured_pieces: CapturedPieces::new(),
             player: Player::Black,
             expected_score: 0.0, // Draw
-            game_phase: 128,      // Middlegame
+            game_phase: 128,     // Middlegame
             move_number: 10,
         };
         position_set.add_position(position);
@@ -30,7 +30,10 @@ fn test_tune_weights_api() {
 
     // Should not error (even if optimization doesn't converge)
     let result = evaluator.tune_weights(&position_set, &tuning_config);
-    assert!(result.is_ok(), "tune_weights should not error on valid input");
+    assert!(
+        result.is_ok(),
+        "tune_weights should not error on valid input"
+    );
 
     let tuning_result = result.unwrap();
     // Iterations might be less than max_iterations if we converge early or hit early stopping
@@ -38,9 +41,15 @@ fn test_tune_weights_api() {
         tuning_result.iterations <= tuning_config.max_iterations,
         "Iterations should not exceed max_iterations"
     );
-    assert!(tuning_result.iterations > 0, "Should complete at least one iteration");
+    assert!(
+        tuning_result.iterations > 0,
+        "Should complete at least one iteration"
+    );
     assert!(tuning_result.final_error >= 0.0);
-    assert!(tuning_result.error_history.len() > 0, "Should have error history");
+    assert!(
+        tuning_result.error_history.len() > 0,
+        "Should have error history"
+    );
 }
 
 /// Test weight adapter layers (Task 20.0 - Task 4.20)
@@ -81,9 +90,7 @@ fn test_weight_adapter_layers() {
     let wrong_vector = vec![1.0, 2.0, 3.0];
     let error_result = EvaluationWeights::from_vector(&wrong_vector);
     assert!(error_result.is_err());
-    assert!(error_result
-        .unwrap_err()
-        .contains("Expected 10 weights"));
+    assert!(error_result.unwrap_err().contains("Expected 10 weights"));
 
     // Test round-trip conversion
     let original = EvaluationWeights::default();
@@ -93,9 +100,15 @@ fn test_weight_adapter_layers() {
     assert_eq!(original.material_weight, round_trip.material_weight);
     assert_eq!(original.position_weight, round_trip.position_weight);
     assert_eq!(original.king_safety_weight, round_trip.king_safety_weight);
-    assert_eq!(original.pawn_structure_weight, round_trip.pawn_structure_weight);
+    assert_eq!(
+        original.pawn_structure_weight,
+        round_trip.pawn_structure_weight
+    );
     assert_eq!(original.mobility_weight, round_trip.mobility_weight);
-    assert_eq!(original.center_control_weight, round_trip.center_control_weight);
+    assert_eq!(
+        original.center_control_weight,
+        round_trip.center_control_weight
+    );
     assert_eq!(original.development_weight, round_trip.development_weight);
     assert_eq!(original.tactical_weight, round_trip.tactical_weight);
     assert_eq!(original.positional_weight, round_trip.positional_weight);
@@ -143,8 +156,14 @@ fn test_tuning_improves_evaluation() {
     let tuning_result = result.unwrap();
 
     // Verify that final error is reasonable
-    assert!(tuning_result.final_error >= 0.0, "Final error should be non-negative");
-    assert!(tuning_result.iterations > 0, "Should complete at least one iteration");
+    assert!(
+        tuning_result.final_error >= 0.0,
+        "Final error should be non-negative"
+    );
+    assert!(
+        tuning_result.iterations > 0,
+        "Should complete at least one iteration"
+    );
     assert!(
         tuning_result.error_history.len() > 0,
         "Error history should have at least one entry, got {}",
@@ -231,7 +250,7 @@ fn test_tune_from_telemetry() {
     assert!(result.is_ok());
 
     let optimized_weights = result.unwrap();
-    
+
     // Verify weights are valid
     assert!(optimized_weights.material_weight >= 0.0);
     assert!(optimized_weights.position_weight >= 0.0);
@@ -268,17 +287,13 @@ fn test_tuning_position_set() {
 }
 
 /// Helper function to calculate error for testing
-fn calculate_error(
-    evaluator: &IntegratedEvaluator,
-    position_set: &TuningPositionSet,
-) -> f64 {
+fn calculate_error(evaluator: &IntegratedEvaluator, position_set: &TuningPositionSet) -> f64 {
     let mut total_error = 0.0;
     let k_factor = 1.0;
 
     for position in &position_set.positions {
-        let predicted_score = evaluator
-            .evaluate(&position.board, position.player, &position.captured_pieces)
-            as f64;
+        let predicted_score =
+            evaluator.evaluate(&position.board, position.player, &position.captured_pieces) as f64;
 
         let predicted_prob = sigmoid(predicted_score * k_factor);
         let expected_prob = position.expected_score;
@@ -293,4 +308,3 @@ fn calculate_error(
 fn sigmoid(x: f64) -> f64 {
     1.0 / (1.0 + (-x).exp())
 }
-
