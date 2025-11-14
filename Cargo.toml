@@ -50,6 +50,10 @@ name = "puzzle-gen"
 path = "src/bin/puzzle_gen.rs"
 
 [[bin]]
+name = "generate_magic_tables"
+path = "src/bin/generate_magic_tables.rs"
+
+[[bin]]
 name = "pst-tuning-runner"
 path = "src/bin/pst_tuning_runner.rs"
 

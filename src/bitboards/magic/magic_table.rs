@@ -8,6 +8,53 @@ use super::magic_finder::MagicFinder;
 use crate::types::{
     Bitboard, MagicBitboard, MagicError, MagicTable, MemoryPool, PieceType, EMPTY_BITBOARD,
 };
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
+
+/// Magic number for magic table file identification
+pub const MAGIC_TABLE_FILE_MAGIC: &[u8] = b"SHOGI_MAGIC_V1";
+
+/// Current version of the magic table file format
+pub const MAGIC_TABLE_FILE_VERSION: u8 = 1;
+
+/// Get the default path for the magic table file
+/// 
+/// Checks environment variable `SHOGI_MAGIC_TABLE_PATH` first, then falls back to
+/// `resources/magic_tables/magic_table.bin` relative to the executable or workspace root.
+pub fn get_default_magic_table_path() -> std::path::PathBuf {
+    // Check environment variable first
+    if let Ok(custom_path) = std::env::var("SHOGI_MAGIC_TABLE_PATH") {
+        return std::path::PathBuf::from(custom_path);
+    }
+
+    // Try to find workspace root or use current directory
+    let base_path = if let Ok(exe_path) = std::env::current_exe() {
+        // In production, try relative to executable
+        if let Some(exe_dir) = exe_path.parent() {
+            exe_dir.join("resources").join("magic_tables")
+        } else {
+            std::path::PathBuf::from("resources").join("magic_tables")
+        }
+    } else {
+        // Fallback: try to find workspace root
+        let mut current = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        loop {
+            let resources = current.join("resources").join("magic_tables");
+            if resources.exists() || current.join("Cargo.toml").exists() {
+                return resources.join("magic_table.bin");
+            }
+            if let Some(parent) = current.parent() {
+                current = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+        std::path::PathBuf::from("resources").join("magic_tables")
+    };
+
+    base_path.join("magic_table.bin")
+}
 
 impl MagicTable {
     /// Create a new magic table
@@ -216,9 +263,19 @@ impl MagicTable {
 
     /// Serialize magic table to bytes
     pub fn serialize(&self) -> Result<Vec<u8>, MagicError> {
-        use std::io::Write;
-
         let mut data = Vec::new();
+
+        // Write version header: magic number (16 bytes) + version (1 byte)
+        let mut magic_bytes = [0u8; 16];
+        for (i, &byte) in MAGIC_TABLE_FILE_MAGIC.iter().enumerate() {
+            if i < 16 {
+                magic_bytes[i] = byte;
+            }
+        }
+        data.write_all(&magic_bytes)
+            .map_err(|e| MagicError::IoError(e.to_string()))?;
+        data.write_all(&[MAGIC_TABLE_FILE_VERSION])
+            .map_err(|e| MagicError::IoError(e.to_string()))?;
 
         // Write magic entries
         for magic in &self.rook_magics {
@@ -255,14 +312,82 @@ impl MagicTable {
                 .map_err(|e| MagicError::IoError(e.to_string()))?;
         }
 
+        // Calculate and append checksum (simple wrapping addition checksum)
+        let checksum = Self::calculate_checksum(&data[17..]); // Skip header (16 + 1 bytes)
+        data.write_all(&checksum.to_le_bytes())
+            .map_err(|e| MagicError::IoError(e.to_string()))?;
+
         Ok(data)
+    }
+
+    /// Calculate checksum for data validation
+    fn calculate_checksum(data: &[u8]) -> u64 {
+        let mut checksum = 0u64;
+        for &byte in data {
+            checksum = checksum.wrapping_add(byte as u64);
+            checksum = checksum.wrapping_mul(0x9e3779b97f4a7c15); // Mix bits
+        }
+        checksum
     }
 
     /// Deserialize magic table from bytes
     pub fn deserialize(data: &[u8]) -> Result<Self, MagicError> {
         use std::io::Read;
+        
+        if data.len() < 17 {
+            return Err(MagicError::IoError(
+                "Data too short for magic table header".to_string(),
+            ));
+        }
 
-        let mut cursor = std::io::Cursor::new(data);
+        // Validate magic number
+        let expected_magic = MAGIC_TABLE_FILE_MAGIC;
+        if &data[0..expected_magic.len()] != expected_magic {
+            return Err(MagicError::ValidationFailed {
+                reason: format!(
+                    "Invalid magic number: expected {:?}, got {:?}",
+                    expected_magic,
+                    &data[0..expected_magic.len().min(16)]
+                ),
+            });
+        }
+
+        // Validate version
+        let version = data[16];
+        if version != MAGIC_TABLE_FILE_VERSION {
+            return Err(MagicError::ValidationFailed {
+                reason: format!(
+                    "Version mismatch: expected {}, got {}",
+                    MAGIC_TABLE_FILE_VERSION, version
+                ),
+            });
+        }
+
+        // Extract checksum (last 8 bytes)
+        if data.len() < 25 {
+            return Err(MagicError::IoError(
+                "Data too short for checksum".to_string(),
+            ));
+        }
+        let checksum_offset = data.len() - 8;
+        let stored_checksum = u64::from_le_bytes(
+            data[checksum_offset..checksum_offset + 8]
+                .try_into()
+                .map_err(|_| MagicError::IoError("Invalid checksum format".to_string()))?,
+        );
+
+        // Calculate checksum of data (excluding header and checksum)
+        let data_checksum = Self::calculate_checksum(&data[17..checksum_offset]);
+        if data_checksum != stored_checksum {
+            return Err(MagicError::ValidationFailed {
+                reason: format!(
+                    "Checksum mismatch: expected {}, got {}",
+                    stored_checksum, data_checksum
+                ),
+            });
+        }
+
+        let mut cursor = std::io::Cursor::new(&data[17..checksum_offset]); // Skip header, exclude checksum
         let mut table = Self::default();
 
         // Read rook magics
@@ -343,6 +468,116 @@ impl MagicTable {
                 .read_exact(&mut attack)
                 .map_err(|e| MagicError::IoError(e.to_string()))?;
             table.attack_storage.push(u128::from_le_bytes(attack));
+        }
+
+        Ok(table)
+    }
+
+    /// Save magic table to file
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), MagicError> {
+        let path = path.as_ref();
+        let parent = path.parent().ok_or_else(|| MagicError::IoError(
+            format!("Invalid path: {}", path.display())
+        ))?;
+        
+        // Create parent directory if it doesn't exist
+        std::fs::create_dir_all(parent).map_err(|e| MagicError::IoError(format!(
+            "Failed to create directory {}: {}",
+            parent.display(),
+            e
+        )))?;
+
+        let data = self.serialize()?;
+        let file = File::create(path).map_err(|e| MagicError::IoError(format!(
+            "Failed to create file {}: {}",
+            path.display(),
+            e
+        )))?;
+        let mut writer = BufWriter::new(file);
+        writer.write_all(&data).map_err(|e| MagicError::IoError(format!(
+            "Failed to write to file {}: {}",
+            path.display(),
+            e
+        )))?;
+        writer.flush().map_err(|e| MagicError::IoError(format!(
+            "Failed to flush file {}: {}",
+            path.display(),
+            e
+        )))?;
+        Ok(())
+    }
+
+    /// Load magic table from file
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, MagicError> {
+        let path = path.as_ref();
+        let file = File::open(path).map_err(|e| MagicError::IoError(format!(
+            "Failed to open file {}: {}",
+            path.display(),
+            e
+        )))?;
+        let mut reader = BufReader::new(file);
+        let mut data = Vec::new();
+        reader.read_to_end(&mut data).map_err(|e| MagicError::IoError(format!(
+            "Failed to read file {}: {}",
+            path.display(),
+            e
+        )))?;
+        Self::deserialize(&data)
+    }
+
+    /// Try to load magic table from file, or generate if not found
+    /// 
+    /// If `save_if_generated` is true, saves the generated table to the file path.
+    pub fn try_load_or_generate<P: AsRef<Path>>(
+        path: P,
+        save_if_generated: bool,
+    ) -> Result<Self, MagicError> {
+        let path = path.as_ref();
+        
+        // Try to load from file first
+        match Self::load_from_file(path) {
+            Ok(table) => {
+                // Validate the loaded table
+                table.validate()?;
+                return Ok(table);
+            }
+            Err(e) => {
+                // If file doesn't exist or is invalid, generate new table
+                if !path.exists() {
+                    eprintln!(
+                        "Magic table file not found at {}, generating new table...",
+                        path.display()
+                    );
+                } else {
+                    eprintln!(
+                        "Failed to load magic table from {}: {}, generating new table...",
+                        path.display(),
+                        e
+                    );
+                }
+            }
+        }
+
+        // Generate new table
+        let table = Self::new()?;
+        
+        // Validate generated table
+        table.validate()?;
+
+        // Save if requested
+        if save_if_generated {
+            if let Err(e) = table.save_to_file(path) {
+                eprintln!(
+                    "Warning: Failed to save generated magic table to {}: {}",
+                    path.display(),
+                    e
+                );
+            } else {
+                eprintln!(
+                    "Generated magic table saved to {}",
+                    path.display()
+                );
+            }
         }
 
         Ok(table)
@@ -629,6 +864,145 @@ mod tests {
             original_table.bishop_magics.len(),
             deserialized.bishop_magics.len()
         );
+    }
+
+    #[test]
+    fn test_serialization_version_validation() {
+        let table = MagicTable::default();
+        let serialized = table.serialize().unwrap();
+        
+        // Should deserialize successfully with correct version
+        let deserialized = MagicTable::deserialize(&serialized);
+        assert!(deserialized.is_ok());
+        
+        // Corrupt the version byte
+        let mut corrupted = serialized.clone();
+        corrupted[16] = 99; // Invalid version
+        let result = MagicTable::deserialize(&corrupted);
+        assert!(result.is_err());
+        if let Err(MagicError::ValidationFailed { reason }) = result {
+            assert!(reason.contains("Version mismatch"));
+        } else {
+            panic!("Expected ValidationFailed error for version mismatch");
+        }
+    }
+
+    #[test]
+    fn test_serialization_checksum_validation() {
+        let table = MagicTable::default();
+        let serialized = table.serialize().unwrap();
+        
+        // Should deserialize successfully with correct checksum
+        let deserialized = MagicTable::deserialize(&serialized);
+        assert!(deserialized.is_ok());
+        
+        // Corrupt the checksum (last 8 bytes)
+        let mut corrupted = serialized.clone();
+        let len = corrupted.len();
+        corrupted[len - 1] = corrupted[len - 1].wrapping_add(1);
+        let result = MagicTable::deserialize(&corrupted);
+        assert!(result.is_err());
+        if let Err(MagicError::ValidationFailed { reason }) = result {
+            assert!(reason.contains("Checksum mismatch"));
+        } else {
+            panic!("Expected ValidationFailed error for checksum mismatch");
+        }
+    }
+
+    #[test]
+    fn test_serialization_magic_number_validation() {
+        let table = MagicTable::default();
+        let serialized = table.serialize().unwrap();
+        
+        // Corrupt the magic number (first bytes)
+        let mut corrupted = serialized.clone();
+        corrupted[0] = 0xFF;
+        let result = MagicTable::deserialize(&corrupted);
+        assert!(result.is_err());
+        if let Err(MagicError::ValidationFailed { reason }) = result {
+            assert!(reason.contains("Invalid magic number"));
+        } else {
+            panic!("Expected ValidationFailed error for invalid magic number");
+        }
+    }
+
+    #[test]
+    fn test_save_and_load_file() {
+        use std::fs;
+        use std::path::Path;
+        
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_magic_table.bin");
+        
+        // Clean up if file exists
+        let _ = fs::remove_file(&test_file);
+        
+        let original_table = MagicTable::default();
+        
+        // Save to file
+        let save_result = original_table.save_to_file(&test_file);
+        assert!(save_result.is_ok(), "Failed to save magic table to file");
+        assert!(test_file.exists(), "Magic table file was not created");
+        
+        // Load from file
+        let loaded_table = MagicTable::load_from_file(&test_file);
+        assert!(loaded_table.is_ok(), "Failed to load magic table from file");
+        let loaded = loaded_table.unwrap();
+        
+        // Verify data matches
+        assert_eq!(
+            original_table.attack_storage.len(),
+            loaded.attack_storage.len()
+        );
+        assert_eq!(original_table.attack_storage, loaded.attack_storage);
+        
+        // Clean up
+        let _ = fs::remove_file(&test_file);
+    }
+
+    #[test]
+    #[ignore] // Ignore by default - generation takes 60+ seconds
+    fn test_try_load_or_generate() {
+        use std::fs;
+        use std::path::Path;
+        
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test_try_load_magic_table.bin");
+        
+        // Clean up if file exists
+        let _ = fs::remove_file(&test_file);
+        
+        // First call should generate (file doesn't exist)
+        // Note: This test is ignored by default because generation takes 60+ seconds
+        // Run with: cargo test -- --ignored test_try_load_or_generate
+        let result1 = MagicTable::try_load_or_generate(&test_file, true);
+        assert!(result1.is_ok());
+        assert!(test_file.exists(), "File should be created when save_if_generated=true");
+        
+        // Second call should load from file
+        let result2 = MagicTable::try_load_or_generate(&test_file, false);
+        assert!(result2.is_ok());
+        let loaded = result2.unwrap();
+        let generated = result1.unwrap();
+        
+        // Verify loaded table matches generated table
+        assert_eq!(generated.attack_storage, loaded.attack_storage);
+        
+        // Clean up
+        let _ = fs::remove_file(&test_file);
+    }
+
+    #[test]
+    fn test_get_default_magic_table_path() {
+        // Test that function returns a path
+        let path = get_default_magic_table_path();
+        assert!(!path.as_os_str().is_empty());
+        
+        // Test environment variable override
+        std::env::set_var("SHOGI_MAGIC_TABLE_PATH", "/custom/path/magic.bin");
+        let custom_path = get_default_magic_table_path();
+        assert_eq!(custom_path, std::path::PathBuf::from("/custom/path/magic.bin"));
+        std::env::remove_var("SHOGI_MAGIC_TABLE_PATH");
     }
 
     #[test]

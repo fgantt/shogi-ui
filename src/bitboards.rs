@@ -176,19 +176,25 @@ pub(crate) fn record_attack_table_init(time_nanos: u64, memory_bytes: u64) {
 
 /// Get or initialize the shared magic table singleton
 /// Returns None if magic table initialization fails
+/// 
+/// Attempts to load from precomputed file first, then generates if not found.
 fn get_shared_magic_table() -> Option<Arc<MagicTable>> {
     Some(
         SHARED_MAGIC_TABLE
             .get_or_init(|| {
-                // Try to create a magic table, fall back to default if it fails
-                Arc::new(
-                    MagicTable::new().unwrap_or_else(|_| {
-                        crate::debug_utils::debug_log(
-                            "[MAGIC_TABLE] Failed to initialize magic table, using default",
-                        );
+                let default_path = magic::magic_table::get_default_magic_table_path();
+                
+                // Try to load or generate magic table
+                let table = MagicTable::try_load_or_generate(&default_path, true)
+                    .unwrap_or_else(|e| {
+                        crate::debug_utils::debug_log(&format!(
+                            "[MAGIC_TABLE] Failed to load or generate magic table: {}, using default",
+                            e
+                        ));
                         MagicTable::default()
-                    }),
-                )
+                    });
+                
+                Arc::new(table)
             })
             .clone(),
     )
@@ -196,8 +202,11 @@ fn get_shared_magic_table() -> Option<Arc<MagicTable>> {
 
 /// Initialize the shared magic table singleton explicitly
 /// This should be called once at startup if magic support is desired
+/// 
+/// Attempts to load from precomputed file first, then generates if not found.
 pub fn init_shared_magic_table() -> Result<(), MagicError> {
-    let table = MagicTable::new()?;
+    let default_path = magic::magic_table::get_default_magic_table_path();
+    let table = MagicTable::try_load_or_generate(&default_path, true)?;
     SHARED_MAGIC_TABLE
         .set(Arc::new(table))
         .map_err(|_| MagicError::InitializationFailed {

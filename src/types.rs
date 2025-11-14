@@ -6884,6 +6884,9 @@ pub enum MagicError {
 
     #[error("IO error: {0}")]
     IoError(String),
+
+    #[error("Invalid file format: {reason}")]
+    InvalidFileFormat { reason: String },
 }
 
 /// Represents a magic bitboard entry for a single square

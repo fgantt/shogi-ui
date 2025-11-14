@@ -5,9 +5,12 @@
 //! existing Shogi engine components.
 
 use shogi_engine::{
+    bitboards::magic::magic_table,
     types::{MagicTable, Piece, PieceType, Player, Position},
     BitboardBoard,
 };
+use std::fs;
+use std::path::Path;
 
 #[test]
 fn test_bitboard_with_magic_support() {
@@ -373,4 +376,108 @@ fn test_memory_efficiency() {
         stats.memory_efficiency <= 1.0,
         "Memory efficiency should not exceed 100%"
     );
+}
+
+#[test]
+#[ignore] // Ignore by default - generation takes 60+ seconds
+fn test_precomputed_table_loads_correctly() {
+    use std::time::Instant;
+    
+    let temp_dir = std::env::temp_dir();
+    let test_file = temp_dir.join("test_precomputed_magic_table.bin");
+    
+    // Clean up if file exists
+    let _ = fs::remove_file(&test_file);
+    
+    // Generate a table and save it
+    println!("Generating magic table for precomputed test...");
+    let gen_start = Instant::now();
+    let generated_table = MagicTable::new().unwrap();
+    let gen_time = gen_start.elapsed();
+    println!("Generation took: {:?}", gen_time);
+    
+    // Validate generated table
+    generated_table.validate().expect("Generated table should be valid");
+    
+    // Save to file
+    generated_table.save_to_file(&test_file)
+        .expect("Failed to save generated table");
+    assert!(test_file.exists(), "Precomputed file should exist");
+    
+    // Load from file
+    println!("Loading precomputed table...");
+    let load_start = Instant::now();
+    let loaded_table = MagicTable::load_from_file(&test_file)
+        .expect("Failed to load precomputed table");
+    let load_time = load_start.elapsed();
+    println!("Load took: {:?}", load_time);
+    
+    // Validate loaded table
+    loaded_table.validate().expect("Loaded table should be valid");
+    
+    // Verify loaded table matches generated table
+    assert_eq!(
+        generated_table.attack_storage.len(),
+        loaded_table.attack_storage.len(),
+        "Attack storage length should match"
+    );
+    assert_eq!(
+        generated_table.attack_storage,
+        loaded_table.attack_storage,
+        "Attack storage data should match"
+    );
+    
+    // Verify magic entries match
+    for i in 0..81 {
+        assert_eq!(
+            generated_table.rook_magics[i],
+            loaded_table.rook_magics[i],
+            "Rook magic entry {} should match",
+            i
+        );
+        assert_eq!(
+            generated_table.bishop_magics[i],
+            loaded_table.bishop_magics[i],
+            "Bishop magic entry {} should match",
+            i
+        );
+    }
+    
+    // Verify lookup results match for sample positions
+    for square in (0..81).step_by(10) {
+        let test_occupied = 0x1234567890ABCDEF; // Sample occupied bitboard
+        let gen_rook = generated_table.get_attacks(square, PieceType::Rook, test_occupied);
+        let load_rook = loaded_table.get_attacks(square, PieceType::Rook, test_occupied);
+        assert_eq!(
+            gen_rook, load_rook,
+            "Rook attacks should match for square {}",
+            square
+        );
+        
+        let gen_bishop = generated_table.get_attacks(square, PieceType::Bishop, test_occupied);
+        let load_bishop = loaded_table.get_attacks(square, PieceType::Bishop, test_occupied);
+        assert_eq!(
+            gen_bishop, load_bishop,
+            "Bishop attacks should match for square {}",
+            square
+        );
+    }
+    
+    // Verify load time is much faster than generation time
+    // (This is the main benefit of precomputed tables)
+    if gen_time.as_millis() > 0 {
+        let speedup = gen_time.as_millis() as f64 / load_time.as_millis().max(1) as f64;
+        println!("Load speedup: {:.2}x faster than generation", speedup);
+        // Load should be at least 10x faster (generation takes 60s+, load should be <1s)
+        // But we'll be lenient in tests since generation might be fast in test environment
+        assert!(
+            load_time < gen_time,
+            "Loading should be faster than generation (load: {:?}, gen: {:?})",
+            load_time,
+            gen_time
+        );
+    }
+    
+    // Clean up
+    let _ = fs::remove_file(&test_file);
 }
