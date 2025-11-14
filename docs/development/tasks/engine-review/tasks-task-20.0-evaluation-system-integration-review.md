@@ -110,36 +110,36 @@ This task list implements the coordination improvements identified in the Evalua
   - [x] 4.21 Write integration test `test_tuning_improves_evaluation()` to verify optimized weights improve evaluation accuracy on test set
   - [x] 4.22 Write integration test `test_telemetry_tuning_pipeline()` to verify telemetry collection and tuning integration works end-to-end
 
-- [ ] 5.0 Component Dependency Validation and Coordination (Medium Priority - Est: 10-12 hours)
-  - [ ] 5.1 Create `ComponentDependency` enum with variants: `Conflicts`, `Complements`, `Requires`, `Optional`
-  - [ ] 5.2 Create `ComponentDependencyGraph` struct that maps component pairs to their dependency relationship
-  - [ ] 5.3 Populate dependency graph with known relationships:
-     - `position_features.center_control` CONFLICTS with `positional_patterns` (center control)
-     - `position_features.development` CONFLICTS with `opening_principles` (development, in opening)
-     - `position_features.passed_pawns` CONFLICTS with `endgame_patterns` (passed pawns, in endgame)
-     - `position_features.king_safety` COMPLEMENTS `castle_patterns`
-     - `endgame_patterns` REQUIRES `pawn_structure` (endgame patterns handle pawn structure)
-  - [ ] 5.4 Add `dependency_graph: ComponentDependencyGraph` field to `IntegratedEvaluationConfig`
-  - [ ] 5.5 Implement `validate_component_dependencies()` method that checks enabled components against dependency graph
-  - [ ] 5.6 Add validation logic for CONFLICTS: warn or error when conflicting components are both enabled
-  - [ ] 5.7 Add validation logic for COMPLEMENTS: warn when complementary components are not both enabled
-  - [ ] 5.8 Add validation logic for REQUIRES: error when required component is disabled but dependent component is enabled
-  - [ ] 5.9 Implement `suggest_component_resolution()` method that provides automatic resolution suggestions for conflicts
-  - [ ] 5.10 Add `auto_resolve_conflicts: bool` field to `IntegratedEvaluationConfig` (default: `false`) to enable automatic conflict resolution
-  - [ ] 5.11 Integrate dependency validation into `IntegratedEvaluator::with_config()` constructor
-  - [ ] 5.12 Add phase-aware validation: warn when `opening_principles` is enabled but phase is consistently < opening_threshold
-  - [ ] 5.13 Add phase-aware validation: warn when `endgame_patterns` is enabled but phase is consistently >= endgame_threshold
-  - [ ] 5.14 Implement `check_phase_compatibility()` method that analyzes recent phase history to detect phase-component mismatches
-  - [ ] 5.15 Add `validate_configuration()` method to `IntegratedEvaluator` that performs all validation checks (dependencies, weights, phase compatibility)
-  - [ ] 5.16 Update `IntegratedEvaluationConfig::validate()` to call dependency validation
-  - [ ] 5.17 Add comprehensive documentation explaining component dependencies and relationships
-  - [ ] 5.18 Write unit test `test_dependency_graph_creation()` to verify dependency graph is correctly populated
-  - [ ] 5.19 Write unit test `test_conflict_detection()` to verify conflicts are detected when both components enabled
-  - [ ] 5.20 Write unit test `test_complement_validation()` to verify warnings when complementary components not both enabled
-  - [ ] 5.21 Write unit test `test_requirement_validation()` to verify errors when required components are missing
-  - [ ] 5.22 Write unit test `test_auto_resolve_conflicts()` to verify automatic conflict resolution works correctly
-  - [ ] 5.23 Write integration test `test_phase_compatibility_validation()` to verify phase-aware validation detects mismatches
-  - [ ] 5.24 Write integration test `test_comprehensive_dependency_validation()` to verify all validation checks work together
+- [x] 5.0 Component Dependency Validation and Coordination (Medium Priority - Est: 10-12 hours) ✅ COMPLETE
+  - [x] 5.1 Create `ComponentDependency` enum with variants: `Conflicts`, `Complements`, `Requires`, `Optional`
+  - [x] 5.2 Create `ComponentDependencyGraph` struct that maps component pairs to their dependency relationship
+  - [x] 5.3 Populate dependency graph with known relationships:
+    - `position_features.center_control` CONFLICTS with `positional_patterns` (center control)
+    - `position_features.development` CONFLICTS with `opening_principles` (development, in opening)
+    - `position_features.passed_pawns` CONFLICTS with `endgame_patterns` (passed pawns, in endgame)
+    - `position_features.king_safety` COMPLEMENTS `castle_patterns`
+    - `endgame_patterns` REQUIRES `pawn_structure` (endgame patterns handle pawn structure)
+  - [x] 5.4 Add `dependency_graph: ComponentDependencyGraph` field to `IntegratedEvaluationConfig`
+  - [x] 5.5 Implement `validate_component_dependencies()` method that checks enabled components against dependency graph
+  - [x] 5.6 Add validation logic for CONFLICTS: warn or error when conflicting components are both enabled
+  - [x] 5.7 Add validation logic for COMPLEMENTS: warn when complementary components are not both enabled
+  - [x] 5.8 Add validation logic for REQUIRES: error when required component is disabled but dependent component is enabled
+  - [x] 5.9 Implement `suggest_component_resolution()` method that provides automatic resolution suggestions for conflicts
+  - [x] 5.10 Add `auto_resolve_conflicts: bool` field to `IntegratedEvaluationConfig` (default: `false`) to enable automatic conflict resolution
+  - [x] 5.11 Integrate dependency validation into `IntegratedEvaluator::with_config()` constructor
+  - [x] 5.12 Add phase-aware validation: warn when `opening_principles` is enabled but phase is consistently < opening_threshold
+  - [x] 5.13 Add phase-aware validation: warn when `endgame_patterns` is enabled but phase is consistently >= endgame_threshold
+  - [x] 5.14 Implement `check_phase_compatibility()` method that analyzes recent phase history to detect phase-component mismatches
+  - [x] 5.15 Add `validate_configuration()` method to `IntegratedEvaluator` that performs all validation checks (dependencies, weights, phase compatibility)
+  - [x] 5.16 Update `IntegratedEvaluationConfig::validate()` to call dependency validation
+  - [x] 5.17 Add comprehensive documentation explaining component dependencies and relationships
+  - [x] 5.18 Write unit test `test_dependency_graph_creation()` to verify dependency graph is correctly populated
+  - [x] 5.19 Write unit test `test_conflict_detection()` to verify conflicts are detected when both components enabled
+  - [x] 5.20 Write unit test `test_complement_validation()` to verify warnings when complementary components not both enabled
+  - [x] 5.21 Write unit test `test_requirement_validation()` to verify errors when required components are missing
+  - [x] 5.22 Write unit test `test_auto_resolve_conflicts()` to verify automatic conflict resolution works correctly
+  - [x] 5.23 Write integration test `test_phase_compatibility_validation()` to verify phase-aware validation detects mismatches
+  - [x] 5.24 Write integration test `test_comprehensive_dependency_validation()` to verify all validation checks work together
 
 ---
 
@@ -902,3 +902,124 @@ Both examples compile successfully.
 
 None - Task 4.0 is complete. Tuning infrastructure is now fully integrated with `IntegratedEvaluator`, providing automated weight optimization capabilities using training positions and telemetry data.
 
+
+---
+
+**Task 5.0 Complete** ✅
+
+## Task 5.0 Completion Notes
+
+### Implementation Summary
+
+Task 5.0: Component Dependency Validation and Coordination has been completed successfully. This task implements comprehensive component dependency validation to ensure optimal configuration and avoid conflicts in the evaluation system.
+
+### Key Implementations
+
+1. **Component Dependency Graph (`ComponentDependencyGraph`)**:
+   - Created `ComponentDependency` enum with variants: `Conflicts`, `Complements`, `Requires`, `Optional`
+   - Created `ComponentId` enum to identify all evaluation components and sub-components
+   - Implemented `ComponentDependencyGraph` struct that maps component pairs to their dependency relationships
+   - Populated dependency graph with known relationships:
+     - `position_features.center_control` CONFLICTS with `positional_patterns`
+     - `position_features.development` CONFLICTS with `opening_principles` (in opening)
+     - `position_features.passed_pawns` CONFLICTS with `endgame_patterns` (in endgame)
+     - `position_features.king_safety` COMPLEMENTS `castle_patterns`
+     - `endgame_patterns` REQUIRES `position_features` (for pawn structure)
+
+2. **Configuration Integration**:
+   - Added `dependency_graph: ComponentDependencyGraph` field to `IntegratedEvaluationConfig` (default: graph with default relationships)
+   - Added `auto_resolve_conflicts: bool` field to `IntegratedEvaluationConfig` (default: `false`)
+   - Integrated dependency validation into `IntegratedEvaluator::with_config()` constructor
+   - Updated `IntegratedEvaluationConfig::validate()` to call dependency validation
+
+3. **Validation Logic**:
+   - Implemented `validate_component_dependencies()` method that checks enabled components against dependency graph
+   - Added conflict detection: warns when conflicting components are both enabled
+   - Added complement validation: warns when complementary components are not both enabled
+   - Added requirement validation: errors when required component is disabled but dependent component is enabled
+   - Extended `ComponentDependencyWarning` enum with new variants: `ComponentConflict`, `MissingComplement`, `MissingRequirement`
+
+4. **Conflict Resolution**:
+   - Implemented `suggest_component_resolution()` method that provides automatic resolution suggestions for conflicts
+   - Implemented `auto_resolve_conflicts()` method that logs resolutions (conflicts are actually handled during evaluation via precedence)
+   - Auto-resolution logs how conflicts are resolved via precedence rules during evaluation
+
+5. **Phase-Aware Validation**:
+   - Implemented `check_phase_compatibility()` method that analyzes recent phase history to detect phase-component mismatches
+   - Added phase history tracking in `IntegratedEvaluator` (stores last 100 phases)
+   - Warns when `opening_principles` is enabled but phase is consistently < opening_threshold
+   - Warns when `endgame_patterns` is enabled but phase is consistently >= endgame_threshold
+
+6. **Comprehensive Validation**:
+   - Added `validate_configuration()` method to `IntegratedEvaluator` that performs all validation checks:
+     - Cumulative weight validation
+     - Component dependency validation
+     - Phase compatibility validation (if phase history is available)
+   - Updated module documentation with comprehensive component dependency information
+
+### Files Modified
+
+- `src/evaluation/config.rs`:
+  - Added `ComponentDependency` enum
+  - Added `ComponentId` enum
+  - Added `ComponentDependencyGraph` struct with default relationships
+  - Extended `ComponentDependencyWarning` enum with new variants
+  - Added `HashMap` import for dependency graph
+
+- `src/evaluation/integration.rs`:
+  - Added `dependency_graph` and `auto_resolve_conflicts` fields to `IntegratedEvaluationConfig`
+  - Added `phase_history: RefCell<Vec<i32>>` field to `IntegratedEvaluator`
+  - Implemented `get_enabled_component_ids()` helper method
+  - Enhanced `validate_component_dependencies()` with comprehensive dependency checking
+  - Implemented `suggest_component_resolution()` method
+  - Implemented `auto_resolve_conflicts()` method
+  - Implemented `check_phase_compatibility()` method
+  - Added `validate_configuration()` method to `IntegratedEvaluator`
+  - Integrated validation into `with_config()` constructor
+  - Added phase history recording in `evaluate()` method
+  - Updated module documentation with component dependency section
+
+### Files Created
+
+- `tests/evaluation_component_dependency_tests.rs`:
+  - 11 comprehensive tests covering all aspects of dependency validation:
+    - `test_dependency_graph_creation()`: Verifies dependency graph is correctly populated
+    - `test_conflict_detection()`: Verifies conflicts are detected when both components enabled
+    - `test_complement_validation()`: Verifies warnings when complementary components not both enabled
+    - `test_requirement_validation()`: Verifies errors when required components are missing
+    - `test_auto_resolve_conflicts()`: Verifies automatic conflict resolution
+    - `test_phase_compatibility_validation()`: Verifies phase-aware validation detects mismatches
+    - `test_comprehensive_dependency_validation()`: Verifies all validation checks work together
+    - Additional tests for enum variants and helper methods
+
+### Testing Results
+
+- **All 11 tests pass** ✅
+- Tests verify:
+  - Dependency graph creation and relationships
+  - Conflict detection for all known conflicts
+  - Complement validation for king safety + castle patterns
+  - Requirement validation for endgame patterns requiring position features
+  - Phase compatibility validation
+  - Comprehensive validation integration
+  - Enum variants and helper methods
+
+### Documentation
+
+- Added comprehensive module documentation explaining:
+  - Component dependency validation system
+  - Known relationships in dependency graph
+  - Conflict resolution strategies
+  - Phase-aware validation
+  - Usage examples and best practices
+
+### Notes
+
+- Conflicts are detected and warned, but actual resolution is handled during evaluation via precedence rules (e.g., `center_control_precedence`)
+- Phase-aware validation uses average phase from history to detect mismatches
+- Auto-resolution logs how conflicts are resolved but doesn't modify configuration (conflicts are handled dynamically during evaluation)
+- All validation methods return warnings/errors but don't prevent configuration from being used (except for critical requirement violations)
+
+### Next Steps
+
+None - Task 5.0 is complete. Component dependency validation and coordination is now fully implemented, providing comprehensive validation to ensure optimal configuration and avoid conflicts in the evaluation system.

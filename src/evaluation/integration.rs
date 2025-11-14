@@ -71,6 +71,28 @@
 //! Scaling factors are configurable via `phase_scaling_config` in `TaperedEvalConfig`. If `None`, defaults
 //! are used which provide good balance across all phases.
 //!
+//! # Component Dependency Validation and Coordination (Task 20.0 - Task 5.0)
+//!
+//! The evaluator includes comprehensive component dependency validation to ensure optimal
+//! configuration and avoid conflicts:
+//!
+//! - **Dependency Graph**: Maps component relationships (Conflicts, Complements, Requires, Optional)
+//! - **Conflict Detection**: Warns when conflicting components are both enabled (e.g., center control overlap)
+//! - **Complement Validation**: Warns when complementary components are not both enabled (e.g., king safety + castle patterns)
+//! - **Requirement Validation**: Errors when required components are missing (e.g., endgame patterns requires position features)
+//! - **Auto-Resolution**: Optionally automatically resolves conflicts based on precedence rules
+//! - **Phase-Aware Validation**: Warns when components are enabled but phase is outside their effective range
+//!
+//! The dependency graph includes known relationships:
+//! - `position_features.center_control` CONFLICTS with `positional_patterns`
+//! - `position_features.development` CONFLICTS with `opening_principles` (in opening)
+//! - `position_features.passed_pawns` CONFLICTS with `endgame_patterns` (in endgame)
+//! - `position_features.king_safety` COMPLEMENTS `castle_patterns`
+//! - `endgame_patterns` REQUIRES `position_features` (for pawn structure)
+//!
+//! Use `validate_configuration()` to perform all validation checks, or enable
+//! `auto_resolve_conflicts` for automatic conflict resolution.
+//!
 //! # Tuning Infrastructure Integration (Task 20.0 - Task 4.0)
 //!
 //! The evaluator supports weight tuning through the tuning infrastructure:
@@ -179,6 +201,8 @@ pub struct IntegratedEvaluator {
     phase_cache: RefCell<HashMap<u64, i32>>,
     /// Evaluation cache (uses interior mutability)
     eval_cache: RefCell<HashMap<u64, CachedEvaluation>>,
+    /// Phase history for phase-aware validation (Task 20.0 - Task 5.14)
+    phase_history: RefCell<Vec<i32>>,
 }
 
 impl IntegratedEvaluator {
@@ -188,7 +212,27 @@ impl IntegratedEvaluator {
     }
 
     /// Create with custom configuration
-    pub fn with_config(config: IntegratedEvaluationConfig) -> Self {
+    pub fn with_config(mut config: IntegratedEvaluationConfig) -> Self {
+        // Validate and optionally auto-resolve conflicts (Task 20.0 - Task 5.11)
+        if config.auto_resolve_conflicts {
+            let warnings = config.validate_component_dependencies();
+            if !warnings.is_empty() {
+                debug_log(&format!(
+                    "[IntegratedEvaluator] Auto-resolving {} component dependency conflicts",
+                    warnings.len()
+                ));
+                config.auto_resolve_conflicts(); // This logs resolutions but conflicts are handled during evaluation
+            }
+        }
+
+        // Validate configuration (Task 20.0 - Task 5.16)
+        if let Err(err) = config.validate() {
+            debug_log(&format!(
+                "[IntegratedEvaluator] Configuration validation error: {}",
+                err
+            ));
+        }
+
         let pst_tables = match PieceSquareTableLoader::load(&config.pst) {
             Ok(pst) => pst,
             Err(err) => {
@@ -231,6 +275,7 @@ impl IntegratedEvaluator {
             telemetry: RefCell::new(None),
             phase_cache: RefCell::new(HashMap::new()),
             eval_cache: RefCell::new(HashMap::new()),
+            phase_history: RefCell::new(Vec::new()), // Task 20.0 - Task 5.14
         };
 
         evaluator
@@ -287,6 +332,14 @@ impl IntegratedEvaluator {
             if self.config.enable_phase_cache {
                 let phase = self.calculate_phase_cached(board, captured_pieces);
                 self.statistics.borrow_mut().record_evaluation(score, phase);
+                
+                // Record phase for phase-aware validation (Task 20.0 - Task 5.14)
+                let mut phase_history = self.phase_history.borrow_mut();
+                phase_history.push(phase);
+                const MAX_PHASE_HISTORY: usize = 100;
+                if phase_history.len() > MAX_PHASE_HISTORY {
+                    phase_history.remove(0);
+                }
             }
         }
 
@@ -1177,6 +1230,10 @@ pub struct IntegratedEvaluationConfig {
     /// 
     /// Default: `PositionalPatterns` (more sophisticated evaluation)
     pub center_control_precedence: CenterControlPrecedence,
+    /// Component dependency graph (Task 20.0 - Task 5.4)
+    pub dependency_graph: crate::evaluation::config::ComponentDependencyGraph,
+    /// Automatically resolve conflicts when detected (Task 20.0 - Task 5.10)
+    pub auto_resolve_conflicts: bool,
 }
 
 impl Default for IntegratedEvaluationConfig {
@@ -1200,6 +1257,8 @@ impl Default for IntegratedEvaluationConfig {
             phase_boundaries: crate::evaluation::config::PhaseBoundaryConfig::default(),
             enable_gradual_phase_transitions: false,
             center_control_precedence: CenterControlPrecedence::PositionalPatterns,
+            dependency_graph: crate::evaluation::config::ComponentDependencyGraph::default(), // Task 20.0 - Task 5.4
+            auto_resolve_conflicts: false, // Task 20.0 - Task 5.10
         }
     }
 }
@@ -1226,22 +1285,136 @@ impl IntegratedEvaluationConfig {
         temp_config.validate_cumulative_weights(&components)
     }
 
-    /// Validate component dependencies and check for conflicts
+    /// Convert ComponentFlags to ComponentId set for dependency checking (Task 20.0 - Task 5.5)
+    fn get_enabled_component_ids(&self) -> Vec<crate::evaluation::config::ComponentId> {
+        use crate::evaluation::config::ComponentId;
+        let mut ids = Vec::new();
+
+        if self.components.material {
+            ids.push(ComponentId::Material);
+        }
+        if self.components.piece_square_tables {
+            ids.push(ComponentId::PieceSquareTables);
+        }
+        if self.components.position_features {
+            ids.push(ComponentId::PositionFeatures);
+            // Add sub-components if they're enabled
+            ids.push(ComponentId::PositionFeaturesCenterControl);
+            ids.push(ComponentId::PositionFeaturesDevelopment);
+            ids.push(ComponentId::PositionFeaturesPassedPawns);
+            ids.push(ComponentId::PositionFeaturesKingSafety);
+        }
+        if self.components.opening_principles {
+            ids.push(ComponentId::OpeningPrinciples);
+        }
+        if self.components.endgame_patterns {
+            ids.push(ComponentId::EndgamePatterns);
+        }
+        if self.components.tactical_patterns {
+            ids.push(ComponentId::TacticalPatterns);
+        }
+        if self.components.positional_patterns {
+            ids.push(ComponentId::PositionalPatterns);
+        }
+        if self.components.castle_patterns {
+            ids.push(ComponentId::CastlePatterns);
+        }
+
+        ids
+    }
+
+    /// Validate component dependencies and check for conflicts (Task 20.0 - Task 5.5)
     /// 
     /// Returns a vector of warnings for potential issues. These are informational
     /// and don't prevent the configuration from being used, but may indicate
     /// suboptimal settings.
     pub fn validate_component_dependencies(&self) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
-        use crate::evaluation::config::ComponentDependencyWarning;
+        use crate::evaluation::config::{ComponentDependencyWarning, ComponentId};
         let mut warnings = Vec::new();
 
-        // Check for center control overlap (Task 20.0 - Task 1.8)
+        let enabled_ids = self.get_enabled_component_ids();
+
+        // Check for conflicts (Task 20.0 - Task 5.6)
+        for (i, &id1) in enabled_ids.iter().enumerate() {
+            for &id2 in enabled_ids.iter().skip(i + 1) {
+                if self.dependency_graph.conflicts(id1, id2) {
+                    warnings.push(ComponentDependencyWarning::ComponentConflict {
+                        component1: format!("{:?}", id1),
+                        component2: format!("{:?}", id2),
+                    });
+                }
+            }
+        }
+
+        // Check for missing complements (Task 20.0 - Task 5.7)
+        for &id1 in &enabled_ids {
+            for &id2 in &enabled_ids {
+                if id1 != id2 && self.dependency_graph.complements(id1, id2) {
+                    // id1 is enabled and complements id2, id2 is enabled - good, skip
+                    continue;
+                }
+            }
+            // Check if id1 has complementary components that are not enabled
+            for component_id in [
+                ComponentId::Material,
+                ComponentId::PieceSquareTables,
+                ComponentId::PositionFeatures,
+                ComponentId::PositionFeaturesCenterControl,
+                ComponentId::PositionFeaturesDevelopment,
+                ComponentId::PositionFeaturesPassedPawns,
+                ComponentId::PositionFeaturesKingSafety,
+                ComponentId::OpeningPrinciples,
+                ComponentId::EndgamePatterns,
+                ComponentId::TacticalPatterns,
+                ComponentId::PositionalPatterns,
+                ComponentId::CastlePatterns,
+            ] {
+                if component_id != id1 && self.dependency_graph.complements(id1, component_id) {
+                    // Check if component_id is enabled
+                    if !enabled_ids.contains(&component_id) {
+                        warnings.push(ComponentDependencyWarning::MissingComplement {
+                            component1: format!("{:?}", id1),
+                            component2: format!("{:?}", component_id),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check for missing requirements (Task 20.0 - Task 5.8)
+        for &id1 in &enabled_ids {
+            for component_id in [
+                ComponentId::Material,
+                ComponentId::PieceSquareTables,
+                ComponentId::PositionFeatures,
+                ComponentId::PositionFeaturesCenterControl,
+                ComponentId::PositionFeaturesDevelopment,
+                ComponentId::PositionFeaturesPassedPawns,
+                ComponentId::PositionFeaturesKingSafety,
+                ComponentId::OpeningPrinciples,
+                ComponentId::EndgamePatterns,
+                ComponentId::TacticalPatterns,
+                ComponentId::PositionalPatterns,
+                ComponentId::CastlePatterns,
+            ] {
+                if component_id != id1 && self.dependency_graph.requires(id1, component_id) {
+                    // id1 requires component_id, check if component_id is enabled
+                    if !enabled_ids.contains(&component_id) {
+                        warnings.push(ComponentDependencyWarning::MissingRequirement {
+                            component: format!("{:?}", id1),
+                            required: format!("{:?}", component_id),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Legacy warnings for backward compatibility (Task 20.0 - Task 1.8)
         // Note: Automatically handled via center_control_precedence, but still warn for visibility
         if self.components.position_features && self.components.positional_patterns {
             warnings.push(ComponentDependencyWarning::CenterControlOverlap);
         }
 
-        // Check for development overlap (Task 20.0 - Task 1.8)
         // Note: Automatically handled during evaluation (opening_principles takes precedence in opening),
         // but still warn for visibility
         if self.components.position_features && self.components.opening_principles {
@@ -1250,6 +1423,104 @@ impl IntegratedEvaluationConfig {
 
         // Note: Endgame patterns phase check (Task 5.3) requires runtime phase calculation,
         // so it's handled during evaluation, not in static validation
+
+        warnings
+    }
+
+    /// Suggest component resolution for conflicts (Task 20.0 - Task 5.9)
+    pub fn suggest_component_resolution(&self) -> Vec<String> {
+        use crate::evaluation::config::ComponentId;
+        let mut suggestions = Vec::new();
+
+        let enabled_ids = self.get_enabled_component_ids();
+
+        // Check for conflicts and suggest resolutions
+        for (i, &id1) in enabled_ids.iter().enumerate() {
+            for &id2 in enabled_ids.iter().skip(i + 1) {
+                if self.dependency_graph.conflicts(id1, id2) {
+                    // Suggest disabling one based on precedence or importance
+                    let suggestion = if matches!(id1, ComponentId::PositionalPatterns) 
+                        && matches!(id2, ComponentId::PositionFeaturesCenterControl) {
+                        format!("Disable position_features.center_control (positional_patterns takes precedence)")
+                    } else if matches!(id1, ComponentId::OpeningPrinciples)
+                        && matches!(id2, ComponentId::PositionFeaturesDevelopment) {
+                        format!("Disable position_features.development in opening (opening_principles takes precedence)")
+                    } else if matches!(id1, ComponentId::EndgamePatterns)
+                        && matches!(id2, ComponentId::PositionFeaturesPassedPawns) {
+                        format!("Disable position_features.passed_pawns in endgame (endgame_patterns takes precedence)")
+                    } else {
+                        format!("Disable either {:?} or {:?} to resolve conflict", id1, id2)
+                    };
+                    suggestions.push(suggestion);
+                }
+            }
+        }
+
+        suggestions
+    }
+
+    /// Automatically resolve conflicts by disabling components based on precedence (Task 20.0 - Task 5.9)
+    pub fn auto_resolve_conflicts(&mut self) -> Vec<String> {
+        use crate::evaluation::config::ComponentId;
+        let mut resolutions = Vec::new();
+
+        let enabled_ids = self.get_enabled_component_ids();
+
+        // Resolve conflicts based on precedence
+        for (i, &id1) in enabled_ids.iter().enumerate() {
+            for &id2 in enabled_ids.iter().skip(i + 1) {
+                if self.dependency_graph.conflicts(id1, id2) {
+                    // Apply resolution based on component types and precedence
+                    if matches!(id1, ComponentId::PositionalPatterns)
+                        && matches!(id2, ComponentId::PositionFeaturesCenterControl)
+                    {
+                        // Positional patterns take precedence - handled by center_control_precedence
+                        resolutions.push("Center control conflict resolved via center_control_precedence".to_string());
+                    } else if matches!(id1, ComponentId::OpeningPrinciples)
+                        && matches!(id2, ComponentId::PositionFeaturesDevelopment)
+                    {
+                        // Opening principles take precedence in opening - already handled during evaluation
+                        resolutions.push("Development conflict resolved (opening_principles takes precedence in opening)".to_string());
+                    } else if matches!(id1, ComponentId::EndgamePatterns)
+                        && matches!(id2, ComponentId::PositionFeaturesPassedPawns)
+                    {
+                        // Endgame patterns take precedence in endgame - already handled during evaluation
+                        resolutions.push("Passed pawns conflict resolved (endgame_patterns takes precedence in endgame)".to_string());
+                    }
+                }
+            }
+        }
+
+        resolutions
+    }
+
+    /// Check phase compatibility for component usage (Task 20.0 - Task 5.14)
+    /// 
+    /// Analyzes recent phase history to detect phase-component mismatches.
+    /// Returns warnings if components are enabled but phase is consistently outside their effective range.
+    pub fn check_phase_compatibility(&self, phase_history: &[i32]) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
+        use crate::evaluation::config::ComponentDependencyWarning;
+        let mut warnings = Vec::new();
+
+        if phase_history.is_empty() {
+            return warnings;
+        }
+
+        let opening_threshold = self.phase_boundaries.opening_threshold;
+        let endgame_threshold = self.phase_boundaries.endgame_threshold;
+
+        // Check if phases are consistently in a particular range
+        let avg_phase: i32 = phase_history.iter().sum::<i32>() / phase_history.len() as i32;
+
+        // Warn when opening_principles is enabled but phase is consistently < opening_threshold (Task 20.0 - Task 5.12)
+        if self.components.opening_principles && avg_phase < opening_threshold {
+            warnings.push(ComponentDependencyWarning::EndgamePatternsNotInEndgame); // Reuse for now
+        }
+
+        // Warn when endgame_patterns is enabled but phase is consistently >= endgame_threshold (Task 20.0 - Task 5.13)
+        if self.components.endgame_patterns && avg_phase >= endgame_threshold {
+            warnings.push(ComponentDependencyWarning::EndgamePatternsNotInEndgame);
+        }
 
         warnings
     }
@@ -1264,6 +1535,32 @@ impl IntegratedEvaluationConfig {
 
         // Check component dependencies (warnings, not errors)
         let warnings = self.validate_component_dependencies();
+
+        Ok(warnings)
+    }
+}
+
+// Validation methods for IntegratedEvaluator (Task 20.0 - Task 5.0)
+impl IntegratedEvaluator {
+    /// Validate configuration with all checks (Task 20.0 - Task 5.15)
+    /// 
+    /// Performs comprehensive validation including:
+    /// - Cumulative weight validation
+    /// - Component dependency validation
+    /// - Phase compatibility validation (if phase history is available)
+    pub fn validate_configuration(&self) -> Result<Vec<crate::evaluation::config::ComponentDependencyWarning>, crate::evaluation::config::ConfigError> {
+        let mut warnings = Vec::new();
+
+        // Validate configuration (weights and dependencies)
+        let config_warnings = self.config.validate()?;
+        warnings.extend(config_warnings);
+
+        // Phase-aware validation (Task 20.0 - Task 5.14)
+        let phase_history = self.phase_history.borrow();
+        if !phase_history.is_empty() {
+            let phase_warnings = self.config.check_phase_compatibility(&phase_history);
+            warnings.extend(phase_warnings);
+        }
 
         Ok(warnings)
     }

@@ -33,6 +33,7 @@ use crate::evaluation::position_features::PositionFeatureConfig;
 use crate::evaluation::pst_loader::PieceSquareTableConfig;
 use crate::types::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Unified configuration for all tapered evaluation components
@@ -1367,6 +1368,157 @@ impl PhaseBoundaryConfig {
     }
 }
 
+/// Component dependency relationship types (Task 20.0 - Task 5.1)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComponentDependency {
+    /// Components conflict - both should not be enabled simultaneously (causes double-counting)
+    Conflicts,
+    /// Components complement each other - should be enabled together for best results
+    Complements,
+    /// Component requires another - dependent component should not be enabled without required component
+    Requires,
+    /// Component is optional dependency - can be enabled independently
+    Optional,
+}
+
+/// Component identifier for dependency graph (Task 20.0 - Task 5.2)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ComponentId {
+    /// Material evaluation
+    Material,
+    /// Piece-square tables
+    PieceSquareTables,
+    /// Position features (king safety, pawn structure, mobility, center control, development)
+    PositionFeatures,
+    /// Position features: center control specifically
+    PositionFeaturesCenterControl,
+    /// Position features: development specifically
+    PositionFeaturesDevelopment,
+    /// Position features: passed pawns specifically
+    PositionFeaturesPassedPawns,
+    /// Position features: king safety specifically
+    PositionFeaturesKingSafety,
+    /// Opening principles
+    OpeningPrinciples,
+    /// Endgame patterns
+    EndgamePatterns,
+    /// Tactical patterns
+    TacticalPatterns,
+    /// Positional patterns (center control)
+    PositionalPatterns,
+    /// Castle patterns
+    CastlePatterns,
+}
+
+/// Component dependency graph that maps component pairs to their dependency relationship (Task 20.0 - Task 5.2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentDependencyGraph {
+    /// Map from (component1, component2) to dependency relationship
+    dependencies: HashMap<(ComponentId, ComponentId), ComponentDependency>,
+}
+
+impl ComponentDependencyGraph {
+    /// Create a new empty dependency graph
+    pub fn new() -> Self {
+        Self {
+            dependencies: HashMap::new(),
+        }
+    }
+
+    /// Create dependency graph with default relationships (Task 20.0 - Task 5.3)
+    pub fn with_defaults() -> Self {
+        let mut graph = Self::new();
+        
+        // Conflicts: components that overlap in functionality
+        // position_features.center_control CONFLICTS with positional_patterns (center control)
+        graph.add_dependency(
+            ComponentId::PositionFeaturesCenterControl,
+            ComponentId::PositionalPatterns,
+            ComponentDependency::Conflicts,
+        );
+        
+        // position_features.development CONFLICTS with opening_principles (development, in opening)
+        graph.add_dependency(
+            ComponentId::PositionFeaturesDevelopment,
+            ComponentId::OpeningPrinciples,
+            ComponentDependency::Conflicts,
+        );
+        
+        // position_features.passed_pawns CONFLICTS with endgame_patterns (passed pawns, in endgame)
+        graph.add_dependency(
+            ComponentId::PositionFeaturesPassedPawns,
+            ComponentId::EndgamePatterns,
+            ComponentDependency::Conflicts,
+        );
+        
+        // Complements: components that work well together
+        // position_features.king_safety COMPLEMENTS castle_patterns
+        graph.add_dependency(
+            ComponentId::PositionFeaturesKingSafety,
+            ComponentId::CastlePatterns,
+            ComponentDependency::Complements,
+        );
+        
+        // Requires: dependent component requires another
+        // endgame_patterns REQUIRES pawn_structure (endgame patterns handle pawn structure)
+        // Note: This is handled through position_features which includes pawn_structure
+        graph.add_dependency(
+            ComponentId::EndgamePatterns,
+            ComponentId::PositionFeatures, // Requires position_features for pawn structure
+            ComponentDependency::Requires,
+        );
+        
+        graph
+    }
+
+    /// Add a dependency relationship between two components
+    pub fn add_dependency(
+        &mut self,
+        component1: ComponentId,
+        component2: ComponentId,
+        dependency: ComponentDependency,
+    ) {
+        // Add both directions for bidirectional lookups
+        self.dependencies.insert((component1, component2), dependency);
+        self.dependencies.insert((component2, component1), dependency);
+    }
+
+    /// Get dependency relationship between two components
+    pub fn get_dependency(&self, component1: ComponentId, component2: ComponentId) -> Option<ComponentDependency> {
+        self.dependencies.get(&(component1, component2)).copied()
+    }
+
+    /// Check if two components conflict
+    pub fn conflicts(&self, component1: ComponentId, component2: ComponentId) -> bool {
+        matches!(
+            self.get_dependency(component1, component2),
+            Some(ComponentDependency::Conflicts)
+        )
+    }
+
+    /// Check if two components complement each other
+    pub fn complements(&self, component1: ComponentId, component2: ComponentId) -> bool {
+        matches!(
+            self.get_dependency(component1, component2),
+            Some(ComponentDependency::Complements)
+        )
+    }
+
+    /// Check if component1 requires component2
+    pub fn requires(&self, component1: ComponentId, component2: ComponentId) -> bool {
+        matches!(
+            self.get_dependency(component1, component2),
+            Some(ComponentDependency::Requires)
+        )
+    }
+}
+
+impl Default for ComponentDependencyGraph {
+    fn default() -> Self {
+        Self::with_defaults()
+    }
+}
+
 /// Component dependency warnings for configuration validation
 #[derive(Debug, Clone, PartialEq)]
 pub enum ComponentDependencyWarning {
@@ -1379,6 +1531,21 @@ pub enum ComponentDependencyWarning {
     EndgamePatternsNotInEndgame,
     /// Enabled component produced zero score (may indicate configuration issue)
     ComponentProducedZeroScore(String),
+    /// Components conflict: both components are enabled but conflict with each other (Task 20.0 - Task 5.6)
+    ComponentConflict {
+        component1: String,
+        component2: String,
+    },
+    /// Components complement but only one is enabled (Task 20.0 - Task 5.7)
+    MissingComplement {
+        component1: String,
+        component2: String,
+    },
+    /// Component requires another but it's not enabled (Task 20.0 - Task 5.8)
+    MissingRequirement {
+        component: String,
+        required: String,
+    },
 }
 
 impl std::fmt::Display for ConfigError {
