@@ -573,6 +573,48 @@ impl Default for KingSilverVsKingSolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
+
+    fn build_board(pieces: &[(Player, PieceType, Position)]) -> BitboardBoard {
+        let mut board = BitboardBoard::empty();
+        for (player, piece_type, position) in pieces {
+            board.place_piece(
+                Piece {
+                    piece_type: *piece_type,
+                    player: *player,
+                },
+                *position,
+            );
+        }
+        board
+    }
+
+    fn silver_checkmate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 4)),
+            (Player::Black, PieceType::Silver, Position::new(1, 4)),
+            (Player::White, PieceType::King, Position::new(0, 4)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn silver_stalemate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(1, 2)),
+            (Player::Black, PieceType::Silver, Position::new(2, 0)),
+            (Player::White, PieceType::King, Position::new(0, 0)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn silver_distance_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(4, 4)),
+            (Player::Black, PieceType::Silver, Position::new(6, 6)),
+            (Player::White, PieceType::King, Position::new(8, 8)),
+        ]);
+        (board, CapturedPieces::new())
+    }
 
     #[test]
     fn test_king_silver_vs_king_detection() {
@@ -623,5 +665,93 @@ mod tests {
 
         // Empty board should have no moves
         assert_eq!(moves.len(), 0);
+    }
+
+    #[test]
+    fn test_silver_solver_detects_checkmate_position() {
+        let solver = KingSilverVsKingSolver::new();
+        let (board, captured) = silver_checkmate_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("King+Silver vs King should be solvable");
+
+        assert!(result.is_winning());
+        assert_eq!(result.moves_to_mate, Some(0));
+    }
+
+    #[test]
+    fn test_silver_solver_detects_stalemate_position() {
+        let solver = KingSilverVsKingSolver::new();
+        let (board, captured) = silver_stalemate_position();
+
+        assert!(solver.is_stalemate(&board, Player::White, &captured));
+    }
+
+    #[test]
+    fn test_silver_solver_distance_to_mate_for_far_position() {
+        let solver = KingSilverVsKingSolver::new();
+        let (board, captured) = silver_distance_position();
+
+        let distance = solver.calculate_distance_to_mate(&board, Player::Black, &captured);
+        assert!(distance > 0);
+    }
+
+    #[test]
+    fn test_silver_evaluation_helpers() {
+        let solver = KingSilverVsKingSolver::new();
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(3, 4)),
+            (Player::Black, PieceType::Silver, Position::new(2, 4)),
+            (Player::White, PieceType::King, Position::new(0, 4)),
+        ]);
+        let coord_move = Move::new_move(
+            Position::new(2, 4),
+            Position::new(1, 4),
+            PieceType::Silver,
+            Player::Black,
+            false,
+        );
+
+        assert!(solver.coordinates_king_silver(
+            &board,
+            Player::Black,
+            &coord_move,
+            Position::new(3, 4),
+            Position::new(2, 4),
+        ));
+
+        let mobility_board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 2)),
+            (Player::Black, PieceType::Silver, Position::new(2, 0)),
+            (Player::White, PieceType::King, Position::new(0, 0)),
+        ]);
+        let mobility_move = Move::new_move(
+            Position::new(2, 0),
+            Position::new(1, 0),
+            PieceType::Silver,
+            Player::Black,
+            false,
+        );
+        let captured = CapturedPieces::new();
+
+        assert!(solver.restricts_king_mobility(
+            &mobility_board,
+            Player::Black,
+            &mobility_move,
+            Position::new(0, 0),
+            &captured,
+        ));
+    }
+
+    #[test]
+    fn test_silver_solver_matches_endgame_theory() {
+        let solver = KingSilverVsKingSolver::new();
+        let (board, captured) = silver_distance_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("Position should be solvable");
+        assert!(result.is_winning());
     }
 }

@@ -512,6 +512,16 @@ impl KingGoldVsKingSolver {
         king_distance_to_gold <= 2 && king_distance_to_defending_king <= 3
     }
 
+    /// Check if the defending player is stalemated
+    fn is_stalemate(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> bool {
+        board.is_stalemate(player, captured_pieces)
+    }
+
     /// Calculate distance to mate using search-based DTM calculation
     fn calculate_distance_to_mate(&self, board: &BitboardBoard, player: Player) -> u8 {
         use super::dtm_calculator::calculate_dtm;
@@ -606,7 +616,48 @@ impl Default for KingGoldVsKingSolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Move, PieceType, Player, Position};
+    use crate::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
+
+    fn build_board(pieces: &[(Player, PieceType, Position)]) -> BitboardBoard {
+        let mut board = BitboardBoard::empty();
+        for (player, piece_type, position) in pieces {
+            board.place_piece(
+                Piece {
+                    piece_type: *piece_type,
+                    player: *player,
+                },
+                *position,
+            );
+        }
+        board
+    }
+
+    fn gold_checkmate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 4)),
+            (Player::Black, PieceType::Gold, Position::new(1, 4)),
+            (Player::White, PieceType::King, Position::new(0, 4)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn gold_stalemate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(1, 2)),
+            (Player::Black, PieceType::Gold, Position::new(2, 0)),
+            (Player::White, PieceType::King, Position::new(0, 0)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn gold_distance_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(4, 4)),
+            (Player::Black, PieceType::Gold, Position::new(6, 6)),
+            (Player::White, PieceType::King, Position::new(8, 8)),
+        ]);
+        (board, CapturedPieces::new())
+    }
 
     fn create_test_board() -> BitboardBoard {
         BitboardBoard::new()
@@ -733,5 +784,89 @@ mod tests {
         assert!(solver.is_enabled());
         assert_eq!(solver.max_depth(), Some(30));
         assert_eq!(solver.priority(), 100);
+    }
+
+    #[test]
+    fn test_gold_solver_detects_checkmate_position() {
+        let solver = KingGoldVsKingSolver::new();
+        let (board, captured) = gold_checkmate_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("King+Gold vs King should be solvable");
+
+        assert!(result.is_winning());
+        assert_eq!(result.moves_to_mate, Some(0));
+    }
+
+    #[test]
+    fn test_gold_solver_detects_stalemate_position() {
+        let solver = KingGoldVsKingSolver::new();
+        let (board, captured) = gold_stalemate_position();
+
+        assert!(solver.is_stalemate(&board, Player::White, &captured));
+    }
+
+    #[test]
+    fn test_gold_solver_distance_to_mate_for_far_position() {
+        let solver = KingGoldVsKingSolver::new();
+        let (board, captured) = gold_distance_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("Position should be solvable");
+
+        let distance = result
+            .moves_to_mate
+            .expect("Distance to mate should be available");
+        assert!(distance > 0);
+    }
+
+    #[test]
+    fn test_gold_evaluation_helpers() {
+        let solver = KingGoldVsKingSolver::new();
+        let king_move = Move::new_move(
+            Position::new(3, 4),
+            Position::new(2, 4),
+            PieceType::King,
+            Player::Black,
+            false,
+        );
+
+        assert!(solver.king_supports_gold_mate(
+            &BitboardBoard::empty(),
+            Player::Black,
+            &king_move,
+            Position::new(1, 4),
+            Position::new(0, 4),
+        ));
+
+        let gold_move = Move::new_move(
+            Position::new(5, 5),
+            Position::new(4, 5),
+            PieceType::Gold,
+            Player::Black,
+            false,
+        );
+
+        assert!(solver.improves_mating_position(
+            &BitboardBoard::empty(),
+            Player::Black,
+            &gold_move,
+            Position::new(6, 6),
+            Position::new(0, 4),
+        ));
+    }
+
+    #[test]
+    fn test_gold_solver_matches_endgame_theory() {
+        let solver = KingGoldVsKingSolver::new();
+        let (board, captured) = gold_distance_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("Position should be solvable");
+
+        assert!(result.is_winning());
     }
 }

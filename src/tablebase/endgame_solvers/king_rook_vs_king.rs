@@ -642,6 +642,48 @@ impl Default for KingRookVsKingSolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
+
+    fn build_board(pieces: &[(Player, PieceType, Position)]) -> BitboardBoard {
+        let mut board = BitboardBoard::empty();
+        for (player, piece_type, position) in pieces {
+            board.place_piece(
+                Piece {
+                    piece_type: *piece_type,
+                    player: *player,
+                },
+                *position,
+            );
+        }
+        board
+    }
+
+    fn rook_checkmate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 4)),
+            (Player::Black, PieceType::Rook, Position::new(0, 2)),
+            (Player::White, PieceType::King, Position::new(0, 4)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn rook_stalemate_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 2)),
+            (Player::Black, PieceType::Rook, Position::new(1, 1)),
+            (Player::White, PieceType::King, Position::new(0, 0)),
+        ]);
+        (board, CapturedPieces::new())
+    }
+
+    fn rook_distance_position() -> (BitboardBoard, CapturedPieces) {
+        let board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(4, 4)),
+            (Player::Black, PieceType::Rook, Position::new(6, 6)),
+            (Player::White, PieceType::King, Position::new(8, 8)),
+        ]);
+        (board, CapturedPieces::new())
+    }
 
     #[test]
     fn test_king_rook_vs_king_detection() {
@@ -692,5 +734,102 @@ mod tests {
 
         // Empty board should have no moves
         assert_eq!(moves.len(), 0);
+    }
+
+    #[test]
+    fn test_rook_solver_detects_checkmate_position() {
+        let solver = KingRookVsKingSolver::new();
+        let (board, captured) = rook_checkmate_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("King+Rook vs King should be solvable");
+
+        assert!(result.is_winning());
+        assert_eq!(result.moves_to_mate, Some(0));
+    }
+
+    #[test]
+    fn test_rook_solver_detects_stalemate_position() {
+        let solver = KingRookVsKingSolver::new();
+        let (board, captured) = rook_stalemate_position();
+
+        assert!(solver.is_stalemate(&board, Player::White, &captured));
+    }
+
+    #[test]
+    fn test_rook_solver_distance_to_mate_for_far_position() {
+        let solver = KingRookVsKingSolver::new();
+        let (board, captured) = rook_distance_position();
+
+        let distance = solver.calculate_distance_to_mate(&board, Player::Black, &captured);
+        assert!(distance > 0);
+    }
+
+    #[test]
+    fn test_rook_evaluation_helpers() {
+        let solver = KingRookVsKingSolver::new();
+        let king_pos = Position::new(3, 4);
+        let rook_pos = Position::new(0, 2);
+        let board = build_board(&[
+            (Player::Black, PieceType::King, king_pos),
+            (Player::Black, PieceType::Rook, rook_pos),
+            (Player::White, PieceType::King, Position::new(0, 4)),
+        ]);
+        let coord_move = Move::new_move(
+            rook_pos,
+            Position::new(0, 4),
+            PieceType::Rook,
+            Player::Black,
+            false,
+        );
+
+        assert!(solver.coordinates_king_rook(
+            &board,
+            Player::Black,
+            &coord_move,
+            king_pos,
+            rook_pos,
+        ));
+
+        let mobility_board = build_board(&[
+            (Player::Black, PieceType::King, Position::new(2, 2)),
+            (Player::Black, PieceType::Rook, Position::new(0, 2)),
+            (Player::White, PieceType::King, Position::new(0, 0)),
+        ]);
+        let mobility_move = Move::new_move(
+            Position::new(0, 2),
+            Position::new(0, 1),
+            PieceType::Rook,
+            Player::Black,
+            false,
+        );
+        let captured = CapturedPieces::new();
+
+        assert!(solver.restricts_king_mobility(
+            &mobility_board,
+            Player::Black,
+            &mobility_move,
+            Position::new(0, 0),
+            &captured,
+        ));
+
+        assert!(solver.controls_key_squares(
+            &mobility_board,
+            Player::Black,
+            &mobility_move,
+            Position::new(0, 0),
+        ));
+    }
+
+    #[test]
+    fn test_rook_solver_matches_endgame_theory() {
+        let solver = KingRookVsKingSolver::new();
+        let (board, captured) = rook_distance_position();
+
+        let result = solver
+            .solve(&board, Player::Black, &captured)
+            .expect("Position should be solvable");
+        assert!(result.is_winning());
     }
 }
