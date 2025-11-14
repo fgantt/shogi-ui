@@ -112,8 +112,15 @@ impl KingSilverVsKingSolver {
             let mut best_score = i32::MIN;
 
             for move_ in &moves {
-                let score =
-                    self.evaluate_move(board, player, move_, king_pos, silver_pos, def_king_pos, captured_pieces);
+                let score = self.evaluate_move(
+                    board,
+                    player,
+                    move_,
+                    king_pos,
+                    silver_pos,
+                    def_king_pos,
+                    captured_pieces,
+                );
                 if score > best_score {
                     best_score = score;
                     best_move = Some(move_.clone());
@@ -157,7 +164,7 @@ impl KingSilverVsKingSolver {
         board: &BitboardBoard,
         piece: Piece,
         from: Position,
-        _captured_pieces: &CapturedPieces,
+        captured_pieces: &CapturedPieces,
     ) -> Vec<Move> {
         let mut moves = Vec::new();
 
@@ -178,14 +185,13 @@ impl KingSilverVsKingSolver {
                                 row: new_row,
                                 col: new_col,
                             };
-                            if self.is_legal_move(board, from, to, piece) {
-                                moves.push(Move::new_move(
-                                    from,
-                                    to,
-                                    piece.piece_type,
-                                    piece.player,
-                                    false,
-                                ));
+                            let mut candidate =
+                                Move::new_move(from, to, piece.piece_type, piece.player, false);
+                            candidate.is_capture =
+                                matches!(board.get_piece(to), Some(p) if p.player != piece.player);
+
+                            if self.is_legal_move(board, captured_pieces, &candidate) {
+                                moves.push(candidate);
                             }
                         }
                     }
@@ -208,14 +214,13 @@ impl KingSilverVsKingSolver {
                             row: new_row,
                             col: new_col,
                         };
-                        if self.is_legal_move(board, from, to, piece) {
-                            moves.push(Move::new_move(
-                                from,
-                                to,
-                                piece.piece_type,
-                                piece.player,
-                                false,
-                            ));
+                        let mut candidate =
+                            Move::new_move(from, to, piece.piece_type, piece.player, false);
+                        candidate.is_capture =
+                            matches!(board.get_piece(to), Some(p) if p.player != piece.player);
+
+                        if self.is_legal_move(board, captured_pieces, &candidate) {
+                            moves.push(candidate);
                         }
                     }
                 }
@@ -230,24 +235,48 @@ impl KingSilverVsKingSolver {
     fn is_legal_move(
         &self,
         board: &BitboardBoard,
-        _from: Position,
-        to: Position,
-        piece: Piece,
+        captured_pieces: &CapturedPieces,
+        move_: &Move,
     ) -> bool {
-        // Check if destination is within bounds
-        if to.row >= 9 || to.col >= 9 {
+        let Some(from) = move_.from else {
+            return false;
+        };
+
+        if from.row >= 9 || from.col >= 9 || move_.to.row >= 9 || move_.to.col >= 9 {
             return false;
         }
 
-        // Check if destination is empty or contains opponent piece
-        if let Some(target_piece) = board.get_piece(to) {
-            if target_piece.player == piece.player {
-                return false; // Can't capture own piece
+        if let Some(target_piece) = board.get_piece(move_.to) {
+            if target_piece.player == move_.player {
+                return false;
             }
         }
 
-        // TODO: Add more sophisticated legality checks
-        true
+        if !captured_pieces.black.is_empty() || !captured_pieces.white.is_empty() {
+            return false;
+        }
+
+        let Some(piece_to_move) = board.get_piece(from) else {
+            return false;
+        };
+
+        if piece_to_move.player != move_.player || piece_to_move.piece_type != move_.piece_type {
+            return false;
+        }
+
+        let mut temp_board = board.clone();
+        let mut temp_captured = captured_pieces.clone();
+        let mut temp_move = move_.clone();
+        temp_move.is_capture =
+            matches!(board.get_piece(move_.to), Some(p) if p.player != move_.player);
+
+        if let Some(captured_piece) = temp_board.make_move(&temp_move) {
+            temp_captured.add_piece(captured_piece.piece_type, move_.player);
+        } else if temp_move.is_capture {
+            return false;
+        }
+
+        !temp_board.is_king_in_check(move_.player, &temp_captured)
     }
 
     /// Check if the position is a checkmate
@@ -317,12 +346,12 @@ impl KingSilverVsKingSolver {
         // Make the move on a temporary board
         let mut temp_board = board.clone();
         let mut temp_captured = CapturedPieces::new();
-        
+
         // Capture piece if move captures
         if let Some(captured) = temp_board.make_move(move_) {
             temp_captured.add_piece(captured.piece_type, player);
         }
-        
+
         // Check if the opponent is now in checkmate
         let opponent = player.opposite();
         temp_board.is_checkmate(opponent, &temp_captured)
@@ -401,7 +430,7 @@ impl KingSilverVsKingSolver {
                 // King coordinates when it's close to both silver and defending king
                 let king_to_silver = self.manhattan_distance(move_.to, silver);
                 let king_to_def_king = self.manhattan_distance(move_.to, defending_king);
-                
+
                 // King should be within 2 squares of silver and within 3 of defending king
                 king_to_silver <= 2 && king_to_def_king <= 3
             }
@@ -409,7 +438,7 @@ impl KingSilverVsKingSolver {
                 // Silver coordinates when it's close to king and can attack defending king
                 let silver_to_king = self.manhattan_distance(move_.to, king);
                 let silver_to_def_king = self.manhattan_distance(move_.to, defending_king);
-                
+
                 // Silver should be within 2 squares of king and close to defending king
                 silver_to_king <= 2 && silver_to_def_king <= 3
             }
@@ -429,7 +458,7 @@ impl KingSilverVsKingSolver {
         // Make the move on a temporary board to see the resulting position
         let mut temp_board = board.clone();
         let mut temp_captured = CapturedPieces::new();
-        
+
         if let Some(captured) = temp_board.make_move(move_) {
             temp_captured.add_piece(captured.piece_type, player);
         }
@@ -438,12 +467,13 @@ impl KingSilverVsKingSolver {
         let opponent = player.opposite();
         let move_generator = crate::moves::MoveGenerator::new();
         let moves_before = move_generator.generate_legal_moves(board, opponent, captured_pieces);
-        let moves_after = move_generator.generate_legal_moves(&temp_board, opponent, &temp_captured);
+        let moves_after =
+            move_generator.generate_legal_moves(&temp_board, opponent, &temp_captured);
 
         // If the move reduces the number of legal moves available to the defending king, it restricts mobility
         // Also check if the move attacks squares adjacent to the defending king
         let restricts_by_reducing_moves = moves_after.len() < moves_before.len();
-        
+
         // Check if move attacks squares adjacent to defending king
         let move_attacks_escape_squares = {
             let mut attacks_escape = false;
@@ -455,11 +485,16 @@ impl KingSilverVsKingSolver {
                     }
                     let escape_row = (defending_king.row as i8 + dr) as u8;
                     let escape_col = (defending_king.col as i8 + dc) as u8;
-                    
+
                     if escape_row < 9 && escape_col < 9 {
-                        let escape_pos = Position { row: escape_row, col: escape_col };
+                        let escape_pos = Position {
+                            row: escape_row,
+                            col: escape_col,
+                        };
                         // If the move's destination attacks this escape square, it restricts mobility
-                        if move_.to == escape_pos || temp_board.is_square_attacked_by(escape_pos, player) {
+                        if move_.to == escape_pos
+                            || temp_board.is_square_attacked_by(escape_pos, player)
+                        {
                             attacks_escape = true;
                             break;
                         }
@@ -483,11 +518,11 @@ impl KingSilverVsKingSolver {
         captured_pieces: &CapturedPieces,
     ) -> u8 {
         use super::dtm_calculator::calculate_dtm;
-        
+
         // Use search-based DTM calculation with max depth limit
         // For K+S vs K, mate is typically achievable within 35 moves
         let max_depth = 35;
-        
+
         // Calculate actual DTM using iterative deepening search
         if let Some(dtm) = calculate_dtm(board, player, captured_pieces, max_depth) {
             dtm
@@ -503,10 +538,10 @@ impl KingSilverVsKingSolver {
                 // Heuristic: estimate based on piece coordination
                 let king_distance = self.manhattan_distance(king_pos, def_king_pos);
                 let silver_distance = self.manhattan_distance(silver_pos, def_king_pos);
-                
+
                 // Better estimate: consider piece coordination
                 let avg_distance = (king_distance + silver_distance) / 2;
-                
+
                 // Estimate: Silver is less powerful than Gold, usually takes longer
                 // Typically 1.8x the average distance for coordination
                 ((avg_distance * 9) / 5).min(35) as u8
@@ -665,6 +700,65 @@ mod tests {
 
         // Empty board should have no moves
         assert_eq!(moves.len(), 0);
+    }
+
+    #[test]
+    fn test_silver_move_cannot_leave_king_in_check() {
+        let solver = KingSilverVsKingSolver::new();
+        let mut board = BitboardBoard::empty();
+        let captured = CapturedPieces::new();
+
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(4, 5),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Rook, Player::White),
+            Position::new(4, 8),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 0),
+        );
+
+        let moves = solver.generate_moves(&board, Player::Black, &captured);
+        assert!(
+            !moves
+                .iter()
+                .any(|m| m.from == Some(Position::new(4, 5)) && m.to == Position::new(3, 4)),
+            "Silver move that exposes the king should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_silver_moves_require_empty_captured_pieces() {
+        let solver = KingSilverVsKingSolver::new();
+        let mut board = BitboardBoard::empty();
+        let mut captured = CapturedPieces::new();
+        captured.add_piece(PieceType::Pawn, Player::Black);
+
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Silver, Player::Black),
+            Position::new(4, 5),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 0),
+        );
+
+        let moves = solver.generate_moves(&board, Player::Black, &captured);
+        assert!(
+            moves.is_empty(),
+            "Solver should not generate moves when captured pieces are present"
+        );
     }
 
     #[test]
