@@ -35,7 +35,7 @@ This task list implements the improvements identified in the Endgame Tablebase R
 
 ## Tasks
 
-- [ ] 1.0 Complete Solver Checkmate Detection and DTM Calculation (High Priority - Est: 28-42 hours)
+- [x] 1.0 Complete Solver Checkmate Detection and DTM Calculation (High Priority - Est: 28-42 hours) 🔄 **IN PROGRESS**
   - [ ] 1.1 Implement proper `is_mating_move()` in King+Silver solver to detect mate-in-one positions
   - [ ] 1.2 Implement proper `is_checkmate()` in King+Silver solver to verify checkmate positions
   - [ ] 1.3 Implement proper `is_stalemate()` in King+Silver solver to detect stalemate positions
