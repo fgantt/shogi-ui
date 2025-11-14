@@ -258,23 +258,23 @@ impl KingRookVsKingSolver {
     /// Check if the position is a checkmate
     fn is_checkmate(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _captured_pieces: &CapturedPieces,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
-        // TODO: Implement checkmate detection
-        false
+        // Use the board's built-in checkmate detection
+        board.is_checkmate(player, captured_pieces)
     }
 
     /// Check if the position is a stalemate
     fn is_stalemate(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _captured_pieces: &CapturedPieces,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
-        // TODO: Implement stalemate detection
-        false
+        // Use the board's built-in stalemate detection
+        board.is_stalemate(player, captured_pieces)
     }
 
     /// Find the king and rook pieces from the extracted pieces
@@ -314,14 +314,23 @@ impl KingRookVsKingSolver {
     /// Check if a move results in checkmate
     fn is_mating_move(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _move_: &Move,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
         _defending_king: Position,
     ) -> bool {
-        // TODO: Implement proper checkmate detection
-        // For now, return false
-        false
+        // Make the move on a temporary board
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        // Capture piece if move captures
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, player);
+        }
+        
+        // Check if the opponent is now in checkmate
+        let opponent = player.opposite();
+        temp_board.is_checkmate(opponent, &temp_captured)
     }
 
     /// Evaluate a move's quality in the King + Rook vs King endgame
