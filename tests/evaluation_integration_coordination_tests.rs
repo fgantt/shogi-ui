@@ -20,7 +20,7 @@ fn test_center_control_conflict_resolution() {
     config1.center_control_precedence = CenterControlPrecedence::PositionalPatterns;
     
     let evaluator1 = IntegratedEvaluator::with_config(config1);
-    let score1 = evaluator1.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score1 = evaluator1.evaluate(&board, Player::Black, &captured_pieces);
     
     // Test 2: PositionFeatures precedence - skip positional_patterns center control
     let mut config2 = IntegratedEvaluationConfig::default();
@@ -29,7 +29,7 @@ fn test_center_control_conflict_resolution() {
     config2.center_control_precedence = CenterControlPrecedence::PositionFeatures;
     
     let evaluator2 = IntegratedEvaluator::with_config(config2);
-    let score2 = evaluator2.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score2 = evaluator2.evaluate(&board, Player::Black, &captured_pieces);
     
     // Test 3: Both precedence - evaluate both (may cause double-counting)
     let mut config3 = IntegratedEvaluationConfig::default();
@@ -38,7 +38,7 @@ fn test_center_control_conflict_resolution() {
     config3.center_control_precedence = CenterControlPrecedence::Both;
     
     let evaluator3 = IntegratedEvaluator::with_config(config3);
-    let score3 = evaluator3.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score3 = evaluator3.evaluate(&board, Player::Black, &captured_pieces);
     
     // All should return valid scores
     assert!(score1 != i32::MIN && score1 != i32::MAX);
@@ -70,7 +70,7 @@ fn test_development_overlap_coordination() {
     config1.components.opening_principles = true;
     
     let evaluator1 = IntegratedEvaluator::with_config(config1);
-    let score1 = evaluator1.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score1 = evaluator1.evaluate(&board, Player::Black, &captured_pieces);
     
     // Test 2: Only position_features enabled (no overlap)
     let mut config2 = IntegratedEvaluationConfig::default();
@@ -78,7 +78,7 @@ fn test_development_overlap_coordination() {
     config2.components.opening_principles = false;
     
     let evaluator2 = IntegratedEvaluator::with_config(config2);
-    let score2 = evaluator2.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score2 = evaluator2.evaluate(&board, Player::Black, &captured_pieces);
     
     // Test 3: Only opening_principles enabled (no overlap)
     let mut config3 = IntegratedEvaluationConfig::default();
@@ -86,7 +86,7 @@ fn test_development_overlap_coordination() {
     config3.components.opening_principles = true;
     
     let evaluator3 = IntegratedEvaluator::with_config(config3);
-    let score3 = evaluator3.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score3 = evaluator3.evaluate(&board, Player::Black, &captured_pieces);
     
     // All should return valid scores
     assert!(score1 != i32::MIN && score1 != i32::MAX);
@@ -145,7 +145,7 @@ fn test_double_counting_prevention() {
     
     for (i, config) in test_configs.iter().enumerate() {
         let evaluator = IntegratedEvaluator::with_config(config.clone());
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces);
         
         // Verify evaluation completes successfully
         assert!(score != i32::MIN && score != i32::MAX, 

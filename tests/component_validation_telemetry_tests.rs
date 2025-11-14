@@ -1,9 +1,9 @@
 //! Tests for Component Validation and Telemetry (Task 17.0 - Task 5.0)
 
-use shogi_engine::evaluation::config::{ComponentDependencyWarning, ConfigError};
-use shogi_engine::evaluation::integration::{ComponentFlags, IntegratedEvaluationConfig, IntegratedEvaluator};
-use shogi_engine::evaluation::statistics::EvaluationTelemetry;
-use shogi_engine::types::{BitboardBoard, CapturedPieces, Player};
+use shogi_engine::bitboards::BitboardBoard;
+use shogi_engine::evaluation::config::ComponentDependencyWarning;
+use shogi_engine::evaluation::integration::{IntegratedEvaluationConfig, IntegratedEvaluator};
+use shogi_engine::types::{CapturedPieces, Player};
 
 #[test]
 fn test_component_dependency_validation() {
@@ -46,8 +46,8 @@ fn test_castle_stats_in_telemetry() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate a position
     let _score = evaluator.evaluate(&board, Player::Black, &captured);
@@ -70,8 +70,8 @@ fn test_weight_contributions_tracking() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate a position
     let _score = evaluator.evaluate(&board, Player::Black, &captured);
@@ -101,8 +101,8 @@ fn test_large_contribution_logging() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate a position - logging code path should execute
     let _score = evaluator.evaluate(&board, Player::Black, &captured);
@@ -120,8 +120,8 @@ fn test_all_pattern_stats_aggregated() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate a position
     let _score = evaluator.evaluate(&board, Player::Black, &captured);
@@ -146,8 +146,8 @@ fn test_component_zero_score_validation() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate - validation code path should execute
     // (zero score warnings would be logged if material produced zero, which is unlikely)
@@ -163,8 +163,8 @@ fn test_endgame_patterns_phase_warning() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate in opening phase (phase >= 64)
     // Warning should be logged (we can't easily capture it, but code path should execute)
@@ -181,8 +181,8 @@ fn test_weight_contributions_percentage_calculation() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Evaluate a position
     let _score = evaluator.evaluate(&board, Player::Black, &captured);

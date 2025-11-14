@@ -256,6 +256,7 @@ fn tactical_weight_scales_contribution() {
         endgame_patterns: false,
         tactical_patterns: true,
         positional_patterns: false,
+        castle_patterns: false,
     };
     config.weights.tactical_weight = 1.0;
 
@@ -356,6 +357,7 @@ fn integrated_evaluator_respects_tactical_polarity() {
         endgame_patterns: false,
         tactical_patterns: true,
         positional_patterns: false,
+        castle_patterns: false,
     };
 
     let evaluator = IntegratedEvaluator::with_config(config.clone());
@@ -400,6 +402,7 @@ fn telemetry_includes_tactical_snapshot() {
         endgame_patterns: false,
         tactical_patterns: true,
         positional_patterns: false,
+        castle_patterns: false,
     };
 
     let evaluator = IntegratedEvaluator::with_config(config);

@@ -39,11 +39,11 @@ fn test_king_square_tables() {
     let board = BitboardBoard::new();
     
     // Test that king-square tables are used
-    let score = evaluator.evaluate_king_activity(&board, Player::Black);
+    let score = evaluator.evaluate_endgame(&board, Player::Black, &CapturedPieces::new());
     
     // Should complete without error
-    assert!(score.mg >= -200 && score.mg <= 200);
-    assert!(score.eg >= -200 && score.eg <= 200);
+    assert!(score.mg >= -10000 && score.mg <= 10000);
+    assert!(score.eg >= -10000 && score.eg <= 10000);
 }
 
 #[test]

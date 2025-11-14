@@ -823,7 +823,7 @@ evaluation_scores:
             }
         ]"#;
         
-        let (book, _stats) = converter.convert_from_json(json_data).unwrap();
+        let (mut book, _stats) = converter.convert_from_json(json_data).unwrap();
         
         // Verify the book was created with custom weight
         let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";

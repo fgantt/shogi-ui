@@ -27,6 +27,175 @@ thread_local! {
     static YBWC_ENGINE_TLS: std::cell::RefCell<Option<SearchEngine>> = std::cell::RefCell::new(None);
 }
 
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+    use crate::types::{Move, Piece, PieceType, Player, Position};
+
+    #[test]
+    fn test_quiescence_move_sorting_total_order() {
+        let search_engine = SearchEngine::new(None, 16);
+
+        let mut test_moves = vec![
+            Move {
+                from: Some(Position { row: 1, col: 1 }),
+                to: Position { row: 2, col: 1 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: false,
+                is_promotion: false,
+                gives_check: false,
+                is_recapture: false,
+                captured_piece: None,
+            },
+            Move {
+                from: Some(Position { row: 1, col: 2 }),
+                to: Position { row: 2, col: 2 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: true,
+                is_promotion: false,
+                gives_check: false,
+                is_recapture: false,
+                captured_piece: Some(Piece {
+                    piece_type: PieceType::Pawn,
+                    player: Player::White,
+                }),
+            },
+            Move {
+                from: Some(Position { row: 1, col: 3 }),
+                to: Position { row: 2, col: 3 },
+                piece_type: PieceType::Pawn,
+                player: Player::Black,
+                is_capture: false,
+                is_promotion: false,
+                gives_check: true,
+                is_recapture: false,
+                captured_piece: None,
+            },
+        ];
+
+        test_moves.sort_by(|a, b| search_engine.compare_quiescence_moves(a, b));
+
+        assert!(test_moves[0].gives_check, "Check move should be first");
+        assert!(test_moves[1].is_capture, "Capture move should be second");
+        assert!(
+            !test_moves[2].is_capture && !test_moves[2].gives_check,
+            "Non-capture move should be last"
+        );
+
+        for i in 0..test_moves.len() {
+            for j in 0..test_moves.len() {
+                let cmp_ij = search_engine.compare_quiescence_moves(&test_moves[i], &test_moves[j]);
+                let cmp_ji = search_engine.compare_quiescence_moves(&test_moves[j], &test_moves[i]);
+                match (cmp_ij, cmp_ji) {
+                    (std::cmp::Ordering::Less, std::cmp::Ordering::Greater) => {}
+                    (std::cmp::Ordering::Greater, std::cmp::Ordering::Less) => {}
+                    (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal) => {}
+                    _ => panic!("Comparison is not antisymmetric: {} vs {}", i, j),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_null_move_configuration_management() {
+        let mut engine = SearchEngine::new(None, 16);
+
+        let config = engine.get_null_move_config();
+        assert!(config.enabled);
+        assert_eq!(config.min_depth, 3);
+        assert_eq!(config.reduction_factor, 2);
+
+        let mut new_config = NullMoveConfig::default();
+        new_config.min_depth = 4;
+        new_config.reduction_factor = 3;
+        assert!(engine.update_null_move_config(new_config.clone()).is_ok());
+
+        let updated_config = engine.get_null_move_config();
+        assert_eq!(updated_config.min_depth, 4);
+        assert_eq!(updated_config.reduction_factor, 3);
+
+        let mut invalid_config = NullMoveConfig::default();
+        invalid_config.min_depth = 0;
+        assert!(engine.update_null_move_config(invalid_config).is_err());
+
+        engine.null_move_stats.attempts = 100;
+        engine.null_move_stats.cutoffs = 25;
+        assert_eq!(engine.get_null_move_stats().attempts, 100);
+        assert_eq!(engine.get_null_move_stats().cutoffs, 25);
+
+        engine.reset_null_move_stats();
+        assert_eq!(engine.get_null_move_stats().attempts, 0);
+        assert_eq!(engine.get_null_move_stats().cutoffs, 0);
+
+        let default_config = SearchEngine::new_null_move_config();
+        assert_eq!(default_config.min_depth, 3);
+        assert_eq!(default_config.reduction_factor, 2);
+        assert!(default_config.enabled);
+    }
+}
+
+#[cfg(test)]
+mod tablebase_tests {
+    use super::*;
+
+    #[test]
+    fn test_tablebase_integration() {
+        let mut engine = SearchEngine::new(None, 16);
+        let board = BitboardBoard::new();
+        let captured_pieces = CapturedPieces::new();
+        let player = Player::Black;
+
+        let mut test_board = board.clone();
+        let result = engine.search_at_depth(
+            &mut test_board,
+            &captured_pieces,
+            player,
+            1,
+            1000,
+            -10000,
+            10000,
+        );
+
+        assert!(result.is_some() || result.is_none());
+
+        let moves = engine
+            .move_generator
+            .generate_legal_moves(&board, player, &captured_pieces);
+        if !moves.is_empty() {
+            let sorted_moves = engine.sort_moves(&moves, &board, None);
+            assert_eq!(sorted_moves.len(), moves.len());
+        }
+    }
+
+    #[test]
+    fn test_convert_tablebase_score() {
+        let engine = SearchEngine::new(None, 16);
+
+        let win_result = crate::tablebase::TablebaseResult::win(
+            Some(Move::new_move(
+                Position::new(0, 0),
+                Position::new(1, 1),
+                PieceType::King,
+                Player::Black,
+                false,
+            )),
+            5,
+        );
+        let win_score = engine.convert_tablebase_score(&win_result);
+        assert_eq!(win_score, 9995);
+
+        let loss_result = crate::tablebase::TablebaseResult::loss(3);
+        let loss_score = engine.convert_tablebase_score(&loss_result);
+        assert_eq!(loss_score, -9997);
+
+        let draw_result = crate::tablebase::TablebaseResult::draw();
+        let draw_score = engine.convert_tablebase_score(&draw_result);
+        assert_eq!(draw_score, 0);
+    }
+}
+
 pub struct SearchEngine {
     evaluator: PositionEvaluator,
     move_generator: MoveGenerator,
@@ -777,6 +946,7 @@ impl SearchEngine {
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
+            tablebase_move_cache: HashMap::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -6654,6 +6824,22 @@ impl SearchEngine {
         board.unmake_move(&move_info);
 
         result
+    }
+    fn compute_tablebase_cache_key(
+        &self,
+        board: &BitboardBoard,
+        captured_pieces: &CapturedPieces,
+        player: Player,
+    ) -> u64 {
+        let mut hash = board.get_position_hash(captured_pieces);
+        if player == Player::White {
+            hash ^= 0x9E37_79B1_85EB_CA87;
+        }
+        hash
+    }
+
+    pub fn tablebase_cache_size(&self) -> usize {
+        self.tablebase_move_cache.len()
     }
     pub fn score_move(&self, move_: &Move, _board: &BitboardBoard, iid_move: Option<&Move>) -> i32 {
         // Priority 1: IID move gets maximum score
@@ -13834,217 +14020,5 @@ impl IterativeDeepening {
         } else {
             None // Only return None if there are truly no legal moves
         }
-    }
-}
-
-#[cfg(test)]
-mod search_tests {
-    use super::*;
-    use crate::types::{Move, Piece, PieceType, Player, Position};
-
-    #[test]
-    fn test_quiescence_move_sorting_total_order() {
-        let search_engine = SearchEngine::new(None, 16);
-
-        // Create test moves with different properties
-        let mut test_moves = vec![
-            // Non-capture move
-            Move {
-                from: Some(Position { row: 1, col: 1 }),
-                to: Position { row: 2, col: 1 },
-                piece_type: PieceType::Pawn,
-                player: Player::Black,
-                is_capture: false,
-                is_promotion: false,
-                gives_check: false,
-                is_recapture: false,
-                captured_piece: None,
-            },
-            // Capture move
-            Move {
-                from: Some(Position { row: 1, col: 2 }),
-                to: Position { row: 2, col: 2 },
-                piece_type: PieceType::Pawn,
-                player: Player::Black,
-                is_capture: true,
-                is_promotion: false,
-                gives_check: false,
-                is_recapture: false,
-                captured_piece: Some(Piece {
-                    piece_type: PieceType::Pawn,
-                    player: Player::White,
-                }),
-            },
-            // Check move
-            Move {
-                from: Some(Position { row: 1, col: 3 }),
-                to: Position { row: 2, col: 3 },
-                piece_type: PieceType::Pawn,
-                player: Player::Black,
-                is_capture: false,
-                is_promotion: false,
-                gives_check: true,
-                is_recapture: false,
-                captured_piece: None,
-            },
-        ];
-
-        // Test that sorting doesn't panic and produces consistent results
-        test_moves.sort_by(|a, b| search_engine.compare_quiescence_moves(a, b));
-
-        // Verify the ordering is correct
-        // Check should be first, then capture, then non-capture
-        assert!(test_moves[0].gives_check, "Check move should be first");
-        assert!(test_moves[1].is_capture, "Capture move should be second");
-        assert!(
-            !test_moves[2].is_capture && !test_moves[2].gives_check,
-            "Non-capture move should be last"
-        );
-
-        // Test that the comparison is transitive and consistent
-        for i in 0..test_moves.len() {
-            for j in 0..test_moves.len() {
-                let cmp_ij = search_engine.compare_quiescence_moves(&test_moves[i], &test_moves[j]);
-                let cmp_ji = search_engine.compare_quiescence_moves(&test_moves[j], &test_moves[i]);
-
-                // Test antisymmetry: if a < b, then b > a
-                match (cmp_ij, cmp_ji) {
-                    (std::cmp::Ordering::Less, std::cmp::Ordering::Greater) => {}
-                    (std::cmp::Ordering::Greater, std::cmp::Ordering::Less) => {}
-                    (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal) => {}
-                    _ => panic!("Comparison is not antisymmetric: {} vs {}", i, j),
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_null_move_configuration_management() {
-        let mut engine = SearchEngine::new(None, 16);
-
-        // Test get_null_move_config
-        let config = engine.get_null_move_config();
-        assert!(config.enabled);
-        assert_eq!(config.min_depth, 3);
-        assert_eq!(config.reduction_factor, 2);
-
-        // Test update_null_move_config with valid config
-        let mut new_config = NullMoveConfig::default();
-        new_config.min_depth = 4;
-        new_config.reduction_factor = 3;
-        assert!(engine.update_null_move_config(new_config.clone()).is_ok());
-
-        let updated_config = engine.get_null_move_config();
-        assert_eq!(updated_config.min_depth, 4);
-        assert_eq!(updated_config.reduction_factor, 3);
-
-        // Test update_null_move_config with invalid config
-        let mut invalid_config = NullMoveConfig::default();
-        invalid_config.min_depth = 0; // Invalid
-        assert!(engine.update_null_move_config(invalid_config).is_err());
-
-        // Test reset_null_move_stats
-        engine.null_move_stats.attempts = 100;
-        engine.null_move_stats.cutoffs = 25;
-        assert_eq!(engine.get_null_move_stats().attempts, 100);
-        assert_eq!(engine.get_null_move_stats().cutoffs, 25);
-
-        engine.reset_null_move_stats();
-        assert_eq!(engine.get_null_move_stats().attempts, 0);
-        assert_eq!(engine.get_null_move_stats().cutoffs, 0);
-
-        // Test new_null_move_config
-        let default_config = SearchEngine::new_null_move_config();
-        assert_eq!(default_config.min_depth, 3);
-        assert_eq!(default_config.reduction_factor, 2);
-        assert!(default_config.enabled);
-    }
-
-    fn compute_tablebase_cache_key(
-        &self,
-        board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
-        player: Player,
-    ) -> u64 {
-        let mut hash = board.get_position_hash(captured_pieces);
-        if player == Player::White {
-            hash ^= 0x9E37_79B1_85EB_CA87;
-        }
-        hash
-    }
-
-    #[cfg(test)]
-    pub(crate) fn tablebase_cache_size(&self) -> usize {
-        self.tablebase_move_cache.len()
-    }
-}
-
-#[cfg(test)]
-mod tablebase_tests {
-    use super::*;
-
-    #[test]
-    fn test_tablebase_integration() {
-        let mut engine = SearchEngine::new(None, 16);
-        let board = BitboardBoard::new();
-        let captured_pieces = CapturedPieces::new();
-        let player = Player::Black;
-
-        // Test tablebase probing in search_at_depth
-        let mut test_board = board.clone();
-        let result = engine.search_at_depth(
-            &mut test_board,
-            &captured_pieces,
-            player,
-            1,
-            1000,
-            -10000,
-            10000,
-        );
-
-        // Should not panic and should return some result (even if not from tablebase)
-        assert!(result.is_some() || result.is_none()); // Either some move or no legal moves
-
-        // Test tablebase move prioritization
-        let moves = engine
-            .move_generator
-            .generate_legal_moves(&board, player, &captured_pieces);
-        if !moves.is_empty() {
-            let sorted_moves = engine.sort_moves(&moves, &board, None);
-            assert_eq!(sorted_moves.len(), moves.len());
-        }
-
-        println!("Tablebase integration tests passed!");
-    }
-
-    #[test]
-    fn test_convert_tablebase_score() {
-        let engine = SearchEngine::new(None, 16);
-
-        // Test win score
-        let win_result = crate::tablebase::TablebaseResult::win(
-            Some(Move::new_move(
-                Position::new(0, 0),
-                Position::new(1, 1),
-                PieceType::King,
-                Player::Black,
-                false,
-            )),
-            5,
-        );
-        let win_score = engine.convert_tablebase_score(&win_result);
-        assert_eq!(win_score, 9995); // 10000 - 5
-
-        // Test loss score
-        let loss_result = crate::tablebase::TablebaseResult::loss(3);
-        let loss_score = engine.convert_tablebase_score(&loss_result);
-        assert_eq!(loss_score, -9997); // -10000 - (-3) = -10000 + 3 = -9997
-
-        // Test draw score
-        let draw_result = crate::tablebase::TablebaseResult::draw();
-        let draw_score = engine.convert_tablebase_score(&draw_result);
-        assert_eq!(draw_score, 0);
-
-        println!("Tablebase score conversion tests passed!");
     }
 }

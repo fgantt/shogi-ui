@@ -300,6 +300,15 @@ impl IntegratedEvaluator {
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
+    ) -> i32 {
+        self.evaluate_with_move_count(board, player, captured_pieces, None)
+    }
+
+    pub fn evaluate_with_move_count(
+        &self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
         move_count: Option<u32>,
     ) -> i32 {
         let start = if self.statistics.borrow().is_enabled() {
@@ -1653,7 +1662,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        let score = evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
 
         // Should return a valid score
         assert!(score.abs() < 100000);
@@ -1772,7 +1781,8 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        let score =
+            evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 
@@ -1787,7 +1797,8 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        let score =
+            evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 
@@ -1838,7 +1849,8 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        let score =
+            evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
         assert!(score.abs() < 100000);
     }
 }
@@ -2123,7 +2135,7 @@ impl IntegratedEvaluator {
 
             for position in &position_set.positions {
                 // Evaluate position with current weights
-                let predicted_score = temp_evaluator.evaluate(
+                let predicted_score = temp_evaluator.evaluate_with_move_count(
                     &position.board,
                     position.player,
                     &position.captured_pieces,
@@ -2150,7 +2162,7 @@ impl IntegratedEvaluator {
                     {
                         let mut perturbed_evaluator = IntegratedEvaluator::with_config(self.config.clone());
                         perturbed_evaluator.weights = perturbed_eval_weights;
-                        let perturbed_score = perturbed_evaluator.evaluate(
+                        let perturbed_score = perturbed_evaluator.evaluate_with_move_count(
                             &position.board,
                             position.player,
                             &position.captured_pieces,

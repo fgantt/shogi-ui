@@ -1823,9 +1823,10 @@ mod tests {
     fn test_triangulation_opponent_mobility() {
         let mut evaluator = EndgamePatternEvaluator::new();
         let board = BitboardBoard::empty();
+        let captured_pieces = CapturedPieces::new();
         
         // Empty board with few pieces should allow triangulation if conditions are met
-        let score = evaluator.evaluate_triangulation(&board, Player::Black);
+        let score = evaluator.evaluate_triangulation(&board, Player::Black, &captured_pieces);
         // May or may not detect triangulation depending on king positions
         assert!(score.eg >= 0 && score.eg <= 25);
     }
@@ -2076,6 +2077,7 @@ mod tests {
             enable_piece_coordination: true,
             enable_mating_patterns: false,
             enable_major_piece_activity: true,
+            ..Default::default()
         };
 
         let evaluator = EndgamePatternEvaluator::with_config(config);

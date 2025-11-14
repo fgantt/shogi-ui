@@ -179,7 +179,7 @@ fn test_telemetry_tuning_pipeline() {
     let player = Player::Black;
 
     // Evaluate and get telemetry
-    evaluator.evaluate(&board, player, &captured_pieces, None);
+    evaluator.evaluate(&board, player, &captured_pieces);
     let telemetry = evaluator.telemetry_snapshot().unwrap();
 
     // Create telemetry positions
@@ -220,7 +220,7 @@ fn test_tune_from_telemetry() {
     let captured_pieces = CapturedPieces::new();
     let player = Player::Black;
 
-    evaluator.evaluate(&board, player, &captured_pieces, None);
+    evaluator.evaluate(&board, player, &captured_pieces);
     let telemetry = evaluator.telemetry_snapshot().unwrap();
 
     // Create telemetry set
@@ -276,12 +276,9 @@ fn calculate_error(
     let k_factor = 1.0;
 
     for position in &position_set.positions {
-        let predicted_score = evaluator.evaluate(
-            &position.board,
-            position.player,
-            &position.captured_pieces,
-            None,
-        ) as f64;
+        let predicted_score = evaluator
+            .evaluate(&position.board, position.player, &position.captured_pieces)
+            as f64;
 
         let predicted_prob = sigmoid(predicted_score * k_factor);
         let expected_prob = position.expected_score;

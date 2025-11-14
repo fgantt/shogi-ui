@@ -60,10 +60,11 @@ fn development_penalises_stuck_knights() {
     );
 
     let mut evaluator = PositionFeatureEvaluator::new();
-    let stuck_score = evaluator.evaluate_development(&stuck_board, Player::Black);
+    let stuck_score = evaluator.evaluate_development(&stuck_board, Player::Black, false);
 
     let mut evaluator_developed = PositionFeatureEvaluator::new();
-    let developed_score = evaluator_developed.evaluate_development(&developed_board, Player::Black);
+    let developed_score =
+        evaluator_developed.evaluate_development(&developed_board, Player::Black, false);
 
     assert!(
         developed_score.mg > stuck_score.mg,
@@ -86,10 +87,10 @@ fn development_penalises_retreating_promoted_pieces() {
     );
 
     let mut advanced_eval = PositionFeatureEvaluator::new();
-    let advanced_score = advanced_eval.evaluate_development(&advanced_board, Player::Black);
+    let advanced_score = advanced_eval.evaluate_development(&advanced_board, Player::Black, false);
 
     let mut retreat_eval = PositionFeatureEvaluator::new();
-    let retreat_score = retreat_eval.evaluate_development(&retreat_board, Player::Black);
+    let retreat_score = retreat_eval.evaluate_development(&retreat_board, Player::Black, false);
 
     assert!(
         advanced_score.mg > retreat_score.mg,

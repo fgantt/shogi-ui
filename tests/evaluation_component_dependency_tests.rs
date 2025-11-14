@@ -197,7 +197,7 @@ fn test_comprehensive_dependency_validation() {
 
     // Evaluate some positions to build phase history
     for _ in 0..10 {
-        evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+        evaluator.evaluate(&board, Player::Black, &captured_pieces);
     }
 
     // Validate configuration

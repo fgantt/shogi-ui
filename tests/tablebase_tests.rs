@@ -279,7 +279,11 @@ mod cache_tests {
 
     #[test]
     fn test_position_cache_with_config() {
-        let config = CacheConfig { max_size: 1000 };
+        let config = CacheConfig {
+            max_size: 1000,
+            eviction_strategy: EvictionStrategy::LRU,
+            enable_adaptive_eviction: false,
+        };
         let cache = PositionCache::with_config(config);
         assert_eq!(cache.size(), 0);
     }

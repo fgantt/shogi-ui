@@ -616,7 +616,7 @@ mod benchmarks {
 
         // Benchmark put operations
         let start = TimeSource::now();
-        for i in 0..1000 {
+        for _i in 0..1000 {
             let test_board = board.clone();
             // For now, just use the same board for all iterations
             // TODO: Implement proper board modification when set_piece is available
@@ -626,7 +626,7 @@ mod benchmarks {
 
         // Benchmark get operations
         let start = TimeSource::now();
-        for i in 0..1000 {
+        for _i in 0..1000 {
             let test_board = board.clone();
             // For now, just use the same board for all iterations
             // TODO: Implement proper board modification when set_piece is available
@@ -667,7 +667,7 @@ mod benchmarks {
 
         // Fill cache beyond capacity to trigger evictions
         let start = TimeSource::now();
-        for i in 0..200 {
+        for _i in 0..200 {
             let test_board = board.clone();
             // For now, just use the same board for all iterations
             // TODO: Implement proper board modification when set_piece is available

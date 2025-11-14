@@ -48,13 +48,16 @@ fn test_integrated_evaluator_move_count() {
     let captured_pieces = CapturedPieces::new();
     
     // Test with move_count = 5
-    let score_move_5 = evaluator.evaluate(&board, Player::Black, &captured_pieces, Some(5));
+    let score_move_5 =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, Some(5));
     
     // Test with move_count = 15
-    let score_move_15 = evaluator.evaluate(&board, Player::Black, &captured_pieces, Some(15));
+    let score_move_15 =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, Some(15));
     
     // Test with move_count = None (should estimate from phase)
-    let score_estimated = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score_estimated =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
     
     // All should return valid scores
     assert!(score_move_5.abs() < 100000);
@@ -117,17 +120,20 @@ fn test_move_count_not_hardcoded() {
     let captured_pieces = CapturedPieces::new();
     
     // Test with explicit move_count = 5
-    let score_explicit_5 = evaluator.evaluate(&board, Player::Black, &captured_pieces, Some(5));
+    let score_explicit_5 =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, Some(5));
     
     // Test with explicit move_count = 0
-    let score_explicit_0 = evaluator.evaluate(&board, Player::Black, &captured_pieces, Some(0));
+    let score_explicit_0 =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, Some(0));
     
     // Both should be valid (they may be the same in starting position, but the parameter is being used)
     assert!(score_explicit_5.abs() < 100000);
     assert!(score_explicit_0.abs() < 100000);
     
     // The key test: verify that when we pass None, it estimates (not hardcoded 0)
-    let score_estimated = evaluator.evaluate(&board, Player::Black, &captured_pieces, None);
+    let score_estimated =
+        evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
     assert!(score_estimated.abs() < 100000);
     
     // Estimated should use phase-based estimation, not hardcoded 0

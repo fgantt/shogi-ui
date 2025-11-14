@@ -874,11 +874,11 @@ mod tests {
             recognizer.evaluate_castle(&partial_board, Player::Black, Position::new(8, 4));
 
         assert!(
-            full_eval.matched_pattern,
+            full_eval.matched_pattern.is_some(),
             "full castle should match a pattern"
         );
         assert!(
-            partial_eval.matched_pattern,
+            partial_eval.matched_pattern.is_some(),
             "partial castle should still register the base castle"
         );
         assert!(

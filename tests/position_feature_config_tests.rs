@@ -27,7 +27,7 @@ fn position_feature_toggles_skip_computation_and_statistics() {
     assert_eq!(evaluator.stats().king_safety_evals, 0);
 
     assert_eq!(
-        evaluator.evaluate_pawn_structure(&board, Player::Black, &captured),
+        evaluator.evaluate_pawn_structure(&board, Player::Black, &captured, false),
         TaperedScore::default()
     );
     assert_eq!(evaluator.stats().pawn_structure_evals, 0);
@@ -39,13 +39,13 @@ fn position_feature_toggles_skip_computation_and_statistics() {
     assert_eq!(evaluator.stats().mobility_evals, 0);
 
     assert_eq!(
-        evaluator.evaluate_center_control(&board, Player::Black),
+        evaluator.evaluate_center_control(&board, Player::Black, false),
         TaperedScore::default()
     );
     assert_eq!(evaluator.stats().center_control_evals, 0);
 
     assert_eq!(
-        evaluator.evaluate_development(&board, Player::Black),
+        evaluator.evaluate_development(&board, Player::Black, false),
         TaperedScore::default()
     );
     assert_eq!(evaluator.stats().development_evals, 0);
@@ -79,6 +79,7 @@ fn integrated_evaluator_respects_position_feature_weights() {
         development_weight: 0.0,
         tactical_weight: 0.0,
         positional_weight: 0.0,
+        castle_weight: 0.0,
     };
 
     let evaluator = IntegratedEvaluator::with_config(config.clone());

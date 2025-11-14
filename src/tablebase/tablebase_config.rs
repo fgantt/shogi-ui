@@ -626,12 +626,6 @@ pub struct TablebaseStats {
     pub solver_selection_calls: u64,
 }
 
-impl Default for TablebaseStats {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TablebaseStats {
     /// Create new statistics
     pub fn new() -> Self {

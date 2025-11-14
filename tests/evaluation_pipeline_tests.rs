@@ -15,6 +15,7 @@ fn pst_only_config() -> IntegratedEvaluationConfig {
         endgame_patterns: false,
         tactical_patterns: false,
         positional_patterns: false,
+        castle_patterns: false,
     };
     config.enable_phase_cache = false;
     config.enable_eval_cache = false;

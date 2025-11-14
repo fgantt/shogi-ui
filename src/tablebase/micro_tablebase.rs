@@ -599,7 +599,7 @@ mod tests {
     #[test]
     fn test_micro_tablebase_config_management() {
         let mut tablebase = MicroTablebase::new();
-        let original_config = tablebase.get_config().clone();
+        let _original_config = tablebase.get_config().clone();
 
         // Test setting new config
         let new_config = TablebaseConfig::performance_optimized();
