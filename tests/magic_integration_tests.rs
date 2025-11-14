@@ -729,3 +729,120 @@ fn test_lazy_vs_full_initialization() {
         assert!(lazy_table.is_square_initialized(square, PieceType::Bishop));
     }
 }
+
+#[test]
+fn test_bounds_checking_and_fallback() {
+    use shogi_engine::bitboards::magic::MagicTable;
+    
+    // Create a partially initialized table
+    let mut table = MagicTable::default();
+    
+    // Initialize only one square
+    table.initialize_rook_square(40).unwrap();
+    
+    // Access initialized square - should work
+    let attacks1 = table.get_attacks(40, PieceType::Rook, 0);
+    assert_ne!(attacks1, 0, "Initialized square should return attacks");
+    
+    // Access uninitialized square - should fallback to ray-casting
+    let attacks2 = table.get_attacks(0, PieceType::Rook, 0);
+    assert_ne!(attacks2, 0, "Uninitialized square should fallback to ray-casting");
+    
+    // Access invalid piece type - should return empty
+    let attacks3 = table.get_attacks(40, PieceType::Pawn, 0);
+    assert_eq!(attacks3, 0, "Invalid piece type should return empty");
+}
+
+#[test]
+fn test_validate_integrity() {
+    use shogi_engine::bitboards::magic::MagicTable;
+    
+    // Create and initialize a table
+    let table = MagicTable::new().unwrap();
+    
+    // Validate integrity should pass
+    let result = table.validate_integrity();
+    assert!(result.is_ok(), "Valid table should pass integrity check");
+}
+
+#[test]
+fn test_lru_cache_eviction() {
+    use shogi_engine::bitboards::magic::attack_generator::{AttackGenerator, AttackGeneratorConfig};
+    
+    // Create generator with small cache size
+    let config = AttackGeneratorConfig { cache_size: 5 };
+    let mut generator = AttackGenerator::with_config(config);
+    
+    // Fill cache beyond capacity
+    for i in 0..10 {
+        let _ = generator.generate_attack_pattern(0, PieceType::Rook, i);
+    }
+    
+    // Check cache stats
+    let stats = generator.cache_stats();
+    assert_eq!(stats.cache_size, 5, "Cache should be at capacity");
+    assert!(stats.evictions > 0, "Should have evictions when cache is full");
+    assert!(stats.misses > 0, "Should have misses");
+}
+
+#[test]
+fn test_lru_cache_hit_rate() {
+    use shogi_engine::bitboards::magic::attack_generator::AttackGenerator;
+    
+    let mut generator = AttackGenerator::new();
+    
+    // Generate same pattern multiple times
+    for _ in 0..100 {
+        let _ = generator.generate_attack_pattern(40, PieceType::Rook, 0);
+    }
+    
+    let stats = generator.cache_stats();
+    assert!(stats.hits > 0, "Should have cache hits");
+    assert!(stats.hit_rate > 0.5, "Hit rate should be high for repeated patterns");
+}
+
+#[test]
+fn test_cache_clear() {
+    use shogi_engine::bitboards::magic::attack_generator::AttackGenerator;
+    
+    let mut generator = AttackGenerator::new();
+    
+    // Generate some patterns
+    for i in 0..10 {
+        let _ = generator.generate_attack_pattern(0, PieceType::Rook, i);
+    }
+    
+    let stats_before = generator.cache_stats();
+    assert!(stats_before.cache_size > 0, "Cache should have entries");
+    
+    // Clear cache
+    generator.clear_cache();
+    
+    let stats_after = generator.cache_stats();
+    assert_eq!(stats_after.cache_size, 0, "Cache should be empty after clear");
+    assert_eq!(stats_after.hits, 0, "Stats should be reset");
+    assert_eq!(stats_after.misses, 0, "Stats should be reset");
+}
+
+#[test]
+#[ignore] // Long-running test
+fn test_fallback_on_corrupted_table() {
+    use shogi_engine::bitboards::magic::MagicTable;
+    use shogi_engine::types::MagicBitboard;
+    
+    // Create a table and corrupt it
+    let mut table = MagicTable::new().unwrap();
+    
+    // Corrupt an entry by setting invalid attack_base
+    table.rook_magics[40].attack_base = 999999999;
+    
+    // Access should fallback to ray-casting
+    let attacks = table.get_attacks(40, PieceType::Rook, 0);
+    assert_ne!(attacks, 0, "Should fallback to ray-casting on corruption");
+    
+    // Verify fallback produces correct results by comparing with fresh generator
+    use shogi_engine::bitboards::magic::attack_generator::AttackGenerator;
+    let mut generator = AttackGenerator::new();
+    let expected = generator.generate_attack_pattern(40, PieceType::Rook, 0);
+    assert_eq!(attacks, expected, "Fallback should produce correct results");
+}

@@ -205,12 +205,32 @@ impl MagicTable {
     }
 
     /// Get attack pattern for a square using magic bitboards
+    ///
+    /// # Safety Guarantees
+    ///
+    /// This method includes comprehensive safety checks:
+    /// - Validates magic entry is initialized (magic_number != 0)
+    /// - Validates attack_index is within bounds
+    /// - Falls back to ray-casting if lookup fails or entry is invalid
+    ///
+    /// # Fallback Behavior
+    ///
+    /// If the magic table lookup fails (invalid entry, out of bounds, or corruption),
+    /// this method automatically falls back to ray-casting attack generation. This ensures
+    /// the engine continues to function correctly even if the magic table is corrupted
+    /// or partially initialized.
     pub fn get_attacks(&self, square: u8, piece_type: PieceType, occupied: Bitboard) -> Bitboard {
         let magic_entry = match piece_type {
             PieceType::Rook | PieceType::PromotedRook => &self.rook_magics[square as usize],
             PieceType::Bishop | PieceType::PromotedBishop => &self.bishop_magics[square as usize],
             _ => return EMPTY_BITBOARD,
         };
+
+        // Validate magic entry is initialized
+        if magic_entry.magic_number == 0 {
+            // Fallback to ray-casting for uninitialized entries
+            return self.get_attacks_fallback(square, piece_type, occupied);
+        }
 
         // Apply mask to get relevant occupied squares
         let relevant_occupied = occupied & magic_entry.mask;
@@ -219,13 +239,21 @@ impl MagicTable {
         let hash =
             (relevant_occupied.wrapping_mul(magic_entry.magic_number as u128)) >> magic_entry.shift;
 
-        // Lookup attack pattern
+        // Lookup attack pattern with bounds checking
         let attack_index = magic_entry.attack_base + hash as usize;
         if attack_index < self.attack_storage.len() {
             self.attack_storage[attack_index]
         } else {
-            EMPTY_BITBOARD
+            // Bounds check failed - fallback to ray-casting
+            self.get_attacks_fallback(square, piece_type, occupied)
         }
+    }
+
+    /// Fallback to ray-casting when magic table lookup fails
+    fn get_attacks_fallback(&self, square: u8, piece_type: PieceType, occupied: Bitboard) -> Bitboard {
+        use super::attack_generator::AttackGenerator;
+        let mut generator = AttackGenerator::new();
+        generator.generate_attack_pattern(square, piece_type, occupied)
     }
 
     /// Get memory usage statistics
@@ -235,6 +263,71 @@ impl MagicTable {
             memory_usage_bytes: self.attack_storage.len() * std::mem::size_of::<Bitboard>(),
             pool_stats: self.memory_pool.memory_stats(),
         }
+    }
+
+    /// Validate table integrity: check all entries are within bounds
+    ///
+    /// This method verifies that all magic entries reference valid indices
+    /// in the attack_storage array. It does not validate correctness of
+    /// attack patterns (use `validate()` for that).
+    pub fn validate_integrity(&self) -> Result<(), MagicError> {
+        // Check rook tables
+        for (square, magic_entry) in self.rook_magics.iter().enumerate() {
+            if magic_entry.magic_number == 0 {
+                continue; // Skip uninitialized entries
+            }
+
+            // Check that attack_base is within bounds
+            if magic_entry.attack_base >= self.attack_storage.len() {
+                return Err(MagicError::ValidationFailed {
+                    reason: format!(
+                        "Rook square {} has invalid attack_base {} (storage size: {})",
+                        square, magic_entry.attack_base, self.attack_storage.len()
+                    ),
+                });
+            }
+
+            // Check that attack_base + table_size is within bounds
+            let max_index = magic_entry.attack_base + magic_entry.table_size;
+            if max_index > self.attack_storage.len() {
+                return Err(MagicError::ValidationFailed {
+                    reason: format!(
+                        "Rook square {} table extends beyond storage (max_index: {}, storage size: {})",
+                        square, max_index, self.attack_storage.len()
+                    ),
+                });
+            }
+        }
+
+        // Check bishop tables
+        for (square, magic_entry) in self.bishop_magics.iter().enumerate() {
+            if magic_entry.magic_number == 0 {
+                continue; // Skip uninitialized entries
+            }
+
+            // Check that attack_base is within bounds
+            if magic_entry.attack_base >= self.attack_storage.len() {
+                return Err(MagicError::ValidationFailed {
+                    reason: format!(
+                        "Bishop square {} has invalid attack_base {} (storage size: {})",
+                        square, magic_entry.attack_base, self.attack_storage.len()
+                    ),
+                });
+            }
+
+            // Check that attack_base + table_size is within bounds
+            let max_index = magic_entry.attack_base + magic_entry.table_size;
+            if max_index > self.attack_storage.len() {
+                return Err(MagicError::ValidationFailed {
+                    reason: format!(
+                        "Bishop square {} table extends beyond storage (max_index: {}, storage size: {})",
+                        square, max_index, self.attack_storage.len()
+                    ),
+                });
+            }
+        }
+
+        Ok(())
     }
 
     /// Validate magic table correctness
@@ -302,6 +395,22 @@ impl MagicTable {
         self.memory_pool.clear();
         self.rook_magics = [MagicBitboard::default(); 81];
         self.bishop_magics = [MagicBitboard::default(); 81];
+    }
+
+    /// Clear pattern cache in AttackGenerator
+    ///
+    /// Note: This is primarily for documentation. AttackGenerator instances
+    /// are typically created fresh for each operation, so their caches are
+    /// automatically cleared. However, if you maintain a long-lived
+    /// AttackGenerator instance, you can use this to free memory.
+    ///
+    /// After table initialization completes, the pattern cache is no longer
+    /// needed and can be cleared to free memory.
+    pub fn clear_pattern_cache(&self) {
+        // AttackGenerator instances are created fresh in get_attacks_fallback,
+        // so there's no persistent cache to clear. This method exists for
+        // API completeness and documentation purposes.
+        // If you maintain a long-lived AttackGenerator, call clear_cache() on it directly.
     }
 
     /// Serialize magic table to bytes

@@ -5,14 +5,78 @@
 //! bitboard lookup tables.
 
 use crate::types::{Bitboard, PieceType, EMPTY_BITBOARD};
-use std::collections::HashMap;
+use lru::LruCache;
+use std::num::NonZeroUsize;
+use lazy_static::lazy_static;
 
 /// Attack pattern generator with optimization
 pub struct AttackGenerator {
-    /// Precomputed direction vectors
-    direction_cache: HashMap<PieceType, Vec<Direction>>,
-    /// Attack pattern cache
-    pattern_cache: HashMap<(u8, PieceType, Bitboard), Bitboard>,
+    /// Attack pattern cache with LRU eviction
+    pattern_cache: LruCache<(u8, PieceType, Bitboard), Bitboard>,
+    /// Cache statistics
+    cache_stats: CacheStatsInternal,
+}
+
+/// Internal cache statistics
+#[derive(Debug, Clone, Default)]
+struct CacheStatsInternal {
+    hits: u64,
+    misses: u64,
+    evictions: u64,
+}
+
+/// Configuration for attack generator cache
+#[derive(Debug, Clone, Copy)]
+pub struct AttackGeneratorConfig {
+    /// Maximum cache size (default: 10,000 entries)
+    pub cache_size: usize,
+}
+
+impl Default for AttackGeneratorConfig {
+    fn default() -> Self {
+        Self {
+            cache_size: 10_000,
+        }
+    }
+}
+
+// Precomputed direction vectors (optimized to const/lazy_static for zero-cost access)
+lazy_static! {
+    static ref ROOK_DIRECTIONS: Vec<Direction> = vec![
+        Direction { row_delta: 1, col_delta: 0 },   // Up
+        Direction { row_delta: -1, col_delta: 0 },  // Down
+        Direction { row_delta: 0, col_delta: 1 },   // Right
+        Direction { row_delta: 0, col_delta: -1 },  // Left
+    ];
+
+    static ref BISHOP_DIRECTIONS: Vec<Direction> = vec![
+        Direction { row_delta: 1, col_delta: 1 },   // Up-Right
+        Direction { row_delta: 1, col_delta: -1 },  // Up-Left
+        Direction { row_delta: -1, col_delta: 1 },  // Down-Right
+        Direction { row_delta: -1, col_delta: -1 }, // Down-Left
+    ];
+
+    static ref PROMOTED_ROOK_DIRECTIONS: Vec<Direction> = vec![
+        Direction { row_delta: 1, col_delta: 0 },   // Up
+        Direction { row_delta: -1, col_delta: 0 },  // Down
+        Direction { row_delta: 0, col_delta: 1 },   // Right
+        Direction { row_delta: 0, col_delta: -1 },  // Left
+        Direction { row_delta: 1, col_delta: 1 },   // Up-Right
+        Direction { row_delta: 1, col_delta: -1 },  // Up-Left
+        Direction { row_delta: -1, col_delta: 1 },  // Down-Right
+        Direction { row_delta: -1, col_delta: -1 }, // Down-Left
+    ];
+
+    static ref PROMOTED_BISHOP_DIRECTIONS: Vec<Direction> = vec![
+        Direction { row_delta: 1, col_delta: 1 },   // Up-Right
+        Direction { row_delta: 1, col_delta: -1 },  // Up-Left
+        Direction { row_delta: -1, col_delta: 1 },  // Down-Right
+        Direction { row_delta: -1, col_delta: -1 }, // Down-Left
+        Direction { row_delta: 1, col_delta: 0 },   // Up
+        Direction { row_delta: -1, col_delta: 0 },  // Down
+        Direction { row_delta: 0, col_delta: 1 },   // Right
+        Direction { row_delta: 0, col_delta: -1 },  // Left
+    ];
 }
 
 /// Direction vector for piece movement
@@ -23,14 +87,18 @@ pub struct Direction {
 }
 
 impl AttackGenerator {
-    /// Create a new attack generator
+    /// Create a new attack generator with default cache size
     pub fn new() -> Self {
-        let mut generator = Self {
-            direction_cache: HashMap::new(),
-            pattern_cache: HashMap::new(),
-        };
-        generator.initialize_direction_cache();
-        generator
+        Self::with_config(AttackGeneratorConfig::default())
+    }
+
+    /// Create a new attack generator with custom configuration
+    pub fn with_config(config: AttackGeneratorConfig) -> Self {
+        let cache_size = NonZeroUsize::new(config.cache_size.max(1)).unwrap();
+        Self {
+            pattern_cache: LruCache::new(cache_size),
+            cache_stats: CacheStatsInternal::default(),
+        }
     }
 
     /// Generate attack pattern with caching
@@ -40,16 +108,31 @@ impl AttackGenerator {
         piece_type: PieceType,
         blockers: Bitboard,
     ) -> Bitboard {
+        let key = (square, piece_type, blockers);
+        
         // Check cache first
-        if let Some(cached) = self.pattern_cache.get(&(square, piece_type, blockers)) {
+        if let Some(cached) = self.pattern_cache.get(&key) {
+            self.cache_stats.hits += 1;
             return *cached;
         }
 
+        // Cache miss
+        self.cache_stats.misses += 1;
+
+        // Generate pattern
         let pattern = self.generate_attack_pattern_internal(square, piece_type, blockers);
 
-        // Cache the result
-        self.pattern_cache
-            .insert((square, piece_type, blockers), pattern);
+        // Check if insertion would cause eviction
+        let was_full = self.pattern_cache.len() >= self.pattern_cache.cap().get();
+        
+        // Cache the result (may evict LRU entry)
+        self.pattern_cache.put(key, pattern);
+        
+        // Track evictions
+        if was_full && self.pattern_cache.len() >= self.pattern_cache.cap().get() {
+            self.cache_stats.evictions += 1;
+        }
+
         pattern
     }
 
@@ -80,12 +163,15 @@ impl AttackGenerator {
         attacks
     }
 
-    /// Get directions for a piece type
+    /// Get directions for a piece type (using lazy_static for zero-cost access)
     fn get_directions(&self, piece_type: PieceType) -> &[Direction] {
-        self.direction_cache
-            .get(&piece_type)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
+        match piece_type {
+            PieceType::Rook => &ROOK_DIRECTIONS,
+            PieceType::Bishop => &BISHOP_DIRECTIONS,
+            PieceType::PromotedRook => &PROMOTED_ROOK_DIRECTIONS,
+            PieceType::PromotedBishop => &PROMOTED_BISHOP_DIRECTIONS,
+            _ => &[],
+        }
     }
 
     /// Get next square in a direction
@@ -103,132 +189,40 @@ impl AttackGenerator {
         }
     }
 
-    /// Initialize direction cache
-    fn initialize_direction_cache(&mut self) {
-        // Rook directions
-        self.direction_cache.insert(
-            PieceType::Rook,
-            vec![
-                Direction {
-                    row_delta: 1,
-                    col_delta: 0,
-                }, // Up
-                Direction {
-                    row_delta: -1,
-                    col_delta: 0,
-                }, // Down
-                Direction {
-                    row_delta: 0,
-                    col_delta: 1,
-                }, // Right
-                Direction {
-                    row_delta: 0,
-                    col_delta: -1,
-                }, // Left
-            ],
-        );
-
-        // Bishop directions
-        self.direction_cache.insert(
-            PieceType::Bishop,
-            vec![
-                Direction {
-                    row_delta: 1,
-                    col_delta: 1,
-                }, // Up-Right
-                Direction {
-                    row_delta: 1,
-                    col_delta: -1,
-                }, // Up-Left
-                Direction {
-                    row_delta: -1,
-                    col_delta: 1,
-                }, // Down-Right
-                Direction {
-                    row_delta: -1,
-                    col_delta: -1,
-                }, // Down-Left
-            ],
-        );
-
-        // Promoted rook directions (rook + king moves)
-        self.direction_cache.insert(
-            PieceType::PromotedRook,
-            vec![
-                Direction {
-                    row_delta: 1,
-                    col_delta: 0,
-                }, // Up
-                Direction {
-                    row_delta: -1,
-                    col_delta: 0,
-                }, // Down
-                Direction {
-                    row_delta: 0,
-                    col_delta: 1,
-                }, // Right
-                Direction {
-                    row_delta: 0,
-                    col_delta: -1,
-                }, // Left
-                Direction {
-                    row_delta: 1,
-                    col_delta: 1,
-                }, // Up-Right
-                Direction {
-                    row_delta: 1,
-                    col_delta: -1,
-                }, // Up-Left
-                Direction {
-                    row_delta: -1,
-                    col_delta: 1,
-                }, // Down-Right
-                Direction {
-                    row_delta: -1,
-                    col_delta: -1,
-                }, // Down-Left
-            ],
-        );
-
-        // Promoted bishop directions (bishop + king moves)
-        self.direction_cache.insert(
-            PieceType::PromotedBishop,
-            vec![
-                Direction {
-                    row_delta: 1,
-                    col_delta: 1,
-                }, // Up-Right
-                Direction {
-                    row_delta: 1,
-                    col_delta: -1,
-                }, // Up-Left
-                Direction {
-                    row_delta: -1,
-                    col_delta: 1,
-                }, // Down-Right
-                Direction {
-                    row_delta: -1,
-                    col_delta: -1,
-                }, // Down-Left
-                Direction {
-                    row_delta: 1,
-                    col_delta: 0,
-                }, // Up
-                Direction {
-                    row_delta: -1,
-                    col_delta: 0,
-                }, // Down
-                Direction {
-                    row_delta: 0,
-                    col_delta: 1,
-                }, // Right
-                Direction {
-                    row_delta: 0,
-                    col_delta: -1,
-                }, // Left
-            ],
-        );
+    /// Clear the pattern cache
+    pub fn clear_cache(&mut self) {
+        self.pattern_cache.clear();
+        self.cache_stats = CacheStatsInternal::default();
     }
+
+    /// Get cache statistics
+    pub fn cache_stats(&self) -> CacheStats {
+        let total_requests = self.cache_stats.hits + self.cache_stats.misses;
+        let hit_rate = if total_requests > 0 {
+            self.cache_stats.hits as f64 / total_requests as f64
+        } else {
+            0.0
+        };
+
+        CacheStats {
+            cache_size: self.pattern_cache.len(),
+            max_cache_size: self.pattern_cache.cap().get(),
+            hits: self.cache_stats.hits,
+            misses: self.cache_stats.misses,
+            evictions: self.cache_stats.evictions,
+            hit_rate,
+            direction_cache_size: 4, // Rook, Bishop, PromotedRook, PromotedBishop (now lazy_static)
+        }
+    }
+
+    /// Get cache configuration
+    pub fn cache_config(&self) -> AttackGeneratorConfig {
+        AttackGeneratorConfig {
+            cache_size: self.pattern_cache.cap().get(),
+        }
+    }
+
+    // Removed initialize_direction_cache - now using lazy_static for zero-cost access
 
     /// Generate all possible blocker combinations for a mask
     pub fn generate_all_blocker_combinations(&self, mask: Bitboard) -> Vec<Bitboard> {
@@ -403,24 +397,17 @@ impl AttackGenerator {
         }
     }
 
-    /// Clear the pattern cache
-    pub fn clear_cache(&mut self) {
-        self.pattern_cache.clear();
-    }
-
-    /// Get cache statistics
-    pub fn cache_stats(&self) -> CacheStats {
-        CacheStats {
-            cache_size: self.pattern_cache.len(),
-            direction_cache_size: self.direction_cache.len(),
-        }
-    }
 }
 
 /// Cache statistics for attack generator
 #[derive(Debug, Clone)]
 pub struct CacheStats {
     pub cache_size: usize,
+    pub max_cache_size: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub hit_rate: f64,
     pub direction_cache_size: usize,
 }
 
