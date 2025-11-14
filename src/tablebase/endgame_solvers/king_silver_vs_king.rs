@@ -113,7 +113,7 @@ impl KingSilverVsKingSolver {
 
             for move_ in &moves {
                 let score =
-                    self.evaluate_move(board, player, move_, king_pos, silver_pos, def_king_pos);
+                    self.evaluate_move(board, player, move_, king_pos, silver_pos, def_king_pos, captured_pieces);
                 if score > best_score {
                     best_score = score;
                     best_move = Some(move_.clone());
@@ -337,6 +337,7 @@ impl KingSilverVsKingSolver {
         king: Position,
         silver: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> i32 {
         let mut score = 0;
 
@@ -356,7 +357,7 @@ impl KingSilverVsKingSolver {
         }
 
         // Prefer moves that restrict the defending king's mobility
-        if self.restricts_king_mobility(board, player, move_, defending_king) {
+        if self.restricts_king_mobility(board, player, move_, defending_king, captured_pieces) {
             score += 30;
         }
 
@@ -371,32 +372,107 @@ impl KingSilverVsKingSolver {
     /// Check if a move coordinates the king and silver effectively
     fn coordinates_king_silver(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
+        board: &BitboardBoard,
+        player: Player,
         move_: &Move,
-        _king: Position,
+        king: Position,
         silver: Position,
     ) -> bool {
-        // TODO: Implement proper coordination logic
-        // For now, return true if the move is by the silver piece
-        if let Some(from) = move_.from {
-            from == silver
+        // Check which piece is moving
+        let moving_piece = if let Some(from) = move_.from {
+            if from == king {
+                PieceType::King
+            } else if from == silver {
+                PieceType::Silver
+            } else {
+                return false; // Not king or silver
+            }
         } else {
-            false
+            return false;
+        };
+
+        let defending_king = match self.find_defending_king(board, player) {
+            Some(king_pos) => king_pos,
+            None => return false,
+        };
+
+        match moving_piece {
+            PieceType::King => {
+                // King coordinates when it's close to both silver and defending king
+                let king_to_silver = self.manhattan_distance(move_.to, silver);
+                let king_to_def_king = self.manhattan_distance(move_.to, defending_king);
+                
+                // King should be within 2 squares of silver and within 3 of defending king
+                king_to_silver <= 2 && king_to_def_king <= 3
+            }
+            PieceType::Silver => {
+                // Silver coordinates when it's close to king and can attack defending king
+                let silver_to_king = self.manhattan_distance(move_.to, king);
+                let silver_to_def_king = self.manhattan_distance(move_.to, defending_king);
+                
+                // Silver should be within 2 squares of king and close to defending king
+                silver_to_king <= 2 && silver_to_def_king <= 3
+            }
+            _ => false,
         }
     }
 
     /// Check if a move restricts the defending king's mobility
     fn restricts_king_mobility(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _move_: &Move,
-        _defending_king: Position,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
-        // TODO: Implement mobility restriction logic
-        // For now, return false
-        false
+        // Make the move on a temporary board to see the resulting position
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, player);
+        }
+
+        // Count legal moves for defending king before the move
+        let opponent = player.opposite();
+        let move_generator = crate::moves::MoveGenerator::new();
+        let moves_before = move_generator.generate_legal_moves(board, opponent, captured_pieces);
+        let moves_after = move_generator.generate_legal_moves(&temp_board, opponent, &temp_captured);
+
+        // If the move reduces the number of legal moves available to the defending king, it restricts mobility
+        // Also check if the move attacks squares adjacent to the defending king
+        let restricts_by_reducing_moves = moves_after.len() < moves_before.len();
+        
+        // Check if move attacks squares adjacent to defending king
+        let move_attacks_escape_squares = {
+            let mut attacks_escape = false;
+            // Check all 8 adjacent squares to defending king
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    if dr == 0 && dc == 0 {
+                        continue;
+                    }
+                    let escape_row = (defending_king.row as i8 + dr) as u8;
+                    let escape_col = (defending_king.col as i8 + dc) as u8;
+                    
+                    if escape_row < 9 && escape_col < 9 {
+                        let escape_pos = Position { row: escape_row, col: escape_col };
+                        // If the move's destination attacks this escape square, it restricts mobility
+                        if move_.to == escape_pos || temp_board.is_square_attacked_by(escape_pos, player) {
+                            attacks_escape = true;
+                            break;
+                        }
+                    }
+                }
+                if attacks_escape {
+                    break;
+                }
+            }
+            attacks_escape
+        };
+
+        restricts_by_reducing_moves || move_attacks_escape_squares
     }
 
     /// Calculate distance to mate using search-based DTM calculation

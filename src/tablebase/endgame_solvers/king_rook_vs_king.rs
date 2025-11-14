@@ -110,7 +110,7 @@ impl KingRookVsKingSolver {
 
             for move_ in &moves {
                 let score =
-                    self.evaluate_move(board, player, move_, king_pos, rook_pos, def_king_pos);
+                    self.evaluate_move(board, player, move_, king_pos, rook_pos, def_king_pos, captured_pieces);
                 if score > best_score {
                     best_score = score;
                     best_move = Some(move_.clone());
@@ -342,6 +342,7 @@ impl KingRookVsKingSolver {
         king: Position,
         rook: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> i32 {
         let mut score = 0;
 
@@ -361,7 +362,7 @@ impl KingRookVsKingSolver {
         }
 
         // Prefer moves that restrict the defending king's mobility
-        if self.restricts_king_mobility(board, player, move_, defending_king) {
+        if self.restricts_king_mobility(board, player, move_, defending_king, captured_pieces) {
             score += 30;
         }
 
@@ -381,45 +382,167 @@ impl KingRookVsKingSolver {
     /// Check if a move coordinates the king and rook effectively
     fn coordinates_king_rook(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
+        board: &BitboardBoard,
+        player: Player,
         move_: &Move,
-        _king: Position,
+        king: Position,
         rook: Position,
     ) -> bool {
-        // TODO: Implement proper coordination logic
-        // For now, return true if the move is by the rook piece
-        if let Some(from) = move_.from {
-            from == rook
+        // Check which piece is moving
+        let moving_piece = if let Some(from) = move_.from {
+            if from == king {
+                PieceType::King
+            } else if from == rook {
+                PieceType::Rook
+            } else {
+                return false; // Not king or rook
+            }
         } else {
-            false
+            return false;
+        };
+
+        let defending_king = match self.find_defending_king(board, player) {
+            Some(king_pos) => king_pos,
+            None => return false,
+        };
+
+        match moving_piece {
+            PieceType::King => {
+                // King coordinates when it's close to both rook and defending king
+                let king_to_rook = self.manhattan_distance(move_.to, rook);
+                let king_to_def_king = self.manhattan_distance(move_.to, defending_king);
+                
+                // King should be within 3 squares of rook and within 4 of defending king
+                // Rook is powerful at range, so coordination can work from further away
+                king_to_rook <= 3 && king_to_def_king <= 4
+            }
+            PieceType::Rook => {
+                // Rook coordinates when it can attack defending king and king can support
+                let rook_to_king = self.manhattan_distance(move_.to, king);
+                let rook_to_def_king = self.manhattan_distance(move_.to, defending_king);
+                
+                // Rook should be within 3 squares of king and close to defending king
+                // Rook can attack from distance, so check if it's on same rank/file as defending king
+                let on_same_rank_or_file = move_.to.row == defending_king.row || move_.to.col == defending_king.col;
+                rook_to_king <= 3 && (rook_to_def_king <= 4 || on_same_rank_or_file)
+            }
+            _ => false,
         }
     }
 
     /// Check if a move restricts the defending king's mobility
     fn restricts_king_mobility(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _move_: &Move,
-        _defending_king: Position,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
-        // TODO: Implement mobility restriction logic
-        // For now, return false
-        false
+        // Make the move on a temporary board to see the resulting position
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, player);
+        }
+
+        // Count legal moves for defending king before and after the move
+        let opponent = player.opposite();
+        let move_generator = crate::moves::MoveGenerator::new();
+        let moves_before = move_generator.generate_legal_moves(board, opponent, captured_pieces);
+        let moves_after = move_generator.generate_legal_moves(&temp_board, opponent, &temp_captured);
+
+        // If the move reduces the number of legal moves available to the defending king, it restricts mobility
+        let restricts_by_reducing_moves = moves_after.len() < moves_before.len();
+        
+        // Check if move attacks squares adjacent to defending king or controls key squares
+        let move_attacks_escape_squares = {
+            let mut attacks_escape = false;
+            // Check all 8 adjacent squares to defending king
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    if dr == 0 && dc == 0 {
+                        continue;
+                    }
+                    let escape_row = (defending_king.row as i8 + dr) as u8;
+                    let escape_col = (defending_king.col as i8 + dc) as u8;
+                    
+                    if escape_row < 9 && escape_col < 9 {
+                        let escape_pos = Position { row: escape_row, col: escape_col };
+                        // If the move's destination attacks this escape square, it restricts mobility
+                        if move_.to == escape_pos || temp_board.is_square_attacked_by(escape_pos, player) {
+                            attacks_escape = true;
+                            break;
+                        }
+                    }
+                }
+                if attacks_escape {
+                    break;
+                }
+            }
+            attacks_escape
+        };
+
+        restricts_by_reducing_moves || move_attacks_escape_squares
     }
 
     /// Check if a move controls key squares for rook mating patterns
     fn controls_key_squares(
         &self,
-        _board: &BitboardBoard,
-        _player: Player,
-        _move_: &Move,
-        _defending_king: Position,
+        board: &BitboardBoard,
+        player: Player,
+        move_: &Move,
+        defending_king: Position,
     ) -> bool {
-        // TODO: Implement key square control logic
-        // For now, return false
-        false
+        // For rook mating patterns, key squares are:
+        // 1. Squares on the same rank/file as defending king (rook can attack from distance)
+        // 2. Squares that cut off the defending king's escape routes
+        // 3. Squares that support the king in approaching the defending king
+        
+        // Make the move on a temporary board
+        let mut temp_board = board.clone();
+        let mut temp_captured = CapturedPieces::new();
+        
+        if let Some(captured) = temp_board.make_move(move_) {
+            temp_captured.add_piece(captured.piece_type, player);
+        }
+
+        // Key square control: Rook should control squares that restrict the defending king
+        // Check if the move places rook on same rank or file as defending king
+        let on_same_rank_or_file = move_.to.row == defending_king.row || move_.to.col == defending_king.col;
+        
+        // Check if rook can now attack squares that the defending king might escape to
+        // This includes squares adjacent to the defending king
+        let controls_escape_squares = {
+            let mut controls = false;
+            // Check squares adjacent to defending king
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    if dr == 0 && dc == 0 {
+                        continue;
+                    }
+                    let escape_row = (defending_king.row as i8 + dr) as u8;
+                    let escape_col = (defending_king.col as i8 + dc) as u8;
+                    
+                    if escape_row < 9 && escape_col < 9 {
+                        let escape_pos = Position { row: escape_row, col: escape_col };
+                        // Rook can attack if on same rank or file
+                        if temp_board.is_square_attacked_by(escape_pos, player) {
+                            controls = true;
+                            break;
+                        }
+                    }
+                }
+                if controls {
+                    break;
+                }
+            }
+            controls
+        };
+
+        // Rook controls key squares if it's on same rank/file OR if it attacks escape squares
+        on_same_rank_or_file || controls_escape_squares
     }
 
     /// Calculate distance to mate using search-based DTM calculation
