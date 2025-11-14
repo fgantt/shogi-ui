@@ -297,6 +297,15 @@ pub enum OptimizationMethod {
     /// Gradient descent with fixed learning rate
     GradientDescent { learning_rate: f64 },
     /// Adam optimizer with adaptive learning rates
+    ///
+    /// All parameters (`beta1`, `beta2`, `epsilon`) are honored from the configuration
+    /// and passed to the optimizer implementation. Default values are:
+    /// - `beta1`: 0.9 (exponential decay rate for first moment estimates)
+    /// - `beta2`: 0.999 (exponential decay rate for second moment estimates)
+    /// - `epsilon`: 1e-8 (small constant for numerical stability)
+    ///
+    /// These parameters can be tuned to adapt the optimizer behavior to different
+    /// datasets and optimization landscapes.
     Adam {
         learning_rate: f64,
         beta1: f64,
