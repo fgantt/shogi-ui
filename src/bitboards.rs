@@ -106,6 +106,74 @@ pub fn get_magic_telemetry() -> (u64, u64, u64) {
     )
 }
 
+/// Task 5.0.5.2: Telemetry counters for board operations
+#[derive(Debug, Default, Clone)]
+pub struct BoardTelemetry {
+    /// Count of board clones performed
+    pub clone_count: u64,
+    /// Count of hash collisions detected
+    pub hash_collision_count: u64,
+    /// Attack table initialization time (nanoseconds)
+    pub attack_table_init_time: u64,
+    /// Attack table memory usage (bytes)
+    pub attack_table_memory: u64,
+}
+
+static BOARD_TELEMETRY: BoardTelemetryInner = BoardTelemetryInner {
+    clone_count: std::sync::atomic::AtomicU64::new(0),
+    hash_collision_count: std::sync::atomic::AtomicU64::new(0),
+    attack_table_init_time: std::sync::atomic::AtomicU64::new(0),
+    attack_table_memory: std::sync::atomic::AtomicU64::new(0),
+};
+
+#[derive(Debug, Default)]
+struct BoardTelemetryInner {
+    clone_count: std::sync::atomic::AtomicU64,
+    hash_collision_count: std::sync::atomic::AtomicU64,
+    attack_table_init_time: std::sync::atomic::AtomicU64,
+    attack_table_memory: std::sync::atomic::AtomicU64,
+}
+
+/// Task 5.0.5.2: Get board operation telemetry
+pub fn get_board_telemetry() -> BoardTelemetry {
+    BoardTelemetry {
+        clone_count: BOARD_TELEMETRY.clone_count.load(std::sync::atomic::Ordering::Relaxed),
+        hash_collision_count: BOARD_TELEMETRY
+            .hash_collision_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        attack_table_init_time: BOARD_TELEMETRY
+            .attack_table_init_time
+            .load(std::sync::atomic::Ordering::Relaxed),
+        attack_table_memory: BOARD_TELEMETRY
+            .attack_table_memory
+            .load(std::sync::atomic::Ordering::Relaxed),
+    }
+}
+
+/// Task 5.0.5.2: Reset board telemetry counters
+pub fn reset_board_telemetry() {
+    BOARD_TELEMETRY.clone_count.store(0, std::sync::atomic::Ordering::Relaxed);
+    BOARD_TELEMETRY
+        .hash_collision_count
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+    BOARD_TELEMETRY
+        .attack_table_init_time
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+    BOARD_TELEMETRY
+        .attack_table_memory
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Task 5.0.5.2: Record attack table initialization telemetry
+pub(crate) fn record_attack_table_init(time_nanos: u64, memory_bytes: u64) {
+    BOARD_TELEMETRY
+        .attack_table_init_time
+        .store(time_nanos, std::sync::atomic::Ordering::Relaxed);
+    BOARD_TELEMETRY
+        .attack_table_memory
+        .store(memory_bytes, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Get or initialize the shared magic table singleton
 /// Returns None if magic table initialization fails
 fn get_shared_magic_table() -> Option<Arc<MagicTable>> {
@@ -240,6 +308,14 @@ impl BitboardBoard {
     }
 
     pub fn empty() -> Self {
+        // Task 5.0.5.2: Track attack table initialization time and memory
+        let start_time = std::time::Instant::now();
+        let attack_tables = Arc::new(attack_patterns::AttackTables::new());
+        let init_time = start_time.elapsed();
+        let memory = attack_tables.memory_stats().memory_usage_bytes;
+        
+        record_attack_table_init(init_time.as_nanos() as u64, memory as u64);
+        
         Self {
             pieces: [[EMPTY_BITBOARD; 14]; 2],
             occupied: EMPTY_BITBOARD,
@@ -247,7 +323,7 @@ impl BitboardBoard {
             white_occupied: EMPTY_BITBOARD,
             squares: [None; 81],
             attack_patterns: AttackPatterns::new(),
-            attack_tables: Arc::new(attack_patterns::AttackTables::new()),
+            attack_tables,
             magic_table: None,
             sliding_generator: None,
             side_to_move: Player::Black,
@@ -1492,7 +1568,12 @@ impl BoardTrait for BitboardBoard {
 }
 
 impl Clone for BitboardBoard {
+    /// Task 5.0.5.2: Track board clone operations
     fn clone(&self) -> Self {
+        BOARD_TELEMETRY
+            .clone_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        
         Self {
             pieces: self.pieces,
             occupied: self.occupied,

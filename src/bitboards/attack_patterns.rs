@@ -157,6 +157,8 @@ impl AttackTables {
         tables.metadata.memory_usage_bytes = std::mem::size_of::<AttackTables>();
         tables.metadata.validation_passed = true;
 
+        // Task 5.0.5.2: Telemetry is tracked in bitboards.rs when AttackTables::new() is called
+
         tables
     }
 
