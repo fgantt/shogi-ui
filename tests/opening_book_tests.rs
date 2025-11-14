@@ -866,3 +866,313 @@ mod edge_case_tests {
         assert_eq!(best_move.unwrap().piece_type, PieceType::Rook);
     }
 }
+
+#[cfg(test)]
+mod binary_format_extraction_tests {
+    use super::*;
+    use shogi_engine::opening_book::binary_format::{BinaryHeader, BinaryReader, BinaryWriter};
+
+    #[test]
+    fn test_binary_format_module_extraction() {
+        // Verify that binary format module is accessible
+        let mut writer = BinaryWriter::new();
+        let book = OpeningBook::new();
+        let result = writer.write_opening_book(&book);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_binary_header_creation() {
+        let header = BinaryHeader::new(100, 128, 500);
+        assert_eq!(header.entry_count, 100);
+        assert_eq!(header.hash_table_size, 128);
+        assert_eq!(header.total_moves, 500);
+        assert_eq!(header.version, 1);
+    }
+
+    #[test]
+    fn test_binary_header_serialization() {
+        let header = BinaryHeader::new(100, 128, 500);
+        let bytes = header.to_bytes();
+        assert_eq!(bytes.len(), 48); // Header size
+
+        // Verify we can read it back
+        let header2 = BinaryHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(header2.entry_count, 100);
+        assert_eq!(header2.hash_table_size, 128);
+        assert_eq!(header2.total_moves, 500);
+    }
+
+    #[test]
+    fn test_binary_reader_writer_roundtrip() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+        let moves = vec![BookMove::new(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+        )];
+        book.add_position(fen.clone(), moves);
+        book = book.mark_loaded();
+
+        // Write to binary
+        let mut writer = BinaryWriter::new();
+        let binary_data = writer.write_opening_book(&book).unwrap();
+
+        // Read from binary
+        let mut reader = BinaryReader::new(binary_data);
+        let restored_book = reader.read_opening_book().unwrap();
+
+        // Verify data integrity
+        assert_eq!(restored_book.positions.len(), book.positions.len());
+        assert_eq!(restored_book.total_moves, book.total_moves);
+    }
+}
+
+#[cfg(test)]
+mod binary_format_edge_cases_tests {
+    use super::*;
+    use shogi_engine::opening_book::binary_format::{BinaryReader, BinaryWriter};
+
+    #[test]
+    fn test_empty_book_serialization() {
+        let book = OpeningBook::new();
+        let mut writer = BinaryWriter::new();
+        let binary_data = writer.write_opening_book(&book).unwrap();
+
+        // Empty book should still produce valid binary data
+        assert!(!binary_data.is_empty());
+
+        let mut reader = BinaryReader::new(binary_data);
+        let restored_book = reader.read_opening_book().unwrap();
+        assert_eq!(restored_book.positions.len(), 0);
+        assert_eq!(restored_book.total_moves, 0);
+    }
+
+    #[test]
+    fn test_large_move_count() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+
+        // Create a position with >100 moves
+        let mut moves = Vec::new();
+        for i in 0..150 {
+            moves.push(BookMove::new(
+                Some(Position::new((i % 9) as u8, (i / 9) as u8)),
+                Position::new((i % 9) as u8, ((i / 9) + 1) as u8),
+                PieceType::Pawn,
+                false,
+                false,
+                500 + (i as u32),
+                10,
+            ));
+        }
+
+        book.add_position(fen.clone(), moves);
+        book = book.mark_loaded();
+
+        // Serialize and deserialize
+        let mut writer = BinaryWriter::new();
+        let binary_data = writer.write_opening_book(&book).unwrap();
+
+        let mut reader = BinaryReader::new(binary_data);
+        let restored_book = reader.read_opening_book().unwrap();
+
+        // Verify all moves are preserved
+        let entry = restored_book.positions.values().next().unwrap();
+        assert_eq!(entry.moves.len(), 150);
+    }
+
+    #[test]
+    fn test_utf8_strings_in_opening_names() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+
+        // Test with Japanese characters
+        let moves = vec![BookMove::new_with_metadata(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+            Some("四間飛車".to_string()), // Japanese opening name
+            Some("27-26".to_string()),
+        )];
+
+        book.add_position(fen.clone(), moves);
+        book = book.mark_loaded();
+
+        // Serialize and deserialize
+        let mut writer = BinaryWriter::new();
+        let binary_data = writer.write_opening_book(&book).unwrap();
+
+        let mut reader = BinaryReader::new(binary_data);
+        let restored_book = reader.read_opening_book().unwrap();
+
+        // Verify UTF-8 strings are preserved
+        let entry = restored_book.positions.values().next().unwrap();
+        let book_move = &entry.moves[0];
+        assert_eq!(book_move.opening_name, Some("四間飛車".to_string()));
+    }
+
+    #[test]
+    fn test_utf8_strings_in_move_notation() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+
+        // Test with UTF-8 in move notation
+        let moves = vec![BookMove::new_with_metadata(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+            Some("Test Opening".to_string()),
+            Some("27-26 飛車".to_string()), // UTF-8 in notation
+        )];
+
+        book.add_position(fen.clone(), moves);
+        book = book.mark_loaded();
+
+        // Serialize and deserialize
+        let mut writer = BinaryWriter::new();
+        let binary_data = writer.write_opening_book(&book).unwrap();
+
+        let mut reader = BinaryReader::new(binary_data);
+        let restored_book = reader.read_opening_book().unwrap();
+
+        // Verify UTF-8 strings are preserved
+        let entry = restored_book.positions.values().next().unwrap();
+        let book_move = &entry.moves[0];
+        assert_eq!(book_move.move_notation, Some("27-26 飛車".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod unified_statistics_tests {
+    use super::*;
+    use shogi_engine::opening_book::statistics::BookStatistics;
+    use shogi_engine::evaluation::opening_principles::OpeningPrincipleStats;
+    use shogi_engine::search::move_ordering::AdvancedIntegrationStats;
+
+    #[test]
+    fn test_book_statistics_creation() {
+        let stats = BookStatistics::new();
+        assert!(stats.migration.is_none());
+        assert!(stats.memory.is_none());
+        assert_eq!(stats.opening_principles.book_moves_evaluated, 0);
+        assert_eq!(stats.move_ordering.opening_book_integrations, 0);
+    }
+
+    #[test]
+    fn test_statistics_from_opening_principles() {
+        let mut stats = BookStatistics::new();
+        let mut opening_principles_stats = OpeningPrincipleStats::default();
+        opening_principles_stats.book_moves_evaluated = 100;
+        opening_principles_stats.book_moves_prioritized = 50;
+        opening_principles_stats.book_moves_validated = 75;
+        opening_principles_stats.book_move_quality_scores = 5000;
+
+        stats.update_from_opening_principles(&opening_principles_stats);
+
+        assert_eq!(stats.opening_principles.book_moves_evaluated, 100);
+        assert_eq!(stats.opening_principles.book_moves_prioritized, 50);
+        assert_eq!(stats.opening_principles.book_moves_validated, 75);
+        assert_eq!(stats.opening_principles.book_move_quality_scores, 5000);
+    }
+
+    #[test]
+    fn test_statistics_from_move_ordering() {
+        let mut stats = BookStatistics::new();
+        let mut move_ordering_stats = AdvancedIntegrationStats::default();
+        move_ordering_stats.opening_book_integrations = 200;
+
+        stats.update_from_move_ordering(&move_ordering_stats);
+
+        assert_eq!(stats.move_ordering.opening_book_integrations, 200);
+    }
+
+    #[test]
+    fn test_average_book_move_quality() {
+        let mut stats = BookStatistics::new();
+        let mut opening_principles_stats = OpeningPrincipleStats::default();
+        opening_principles_stats.book_moves_evaluated = 100;
+        opening_principles_stats.book_move_quality_scores = 5000;
+
+        stats.update_from_opening_principles(&opening_principles_stats);
+
+        let average = stats.average_book_move_quality();
+        assert_eq!(average, 50.0); // 5000 / 100
+    }
+
+    #[test]
+    fn test_average_book_move_quality_zero_evaluations() {
+        let stats = BookStatistics::new();
+        let average = stats.average_book_move_quality();
+        assert_eq!(average, 0.0);
+    }
+
+    #[test]
+    fn test_get_statistics_from_opening_book() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+        let moves = vec![BookMove::new(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+        )];
+        book.add_position(fen, moves);
+        book = book.mark_loaded();
+
+        let stats = book.get_statistics();
+        assert!(stats.memory.is_some());
+        let memory = stats.memory.unwrap();
+        assert_eq!(memory.loaded_positions, 1);
+    }
+
+    #[test]
+    fn test_statistics_aggregation() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+        let moves = vec![BookMove::new(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+        )];
+        book.add_position(fen, moves);
+        book = book.mark_loaded();
+
+        let mut stats = book.get_statistics();
+
+        // Update from opening principles
+        let mut opening_principles_stats = OpeningPrincipleStats::default();
+        opening_principles_stats.book_moves_evaluated = 50;
+        book.update_statistics_from_opening_principles(&mut stats, &opening_principles_stats);
+
+        // Update from move ordering
+        let mut move_ordering_stats = AdvancedIntegrationStats::default();
+        move_ordering_stats.opening_book_integrations = 25;
+        book.update_statistics_from_move_ordering(&mut stats, &move_ordering_stats);
+
+        // Verify all statistics are aggregated
+        assert!(stats.memory.is_some());
+        assert_eq!(stats.opening_principles.book_moves_evaluated, 50);
+        assert_eq!(stats.move_ordering.opening_book_integrations, 25);
+    }
+}
