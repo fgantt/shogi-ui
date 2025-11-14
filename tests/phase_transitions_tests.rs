@@ -1,8 +1,9 @@
 //! Tests for Phase Transitions and Documentation (Task 17.0 - Task 6.0)
 
+use shogi_engine::bitboards::BitboardBoard;
 use shogi_engine::evaluation::config::PhaseBoundaryConfig;
 use shogi_engine::evaluation::integration::{IntegratedEvaluationConfig, IntegratedEvaluator};
-use shogi_engine::types::{BitboardBoard, CapturedPieces, Player};
+use shogi_engine::types::{CapturedPieces, Player};
 
 #[test]
 fn test_gradual_phase_out_endgame() {
@@ -15,22 +16,32 @@ fn test_gradual_phase_out_endgame() {
     config.phase_boundaries.endgame_fade_end = 64;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
     
     // Test fade factor calculation
-    let fade_factor_64 = evaluator.config.phase_boundaries.calculate_endgame_fade_factor(64);
+    let fade_factor_64 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_endgame_fade_factor(64);
     assert_eq!(fade_factor_64, 1.0, "At fade_end, fade factor should be 1.0");
     
-    let fade_factor_80 = evaluator.config.phase_boundaries.calculate_endgame_fade_factor(80);
+    let fade_factor_80 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_endgame_fade_factor(80);
     assert_eq!(fade_factor_80, 0.0, "At fade_start, fade factor should be 0.0");
     
-    let fade_factor_72 = evaluator.config.phase_boundaries.calculate_endgame_fade_factor(72);
+    let fade_factor_72 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_endgame_fade_factor(72);
     assert!(fade_factor_72 > 0.0 && fade_factor_72 < 1.0, 
             "Between fade_end and fade_start, fade factor should be between 0.0 and 1.0");
     
     // Verify fade is linear
-    let fade_factor_68 = evaluator.config.phase_boundaries.calculate_endgame_fade_factor(68);
+    let fade_factor_68 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_endgame_fade_factor(68);
     assert!((fade_factor_68 - 0.5).abs() < 0.1, 
             "At midpoint (68), fade factor should be approximately 0.5");
 }
@@ -48,13 +59,22 @@ fn test_gradual_phase_out_opening() {
     let evaluator = IntegratedEvaluator::with_config(config);
     
     // Test fade factor calculation
-    let fade_factor_192 = evaluator.config.phase_boundaries.calculate_opening_fade_factor(192);
+    let fade_factor_192 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_opening_fade_factor(192);
     assert_eq!(fade_factor_192, 1.0, "At fade_start, fade factor should be 1.0");
     
-    let fade_factor_160 = evaluator.config.phase_boundaries.calculate_opening_fade_factor(160);
+    let fade_factor_160 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_opening_fade_factor(160);
     assert_eq!(fade_factor_160, 0.0, "At fade_end, fade factor should be 0.0");
     
-    let fade_factor_176 = evaluator.config.phase_boundaries.calculate_opening_fade_factor(176);
+    let fade_factor_176 = evaluator
+        .config()
+        .phase_boundaries
+        .calculate_opening_fade_factor(176);
     assert!(fade_factor_176 > 0.0 && fade_factor_176 < 1.0, 
             "Between fade_start and fade_end, fade factor should be between 0.0 and 1.0");
     
@@ -79,12 +99,13 @@ fn test_configurable_phase_boundaries() {
     let evaluator = IntegratedEvaluator::with_config(config);
     
     // Verify boundaries are set correctly
-    assert_eq!(evaluator.config.phase_boundaries.opening_threshold, 200);
-    assert_eq!(evaluator.config.phase_boundaries.endgame_threshold, 60);
-    assert_eq!(evaluator.config.phase_boundaries.opening_fade_start, 200);
-    assert_eq!(evaluator.config.phase_boundaries.opening_fade_end, 170);
-    assert_eq!(evaluator.config.phase_boundaries.endgame_fade_start, 70);
-    assert_eq!(evaluator.config.phase_boundaries.endgame_fade_end, 60);
+    let config_ref = evaluator.config();
+    assert_eq!(config_ref.phase_boundaries.opening_threshold, 200);
+    assert_eq!(config_ref.phase_boundaries.endgame_threshold, 60);
+    assert_eq!(config_ref.phase_boundaries.opening_fade_start, 200);
+    assert_eq!(config_ref.phase_boundaries.opening_fade_end, 170);
+    assert_eq!(config_ref.phase_boundaries.endgame_fade_start, 70);
+    assert_eq!(config_ref.phase_boundaries.endgame_fade_end, 60);
 }
 
 #[test]
@@ -96,8 +117,6 @@ fn test_phase_transition_smoothness() {
     config.collect_position_feature_stats = true;
     
     let evaluator = IntegratedEvaluator::with_config(config);
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
     
     // Evaluate at different phases to check smoothness
     // Note: We can't easily control phase in a test, but we can verify the fade factors
@@ -107,7 +126,10 @@ fn test_phase_transition_smoothness() {
     let mut previous_fade = 1.0;
     
     for phase in phases {
-        let fade = evaluator.config.phase_boundaries.calculate_endgame_fade_factor(phase);
+        let fade = evaluator
+            .config()
+            .phase_boundaries
+            .calculate_endgame_fade_factor(phase);
         assert!(fade <= previous_fade, 
                 "Fade factor should decrease as phase increases (smooth transition)");
         previous_fade = fade;
@@ -118,7 +140,10 @@ fn test_phase_transition_smoothness() {
     let mut previous_opening_fade = 1.0;
     
     for phase in opening_phases {
-        let fade = evaluator.config.phase_boundaries.calculate_opening_fade_factor(phase);
+        let fade = evaluator
+            .config()
+            .phase_boundaries
+            .calculate_opening_fade_factor(phase);
         assert!(fade <= previous_opening_fade, 
                 "Opening fade factor should decrease as phase decreases (smooth transition)");
         previous_opening_fade = fade;
@@ -172,8 +197,8 @@ fn test_abrupt_vs_gradual_transitions() {
     let evaluator_abrupt = IntegratedEvaluator::with_config(config_abrupt);
     let evaluator_gradual = IntegratedEvaluator::with_config(config_gradual);
     
-    let board = BitboardBoard::default();
-    let captured = CapturedPieces::default();
+    let board = BitboardBoard::new();
+    let captured = CapturedPieces::new();
     
     // Both should evaluate without panicking
     let _score_abrupt = evaluator_abrupt.evaluate(&board, Player::Black, &captured);

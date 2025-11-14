@@ -22,6 +22,8 @@ use crate::types::{CapturedPieces, Move, Player};
 /// # Returns
 /// * `Some(distance)` - Distance to mate in moves if mate is found
 /// * `None` - If mate cannot be found within max_depth
+const NODE_LIMIT: usize = 25_000;
+
 pub fn calculate_dtm(
     board: &BitboardBoard,
     player: Player,
@@ -36,14 +38,20 @@ pub fn calculate_dtm(
 
     // Use iterative deepening to find shortest path to mate
     let move_generator = MoveGenerator::new();
-    
+    let mut nodes_explored = 0usize;
+
     for depth in 1..=max_depth {
+        if nodes_explored >= NODE_LIMIT {
+            break;
+        }
         if let Some(_mate) = find_mate_at_depth(
             board,
             player,
             captured_pieces,
             depth,
             &move_generator,
+            &mut nodes_explored,
+            NODE_LIMIT,
         ) {
             return Some(depth);
         }
@@ -59,7 +67,15 @@ fn find_mate_at_depth(
     captured_pieces: &CapturedPieces,
     depth: u8,
     move_generator: &MoveGenerator,
+    nodes_explored: &mut usize,
+    node_limit: usize,
 ) -> Option<Move> {
+    if *nodes_explored >= node_limit {
+        return None;
+    }
+
+    *nodes_explored += 1;
+
     if depth == 0 {
         // At depth 0, check if opponent is in checkmate
         let opponent = player.opposite();
@@ -86,6 +102,9 @@ fn find_mate_at_depth(
 
     // Try each move and see if it leads to mate at the target depth
     for move_ in &moves {
+        if *nodes_explored >= node_limit {
+            break;
+        }
         let mut temp_board = board.clone();
         let mut temp_captured = captured_pieces.clone();
         
@@ -96,8 +115,16 @@ fn find_mate_at_depth(
 
         // Check if this move leads to mate at depth-1 for opponent
         let opponent = player.opposite();
-        if find_mate_at_depth(&temp_board, opponent, &temp_captured, depth - 1, move_generator)
-            .is_some()
+        if find_mate_at_depth(
+            &temp_board,
+            opponent,
+            &temp_captured,
+            depth - 1,
+            move_generator,
+            nodes_explored,
+            node_limit,
+        )
+        .is_some()
         {
             return Some(move_.clone());
         }

@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Evaluate position
-        evaluator.evaluate(&board, player, &captured_pieces, None);
+        evaluator.evaluate(&board, player, &captured_pieces);
 
         // Get telemetry snapshot
         if let Some(telemetry) = evaluator.telemetry_snapshot() {

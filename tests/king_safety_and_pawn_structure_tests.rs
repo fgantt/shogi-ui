@@ -159,12 +159,12 @@ fn pawn_in_hand_supports_new_chain() {
 
     let mut evaluator = pawn_structure_only();
     let with_drop = evaluator
-        .evaluate_pawn_structure(&board, Player::Black, &captured)
+        .evaluate_pawn_structure(&board, Player::Black, &captured, false)
         .mg;
 
     let mut evaluator_no_hand = pawn_structure_only();
     let without_drop = evaluator_no_hand
-        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     assert!(
@@ -190,12 +190,12 @@ fn gold_in_hand_can_complete_chain_gap() {
 
     let mut evaluator_with_gold = pawn_structure_only();
     let with_gold = evaluator_with_gold
-        .evaluate_pawn_structure(&board, Player::Black, &captured)
+        .evaluate_pawn_structure(&board, Player::Black, &captured, false)
         .mg;
 
     let mut evaluator_no_gold = pawn_structure_only();
     let without_gold = evaluator_no_gold
-        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     assert!(
@@ -228,12 +228,12 @@ fn illegal_double_pawns_heavily_penalised() {
 
     let mut evaluator = pawn_structure_only();
     let normal = evaluator
-        .evaluate_pawn_structure(&board_normal, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board_normal, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     let mut evaluator_illegal = pawn_structure_only();
     let illegal = evaluator_illegal
-        .evaluate_pawn_structure(&board_illegal, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board_illegal, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     assert!(
@@ -258,12 +258,12 @@ fn advanced_pawns_score_higher_than_home_rank() {
 
     let mut evaluator_far = pawn_structure_only();
     let far_score = evaluator_far
-        .evaluate_pawn_structure(&board_far, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board_far, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     let mut evaluator_advanced = pawn_structure_only();
     let advanced_score = evaluator_advanced
-        .evaluate_pawn_structure(&board_advanced, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board_advanced, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     assert!(
@@ -282,7 +282,7 @@ fn passed_pawn_score_reduced_by_enemy_gold_drop() {
 
     let mut evaluator = pawn_structure_only();
     let no_enemy_hand = evaluator
-        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     let mut captured = CapturedPieces::new();
@@ -290,7 +290,7 @@ fn passed_pawn_score_reduced_by_enemy_gold_drop() {
 
     let mut evaluator_blocked = pawn_structure_only();
     let with_enemy_gold = evaluator_blocked
-        .evaluate_pawn_structure(&board, Player::Black, &captured)
+        .evaluate_pawn_structure(&board, Player::Black, &captured, false)
         .mg;
 
     assert!(
@@ -309,7 +309,7 @@ fn passed_pawn_score_reduced_by_enemy_knight_drop() {
 
     let mut evaluator = pawn_structure_only();
     let baseline = evaluator
-        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new())
+        .evaluate_pawn_structure(&board, Player::Black, &CapturedPieces::new(), false)
         .mg;
 
     let mut captured = CapturedPieces::new();
@@ -317,7 +317,7 @@ fn passed_pawn_score_reduced_by_enemy_knight_drop() {
 
     let mut evaluator_knight = pawn_structure_only();
     let with_knight = evaluator_knight
-        .evaluate_pawn_structure(&board, Player::Black, &captured)
+        .evaluate_pawn_structure(&board, Player::Black, &captured, false)
         .mg;
 
     assert!(

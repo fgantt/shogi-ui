@@ -164,6 +164,7 @@ impl KingGoldVsKingSolver {
         &self,
         board: &BitboardBoard,
         player: Player,
+        captured_pieces: &CapturedPieces,
     ) -> Option<TablebaseResult> {
         let (attacking_king, attacking_gold) = self.find_attacking_pieces(board, player)?;
         let defending_king = self.find_defending_king(board, player)?;
@@ -175,13 +176,19 @@ impl KingGoldVsKingSolver {
             attacking_king,
             attacking_gold,
             defending_king,
+            captured_pieces,
         ) {
             return Some(TablebaseResult::win(Some(mate_move), 1));
         }
 
         // Check if we can approach with the King
-        if let Some(approach_move) =
-            self.approach_with_king(board, player, attacking_king, defending_king)
+        if let Some(approach_move) = self.approach_with_king(
+            board,
+            player,
+            attacking_king,
+            defending_king,
+            captured_pieces,
+        )
         {
             let distance = self.calculate_distance_to_mate(board, player);
             return Some(TablebaseResult::win(Some(approach_move), distance));
@@ -194,6 +201,7 @@ impl KingGoldVsKingSolver {
             attacking_king,
             attacking_gold,
             defending_king,
+            captured_pieces,
         ) {
             let distance = self.calculate_distance_to_mate(board, player);
             return Some(TablebaseResult::win(Some(coordinate_move), distance));
@@ -206,6 +214,7 @@ impl KingGoldVsKingSolver {
             attacking_king,
             attacking_gold,
             defending_king,
+            captured_pieces,
         )
     }
 
@@ -217,14 +226,19 @@ impl KingGoldVsKingSolver {
         king: Position,
         gold: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<Move> {
         // Check if Gold can mate directly
-        if let Some(mate_move) = self.gold_can_mate(board, player, gold, defending_king) {
+        if let Some(mate_move) =
+            self.gold_can_mate(board, player, gold, defending_king, captured_pieces)
+        {
             return Some(mate_move);
         }
 
         // Check if King can mate directly (rare but possible)
-        if let Some(mate_move) = self.king_can_mate(board, player, king, defending_king) {
+        if let Some(mate_move) =
+            self.king_can_mate(board, player, king, defending_king, captured_pieces)
+        {
             return Some(mate_move);
         }
 
@@ -238,6 +252,7 @@ impl KingGoldVsKingSolver {
         player: Player,
         gold: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<Move> {
         // Generate all possible Gold moves
         let gold_moves = self.generate_gold_moves(board, player, gold, captured_pieces);
@@ -258,6 +273,7 @@ impl KingGoldVsKingSolver {
         player: Player,
         king: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<Move> {
         // Generate all possible King moves
         let king_moves = self.generate_king_moves(board, player, king, captured_pieces);
@@ -278,6 +294,7 @@ impl KingGoldVsKingSolver {
         player: Player,
         king: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<Move> {
         let king_moves = self.generate_king_moves(board, player, king, captured_pieces);
 
@@ -304,13 +321,21 @@ impl KingGoldVsKingSolver {
         king: Position,
         gold: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<Move> {
         // Try moving the Gold to a better position
         let gold_moves = self.generate_gold_moves(board, player, gold, captured_pieces);
 
         for move_ in gold_moves {
             // Check if this move improves our mating chances
-            if self.improves_mating_position(board, player, &move_, king, defending_king) {
+            if self.improves_mating_position(
+                board,
+                player,
+                &move_,
+                king,
+                defending_king,
+                captured_pieces,
+            ) {
                 return Some(move_);
             }
         }
@@ -335,6 +360,7 @@ impl KingGoldVsKingSolver {
         king: Position,
         _gold: Position,
         _defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> Option<TablebaseResult> {
         // In King + Gold vs King, the side with King + Gold should always be winning
         // If we can't make progress, it might be a draw or we need to find a different approach
@@ -510,6 +536,7 @@ impl KingGoldVsKingSolver {
         move_: &Move,
         _king: Position,
         defending_king: Position,
+        captured_pieces: &CapturedPieces,
     ) -> bool {
         // Check if the move gets the Gold closer to the defending King
         let current_distance = self.manhattan_distance(move_.from.unwrap(), defending_king);
@@ -550,9 +577,8 @@ impl KingGoldVsKingSolver {
         use super::dtm_calculator::calculate_dtm;
         use crate::types::CapturedPieces;
 
-        // Use search-based DTM calculation with max depth limit
-        // For K+G vs K, mate is typically achievable within 30 moves
-        let max_depth = 30;
+        // Use search-based DTM calculation with capped depth for responsiveness
+        let max_depth = self.config.max_moves_to_mate.min(12);
         let captured_pieces = CapturedPieces::new();
 
         // Calculate actual DTM using iterative deepening search
@@ -608,7 +634,7 @@ impl EndgameSolver for KingGoldVsKingSolver {
             return None;
         }
 
-        self.calculate_mating_move(board, player)
+        self.calculate_mating_move(board, player, captured_pieces)
     }
 
     fn priority(&self) -> u8 {
@@ -683,7 +709,7 @@ mod tests {
     }
 
     fn create_test_board() -> BitboardBoard {
-        BitboardBoard::new()
+        BitboardBoard::empty()
     }
 
     fn create_king_gold_vs_king_position() -> (BitboardBoard, Player) {
@@ -721,7 +747,7 @@ mod tests {
     #[test]
     fn test_piece_counting() {
         let solver = KingGoldVsKingSolver::new();
-        let board = create_test_board();
+        let board = BitboardBoard::new();
         let (black_pieces, white_pieces) = solver.count_pieces_by_player(&board);
 
         // Initial position should have many pieces
@@ -766,7 +792,19 @@ mod tests {
     #[test]
     fn test_gold_move_generation() {
         let solver = KingGoldVsKingSolver::new();
-        let board = create_test_board();
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(6, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(8, 8),
+        );
         let gold_pos = Position::new(4, 4);
         let player = Player::Black;
 
@@ -779,7 +817,19 @@ mod tests {
     #[test]
     fn test_king_move_generation() {
         let solver = KingGoldVsKingSolver::new();
-        let board = create_test_board();
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::Gold, Player::Black),
+            Position::new(6, 6),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(8, 8),
+        );
         let king_pos = Position::new(4, 4);
         let player = Player::Black;
 
@@ -940,6 +990,7 @@ mod tests {
             &gold_move,
             Position::new(6, 6),
             Position::new(0, 4),
+            &CapturedPieces::new(),
         ));
     }
 

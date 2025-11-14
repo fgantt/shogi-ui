@@ -519,9 +519,8 @@ impl KingSilverVsKingSolver {
     ) -> u8 {
         use super::dtm_calculator::calculate_dtm;
 
-        // Use search-based DTM calculation with max depth limit
-        // For K+S vs K, mate is typically achievable within 35 moves
-        let max_depth = 35;
+        // Use search-based DTM calculation with a capped depth to avoid long searches
+        let max_depth = self.config.max_moves_to_mate.min(12);
 
         // Calculate actual DTM using iterative deepening search
         if let Some(dtm) = calculate_dtm(board, player, captured_pieces, max_depth) {

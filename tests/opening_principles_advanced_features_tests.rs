@@ -70,23 +70,21 @@ fn test_repeated_piece_moves() {
     let mut move_history = Vec::new();
     
     // Move same rook twice
-    move_history.push(Move {
-        from: Some(Position::new(8, 1)),
-        to: Position::new(7, 1),
-        piece_type: PieceType::Rook,
-        player: Player::Black,
-        is_drop: false,
-        is_promotion: false,
-    });
+    move_history.push(Move::new_move(
+        Position::new(8, 1),
+        Position::new(7, 1),
+        PieceType::Rook,
+        Player::Black,
+        false,
+    ));
     
-    move_history.push(Move {
-        from: Some(Position::new(7, 1)),
-        to: Position::new(6, 1),
-        piece_type: PieceType::Rook,
-        player: Player::Black,
-        is_drop: false,
-        is_promotion: false,
-    });
+    move_history.push(Move::new_move(
+        Position::new(7, 1),
+        Position::new(6, 1),
+        PieceType::Rook,
+        Player::Black,
+        false,
+    ));
     
     // Evaluate with move history
     let score_with_history = evaluator.evaluate_opening(&board, Player::Black, 5, None, Some(&move_history));
@@ -112,14 +110,13 @@ fn test_multiple_repeated_moves() {
     let mut move_history = Vec::new();
     
     for i in 0..3 {
-        move_history.push(Move {
-            from: Some(Position::new(8 - i as u8, 1)),
-            to: Position::new(7 - i as u8, 1),
-            piece_type: PieceType::Bishop,
-            player: Player::Black,
-            is_drop: false,
-            is_promotion: false,
-        });
+        move_history.push(Move::new_move(
+            Position::new(8 - i as u8, 1),
+            Position::new(7 - i as u8, 1),
+            PieceType::Bishop,
+            Player::Black,
+            false,
+        ));
     }
     
     let score = evaluator.evaluate_opening(&board, Player::Black, 5, None, Some(&move_history));
