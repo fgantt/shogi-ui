@@ -190,37 +190,104 @@ impl MagicFinder {
         Err(MagicError::GenerationFailed { square, piece_type })
     }
 
-    /// Generate heuristic magic number candidates
+    /// Generate heuristic magic number candidates with expanded patterns
+    ///
+    /// This improved heuristic includes:
+    /// - Powers of 2
+    /// - Sparse bit patterns (2-4 bits set)
+    /// - Mask-derived patterns
+    /// - Well-known magic numbers from chess engines
+    /// - Patterns optimized for smaller table sizes
     fn generate_heuristic_candidates(&self, mask: Bitboard) -> Vec<u64> {
         let mut candidates = Vec::new();
-        let _bit_count = mask.count_ones() as u8;
+        let bit_count = mask.count_ones() as u8;
 
-        // Try powers of 2
+        // Try powers of 2 (expanded set)
         for i in 0..64 {
             candidates.push(1u64 << i);
         }
 
-        // Try numbers with sparse bit patterns
+        // Try numbers with sparse bit patterns (2 bits)
         for i in 0..64 {
             for j in (i + 1)..64 {
                 candidates.push((1u64 << i) | (1u64 << j));
             }
         }
 
-        // Try numbers based on the mask pattern
+        // Try numbers with 3-bit sparse patterns (for better distribution)
+        for i in 0..64 {
+            for j in (i + 1)..64.min(i + 10) { // Limit to nearby bits
+                for k in (j + 1)..64.min(j + 10) {
+                    candidates.push((1u64 << i) | (1u64 << j) | (1u64 << k));
+                }
+            }
+        }
+
+        // Try numbers with 4-bit sparse patterns (limited to prevent explosion)
+        for i in 0..32 {
+            for j in (i + 1)..32.min(i + 8) {
+                for k in (j + 1)..32.min(j + 8) {
+                    for l in (k + 1)..32.min(k + 8) {
+                        candidates.push((1u64 << i) | (1u64 << j) | (1u64 << k) | (1u64 << l));
+                    }
+                }
+            }
+        }
+
+        // Try numbers based on the mask pattern (expanded)
         let mask_low = (mask & 0xFFFFFFFF) as u32;
         let mask_high = ((mask >> 32) & 0xFFFFFFFF) as u32;
+        let mask_mid = ((mask >> 16) & 0xFFFFFFFF) as u32;
 
         candidates.push(mask_low as u64);
         candidates.push(mask_high as u64);
+        candidates.push(mask_mid as u64);
         candidates.push((mask_low as u64) << 32 | (mask_high as u64));
+        candidates.push((mask_low as u64) | ((mask_high as u64) << 32));
+        
+        // Mask-derived patterns with rotations
+        candidates.push(mask_low.wrapping_mul(0x9E3779B9) as u64);
+        candidates.push(mask_high.wrapping_mul(0x9E3779B9) as u64);
+        candidates.push((mask_low as u64).wrapping_mul(0x517CC1B7));
+        candidates.push((mask_high as u64).wrapping_mul(0x517CC1B7));
 
-        // Try some well-known magic numbers from chess engines
-        candidates.push(0x0001010101010101);
-        candidates.push(0x0002020202020202);
-        candidates.push(0x0004040404040404);
-        candidates.push(0x0008080808080808);
+        // Try some well-known magic numbers from chess engines (expanded set)
+        let well_known = vec![
+            0x0001010101010101,
+            0x0002020202020202,
+            0x0004040404040404,
+            0x0008080808080808,
+            0x0010101010101010,
+            0x0020202020202020,
+            0x0040404040404040,
+            0x0080808080808080,
+            0x0101010101010101,
+            0x0202020202020202,
+            0x0404040404040404,
+            0x0808080808080808,
+            0x1010101010101010,
+            0x2020202020202020,
+            0x4040404040404040,
+            0x8080808080808080,
+            0x00000000000000FF,
+            0x000000000000FF00,
+            0x00000000FF000000,
+            0xFF00000000000000,
+        ];
+        candidates.extend(well_known);
 
+        // Patterns optimized for smaller table sizes (when bit_count is small)
+        if bit_count <= 8 {
+            // For small masks, try more aggressive patterns
+            for i in 0..16 {
+                candidates.push(0xFFFFFFFFFFFFFFFFu64 >> (64 - (1 << i).min(64)));
+            }
+        }
+
+        // Remove duplicates while preserving order
+        let mut seen = HashSet::new();
+        candidates.retain(|&x| seen.insert(x));
+        
         candidates
     }
 

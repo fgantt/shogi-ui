@@ -844,5 +844,73 @@ fn test_fallback_on_corrupted_table() {
     use shogi_engine::bitboards::magic::attack_generator::AttackGenerator;
     let mut generator = AttackGenerator::new();
     let expected = generator.generate_attack_pattern(40, PieceType::Rook, 0);
-    assert_eq!(attacks, expected, "Fallback should produce correct results");
+        assert_eq!(attacks, expected, "Fallback should produce correct results");
+    }
+}
+
+#[test]
+fn test_improved_heuristics_find_valid_magic() {
+    use shogi_engine::bitboards::magic::magic_finder::MagicFinder;
+    
+    let mut finder = MagicFinder::new();
+    
+    // Test that improved heuristics can find magic numbers
+    for square in [0, 40, 80] {
+        for piece_type in [PieceType::Rook, PieceType::Bishop] {
+            let result = finder.find_magic_number(square, piece_type);
+            assert!(result.is_ok(), "Should find magic number for square {} piece {:?}", square, piece_type);
+            
+            let magic_result = result.unwrap();
+            assert_ne!(magic_result.magic_number, 0, "Magic number should be non-zero");
+            assert!(magic_result.table_size > 0, "Table size should be positive");
+        }
+    }
+}
+
+#[test]
+fn test_lookup_engine_caching() {
+    use shogi_engine::bitboards::magic::lookup_engine::LookupEngine;
+    use shogi_engine::types::MagicTable;
+    
+    let table = MagicTable::new().unwrap();
+    let engine = LookupEngine::new(table);
+    
+    // First access (cache miss)
+    let _attacks1 = engine.get_attacks(40, PieceType::Rook, 0);
+    let metrics1 = engine.get_metrics();
+    assert_eq!(metrics1.cache_misses, 1);
+    
+    // Second access (cache hit)
+    let _attacks2 = engine.get_attacks(40, PieceType::Rook, 0);
+    let metrics2 = engine.get_metrics();
+    assert!(metrics2.cache_hits >= 1, "Should have cache hit on second access");
+}
+
+#[test]
+#[ignore] // Long-running test
+fn test_memory_mapped_table() {
+    use shogi_engine::bitboards::magic::memory_mapped::MemoryMappedMagicTable;
+    use shogi_engine::bitboards::magic::MagicTable;
+    use std::fs;
+    
+    let temp_dir = std::env::temp_dir();
+    let test_file = temp_dir.join("test_mmap_magic_table.bin");
+    
+    // Generate and save a table
+    let table = MagicTable::new().unwrap();
+    table.save_to_file(&test_file).unwrap();
+    
+    // Load as memory-mapped
+    let mmap_table = MemoryMappedMagicTable::from_file(&test_file).unwrap();
+    
+    // Verify it works
+    let attacks = mmap_table.get_attacks(40, PieceType::Rook, 0);
+    assert_ne!(attacks, 0);
+    
+    // Verify stats
+    let stats = mmap_table.memory_stats();
+    assert!(stats.file_size > 0);
+    
+    // Cleanup
+    let _ = fs::remove_file(&test_file);
 }
