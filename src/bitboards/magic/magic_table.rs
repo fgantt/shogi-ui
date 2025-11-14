@@ -64,6 +64,17 @@ impl MagicTable {
         Ok(table)
     }
 
+    /// Create a new magic table with progress callback
+    pub fn new_with_progress<F>(progress_callback: Option<F>) -> Result<Self, MagicError>
+    where
+        F: Fn(f64) + Send + Sync + 'static,
+    {
+        let mut table = Self::default();
+        let callback = progress_callback.map(|f| Box::new(f) as Box<dyn Fn(f64) + Send + Sync>);
+        table.initialize_tables_with_progress(callback)?;
+        Ok(table)
+    }
+
     /// Create a new magic table with custom memory pool
     pub fn with_memory_pool(memory_pool: MemoryPool) -> Result<Self, MagicError> {
         Ok(Self {
@@ -76,16 +87,40 @@ impl MagicTable {
 
     /// Initialize all magic tables
     fn initialize_tables(&mut self) -> Result<(), MagicError> {
+        self.initialize_tables_with_progress(None)
+    }
+
+    /// Initialize all magic tables with progress callback
+    ///
+    /// The callback receives progress as a f64 from 0.0 to 1.0
+    pub fn initialize_tables_with_progress(
+        &mut self,
+        progress_callback: Option<Box<dyn Fn(f64) + Send + Sync>>,
+    ) -> Result<(), MagicError> {
         let start_time = std::time::Instant::now();
+        let total_squares = 162; // 81 rook + 81 bishop
+        let mut completed = 0;
+
+        // Estimate total storage needed to pre-allocate
+        let estimated_size = self.estimate_total_storage_size();
+        self.attack_storage.reserve(estimated_size);
 
         // Initialize rook tables
         for square in 0..81 {
             self.initialize_rook_square(square)?;
+            completed += 1;
+            if let Some(ref callback) = progress_callback {
+                callback(completed as f64 / total_squares as f64);
+            }
         }
 
         // Initialize bishop tables
         for square in 0..81 {
             self.initialize_bishop_square(square)?;
+            completed += 1;
+            if let Some(ref callback) = progress_callback {
+                callback(completed as f64 / total_squares as f64);
+            }
         }
 
         println!(
@@ -95,8 +130,16 @@ impl MagicTable {
         Ok(())
     }
 
+    /// Estimate total storage size needed for all tables
+    fn estimate_total_storage_size(&self) -> usize {
+        // Rough estimate: average table size per square * 162 squares
+        // This is conservative and will be adjusted as we allocate
+        let avg_table_size = 1024; // Conservative estimate
+        avg_table_size * 162
+    }
+
     /// Initialize magic table for a specific rook square
-    fn initialize_rook_square(&mut self, square: u8) -> Result<(), MagicError> {
+    pub fn initialize_rook_square(&mut self, square: u8) -> Result<(), MagicError> {
         let mut finder = MagicFinder::new();
         let magic_result = finder.find_magic_number(square, PieceType::Rook)?;
         let attack_base = self.memory_pool.allocate(magic_result.table_size)?;
@@ -129,7 +172,7 @@ impl MagicTable {
     }
 
     /// Initialize magic table for a specific bishop square
-    fn initialize_bishop_square(&mut self, square: u8) -> Result<(), MagicError> {
+    pub fn initialize_bishop_square(&mut self, square: u8) -> Result<(), MagicError> {
         let mut finder = MagicFinder::new();
         let magic_result = finder.find_magic_number(square, PieceType::Bishop)?;
         let attack_base = self.memory_pool.allocate(magic_result.table_size)?;

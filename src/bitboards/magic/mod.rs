@@ -40,6 +40,7 @@ pub mod magic_table;
 // pub mod lookup_engine; // Complex lookup engine with caching - not used currently
 pub mod adaptive_cache;
 pub mod compressed_table;
+pub mod lazy_init;
 pub mod memory_pool;
 pub mod parallel_init;
 pub mod performance_monitor;
@@ -51,6 +52,7 @@ pub use magic_finder::MagicFinder;
 // pub use lookup_engine::LookupEngine; // Not used - sliding_moves has SimpleLookupEngine
 pub use adaptive_cache::{AdaptiveCache, CacheStats};
 pub use compressed_table::CompressedMagicTable;
+pub use lazy_init::{LazyInitStats, LazyMagicTable};
 pub use parallel_init::ParallelInitializer;
 pub use performance_monitor::{AdaptiveOptimizer, MonitorStats, PerformanceMonitor};
 pub use validator::MagicValidator;

@@ -596,3 +596,136 @@ fn test_compression_memory_usage_comparison() {
         );
     }
 }
+
+#[test]
+#[ignore] // Long-running test
+fn test_progress_reporting() {
+    use shogi_engine::bitboards::magic::MagicTable;
+    
+    let mut progress_values = Vec::new();
+    let table = MagicTable::new_with_progress(Some(move |progress| {
+        progress_values.push(progress);
+    })).unwrap();
+    
+    // Verify progress was reported
+    assert!(!progress_values.is_empty());
+    assert!(progress_values[0] >= 0.0);
+    assert!(*progress_values.last().unwrap() >= 1.0);
+    
+    // Verify progress is monotonic
+    for i in 1..progress_values.len() {
+        assert!(
+            progress_values[i] >= progress_values[i - 1],
+            "Progress should be monotonic"
+        );
+    }
+    
+    // Verify table is fully initialized
+    assert!(table.is_fully_initialized());
+}
+
+#[test]
+#[ignore] // Long-running test
+fn test_parallel_initialization() {
+    use shogi_engine::bitboards::magic::parallel_init::ParallelInitializer;
+    
+    let initializer = ParallelInitializer::new();
+    let table = initializer.initialize().unwrap();
+    
+    // Verify table is fully initialized
+    assert!(table.is_fully_initialized());
+    
+    // Verify correctness by comparing with sequential
+    let seq_table = initializer.initialize_sequential().unwrap();
+    
+    // Compare attack patterns for sample positions
+    for square in (0..81).step_by(10) {
+        for piece_type in [PieceType::Rook, PieceType::Bishop] {
+            let test_occupied = (square as u128) * 0x1234567890ABCDEF;
+            let par_attacks = table.get_attacks(square, piece_type, test_occupied);
+            let seq_attacks = seq_table.get_attacks(square, piece_type, test_occupied);
+            
+            assert_eq!(
+                par_attacks, seq_attacks,
+                "Parallel and sequential should produce identical results for square {} piece {:?}",
+                square, piece_type
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore] // Long-running test
+fn test_parallel_initialization_with_progress() {
+    use shogi_engine::bitboards::magic::parallel_init::ParallelInitializer;
+    
+    let mut progress_values = Vec::new();
+    let initializer = ParallelInitializer::new()
+        .with_progress_callback(move |progress| {
+            progress_values.push(progress);
+        });
+    
+    let table = initializer.initialize().unwrap();
+    
+    // Verify progress was reported
+    assert!(!progress_values.is_empty());
+    assert!(*progress_values.last().unwrap() >= 1.0);
+    
+    // Verify table is fully initialized
+    assert!(table.is_fully_initialized());
+}
+
+#[test]
+fn test_lazy_initialization() {
+    use shogi_engine::bitboards::magic::lazy_init::LazyMagicTable;
+    
+    let table = LazyMagicTable::new().unwrap();
+    
+    // Initially no squares initialized
+    assert!(!table.is_square_initialized(0, PieceType::Rook));
+    assert!(!table.is_square_initialized(40, PieceType::Bishop));
+    
+    // Access triggers initialization
+    let _attacks1 = table.get_attacks(0, PieceType::Rook, 0);
+    assert!(table.is_square_initialized(0, PieceType::Rook));
+    
+    let _attacks2 = table.get_attacks(40, PieceType::Bishop, 0);
+    assert!(table.is_square_initialized(40, PieceType::Bishop));
+    
+    // Verify stats
+    let stats = table.stats();
+    assert!(stats.lazy_init_count >= 2);
+    assert!(stats.accessed_squares.len() >= 2);
+}
+
+#[test]
+#[ignore] // Long-running test
+fn test_lazy_vs_full_initialization() {
+    use shogi_engine::bitboards::magic::lazy_init::LazyMagicTable;
+    use shogi_engine::bitboards::magic::MagicTable;
+    
+    // Test that lazy initialization produces same results as full initialization
+    let lazy_table = LazyMagicTable::new().unwrap();
+    let full_table = MagicTable::new().unwrap();
+    
+    // Access all squares in lazy table
+    for square in 0..81 {
+        for piece_type in [PieceType::Rook, PieceType::Bishop] {
+            let test_occupied = (square as u128) * 0x1234567890ABCDEF;
+            let lazy_attacks = lazy_table.get_attacks(square, piece_type, test_occupied);
+            let full_attacks = full_table.get_attacks(square, piece_type, test_occupied);
+            
+            assert_eq!(
+                lazy_attacks, full_attacks,
+                "Lazy and full initialization should produce identical results for square {} piece {:?}",
+                square, piece_type
+            );
+        }
+    }
+    
+    // Verify all squares are now initialized
+    for square in 0..81 {
+        assert!(lazy_table.is_square_initialized(square, PieceType::Rook));
+        assert!(lazy_table.is_square_initialized(square, PieceType::Bishop));
+    }
+}
