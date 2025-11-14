@@ -18,25 +18,25 @@ pub type SEEResult<T> = Result<T, String>;
 ///
 /// Returns a vector of all pieces that can attack the square, with their positions.
 /// The caller will separate them by player.
+/// Task 3.0.3.1: Rewritten to use bitboard iteration instead of nested 9×9 loops
+/// Task 3.0.3.4: Uses iter_pieces for efficient iteration over board pieces
 pub fn find_attackers_defenders(square: Position, board: &BitboardBoard) -> Vec<(Position, Piece)> {
     let mut all_attackers = Vec::new();
 
-    // Iterate through all squares on the board to find pieces
-    for row in 0..9 {
-        for col in 0..9 {
-            let position = Position::new(row, col);
-
-            // Skip the target square itself (we're evaluating captures on it)
-            if position == square {
+    // Check both players' pieces
+    for player in [Player::Black, Player::White] {
+        // Get all pieces of this player that can attack the target square
+        // We iterate through all squares and check if pieces attack the target
+        // This is more efficient than checking every piece individually
+        for (position, piece) in board.iter_pieces() {
+            // Skip the target square itself and pieces of the wrong player
+            if position == square || piece.player != player {
                 continue;
             }
-
-            // Check if there's a piece at this position
-            if let Some(piece) = board.get_piece(position) {
-                // Check if this specific piece attacks the target square
-                if piece_attacks_square(&piece, position, square, board) {
-                    all_attackers.push((position, piece.clone()));
-                }
+            
+            // Check if this piece attacks the target square
+            if piece_attacks_square(&piece, position, square, board) {
+                all_attackers.push((position, piece.clone()));
             }
         }
     }

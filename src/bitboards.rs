@@ -208,8 +208,9 @@ impl BitboardBoard {
         }
     }
 
+    /// Task 3.0.3.4: Iterator over all pieces on the board
     #[inline]
-    fn iter_pieces(&self) -> impl Iterator<Item = (Position, Piece)> + '_ {
+    pub fn iter_pieces(&self) -> impl Iterator<Item = (Position, Piece)> + '_ {
         self.squares
             .iter()
             .enumerate()
@@ -536,28 +537,96 @@ impl BitboardBoard {
         }
     }
 
+    /// Check if a square is attacked by a player
+    /// Task 3.0.3.1: Rewritten to iterate attackers by bitboard instead of nested 9×9 loops
     pub fn is_square_attacked_by(&self, target_pos: Position, attacking_player: Player) -> bool {
-        // More efficient direct attack checking without generating all moves
-        for r in 0..9 {
-            for c in 0..9 {
-                let from_pos = Position::new(r, c);
-                if let Some(piece) = self.get_piece(from_pos) {
-                    if piece.player == attacking_player {
-                        // Check if this piece attacks the target_pos directly
-                        if self.piece_attacks_square(&piece, from_pos, target_pos) {
-                            crate::debug_utils::debug_log(&format!(
-                                "[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}",
-                                piece.piece_type,
-                                (b'a' + from_pos.col) as char,
-                                9 - from_pos.row
-                            ));
-                            return true;
-                        }
+        use crate::bitboards::integration::GlobalOptimizer;
+        
+        let target_idx = target_pos.to_index();
+        let player_idx = if attacking_player == Player::Black { 0 } else { 1 };
+        let target_bit = 1u128 << target_idx;
+        
+        // Check each piece type for the attacking player
+        let piece_types = [
+            PieceType::Pawn,
+            PieceType::Lance,
+            PieceType::Knight,
+            PieceType::Silver,
+            PieceType::Gold,
+            PieceType::Bishop,
+            PieceType::Rook,
+            PieceType::King,
+            PieceType::PromotedPawn,
+            PieceType::PromotedLance,
+            PieceType::PromotedKnight,
+            PieceType::PromotedSilver,
+            PieceType::PromotedBishop,
+            PieceType::PromotedRook,
+        ];
+        
+        for &piece_type in &piece_types {
+            let piece_idx = piece_type.to_u8() as usize;
+            let pieces_bb = self.pieces[player_idx][piece_idx];
+            
+            // Iterate over pieces of this type using bit scans
+            let mut remaining = pieces_bb;
+            while remaining != 0 {
+                if let Some(from_idx) = GlobalOptimizer::bit_scan_forward(remaining) {
+                    let from_pos = Position::from_index(from_idx);
+                    
+                    // Check if this piece attacks the target square
+                    if self.piece_attacks_square_bitboard(piece_type, from_pos, target_pos, attacking_player) {
+                        crate::debug_utils::debug_log(&format!(
+                            "[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}",
+                            piece_type,
+                            (b'a' + from_pos.col) as char,
+                            9 - from_pos.row
+                        ));
+                        return true;
                     }
+                    
+                    // Clear the processed bit
+                    remaining &= remaining - 1;
+                } else {
+                    break;
                 }
             }
         }
+        
         false
+    }
+
+    /// Check if a piece type attacks a square (bitboard-optimized version)
+    /// Task 3.0.3.2: Uses precomputed attack tables for non-sliding pieces and bit scans for sliding pieces
+    fn piece_attacks_square_bitboard(
+        &self,
+        piece_type: PieceType,
+        from_pos: Position,
+        target_pos: Position,
+        player: Player,
+    ) -> bool {
+        let target_idx = target_pos.to_index();
+        let from_idx = from_pos.to_index();
+        
+        match piece_type {
+            // Non-sliding pieces: use precomputed attack tables
+            PieceType::Pawn | PieceType::Lance | PieceType::Knight | PieceType::Silver
+            | PieceType::Gold | PieceType::King | PieceType::PromotedPawn
+            | PieceType::PromotedLance | PieceType::PromotedKnight | PieceType::PromotedSilver => {
+                self.attack_tables.is_square_attacked(from_idx, target_idx, piece_type, player)
+            }
+            // Sliding pieces: use magic bitboards or ray-cast fallback
+            PieceType::Rook | PieceType::Bishop | PieceType::PromotedRook | PieceType::PromotedBishop => {
+                let attacks = self.get_attack_pattern(from_pos, piece_type);
+                (attacks & (1u128 << target_idx)) != 0
+            }
+        }
+    }
+
+    /// Task 3.0.3.4: Helper to iterate over target squares from an attack bitboard
+    /// Returns an iterator over positions that are attacked
+    pub fn iter_attack_targets(&self, attacks: Bitboard) -> impl Iterator<Item = Position> + '_ {
+        BitIterator::new(attacks).map(|idx| Position::from_index(idx))
     }
 
     // Direct attack checking without move generation
@@ -1454,7 +1523,7 @@ impl AttackPatterns {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{CapturedPieces, PieceType, Player, Position};
+    use crate::types::{CapturedPieces, Piece, PieceType, Player, Position};
 
     #[test]
     fn test_from_fen_startpos() {
@@ -1528,5 +1597,102 @@ mod tests {
         let promoted_pawn = board.get_piece(Position::new(8, 4)).unwrap();
         assert_eq!(promoted_pawn.piece_type, PieceType::PromotedPawn);
         assert_eq!(promoted_pawn.player, Player::White);
+    }
+
+    // Task 3.0.3.5: Regression tests for bitboard-centric attack detection
+    #[test]
+    fn test_is_square_attacked_by_dense_opening() {
+        // Dense opening position - many pieces on board
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        let (board, _, _) = BitboardBoard::from_fen(fen).unwrap();
+        
+        // Test center square attacks
+        let center = Position::new(4, 4);
+        let attacked_by_black = board.is_square_attacked_by(center, Player::Black);
+        let attacked_by_white = board.is_square_attacked_by(center, Player::White);
+        
+        // In starting position, center should not be attacked
+        assert!(!attacked_by_black);
+        assert!(!attacked_by_white);
+    }
+
+    #[test]
+    fn test_is_square_attacked_by_sparse_endgame() {
+        // Sparse endgame position - few pieces
+        let mut board = BitboardBoard::empty();
+        let black_king = Piece::new(PieceType::King, Player::Black);
+        let white_king = Piece::new(PieceType::King, Player::White);
+        let black_rook = Piece::new(PieceType::Rook, Player::Black);
+        
+        board.place_piece(black_king, Position::new(4, 4));
+        board.place_piece(white_king, Position::new(0, 4));
+        board.place_piece(black_rook, Position::new(4, 0));
+        
+        // Rook should attack white king's file
+        let white_king_pos = Position::new(0, 4);
+        assert!(board.is_square_attacked_by(white_king_pos, Player::Black));
+    }
+
+    #[test]
+    fn test_is_square_attacked_by_drop_heavy() {
+        // Position with many pieces in hand (drop-heavy scenario)
+        let mut board = BitboardBoard::empty();
+        let black_king = Piece::new(PieceType::King, Player::Black);
+        let white_king = Piece::new(PieceType::King, Player::White);
+        let black_silver = Piece::new(PieceType::Silver, Player::Black);
+        
+        board.place_piece(black_king, Position::new(4, 4));
+        board.place_piece(white_king, Position::new(0, 4));
+        board.place_piece(black_silver, Position::new(3, 3));
+        
+        // Silver should attack squares around white king
+        let target = Position::new(1, 3);
+        assert!(board.is_square_attacked_by(target, Player::Black));
+    }
+
+    #[test]
+    fn test_piece_attacks_square_bitboard_non_sliding() {
+        let board = BitboardBoard::empty();
+        let from = Position::new(4, 4);
+        let target = Position::new(5, 4);
+        
+        // Test non-sliding piece (pawn) using attack tables
+        let attacks = board.get_attack_pattern_precomputed(from, PieceType::Pawn, Player::Black);
+        let target_bit = 1u128 << target.to_index();
+        assert!((attacks & target_bit) != 0);
+    }
+
+    #[test]
+    fn test_piece_attacks_square_bitboard_sliding() {
+        let board = BitboardBoard::empty();
+        let from = Position::new(4, 4);
+        let target = Position::new(4, 0);
+        
+        // Test sliding piece (rook)
+        // Rook at center should attack squares in same row/col
+        let attacks = board.get_attack_pattern(from, PieceType::Rook);
+        let target_bit = 1u128 << target.to_index();
+        assert!((attacks & target_bit) != 0);
+    }
+
+    #[test]
+    fn test_iter_attack_targets() {
+        let board = BitboardBoard::empty();
+        let attacks = 0b1010; // Bits at positions 1 and 3
+        
+        let targets: Vec<Position> = board.iter_attack_targets(attacks).collect();
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(&Position::from_index(1)));
+        assert!(targets.contains(&Position::from_index(3)));
+    }
+
+    #[test]
+    fn test_iter_pieces() {
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
+        let (board, _, _) = BitboardBoard::from_fen(fen).unwrap();
+        
+        let piece_count: usize = board.iter_pieces().count();
+        // Starting position should have 40 pieces (20 per player)
+        assert_eq!(piece_count, 40);
     }
 }

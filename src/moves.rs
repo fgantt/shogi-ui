@@ -374,11 +374,16 @@ impl MoveGenerator {
                 // Use precomputed attack patterns for better performance
                 let attacks = board.get_attack_pattern_precomputed(pos, piece.piece_type, player);
 
-                // Convert attack bitboard to individual moves
-                for target_square in 0..81 {
-                    if attacks & (1u128 << target_square) != 0 {
-                        let target_pos = Position::from_index(target_square as u8);
+                // Task 3.0.3.3: Convert attack bitboard to moves using bit scans instead of 0..81 loop
+                use crate::bitboards::integration::GlobalOptimizer;
+                let mut remaining = attacks;
+                while remaining != 0 {
+                    if let Some(target_square) = GlobalOptimizer::bit_scan_forward(remaining) {
+                        let target_pos = Position::from_index(target_square);
                         handle_move(&mut moves, target_pos);
+                        remaining &= remaining - 1;
+                    } else {
+                        break;
                     }
                 }
             }
@@ -426,11 +431,16 @@ impl MoveGenerator {
                 // Use precomputed attack patterns for better performance
                 let attacks = board.get_attack_pattern_precomputed(pos, piece.piece_type, player);
 
-                // Convert attack bitboard to individual moves
-                for target_square in 0..81 {
-                    if attacks & (1u128 << target_square) != 0 {
-                        let target_pos = Position::from_index(target_square as u8);
+                // Task 3.0.3.3: Convert attack bitboard to moves using bit scans instead of 0..81 loop
+                use crate::bitboards::integration::GlobalOptimizer;
+                let mut remaining = attacks;
+                while remaining != 0 {
+                    if let Some(target_square) = GlobalOptimizer::bit_scan_forward(remaining) {
+                        let target_pos = Position::from_index(target_square);
                         handle_move(&mut moves, target_pos);
+                        remaining &= remaining - 1;
+                    } else {
+                        break;
                     }
                 }
             }
