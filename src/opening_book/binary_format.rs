@@ -354,6 +354,7 @@ impl BinaryReader {
                     streaming_enabled: false,
                     chunk_size: 0,
                 },
+                hash_collision_stats: crate::opening_book::HashCollisionStats::new(),
             });
         }
 
@@ -399,6 +400,7 @@ impl BinaryReader {
                 streaming_enabled: false,
                 chunk_size: 0,
             },
+            hash_collision_stats: crate::opening_book::HashCollisionStats::new(),
         })
     }
 

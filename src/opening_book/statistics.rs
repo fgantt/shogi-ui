@@ -5,7 +5,7 @@
 /// - Opening principles integration (book move evaluation)
 /// - Move ordering integration (opening book move prioritization)
 
-use super::MemoryUsageStats;
+use super::{HashCollisionStats, MemoryUsageStats};
 use crate::opening_book_converter::MigrationStats;
 use crate::evaluation::opening_principles::OpeningPrincipleStats;
 use crate::search::move_ordering::AdvancedIntegrationStats;
@@ -17,6 +17,8 @@ pub struct BookStatistics {
     pub migration: Option<MigrationStats>,
     /// Memory usage statistics
     pub memory: Option<MemoryUsageStats>,
+    /// Hash collision statistics
+    pub hash_collisions: Option<HashCollisionStats>,
     /// Opening principles integration statistics
     pub opening_principles: OpeningPrincipleBookStats,
     /// Move ordering integration statistics
@@ -70,6 +72,11 @@ impl BookStatistics {
     /// Update memory usage statistics
     pub fn set_memory_stats(&mut self, stats: MemoryUsageStats) {
         self.memory = Some(stats);
+    }
+
+    /// Update hash collision statistics
+    pub fn set_hash_collision_stats(&mut self, stats: HashCollisionStats) {
+        self.hash_collisions = Some(stats);
     }
 
     /// Calculate average book move quality score

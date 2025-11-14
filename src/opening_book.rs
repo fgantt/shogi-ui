@@ -94,6 +94,50 @@ pub struct ChunkHeader {
     pub chunk_size: usize,
 }
 
+/// Hash collision statistics for monitoring hash function quality
+#[derive(Debug, Clone, Default)]
+pub struct HashCollisionStats {
+    /// Total number of hash collisions detected
+    pub total_collisions: u64,
+    /// Collision rate (collisions / total positions)
+    pub collision_rate: f64,
+    /// Maximum chain length observed in HashMap
+    pub max_chain_length: usize,
+    /// Total number of positions added
+    pub total_positions: u64,
+}
+
+impl HashCollisionStats {
+    /// Create new empty statistics
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Calculate and update collision rate
+    pub fn update_collision_rate(&mut self) {
+        if self.total_positions > 0 {
+            self.collision_rate = self.total_collisions as f64 / self.total_positions as f64;
+        } else {
+            self.collision_rate = 0.0;
+        }
+    }
+
+    /// Record a collision
+    pub fn record_collision(&mut self, chain_length: usize) {
+        self.total_collisions += 1;
+        if chain_length > self.max_chain_length {
+            self.max_chain_length = chain_length;
+        }
+        self.update_collision_rate();
+    }
+
+    /// Record a position addition
+    pub fn record_position(&mut self) {
+        self.total_positions += 1;
+        self.update_collision_rate();
+    }
+}
+
 /// Memory usage statistics
 #[derive(Debug, Clone)]
 pub struct MemoryUsageStats {
@@ -147,6 +191,9 @@ pub struct OpeningBook {
     loaded: bool,
     /// Opening book metadata
     metadata: OpeningBookMetadata,
+    /// Hash collision statistics for monitoring hash function quality
+    #[serde(skip)]
+    hash_collision_stats: HashCollisionStats,
 }
 
 impl Default for OpeningBook {
@@ -179,6 +226,7 @@ impl<'de> Deserialize<'de> for OpeningBook {
             total_moves: data.total_moves,
             loaded: data.loaded,
             metadata: data.metadata,
+            hash_collision_stats: HashCollisionStats::new(),
         })
     }
 }
@@ -405,6 +453,7 @@ impl OpeningBook {
                 streaming_enabled: false,
                 chunk_size: 0,
             },
+            hash_collision_stats: HashCollisionStats::new(),
         }
     }
 
@@ -714,11 +763,50 @@ impl OpeningBook {
     /// Add a position entry to the book
     pub fn add_position(&mut self, fen: String, moves: Vec<BookMove>) {
         let hash = self.hash_fen(&fen);
-        let entry = PositionEntry::new(fen, moves);
+        let entry = PositionEntry::new(fen.clone(), moves);
         self.total_moves += entry.moves.len();
-        self.positions.insert(hash, entry);
+        
+        // Detect hash collisions: if insert returns Some, check if it's a true collision
+        if let Some(old_entry) = self.positions.insert(hash, entry) {
+            // If the FENs are different, this is a hash collision (same hash, different FEN)
+            if old_entry.fen != fen {
+                // True hash collision detected
+                let chain_length = self.count_positions_with_hash(hash);
+                self.hash_collision_stats.record_collision(chain_length);
+                
+                // Debug logging
+                #[cfg(feature = "verbose-debug")]
+                {
+                    log::debug!(
+                        "Hash collision detected: hash={}, old_fen={}, new_fen={}, chain_length={}",
+                        hash,
+                        old_entry.fen,
+                        fen,
+                        chain_length
+                    );
+                }
+            }
+            // If FENs are the same, we're just overwriting the same position (not a collision)
+        }
+        
+        self.hash_collision_stats.record_position();
         self.metadata.position_count = self.positions.len();
         self.metadata.move_count = self.total_moves;
+    }
+    
+    /// Count positions that would hash to the same value
+    /// This is an approximation since we can't access HashMap internals
+    fn count_positions_with_hash(&self, hash: u64) -> usize {
+        // Since we can't access HashMap internals, we estimate based on
+        // how many positions we've seen with this hash
+        // In practice, HashMap uses open addressing, so chain length is typically 1-2
+        // We'll use a conservative estimate: if we see a collision, assume chain length of 2
+        // This will be updated as we see more collisions
+        if self.hash_collision_stats.max_chain_length > 0 {
+            self.hash_collision_stats.max_chain_length + 1
+        } else {
+            2 // First collision means at least 2 entries share the hash
+        }
     }
 
     /// Add a position entry to lazy storage (for rarely accessed positions)
@@ -879,10 +967,19 @@ impl OpeningBook {
         }
     }
 
+    /// Get hash quality metrics
+    ///
+    /// Returns statistics about hash collisions, which can help assess
+    /// the quality of the hash function being used.
+    pub fn get_hash_quality_metrics(&self) -> HashCollisionStats {
+        self.hash_collision_stats.clone()
+    }
+
     /// Get unified statistics for the opening book
     ///
     /// This method aggregates statistics from various sources:
     /// - Memory usage statistics
+    /// - Hash collision statistics
     /// - Opening principles integration (if available)
     /// - Move ordering integration (if available)
     ///
@@ -894,6 +991,9 @@ impl OpeningBook {
 
         // Add memory usage statistics
         stats.set_memory_stats(self.get_memory_usage());
+        
+        // Add hash collision statistics
+        stats.set_hash_collision_stats(self.get_hash_quality_metrics());
 
         stats
     }
