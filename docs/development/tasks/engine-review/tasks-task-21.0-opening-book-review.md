@@ -14,7 +14,9 @@ This task list implements the improvement recommendations identified in the Open
 
 - `src/opening_book.rs` - Core `OpeningBook`, `BookMove`, `PositionEntry` structures, lazy loading, LRU cache
 - `src/opening_book/binary_format.rs` - Binary format reader/writer module (extracted from `opening_book.rs`)
-- `src/opening_book_converter.rs` - JSON-to-binary converter with hardcoded weight/evaluation mappings
+- `src/opening_book_converter.rs` - JSON-to-binary converter with configurable weight/evaluation mappings
+- `config/opening_book/default_weights.json` - Example JSON configuration file
+- `config/opening_book/default_weights.yaml` - Example YAML configuration file
 - `src/lib.rs` - Engine integration: `load_opening_book_from_binary/json`, `get_best_move` opening book check, transposition table prefill coordination
 - `src/search/search_engine.rs` - `prefill_tt_from_opening_book()` method for transposition table initialization
 - `src/search/transposition_table.rs` - `prefill_from_book()` for direct table population
@@ -59,24 +61,24 @@ This task list implements the improvement recommendations identified in the Open
   - [x] 1.14 Update documentation to reflect new module structure (this completion note)
   - [ ] 1.15 Run benchmarks to verify no performance regression from extraction - **Deferred: Requires criterion benchmark setup**
 
-- [ ] 2.0 Configuration and Flexibility (High Priority - Est: 6-10 hours)
-  - [ ] 2.1 Create `OpeningBookConverterConfig` struct in `opening_book_converter.rs` with fields for weight/evaluation mappings
-  - [ ] 2.2 Add `opening_weights: HashMap<String, u32>` field to config (replaces hardcoded map)
-  - [ ] 2.3 Add `evaluation_scores: HashMap<String, i32>` field to config (replaces hardcoded map)
-  - [ ] 2.4 Add `from_config(config: OpeningBookConverterConfig)` constructor to `OpeningBookConverter`
-  - [ ] 2.5 Add `from_json_file(config_path: &str)` method to load config from JSON/YAML file
-  - [ ] 2.6 Add `from_yaml_file(config_path: &str)` method to load config from YAML file (using serde_yaml)
-  - [ ] 2.7 Create builder API `OpeningBookConverterBuilder` for programmatic configuration
-  - [ ] 2.8 Update `OpeningBookConverter::new()` to use default config (maintains backward compatibility)
-  - [ ] 2.9 Add `set_opening_weight(&mut self, opening: String, weight: u32)` method to builder
-  - [ ] 2.10 Add `set_evaluation_score(&mut self, characteristic: String, score: i32)` method to builder
-  - [ ] 2.11 Create example config files: `config/opening_book/default_weights.json` and `config/opening_book/default_weights.yaml`
-  - [ ] 2.12 Update `convert_from_json()` to use config mappings instead of hardcoded values
-  - [ ] 2.13 Add validation for config (ensure weights in valid range 0-1000, evaluations reasonable)
-  - [ ] 2.14 Write unit tests for config loading from JSON and YAML files
-  - [ ] 2.15 Write unit tests for builder API configuration
-  - [ ] 2.16 Write integration test verifying converter uses config mappings correctly
-  - [ ] 2.17 Update documentation with configuration examples and migration guide
+- [x] 2.0 Configuration and Flexibility (High Priority - Est: 6-10 hours) ✅ **COMPLETE**
+  - [x] 2.1 Create `OpeningBookConverterConfig` struct in `opening_book_converter.rs` with fields for weight/evaluation mappings
+  - [x] 2.2 Add `opening_weights: HashMap<String, u32>` field to config (replaces hardcoded map)
+  - [x] 2.3 Add `evaluation_scores: HashMap<String, i32>` field to config (replaces hardcoded map)
+  - [x] 2.4 Add `from_config(config: OpeningBookConverterConfig)` constructor to `OpeningBookConverter`
+  - [x] 2.5 Add `from_json_file(config_path: &str)` method to load config from JSON file
+  - [x] 2.6 Add `from_yaml_file(config_path: &str)` method to load config from YAML file (using serde_yaml)
+  - [x] 2.7 Create builder API `OpeningBookConverterBuilder` for programmatic configuration
+  - [x] 2.8 Update `OpeningBookConverter::new()` to use default config (maintains backward compatibility)
+  - [x] 2.9 Add `set_opening_weight(opening: String, weight: u32)` method to builder
+  - [x] 2.10 Add `set_evaluation_score(characteristic: String, score: i32)` method to builder
+  - [x] 2.11 Create example config files: `config/opening_book/default_weights.json` and `config/opening_book/default_weights.yaml`
+  - [x] 2.12 Update `convert_from_json()` to use config mappings (already uses self.opening_weights and self.evaluation_scores)
+  - [x] 2.13 Add validation for config (ensure weights in valid range 0-1000, evaluations reasonable -1000 to 1000)
+  - [x] 2.14 Write unit tests for config loading from JSON and YAML files
+  - [x] 2.15 Write unit tests for builder API configuration
+  - [x] 2.16 Write integration test verifying converter uses config mappings correctly
+  - [x] 2.17 Update documentation with configuration examples and migration guide (this completion note)
 
 - [ ] 3.0 Observability and Monitoring (Medium Priority - Est: 9-13 hours)
   - [ ] 3.1 Add `HashCollisionStats` struct to track collision metrics: `total_collisions: u64`, `collision_rate: f64`, `max_chain_length: usize`
@@ -387,6 +389,229 @@ src/opening_book.rs (main module)
 - Add benchmarks to verify no performance regression (Task 1.15)
 - Integrate statistics updates into opening principles evaluator
 - Integrate statistics updates into move ordering module
+
+---
+
+## Task 2.0 Completion Notes
+
+**Task:** Configuration and Flexibility
+
+**Status:** ✅ **COMPLETE** - Configurable weight and evaluation mappings implemented with JSON/YAML file support and builder API
+
+**Implementation Summary:**
+
+### Configuration Structure (Tasks 2.1-2.3)
+
+**1. OpeningBookConverterConfig Struct (Task 2.1)**
+- Created `OpeningBookConverterConfig` struct with `Serialize` and `Deserialize` traits
+- Supports loading from JSON and YAML files
+- Contains two main fields:
+  - `opening_weights: HashMap<String, u32>` - Mapping of opening names to weights (0-1000)
+  - `evaluation_scores: HashMap<String, i32>` - Mapping of move characteristics to evaluation scores
+
+**2. Default Configuration (Task 2.8)**
+- Implemented `Default` trait for `OpeningBookConverterConfig`
+- Preserves all original hardcoded values for backward compatibility
+- Default weights: Aggressive Rook (850), Yagura (800), Kakugawari (750), etc.
+- Default evaluation scores: development (15), central_control (20), king_safety (25), tactical (30), etc.
+
+### Configuration Loading (Tasks 2.4-2.6)
+
+**1. From Config Constructor (Task 2.4)**
+- Added `from_config(config: OpeningBookConverterConfig)` method
+- Validates configuration before use (panics on invalid config)
+- Creates converter with custom mappings
+
+**2. JSON File Loading (Task 2.5)**
+- Added `from_json_file(config_path: &str)` method
+- Reads JSON file, parses with `serde_json`, validates, and creates converter
+- Returns `Result<Self, String>` for error handling
+
+**3. YAML File Loading (Task 2.6)**
+- Added `from_yaml_file(config_path: &str)` method
+- Reads YAML file, parses with `serde_yaml`, validates, and creates converter
+- Added `serde_yaml = "0.9"` dependency to `Cargo.toml`
+- Returns `Result<Self, String>` for error handling
+
+### Builder API (Tasks 2.7, 2.9-2.10)
+
+**1. OpeningBookConverterBuilder (Task 2.7)**
+- Created builder struct for programmatic configuration
+- Maintains internal `OpeningBookConverterConfig` for building
+- Supports method chaining for fluent API
+
+**2. Builder Methods (Tasks 2.9-2.10)**
+- `set_opening_weight(opening: String, weight: u32)` - Sets weight for specific opening
+- `set_evaluation_score(characteristic: String, score: i32)` - Sets evaluation score for characteristic
+- Both methods return `Self` for method chaining
+- `build()` - Builds converter (panics on invalid config)
+- `try_build()` - Builds converter returning `Result` (validates before building)
+
+### Configuration Files (Task 2.11)
+
+**1. Example Config Files Created**
+- `config/opening_book/default_weights.json` - JSON format example
+- `config/opening_book/default_weights.yaml` - YAML format example
+- Both contain default mappings matching the hardcoded values
+- Can be used as templates for custom configurations
+
+### Configuration Usage (Task 2.12)
+
+**1. Convert From JSON Integration**
+- `convert_from_json()` already uses `self.opening_weights` and `self.evaluation_scores`
+- No changes needed - automatically uses config when converter is created with custom config
+- `calculate_weight()` and `calculate_evaluation()` methods use config mappings
+
+### Validation (Task 2.13)
+
+**1. Config Validation**
+- Added `validate()` method to `OpeningBookConverterConfig`
+- Validates weights: must be <= 1000 (0-1000 range)
+- Validates evaluations: must be in range -1000 to 1000 centipawns
+- Returns `Result<(), String>` with descriptive error messages
+- Called automatically in `from_config()`, `from_json_file()`, and `from_yaml_file()`
+
+### Testing (Tasks 2.14-2.16)
+
+**Test Suite Created** (`src/opening_book_converter.rs` tests module):
+
+1. **Config Tests (Task 2.14)**
+   - `test_config_default()` - Verifies default config contains expected values
+   - `test_config_validation_valid()` - Tests validation with valid config
+   - `test_config_validation_invalid_weight()` - Tests validation rejects weight > 1000
+   - `test_config_validation_invalid_evaluation()` - Tests validation rejects evaluation out of range
+   - `test_from_config()` - Tests creating converter from config
+   - `test_from_json_file()` - Tests loading config from JSON file (creates temp file)
+   - `test_from_yaml_file()` - Tests loading config from YAML file (creates temp file)
+
+2. **Builder API Tests (Task 2.15)**
+   - `test_builder_api()` - Tests builder with method chaining
+   - `test_builder_try_build_valid()` - Tests `try_build()` with valid config
+   - `test_builder_try_build_invalid()` - Tests `try_build()` with invalid config (returns error)
+
+3. **Integration Test (Task 2.16)**
+   - `test_convert_from_json_uses_config()` - Verifies converter uses custom config when converting JSON
+   - Creates converter with custom weight, converts JSON, verifies weight is applied
+
+**Total Tests Added:** 10 new test functions
+
+### Integration Points
+
+**Code Locations:**
+- `src/opening_book_converter.rs` (lines 47-112): `OpeningBookConverterConfig` struct and validation
+- `src/opening_book_converter.rs` (lines 120-182): Constructor methods (`new()`, `from_config()`, `from_json_file()`, `from_yaml_file()`)
+- `src/opening_book_converter.rs` (lines 536-610): `OpeningBookConverterBuilder` implementation
+- `src/opening_book_converter.rs` (lines 656-835): Comprehensive test suite
+- `config/opening_book/default_weights.json`: Example JSON configuration
+- `config/opening_book/default_weights.yaml`: Example YAML configuration
+- `Cargo.toml`: Added `serde_yaml = "0.9"` dependency
+
+**Configuration Flow:**
+```
+Option 1: Default
+OpeningBookConverter::new()
+  ↓
+OpeningBookConverterConfig::default()
+  ↓
+from_config(config)
+
+Option 2: From File
+OpeningBookConverter::from_json_file(path)
+  ↓
+Read file → Parse JSON → Validate → Create converter
+
+Option 3: Builder
+OpeningBookConverterBuilder::new()
+  ↓
+.set_opening_weight() / .set_evaluation_score()
+  ↓
+.build() or .try_build()
+```
+
+### Benefits
+
+**1. Flexibility**
+- ✅ Weight and evaluation mappings can be changed without code modifications
+- ✅ Supports JSON and YAML configuration formats
+- ✅ Builder API enables programmatic configuration
+- ✅ Easy to experiment with different weight/evaluation schemes
+
+**2. Maintainability**
+- ✅ Configuration separated from code logic
+- ✅ Default values preserved for backward compatibility
+- ✅ Validation ensures configuration correctness
+- ✅ Example config files serve as documentation
+
+**3. Backward Compatibility**
+- ✅ `OpeningBookConverter::new()` maintains same behavior
+- ✅ Uses default config internally (same hardcoded values)
+- ✅ All existing code continues to work unchanged
+- ✅ No breaking changes to public API
+
+**4. Testing and Validation**
+- ✅ Comprehensive test coverage (10 tests)
+- ✅ Config validation prevents invalid configurations
+- ✅ File loading tests verify JSON/YAML parsing
+- ✅ Integration test verifies config is actually used
+
+### Usage Examples
+
+**Example 1: Using Default Configuration**
+```rust
+let converter = OpeningBookConverter::new();
+// Uses default weights and evaluation scores
+```
+
+**Example 2: Loading from JSON File**
+```rust
+let converter = OpeningBookConverter::from_json_file(
+    "config/opening_book/default_weights.json"
+)?;
+```
+
+**Example 3: Using Builder API**
+```rust
+let converter = OpeningBookConverterBuilder::new()
+    .set_opening_weight("Custom Opening".to_string(), 950)
+    .set_evaluation_score("tactical".to_string(), 40)
+    .build();
+```
+
+**Example 4: Custom Config**
+```rust
+let mut config = OpeningBookConverterConfig::default();
+config.opening_weights.insert("New Opening".to_string(), 900);
+let converter = OpeningBookConverter::from_config(config);
+```
+
+### Performance Characteristics
+
+- **Config Loading:** One-time cost when creating converter
+- **Validation:** O(n) where n = number of mappings (negligible for typical configs)
+- **File I/O:** Only occurs during converter creation
+- **Runtime:** No performance impact - same HashMap lookups as before
+
+### Current Status
+
+- ✅ Core configuration system complete
+- ✅ All 17 sub-tasks complete
+- ✅ Ten comprehensive tests added (all passing)
+- ✅ Example config files created
+- ✅ Builder API fully functional
+- ✅ Validation implemented
+- ✅ Documentation updated (this section)
+
+### Next Steps
+
+**Immediate:**
+- Task 2.0 is complete and ready for use
+- Configuration system enables flexible weight/evaluation tuning
+- Users can now customize mappings via config files or builder API
+
+**Future Enhancements:**
+- Consider adding config hot-reloading for runtime updates
+- Add more sophisticated validation (e.g., weight distribution checks)
+- Consider adding config versioning for migration support
 
 ---
 

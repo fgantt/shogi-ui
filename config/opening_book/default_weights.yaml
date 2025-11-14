@@ -1,0 +1,16 @@
+opening_weights:
+  Aggressive Rook: 850
+  Yagura: 800
+  Kakugawari (Bishop Exchange): 750
+  Shikenbisya (Fourth File Rook): 700
+  Aigakari (Double Wing Attack): 650
+  Side Pawn Picker (Yokofudori): 600
+
+evaluation_scores:
+  development: 15
+  central_control: 20
+  king_safety: 25
+  tactical: 30
+  positional: 10
+  neutral: 0
+
