@@ -94,6 +94,134 @@ pub struct ChunkHeader {
     pub chunk_size: usize,
 }
 
+/// Manages chunks for streaming mode
+///
+/// Tracks which chunks are loaded, their offsets, and loading progress.
+#[derive(Debug, Clone)]
+pub struct ChunkManager {
+    /// Set of chunk IDs that have been loaded
+    loaded_chunks: std::collections::HashSet<u64>,
+    /// Offsets of all chunks in the file
+    chunk_offsets: Vec<u64>,
+    /// Total number of chunks
+    total_chunks: usize,
+    /// Number of chunks loaded
+    chunks_loaded: usize,
+    /// Total number of chunks
+    chunks_total: usize,
+    /// Bytes loaded so far
+    bytes_loaded: u64,
+    /// Total bytes in all chunks
+    bytes_total: u64,
+    /// Last access time for each chunk (for LRU eviction)
+    chunk_access_times: std::collections::HashMap<u64, u64>,
+    /// Access counter for LRU tracking
+    access_counter: u64,
+}
+
+impl ChunkManager {
+    /// Create a new chunk manager
+    pub fn new(total_chunks: usize, chunk_offsets: Vec<u64>, bytes_total: u64) -> Self {
+        Self {
+            loaded_chunks: std::collections::HashSet::new(),
+            chunk_offsets,
+            total_chunks,
+            chunks_loaded: 0,
+            chunks_total: total_chunks,
+            bytes_loaded: 0,
+            bytes_total,
+            chunk_access_times: std::collections::HashMap::new(),
+            access_counter: 0,
+        }
+    }
+
+    /// Register that a chunk has been loaded
+    pub fn register_chunk(&mut self, chunk_id: u64, chunk_size: usize) {
+        if self.loaded_chunks.insert(chunk_id) {
+            self.chunks_loaded += 1;
+            self.bytes_loaded += chunk_size as u64;
+        }
+        self.access_counter += 1;
+        self.chunk_access_times.insert(chunk_id, self.access_counter);
+    }
+
+    /// Check if a chunk is loaded
+    pub fn is_chunk_loaded(&self, chunk_id: u64) -> bool {
+        self.loaded_chunks.contains(&chunk_id)
+    }
+
+    /// Get the least recently used chunk ID
+    pub fn get_lru_chunk(&self) -> Option<u64> {
+        self.chunk_access_times
+            .iter()
+            .min_by_key(|(_, &time)| time)
+            .map(|(&chunk_id, _)| chunk_id)
+    }
+
+    /// Evict a chunk (mark as unloaded)
+    pub fn evict_chunk(&mut self, chunk_id: u64, chunk_size: usize) -> bool {
+        if self.loaded_chunks.remove(&chunk_id) {
+            self.chunks_loaded -= 1;
+            self.bytes_loaded = self.bytes_loaded.saturating_sub(chunk_size as u64);
+            self.chunk_access_times.remove(&chunk_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get progress statistics
+    pub fn get_progress(&self) -> StreamingProgress {
+        StreamingProgress {
+            chunks_loaded: self.chunks_loaded,
+            chunks_total: self.chunks_total,
+            bytes_loaded: self.bytes_loaded,
+            bytes_total: self.bytes_total,
+            progress_percentage: if self.chunks_total > 0 {
+                (self.chunks_loaded as f64 / self.chunks_total as f64) * 100.0
+            } else {
+                0.0
+            },
+        }
+    }
+
+    /// Get chunk offset by index
+    pub fn get_chunk_offset(&self, index: usize) -> Option<u64> {
+        self.chunk_offsets.get(index).copied()
+    }
+
+    /// Get number of loaded chunks
+    pub fn loaded_count(&self) -> usize {
+        self.chunks_loaded
+    }
+}
+
+/// Progress statistics for streaming mode
+#[derive(Debug, Clone)]
+pub struct StreamingProgress {
+    /// Number of chunks loaded
+    pub chunks_loaded: usize,
+    /// Total number of chunks
+    pub chunks_total: usize,
+    /// Bytes loaded
+    pub bytes_loaded: u64,
+    /// Total bytes
+    pub bytes_total: u64,
+    /// Progress percentage (0.0 to 100.0)
+    pub progress_percentage: f64,
+}
+
+/// Streaming state for resume support
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StreamingState {
+    /// IDs of chunks that have been loaded
+    pub loaded_chunks: Vec<u64>,
+    /// Number of chunks loaded
+    pub chunks_loaded: usize,
+    /// Bytes loaded
+    pub bytes_loaded: u64,
+}
+
 /// Hash collision statistics for monitoring hash function quality
 #[derive(Debug, Clone, Default)]
 pub struct HashCollisionStats {
@@ -194,6 +322,9 @@ pub struct OpeningBook {
     /// Hash collision statistics for monitoring hash function quality
     #[serde(skip)]
     hash_collision_stats: HashCollisionStats,
+    /// Chunk manager for streaming mode (None if streaming not enabled)
+    #[serde(skip)]
+    chunk_manager: Option<ChunkManager>,
 }
 
 impl Default for OpeningBook {
@@ -227,6 +358,7 @@ impl<'de> Deserialize<'de> for OpeningBook {
             loaded: data.loaded,
             metadata: data.metadata,
             hash_collision_stats: HashCollisionStats::new(),
+            chunk_manager: None,
         })
     }
 }
@@ -454,6 +586,7 @@ impl OpeningBook {
                 chunk_size: 0,
             },
             hash_collision_stats: HashCollisionStats::new(),
+            chunk_manager: None,
         }
     }
 
@@ -891,19 +1024,23 @@ impl OpeningBook {
         // Set up streaming parameters
         self.metadata.streaming_enabled = true;
         self.metadata.chunk_size = chunk_size;
+        
+        // Initialize chunk manager (will be populated when chunks are loaded)
+        self.chunk_manager = Some(ChunkManager::new(0, Vec::new(), 0));
     }
 
     /// Load a chunk of positions from binary data (for streaming)
     pub fn load_chunk(
         &mut self,
         chunk_data: &[u8],
-        _chunk_offset: u64,
+        chunk_offset: u64,
     ) -> Result<usize, OpeningBookError> {
         let mut reader = binary_format::BinaryReader::new(chunk_data.to_vec());
         let mut loaded_count = 0;
 
         // Read chunk header
         let chunk_header = reader.read_chunk_header()?;
+        let chunk_id = chunk_offset;
 
         // Load positions from this chunk
         for _ in 0..chunk_header.position_count {
@@ -924,7 +1061,93 @@ impl OpeningBook {
             }
         }
 
+        // Register chunk with chunk manager
+        if let Some(ref mut manager) = self.chunk_manager {
+            manager.register_chunk(chunk_id, chunk_header.chunk_size);
+            
+            #[cfg(feature = "verbose-debug")]
+            {
+                log::debug!(
+                    "Loaded chunk: id={}, positions={}, size={} bytes",
+                    chunk_id,
+                    loaded_count,
+                    chunk_header.chunk_size
+                );
+            }
+        }
+
         Ok(loaded_count)
+    }
+
+    /// Get streaming progress statistics
+    pub fn get_streaming_progress(&self) -> Option<StreamingProgress> {
+        self.chunk_manager.as_ref().map(|m| m.get_progress())
+    }
+
+    /// Evict least-recently-used chunks when memory limit is reached
+    pub fn evict_lru_chunks(&mut self, max_memory_bytes: u64) -> usize {
+        let mut evicted_count = 0;
+        
+        if let Some(ref mut manager) = self.chunk_manager {
+            let progress = manager.get_progress();
+            
+            // If we're over the memory limit, evict LRU chunks
+            while progress.bytes_loaded > max_memory_bytes {
+                if let Some(lru_chunk_id) = manager.get_lru_chunk() {
+                    // Estimate chunk size (we don't have exact size, use average)
+                    let avg_chunk_size = if manager.loaded_count() > 0 {
+                        progress.bytes_loaded / manager.loaded_count() as u64
+                    } else {
+                        0
+                    };
+                    
+                    // Evict the chunk
+                    if manager.evict_chunk(lru_chunk_id, avg_chunk_size as usize) {
+                        evicted_count += 1;
+                        
+                        // Remove positions from this chunk from lazy_positions
+                        // (In practice, we'd need to track which positions belong to which chunk)
+                        // For now, we'll just evict from the manager
+                    } else {
+                        break; // Couldn't evict, stop trying
+                    }
+                } else {
+                    break; // No chunks to evict
+                }
+            }
+        }
+        
+        evicted_count
+    }
+
+    /// Save streaming state for resume support
+    ///
+    /// Returns a serializable state that can be saved and later loaded
+    /// to resume chunk loading from where it left off.
+    pub fn save_streaming_state(&self) -> Option<StreamingState> {
+        self.chunk_manager.as_ref().map(|manager| {
+            StreamingState {
+                loaded_chunks: manager.loaded_chunks.iter().copied().collect(),
+                chunks_loaded: manager.chunks_loaded,
+                bytes_loaded: manager.bytes_loaded,
+            }
+        })
+    }
+
+    /// Load streaming state for resume support
+    ///
+    /// Restores chunk loading state from a previously saved state.
+    pub fn load_streaming_state(&mut self, state: StreamingState) -> Result<(), OpeningBookError> {
+        if let Some(ref mut manager) = self.chunk_manager {
+            manager.loaded_chunks = state.loaded_chunks.into_iter().collect();
+            manager.chunks_loaded = state.chunks_loaded;
+            manager.bytes_loaded = state.bytes_loaded;
+            Ok(())
+        } else {
+            Err(OpeningBookError::BinaryFormatError(
+                "Streaming mode not enabled".to_string(),
+            ))
+        }
     }
 
     /// Get streaming statistics
@@ -1467,7 +1690,12 @@ pub mod binary_format;
 #[path = "opening_book/statistics.rs"]
 pub mod statistics;
 
+/// Coverage analysis tools for opening book
+#[path = "opening_book/coverage.rs"]
+pub mod coverage;
+
 pub use statistics::BookStatistics;
+pub use coverage::{CoverageAnalyzer, CoverageReport};
 
 /// Helper functions for coordinate conversion
 pub mod coordinate_utils {

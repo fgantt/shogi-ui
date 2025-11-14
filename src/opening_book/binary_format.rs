@@ -355,6 +355,7 @@ impl BinaryReader {
                     chunk_size: 0,
                 },
                 hash_collision_stats: crate::opening_book::HashCollisionStats::new(),
+                chunk_manager: None,
             });
         }
 
@@ -401,6 +402,7 @@ impl BinaryReader {
                 chunk_size: 0,
             },
             hash_collision_stats: crate::opening_book::HashCollisionStats::new(),
+            chunk_manager: None,
         })
     }
 

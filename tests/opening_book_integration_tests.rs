@@ -533,3 +533,72 @@ mod error_handling_tests {
         // The exact behavior depends on the implementation
     }
 }
+
+#[cfg(test)]
+mod streaming_mode_integration_tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_mode_enable() {
+        let mut book = OpeningBook::new();
+        book.enable_streaming_mode(1024);
+        
+        assert!(book.get_stats().streaming_enabled);
+        assert_eq!(book.get_stats().chunk_size, 1024);
+    }
+
+    #[test]
+    fn test_streaming_progress_tracking() {
+        let mut book = OpeningBook::new();
+        book.enable_streaming_mode(1024);
+        
+        // Initially no progress
+        let progress = book.get_streaming_progress();
+        assert!(progress.is_some());
+        let progress = progress.unwrap();
+        assert_eq!(progress.chunks_loaded, 0);
+        assert_eq!(progress.progress_percentage, 0.0);
+    }
+
+    #[test]
+    fn test_streaming_state_save_load() {
+        let mut book = OpeningBook::new();
+        book.enable_streaming_mode(1024);
+        
+        // Save empty state
+        let state = book.save_streaming_state();
+        assert!(state.is_some());
+        
+        // Load into new book
+        let mut new_book = OpeningBook::new();
+        new_book.enable_streaming_mode(1024);
+        let result = new_book.load_streaming_state(state.unwrap());
+        assert!(result.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod coverage_analysis_integration_tests {
+    use super::*;
+    use shogi_engine::opening_book::{CoverageAnalyzer, CoverageReport};
+
+    #[test]
+    fn test_coverage_report_generation() {
+        let mut book = OpeningBook::new();
+        let fen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1".to_string();
+        let moves = vec![BookMove::new(
+            Some(Position::new(2, 6)),
+            Position::new(2, 5),
+            PieceType::Rook,
+            false,
+            false,
+            850,
+            15,
+        )];
+        book.add_position(fen, moves);
+        book = book.mark_loaded();
+        
+        let report = CoverageAnalyzer::generate_coverage_report(&book);
+        assert!(report.depth_stats.total_openings > 0);
+    }
+}
