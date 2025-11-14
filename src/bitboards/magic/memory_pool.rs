@@ -22,6 +22,29 @@ impl MemoryPool {
         }
     }
 
+    /// Create a new memory pool with adaptive block sizing
+    ///
+    /// The block size is calculated based on the estimated total size:
+    /// - Small tables (< 1MB): 1024 entries per block
+    /// - Medium tables (1-10MB): 4096 entries per block
+    /// - Large tables (> 10MB): 16384 entries per block
+    pub fn with_adaptive_block_size(estimated_total_size: usize) -> Self {
+        let block_size = if estimated_total_size < 1_000_000 {
+            1024
+        } else if estimated_total_size < 10_000_000 {
+            4096
+        } else {
+            16384
+        };
+
+        Self {
+            blocks: Vec::new(),
+            current_block: 0,
+            current_offset: 0,
+            block_size,
+        }
+    }
+
     /// Allocate memory for attack table
     ///
     /// Returns the base index where the allocated memory starts

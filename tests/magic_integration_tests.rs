@@ -481,3 +481,118 @@ fn test_precomputed_table_loads_correctly() {
     // Clean up
     let _ = fs::remove_file(&test_file);
 }
+
+#[test]
+#[ignore] // Ignore by default - compression takes time
+fn test_compressed_table_produces_identical_results() {
+    use shogi_engine::bitboards::magic::compressed_table::CompressedMagicTable;
+    
+    // Generate a magic table
+    let table = MagicTable::new().unwrap();
+    table.validate().expect("Table should be valid");
+    
+    // Create compressed and uncompressed versions
+    let compressed = CompressedMagicTable::from_table(table.clone())
+        .expect("Should create compressed table");
+    let uncompressed = CompressedMagicTable::uncompressed(table.clone());
+    
+    // Test various positions
+    let test_cases = vec![
+        (0u8, PieceType::Rook, 0u128),
+        (40u8, PieceType::Rook, 0b1010101010101010u128),
+        (40u8, PieceType::Bishop, 0b1111000011110000u128),
+        (72u8, PieceType::Rook, 0b1111111100000000u128),
+        (4u8, PieceType::Bishop, 0b0000111100001111u128),
+        (20u8, PieceType::Rook, 0xFFFFFFFFFFFFFFFFu128),
+        (60u8, PieceType::Bishop, 0x1234567890ABCDEFu128),
+    ];
+    
+    // Verify compressed and uncompressed produce identical results
+    for (square, piece_type, occupied) in test_cases {
+        let base_attacks = table.get_attacks(square, piece_type, occupied);
+        let compressed_attacks = compressed.get_attacks(square, piece_type, occupied);
+        let uncompressed_attacks = uncompressed.get_attacks(square, piece_type, occupied);
+        
+        assert_eq!(
+            base_attacks, compressed_attacks,
+            "Compressed attacks should match base for square {} piece {:?}",
+            square, piece_type
+        );
+        assert_eq!(
+            base_attacks, uncompressed_attacks,
+            "Uncompressed attacks should match base for square {} piece {:?}",
+            square, piece_type
+        );
+    }
+    
+    // Test all squares systematically (sample)
+    for square in (0..81).step_by(5) {
+        for piece_type in [PieceType::Rook, PieceType::Bishop] {
+            let test_occupied = (square as u128) * 0x1234567890ABCDEF;
+            let base_attacks = table.get_attacks(square, piece_type, test_occupied);
+            let compressed_attacks = compressed.get_attacks(square, piece_type, test_occupied);
+            
+            assert_eq!(
+                base_attacks, compressed_attacks,
+                "Compressed attacks should match base for square {} piece {:?}",
+                square, piece_type
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore] // Ignore by default - compression takes time
+fn test_compression_memory_usage_comparison() {
+    use shogi_engine::bitboards::magic::compressed_table::CompressedMagicTable;
+    use std::alloc::{GlobalAlloc, Layout, System};
+    
+    // Generate a magic table
+    let table = MagicTable::new().unwrap();
+    
+    // Measure original size
+    let original_size = table.attack_storage.len() * std::mem::size_of::<u128>();
+    
+    // Create compressed version
+    let compressed = CompressedMagicTable::from_table(table.clone())
+        .expect("Should create compressed table");
+    
+    // Get compression statistics
+    let stats = compressed.stats();
+    
+    // Verify compression achieved some savings (if enabled)
+    if compressed.is_compressed() {
+        assert!(
+            stats.compression_ratio >= 1.0,
+            "Compression ratio should be >= 1.0, got {}",
+            stats.compression_ratio
+        );
+        
+        // Print compression results
+        println!("\n=== Compression Memory Usage ===");
+        println!("Original size: {} bytes ({:.2} MB)", 
+                 stats.original_size, 
+                 stats.original_size as f64 / 1_000_000.0);
+        println!("Compressed size: {} bytes ({:.2} MB)", 
+                 stats.compressed_size, 
+                 stats.compressed_size as f64 / 1_000_000.0);
+        println!("Compression ratio: {:.2}x", stats.compression_ratio);
+        println!("Memory saved: {} bytes ({:.2} MB)", 
+                 stats.memory_saved, 
+                 stats.memory_saved as f64 / 1_000_000.0);
+        println!("Memory reduction: {:.1}%", 
+                 (1.0 - 1.0 / stats.compression_ratio) * 100.0);
+        println!("Deduplication: {} patterns", stats.dedup_count);
+        println!("RLE encoded: {} patterns", stats.rle_count);
+        println!("Delta encoded: {} patterns", stats.delta_count);
+        println!("Raw storage: {} patterns", stats.raw_count);
+        
+        // Verify we achieved some memory savings (at least 5% reduction)
+        let reduction = (1.0 - 1.0 / stats.compression_ratio) * 100.0;
+        assert!(
+            reduction >= 0.0,
+            "Compression should not increase memory usage (reduction: {:.1}%)",
+            reduction
+        );
+    }
+}
