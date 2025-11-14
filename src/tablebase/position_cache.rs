@@ -5,6 +5,7 @@
 
 use super::tablebase_config::EvictionStrategy;
 use super::TablebaseResult;
+use crate::search::BoardTrait;
 use crate::time_utils::TimeSource;
 use crate::types::Player;
 use crate::BitboardBoard;
@@ -18,6 +19,8 @@ struct CacheEntry {
     last_accessed: u64,
     access_count: u64,
     creation_time: u64,
+    position_signature: u64,
+    player: Player,
 }
 
 /// Configuration for the position cache
@@ -58,6 +61,8 @@ pub struct PositionCache {
     eviction_strategy: EvictionStrategy,
     /// Whether to enable adaptive eviction
     enable_adaptive_eviction: bool,
+    /// Number of detected cache key collisions
+    collision_count: u64,
 }
 
 impl PositionCache {
@@ -75,6 +80,7 @@ impl PositionCache {
             misses: 0,
             eviction_strategy: EvictionStrategy::LRU,
             enable_adaptive_eviction: false,
+            collision_count: 0,
         }
     }
 
@@ -87,6 +93,7 @@ impl PositionCache {
             misses: 0,
             eviction_strategy: config.eviction_strategy,
             enable_adaptive_eviction: config.enable_adaptive_eviction,
+            collision_count: 0,
         }
     }
 
@@ -111,8 +118,15 @@ impl PositionCache {
             // Update access information
             entry.last_accessed = timestamp;
             entry.access_count += 1;
-            self.hits += 1;
-            Some(entry.result.clone())
+            let signature = board.get_position_hash(captured_pieces);
+            if entry.position_signature == signature && entry.player == player {
+                self.hits += 1;
+                Some(entry.result.clone())
+            } else {
+                self.collision_count += 1;
+                self.misses += 1;
+                None
+            }
         } else {
             self.misses += 1;
             None
@@ -134,6 +148,7 @@ impl PositionCache {
         result: TablebaseResult,
     ) {
         let key = self.generate_key(board, player, captured_pieces);
+        let signature = board.get_position_hash(captured_pieces);
 
         // Check if we need to evict entries
         if self.cache.len() >= self.max_size && !self.cache.contains_key(&key) {
@@ -146,6 +161,8 @@ impl PositionCache {
             last_accessed: timestamp,
             access_count: 0,
             creation_time: timestamp,
+            position_signature: signature,
+            player,
         };
 
         self.cache.insert(key, entry);
@@ -194,6 +211,7 @@ impl PositionCache {
         self.cache.clear();
         self.hits = 0;
         self.misses = 0;
+        self.collision_count = 0;
     }
 
     /// Get cache statistics
@@ -201,67 +219,33 @@ impl PositionCache {
         (self.hits, self.misses, self.hit_rate())
     }
 
+    /// Number of detected cache key collisions
+    pub fn collision_count(&self) -> u64 {
+        self.collision_count
+    }
+
     /// Generate a hash key for a position
     ///
     /// This method creates a unique hash key for a position based on
     /// the board state, player to move, and captured pieces.
     /// Optimized for speed using bitboard operations.
+    /// Generate a stable cache key using the board's Zobrist hash.
+    ///
+    /// Tablebase results depend only on the material arrangement and side to move,
+    /// not on repetition counters or move history. We therefore combine the board's
+    /// position hash (which already incorporates captured pieces) with the player
+    /// to move and rely on the Zobrist implementation for uniqueness.
     fn generate_key(
         &self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-
-        // Hash the bitboard representation directly for speed
-        let pieces = board.get_pieces();
-
-        // Hash all piece bitboards for both players
-        // This is much faster than iterating through all 81 squares
-        for player_pieces in pieces.iter() {
-            for piece_bitboard in player_pieces.iter() {
-                piece_bitboard.hash(&mut hasher);
-            }
+        let mut hash = board.get_position_hash(captured_pieces);
+        if player == Player::White {
+            hash ^= 0x9E37_79B1_85EB_CA87;
         }
-
-        // Hash the player to move
-        player.hash(&mut hasher);
-
-        // Hash the captured pieces efficiently
-        self.hash_captured_pieces(captured_pieces, &mut hasher);
-
-        hasher.finish()
-    }
-
-    /// Efficiently hash captured pieces
-    fn hash_captured_pieces(
-        &self,
-        captured_pieces: &CapturedPieces,
-        hasher: &mut std::collections::hash_map::DefaultHasher,
-    ) {
-        use std::hash::Hash;
-        // Hash each piece type count for both players
-        for piece_type in [
-            crate::types::PieceType::Pawn,
-            crate::types::PieceType::Lance,
-            crate::types::PieceType::Knight,
-            crate::types::PieceType::Silver,
-            crate::types::PieceType::Gold,
-            crate::types::PieceType::Bishop,
-            crate::types::PieceType::Rook,
-        ] {
-            // Hash black pieces
-            let black_count = captured_pieces.count(piece_type, crate::types::Player::Black);
-            black_count.hash(hasher);
-
-            // Hash white pieces
-            let white_count = captured_pieces.count(piece_type, crate::types::Player::White);
-            white_count.hash(hasher);
-        }
+        hash
     }
 
     /// Get current timestamp for LRU tracking

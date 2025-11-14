@@ -156,12 +156,16 @@ mod stats_tests {
         let mut stats = TablebaseStats::new();
         stats.record_probe(true, false, None, 5);
         stats.record_probe(false, true, Some("KingGoldVsKing"), 10);
+        stats.record_position_analysis_time(2);
+        stats.record_solver_selection_time(3);
 
         let summary = stats.performance_summary();
         assert!(summary.contains("Total Probes: 2"));
         assert!(summary.contains("Cache Hit Rate: 50.00%"));
         assert!(summary.contains("Solver Hit Rate: 50.00%"));
         assert!(summary.contains("Overall Hit Rate: 100.00%"));
+        assert!(summary.contains("Avg Position Analysis Time"));
+        assert!(summary.contains("Avg Solver Selection Time"));
     }
 }
 
@@ -337,6 +341,84 @@ mod cache_tests {
         cache.clear();
         assert_eq!(cache.size(), 0);
         // Note: hits and misses are now private fields, so we can't test them directly
+        assert_eq!(cache.collision_count(), 0);
+    }
+
+    #[test]
+    fn test_position_cache_separates_positions() {
+        let mut cache = PositionCache::new();
+        let mut board1 = BitboardBoard::empty();
+        board1.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        let mut board2 = board1.clone();
+        board2.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 0),
+        );
+
+        let captured = CapturedPieces::new();
+        let player = Player::Black;
+
+        let res1 = TablebaseResult::win(None, 3);
+        let res2 = TablebaseResult::loss(5);
+
+        cache.put(&board1, player, &captured, res1.clone());
+        cache.put(&board2, player, &captured, res2.clone());
+
+        let stored1 = cache.get(&board1, player, &captured).unwrap();
+        let stored2 = cache.get(&board2, player, &captured).unwrap();
+
+        assert_eq!(stored1.moves_to_mate, res1.moves_to_mate);
+        assert_eq!(stored2.distance_to_mate, res2.distance_to_mate);
+        assert_eq!(cache.collision_count(), 0);
+    }
+
+    #[test]
+    fn test_position_cache_considers_player_to_move() {
+        let mut cache = PositionCache::new();
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 0),
+        );
+        let captured = CapturedPieces::new();
+
+        cache.put(&board, Player::Black, &captured, TablebaseResult::win(None, 1));
+        cache.put(&board, Player::White, &captured, TablebaseResult::loss(2));
+
+        let black_result = cache.get(&board, Player::Black, &captured).unwrap();
+        let white_result = cache.get(&board, Player::White, &captured).unwrap();
+
+        assert!(black_result.is_winning());
+        assert!(white_result.is_losing());
+    }
+
+    #[test]
+    fn test_position_cache_consistency_with_repeated_puts() {
+        let mut cache = PositionCache::new();
+        let mut board = BitboardBoard::empty();
+        board.place_piece(
+            Piece::new(PieceType::King, Player::Black),
+            Position::new(4, 4),
+        );
+        board.place_piece(
+            Piece::new(PieceType::King, Player::White),
+            Position::new(0, 0),
+        );
+        let captured = CapturedPieces::new();
+        let player = Player::Black;
+
+        cache.put(&board, player, &captured, TablebaseResult::win(None, 4));
+        cache.put(&board, player, &captured, TablebaseResult::win(None, 2));
+
+        let retrieved = cache.get(&board, player, &captured).unwrap();
+        assert_eq!(retrieved.moves_to_mate, Some(2));
     }
 }
 
@@ -697,7 +779,11 @@ mod endgame_comprehensive_tests {
 
     impl PositionFixture {
         fn new(name: &'static str, player: Player, board: BitboardBoard) -> Self {
-            Self { name, player, board }
+            Self {
+                name,
+                player,
+                board,
+            }
         }
 
         fn components(&self) -> (BitboardBoard, CapturedPieces, Player) {
@@ -720,10 +806,7 @@ mod endgame_comprehensive_tests {
         fn empty_board_with(pieces: &[(Player, PieceType, (u8, u8))]) -> BitboardBoard {
             let mut board = BitboardBoard::empty();
             for (player, piece_type, (row, col)) in pieces {
-                board.place_piece(
-                    Piece::new(*piece_type, *player),
-                    Position::new(*row, *col),
-                );
+                board.place_piece(Piece::new(*piece_type, *player), Position::new(*row, *col));
             }
             board
         }
@@ -844,13 +927,17 @@ mod endgame_comprehensive_tests {
     fn solver_result(kind: SolverKind, fixture: &PositionFixture) -> TablebaseResult {
         let solver = kind.instantiate();
         let (board, captured, player) = fixture.components();
-        solver.solve(&board, player, &captured).expect("solver result")
+        solver
+            .solve(&board, player, &captured)
+            .expect("solver result")
     }
 
     fn tablebase_result(fixture: &PositionFixture) -> TablebaseResult {
         let mut tablebase = MicroTablebase::new();
         let (board, captured, player) = fixture.components();
-        tablebase.probe(&board, player, &captured).expect("tablebase result")
+        tablebase
+            .probe(&board, player, &captured)
+            .expect("tablebase result")
     }
 
     #[test]
@@ -973,7 +1060,9 @@ mod endgame_comprehensive_tests {
         let spec = fixtures::gold_mate_in_one();
         let (board, captured, player) = spec.fixture.components();
         assert!(
-            disabled_tablebase.probe(&board, player, &captured).is_none(),
+            disabled_tablebase
+                .probe(&board, player, &captured)
+                .is_none(),
             "Disabled tablebase should not return results"
         );
     }
@@ -1029,5 +1118,38 @@ mod endgame_comprehensive_tests {
             !fixtures::all_expected_wins().is_empty(),
             "Fixture dataset should not be empty"
         );
+    }
+
+    #[test]
+    fn test_tablebase_move_cache_populates() {
+        let spec = fixtures::gold_mate_in_one();
+        let mut engine = SearchEngine::new(None, 4);
+        let mut board = spec.fixture.board.clone();
+
+        let winning_move = Move::new_move(
+            Position::new(1, 3),
+            Position::new(0, 4),
+            PieceType::Gold,
+            Player::Black,
+            false,
+        );
+        let alt_move = Move::new_move(
+            Position::new(2, 4),
+            Position::new(2, 3),
+            PieceType::King,
+            Player::Black,
+            false,
+        );
+        let moves = vec![winning_move, alt_move];
+
+        assert_eq!(engine.tablebase_cache_size(), 0);
+        let _ =
+            engine.sort_moves_with_pruning_awareness(&moves, &mut board, None, None, None, None);
+        assert!(engine.tablebase_cache_size() > 0);
+
+        let size_after_first = engine.tablebase_cache_size();
+        let _ =
+            engine.sort_moves_with_pruning_awareness(&moves, &mut board, None, None, None, None);
+        assert_eq!(engine.tablebase_cache_size(), size_after_first);
     }
 }

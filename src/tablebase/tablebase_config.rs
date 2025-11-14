@@ -588,6 +588,7 @@ pub enum EvictionStrategy {
 
 /// Statistics for monitoring tablebase performance
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TablebaseStats {
     /// Total number of tablebase probes
     pub total_probes: u64,
@@ -615,6 +616,20 @@ pub struct TablebaseStats {
     pub memory_critical_alerts: u64,
     /// Number of automatic evictions due to memory pressure
     pub auto_evictions: u64,
+    /// Total time spent in position analysis (ms)
+    pub position_analysis_time_ms: u64,
+    /// Number of position analysis invocations
+    pub position_analysis_calls: u64,
+    /// Total time spent selecting solvers (ms)
+    pub solver_selection_time_ms: u64,
+    /// Number of solver selection invocations
+    pub solver_selection_calls: u64,
+}
+
+impl Default for TablebaseStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TablebaseStats {
@@ -634,6 +649,10 @@ impl TablebaseStats {
             memory_warnings: 0,
             memory_critical_alerts: 0,
             auto_evictions: 0,
+            position_analysis_time_ms: 0,
+            position_analysis_calls: 0,
+            solver_selection_time_ms: 0,
+            solver_selection_calls: 0,
         }
     }
 
@@ -742,13 +761,17 @@ impl TablebaseStats {
             Solver Hit Rate: {:.2}%\n\
             Overall Hit Rate: {:.2}%\n\
             Average Probe Time: {:.2}ms\n\
-            Total Probe Time: {}ms",
+            Total Probe Time: {}ms\n\
+            Avg Position Analysis Time: {:.2}ms\n\
+            Avg Solver Selection Time: {:.2}ms",
             self.total_probes,
             self.cache_hit_rate() * 100.0,
             self.solver_hit_rate() * 100.0,
             self.overall_hit_rate() * 100.0,
             self.average_probe_time_ms,
-            self.total_probe_time_ms
+            self.total_probe_time_ms,
+            self.average_position_analysis_time(),
+            self.average_solver_selection_time()
         )
     }
 
@@ -768,6 +791,36 @@ impl TablebaseStats {
     /// Record a memory critical alert
     pub fn record_memory_critical_alert(&mut self) {
         self.memory_critical_alerts += 1;
+    }
+
+    /// Record position analysis timing
+    pub fn record_position_analysis_time(&mut self, time_ms: u64) {
+        self.position_analysis_calls += 1;
+        self.position_analysis_time_ms += time_ms;
+    }
+
+    /// Record solver selection timing
+    pub fn record_solver_selection_time(&mut self, time_ms: u64) {
+        self.solver_selection_calls += 1;
+        self.solver_selection_time_ms += time_ms;
+    }
+
+    /// Average time spent analyzing positions
+    pub fn average_position_analysis_time(&self) -> f64 {
+        if self.position_analysis_calls == 0 {
+            0.0
+        } else {
+            self.position_analysis_time_ms as f64 / self.position_analysis_calls as f64
+        }
+    }
+
+    /// Average time spent selecting solvers
+    pub fn average_solver_selection_time(&self) -> f64 {
+        if self.solver_selection_calls == 0 {
+            0.0
+        } else {
+            self.solver_selection_time_ms as f64 / self.solver_selection_calls as f64
+        }
     }
 
     /// Record an automatic eviction due to memory pressure

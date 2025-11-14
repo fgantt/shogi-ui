@@ -10,7 +10,7 @@ use super::{
     TablebaseResult, TablebaseStats,
 };
 use crate::time_utils::TimeSource;
-use crate::types::Player;
+use crate::types::{Player, Position};
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 
@@ -60,6 +60,12 @@ use crate::CapturedPieces;
 /// let summary = profiler.get_summary();
 /// println!("Performance: {}", summary);
 /// ```
+///
+/// ## Performance Targets
+///
+/// - Cache probe latency (warm cache): **< 1ms**
+/// - Solver computation latency (supported K+G/K+S/K+R endgames): **< 10ms**
+/// - Move ordering cache should prevent repeated tablebase probes during a search iteration
 ///
 /// ## Memory Management
 ///
@@ -246,24 +252,34 @@ impl MicroTablebase {
             return Some(result);
         }
 
-        // Analyze position complexity for adaptive solver selection
-        let position_analysis =
-            self.position_analyzer
+        // Analyze position complexity for adaptive solver selection (skip trivial cases)
+        let mut position_analysis = None;
+        if !self.is_simple_endgame(board, captured_pieces) {
+            let analysis_start = TimeSource::now();
+            let analysis = self
+                .position_analyzer
                 .analyze_position(board, player, captured_pieces);
+            self.stats
+                .record_position_analysis_time(analysis_start.elapsed_ms() as u64);
+            position_analysis = Some(analysis);
+        }
 
         // Try each solver in priority order, but skip solvers that can't handle the complexity
+        let solver_timer = TimeSource::now();
         let mut solver_result = None;
         for solver in &self.solvers {
             if !solver.is_enabled() {
                 continue;
             }
 
-            // Skip solver if it can't handle the position complexity
-            if !position_analysis
-                .complexity
-                .is_suitable_for_priority(solver.priority())
-            {
-                continue;
+            if let Some(ref analysis) = position_analysis {
+                // Skip solver if it can't handle the position complexity
+                if !analysis
+                    .complexity
+                    .is_suitable_for_priority(solver.priority())
+                {
+                    continue;
+                }
             }
 
             if solver.can_solve(board, player, captured_pieces) {
@@ -276,6 +292,8 @@ impl MicroTablebase {
                 }
             }
         }
+        self.stats
+            .record_solver_selection_time(solver_timer.elapsed_ms() as u64);
 
         if let Some((result, solver_name)) = solver_result {
             let probe_time = start_time.elapsed_ms() as u64;
@@ -409,6 +427,25 @@ impl MicroTablebase {
     /// Enable or disable the tablebase
     pub fn set_enabled(&mut self, enabled: bool) {
         self.config.enabled = enabled;
+    }
+
+    fn is_simple_endgame(&self, board: &BitboardBoard, captured_pieces: &CapturedPieces) -> bool {
+        if !captured_pieces.black.is_empty() || !captured_pieces.white.is_empty() {
+            return false;
+        }
+        self.count_pieces(board) <= 4
+    }
+
+    fn count_pieces(&self, board: &BitboardBoard) -> u8 {
+        let mut count = 0;
+        for row in 0..9 {
+            for col in 0..9 {
+                if board.get_piece(Position::new(row, col)).is_some() {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 }
 
