@@ -1,6 +1,6 @@
 use crate::search::RepetitionState;
 use crate::types::*;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 // Include the magic bitboard module
 pub mod api;
@@ -70,6 +70,74 @@ pub use square_utils::{
     square_distance, square_name_to_bit, square_to_bit,
 };
 
+/// Shared singleton for magic bitboard table (Task 2.0.2.1)
+/// This allows multiple boards to share the same magic table without cloning
+static SHARED_MAGIC_TABLE: OnceLock<Arc<MagicTable>> = OnceLock::new();
+
+/// Telemetry counters for magic bitboard operations (Task 2.0.2.3)
+#[derive(Debug, Default)]
+struct MagicTelemetry {
+    /// Count of times ray-cast fallback was used
+    raycast_fallback_count: std::sync::atomic::AtomicU64,
+    /// Count of times magic lookup was used
+    magic_lookup_count: std::sync::atomic::AtomicU64,
+    /// Count of times magic support was unavailable
+    magic_unavailable_count: std::sync::atomic::AtomicU64,
+}
+
+static MAGIC_TELEMETRY: MagicTelemetry = MagicTelemetry {
+    raycast_fallback_count: std::sync::atomic::AtomicU64::new(0),
+    magic_lookup_count: std::sync::atomic::AtomicU64::new(0),
+    magic_unavailable_count: std::sync::atomic::AtomicU64::new(0),
+};
+
+/// Get telemetry statistics for magic bitboard operations
+pub fn get_magic_telemetry() -> (u64, u64, u64) {
+    (
+        MAGIC_TELEMETRY
+            .raycast_fallback_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        MAGIC_TELEMETRY
+            .magic_lookup_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        MAGIC_TELEMETRY
+            .magic_unavailable_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+/// Get or initialize the shared magic table singleton
+/// Returns None if magic table initialization fails
+fn get_shared_magic_table() -> Option<Arc<MagicTable>> {
+    Some(
+        SHARED_MAGIC_TABLE
+            .get_or_init(|| {
+                // Try to create a magic table, fall back to default if it fails
+                Arc::new(
+                    MagicTable::new().unwrap_or_else(|_| {
+                        crate::debug_utils::debug_log(
+                            "[MAGIC_TABLE] Failed to initialize magic table, using default",
+                        );
+                        MagicTable::default()
+                    }),
+                )
+            })
+            .clone(),
+    )
+}
+
+/// Initialize the shared magic table singleton explicitly
+/// This should be called once at startup if magic support is desired
+pub fn init_shared_magic_table() -> Result<(), MagicError> {
+    let table = MagicTable::new()?;
+    SHARED_MAGIC_TABLE
+        .set(Arc::new(table))
+        .map_err(|_| MagicError::InitializationFailed {
+            reason: "Magic table already initialized".to_string(),
+        })?;
+    Ok(())
+}
+
 /// Information needed to unmake a move
 #[derive(Debug, Clone)]
 pub struct MoveInfo {
@@ -118,8 +186,8 @@ pub struct BitboardBoard {
     attack_patterns: AttackPatterns,
     /// Precomputed attack tables for non-sliding pieces
     attack_tables: Arc<attack_patterns::AttackTables>,
-    /// Magic bitboard table for sliding piece moves
-    magic_table: Option<crate::types::MagicTable>,
+    /// Magic bitboard table for sliding piece moves (shared via Arc)
+    magic_table: Option<Arc<MagicTable>>,
     /// Sliding move generator for magic bitboard operations
     sliding_generator: Option<sliding_moves::SlidingMoveGenerator>,
     side_to_move: Player,
@@ -932,8 +1000,11 @@ impl BitboardBoard {
     }
 
     /// Initialize with magic bitboard support
+    /// Uses the shared magic table singleton (Task 2.0.2.1)
     pub fn new_with_magic_support() -> Result<Self, MagicError> {
-        let magic_table = crate::types::MagicTable::new()?;
+        let magic_table = get_shared_magic_table().ok_or_else(|| MagicError::InitializationFailed {
+            reason: "Failed to get shared magic table".to_string(),
+        })?;
         Ok(Self {
             pieces: [[EMPTY_BITBOARD; 14]; 2],
             occupied: EMPTY_BITBOARD,
@@ -982,23 +1053,62 @@ impl BitboardBoard {
     }
 
     /// Get attack pattern for a square using magic bitboards
+    /// Task 2.0.2.3: Added telemetry tracking for magic vs fallback usage
     pub fn get_attack_pattern(&self, square: Position, piece_type: PieceType) -> Bitboard {
         if let Some(ref magic_table) = self.magic_table {
+            MAGIC_TELEMETRY
+                .magic_lookup_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             magic_table.get_attacks(square.to_index(), piece_type, self.occupied)
         } else {
             // Fallback to ray-casting
+            MAGIC_TELEMETRY
+                .raycast_fallback_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            MAGIC_TELEMETRY
+                .magic_unavailable_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            
+            crate::debug_utils::trace_log(
+                "MAGIC_FALLBACK",
+                &format!(
+                    "Using ray-cast fallback for {:?} at square {} (magic table unavailable)",
+                    piece_type,
+                    square.to_index()
+                ),
+            );
+            
             self.generate_attack_pattern_raycast(square, piece_type)
         }
     }
 
     /// Generate attack pattern using ray-casting (fallback method)
+    /// Task 2.0.2.2: Implemented using AttackGenerator for correct fallback behavior
     fn generate_attack_pattern_raycast(
         &self,
-        _square: Position,
-        _piece_type: PieceType,
+        square: Position,
+        piece_type: PieceType,
     ) -> Bitboard {
-        // Placeholder implementation - would use the existing ray-casting logic
-        EMPTY_BITBOARD
+        use crate::bitboards::magic::attack_generator::AttackGenerator;
+        
+        // Only support sliding pieces for ray-casting
+        if !matches!(
+            piece_type,
+            PieceType::Rook
+                | PieceType::Bishop
+                | PieceType::PromotedRook
+                | PieceType::PromotedBishop
+        ) {
+            return EMPTY_BITBOARD;
+        }
+        
+        // Use AttackGenerator to compute ray-cast attacks
+        let mut generator = AttackGenerator::new();
+        let occupied = self.occupied;
+        let square_idx = square.to_index();
+        
+        // Generate attack pattern with current occupancy
+        generator.generate_attack_pattern(square_idx, piece_type, occupied)
     }
 
     /// Check if magic bitboards are enabled
@@ -1007,14 +1117,18 @@ impl BitboardBoard {
     }
 
     /// Get magic table reference
-    pub fn get_magic_table(&self) -> Option<&crate::types::MagicTable> {
-        self.magic_table.as_ref()
+    pub fn get_magic_table(&self) -> Option<Arc<MagicTable>> {
+        self.magic_table.clone()
     }
 
     /// Initialize sliding move generator with magic table
+    /// Uses shared magic table reference (Task 2.0.2.1 - no longer consumes table)
     pub fn init_sliding_generator(&mut self) -> Result<(), crate::types::MagicError> {
-        if let Some(magic_table) = self.magic_table.take() {
-            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::new(magic_table));
+        if let Some(ref magic_table) = self.magic_table {
+            // Clone the Arc to share the table instead of taking ownership
+            self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::new(
+                Arc::clone(magic_table),
+            ));
             Ok(())
         } else {
             Err(crate::types::MagicError::InitializationFailed {
@@ -1024,13 +1138,15 @@ impl BitboardBoard {
     }
 
     /// Initialize sliding move generator with custom settings
+    /// Uses shared magic table reference (Task 2.0.2.1 - no longer consumes table)
     pub fn init_sliding_generator_with_settings(
         &mut self,
         magic_enabled: bool,
     ) -> Result<(), crate::types::MagicError> {
-        if let Some(magic_table) = self.magic_table.take() {
+        if let Some(ref magic_table) = self.magic_table {
+            // Clone the Arc to share the table instead of taking ownership
             self.sliding_generator = Some(sliding_moves::SlidingMoveGenerator::with_settings(
-                magic_table,
+                Arc::clone(magic_table),
                 magic_enabled,
             ));
             Ok(())

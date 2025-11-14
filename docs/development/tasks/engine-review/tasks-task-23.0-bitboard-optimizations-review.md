@@ -29,12 +29,12 @@
   - [x] 1.5 Add regression tests validating hash uniqueness (different hands/players produce different hashes) and that board cloning preserves bitboards without duplicating tables.
   - [x] 1.6 Document the new encoding and hashing approach in `task-23.0` notes plus update any developer docs referencing the HashMap-based storage.
 
-- [ ] 2.0 Sliding Move Infrastructure Hardening
-  - [ ] 2.1 Refactor magic-table ownership so initialization stores tables in a shared singleton/Arc and the board holds lightweight references; prevent `Option::take()` from invalidating future setups.
-  - [ ] 2.2 Implement the ray-cast fallback to correctly generate rook/bishop/promoted sliding moves when magic data is unavailable, using occupancy masks rather than returning empty boards.
-  - [ ] 2.3 Add runtime warnings/telemetry when the engine runs without magic support or falls back to ray-cast generation, including counters exposed via `debug_utils`.
-  - [ ] 2.4 Ensure `sliding_moves.rs` iterates attack bitboards via bit scans (not 81-square loops) for both magic and fallback paths, sharing helper utilities.
-  - [ ] 2.5 Extend tests to cover magic-enabled, fallback-only, and mixed scenarios (missing table entries, invalidations) to guarantee sliding move correctness across platforms.
+- [x] 2.0 Sliding Move Infrastructure Hardening
+  - [x] 2.1 Refactor magic-table ownership so initialization stores tables in a shared singleton/Arc and the board holds lightweight references; prevent `Option::take()` from invalidating future setups.
+  - [x] 2.2 Implement the ray-cast fallback to correctly generate rook/bishop/promoted sliding moves when magic data is unavailable, using occupancy masks rather than returning empty boards.
+  - [x] 2.3 Add runtime warnings/telemetry when the engine runs without magic support or falls back to ray-cast generation, including counters exposed via `debug_utils`.
+  - [x] 2.4 Ensure `sliding_moves.rs` iterates attack bitboards via bit scans (not 81-square loops) for both magic and fallback paths, sharing helper utilities.
+  - [x] 2.5 Extend tests to cover magic-enabled, fallback-only, and mixed scenarios (missing table entries, invalidations) to guarantee sliding move correctness across platforms.
 
 - [ ] 3.0 Bitboard-Centric Attack & Move Iteration
   - [ ] 3.1 Rewrite `is_square_attacked_by` to iterate attackers by bitboard (e.g., per-piece masks + attack tables) instead of nested 9×9 loops with HashMap lookups.
@@ -65,4 +65,12 @@
 - **Hashing & Cloning:** `BitboardBoard` now tracks `side_to_move`/`repetition_state`, and `get_position_id` delegates to the existing Zobrist hasher so callers can supply the current player and hand state when building TT keys. Attack tables are stored behind `Arc<AttackTables>` so board cloning (and legality probes) reuse the same precomputed tables instead of copying ~22 KB per clone.
 - **Verification:** Updated the board trait tests and ran `cargo check` to cover the new API surface (`get_position_id` parameters, array-backed accessors). The broader engine build succeeds with the new encoding in place, exercising the same regression suite that relies on `BitboardBoard`.
 - **Documentation:** Captured the encoding/hash changes in this task plan and refreshed `task-23.0-bitboard-optimizations-review.md` to reference the array-backed board so future reviews no longer call out the HashMap duplication.
+
+### Task 2.0 Completion Notes
+
+- **Magic Table Ownership:** Implemented a shared singleton `SHARED_MAGIC_TABLE` using `OnceLock<Arc<MagicTable>>` that allows multiple `BitboardBoard` instances to share the same magic table without cloning. Updated `BitboardBoard` to store `Option<Arc<MagicTable>>` instead of `Option<MagicTable>`, and refactored `SlidingMoveGenerator` and `SimpleLookupEngine` to accept `Arc<MagicTable>`. The `init_sliding_generator` methods now clone the `Arc` pointer instead of consuming the table via `Option::take()`, preventing invalidation of future setups.
+- **Ray-Cast Fallback:** Implemented proper ray-cast fallback in `generate_attack_pattern_raycast` using the existing `AttackGenerator` from the magic module. The fallback correctly generates attack patterns for rook, bishop, promoted rook, and promoted bishop pieces using occupancy masks. Updated `SlidingMoveGenerator` methods to automatically fall back to ray-casting when magic is disabled, ensuring moves are still generated correctly.
+- **Telemetry & Warnings:** Added `MagicTelemetry` struct with atomic counters tracking ray-cast fallback usage, magic lookup counts, and magic unavailable events. The telemetry is exposed via `get_magic_telemetry()` function and integrated into `get_attack_pattern` to track usage patterns. Added debug logging via `trace_log` when fallback is used, providing visibility into when magic support is unavailable.
+- **Bit Scan Optimization:** Replaced all 81-square loops in `sliding_moves.rs` with efficient bit scans using `GlobalOptimizer::bit_scan_forward`. The new implementation iterates only over set bits in attack bitboards using `while remaining_attacks != 0 { ... remaining_attacks &= remaining_attacks - 1; }` pattern, significantly reducing iteration overhead for sparse attack patterns.
+- **Testing:** Added comprehensive test suite covering magic-enabled scenarios (rook/bishop moves), fallback-only scenarios (with magic disabled), mixed scenarios (blocked pieces), bit scan optimization verification, and batch generation for both magic and fallback paths. All tests validate correct move generation and blocker handling across different configurations.
 
