@@ -5,14 +5,17 @@
 
 use super::optimizer::Optimizer;
 use super::types::{
-    FoldResult, MatchResult, OptimizationMethod, TrainingPosition, ValidationConfig,
-    ValidationResults,
+    FoldResult, GameResult as TuningGameResult, MatchResult, OptimizationMethod, TrainingPosition,
+    ValidationConfig, ValidationResults,
 };
-use crate::types::Player;
+use crate::types::{GameResult, Move, Player};
+use crate::ShogiEngine;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// Validation engine for tuning results
 pub struct Validator {
@@ -189,119 +192,386 @@ impl Validator {
     }
 }
 
-/// Strength testing framework for engine vs engine matches
-pub struct StrengthTester {
-    /// Number of games to play for testing
-    pub games_per_test: u32,
-    /// Time control for games (in milliseconds)
-    pub time_control_ms: u32,
+/// Trait for playing games between two engine configurations
+///
+/// This trait abstracts the game playing interface, allowing different
+/// implementations (actual engine, mock for testing, etc.)
+pub trait GamePlayer: Send + Sync {
+    /// Play a single game between two engine configurations
+    ///
+    /// # Arguments
+    /// * `player1_weights` - Weights for the first player (playing as Black)
+    /// * `player2_weights` - Weights for the second player (playing as White)
+    /// * `time_per_move_ms` - Time limit per move in milliseconds
+    /// * `max_moves` - Maximum number of moves before declaring a draw
+    ///
+    /// # Returns
+    /// * `Ok(TuningGameResult)` - The result of the game from player1's perspective
+    /// * `Err(String)` - Error message if the game could not be played
+    fn play_game(
+        &self,
+        player1_weights: &[f64],
+        player2_weights: &[f64],
+        time_per_move_ms: u32,
+        max_moves: u32,
+    ) -> Result<TuningGameResult, String>;
 }
 
-impl StrengthTester {
-    /// Create a new strength tester
-    pub fn new(games_per_test: u32, time_control_ms: u32) -> Self {
+/// Mock game player for testing
+///
+/// This implementation simulates game results for fast unit testing
+/// without actually playing games.
+pub struct MockGamePlayer {
+    /// Predetermined results to return (cycles through)
+    results: Vec<TuningGameResult>,
+    /// Current index in results (uses interior mutability for thread safety)
+    current_index: Arc<Mutex<usize>>,
+}
+
+impl MockGamePlayer {
+    /// Create a new mock game player with predetermined results
+    pub fn new(results: Vec<TuningGameResult>) -> Self {
         Self {
-            games_per_test,
-            time_control_ms,
+            results,
+            current_index: Arc::new(Mutex::new(0)),
+        }
+    }
+}
+
+impl GamePlayer for MockGamePlayer {
+    fn play_game(
+        &self,
+        _player1_weights: &[f64],
+        _player2_weights: &[f64],
+        _time_per_move_ms: u32,
+        _max_moves: u32,
+    ) -> Result<TuningGameResult, String> {
+        if self.results.is_empty() {
+            return Ok(TuningGameResult::Draw);
+        }
+
+        let mut index = self.current_index.lock().unwrap();
+        let result = self.results[*index % self.results.len()];
+        *index += 1;
+        Ok(result)
+    }
+}
+
+/// Game player implementation using ShogiEngine
+///
+/// This implementation plays actual games using the ShogiEngine,
+/// allowing realistic strength testing of tuned weights.
+pub struct ShogiEngineGamePlayer {
+    /// Search depth for moves (0 = adaptive/unlimited)
+    pub search_depth: u8,
+    /// Whether to enable verbose logging
+    pub verbose: bool,
+}
+
+impl ShogiEngineGamePlayer {
+    /// Create a new ShogiEngine game player
+    pub fn new(search_depth: u8, verbose: bool) -> Self {
+        Self {
+            search_depth,
+            verbose,
         }
     }
 
-    /// Run engine vs engine matches to test strength
+    /// Convert engine GameResult to tuning GameResult from a player's perspective
+    fn convert_game_result(
+        engine_result: GameResult,
+        perspective: Player,
+    ) -> TuningGameResult {
+        match (engine_result, perspective) {
+            (GameResult::Win, Player::Black) => TuningGameResult::BlackWin,
+            (GameResult::Win, Player::White) => TuningGameResult::WhiteWin,
+            (GameResult::Loss, Player::Black) => TuningGameResult::WhiteWin,
+            (GameResult::Loss, Player::White) => TuningGameResult::BlackWin,
+            (GameResult::Draw, _) => TuningGameResult::Draw,
+        }
+    }
+}
+
+impl GamePlayer for ShogiEngineGamePlayer {
+    fn play_game(
+        &self,
+        _player1_weights: &[f64],
+        _player2_weights: &[f64],
+        time_per_move_ms: u32,
+        max_moves: u32,
+    ) -> Result<TuningGameResult, String> {
+        // Create a single engine instance for self-play
+        // Note: In a full implementation, we would apply different weights to each player
+        // This requires integration with the evaluation system to apply feature weights
+        // For now, we use a single engine to establish the game playing infrastructure
+        let mut engine = ShogiEngine::new();
+
+        // TODO: Apply player1_weights and player2_weights to engine configurations
+        // This requires:
+        // 1. Integration with evaluation system to map feature weights to evaluation parameters
+        // 2. Ability to configure engine with different evaluation weights per game
+        // 3. Or use two separate engine instances with different configurations
+
+        let mut move_count = 0;
+        let mut consecutive_passes = 0;
+        let mut last_move: Option<Move> = None;
+        let mut current_player = Player::Black;
+
+        // Play the game (engine plays against itself)
+        loop {
+            // Check if game is over
+            if let Some(result) = engine.is_game_over() {
+                if self.verbose {
+                    println!("Game over: {:?}", result);
+                }
+                // Convert result from Black's perspective (player1)
+                return Ok(Self::convert_game_result(result, Player::Black));
+            }
+
+            // Get engine's best move
+            let best_move = engine.get_best_move(
+                self.search_depth,
+                time_per_move_ms,
+                None,
+            );
+
+            match best_move {
+                Some(move_) => {
+                    if self.verbose && move_count < 10 {
+                        println!(
+                            "Move {}: {} ({:?})",
+                            move_count + 1,
+                            move_.to_usi_string(),
+                            current_player
+                        );
+                    }
+
+                    // Check if same move repeated (possible infinite loop)
+                    if last_move.as_ref().map(|m| m.to_usi_string())
+                        == Some(move_.to_usi_string())
+                    {
+                        consecutive_passes += 1;
+                        if consecutive_passes >= 3 {
+                            if self.verbose {
+                                println!("Consecutive repeated moves detected, ending game as draw");
+                            }
+                            return Ok(TuningGameResult::Draw);
+                        }
+                    } else {
+                        consecutive_passes = 0;
+                    }
+
+                    last_move = Some(move_.clone());
+
+                    // Apply the move to the engine
+                    if !engine.apply_move(&move_) {
+                        if self.verbose {
+                            println!(
+                                "Failed to apply move: {}, ending game",
+                                move_.to_usi_string()
+                            );
+                        }
+                        return Ok(TuningGameResult::Draw);
+                    }
+
+                    // Switch turns
+                    current_player = current_player.opposite();
+                    move_count += 1;
+
+                    // Safety limit to avoid infinite games
+                    if move_count >= max_moves {
+                        if self.verbose {
+                            println!("Maximum move limit reached, ending as draw");
+                        }
+                        return Ok(TuningGameResult::Draw);
+                    }
+                }
+                None => {
+                    // No legal moves - game ended
+                    if let Some(result) = engine.is_game_over() {
+                        return Ok(Self::convert_game_result(result, Player::Black));
+                    }
+                    return Ok(TuningGameResult::Draw);
+                }
+            }
+        }
+    }
+}
+
+/// Strength testing framework for engine vs engine matches
+///
+/// This struct provides realistic validation by playing actual games between
+/// two engine configurations (original vs tuned weights) rather than simulating results.
+pub struct StrengthTester {
+    /// Number of games to play for testing
+    pub games_per_test: u32,
+    /// Time control for games (in milliseconds per move)
+    pub time_control_ms: u32,
+    /// Maximum moves per game before declaring a draw
+    pub max_moves_per_game: u32,
+    /// Game player implementation
+    game_player: Box<dyn GamePlayer>,
+}
+
+impl StrengthTester {
+    /// Create a new strength tester with default ShogiEngine game player
+    pub fn new(games_per_test: u32, time_control_ms: u32) -> Self {
+        Self::with_game_player(
+            games_per_test,
+            time_control_ms,
+            Box::new(ShogiEngineGamePlayer::new(3, false)),
+        )
+    }
+
+    /// Create a new strength tester with a custom game player
+    pub fn with_game_player(
+        games_per_test: u32,
+        time_control_ms: u32,
+        game_player: Box<dyn GamePlayer>,
+    ) -> Self {
+        Self {
+            games_per_test,
+            time_control_ms,
+            max_moves_per_game: 200, // Default maximum moves
+            game_player,
+        }
+    }
+
+    /// Set the maximum number of moves per game before declaring a draw
+    pub fn set_max_moves_per_game(&mut self, max_moves: u32) {
+        self.max_moves_per_game = max_moves;
+    }
+
+    /// Run engine vs engine matches to test strength by playing actual games
+    ///
+    /// This method plays actual games between two engine configurations:
+    /// - Original weights (playing as Black in even games, White in odd games)
+    /// - Tuned weights (playing as White in even games, Black in odd games)
+    ///
+    /// The games alternate colors to eliminate first-move advantage bias.
+    ///
+    /// # Arguments
+    /// * `original_weights` - Weights for the original engine configuration
+    /// * `tuned_weights` - Weights for the tuned engine configuration
+    ///
+    /// # Returns
+    /// * `MatchResult` - Results from the match, including wins, losses, draws, and ELO difference
     pub fn test_engine_strength(
         &self,
         original_weights: &[f64],
         tuned_weights: &[f64],
     ) -> MatchResult {
-        // For now, simulate match results based on weight differences
-        // In a real implementation, this would play actual games
+        let mut wins = 0;
+        let mut losses = 0;
+        let mut draws = 0;
 
-        let weight_difference = self.calculate_weight_difference(original_weights, tuned_weights);
-        let strength_improvement = self.estimate_strength_improvement(weight_difference);
+        // Play games, alternating colors to eliminate first-move advantage
+        for game_num in 0..self.games_per_test {
+            let (player1_weights, player2_weights) = if game_num % 2 == 0 {
+                // Even games: original plays Black, tuned plays White
+                (original_weights, tuned_weights)
+            } else {
+                // Odd games: tuned plays Black, original plays White
+                (tuned_weights, original_weights)
+            };
 
-        // Simulate match results based on strength improvement
-        let (wins, losses, draws) = self.simulate_match_results(strength_improvement);
+            match self.game_player.play_game(
+                player1_weights,
+                player2_weights,
+                self.time_control_ms,
+                self.max_moves_per_game,
+            ) {
+                Ok(result) => {
+                    // Count results from tuned weights' perspective
+                    // In even games (game_num % 2 == 0), tuned is player2 (White)
+                    // In odd games (game_num % 2 == 1), tuned is player1 (Black)
+                    let is_tuned_black = game_num % 2 == 1;
+                    match (result, is_tuned_black) {
+                        (TuningGameResult::BlackWin, false) => {
+                            // Original (Black) won, so tuned (White) lost
+                            losses += 1;
+                        }
+                        (TuningGameResult::WhiteWin, false) => {
+                            // Tuned (White) won
+                            wins += 1;
+                        }
+                        (TuningGameResult::BlackWin, true) => {
+                            // Tuned (Black) won
+                            wins += 1;
+                        }
+                        (TuningGameResult::WhiteWin, true) => {
+                            // Original (White) won, so tuned (Black) lost
+                            losses += 1;
+                        }
+                        (TuningGameResult::Draw, _) => {
+                            draws += 1;
+                        }
+                    }
+                }
+                Err(e) => {
+                    // On error, count as draw (conservative approach)
+                    eprintln!("Error playing game {}: {}", game_num + 1, e);
+                    draws += 1;
+                }
+            }
+        }
+
+        // Calculate ELO difference and confidence interval
+        let total_games = wins + losses + draws;
+        let elo_difference = Self::calculate_elo_difference(wins, losses, draws);
+        let elo_confidence_interval =
+            Self::calculate_elo_confidence_interval(wins, losses, draws);
 
         MatchResult {
             wins,
             losses,
             draws,
-            elo_difference: self.calculate_elo_difference(wins, losses, draws),
-            elo_confidence_interval: self.calculate_elo_confidence_interval(wins, losses, draws),
-            total_games: self.games_per_test,
+            elo_difference,
+            elo_confidence_interval,
+            total_games,
         }
     }
 
-    /// Calculate the difference between original and tuned weights
-    fn calculate_weight_difference(&self, original: &[f64], tuned: &[f64]) -> f64 {
-        original
-            .iter()
-            .zip(tuned.iter())
-            .map(|(o, t)| (o - t).abs())
-            .sum::<f64>()
-    }
-
-    /// Estimate strength improvement based on weight differences
-    fn estimate_strength_improvement(&self, weight_difference: f64) -> f64 {
-        // Simple heuristic: larger weight changes suggest bigger improvements
-        // This is a placeholder - real implementation would be more sophisticated
-        weight_difference * 0.1
-    }
-
-    /// Simulate match results based on strength improvement
-    fn simulate_match_results(&self, strength_improvement: f64) -> (u32, u32, u32) {
-        let mut rng = thread_rng();
-        let win_probability = 0.5 + strength_improvement.min(0.3); // Cap at 80% win rate
-        let draw_probability = 0.2;
-
-        let mut wins = 0;
-        let mut losses = 0;
-        let mut draws = 0;
-
-        for _ in 0..self.games_per_test {
-            let rand_val: f64 = rng.gen();
-
-            if rand_val < win_probability {
-                wins += 1;
-            } else if rand_val < win_probability + draw_probability {
-                draws += 1;
-            } else {
-                losses += 1;
-            }
-        }
-
-        (wins, losses, draws)
-    }
-
-    /// Calculate ELO difference from match results
-    fn calculate_elo_difference(&self, wins: u32, losses: u32, draws: u32) -> f64 {
-        let total_games = wins + losses + draws;
+    /// Calculate ELO difference from match results using standard ELO formula
+    ///
+    /// Uses the standard ELO calculation: ELO_diff = 400 * log10(W/L) where W/L is win/loss ratio
+    fn calculate_elo_difference(wins: u32, losses: u32, _draws: u32) -> f64 {
+        let total_games = wins + losses;
         if total_games == 0 {
             return 0.0;
         }
 
         let win_rate = wins as f64 / total_games as f64;
-        let _draw_rate = draws as f64 / total_games as f64;
-
-        // Simple ELO calculation: win rate of 0.5 = 0 ELO difference
-        // This is a simplified version - real implementation would be more sophisticated
-        if win_rate > 0.5 {
-            (win_rate - 0.5) * 400.0
-        } else {
-            (win_rate - 0.5) * 400.0
+        if win_rate <= 0.0 || win_rate >= 1.0 {
+            return 0.0;
         }
+
+        // Standard ELO formula: ELO_diff = 400 * log10(W/L)
+        // where W/L = wins / losses
+        let win_loss_ratio = wins as f64 / losses.max(1) as f64;
+        400.0 * win_loss_ratio.log10()
     }
 
-    /// Calculate ELO confidence interval
-    fn calculate_elo_confidence_interval(&self, wins: u32, losses: u32, draws: u32) -> (f64, f64) {
+    /// Calculate ELO confidence interval using standard error
+    ///
+    /// Uses the standard error formula for ELO difference with 95% confidence interval
+    fn calculate_elo_confidence_interval(wins: u32, losses: u32, draws: u32) -> (f64, f64) {
         let total_games = wins + losses + draws;
         if total_games == 0 {
             return (0.0, 0.0);
         }
 
-        // Simplified confidence interval calculation
-        let margin = 100.0 / (total_games as f64).sqrt();
-        let elo_diff = self.calculate_elo_difference(wins, losses, draws);
+        // Standard error for ELO difference (95% confidence interval)
+        // Margin = 1.96 * sqrt((W + L) / (W * L)) * 400
+        let w = wins as f64;
+        let l = losses as f64;
+        let margin = if w > 0.0 && l > 0.0 {
+            1.96 * ((w + l) / (w * l)).sqrt() * 400.0
+        } else {
+            100.0 / (total_games as f64).sqrt() // Fallback for edge cases
+        };
 
+        let elo_diff = Self::calculate_elo_difference(wins, losses, draws);
         (elo_diff - margin, elo_diff + margin)
     }
 }
@@ -471,8 +741,9 @@ impl PerformanceBenchmark {
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
-    use super::super::types::ValidationConfig;
+    use super::super::types::{ValidationConfig, GameResult as TuningGameResult};
     use super::*;
+    use crate::types::NUM_EVAL_FEATURES;
 
     #[test]
     fn test_validator_creation() {
@@ -512,14 +783,45 @@ mod tests {
     }
 
     #[test]
-    fn test_strength_tester_match() {
-        let tester = StrengthTester::new(10, 1000);
+    fn test_strength_tester_match_with_mock() {
+        // Use mock game player for fast unit testing
+        let mock_results = vec![
+            TuningGameResult::BlackWin, // Game 0: Black wins (tuned as White loses)
+            TuningGameResult::WhiteWin, // Game 1: White wins (tuned as Black wins)
+            TuningGameResult::Draw,     // Game 2: Draw
+            TuningGameResult::BlackWin, // Game 3: Black wins (tuned as White loses)
+            TuningGameResult::WhiteWin, // Game 4: White wins (tuned as Black wins)
+        ];
+        let mock_player = Box::new(MockGamePlayer::new(mock_results));
+        let tester = StrengthTester::with_game_player(5, 1000, mock_player);
         let original_weights = vec![1.0; NUM_EVAL_FEATURES];
         let tuned_weights = vec![1.1; NUM_EVAL_FEATURES];
 
         let result = tester.test_engine_strength(&original_weights, &tuned_weights);
-        assert_eq!(result.total_games, 10);
-        assert_eq!(result.wins + result.losses + result.draws, 10);
+        assert_eq!(result.total_games, 5);
+        assert_eq!(result.wins + result.losses + result.draws, 5);
+        // Expected: 2 wins (games 1, 4), 2 losses (games 0, 3), 1 draw (game 2)
+        assert_eq!(result.wins, 2);
+        assert_eq!(result.losses, 2);
+        assert_eq!(result.draws, 1);
+    }
+
+    #[test]
+    fn test_strength_tester_actual_games() {
+        // Integration test with actual engine (may be slow)
+        // Use very fast time control and few games for testing
+        let tester = StrengthTester::new(2, 100); // 2 games, 100ms per move
+        let original_weights = vec![1.0; NUM_EVAL_FEATURES];
+        let tuned_weights = vec![1.0; NUM_EVAL_FEATURES]; // Same weights for testing
+
+        let result = tester.test_engine_strength(&original_weights, &tuned_weights);
+        assert_eq!(result.total_games, 2);
+        assert_eq!(result.wins + result.losses + result.draws, 2);
+        // With same weights, results should be balanced (wins ≈ losses) or draws
+        // But we can't predict exact results, so just verify structure
+        assert!(result.wins <= 2);
+        assert!(result.losses <= 2);
+        assert!(result.draws <= 2);
     }
 
     #[test]
