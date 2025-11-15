@@ -7,6 +7,8 @@
 use crate::search::RepetitionState;
 use crate::types::board::{CapturedPieces, GamePhase};
 use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::search::PositionComplexity;
+use crate::types::Bitboard;
 
 /// Trait for board operations required by Zobrist hashing
 ///

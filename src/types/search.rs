@@ -99,6 +99,12 @@ pub struct QuiescenceEntry {
     pub flag: TranspositionFlag,
     pub best_move: Option<Move>,
     pub hash_key: u64,
+    /// For LRU tracking - number of times this entry was accessed
+    pub access_count: u64,
+    /// For LRU tracking - age when last accessed
+    pub last_access_age: u64,
+    /// Cached stand-pat evaluation (optional, not all entries have it)
+    pub stand_pat_score: Option<i32>,
 }
 
 // ============================================================================
@@ -217,6 +223,37 @@ impl QuiescenceConfig {
         Ok(())
     }
 
+    /// Create a new validated configuration
+    pub fn new_validated(
+        max_depth: u8,
+        enable_delta_pruning: bool,
+        enable_futility_pruning: bool,
+        enable_selective_extensions: bool,
+        enable_tt: bool,
+        tt_size_mb: usize,
+        tt_cleanup_threshold: usize,
+        futility_margin: i32,
+        delta_margin: i32,
+        high_value_capture_threshold: i32,
+    ) -> Result<Self, String> {
+        let config = Self {
+            max_depth,
+            enable_delta_pruning,
+            enable_futility_pruning,
+            enable_selective_extensions,
+            enable_tt,
+            enable_adaptive_pruning: true, // Default value
+            futility_margin,
+            delta_margin,
+            high_value_capture_threshold,
+            tt_size_mb,
+            tt_cleanup_threshold,
+            tt_replacement_policy: TTReplacementPolicy::DepthPreferred, // Default value
+        };
+        config.validate()?;
+        Ok(config)
+    }
+
     /// Get a summary of the configuration
     pub fn summary(&self) -> String {
         format!(
@@ -274,6 +311,18 @@ impl QuiescenceStats {
         (self.total_prunes() as f64 / self.nodes_searched as f64) * 100.0
     }
 
+    /// Get a summary string of the statistics
+    pub fn summary(&self) -> String {
+        format!(
+            "QuiescenceStats: nodes={}, prunes={}, extensions={}, tt_hits={}, tt_misses={}",
+            self.nodes_searched,
+            self.total_prunes(),
+            self.extensions,
+            self.tt_hits,
+            self.tt_misses
+        )
+    }
+
     /// Get the transposition table hit rate as a percentage
     pub fn tt_hit_rate(&self) -> f64 {
         let total_tt_attempts = self.tt_hits + self.tt_misses;
@@ -281,6 +330,25 @@ impl QuiescenceStats {
             return 0.0;
         }
         (self.tt_hits as f64 / total_tt_attempts as f64) * 100.0
+    }
+
+    /// Get the extension rate as a percentage
+    pub fn extension_rate(&self) -> f64 {
+        if self.nodes_searched == 0 {
+            return 0.0;
+        }
+        (self.extensions as f64 / self.nodes_searched as f64) * 100.0
+    }
+
+    /// Generate a performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "Quiescence Performance: {} nodes, {:.1}% pruning, {:.1}% extensions, {:.1}% TT hit rate",
+            self.nodes_searched,
+            self.pruning_efficiency(),
+            self.extension_rate(),
+            self.tt_hit_rate()
+        )
     }
 }
 
@@ -581,18 +649,38 @@ impl NullMoveConfig {
 /// Performance statistics for null move pruning
 #[derive(Debug, Clone, Default)]
 pub struct NullMoveStats {
+    /// Number of null move attempts
+    pub attempts: u64,
     pub null_moves_tried: u64,
     pub null_moves_successful: u64,
     pub verifications_triggered: u64,
     pub verifications_successful: u64,
+    /// Number of verification searches attempted
+    pub verification_attempts: u64,
     pub cutoffs_after_null_move: u64,
     pub cutoffs_after_verification: u64,
+    /// Total depth reductions applied
+    pub depth_reductions: u64,
     pub total_depth_saved: u64,
     pub average_reduction: f64,
     pub endgame_positions_detected: u64,
     pub endgame_positions_skipped: u64,
+    /// Number of mate threat detection attempts
+    pub mate_threat_attempts: u64,
     pub mate_threats_detected: u64,
+    /// Alias for mate_threats_detected (for compatibility)
+    pub mate_threat_detected: u64,
     pub mate_threats_skipped: u64,
+    /// Number of times null move was disabled in check
+    pub disabled_in_check: u64,
+    /// Number of times null move was disabled in endgame
+    pub disabled_endgame: u64,
+    /// Number of times null move was skipped due to time pressure
+    pub skipped_time_pressure: u64,
+    /// Total number of cutoffs (alias for cutoffs_after_null_move + cutoffs_after_verification)
+    pub cutoffs: u64,
+    /// Number of verification searches that resulted in cutoffs
+    pub verification_cutoffs: u64,
 }
 
 impl NullMoveStats {
@@ -758,6 +846,8 @@ pub struct AdaptiveTuningConfig {
     pub enabled: bool,
     /// Tuning aggressiveness level (default: Moderate)
     pub aggressiveness: TuningAggressiveness,
+    /// Minimum data threshold for tuning decisions
+    pub min_data_threshold: u64,
     // Additional fields will be added as needed
 }
 
@@ -766,6 +856,7 @@ impl Default for AdaptiveTuningConfig {
         Self {
             enabled: false,
             aggressiveness: TuningAggressiveness::Moderate,
+            min_data_threshold: 100,
         }
     }
 }
@@ -819,6 +910,22 @@ impl Default for LMRConfig {
     }
 }
 
+impl LMRConfig {
+    /// Validate the LMR configuration
+    pub fn validate(&self) -> Result<(), String> {
+        if self.min_depth == 0 {
+            return Err("min_depth must be greater than 0".to_string());
+        }
+        if self.base_reduction > self.max_reduction {
+            return Err("base_reduction cannot be greater than max_reduction".to_string());
+        }
+        if self.re_search_margin < 0 {
+            return Err("re_search_margin must be non-negative".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Performance statistics for Late Move Reductions
 /// 
 /// This is a large struct with many fields. The full implementation will be
@@ -842,7 +949,14 @@ pub struct LMRStats {
     pub quiet_researches: u64,
     pub neutral_researches: u64,
     pub phase_stats: HashMap<GamePhase, LMRPhaseStats>,
-    // Additional fields will be added in follow-up
+    /// Position classification statistics
+    pub classification_stats: PositionClassificationStats,
+    /// Escape move detection statistics
+    pub escape_move_stats: EscapeMoveStats,
+    /// Adaptive tuning statistics
+    pub adaptive_tuning_stats: AdaptiveTuningStats,
+    /// Move ordering effectiveness statistics
+    pub move_ordering_stats: MoveOrderingEffectivenessStats,
 }
 
 impl LMRStats {
@@ -880,6 +994,98 @@ impl LMRStats {
     pub fn total_cutoffs(&self) -> u64 {
         self.cutoffs_after_reduction + self.cutoffs_after_research
     }
+
+    /// Record LMR statistics for a specific game phase
+    pub fn record_phase_stats(
+        &mut self,
+        phase: GamePhase,
+        moves_considered: u64,
+        reductions_applied: u64,
+        researches_triggered: u64,
+        cutoffs_after_reduction: u64,
+        cutoffs_after_research: u64,
+        depth_saved: u64,
+    ) {
+        let stats = self
+            .phase_stats
+            .entry(phase)
+            .or_insert_with(LMRPhaseStats::default);
+        stats.moves_considered += moves_considered;
+        stats.reductions_applied += reductions_applied;
+        stats.researches_triggered += researches_triggered;
+        stats.cutoffs_after_reduction += cutoffs_after_reduction;
+        stats.cutoffs_after_research += cutoffs_after_research;
+        stats.total_depth_saved += depth_saved;
+    }
+
+    /// Check if move ordering has degraded
+    pub fn check_ordering_degradation(&self) -> bool {
+        // Simple heuristic: if research rate is too high, ordering may be degraded
+        self.research_rate() > 50.0
+    }
+
+    /// Check if performance meets minimum thresholds
+    pub fn check_performance_thresholds(&self) -> (bool, Vec<String>) {
+        let mut alerts = Vec::new();
+        let mut is_healthy = true;
+
+        if self.research_rate() > 50.0 {
+            alerts.push("Research rate too high - move ordering may be degraded".to_string());
+            is_healthy = false;
+        }
+
+        if self.efficiency() < 10.0 {
+            alerts.push("LMR efficiency too low".to_string());
+            is_healthy = false;
+        }
+
+        (is_healthy, alerts)
+    }
+
+    /// Get performance alerts
+    pub fn get_performance_alerts(&self) -> Vec<String> {
+        let (_, alerts) = self.check_performance_thresholds();
+        alerts
+    }
+
+    /// Export metrics for analysis
+    pub fn export_metrics(&self) -> String {
+        format!(
+            "LMR Metrics: {} moves considered, {} reductions, {:.1}% efficiency, {:.1}% research rate",
+            self.moves_considered,
+            self.reductions_applied,
+            self.efficiency(),
+            self.research_rate()
+        )
+    }
+
+    /// Generate a performance report
+    pub fn performance_report(&self) -> String {
+        format!(
+            "LMR Performance: {:.1}% efficiency, {:.1}% research rate, {:.1}% cutoff rate",
+            self.efficiency(),
+            self.research_rate(),
+            self.cutoff_rate()
+        )
+    }
+
+    /// Get move ordering metrics
+    pub fn get_move_ordering_metrics(&self) -> String {
+        format!(
+            "Move Ordering: {} total cutoffs, {:.1}% effectiveness",
+            self.move_ordering_stats.total_cutoffs,
+            self.move_ordering_stats.ordering_effectiveness()
+        )
+    }
+
+    /// Get ordering vs LMR report
+    pub fn get_ordering_vs_lmr_report(&self) -> String {
+        format!(
+            "Ordering vs LMR: {:.1}% ordering effectiveness, {:.1}% LMR efficiency",
+            self.move_ordering_stats.ordering_effectiveness(),
+            self.efficiency()
+        )
+    }
 }
 
 /// LMR statistics by game phase
@@ -913,6 +1119,24 @@ pub struct EscapeMoveStats {
 pub struct AdaptiveTuningStats {
     pub tuning_adjustments: u64,
     pub successful_adjustments: u64,
+}
+
+impl AdaptiveTuningStats {
+    /// Record a parameter change
+    pub fn record_parameter_change(&mut self) {
+        self.tuning_adjustments += 1;
+    }
+
+    /// Record an adjustment reason
+    pub fn record_adjustment_reason(&mut self, _reason: &str) {
+        // For now, just increment successful adjustments
+        self.successful_adjustments += 1;
+    }
+
+    /// Record a tuning attempt
+    pub fn record_tuning_attempt(&mut self) {
+        self.tuning_adjustments += 1;
+    }
 }
 
 /// Move ordering effectiveness statistics
@@ -950,6 +1174,21 @@ impl MoveOrderingEffectivenessStats {
         }
         let early_cutoffs = self.total_cutoffs - self.cutoffs_after_threshold;
         (early_cutoffs as f64 / self.total_cutoffs as f64) * 100.0
+    }
+
+    /// Record a cutoff
+    pub fn record_cutoff(&mut self, index: usize) {
+        self.total_cutoffs += 1;
+        if index >= 3 {
+            self.cutoffs_after_threshold += 1;
+        }
+        self.cutoff_index_sum += index as u64;
+        self.cutoff_index_count += 1;
+    }
+
+    /// Record a position with no cutoff
+    pub fn record_no_cutoff(&mut self) {
+        self.early_ordered_no_cutoffs += 1;
     }
 }
 
@@ -1411,6 +1650,16 @@ pub struct IIDOverheadStats {
     pub total_search_time_ms: u64,
     /// Calculated overhead percentage
     pub overhead_percentage: f64,
+    /// Average overhead percentage across all searches
+    pub average_overhead: f64,
+    /// Current threshold for IID overhead
+    pub current_threshold: f64,
+    /// Number of threshold adjustments made
+    pub threshold_adjustments: u64,
+    /// Total number of searches (alias for total_iid_searches)
+    pub total_searches: u64,
+    /// Number of times IID was skipped due to time pressure
+    pub time_pressure_skips: u64,
 }
 
 // ============================================================================
@@ -1444,6 +1693,19 @@ pub struct AspirationWindowConfig {
     pub disable_statistics_in_production: bool,
 }
 
+impl AspirationWindowConfig {
+    /// Validate the aspiration window configuration
+    pub fn validate(&self) -> Result<(), String> {
+        if self.min_depth == 0 {
+            return Err("min_depth must be greater than 0".to_string());
+        }
+        if self.base_window_size > self.max_window_size {
+            return Err("base_window_size cannot be greater than max_window_size".to_string());
+        }
+        Ok(())
+    }
+}
+
 impl Default for AspirationWindowConfig {
     fn default() -> Self {
         Self {
@@ -1469,9 +1731,21 @@ pub struct AspirationWindowStats {
     pub fail_lows: u64,
     pub fail_highs: u64,
     pub successful_searches: u64,
+    /// Total re-searches performed
+    pub total_researches: u64,
     pub average_window_size: f64,
+    /// Time saved (estimated)
+    pub estimated_time_saved_ms: u64,
+    /// Nodes saved (estimated)
+    pub estimated_nodes_saved: u64,
     pub window_size_by_position_type: WindowSizeByPositionType,
     pub success_rate_by_position_type: SuccessRateByPositionType,
+    /// Success rate by depth (for depth analysis)
+    pub success_rate_by_depth: Vec<f64>,
+    /// Memory usage in bytes
+    pub memory_usage_bytes: u64,
+    /// Configuration effectiveness score
+    pub configuration_effectiveness: f64,
 }
 
 /// Window size statistics by position type
@@ -1518,6 +1792,100 @@ impl AspirationWindowStats {
     /// Reset all statistics to zero
     pub fn reset(&mut self) {
         *self = AspirationWindowStats::default();
+    }
+
+    /// Get the success rate as a percentage
+    pub fn success_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.successful_searches as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get performance trend (simplified - returns success rate)
+    pub fn get_performance_trend(&self) -> f64 {
+        self.success_rate()
+    }
+
+    /// Update window size statistics
+    pub fn update_window_size_stats(&mut self, _window_size: i32) {
+        // For now, this is a placeholder
+        // In a full implementation, this would track window size distribution
+    }
+
+    /// Get the research rate as a percentage
+    pub fn research_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.total_researches as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Update window size by position type
+    pub fn update_window_size_by_position_type(&mut self, _position_type: GamePhase, _window_size: i32) {
+        // Placeholder implementation
+    }
+
+    /// Update success rate by position type
+    pub fn update_success_rate_by_position_type(&mut self, _position_type: GamePhase, _success: bool) {
+        // Placeholder implementation
+    }
+
+    /// Update depth statistics
+    pub fn update_depth_stats(&mut self, _depth: u8, _success: bool) {
+        // Placeholder implementation
+    }
+
+    /// Update time statistics
+    pub fn update_time_stats(&mut self, _time_ms: u64) {
+        // Placeholder implementation
+    }
+
+    /// Update memory statistics
+    pub fn update_memory_stats(&mut self, _memory_bytes: u64) {
+        // Placeholder implementation
+    }
+
+    /// Initialize depth tracking
+    pub fn initialize_depth_tracking(&mut self) {
+        // Placeholder implementation
+    }
+
+    /// Get performance summary
+    pub fn get_performance_summary(&self) -> String {
+        format!(
+            "Aspiration Window: {:.1}% success rate, {} researches",
+            self.success_rate(),
+            self.total_researches
+        )
+    }
+
+    /// Get depth analysis
+    pub fn get_depth_analysis(&self) -> String {
+        format!("Depth analysis: {} searches", self.total_searches)
+    }
+
+    /// Calculate performance metrics
+    pub fn calculate_performance_metrics(&self) -> f64 {
+        self.success_rate()
+    }
+
+    /// Get fail low rate
+    pub fn fail_low_rate(&self) -> f64 {
+        if self.total_searches == 0 {
+            return 0.0;
+        }
+        (self.fail_lows as f64 / self.total_searches as f64) * 100.0
+    }
+
+    /// Get efficiency
+    pub fn efficiency(&self) -> f64 {
+        self.success_rate()
+    }
+
+    /// Add performance data point for trend analysis
+    pub fn add_performance_data_point(&mut self, _performance: f64) {
+        // Placeholder implementation
     }
 }
 
@@ -1716,6 +2084,16 @@ pub struct SearchState {
     pub tt_move: Option<Move>,
     /// Advanced reduction strategies configuration (optional)
     pub advanced_reduction_config: Option<AdvancedReductionConfig>,
+    /// Best score found so far (for diagnostic purposes)
+    pub best_score: i32,
+    /// Number of nodes searched (for diagnostic purposes)
+    pub nodes_searched: u64,
+    /// Whether aspiration windows are enabled (for diagnostic purposes)
+    pub aspiration_enabled: bool,
+    /// Number of researches performed (for diagnostic purposes)
+    pub researches: u8,
+    /// Health score of the search (for diagnostic purposes)
+    pub health_score: f64,
 }
 
 impl SearchState {
@@ -1733,6 +2111,11 @@ impl SearchState {
             position_classification: None,
             tt_move: None,
             advanced_reduction_config: None,
+            best_score: 0,
+            nodes_searched: 0,
+            aspiration_enabled: false,
+            researches: 0,
+            health_score: 1.0,
         }
     }
 
@@ -1817,6 +2200,12 @@ pub struct PruningParameters {
     // Adaptive parameters
     pub adaptive_enabled: bool,
     pub position_dependent_margins: bool,
+    
+    // Razoring enable flag
+    pub razoring_enabled: bool,
+    // Late move pruning parameters
+    pub late_move_pruning_enabled: bool,
+    pub late_move_pruning_move_threshold: u8,
 }
 
 impl Default for PruningParameters {
@@ -1840,6 +2229,9 @@ impl Default for PruningParameters {
             multi_cut_depth_limit: 4,
             adaptive_enabled: false,
             position_dependent_margins: false,
+            razoring_enabled: true,
+            late_move_pruning_enabled: true,
+            late_move_pruning_move_threshold: 4,
         }
     }
 }
@@ -1949,7 +2341,32 @@ pub struct CoreSearchMetrics {
     /// Number of times auxiliary entry was prevented from overwriting deeper main entry
     pub tt_auxiliary_overwrites_prevented: u64,
     /// Number of times main entry preserved another main entry
-    pub tt_main_entry_preserved: u64,
+    pub tt_main_entries_preserved: u64,
+    /// Number of evaluation cache hits
+    pub evaluation_cache_hits: u64,
+    /// Number of evaluation calls saved through caching
+    pub evaluation_calls_saved: u64,
+}
+
+impl CoreSearchMetrics {
+    /// Reset all metrics to zero
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Generate a comprehensive metrics report
+    pub fn generate_report(&self) -> String {
+        format!(
+            "Core Search Metrics: {} nodes, {} cutoffs, {:.1}% TT hit rate",
+            self.total_nodes,
+            self.total_cutoffs,
+            if self.total_tt_probes > 0 {
+                (self.total_tt_hits as f64 / self.total_tt_probes as f64) * 100.0
+            } else {
+                0.0
+            }
+        )
+    }
 }
 
 // Re-export search-related types from all.rs (temporary until moved to search.rs)

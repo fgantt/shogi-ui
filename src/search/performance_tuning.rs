@@ -603,6 +603,10 @@ impl PerformanceProfiler {
 // Performance Baseline Manager (Task 26.0 - Task 1.0)
 // ============================================================================
 
+use crate::types::all::{
+    BaselineMoveOrderingMetrics, BenchmarkPosition, EvaluationMetrics, HardwareInfo, MemoryMetrics,
+    ParallelSearchMetrics, PerformanceBaseline, SearchMetrics, TTMetrics,
+};
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Player};
 use crate::types::evaluation::TaperedScore;

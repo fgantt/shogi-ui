@@ -1,7 +1,7 @@
 use crate::bitboards::*;
 use crate::types::core::{PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
-use crate::types::{Bitboard, EMPTY_BITBOARD, set_bit};
+use crate::types::{Bitboard, EMPTY_BITBOARD, is_bit_set, set_bit};
 use std::collections::HashMap;
 
 /// Attack analyzer for evaluating threats to the king

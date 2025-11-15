@@ -34,7 +34,7 @@
 //! prefetcher.record_access(current_hash, true); // true if prefetched
 //! ```
 
-use crate::types::core::Move;
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::transposition::TranspositionEntry;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};

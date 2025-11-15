@@ -1420,6 +1420,7 @@ pub enum ComponentId {
 
 /// Component dependency graph that maps component pairs to their dependency relationship (Task 20.0 - Task 5.2)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Component dependency graph for validation
 pub struct ComponentDependencyGraph {
     /// Map from (component1, component2) to dependency relationship
     dependencies: HashMap<(ComponentId, ComponentId), ComponentDependency>,

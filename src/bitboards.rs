@@ -1453,7 +1453,7 @@ impl BoardTrait for BitboardBoard {
     fn get_game_phase(&self) -> GamePhase {
         let _total_pieces = BoardTraitExt::get_total_piece_count(self);
         let material_count = self.get_total_material_count();
-        GamePhase::from_material_count(material_count)
+        GamePhase::from_material_count(material_count as u8)
     }
 
     fn is_legal_move(&self, move_: &Move, captured_pieces: &CapturedPieces) -> bool {

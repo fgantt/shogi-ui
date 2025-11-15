@@ -492,6 +492,10 @@ pub struct EvaluationMetrics {
     pub total_evaluations: u64,
     pub average_evaluation_time_ns: u64,
     pub component_evaluation_times: std::collections::HashMap<String, u64>,
+    /// Cache hit rate (0.0 to 1.0)
+    pub cache_hit_rate: f64,
+    /// Phase calculation time in nanoseconds
+    pub phase_calc_time_ns: f64,
 }
 
 #[cfg(test)]

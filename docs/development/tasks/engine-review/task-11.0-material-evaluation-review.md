@@ -337,3 +337,5 @@ The material evaluation module is reliable and Shogi-aware, but its configurabil
 
 
 
+
+

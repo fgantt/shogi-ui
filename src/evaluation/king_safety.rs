@@ -1,8 +1,8 @@
 use crate::bitboards::*;
 use crate::evaluation::attacks::{AttackAnalyzer, ThreatEvaluator};
 use crate::evaluation::castles::{CastleCacheStats, CastleRecognizer};
-use crate::types::core::Player;
-use crate::types::evaluation::TaperedScore;
+use crate::types::core::{PieceType, Player, Position};
+use crate::types::evaluation::{KingSafetyConfig, TaperedScore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

@@ -26,7 +26,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Player};
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use std::collections::HashMap;
 

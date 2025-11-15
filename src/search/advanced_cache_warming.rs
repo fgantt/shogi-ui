@@ -4,7 +4,7 @@
 //! preloading the cache with relevant entries to improve initial performance
 //! and reduce cold start effects.
 
-use crate::types::core::Move;
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::collections::{HashMap, VecDeque};

@@ -26,6 +26,7 @@
 //! ```
 
 use crate::types::core::{PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;

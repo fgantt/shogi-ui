@@ -30,7 +30,7 @@ use crate::bitboards::BitboardBoard;
 use crate::debug_utils::debug_log;
 use crate::evaluation::material_value_loader::MaterialValueLoader;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{PieceType, Player};
+use crate::types::core::{PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 use serde_json;

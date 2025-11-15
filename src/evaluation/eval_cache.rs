@@ -1,7 +1,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::board::CapturedPieces;
-use crate::types::core::Player;
+use crate::types::core::{Move, Player};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::io::{Read, Write};

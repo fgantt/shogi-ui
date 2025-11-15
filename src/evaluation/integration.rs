@@ -160,7 +160,7 @@ use crate::evaluation::{
 };
 use crate::tuning::OptimizationMethod;
 use crate::types::board::CapturedPieces;
-use crate::types::core::Player;
+use crate::types::core::{PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -812,7 +812,7 @@ impl IntegratedEvaluator {
         if stats_enabled && final_score != 0 {
             let mut tracker = ComponentContributionTracker::new();
             for (component, contrib) in &component_contributions {
-                tracker.record(component, *contrib);
+                tracker.record(component, *contrib as i32);
             }
             let contributions_pct = tracker.to_percentages();
 
@@ -1343,10 +1343,18 @@ impl IntegratedEvaluationConfig {
     pub fn validate_component_dependencies(
         &self,
     ) -> Vec<crate::evaluation::config::ComponentDependencyWarning> {
-        use crate::evaluation::config::ComponentDependencyWarning;
+        use crate::evaluation::config::{ComponentDependencyGraph, ComponentDependencyWarning};
+        use crate::evaluation::dependency_graph::{ComponentFlags, DependencyValidator};
         let enabled_ids = self.get_enabled_component_ids();
-        let validator = DependencyValidator::new();
-        let mut warnings = validator.validate_component_dependencies(&enabled_ids);
+        let graph = ComponentDependencyGraph::default();
+        let components = ComponentFlags {
+            position_features: self.components.position_features,
+            positional_patterns: self.components.positional_patterns,
+            opening_principles: self.components.opening_principles,
+            endgame_patterns: self.components.endgame_patterns,
+        };
+        let validator = DependencyValidator::new(&graph, enabled_ids.clone(), components);
+        let mut warnings = validator.validate_component_dependencies();
 
         // Legacy warnings for backward compatibility (Task 20.0 - Task 1.8)
         // Note: Automatically handled via center_control_precedence, but still warn for visibility

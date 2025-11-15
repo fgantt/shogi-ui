@@ -6,6 +6,8 @@ use crate::bitboards::*;
 use crate::search::*;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::search::TranspositionFlag;
+use crate::types::transposition::TranspositionEntry;
 use std::time::Instant;
 
 /// Test suite for move ordering performance

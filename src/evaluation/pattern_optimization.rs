@@ -16,7 +16,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::core::Player;
+use crate::types::core::{PieceType, Player, Position};
 use std::collections::HashMap;
 
 /// Optimized pattern detector using bitboards and lookup tables

@@ -21,6 +21,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Piece, PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 

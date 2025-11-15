@@ -7,6 +7,8 @@
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Player};
 use crate::types::evaluation::TaperedScore;
+use crate::types::search::TranspositionFlag;
+use crate::types::transposition::TranspositionEntry;
 use std::alloc::{alloc, dealloc, Layout};
 use std::ptr::NonNull;
 

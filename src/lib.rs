@@ -1134,7 +1134,7 @@ impl ShogiEngine {
                         match parts[3] {
                             "Equal" => {
                                 config.time_management.allocation_strategy =
-                                    crate::types::TimeAllocationStrategy::Equal;
+                                    crate::types::all::TimeAllocationStrategy::Equal;
                                 let _ = search_engine_guard.update_engine_config(config);
                                 output.push(
                                     "info string Set time allocation strategy to Equal".to_string(),
@@ -1142,7 +1142,7 @@ impl ShogiEngine {
                             }
                             "Exponential" => {
                                 config.time_management.allocation_strategy =
-                                    crate::types::TimeAllocationStrategy::Exponential;
+                                    crate::types::all::TimeAllocationStrategy::Exponential;
                                 let _ = search_engine_guard.update_engine_config(config);
                                 output.push(
                                     "info string Set time allocation strategy to Exponential"
@@ -1151,7 +1151,7 @@ impl ShogiEngine {
                             }
                             "Adaptive" => {
                                 config.time_management.allocation_strategy =
-                                    crate::types::TimeAllocationStrategy::Adaptive;
+                                    crate::types::all::TimeAllocationStrategy::Adaptive;
                                 let _ = search_engine_guard.update_engine_config(config);
                                 output.push(
                                     "info string Set time allocation strategy to Adaptive"

@@ -5,6 +5,7 @@
 //! access patterns, game characteristics, and performance metrics.
 
 use crate::types::core::Move;
+use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};

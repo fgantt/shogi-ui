@@ -495,14 +495,39 @@ impl Move {
             let from = Position::from_usi_string(from_str).map_err(|_| "Invalid from position")?;
             let to = Position::from_usi_string(to_str).map_err(|_| "Invalid to position")?;
 
-            let piece_to_move = board.get_piece(from).ok_or("No piece at source square")?;
-            if piece_to_move.player != player {
+            let core_from = crate::types::core::Position::new(from.row, from.col);
+            let core_to = crate::types::core::Position::new(to.row, to.col);
+            let core_player = match player {
+                Player::Black => crate::types::core::Player::Black,
+                Player::White => crate::types::core::Player::White,
+            };
+            let piece_to_move = board.get_piece(core_from).ok_or("No piece at source square")?;
+            let piece_player = match piece_to_move.player {
+                crate::types::core::Player::Black => Player::Black,
+                crate::types::core::Player::White => Player::White,
+            };
+            if piece_player != player {
                 return Err("Attempting to move opponent's piece");
             }
+            let piece_type = match piece_to_move.piece_type {
+                crate::types::core::PieceType::Pawn => PieceType::Pawn,
+                crate::types::core::PieceType::Lance => PieceType::Lance,
+                crate::types::core::PieceType::Knight => PieceType::Knight,
+                crate::types::core::PieceType::Silver => PieceType::Silver,
+                crate::types::core::PieceType::Gold => PieceType::Gold,
+                crate::types::core::PieceType::Bishop => PieceType::Bishop,
+                crate::types::core::PieceType::Rook => PieceType::Rook,
+                crate::types::core::PieceType::King => PieceType::King,
+                crate::types::core::PieceType::PromotedPawn => PieceType::PromotedPawn,
+                crate::types::core::PieceType::PromotedLance => PieceType::PromotedLance,
+                crate::types::core::PieceType::PromotedKnight => PieceType::PromotedKnight,
+                crate::types::core::PieceType::PromotedSilver => PieceType::PromotedSilver,
+                crate::types::core::PieceType::PromotedBishop => PieceType::PromotedBishop,
+                crate::types::core::PieceType::PromotedRook => PieceType::PromotedRook,
+            };
+            let mut mv = Move::new_move(from, to, piece_type, player, is_promotion);
 
-            let mut mv = Move::new_move(from, to, piece_to_move.piece_type, player, is_promotion);
-
-            if board.is_square_occupied(to) {
+            if board.is_square_occupied(core_to) {
                 mv.is_capture = true;
             }
 
@@ -1250,15 +1275,18 @@ pub const EMPTY_BITBOARD: Bitboard = 0;
 pub const ALL_SQUARES: Bitboard = 0x1FFFFFFFFFFFFFFFFFFFFFFFF; // 81 bits set
 
 // Bitboard utilities
-pub fn set_bit(bitboard: &mut Bitboard, position: Position) {
+// Use Position from core module to avoid type conflicts with modular structure
+use super::core::Position as CorePosition;
+
+pub fn set_bit(bitboard: &mut Bitboard, position: CorePosition) {
     *bitboard |= 1 << position.to_u8();
 }
 
-pub fn clear_bit(bitboard: &mut Bitboard, position: Position) {
+pub fn clear_bit(bitboard: &mut Bitboard, position: CorePosition) {
     *bitboard &= !(1 << position.to_u8());
 }
 
-pub fn is_bit_set(bitboard: Bitboard, position: Position) -> bool {
+pub fn is_bit_set(bitboard: Bitboard, position: CorePosition) -> bool {
     (bitboard & (1 << position.to_u8())) != 0
 }
 
@@ -1266,16 +1294,16 @@ pub fn count_bits(bitboard: Bitboard) -> u32 {
     bitboard.count_ones()
 }
 
-pub fn get_lsb(bitboard: Bitboard) -> Option<Position> {
+pub fn get_lsb(bitboard: Bitboard) -> Option<CorePosition> {
     if bitboard == 0 {
         None
     } else {
         let lsb = bitboard.trailing_zeros() as u8;
-        Some(Position::from_u8(lsb))
+        Some(CorePosition::from_u8(lsb))
     }
 }
 
-pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<Position> {
+pub fn pop_lsb(bitboard: &mut Bitboard) -> Option<CorePosition> {
     if let Some(pos) = get_lsb(*bitboard) {
         *bitboard &= *bitboard - 1;
         Some(pos)
@@ -6595,6 +6623,14 @@ pub struct TimeManagementConfig {
     /// Used in addition to percentage-based safety_margin
     /// This represents the minimum overhead buffer needed for time checks and search completion
     pub absolute_safety_margin_ms: u32,
+    /// Enable adaptive time allocation (Task 4.8)
+    pub enable_adaptive_allocation: bool,
+    /// Adaptive allocation factor (Task 4.8)
+    pub adaptive_allocation_factor: f64,
+    /// Enable time pressure scaling (Task 4.8)
+    pub enable_time_pressure_scaling: bool,
+    /// Time pressure scaling factor (Task 4.8)
+    pub time_pressure_scaling_factor: f64,
 }
 
 impl Default for TimeManagementConfig {
@@ -6617,6 +6653,10 @@ impl Default for TimeManagementConfig {
             enable_time_budget: true,
             time_check_frequency: 1024, // Task 8.4: Check every 1024 nodes (reduce overhead)
             absolute_safety_margin_ms: 100, // Task 8.2, 8.3: 100ms absolute safety margin
+            enable_adaptive_allocation: false,
+            adaptive_allocation_factor: 1.0,
+            enable_time_pressure_scaling: false,
+            time_pressure_scaling_factor: 1.0,
         }
     }
 }
@@ -6908,10 +6948,13 @@ impl ConfigComparison {
 // ============================================================================
 
 /// Magic bitboard specific errors
+// Use PieceType from core module to avoid type conflicts with modular structure
+use super::core::PieceType as CorePieceType;
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum MagicError {
     #[error("Failed to generate magic number for square {square} piece {piece_type:?}")]
-    GenerationFailed { square: u8, piece_type: PieceType },
+    GenerationFailed { square: u8, piece_type: CorePieceType },
 
     #[error("Magic number validation failed: {reason}")]
     ValidationFailed { reason: String },
@@ -6926,7 +6969,7 @@ pub enum MagicError {
     InvalidSquare { square: u8 },
 
     #[error("Invalid piece type for magic bitboards: {piece_type:?}")]
-    InvalidPieceType { piece_type: PieceType },
+    InvalidPieceType { piece_type: CorePieceType },
 
     #[error("IO error: {0}")]
     IoError(String),
@@ -7207,6 +7250,16 @@ pub struct SearchState {
     pub tt_move: Option<Move>,
     /// Advanced reduction strategies configuration (optional, for Task 11.1-11.3)
     pub advanced_reduction_config: Option<AdvancedReductionConfig>,
+    /// Best score found so far (for diagnostic purposes)
+    pub best_score: i32,
+    /// Number of nodes searched (for diagnostic purposes)
+    pub nodes_searched: u64,
+    /// Whether aspiration windows are enabled (for diagnostic purposes)
+    pub aspiration_enabled: bool,
+    /// Number of researches performed (for diagnostic purposes)
+    pub researches: u8,
+    /// Health score of the search (for diagnostic purposes)
+    pub health_score: f64,
 }
 
 impl SearchState {
@@ -7224,6 +7277,11 @@ impl SearchState {
             position_classification: None,
             tt_move: None,
             advanced_reduction_config: None,
+            best_score: 0,
+            nodes_searched: 0,
+            aspiration_enabled: false,
+            researches: 0,
+            health_score: 1.0,
         }
     }
 
@@ -7309,6 +7367,12 @@ pub struct PruningParameters {
     // Adaptive parameters
     pub adaptive_enabled: bool,
     pub position_dependent_margins: bool,
+    
+    // Razoring enable flag
+    pub razoring_enabled: bool,
+    // Late move pruning parameters
+    pub late_move_pruning_enabled: bool,
+    pub late_move_pruning_move_threshold: u8,
 }
 
 impl Default for PruningParameters {
@@ -7332,6 +7396,9 @@ impl Default for PruningParameters {
             multi_cut_depth_limit: 4,
             adaptive_enabled: false,
             position_dependent_margins: false,
+            razoring_enabled: true,
+            late_move_pruning_enabled: true,
+            late_move_pruning_move_threshold: 4,
         }
     }
 }
@@ -9637,25 +9704,30 @@ impl PositionAnalyzer {
         // Calculate piece values on board
         for row in 0..9 {
             for col in 0..9 {
-                if let Some(piece) = board.get_piece(Position::new(row, col)) {
+                let core_pos = crate::types::core::Position::new(row, col);
+                if let Some(piece) = board.get_piece(core_pos) {
                     let value = match piece.piece_type {
-                        PieceType::Pawn => 100,
-                        PieceType::Lance => 300,
-                        PieceType::Knight => 300,
-                        PieceType::Silver => 400,
-                        PieceType::Gold => 500,
-                        PieceType::Bishop => 550,
-                        PieceType::Rook => 650,
-                        PieceType::King => 1000,
-                        PieceType::PromotedPawn => 600,
-                        PieceType::PromotedLance => 600,
-                        PieceType::PromotedKnight => 600,
-                        PieceType::PromotedSilver => 600,
-                        PieceType::PromotedBishop => 650,
-                        PieceType::PromotedRook => 750,
+                        crate::types::core::PieceType::Pawn => 100,
+                        crate::types::core::PieceType::Lance => 300,
+                        crate::types::core::PieceType::Knight => 300,
+                        crate::types::core::PieceType::Silver => 400,
+                        crate::types::core::PieceType::Gold => 500,
+                        crate::types::core::PieceType::Bishop => 550,
+                        crate::types::core::PieceType::Rook => 650,
+                        crate::types::core::PieceType::King => 1000,
+                        crate::types::core::PieceType::PromotedPawn => 600,
+                        crate::types::core::PieceType::PromotedLance => 600,
+                        crate::types::core::PieceType::PromotedKnight => 600,
+                        crate::types::core::PieceType::PromotedSilver => 600,
+                        crate::types::core::PieceType::PromotedBishop => 650,
+                        crate::types::core::PieceType::PromotedRook => 750,
                     };
 
-                    if piece.player == player {
+                    let piece_player = match piece.player {
+                        crate::types::core::Player::Black => Player::Black,
+                        crate::types::core::Player::White => Player::White,
+                    };
+                    if piece_player == player {
                         balance += value;
                     } else {
                         balance -= value;
@@ -9712,13 +9784,18 @@ impl PositionAnalyzer {
         // Check for pieces that can create tactical threats
         for row in 0..9 {
             for col in 0..9 {
-                if let Some(piece) = board.get_piece(Position::new(row, col)) {
-                    if piece.player == player {
+                let core_pos = crate::types::core::Position::new(row, col);
+                if let Some(piece) = board.get_piece(core_pos) {
+                    let piece_player = match piece.player {
+                        crate::types::core::Player::Black => Player::Black,
+                        crate::types::core::Player::White => Player::White,
+                    };
+                    if piece_player == player {
                         match piece.piece_type {
-                            PieceType::Bishop | PieceType::PromotedBishop => potential += 30,
-                            PieceType::Rook | PieceType::PromotedRook => potential += 35,
-                            PieceType::Knight => potential += 20,
-                            PieceType::Lance => potential += 15,
+                            crate::types::core::PieceType::Bishop | crate::types::core::PieceType::PromotedBishop => potential += 30,
+                            crate::types::core::PieceType::Rook | crate::types::core::PieceType::PromotedRook => potential += 35,
+                            crate::types::core::PieceType::Knight => potential += 20,
+                            crate::types::core::PieceType::Lance => potential += 15,
                             _ => potential += 5,
                         }
                     }
@@ -9732,12 +9809,17 @@ impl PositionAnalyzer {
     /// Calculate king safety (0-255, higher = safer)
     fn calculate_king_safety(&self, board: &BitboardBoard, player: Player) -> u8 {
         let mut safety = 100; // Base safety
+        let player_core = match player {
+            Player::Black => crate::types::core::Player::Black,
+            Player::White => crate::types::core::Player::White,
+        };
 
         // Find king position
         for row in 0..9 {
             for col in 0..9 {
-                if let Some(piece) = board.get_piece(Position::new(row, col)) {
-                    if piece.player == player && piece.piece_type == PieceType::King {
+                let core_pos = crate::types::core::Position::new(row, col);
+                if let Some(piece) = board.get_piece(core_pos) {
+                    if piece.player == player_core && piece.piece_type == crate::types::core::PieceType::King {
                         // Check surrounding pieces for protection
                         for dr in -1..=1 {
                             for dc in -1..=1 {
@@ -9751,10 +9833,9 @@ impl PositionAnalyzer {
                                     && check_col >= 0
                                     && check_col < 9
                                 {
-                                    if let Some(protector) = board
-                                        .get_piece(Position::new(check_row as u8, check_col as u8))
-                                    {
-                                        if protector.player == player {
+                                    let protector_pos = crate::types::core::Position::new(check_row as u8, check_col as u8);
+                                    if let Some(protector) = board.get_piece(protector_pos) {
+                                        if protector.player == player_core {
                                             safety += 10;
                                         }
                                     }
@@ -9796,7 +9877,8 @@ impl PositionAnalyzer {
         let mut piece_count = 0;
         for row in 0..9 {
             for col in 0..9 {
-                if board.get_piece(Position::new(row, col)).is_some() {
+                let core_pos = crate::types::core::Position::new(row, col);
+                if board.get_piece(core_pos).is_some() {
                     piece_count += 1;
                 }
             }

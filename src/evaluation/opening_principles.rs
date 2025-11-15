@@ -32,7 +32,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::board::CapturedPieces;
-use crate::types::core::Player;
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 

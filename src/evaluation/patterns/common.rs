@@ -1,5 +1,6 @@
 use crate::bitboards::*;
 use crate::types::core::{PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
 use crate::types::{Bitboard, EMPTY_BITBOARD};
 
 /// Common attack patterns and tactical threat detection

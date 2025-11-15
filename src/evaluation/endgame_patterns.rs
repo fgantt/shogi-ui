@@ -33,7 +33,8 @@
 use crate::bitboards::{bits, BitboardBoard};
 use crate::moves::MoveGenerator;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Player, Position};
+use crate::types::core::{Piece, PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;

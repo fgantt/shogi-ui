@@ -73,6 +73,11 @@ impl GamePhase {
             GamePhase::Endgame
         }
     }
+
+    /// Create GamePhase from material count (for backward compatibility)
+    pub fn from_material_count(material_count: u8) -> Self {
+        Self::from_piece_count(material_count)
+    }
 }
 
 #[cfg(test)]
