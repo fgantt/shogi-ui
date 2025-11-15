@@ -247,6 +247,8 @@ pub struct SearchEngine {
     auto_profiling_enabled: bool,
     /// Profiling sample rate (Task 26.0 - Task 3.0)
     auto_profiling_sample_rate: u32,
+    /// External profiler for hot path analysis (Task 26.0 - Task 8.0)
+    external_profiler: Option<Arc<dyn crate::search::performance_tuning::ExternalProfiler>>,
     /// Performance profiler for hot path analysis (Task 26.0 - Task 3.0)
     performance_profiler: crate::evaluation::performance::PerformanceProfiler,
     /// Memory tracker for RSS tracking (Task 26.0 - Task 4.0)
@@ -625,6 +627,7 @@ impl SearchEngine {
             debug_logging: false,
             auto_profiling_enabled: false,
             auto_profiling_sample_rate: 100,
+            external_profiler: None,
             performance_profiler: crate::evaluation::performance::PerformanceProfiler::new(),
             memory_tracker: crate::search::memory_tracking::MemoryTracker::new(),
             // Advanced Alpha-Beta Pruning
@@ -841,6 +844,11 @@ impl SearchEngine {
         iid_move: Option<&Move>,
         opponent_last_move: Option<&Move>,
     ) -> Vec<Move> {
+        // External profiler marker (Task 26.0 - Task 8.0)
+        if let Some(ref profiler) = self.external_profiler {
+            profiler.start_region("order_moves");
+        }
+        
         // Automatic profiling integration (Task 26.0 - Task 3.0)
         let start_time = if self.auto_profiling_enabled {
             Some(std::time::Instant::now())
@@ -899,6 +907,11 @@ impl SearchEngine {
             self.performance_profiler.record_operation("move_ordering", elapsed_ns);
         }
 
+        // External profiler marker (Task 26.0 - Task 8.0)
+        if let Some(ref profiler) = self.external_profiler {
+            profiler.end_region("order_moves");
+        }
+
         result
     }
 
@@ -926,6 +939,28 @@ impl SearchEngine {
     /// Export profiling data to JSON (Task 26.0 - Task 3.0)
     pub fn export_profiling_data(&self) -> Result<String, String> {
         self.performance_profiler.export_profiling_data()
+    }
+
+    /// Enable external profiling with the given profiler (Task 26.0 - Task 8.0)
+    pub fn enable_external_profiling<P: crate::search::performance_tuning::ExternalProfiler + 'static>(
+        &mut self,
+        profiler: Arc<P>,
+    ) {
+        self.external_profiler = Some(profiler);
+    }
+
+    /// Disable external profiling (Task 26.0 - Task 8.0)
+    pub fn disable_external_profiling(&mut self) {
+        self.external_profiler = None;
+    }
+
+    /// Export profiling markers to JSON (Task 26.0 - Task 8.0)
+    pub fn export_profiling_markers(&self) -> Result<serde_json::Value, String> {
+        if let Some(ref profiler) = self.external_profiler {
+            profiler.export_markers()
+        } else {
+            Err("External profiling is not enabled".to_string())
+        }
     }
 
     /// Get memory breakdown combining RSS with component estimates (Task 26.0 - Task 4.0)
@@ -1044,6 +1079,7 @@ impl SearchEngine {
             debug_logging: config.debug_logging,
             auto_profiling_enabled: config.auto_profiling_enabled,
             auto_profiling_sample_rate: config.auto_profiling_sample_rate,
+            external_profiler: None,
             performance_profiler: crate::evaluation::performance::PerformanceProfiler::with_sample_rate(config.auto_profiling_sample_rate),
             memory_tracker: crate::search::memory_tracking::MemoryTracker::new(),
             iid_config: config.iid,
@@ -12944,6 +12980,11 @@ impl SearchEngine {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> i32 {
+        // External profiler marker (Task 26.0 - Task 8.0)
+        if let Some(ref profiler) = self.external_profiler {
+            profiler.start_region("evaluate_position");
+        }
+        
         // Automatic profiling integration (Task 26.0 - Task 3.0)
         let start_time = if self.auto_profiling_enabled {
             Some(std::time::Instant::now())
@@ -12962,6 +13003,12 @@ impl SearchEngine {
         if self.debug_logging {
             self.log_evaluation_telemetry();
         }
+        
+        // External profiler marker (Task 26.0 - Task 8.0)
+        if let Some(ref profiler) = self.external_profiler {
+            profiler.end_region("evaluate_position");
+        }
+        
         score
     }
 

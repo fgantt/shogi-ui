@@ -2166,6 +2166,302 @@ impl Default for TelemetryExporter {
     }
 }
 
+// ============================================================================
+// External Profiler Integration and Hot Path Analysis (Task 26.0 - Task 8.0)
+// ============================================================================
+
+use std::time::Instant;
+
+/// Trait for external profiler integration (Task 26.0 - Task 8.0)
+pub trait ExternalProfiler: Send + Sync {
+    /// Start profiling a region with the given name
+    fn start_region(&self, name: &str);
+    
+    /// End profiling a region with the given name
+    fn end_region(&self, name: &str);
+    
+    /// Mark a point in time with the given label
+    fn mark(&self, label: &str);
+    
+    /// Export profiling markers to JSON
+    fn export_markers(&self) -> Result<serde_json::Value, String>;
+    
+    /// Check if profiling is enabled
+    fn is_enabled(&self) -> bool;
+}
+
+/// Profiler marker entry (Task 26.0 - Task 8.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfilerMarker {
+    /// Marker name/label
+    pub name: String,
+    /// Timestamp (nanoseconds since epoch)
+    pub timestamp_ns: u64,
+    /// Marker type (start, end, point)
+    pub marker_type: MarkerType,
+}
+
+/// Marker type (Task 26.0 - Task 8.0)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MarkerType {
+    /// Region start
+    RegionStart,
+    /// Region end
+    RegionEnd,
+    /// Point marker
+    Point,
+}
+
+/// Perf-compatible profiler for Linux (Task 26.0 - Task 8.0)
+pub struct PerfProfiler {
+    /// Whether profiling is enabled
+    enabled: bool,
+    /// Profiler markers
+    markers: Arc<Mutex<Vec<ProfilerMarker>>>,
+    /// Start time for relative timestamps
+    start_time: Instant,
+}
+
+impl PerfProfiler {
+    /// Create a new Perf profiler
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            markers: Arc::new(Mutex::new(Vec::new())),
+            start_time: Instant::now(),
+        }
+    }
+    
+    /// Enable profiling
+    pub fn enable(&mut self) {
+        self.enabled = true;
+        self.start_time = Instant::now();
+    }
+    
+    /// Disable profiling
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+    
+    /// Get markers (for testing)
+    pub fn get_markers(&self) -> Vec<ProfilerMarker> {
+        self.markers.lock().unwrap().clone()
+    }
+}
+
+impl Default for PerfProfiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExternalProfiler for PerfProfiler {
+    fn start_region(&self, name: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: name.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::RegionStart,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn end_region(&self, name: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: name.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::RegionEnd,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn mark(&self, label: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: label.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::Point,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn export_markers(&self) -> Result<serde_json::Value, String> {
+        let markers = self.markers.lock().unwrap();
+        
+        let markers_json: Vec<serde_json::Value> = markers
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "name": m.name,
+                    "timestamp_ns": m.timestamp_ns,
+                    "type": match m.marker_type {
+                        MarkerType::RegionStart => "region_start",
+                        MarkerType::RegionEnd => "region_end",
+                        MarkerType::Point => "point",
+                    },
+                })
+            })
+            .collect();
+        
+        Ok(serde_json::json!({
+            "profiler": "perf",
+            "markers": markers_json,
+            "total_markers": markers.len(),
+        }))
+    }
+    
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
+/// Instruments-compatible profiler for macOS (Task 26.0 - Task 8.0)
+pub struct InstrumentsProfiler {
+    /// Whether profiling is enabled
+    enabled: bool,
+    /// Profiler markers
+    markers: Arc<Mutex<Vec<ProfilerMarker>>>,
+    /// Start time for relative timestamps
+    start_time: Instant,
+}
+
+impl InstrumentsProfiler {
+    /// Create a new Instruments profiler
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            markers: Arc::new(Mutex::new(Vec::new())),
+            start_time: Instant::now(),
+        }
+    }
+    
+    /// Enable profiling
+    pub fn enable(&mut self) {
+        self.enabled = true;
+        self.start_time = Instant::now();
+    }
+    
+    /// Disable profiling
+    pub fn disable(&mut self) {
+        self.enabled = false;
+    }
+    
+    /// Get markers (for testing)
+    pub fn get_markers(&self) -> Vec<ProfilerMarker> {
+        self.markers.lock().unwrap().clone()
+    }
+}
+
+impl Default for InstrumentsProfiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExternalProfiler for InstrumentsProfiler {
+    fn start_region(&self, name: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: name.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::RegionStart,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn end_region(&self, name: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: name.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::RegionEnd,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn mark(&self, label: &str) {
+        if !self.enabled {
+            return;
+        }
+        
+        let elapsed = self.start_time.elapsed();
+        let timestamp_ns = elapsed.as_nanos() as u64;
+        
+        let marker = ProfilerMarker {
+            name: label.to_string(),
+            timestamp_ns,
+            marker_type: MarkerType::Point,
+        };
+        
+        self.markers.lock().unwrap().push(marker);
+    }
+    
+    fn export_markers(&self) -> Result<serde_json::Value, String> {
+        let markers = self.markers.lock().unwrap();
+        
+        let markers_json: Vec<serde_json::Value> = markers
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "name": m.name,
+                    "timestamp_ns": m.timestamp_ns,
+                    "type": match m.marker_type {
+                        MarkerType::RegionStart => "region_start",
+                        MarkerType::RegionEnd => "region_end",
+                        MarkerType::Point => "point",
+                    },
+                })
+            })
+            .collect();
+        
+        Ok(serde_json::json!({
+            "profiler": "instruments",
+            "markers": markers_json,
+            "total_markers": markers.len(),
+        }))
+    }
+    
+    fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

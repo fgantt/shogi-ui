@@ -6487,12 +6487,12 @@ impl EngineConfig {
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
                 parallel: ParallelOptions::default(),
-                telemetry_export_enabled: false,
-                telemetry_export_path: "telemetry".to_string(),
             },
             EnginePreset::Balanced => Self {
                 auto_profiling_enabled: false,
                 auto_profiling_sample_rate: 100,
+                telemetry_export_enabled: false,
+                telemetry_export_path: "telemetry".to_string(),
                 quiescence: QuiescenceConfig::default(),
                 null_move: NullMoveConfig::default(),
                 lmr: LMRConfig::default(),
@@ -6506,8 +6506,6 @@ impl EngineConfig {
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
                 parallel: ParallelOptions::default(),
-                telemetry_export_enabled: false,
-                telemetry_export_path: "telemetry".to_string(),
             },
         }
     }
