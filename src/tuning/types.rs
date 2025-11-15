@@ -270,6 +270,8 @@ pub struct PerformanceConfig {
     pub thread_count: usize,
     /// Frequency of checkpoint saves (in iterations)
     pub checkpoint_frequency: usize,
+    /// Path to save checkpoints (None uses default "checkpoints/")
+    pub checkpoint_path: Option<String>,
     /// Whether to enable progress logging
     pub enable_logging: bool,
     /// Maximum batch size for processing
@@ -284,6 +286,7 @@ impl Default for PerformanceConfig {
             memory_limit_mb: 8192, // 8 GB
             thread_count: num_cpus::get(),
             checkpoint_frequency: 1000,
+            checkpoint_path: Some("checkpoints/".to_string()),
             enable_logging: true,
             max_batch_size: 10000,
             max_iterations: None,
@@ -403,16 +406,17 @@ pub struct TuningConfig {
 
 impl Default for TuningConfig {
     fn default() -> Self {
+        let performance_config = PerformanceConfig::default();
         Self {
             dataset_path: "dataset.pgn".to_string(),
             output_path: "tuned_weights.json".to_string(),
-            checkpoint_path: Some("checkpoints/".to_string()),
+            checkpoint_path: performance_config.checkpoint_path.clone(),
             optimization_method: OptimizationMethod::default(),
             max_iterations: 10000,
             convergence_threshold: 1e-6,
             position_filter: PositionFilter::default(),
             validation_config: ValidationConfig::default(),
-            performance_config: PerformanceConfig::default(),
+            performance_config,
         }
     }
 }

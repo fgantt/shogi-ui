@@ -3,6 +3,23 @@
 //! This module provides comprehensive tools for monitoring training progress,
 //! analyzing performance metrics, generating reports, and managing long-running
 //! optimization processes.
+//!
+//! ## Checkpoint Configuration
+//!
+//! Checkpoints can be saved to a configurable path via `PerformanceConfig::checkpoint_path`.
+//! If `checkpoint_path` is `None`, the default path "checkpoints/" is used.
+//! The checkpoint directory is automatically created if it doesn't exist.
+//!
+//! Example:
+//! ```rust,no_run
+//! use shogi_engine::tuning::types::PerformanceConfig;
+//! use shogi_engine::tuning::performance::TuningProfiler;
+//!
+//! let mut config = PerformanceConfig::default();
+//! config.checkpoint_path = Some("my_checkpoints/".to_string());
+//! let mut profiler = TuningProfiler::new(config);
+//! profiler.create_checkpoint(100, 0.5, None, None)?;
+//! ```
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -242,6 +259,9 @@ impl TuningProfiler {
     }
 
     /// Create a checkpoint
+    ///
+    /// Uses the checkpoint path from `PerformanceConfig`. If `checkpoint_path` is `None`,
+    /// defaults to "checkpoints/". The directory will be created if it doesn't exist.
     pub fn create_checkpoint(
         &mut self,
         iteration: usize,
@@ -266,7 +286,16 @@ impl TuningProfiler {
             validation_results: None,
         };
 
-        let checkpoint_dir = Path::new("checkpoints");
+        // Use configured checkpoint path or default to "checkpoints/"
+        let checkpoint_dir_str = self
+            .config
+            .checkpoint_path
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("checkpoints/");
+        let checkpoint_dir = Path::new(checkpoint_dir_str);
+
+        // Create directory if it doesn't exist
         if !checkpoint_dir.exists() {
             std::fs::create_dir_all(checkpoint_dir)?;
         }
@@ -277,7 +306,7 @@ impl TuningProfiler {
         serde_json::to_writer_pretty(writer, &checkpoint_data)?;
 
         self.last_checkpoint = Some(Instant::now());
-        info!("Checkpoint created at iteration {}", iteration);
+        info!("Checkpoint created at iteration {} in {}", iteration, checkpoint_dir_str);
 
         Ok(())
     }
@@ -695,6 +724,70 @@ mod tests {
 
         // Clean up
         let _ = std::fs::remove_dir_all("checkpoints");
+    }
+
+    #[test]
+    fn test_checkpoint_path_configuration() {
+        // Test with custom checkpoint path
+        let custom_path = "test_checkpoints/";
+        let mut config = PerformanceConfig::default();
+        config.checkpoint_path = Some(custom_path.to_string());
+        let mut profiler = TuningProfiler::new(config);
+
+        let weights = vec![1.0, 2.0, 3.0];
+        let method = OptimizationMethod::GradientDescent {
+            learning_rate: 0.01,
+        };
+
+        // Create checkpoint with custom path
+        profiler
+            .create_checkpoint(5, 0.3, Some(weights.clone()), Some(method))
+            .unwrap();
+
+        // Verify checkpoint was created in custom path
+        let checkpoint_path = Path::new("test_checkpoints/checkpoint_iter_5.json");
+        assert!(checkpoint_path.exists(), "Checkpoint should be created in custom path");
+
+        // Load and verify checkpoint
+        let loaded_checkpoint = TuningProfiler::load_checkpoint(checkpoint_path).unwrap();
+        assert_eq!(loaded_checkpoint.iteration, 5);
+        assert_eq!(loaded_checkpoint.current_error, 0.3);
+        assert_eq!(loaded_checkpoint.weights, weights);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all("test_checkpoints");
+    }
+
+    #[test]
+    fn test_checkpoint_path_creation() {
+        // Test that directory is created if it doesn't exist
+        let custom_path = "new_checkpoint_dir/";
+        let mut config = PerformanceConfig::default();
+        config.checkpoint_path = Some(custom_path.to_string());
+
+        // Verify directory doesn't exist initially
+        let checkpoint_dir = Path::new(custom_path);
+        if checkpoint_dir.exists() {
+            let _ = std::fs::remove_dir_all(checkpoint_dir);
+        }
+        assert!(!checkpoint_dir.exists(), "Directory should not exist initially");
+
+        // Create profiler and checkpoint
+        let mut profiler = TuningProfiler::new(config);
+        profiler
+            .create_checkpoint(1, 0.1, None, None)
+            .unwrap();
+
+        // Verify directory was created
+        assert!(checkpoint_dir.exists(), "Directory should be created automatically");
+        assert!(checkpoint_dir.is_dir(), "Path should be a directory");
+
+        // Verify checkpoint file exists
+        let checkpoint_file = checkpoint_dir.join("checkpoint_iter_1.json");
+        assert!(checkpoint_file.exists(), "Checkpoint file should exist");
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(custom_path);
     }
 
     #[test]

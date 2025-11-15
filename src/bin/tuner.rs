@@ -427,6 +427,7 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
         memory_limit_mb: 1024,
         thread_count: num_cpus::get(),
         checkpoint_frequency: 100,
+        checkpoint_path: Some("checkpoints/".to_string()),
         enable_logging: cli.progress,
         max_batch_size: 1000,
         max_iterations: Some(1000),
@@ -435,7 +436,7 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
     Ok(TuningConfig {
         dataset_path: cli.dataset.to_string_lossy().to_string(),
         output_path: cli.output.to_string_lossy().to_string(),
-        checkpoint_path: Some("checkpoints/".to_string()),
+        checkpoint_path: performance_config.checkpoint_path.clone(),
         optimization_method,
         max_iterations: cli.iterations as usize,
         convergence_threshold: 1e-6,
