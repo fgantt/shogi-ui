@@ -6,6 +6,13 @@ use crate::opening_book::OpeningBook;
 use crate::search::move_ordering::MoveOrdering;
 use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 use crate::search::{BoardTrait, ParallelSearchConfig, ParallelSearchEngine};
+use crate::search::iterative_deepening::IterativeDeepeningHelper;
+use crate::search::null_move::NullMoveHelper;
+use crate::search::pvs::PVSHelper;
+use crate::search::quiescence::QuiescenceHelper;
+use crate::search::reductions::ReductionsHelper;
+use crate::search::statistics::SearchStatistics;
+use crate::search::time_management::TimeManager;
 use crate::tablebase::MicroTablebase;
 use crate::time_utils::TimeSource;
 use crate::types::*;
@@ -210,37 +217,43 @@ pub struct SearchEngine {
     quiescence_tt_age: u64, // Age counter for LRU tracking
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
-    nodes_searched: u64,
-    /// Node counter for time check frequency optimization (Task 8.4)
-    /// Tracks nodes since last time check to avoid checking every node
-    time_check_node_counter: u32,
     stop_flag: Option<Arc<AtomicBool>>,
+    /// Quiescence search helper module (Task 1.8)
+    quiescence_helper: QuiescenceHelper,
+    /// Null-move pruning helper module (Task 1.8)
+    null_move_helper: NullMoveHelper,
+    /// Reductions helper module for LMR and IID (Task 1.8)
+    reductions_helper: ReductionsHelper,
+    /// Iterative deepening helper module (Task 1.8)
+    iterative_deepening_helper: IterativeDeepeningHelper,
+    /// Time management module (Task 1.8)
+    time_manager: TimeManager,
+    /// Search statistics module (Task 1.8)
+    search_statistics: SearchStatistics,
+    /// Legacy config fields kept for backward compatibility and configuration updates
+    /// These are synchronized with the helper modules
     quiescence_config: QuiescenceConfig,
-    quiescence_stats: QuiescenceStats,
     null_move_config: NullMoveConfig,
-    null_move_stats: NullMoveStats,
     lmr_config: LMRConfig,
-    lmr_stats: LMRStats,
     aspiration_config: AspirationWindowConfig,
-    aspiration_stats: AspirationWindowStats,
     iid_config: IIDConfig,
+    time_management_config: TimeManagementConfig,
+    /// Legacy stats fields - access through helper modules
+    quiescence_stats: QuiescenceStats,
+    null_move_stats: NullMoveStats,
+    lmr_stats: LMRStats,
+    aspiration_stats: AspirationWindowStats,
     iid_stats: IIDStats,
     /// Task 8.6: Overhead history for performance monitoring (rolling window of last 100 samples)
     iid_overhead_history: Vec<f64>,
     previous_scores: Vec<i32>,
-    /// Time management configuration (Task 4.5-4.8)
-    time_management_config: TimeManagementConfig,
     parallel_options: ParallelOptions,
     /// Whether to prefill the TT from the opening book at startup
     prefill_opening_book: bool,
     /// Depth assigned to opening book prefill entries
     opening_book_prefill_depth: u8,
-    /// Time budget statistics (Task 4.10)
-    time_budget_stats: TimeBudgetStats,
     /// Time pressure thresholds for algorithm coordination (Task 7.0.2.3)
     time_pressure_thresholds: crate::types::TimePressureThresholds,
-    /// Core search metrics for performance monitoring (Task 5.7-5.8)
-    core_search_metrics: crate::types::CoreSearchMetrics,
     /// Whether verbose debug logging is enabled
     debug_logging: bool,
     /// Automatic profiling enabled flag (Task 26.0 - Task 3.0)
@@ -291,10 +304,9 @@ pub struct SearchEngine {
     tt_buffer_entries_written: u64,
 }
 
-/// Global aggregate of nodes searched across all threads for live reporting.
-pub static GLOBAL_NODES_SEARCHED: AtomicU64 = AtomicU64::new(0);
-/// Global maximum search depth reached (seldepth) across all threads for live reporting.
-pub static GLOBAL_SELDEPTH: AtomicU64 = AtomicU64::new(0);
+// Global statistics are now in src/search/statistics.rs (Task 1.8)
+// Re-export for backward compatibility
+pub use crate::search::statistics::{GLOBAL_NODES_SEARCHED, GLOBAL_SELDEPTH};
 // Global contention metrics for shared TT
 pub static TT_TRY_READS: AtomicU64 = AtomicU64::new(0);
 pub static TT_TRY_READ_SUCCESSES: AtomicU64 = AtomicU64::new(0);
@@ -603,27 +615,36 @@ impl SearchEngine {
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
-            time_check_node_counter: 0, // Task 8.4: Initialize time check counter
             stop_flag,
+            // Initialize helper modules (Task 1.8)
+            quiescence_helper: QuiescenceHelper::new(quiescence_config.clone()),
+            null_move_helper: NullMoveHelper::new(NullMoveConfig::default()),
+            reductions_helper: ReductionsHelper::new(IIDConfig::default()),
+            iterative_deepening_helper: IterativeDeepeningHelper::new(AspirationWindowConfig::default()),
+            time_manager: TimeManager::new(
+                TimeManagementConfig::default(),
+                crate::types::TimePressureThresholds::default(),
+            ),
+            search_statistics: SearchStatistics::new(),
+            // Legacy config fields (synchronized with helper modules)
             quiescence_config,
-            quiescence_stats: QuiescenceStats::default(),
             null_move_config: NullMoveConfig::default(),
-            null_move_stats: NullMoveStats::default(),
             lmr_config: LMRConfig::default(),
-            lmr_stats: LMRStats::default(),
             aspiration_config: AspirationWindowConfig::default(),
-            aspiration_stats: AspirationWindowStats::default(),
             iid_config: IIDConfig::default(),
+            time_management_config: TimeManagementConfig::default(),
+            // Legacy stats fields (access through helper modules)
+            quiescence_stats: QuiescenceStats::default(),
+            null_move_stats: NullMoveStats::default(),
+            lmr_stats: LMRStats::default(),
+            aspiration_stats: AspirationWindowStats::default(),
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
             previous_scores: Vec::new(),
-            time_management_config: TimeManagementConfig::default(),
             parallel_options: ParallelOptions::default(),
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
-            time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
-            core_search_metrics: crate::types::CoreSearchMetrics::default(),
             debug_logging: false,
             auto_profiling_enabled: false,
             auto_profiling_sample_rate: 100,
@@ -698,7 +719,7 @@ impl SearchEngine {
         depth: u8,
     ) {
         // Update game phase for position-specific strategies
-        let move_count = self.nodes_searched as usize; // Approximate move count
+        let move_count = self.search_statistics.get_nodes_searched() as usize; // Approximate move count
         let material_balance = self.evaluate_position(board, player, captured_pieces);
         let tactical_complexity =
             self.calculate_tactical_complexity(board, captured_pieces, player);
@@ -1059,23 +1080,36 @@ impl SearchEngine {
             history_table: [[0; 9]; 9],
             killer_moves: [None, None],
             nodes_searched: 0,
-            time_check_node_counter: 0, // Task 8.4: Initialize time check counter
             stop_flag,
+            // Initialize helper modules with config (Task 1.8)
+            quiescence_helper: QuiescenceHelper::new(config.quiescence.clone()),
+            null_move_helper: NullMoveHelper::new(config.null_move.clone()),
+            reductions_helper: ReductionsHelper::new(config.iid.clone()),
+            iterative_deepening_helper: IterativeDeepeningHelper::new(config.aspiration_windows.clone()),
+            time_manager: TimeManager::new(
+                config.time_management.clone(),
+                crate::types::TimePressureThresholds::default(),
+            ),
+            search_statistics: SearchStatistics::new(),
+            // Legacy config fields (synchronized with helper modules)
             quiescence_config: config.quiescence,
-            quiescence_stats: QuiescenceStats::default(),
             null_move_config: config.null_move,
-            null_move_stats: NullMoveStats::default(),
             lmr_config: config.lmr.clone(),
-            lmr_stats: LMRStats::default(),
             aspiration_config: config.aspiration_windows,
-            aspiration_stats: AspirationWindowStats::default(),
+            iid_config: config.iid,
             time_management_config: config.time_management.clone(),
+            // Legacy stats fields (access through helper modules)
+            quiescence_stats: QuiescenceStats::default(),
+            null_move_stats: NullMoveStats::default(),
+            lmr_stats: LMRStats::default(),
+            aspiration_stats: AspirationWindowStats::default(),
+            iid_stats: IIDStats::default(),
+            iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
+            previous_scores: Vec::new(),
             parallel_options: config.parallel.clone(),
             prefill_opening_book: config.prefill_opening_book,
             opening_book_prefill_depth: config.opening_book_prefill_depth,
-            time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
-            core_search_metrics: crate::types::CoreSearchMetrics::default(),
             debug_logging: config.debug_logging,
             auto_profiling_enabled: config.auto_profiling_enabled,
             auto_profiling_sample_rate: config.auto_profiling_sample_rate,
@@ -1144,20 +1178,31 @@ impl SearchEngine {
     }
 
     /// Update the engine configuration
+    /// Synchronizes helper modules with new configuration (Task 1.8)
     pub fn update_engine_config(&mut self, config: EngineConfig) -> Result<(), String> {
         // Validate the configuration
         config.validate()?;
 
         // Update individual configurations
-        self.quiescence_config = config.quiescence;
-        self.null_move_config = config.null_move;
-        self.lmr_config = config.lmr;
-        self.aspiration_config = config.aspiration_windows;
-        self.iid_config = config.iid;
+        self.quiescence_config = config.quiescence.clone();
+        self.null_move_config = config.null_move.clone();
+        self.lmr_config = config.lmr.clone();
+        self.aspiration_config = config.aspiration_windows.clone();
+        self.iid_config = config.iid.clone();
         self.time_management_config = config.time_management.clone();
         self.parallel_options = config.parallel.clone();
         self.prefill_opening_book = config.prefill_opening_book;
         self.opening_book_prefill_depth = config.opening_book_prefill_depth;
+
+        // Synchronize helper modules with new configuration (Task 1.8)
+        self.quiescence_helper = QuiescenceHelper::new(config.quiescence);
+        self.null_move_helper = NullMoveHelper::new(config.null_move);
+        self.reductions_helper = ReductionsHelper::new(config.iid.clone());
+        self.iterative_deepening_helper = IterativeDeepeningHelper::new(config.aspiration_windows);
+        self.time_manager = TimeManager::new(
+            config.time_management.clone(),
+            self.time_pressure_thresholds.clone(),
+        );
 
         // Reset statistics when configuration changes
         self.quiescence_stats.reset();
@@ -1255,28 +1300,13 @@ impl SearchEngine {
 
     /// Calculate time pressure level based on remaining time (Task 7.0.2.2)
     /// Returns the current time pressure level for algorithm coordination
+    /// Delegates to TimeManager (Task 1.8)
     pub fn calculate_time_pressure_level(
         &self,
         start_time: &TimeSource,
         time_limit_ms: u32,
     ) -> crate::types::TimePressure {
-        if time_limit_ms == 0 {
-            return crate::types::TimePressure::None;
-        }
-
-        let elapsed_ms = start_time.elapsed_ms();
-        let remaining_ms = if elapsed_ms >= time_limit_ms {
-            0
-        } else {
-            time_limit_ms - elapsed_ms
-        };
-
-        let remaining_percent = (remaining_ms as f64 / time_limit_ms as f64) * 100.0;
-
-        crate::types::TimePressure::from_remaining_time_percent(
-            remaining_percent,
-            &self.time_pressure_thresholds,
-        )
+        self.time_manager.calculate_time_pressure_level(start_time, time_limit_ms)
     }
 
     /// Determine if IID should be applied at this position
@@ -1553,6 +1583,8 @@ impl SearchEngine {
 
     /// Calculate the depth for IID search based on strategy
     /// Task 4.0: Integrated dynamic depth calculation and enhanced strategies
+    /// Calculate IID depth based on strategy and position characteristics
+    /// Delegates core calculation to ReductionsHelper, then applies advanced strategies (Task 1.8)
     pub fn calculate_iid_depth(
         &mut self,
         main_depth: u8,
@@ -1561,70 +1593,13 @@ impl SearchEngine {
         start_time: Option<&TimeSource>,
         time_limit_ms: Option<u32>,
     ) -> u8 {
-        let depth = match self.iid_config.depth_strategy {
-            IIDDepthStrategy::Fixed => self.iid_config.iid_depth_ply,
-            IIDDepthStrategy::Relative => {
-                // Task 4.7: Add maximum depth cap to Relative strategy
-                let relative_depth = std::cmp::max(2, main_depth.saturating_sub(2));
-                relative_depth.min(4) // Cap at 4 for performance
-            }
-            IIDDepthStrategy::Adaptive => {
-                // Task 4.8: Enhance Adaptive strategy with position-based adjustments
-                let base_depth = if main_depth > 6 { 3 } else { 2 };
-                // Enhanced: If we have position info, use it for better depth selection
-                if let (Some(board), Some(captured)) = (board, captured_pieces) {
-                    let complexity = self.assess_position_complexity(board, captured);
-                    match complexity {
-                        PositionComplexity::High => (base_depth as u8).saturating_add(1).min(4),
-                        PositionComplexity::Low => (base_depth as u8).saturating_sub(1).max(1),
-                        _ => base_depth,
-                    }
-                } else {
-                    base_depth
-                }
-            }
-            IIDDepthStrategy::Dynamic => {
-                // Task 4.5: Use calculate_dynamic_iid_depth() for Dynamic strategy
-                // Task 4.6: Ensure assess_position_complexity() is called when using Dynamic strategy
-                if let (Some(board), Some(captured)) = (board, captured_pieces) {
-                    let base_depth = self.iid_config.dynamic_base_depth;
-                    let complexity = self.assess_position_complexity(board, captured);
-                    let calculated_depth =
-                        self.calculate_dynamic_iid_depth(board, captured, base_depth);
-
-                    // Task 4.12: Track statistics for dynamic depth selection
-                    *self
-                        .iid_stats
-                        .dynamic_depth_selections
-                        .entry(calculated_depth)
-                        .or_insert(0) += 1;
-                    match complexity {
-                        PositionComplexity::Low => self.iid_stats.dynamic_depth_low_complexity += 1,
-                        PositionComplexity::Medium => {
-                            self.iid_stats.dynamic_depth_medium_complexity += 1
-                        }
-                        PositionComplexity::High => {
-                            self.iid_stats.dynamic_depth_high_complexity += 1
-                        }
-                        PositionComplexity::Unknown => {}
-                    }
-
-                    // Task 4.13: Add debug logging for dynamic depth calculation
-                    crate::debug_utils::trace_log(
-                        "IID_DEPTH",
-                        &format!(
-                            "Dynamic depth: main_depth={}, base={}, complexity={:?}, calculated={}",
-                            main_depth, base_depth, complexity, calculated_depth
-                        ),
-                    );
-
-                    calculated_depth
-                } else {
-                    // Fallback to base depth if position info not available
-                    self.iid_config.dynamic_base_depth
-                }
-            }
-        };
+        // Delegate core depth calculation to ReductionsHelper
+        let depth = self.reductions_helper.calculate_iid_depth(
+            main_depth,
+            board,
+            captured_pieces,
+            Some(|b, c| self.assess_position_complexity(b, c)),
+        );
 
         // Task 11.2-11.7: Apply advanced depth strategies if enabled
         let adjusted_depth = if let (Some(board), Some(captured)) = (board, captured_pieces) {
@@ -1804,7 +1779,7 @@ impl SearchEngine {
         hash_history: &mut Vec<u64>,
     ) -> (i32, Option<Move>) {
         let iid_start_time = TimeSource::now();
-        let initial_nodes = self.nodes_searched;
+        let initial_nodes = self.search_statistics.get_nodes_searched();
 
         // Create local hash_history for IID search (Task 5.2)
         let initial_hash = self
@@ -1913,7 +1888,7 @@ impl SearchEngine {
         // Record IID statistics
         let iid_time = iid_start_time.elapsed_ms() as u64;
         self.iid_stats.iid_time_ms += iid_time;
-        self.iid_stats.total_iid_nodes += self.nodes_searched - initial_nodes;
+        self.iid_stats.total_iid_nodes += self.search_statistics.get_nodes_searched() - initial_nodes;
 
         // Task 2.7: Fallback logic - use TT move if available, otherwise tracked move
         let final_best_move = if let Some(tt_move) = best_move_from_tt {
@@ -4659,7 +4634,7 @@ impl SearchEngine {
             );
         }
 
-        self.nodes_searched = 0;
+        self.search_statistics.reset_nodes();
         self.current_depth = depth;
         let start_time = TimeSource::now();
         let mut alpha = alpha;
@@ -5188,9 +5163,8 @@ impl SearchEngine {
             );
             return static_eval;
         }
-        self.nodes_searched += 1;
-        GLOBAL_NODES_SEARCHED.fetch_add(1, Ordering::Relaxed);
-
+        // Track nodes and seldepth through SearchStatistics (Task 1.8)
+        self.search_statistics.increment_nodes();
         // Track total nodes for metrics (Task 5.7)
         self.core_search_metrics.total_nodes += 1;
         // Update seldepth (selective depth) - track maximum depth reached
@@ -5203,11 +5177,7 @@ impl SearchEngine {
         // When depth=1, we've searched 4 plies
         // So depth_from_root = current_depth - depth
         let depth_from_root = self.current_depth.saturating_sub(depth);
-        let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
-        // Update if this is deeper than what we've seen
-        if depth_from_root as u64 > prev_seldepth {
-            GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
-        }
+        self.search_statistics.update_seldepth(depth_from_root);
         // Check transposition table and calculate position hash (Task 5.1-5.3)
         // Calculate position hash for repetition detection and TT
         let position_hash = self
@@ -6250,10 +6220,7 @@ impl SearchEngine {
         // Quiescence can extend deeper: current_depth + (max_quiescence_depth - depth)
         // For now, just track that we've reached current_depth
         let depth_from_root = self.current_depth;
-        let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
-        if depth_from_root as u64 > prev_seldepth {
-            GLOBAL_SELDEPTH.store(depth_from_root as u64, Ordering::Relaxed);
-        }
+        self.search_statistics.update_seldepth(depth_from_root);
 
         // Task 7.8: Depth limit check - updated documentation
         //
@@ -6603,10 +6570,7 @@ impl SearchEngine {
             // For a more accurate seldepth, we track current_depth + extensions
             let quiescence_depth_from_root = self.current_depth as i32
                 + (self.quiescence_config.max_depth as i32 - depth as i32);
-            let prev_seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed);
-            if quiescence_depth_from_root as u64 > prev_seldepth {
-                GLOBAL_SELDEPTH.store(quiescence_depth_from_root as u64, Ordering::Relaxed);
-            }
+            self.search_statistics.update_seldepth(quiescence_depth_from_root);
 
             crate::debug_utils::start_timing(&format!("quiescence_move_{}", move_index));
             let score = -self.quiescence_search(
@@ -6762,27 +6726,14 @@ impl SearchEngine {
     ///
     /// Task 8.4: Only checks time every N nodes to reduce overhead
     /// Task 8.1, 8.2: Optimized to minimize time check overhead
+    /// Check if search should stop due to time limit or stop flag
+    /// Delegates to TimeManager (Task 1.8)
     fn should_stop(&mut self, start_time: &TimeSource, time_limit_ms: u32) -> bool {
-        // Always check stop flag immediately (user-initiated stop)
-        if let Some(flag) = &self.stop_flag {
-            if flag.load(Ordering::Relaxed) {
-                return true;
-            }
-        }
-
-        // Task 8.4: Optimize time check frequency
-        let frequency = self.time_management_config.time_check_frequency;
-        // Use wrapping_add to prevent panic on overflow (shouldn't happen in practice,
-        // but safe to handle in case frequency is very large or counter isn't reset)
-        self.time_check_node_counter = self.time_check_node_counter.wrapping_add(1);
-
-        // Only check time every N nodes
-        if self.time_check_node_counter >= frequency {
-            self.time_check_node_counter = 0;
-            start_time.has_exceeded_limit(time_limit_ms)
-        } else {
-            false // Don't check time yet
-        }
+        self.time_manager.should_stop(
+            start_time,
+            time_limit_ms,
+            self.stop_flag.as_ref().map(|f| f.as_ref()),
+        )
     }
 
     /// Force time check (bypasses frequency optimization) (Task 8.4)
@@ -7366,17 +7317,9 @@ impl SearchEngine {
     }
 
     /// Check if a move should be pruned using delta pruning
+    /// Delegates to QuiescenceHelper (Task 1.8)
     fn should_prune_delta(&self, move_: &Move, stand_pat: i32, alpha: i32) -> bool {
-        if !self.quiescence_config.enable_delta_pruning {
-            return false;
-        }
-
-        let material_gain = move_.captured_piece_value();
-        let promotion_bonus = move_.promotion_value();
-        let total_gain = material_gain + promotion_bonus;
-
-        // If the best possible outcome is still worse than alpha, prune
-        stand_pat + total_gain + self.quiescence_config.delta_margin <= alpha
+        self.quiescence_helper.should_prune_delta(move_, stand_pat, alpha)
     }
 
     /// Adaptive delta pruning based on position characteristics
@@ -7387,6 +7330,8 @@ impl SearchEngine {
     /// - Move type: Less aggressive pruning for high-value captures and promotions
     ///
     /// This provides better pruning effectiveness while maintaining tactical accuracy.
+    /// Check if a move should be pruned using adaptive delta pruning
+    /// Delegates to QuiescenceHelper (Task 1.8)
     fn should_prune_delta_adaptive(
         &self,
         move_: &Move,
@@ -7395,35 +7340,7 @@ impl SearchEngine {
         depth: u8,
         move_count: usize,
     ) -> bool {
-        if !self.quiescence_config.enable_delta_pruning {
-            return false;
-        }
-
-        let material_gain = move_.captured_piece_value();
-        let promotion_bonus = move_.promotion_value();
-        let total_gain = material_gain + promotion_bonus;
-
-        // Adaptive margin based on depth and move count
-        let mut adaptive_margin = self.quiescence_config.delta_margin;
-
-        // Increase margin at deeper depths (more aggressive pruning)
-        if depth > 3 {
-            adaptive_margin += (depth as i32 - 3) * 50;
-        }
-
-        // Increase margin when there are many moves (more selective)
-        if move_count > 8 {
-            adaptive_margin += (move_count as i32 - 8) * 25;
-        }
-
-        // Decrease margin for high-value captures (less aggressive pruning)
-        // This treats captures and promotions differently - high-value moves are less likely to be pruned
-        if total_gain > 200 {
-            adaptive_margin = adaptive_margin / 2;
-        }
-
-        // If the best possible outcome is still worse than alpha, prune
-        stand_pat + total_gain + adaptive_margin <= alpha
+        self.quiescence_helper.should_prune_delta_adaptive(move_, stand_pat, alpha, depth, move_count)
     }
 
     /// Check if a move should be pruned using futility pruning
@@ -8260,6 +8177,9 @@ impl SearchEngine {
     // ===== NULL MOVE PRUNING METHODS =====
     /// Check if null move pruning should be attempted in the current position
     /// Task 7.0.4.3: Accept cached_static_eval to avoid re-evaluation
+    /// Check if null move pruning should be attempted
+    /// Delegates to NullMoveHelper (Task 1.8)
+    /// Note: cached_static_eval parameter is currently unused but kept for API compatibility
     fn should_attempt_null_move(
         &mut self,
         board: &BitboardBoard,
@@ -8267,214 +8187,14 @@ impl SearchEngine {
         player: Player,
         depth: u8,
         can_null_move: bool,
-        cached_static_eval: Option<i32>,
+        _cached_static_eval: Option<i32>,
     ) -> bool {
-        if !self.null_move_config.enabled || !can_null_move {
-            return false;
-        }
-
-        // Must have sufficient depth
-        if depth < self.null_move_config.min_depth {
-            return false;
-        }
-
-        // Cannot be in check
-        if board.is_king_in_check(player, captured_pieces) {
-            self.null_move_stats.disabled_in_check += 1;
-            return false;
-        }
-
-        // Endgame detection
-        if self.null_move_config.enable_endgame_detection {
-            let piece_count = self.count_pieces_on_board(board);
-
-            // Enhanced endgame type detection if enabled
-            if self.null_move_config.enable_endgame_type_detection {
-                let endgame_type =
-                    self.detect_endgame_type(board, captured_pieces, player, piece_count);
-
-                match endgame_type {
-                    crate::types::EndgameType::NotEndgame => {
-                        // Not in endgame, allow null move
-                    }
-                    crate::types::EndgameType::ZugzwangEndgame => {
-                        // Zugzwang-prone positions - disable NMP (most conservative)
-                        if piece_count < self.null_move_config.zugzwang_threshold {
-                            self.null_move_stats.disabled_zugzwang += 1;
-                            return false;
-                        }
-                    }
-                    crate::types::EndgameType::KingActivityEndgame => {
-                        // King activity endgame - disable NMP when pieces < king_activity_threshold
-                        if piece_count < self.null_move_config.king_activity_threshold {
-                            self.null_move_stats.disabled_king_activity_endgame += 1;
-                            return false;
-                        }
-                    }
-                    crate::types::EndgameType::MaterialEndgame => {
-                        // Material endgame - disable NMP when pieces < material_endgame_threshold
-                        if piece_count < self.null_move_config.material_endgame_threshold {
-                            self.null_move_stats.disabled_material_endgame += 1;
-                            return false;
-                        }
-                    }
-                }
-            } else {
-                // Basic endgame detection with optional per-position-type thresholds
-                let threshold = if self.null_move_config.enable_per_position_type_threshold {
-                    // Use per-position-type thresholds based on piece count
-                    let piece_count = piece_count; // Already computed above
-                    if piece_count >= 30 {
-                        // Opening position: many pieces
-                        self.null_move_config.opening_pieces_threshold
-                    } else if piece_count >= 15 {
-                        // Middlegame position: moderate piece count
-                        self.null_move_config.middlegame_pieces_threshold
-                    } else {
-                        // Endgame position: few pieces
-                        self.null_move_config.endgame_pieces_threshold
-                    }
-                } else {
-                    // Use standard threshold (original behavior)
-                    self.null_move_config.max_pieces_threshold
-                };
-
-                if piece_count < threshold {
-                    self.null_move_stats.disabled_endgame += 1;
-                    return false;
-                }
-            }
-        }
-
-        true
+        self.null_move_helper.should_attempt_null_move(board, captured_pieces, player, depth, can_null_move)
     }
 
-    /// Count the number of pieces on the board for endgame detection
-    /// Optimized to use bitboard popcount instead of iterating through all squares
-    fn count_pieces_on_board(&self, board: &BitboardBoard) -> u8 {
-        // Use the occupied bitboard for O(1) piece counting via hardware popcount
-        let occupied = board.get_occupied_bitboard();
-        occupied.count_ones() as u8
-    }
-
-    /// Detect endgame type based on material, king positions, and piece count
-    /// This provides more intelligent endgame detection than simple piece counting
-    fn detect_endgame_type(
-        &self,
-        board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
-        player: Player,
-        piece_count: u8,
-    ) -> crate::types::EndgameType {
-        // Not in endgame if too many pieces
-        if piece_count >= self.null_move_config.max_pieces_threshold {
-            return crate::types::EndgameType::NotEndgame;
-        }
-
-        // Check for zugzwang-prone positions (very few pieces, kings active)
-        if piece_count <= self.null_move_config.zugzwang_threshold {
-            let is_zugzwang_prone = self.is_zugzwang_prone(board, captured_pieces, player);
-            if is_zugzwang_prone {
-                return crate::types::EndgameType::ZugzwangEndgame;
-            }
-        }
-
-        // Check for king activity endgame (active kings, centralized)
-        if piece_count <= self.null_move_config.king_activity_threshold {
-            let is_king_activity_endgame = self.is_king_activity_endgame(board, player);
-            if is_king_activity_endgame {
-                return crate::types::EndgameType::KingActivityEndgame;
-            }
-        }
-
-        // Material endgame: low piece count, mostly minor pieces
-        if piece_count < self.null_move_config.material_endgame_threshold {
-            return crate::types::EndgameType::MaterialEndgame;
-        }
-
-        // Default to material endgame if piece count is low
-        crate::types::EndgameType::MaterialEndgame
-    }
-
-    /// Check if position is zugzwang-prone (any move worsens the position)
-    /// Characteristics: very few pieces, kings are active and centralized, no major pieces
-    fn is_zugzwang_prone(
-        &self,
-        board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
-        player: Player,
-    ) -> bool {
-        let piece_count = self.count_pieces_on_board(board);
-
-        // Zugzwang-prone positions typically have very few pieces
-        if piece_count > self.null_move_config.zugzwang_threshold + 2 {
-            return false;
-        }
-
-        // Check if kings are active (centralized)
-        let black_king_active = self.is_king_active(board, Player::Black);
-        let white_king_active = self.is_king_active(board, Player::White);
-
-        // Both kings active suggests zugzwang-prone position
-        black_king_active && white_king_active
-    }
-
-    /// Check if position is a king activity endgame
-    /// Characteristics: kings are active and centralized, some minor pieces remain
-    fn is_king_activity_endgame(&self, board: &BitboardBoard, player: Player) -> bool {
-        // Check if at least one king is active
-        let black_king_active = self.is_king_active(board, Player::Black);
-        let white_king_active = self.is_king_active(board, Player::White);
-
-        black_king_active || white_king_active
-    }
-
-    /// Check if a king is active (centralized and advanced)
-    /// Active kings are typically in or near the center of the board
-    fn is_king_active(&self, board: &BitboardBoard, player: Player) -> bool {
-        // Find king position
-        let king_pos = self.find_king_position(board, player);
-        if let Some(pos) = king_pos {
-            // Check if king is centralized (within distance 2 of center)
-            let center_row = 4;
-            let center_col = 4;
-            let row_dist = (pos.row as i32 - center_row).abs();
-            let col_dist = (pos.col as i32 - center_col).abs();
-
-            // King is active if within distance 2 of center
-            row_dist <= 2 && col_dist <= 2
-        } else {
-            false
-        }
-    }
-
-    /// Find the position of a player's king
-    fn find_king_position(
-        &self,
-        board: &BitboardBoard,
-        player: Player,
-    ) -> Option<crate::types::Position> {
-        for row in 0..9 {
-            for col in 0..9 {
-                let pos = crate::types::Position::new(row, col);
-                if let Some(piece) = board.get_piece(pos) {
-                    if piece.piece_type == crate::types::PieceType::King && piece.player == player {
-                        return Some(pos);
-                    }
-                }
-            }
-        }
-        None
-    }
 
     /// Calculate reduction factor for null move search using the configured strategy
-    ///
-    /// This method supports multiple reduction strategies:
-    /// - **Static**: Always use base `reduction_factor`
-    /// - **Dynamic**: Use `dynamic_reduction_formula` (Linear/Smooth scaling)
-    /// - **DepthBased**: Reduction varies by depth (smaller at shallow, larger at deep)
-    /// - **MaterialBased**: Reduction adjusted by material count (fewer pieces = smaller reduction)
-    /// - **PositionTypeBased**: Different reduction for opening/middlegame/endgame
+    /// Delegates to NullMoveHelper (Task 1.8)
     fn calculate_null_move_reduction(
         &self,
         board: &BitboardBoard,
@@ -8482,81 +8202,7 @@ impl SearchEngine {
         player: Player,
         depth: u8,
     ) -> u8 {
-        // Check if per-depth reduction is enabled and we have a mapping for this depth
-        if self.null_move_config.enable_per_depth_reduction {
-            if let Some(per_depth_factor) =
-                self.null_move_config.reduction_factor_by_depth.get(&depth)
-            {
-                // Use per-depth reduction factor if available
-                return *per_depth_factor;
-            }
-        }
-
-        match self.null_move_config.reduction_strategy {
-            crate::types::NullMoveReductionStrategy::Static => {
-                // Static reduction: always use reduction_factor
-                self.null_move_config.reduction_factor
-            }
-            crate::types::NullMoveReductionStrategy::Dynamic => {
-                // Dynamic reduction: use dynamic_reduction_formula
-                if self.null_move_config.enable_dynamic_reduction {
-                    self.null_move_config
-                        .dynamic_reduction_formula
-                        .calculate_reduction(depth, self.null_move_config.reduction_factor)
-                } else {
-                    // Fallback to static if dynamic is disabled
-                    self.null_move_config.reduction_factor
-                }
-            }
-            crate::types::NullMoveReductionStrategy::DepthBased => {
-                // Depth-based reduction: R = base + depth_scaling_factor * max(0, depth - min_depth_for_scaling) / 6
-                // Smaller reduction at shallow depths, larger at deep depths
-                let base = self.null_move_config.reduction_factor;
-                let scaling_depth = if depth > self.null_move_config.min_depth_for_scaling {
-                    depth - self.null_move_config.min_depth_for_scaling
-                } else {
-                    0
-                };
-                let depth_adjustment =
-                    (scaling_depth as u16 * self.null_move_config.depth_scaling_factor as u16) / 6;
-                (base as u16 + depth_adjustment).min(5) as u8
-            }
-            crate::types::NullMoveReductionStrategy::MaterialBased => {
-                // Material-based reduction: R = base - material_adjustment_factor * max(0, (piece_count_threshold - piece_count) / threshold_step)
-                // Fewer pieces = smaller reduction (more conservative in endgame)
-                let piece_count = self.count_pieces_on_board(board);
-                let base = self.null_move_config.reduction_factor as i32;
-
-                if piece_count < self.null_move_config.piece_count_threshold {
-                    let pieces_below_threshold =
-                        self.null_move_config.piece_count_threshold - piece_count;
-                    let adjustment_steps =
-                        (pieces_below_threshold + self.null_move_config.threshold_step - 1)
-                            / self.null_move_config.threshold_step;
-                    let material_adjustment = (adjustment_steps as i32)
-                        * (self.null_move_config.material_adjustment_factor as i32);
-                    (base - material_adjustment).max(1) as u8
-                } else {
-                    base as u8
-                }
-            }
-            crate::types::NullMoveReductionStrategy::PositionTypeBased => {
-                // Position-type-based reduction: Different reduction for opening/middlegame/endgame
-                let piece_count = self.count_pieces_on_board(board);
-
-                // Classify position type (simplified: use piece count as proxy)
-                if piece_count >= 30 {
-                    // Opening position: many pieces on board
-                    self.null_move_config.opening_reduction_factor
-                } else if piece_count >= 15 {
-                    // Middlegame position: moderate piece count
-                    self.null_move_config.middlegame_reduction_factor
-                } else {
-                    // Endgame position: few pieces on board
-                    self.null_move_config.endgame_reduction_factor
-                }
-            }
-        }
+        self.null_move_helper.calculate_null_move_reduction(board, captured_pieces, player, depth)
     }
 
     /// Perform a null move search with reduced depth
@@ -8867,6 +8513,7 @@ impl SearchEngine {
     // ===== TIME MANAGEMENT AND BUDGET ALLOCATION (Task 4.5-4.7) =====
 
     /// Calculate time budget for a specific depth based on allocation strategy (Task 4.5, 4.7)
+    /// Delegates to TimeManager (Task 1.8)
     pub fn calculate_time_budget(
         &mut self,
         depth: u8,
@@ -8874,111 +8521,13 @@ impl SearchEngine {
         elapsed_ms: u32,
         max_depth: u8,
     ) -> u32 {
-        let config = &self.time_management_config;
-
-        if !config.enable_time_budget {
-            // If time budget is disabled, use remaining time
-            return total_time_ms.saturating_sub(elapsed_ms);
-        }
-
-        let remaining_time = total_time_ms.saturating_sub(elapsed_ms);
-        let safety_margin_ms = (remaining_time as f64 * config.safety_margin) as u32;
-        let available_time = remaining_time.saturating_sub(safety_margin_ms);
-
-        if depth == 1 {
-            // First depth: use minimum time
-            let budget = config
-                .min_time_per_depth_ms
-                .max(available_time / (max_depth as u32 * 2));
-            return budget.min(available_time);
-        }
-
-        match config.allocation_strategy {
-            TimeAllocationStrategy::Equal => {
-                // Equal allocation: divide remaining time equally among remaining depths
-                let remaining_depths = (max_depth + 1).saturating_sub(depth);
-                if remaining_depths == 0 {
-                    return available_time;
-                }
-                available_time / remaining_depths as u32
-            }
-            TimeAllocationStrategy::Exponential => {
-                // Exponential allocation: later depths get more time
-                self.calculate_exponential_budget(depth, available_time, max_depth)
-            }
-            TimeAllocationStrategy::Adaptive => {
-                // Adaptive allocation: use historical data if available (Task 4.6)
-                self.calculate_adaptive_time_budget(depth, available_time, max_depth)
-            }
-        }
-    }
-
-    /// Calculate adaptive time budget based on depth completion history (Task 4.6)
-    fn calculate_adaptive_time_budget(&self, depth: u8, available_time: u32, max_depth: u8) -> u32 {
-        let config = &self.time_management_config;
-        let stats = &self.time_budget_stats;
-
-        // If we have historical data, use exponential weighting based on past completion times
-        if !stats.depth_completion_times_ms.is_empty()
-            && depth <= stats.depth_completion_times_ms.len() as u8
-        {
-            let depth_idx = (depth - 1) as usize;
-            if depth_idx < stats.depth_completion_times_ms.len() {
-                let avg_completion_time = stats.depth_completion_times_ms[depth_idx];
-                // Estimate based on average, with a factor for remaining depths
-                let remaining_depths = (max_depth + 1).saturating_sub(depth);
-                let estimated_total = avg_completion_time * remaining_depths as u32;
-
-                // Use the average time for this depth, but cap at available time
-                let budget = avg_completion_time.min(available_time);
-
-                // Ensure we have enough time for remaining depths
-                if estimated_total > available_time {
-                    // Scale down proportionally
-                    let scale_factor = available_time as f64 / estimated_total as f64;
-                    ((budget as f64 * scale_factor) as u32).max(config.min_time_per_depth_ms)
-                } else {
-                    budget.max(config.min_time_per_depth_ms)
-                }
-            } else {
-                // Fall back to exponential if no data for this depth
-                self.calculate_exponential_budget(depth, available_time, max_depth)
-            }
-        } else {
-            // No historical data: use exponential strategy
-            self.calculate_exponential_budget(depth, available_time, max_depth)
-        }
-    }
-
-    /// Helper function for exponential budget calculation
-    fn calculate_exponential_budget(&self, depth: u8, available_time: u32, max_depth: u8) -> u32 {
-        let config = &self.time_management_config;
-        let depth_exponent = depth.saturating_sub(1) as i32;
-        let total_weight = (2_f64.powi(max_depth.max(1) as i32) - 1.0).max(1.0);
-        let depth_weight = 2_f64.powi(depth_exponent.max(0));
-
-        let allocated = (available_time as f64 * depth_weight / total_weight) as u32;
-        let lower_bound = config.min_time_per_depth_ms.min(available_time);
-        let upper_bound = available_time;
-        allocated.max(lower_bound).min(upper_bound)
+        self.time_manager.calculate_time_budget(depth, total_time_ms, elapsed_ms, max_depth)
     }
 
     /// Record depth completion time for adaptive allocation (Task 4.6)
+    /// Delegates to TimeManager (Task 1.8)
     pub fn record_depth_completion(&mut self, depth: u8, completion_time_ms: u32) {
-        let stats = &mut self.time_budget_stats;
-
-        // Ensure we have enough space in the vector
-        while stats.depth_completion_times_ms.len() < depth as usize {
-            stats.depth_completion_times_ms.push(0);
-        }
-
-        if depth > 0 {
-            let depth_idx = (depth - 1) as usize;
-            if depth_idx < stats.depth_completion_times_ms.len() {
-                // Update with exponential moving average (weight recent data more)
-                let old_time = stats.depth_completion_times_ms[depth_idx];
-                if old_time == 0 {
-                    stats.depth_completion_times_ms[depth_idx] = completion_time_ms;
+        self.time_manager.record_depth_completion(depth, completion_time_ms);
                 } else {
                     // EMA with alpha = 0.3 (30% weight to new data)
                     stats.depth_completion_times_ms[depth_idx] =
@@ -9154,33 +8703,16 @@ impl SearchEngine {
     // ===== ASPIRATION WINDOW SIZE CALCULATION =====
 
     /// Calculate static window size
+    /// Calculate static window size
+    /// Delegates to IterativeDeepeningHelper (Task 1.8)
     fn calculate_static_window_size(&self, depth: u8) -> i32 {
-        if depth < self.aspiration_config.min_depth {
-            return i32::MAX; // Use full-width window
-        }
-        self.aspiration_config.base_window_size
+        self.iterative_deepening_helper.calculate_static_window_size(depth)
     }
 
     /// Calculate dynamic window size based on depth and score
+    /// Delegates to IterativeDeepeningHelper (Task 1.8)
     fn calculate_dynamic_window_size(&self, depth: u8, previous_score: i32) -> i32 {
-        let base_size = self.aspiration_config.base_window_size;
-
-        if !self.aspiration_config.dynamic_scaling {
-            return base_size;
-        }
-
-        // Scale based on depth
-        let depth_factor = 1.0 + (depth as f64 - 1.0) * 0.1;
-
-        // Scale based on score magnitude (more volatile scores = larger window)
-        let score_factor = 1.0 + (previous_score.abs() as f64 / 1000.0) * 0.2;
-
-        // Clamp to i32 range before casting to prevent overflow
-        let dynamic_size_f64 = base_size as f64 * depth_factor * score_factor;
-        let dynamic_size = dynamic_size_f64.min(i32::MAX as f64).max(i32::MIN as f64) as i32;
-
-        // Apply limits
-        dynamic_size.min(self.aspiration_config.max_window_size)
+        self.iterative_deepening_helper.calculate_dynamic_window_size(depth, previous_score)
     }
 
     /// Calculate adaptive window size based on recent failures
@@ -12486,7 +12018,7 @@ impl SearchEngine {
             beta: self.current_beta,
             best_move: self.current_best_move.clone(),
             best_score: self.current_best_score,
-            nodes_searched: self.nodes_searched,
+            nodes_searched: self.search_statistics.get_nodes_searched(),
             depth: self.current_depth,
             aspiration_enabled: self.aspiration_config.enabled,
             researches: self.aspiration_stats.total_researches as u8,
@@ -12658,7 +12190,7 @@ impl SearchEngine {
         let elapsed_seconds = elapsed_ms as f64 / 1000.0;
 
         if elapsed_seconds > 0.0 {
-            self.nodes_searched as f64 / elapsed_seconds
+            self.search_statistics.get_nodes_searched() as f64 / elapsed_seconds
         } else {
             0.0
         }
@@ -12688,8 +12220,8 @@ impl SearchEngine {
 
         // Get search metrics
         let perf_metrics = self.get_performance_metrics();
-        let cutoff_rate = if self.nodes_searched > 0 {
-            self.core_search_metrics.total_cutoffs as f64 / self.nodes_searched as f64
+        let cutoff_rate = if self.search_statistics.get_nodes_searched() > 0 {
+            self.core_search_metrics.total_cutoffs as f64 / self.search_statistics.get_nodes_searched() as f64
         } else {
             0.0
         };
@@ -13558,7 +13090,7 @@ impl IterativeDeepening {
                             continue; // Skip if no nodes searched yet
                         }
 
-                        let seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8;
+                        let seldepth = GLOBAL_SELDEPTH.load(Ordering::Relaxed) as u8; // Use global for live reporting
                         let seldepth = if seldepth == 0 {
                             depth_clone
                         } else {
@@ -13673,7 +13205,7 @@ impl IterativeDeepening {
 
             // Reset global nodes aggregator and seldepth at the start of each depth
             GLOBAL_NODES_SEARCHED.store(0, Ordering::Relaxed);
-            GLOBAL_SELDEPTH.store(0, Ordering::Relaxed);
+            GLOBAL_SELDEPTH.store(0, Ordering::Relaxed); // Reset global for next search
 
             // Calculate aspiration window parameters
             let (alpha, beta) = if depth == 1 || !search_engine.aspiration_config.enabled {
