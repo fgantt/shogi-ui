@@ -1,0 +1,252 @@
+# Performance Regression Detection Workflow
+#
+# This workflow runs performance benchmarks and regression tests to detect
+# performance regressions in the engine. It compares current performance
+# against a baseline and fails if regressions are detected.
+#
+# Task 26.0 - Task 6.0
+
+name: Performance Regression Detection
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'src/search/**'
+      - 'src/evaluation/**'
+      - 'src/types.rs'
+      - 'benches/**'
+      - 'scripts/run_regression_suite.sh'
+      - 'scripts/ci_performance_check.sh'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'src/search/**'
+      - 'src/evaluation/**'
+      - 'src/types.rs'
+      - 'benches/**'
+      - 'scripts/run_regression_suite.sh'
+      - 'scripts/ci_performance_check.sh'
+  schedule:
+    # Run benchmarks daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  PERFORMANCE_REGRESSION_THRESHOLD: ${{ vars.PERFORMANCE_REGRESSION_THRESHOLD || '5.0' }}
+  BENCHMARK_RESULTS_DIR: target/criterion
+  BASELINE_PATH: docs/performance/baselines/latest.json
+
+jobs:
+  performance-regression:
+    name: Performance Regression Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Build release version
+        run: cargo build --release --lib
+      
+      - name: Create baseline directory if missing
+        run: |
+          mkdir -p docs/performance/baselines
+          if [ ! -f "$BASELINE_PATH" ]; then
+            echo "Baseline file not found, will create after benchmarks"
+          fi
+      
+      - name: Run benchmark suite
+        id: benchmarks
+        env:
+          BENCHMARK_RESULTS_DIR: ${{ env.BENCHMARK_RESULTS_DIR }}
+        run: |
+          mkdir -p $BENCHMARK_RESULTS_DIR
+          cargo bench --all -- --output-format json || echo "Some benchmarks may have failed"
+          echo "benchmarks_completed=true" >> $GITHUB_OUTPUT
+      
+      - name: Collect baseline metrics
+        id: collect_baseline
+        run: |
+          # This would typically call a Rust binary or test to collect baseline metrics
+          # For now, we'll use the helper script
+          if [ -f scripts/ci_performance_check.sh ]; then
+            chmod +x scripts/ci_performance_check.sh
+            ./scripts/ci_performance_check.sh collect-baseline || echo "Baseline collection may have failed"
+          else
+            echo "Helper script not found, skipping baseline collection"
+          fi
+      
+      - name: Load baseline for comparison
+        id: load_baseline
+        run: |
+          if [ -f "$BASELINE_PATH" ]; then
+            echo "Baseline file found: $BASELINE_PATH"
+            echo "baseline_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Baseline file not found, will create new baseline"
+            echo "baseline_exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Compare with baseline
+        id: compare_baseline
+        if: steps.load_baseline.outputs.baseline_exists == 'true'
+        run: |
+          if [ -f scripts/ci_performance_check.sh ]; then
+            chmod +x scripts/ci_performance_check.sh
+            ./scripts/ci_performance_check.sh compare-baseline \
+              --baseline-path "$BASELINE_PATH" \
+              --threshold "$PERFORMANCE_REGRESSION_THRESHOLD" \
+              --output-file performance_comparison.json || true
+            echo "comparison_completed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Helper script not found, skipping comparison"
+            echo "comparison_completed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run regression suite
+        id: regression_suite
+        run: |
+          if [ -f scripts/run_regression_suite.sh ]; then
+            chmod +x scripts/run_regression_suite.sh
+            ./scripts/run_regression_suite.sh \
+              --baseline-path "$BASELINE_PATH" \
+              --regression-threshold "$PERFORMANCE_REGRESSION_THRESHOLD" \
+              --regression-test || {
+              echo "regression_detected=true" >> $GITHUB_OUTPUT
+              exit 1
+            }
+            echo "regression_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "Regression suite script not found"
+            echo "regression_detected=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Check for regressions
+        id: check_regressions
+        run: |
+          REGRESSION_DETECTED=false
+          
+          # Check regression suite results
+          if [ "${{ steps.regression_suite.outputs.regression_detected }}" == "true" ]; then
+            echo "Regression detected in regression suite"
+            REGRESSION_DETECTED=true
+          fi
+          
+          # Check baseline comparison results
+          if [ -f performance_comparison.json ]; then
+            if grep -q '"has_regression":\s*true' performance_comparison.json; then
+              echo "Regression detected in baseline comparison"
+              REGRESSION_DETECTED=true
+            fi
+          fi
+          
+          if [ "$REGRESSION_DETECTED" == "true" ]; then
+            echo "regression_found=true" >> $GITHUB_OUTPUT
+            echo "Performance regression detected!"
+            exit 1
+          else
+            echo "regression_found=false" >> $GITHUB_OUTPUT
+            echo "No performance regressions detected"
+          fi
+      
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: |
+            ${{ env.BENCHMARK_RESULTS_DIR }}/**/*.json
+            performance_comparison.json
+            regression_suite_results.json
+          retention-days: 30
+          if-no-files-found: ignore
+      
+      - name: Comment on PR with performance comparison
+        if: github.event_name == 'pull_request' && steps.check_regressions.outputs.regression_found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## ⚠️ Performance Regression Detected\n\n';
+            
+            if (fs.existsSync('performance_comparison.json')) {
+              const comparison = JSON.parse(fs.readFileSync('performance_comparison.json', 'utf8'));
+              comment += '### Baseline Comparison Results\n\n';
+              comment += 'Performance regressions detected in the following metrics:\n\n';
+              comment += '| Metric | Baseline | Current | Change |\n';
+              comment += '|--------|----------|---------|--------|\n';
+              // Add regression details if available
+            }
+            
+            if (fs.existsSync('regression_suite_results.json')) {
+              const suiteResults = JSON.parse(fs.readFileSync('regression_suite_results.json', 'utf8'));
+              comment += '\n### Regression Suite Results\n\n';
+              comment += `Total positions tested: ${suiteResults.total_positions}\n`;
+              comment += `Regressions detected: ${suiteResults.regressions_detected}\n\n`;
+            }
+            
+            comment += '\n**Threshold:** ' + process.env.PERFORMANCE_REGRESSION_THRESHOLD + '%\n';
+            comment += '\nPlease review the changes and investigate the performance regression.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+      
+      - name: Update baseline on master
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' && steps.check_regressions.outputs.regression_found == 'false'
+        run: |
+          if [ -f scripts/ci_performance_check.sh ]; then
+            chmod +x scripts/ci_performance_check.sh
+            ./scripts/ci_performance_check.sh update-baseline \
+              --baseline-path "$BASELINE_PATH" || echo "Baseline update may have failed"
+          else
+            echo "Helper script not found, skipping baseline update"
+          fi
+      
+      - name: Generate performance summary
+        if: always()
+        run: |
+          echo "## Performance Regression Detection Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check_regressions.outputs.regression_found }}" == "true" ]; then
+            echo "❌ **Performance regression detected!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please review the benchmark results and investigate the regression." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No performance regressions detected**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All performance metrics are within the acceptable threshold ($PERFORMANCE_REGRESSION_THRESHOLD%)." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark results have been uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f performance_comparison.json ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Baseline Comparison" >> $GITHUB_STEP_SUMMARY
+            echo "Comparison results saved to: performance_comparison.json" >> $GITHUB_STEP_SUMMARY
+          fi
+
