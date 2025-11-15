@@ -1,5 +1,5 @@
 use crate::opening_book::*;
-use crate::types::*;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 /// Opening Book JSON to Binary Converter
 ///
 /// This module provides functionality to convert the existing JSON opening book

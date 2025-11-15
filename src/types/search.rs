@@ -1952,6 +1952,10 @@ pub struct CoreSearchMetrics {
     pub tt_main_entry_preserved: u64,
 }
 
+// Re-export search-related types from all.rs (temporary until moved to search.rs)
+// These types are still in all.rs but should be accessible via types::search::
+pub use super::all::{EngineConfig, EnginePreset, ParallelOptions, TimePressure, TimePressureThresholds};
+
 // Note: Additional search-related types (SearchMetrics, ParallelSearchMetrics, etc.)
 // will be added in follow-up commits as needed. This module provides the core search types.
 

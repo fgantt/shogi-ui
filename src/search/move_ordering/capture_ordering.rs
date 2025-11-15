@@ -3,7 +3,7 @@
 //! This module contains MVV/LVA (Most Valuable Victim / Least Valuable Attacker)
 //! and capture move ordering implementation.
 
-use crate::types::*;
+use crate::types::core::{Move, PieceType, Player};
 
 /// Score a capture move using MVV/LVA (Most Valuable Victim / Least Valuable Attacker)
 ///

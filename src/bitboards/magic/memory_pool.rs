@@ -4,7 +4,7 @@
 //! attack pattern tables for magic bitboards. It uses pre-allocated blocks
 //! to reduce memory fragmentation and improve cache locality.
 
-use crate::types::{Bitboard, MagicError, MemoryPool, EMPTY_BITBOARD};
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MemoryPool};
 
 impl MemoryPool {
     /// Create a new memory pool with default settings

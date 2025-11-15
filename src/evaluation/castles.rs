@@ -4,7 +4,8 @@ use crate::evaluation::castle_geometry::{
     KING_ZONE_RING, PAWN_WALL_ARC,
 };
 use crate::evaluation::patterns::*;
-use crate::types::*;
+use crate::types::core::{Player, Position};
+use crate::types::evaluation::TaperedScore;
 use lru::LruCache;
 use std::cell::RefCell;
 use std::collections::HashMap;

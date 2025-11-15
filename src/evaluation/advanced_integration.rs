@@ -32,7 +32,8 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::integration::IntegratedEvaluator;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::Player;
 use std::sync::{Arc, Mutex};
 use std::thread;
 

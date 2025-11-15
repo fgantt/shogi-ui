@@ -4,7 +4,7 @@
 //! Counter-moves are moves that have previously refuted an opponent's move,
 //! and are likely to be good responses to similar moves.
 
-use crate::types::*;
+use crate::types::core::{Move, Player};
 use std::collections::HashMap;
 
 /// Counter-move heuristic configuration

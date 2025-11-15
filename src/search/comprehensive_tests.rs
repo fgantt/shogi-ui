@@ -6,7 +6,8 @@
 
 use crate::bitboards::*;
 use crate::search::*;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 use std::thread;
 use std::time::{Duration, Instant};
 

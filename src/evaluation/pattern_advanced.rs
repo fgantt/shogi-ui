@@ -17,7 +17,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::core::Player;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

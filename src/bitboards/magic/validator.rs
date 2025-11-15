@@ -4,7 +4,8 @@
 //! for magic bitboard implementations to ensure correctness and performance.
 
 use super::attack_generator::AttackGenerator;
-use crate::types::{Bitboard, MagicError, MagicTable, PieceType, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MagicTable};
 
 /// Validator for magic bitboard correctness
 pub struct MagicValidator {

@@ -8,9 +8,9 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::types::{
-    EntrySource, Move, Piece, PieceType, Player, Position, TranspositionEntry, TranspositionFlag,
-};
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::search::{EntrySource, TranspositionFlag};
+use crate::types::transposition::TranspositionEntry;
 
 const LOGICAL_ENTRY_SIZE: u64 = std::mem::size_of::<TranspositionEntry>() as u64;
 

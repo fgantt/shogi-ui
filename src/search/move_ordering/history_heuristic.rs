@@ -7,7 +7,7 @@
 //! Task 4.0: Enhanced with phase-aware, relative, time-based aging, and quiet-move-only history.
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::core::{Move, Player};
 use std::collections::HashMap;
 
 /// History entry for enhanced history heuristic (Task 4.0)

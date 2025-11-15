@@ -19,7 +19,8 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Player, Position};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 

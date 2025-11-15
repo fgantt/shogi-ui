@@ -3,7 +3,8 @@
 //! This module provides functionality to generate and validate magic numbers
 //! used in magic bitboard implementations for efficient sliding piece move generation.
 
-use crate::types::{Bitboard, MagicError, MagicGenerationResult, PieceType, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MagicGenerationResult};
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};

@@ -4,7 +4,7 @@
 //! PV moves are the best moves from previous searches and are given
 //! the highest priority in move ordering.
 
-use crate::types::*;
+use crate::types::core::Move;
 use std::collections::HashMap;
 
 /// PV move ordering manager

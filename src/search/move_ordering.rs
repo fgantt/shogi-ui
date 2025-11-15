@@ -31,7 +31,15 @@
 //! ```
 
 use crate::time_utils::TimeSource;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
+use crate::types::search::{
+    IIDConfig, LMRConfig, NullMoveConfig, QuiescenceConfig, SearchState, TimePressure,
+    TimePressureThresholds,
+};
+use crate::types::transposition::TranspositionEntry;
+use crate::types::{Bitboard, EMPTY_BITBOARD, TranspositionFlag};
 use std::collections::HashMap;
 use std::fmt;
 use std::ptr;

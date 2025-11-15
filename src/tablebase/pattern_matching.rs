@@ -3,8 +3,9 @@
 //! This module provides optimized pattern matching utilities that use bitboard
 //! operations and lookup tables for efficient endgame position analysis.
 
+use crate::bitboards::BitboardBoard;
+use crate::types::core::{Piece, PieceType, Player, Position};
 use crate::types::{count_bits, get_lsb, Bitboard};
-use crate::{BitboardBoard, Piece, PieceType, Player, Position};
 use std::collections::HashMap;
 
 /// Fast pattern matcher for endgame positions

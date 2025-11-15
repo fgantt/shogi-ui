@@ -3,7 +3,8 @@
 //! This module provides lazy initialization that generates magic tables
 //! on-demand when first accessed, rather than pre-generating all tables.
 
-use crate::types::{Bitboard, MagicError, MagicTable, PieceType, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MagicTable};
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 

@@ -1,5 +1,6 @@
 use crate::bitboards::*;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Player};
 use std::collections::HashSet;
 
 pub struct MoveGenerator {

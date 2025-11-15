@@ -6,7 +6,8 @@
 use crate::bitboards::BitboardBoard;
 use crate::search::shogi_hash::{ShogiHashHandler, ShogiMoveValidator};
 use crate::search::RepetitionState;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 
 /// Known Shogi positions for testing
 pub struct ShogiPositionTests;

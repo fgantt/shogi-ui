@@ -3,7 +3,7 @@
 //! This module contains cache structures, eviction policies, and cache
 //! management methods for the move ordering system.
 
-use crate::types::*;
+use crate::types::core::Move;
 use std::collections::HashMap;
 
 /// Cache eviction policy for move ordering cache

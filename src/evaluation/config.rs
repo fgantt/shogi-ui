@@ -31,7 +31,9 @@ use crate::evaluation::material::MaterialEvaluationConfig;
 use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransitionConfig};
 use crate::evaluation::position_features::PositionFeatureConfig;
 use crate::evaluation::pst_loader::PieceSquareTableConfig;
-use crate::types::*;
+use crate::types::evaluation::{
+    KingSafetyConfig, NUM_EG_FEATURES, NUM_EVAL_FEATURES, NUM_MG_FEATURES, TaperedEvaluationConfig,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

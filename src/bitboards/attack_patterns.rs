@@ -4,7 +4,8 @@
 //! It eliminates runtime calculations by precomputing all possible attack patterns
 //! at initialization time, providing O(1) lookup performance.
 
-use crate::types::{Bitboard, PieceType, Player, EMPTY_BITBOARD};
+use crate::types::core::{PieceType, Player};
+use crate::types::{Bitboard, EMPTY_BITBOARD};
 use std::time::Instant;
 
 /// Cache-friendly attack tables with 64-byte alignment for optimal performance

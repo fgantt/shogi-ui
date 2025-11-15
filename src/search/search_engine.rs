@@ -15,8 +15,17 @@ use crate::search::statistics::SearchStatistics;
 use crate::search::time_management::TimeManager;
 use crate::tablebase::MicroTablebase;
 use crate::time_utils::TimeSource;
-use crate::types::*;
-use crate::{TranspositionEntry, TranspositionFlag};
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::evaluation::TaperedScore;
+use crate::types::search::{
+    AspirationWindowConfig, AspirationWindowStats, CoreSearchMetrics, EngineConfig, EnginePreset,
+    IIDConfig, IIDStats, LMRConfig, LMRStats, NullMoveConfig, NullMoveStats, ParallelOptions,
+    PositionComplexity, QuiescenceConfig, QuiescenceEntry, QuiescenceStats, SearchState,
+    TimeAllocationStrategy, TimeBudgetStats, TimeManagementConfig, TimePressure,
+    TimePressureThresholds, TranspositionFlag,
+};
+use crate::types::transposition::TranspositionEntry;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::{
@@ -8528,26 +8537,6 @@ impl SearchEngine {
     /// Delegates to TimeManager (Task 1.8)
     pub fn record_depth_completion(&mut self, depth: u8, completion_time_ms: u32) {
         self.time_manager.record_depth_completion(depth, completion_time_ms);
-                } else {
-                    // EMA with alpha = 0.3 (30% weight to new data)
-                    stats.depth_completion_times_ms[depth_idx] =
-                        ((old_time as f64 * 0.7) + (completion_time_ms as f64 * 0.3)) as u32;
-                }
-            } else {
-                stats.depth_completion_times_ms.push(completion_time_ms);
-            }
-
-            // Update statistics
-            stats.depths_completed = stats.depths_completed.max(depth);
-            if depth_idx < stats.actual_time_per_depth_ms.len() {
-                stats.actual_time_per_depth_ms[depth_idx] = completion_time_ms;
-            } else {
-                while stats.actual_time_per_depth_ms.len() < depth as usize {
-                    stats.actual_time_per_depth_ms.push(0);
-                }
-                stats.actual_time_per_depth_ms.push(completion_time_ms);
-            }
-        }
     }
 
     /// Get time budget statistics for analysis (Task 4.10)
@@ -12779,19 +12768,7 @@ impl SearchEngine {
 // DIAGNOSTIC DATA STRUCTURES
 // ============================================================================
 
-/// Comprehensive search state for debugging and monitoring
-#[derive(Debug, Clone)]
-pub struct SearchState {
-    pub alpha: i32,
-    pub beta: i32,
-    pub best_move: Option<Move>,
-    pub best_score: i32,
-    pub nodes_searched: u64,
-    pub depth: u8,
-    pub aspiration_enabled: bool,
-    pub researches: u8,
-    pub health_score: f64,
-}
+// SearchState is now defined in types::search, duplicate definition removed
 
 /// Detailed aspiration window diagnostics
 #[derive(Debug, Clone)]

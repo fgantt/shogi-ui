@@ -1,7 +1,9 @@
 use crate::bitboards::BitboardBoard;
 use crate::opening_book::OpeningBook;
 use crate::search::zobrist::{RepetitionState, ZobristHasher};
-use crate::types::*;
+use crate::types::core::Move;
+use crate::types::search::{EntrySource, TranspositionFlag};
+use crate::types::transposition::TranspositionEntry;
 
 /// Basic transposition table for caching search results
 ///

@@ -1,5 +1,7 @@
 use crate::search::RepetitionState;
-use crate::types::*;
+use crate::types::board::{CapturedPieces, GamePhase};
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::{Bitboard, EMPTY_BITBOARD, ImpasseOutcome, ImpasseResult, MagicError, MagicTable, count_bits, clear_bit, get_lsb, is_bit_set, set_bit};
 use std::sync::{Arc, OnceLock};
 
 // Include the magic bitboard module

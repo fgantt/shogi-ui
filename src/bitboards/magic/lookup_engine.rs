@@ -3,7 +3,8 @@
 //! This module provides optimized lookup functionality for magic bitboards,
 //! including prefetching, caching, and SIMD optimizations.
 
-use crate::types::{Bitboard, PieceType, PerformanceMetrics, MagicError, MagicTable};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, MagicError, MagicTable, PerformanceMetrics};
 use std::collections::HashMap;
 use std::cell::RefCell;
 

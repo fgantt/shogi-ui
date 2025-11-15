@@ -31,7 +31,9 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::Player;
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 
 /// Opening principle evaluator

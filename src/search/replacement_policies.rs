@@ -6,7 +6,8 @@
 
 use crate::search::cache_management::AgeCounter;
 use crate::search::transposition_config::{ReplacementPolicy, TranspositionConfig};
-use crate::types::*;
+use crate::types::core::Move;
+use crate::types::transposition::TranspositionEntry;
 
 /// Replacement decision result
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

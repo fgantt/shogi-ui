@@ -5,7 +5,8 @@
 //! with the existing Position type and provides efficient conversion functions
 //! optimized for bitboard operations.
 
-use crate::types::{Bitboard, Position};
+use crate::types::core::Position;
+use crate::types::Bitboard;
 
 /// Convert a bit position to a Position struct
 ///

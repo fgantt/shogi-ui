@@ -12,7 +12,9 @@ use crate::search::error_handling::{ComprehensiveErrorHandler, TranspositionResu
 use crate::search::shogi_hash::*;
 use crate::search::thread_safe_table::{ThreadSafeStatsSnapshot, ThreadSafeTranspositionTable};
 use crate::search::transposition_config::TranspositionConfig;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Player};
+use crate::types::evaluation::TaperedScore;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 

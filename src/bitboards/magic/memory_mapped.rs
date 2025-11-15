@@ -4,7 +4,8 @@
 //! from disk without loading the entire file into memory. This is useful for
 //! tables larger than 100MB where memory usage is a concern.
 
-use crate::types::{Bitboard, MagicError, MagicTable, PieceType};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, MagicError, MagicTable};
 use memmap2::Mmap;
 use std::fs::File;
 use std::path::Path;

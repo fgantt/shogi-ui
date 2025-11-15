@@ -4,7 +4,8 @@
 
 use crate::bitboards::*;
 use crate::search::*;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 use std::time::Instant;
 
 /// Test suite for move ordering performance

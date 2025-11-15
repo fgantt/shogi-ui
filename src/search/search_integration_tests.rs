@@ -3,7 +3,8 @@ use crate::bitboards::*;
 #[cfg(test)]
 use crate::search::move_ordering::MoveOrdering;
 #[cfg(test)]
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 #[cfg(test)]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]

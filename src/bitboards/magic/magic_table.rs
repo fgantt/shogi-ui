@@ -5,9 +5,8 @@
 
 use super::attack_generator::AttackGenerator;
 use super::magic_finder::MagicFinder;
-use crate::types::{
-    Bitboard, MagicBitboard, MagicError, MagicTable, MemoryPool, PieceType, EMPTY_BITBOARD,
-};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicBitboard, MagicError, MagicTable, MemoryPool};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;

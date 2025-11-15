@@ -18,7 +18,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::core::Player;
 
 /// Comprehensive pattern test suite
 pub struct PatternTestSuite {

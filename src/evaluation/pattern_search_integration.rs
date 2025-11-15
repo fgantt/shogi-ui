@@ -16,7 +16,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::core::Player;
 
 /// Pattern-based search integrator
 pub struct PatternSearchIntegrator {

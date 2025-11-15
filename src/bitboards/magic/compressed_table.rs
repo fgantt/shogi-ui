@@ -34,7 +34,8 @@
 //! `CompressedMagicTable::from_table_with_config()`. When disabled, the table
 //! behaves identically to an uncompressed table but with compression metadata.
 
-use crate::types::{Bitboard, MagicError, MagicTable, PieceType, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MagicTable};
 use std::collections::HashMap;
 use std::cell::RefCell;
 

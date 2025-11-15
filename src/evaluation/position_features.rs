@@ -27,7 +27,9 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::moves::MoveGenerator;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{PieceType, Player};
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 
 fn is_gold_equivalent(piece_type: PieceType) -> bool {

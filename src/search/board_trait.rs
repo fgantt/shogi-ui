@@ -5,7 +5,8 @@
 //! implementations while maintaining performance and correctness.
 
 use crate::search::RepetitionState;
-use crate::types::*;
+use crate::types::board::{CapturedPieces, GamePhase};
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 
 /// Trait for board operations required by Zobrist hashing
 ///

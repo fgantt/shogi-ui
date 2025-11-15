@@ -39,7 +39,9 @@
 //! ```
 
 use crate::search::transposition_table::{TranspositionTable, TranspositionTableConfig};
-use crate::types::*;
+use crate::types::core::Move;
+use crate::types::search::TranspositionFlag;
+use crate::types::transposition::TranspositionEntry;
 use std::collections::HashMap;
 
 /// Multi-level transposition table configuration

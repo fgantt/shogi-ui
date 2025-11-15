@@ -603,7 +603,9 @@ impl PerformanceProfiler {
 // Performance Baseline Manager (Task 26.0 - Task 1.0)
 // ============================================================================
 
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Player};
+use crate::types::evaluation::TaperedScore;
 use std::fs;
 use std::path::{Path, PathBuf};
 

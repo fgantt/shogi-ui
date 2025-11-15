@@ -4,7 +4,8 @@
 //! transposition tables, learning optimal replacement decisions based on
 //! access patterns, game characteristics, and performance metrics.
 
-use crate::types::*;
+use crate::types::core::Move;
+use crate::types::transposition::TranspositionEntry;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 

@@ -5,10 +5,10 @@
 //! - Progress tracking and reporting
 //! - Configurable thread count
 
-use crate::types::{MagicError, MagicTable, PieceType};
 use crate::bitboards::magic::attack_generator::AttackGenerator;
 use crate::bitboards::magic::magic_finder::MagicFinder;
-use crate::types::{Bitboard, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD, MagicError, MagicTable};
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 

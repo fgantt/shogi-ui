@@ -5,7 +5,7 @@
 //! starting with the given move.
 
 use crate::bitboards::BitboardBoard;
-use crate::types::*;
+use crate::types::core::{Move, PieceType, Player, Position};
 use std::collections::HashMap;
 
 /// SEE calculation result

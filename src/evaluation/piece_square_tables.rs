@@ -25,7 +25,7 @@
 //! println!("Rook on center: {} (mg) → {} (eg)", score.mg, score.eg);
 //! ```
 
-use crate::types::*;
+use crate::types::core::{PieceType, Player, Position};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;

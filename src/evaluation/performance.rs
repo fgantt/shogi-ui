@@ -37,7 +37,8 @@ use crate::evaluation::material::{MaterialEvaluationConfig, MaterialEvaluator};
 use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransition};
 use crate::evaluation::piece_square_tables::PieceSquareTables;
 use crate::evaluation::tapered_eval::TaperedEvaluation;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::Player;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 

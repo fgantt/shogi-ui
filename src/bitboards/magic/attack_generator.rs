@@ -4,7 +4,8 @@
 //! pieces using ray-casting algorithms. These patterns are used to build the magic
 //! bitboard lookup tables.
 
-use crate::types::{Bitboard, PieceType, EMPTY_BITBOARD};
+use crate::types::core::PieceType;
+use crate::types::{Bitboard, EMPTY_BITBOARD};
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use lazy_static::lazy_static;

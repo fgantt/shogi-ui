@@ -8,7 +8,8 @@ use crate::bitboards::BitboardBoard;
 use crate::tablebase::solver_traits::EndgameSolver;
 use crate::tablebase::tablebase_config::KingRookConfig;
 use crate::tablebase::TablebaseResult;
-use crate::types::{CapturedPieces, Move, Piece, PieceType, Player, Position};
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Move, Piece, PieceType, Player, Position};
 
 /// Solver for King + Rook vs King endgames
 ///

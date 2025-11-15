@@ -4,7 +4,7 @@
 //! Killer moves are moves that caused a beta cutoff at the same depth
 //! in a sibling node, and are likely to be good moves in similar positions.
 
-use crate::types::*;
+use crate::types::core::Move;
 use std::collections::HashMap;
 
 /// Killer move configuration

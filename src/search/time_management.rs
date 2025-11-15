@@ -5,10 +5,10 @@
 //! Task 1.0: File Modularization and Structure Improvements.
 
 use crate::time_utils::TimeSource;
-use crate::types::search::{TimeAllocationStrategy, TimeBudgetStats, TimeManagementConfig};
-// Note: TimePressure and TimePressureThresholds are not yet extracted to a sub-module
-// They remain in types/all.rs for now, so we use the root import
-use crate::types::{TimePressure, TimePressureThresholds};
+use crate::types::search::{
+    TimeAllocationStrategy, TimeBudgetStats, TimeManagementConfig, TimePressure,
+    TimePressureThresholds,
+};
 
 /// Time management functionality for search engine
 pub struct TimeManager {
