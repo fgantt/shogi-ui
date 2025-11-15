@@ -321,7 +321,7 @@
   - [x] 27.3 Assess feature completeness
   - [x] 27.4 Document competitive gaps
 
-**Note:** Task 27.0 gap analysis is complete. The implementation tasks identified in `tasks-task-27.0-cross-feature-gap-analysis.md` (including NNUE evaluation system, advanced search techniques, opening/endgame enhancements, and learning systems) are **postponed to a future date** due to their large scope (estimated 14-23 months total effort). These will be prioritized separately after completing the remaining PRD tasks (28.0-31.0).
+**Note:** Task 27.0 gap analysis is complete. The implementation tasks identified in `tasks-task-27.0-cross-feature-gap-analysis.md` (including NNUE evaluation system, advanced search techniques, opening/endgame enhancements, and learning systems) are **postponed for implementation** due to their large scope (estimated 14-23 months total effort). However, Task 27.0 findings will be **included in prioritization (Task 30.0) and final documentation (Task 31.0)** as part of the comprehensive improvement roadmap - they will be documented and prioritized but marked for future implementation.
 
 - [ ] 28.0 Meta-Task: Technical Debt Documentation
   - [ ] 28.1 Identify architectural concerns
@@ -395,8 +395,8 @@ Complete meta-tasks 30-31:
 
 ## Postponed Tasks
 
-**Task 27.0 Implementation Tasks** (Postponed to Future Date):
-- All implementation tasks identified in `tasks-task-27.0-cross-feature-gap-analysis.md` are postponed
+**Task 27.0 Implementation Tasks** (Implementation Postponed; Included in Documentation):
+- **Implementation Status:** All implementation tasks identified in `tasks-task-27.0-cross-feature-gap-analysis.md` are postponed for future implementation
 - These include major features such as:
   - NNUE Evaluation System (6-12 months effort)
   - Advanced Search Techniques (2-3 months effort)
@@ -404,7 +404,10 @@ Complete meta-tasks 30-31:
   - Learning & Adaptation Systems (4-5 months effort)
   - And other improvements (estimated 14-23 months total)
 - **Reason for Postponement:** Large scope requires dedicated focus; continue with remaining PRD review tasks first
-- **Status:** Gap analysis complete; implementation tasks documented but not yet prioritized
+- **Documentation Status:** Task 27.0 gap analysis findings will be included in:
+  - **Task 30.0 (Prioritization):** Task 27.0 improvements will be prioritized and included in the comprehensive improvement roadmap
+  - **Task 31.0 (Final Documentation):** Task 27.0 recommendations will be documented in the improvement recommendations document and included in the improvement roadmap with timelines
+- **Current Status:** Gap analysis complete; implementation tasks documented and will be prioritized/documented in remaining PRD tasks, but actual implementation deferred
 
 ## Remaining Tasks
 
