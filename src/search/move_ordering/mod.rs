@@ -39,23 +39,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ptr;
 
-// Task 6.0: Include extracted modules
-#[path = "move_ordering/statistics.rs"]
+// Task 1.22: Modularized move ordering - submodules are in the same directory
 mod statistics;
-
-#[path = "move_ordering/cache.rs"]
 mod cache;
-
-#[path = "move_ordering/history_heuristic.rs"]
 mod history_heuristic;
-
-#[path = "move_ordering/killer_moves.rs"]
 mod killer_moves;
-
-#[path = "move_ordering/counter_moves.rs"]
 mod counter_moves;
-
-#[path = "move_ordering/pv_ordering.rs"]
 mod pv_ordering;
 
 pub use pv_ordering::{
@@ -63,7 +52,6 @@ pub use pv_ordering::{
     PVOrdering,
 };
 
-#[path = "move_ordering/capture_ordering.rs"]
 mod capture_ordering;
 
 pub use capture_ordering::{
@@ -74,7 +62,6 @@ pub use capture_ordering::{
     score_promotion_move_inline as score_promotion_move_inline_helper,
 };
 
-#[path = "move_ordering/see_calculation.rs"]
 mod see_calculation;
 
 pub use see_calculation::{
@@ -84,7 +71,7 @@ pub use see_calculation::{
 };
 
 // Re-export statistics structures
-// Note: PerformanceStats and StatisticsExport remain in main file (depend on MemoryUsage/MoveOrderingConfig)
+// Task 1.22: PerformanceStats and StatisticsExport now in statistics module
 pub use statistics::{
     AdvancedIntegrationStats, AllocationStats, AutoOptimizationResult, Bottleneck,
     BottleneckAnalysis, BottleneckCategory, BottleneckSeverity, CacheHitRates, CachePerformance,
@@ -92,14 +79,16 @@ pub use statistics::{
     GamePhaseStats, HeuristicEffectiveness, HeuristicPerformance, HeuristicStats, HotPathStats,
     MemoryBreakdown, MemoryStats, MemoryUsageTrend, MoveTypeDistribution, OperationTiming,
     OrderingStats, PerformanceChartData, PerformanceComparison, PerformanceMonitoringReport,
-    PerformanceSnapshot, PerformanceSummary, PerformanceTrendAnalysis, PerformanceTuningResult,
-    PhaseStats, StatisticsSummary, TTIntegrationStats, TimingBreakdown, TimingStats, TrendAnalysis,
-    TrendDirection, TuningCategory, TuningPriority, TuningRecommendation,
+    PerformanceSnapshot, PerformanceStats, PerformanceSummary, PerformanceTrendAnalysis,
+    PerformanceTuningResult, PhaseStats, StatisticsExport, StatisticsSummary, TTIntegrationStats,
+    TimingBreakdown, TimingStats, TrendAnalysis, TrendDirection, TuningCategory, TuningPriority,
+    TuningRecommendation,
 };
 
 // Re-export cache structures
 pub use cache::{
     CacheConfig, CacheEvictionPolicy, MoveOrderingCacheEntry, MoveOrderingCacheManager,
+    MoveScoreCache,
 };
 
 // Re-export killer moves structures
@@ -1494,10 +1483,8 @@ pub struct MoveOrdering {
     pub config: MoveOrderingConfig,
     /// Memory usage tracking
     pub memory_usage: MemoryUsage,
-    /// Move scoring cache for performance optimization (cache-friendly)
-    move_score_cache: HashMap<u64, i32>,
-    /// Fast cache for frequently accessed scores (L1 cache simulation)
-    fast_score_cache: Vec<(u64, i32)>,
+    /// Move scoring cache for performance optimization (Task 1.22: extracted to cache module)
+    move_score_cache: MoveScoreCache,
     /// Transposition table reference for PV move retrieval
     transposition_table: *const crate::search::ThreadSafeTranspositionTable,
     /// Hash calculator for position hashing
@@ -1547,47 +1534,7 @@ pub struct MoveOrdering {
 }
 
 // Statistics structures moved to statistics module - see statistics.rs
-// Remaining here: PerformanceStats and StatisticsExport (depend on MemoryUsage/MoveOrderingConfig)
-
-/// Comprehensive performance statistics
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct PerformanceStats {
-    /// Total moves ordered
-    pub total_moves_ordered: u64,
-    /// Average ordering time per operation
-    pub avg_ordering_time_us: f64,
-    /// Cache hit rate percentage
-    pub cache_hit_rate: f64,
-    /// SEE cache hit rate percentage
-    pub see_cache_hit_rate: f64,
-    /// Hot path performance data
-    pub hot_path_stats: HotPathStats,
-    /// Memory usage information
-    pub memory_usage: MemoryUsage,
-    /// Cache size information
-    pub cache_sizes: CacheSizes,
-}
-
-// CacheSizes, BottleneckAnalysis, Bottleneck, BottleneckCategory, BottleneckSeverity moved to statistics module
-
-/// Statistics export data structure
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct StatisticsExport {
-    /// Timestamp of export
-    pub timestamp: u64,
-    /// Complete ordering statistics
-    pub ordering_stats: OrderingStats,
-    /// Configuration used
-    pub config: MoveOrderingConfig,
-    /// Memory usage information
-    pub memory_usage: MemoryUsage,
-    /// Current cache sizes
-    pub cache_sizes: CacheSizes,
-}
-
-// PerformanceSummary, PerformanceChartData, CacheHitRates, HeuristicEffectiveness,
-// MemoryUsageTrend, TimingBreakdown, PerformanceTrendAnalysis, TrendAnalysis, TrendDirection
-// moved to statistics module
+// Task 1.22: PerformanceStats and StatisticsExport now in statistics module
 
 /// Comprehensive configuration system for move ordering
 ///
@@ -2171,8 +2118,10 @@ impl MoveOrdering {
             },
             config: config.clone(),
             memory_usage: MemoryUsage::default(),
-            move_score_cache: HashMap::new(),
-            fast_score_cache: Vec::with_capacity(64), // Small L1 cache for hot scores
+            move_score_cache: MoveScoreCache::new(
+                config.cache_config.max_cache_size,
+                64, // Fast cache size
+            ),
             transposition_table: ptr::null(),
             hash_calculator: crate::search::ShogiHashHandler::new(
                 config.cache_config.max_cache_size,
@@ -2295,28 +2244,10 @@ impl MoveOrdering {
 
         let cache_start = TimeSource::now();
 
-        // OPTIMIZATION: Check fast cache first (L1 cache simulation)
-        for &(hash, score) in &self.fast_score_cache {
-            if hash == move_hash {
-                self.stats.cache_hits += 1;
-                self.stats.hot_path_stats.cache_lookups += 1;
-                self.stats.hot_path_stats.cache_time_us += cache_start.elapsed_ms() as u64 * 1000;
-                self.stats.hot_path_stats.score_move_time_us +=
-                    start_time.elapsed_ms() as u64 * 1000;
-                return Ok(score);
-            }
-        }
-
-        // Check main cache (L2 cache simulation)
-        if let Some(&cached_score) = self.move_score_cache.get(&move_hash) {
+        // Task 1.22: Use MoveScoreCache which handles both fast and main cache
+        if let Some(cached_score) = self.move_score_cache.get(move_hash) {
             self.stats.cache_hits += 1;
             self.stats.hot_path_stats.cache_lookups += 1;
-
-            // OPTIMIZATION: Promote to fast cache if frequently accessed
-            if self.fast_score_cache.len() < 64 {
-                self.fast_score_cache.push((move_hash, cached_score));
-            }
-
             self.stats.hot_path_stats.cache_time_us += cache_start.elapsed_ms() as u64 * 1000;
             self.stats.hot_path_stats.score_move_time_us += start_time.elapsed_ms() as u64 * 1000;
             return Ok(cached_score);
@@ -2375,10 +2306,8 @@ impl MoveOrdering {
             0
         };
 
-        // Cache the score (with size limit)
-        if self.move_score_cache.len() < self.config.cache_config.max_cache_size {
-            self.move_score_cache.insert(move_hash, score);
-        }
+        // Task 1.22: Cache the score (MoveScoreCache handles size limits internally)
+        self.move_score_cache.insert(move_hash, score);
 
         // OPTIMIZATION: Update profiling statistics
         let total_time = start_time.elapsed_ms() as u64 * 1000;
@@ -2524,10 +2453,8 @@ impl MoveOrdering {
     #[allow(dead_code)] // Kept for future use and debugging
     fn update_memory_stats(&mut self) {
         let current_usage = MemoryBreakdown {
-            move_score_cache_bytes: self.move_score_cache.len()
-                * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
-            fast_cache_bytes: self.fast_score_cache.len()
-                * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>()),
+            move_score_cache_bytes: self.move_score_cache.memory_bytes(),
+            fast_cache_bytes: 0, // Task 1.22: Fast cache is now part of MoveScoreCache
             pv_cache_bytes: self.pv_ordering.cache_memory_bytes(), // Task 6.0: use PVOrdering module
             killer_moves_bytes: self.killer_move_manager.memory_bytes(), // Task 6.0: use KillerMoveManager
             history_table_bytes: self.history_manager.memory_bytes(), // Task 6.0: use HistoryHeuristicManager
@@ -2539,7 +2466,6 @@ impl MoveOrdering {
         };
 
         let total_bytes = current_usage.move_score_cache_bytes
-            + current_usage.fast_cache_bytes
             + current_usage.pv_cache_bytes
             + current_usage.killer_moves_bytes
             + current_usage.history_table_bytes
@@ -2633,99 +2559,23 @@ impl MoveOrdering {
     ///
     /// Captures are generally high-priority moves that should be tried early.
     /// The score is based on the value of the captured piece.
+    /// Task 1.22: Delegates to capture_ordering module helper function
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_capture_move(&self, move_: &Move) -> i32 {
-        if !move_.is_capture {
-            return 0;
-        }
-
-        let mut score = self.config.weights.capture_weight;
-
-        // Add value of captured piece
-        if let Some(captured) = &move_.captured_piece {
-            score += captured.piece_type.base_value();
-
-            // Bonus for capturing higher-value pieces
-            match captured.piece_type {
-                PieceType::King => score += 1000,
-                PieceType::Rook => score += 500,
-                PieceType::Bishop => score += 300,
-                PieceType::Gold => score += 200,
-                PieceType::Silver => score += 150,
-                PieceType::Knight => score += 100,
-                PieceType::Lance => score += 80,
-                PieceType::Pawn => score += 50,
-                // Promoted pieces
-                PieceType::PromotedPawn => score += 250,
-                PieceType::PromotedLance => score += 230,
-                PieceType::PromotedKnight => score += 210,
-                PieceType::PromotedSilver => score += 200,
-                PieceType::PromotedBishop => score += 350,
-                PieceType::PromotedRook => score += 550,
-            }
-        }
-
-        // Bonus for capturing with lower-value pieces (good exchange)
-        match move_.piece_type {
-            PieceType::Pawn => score += 100,
-            PieceType::Lance => score += 80,
-            PieceType::Knight => score += 60,
-            PieceType::Silver => score += 40,
-            PieceType::Gold => score += 30,
-            PieceType::Bishop => score += 20,
-            PieceType::Rook => score += 10,
-            PieceType::King => score += 5,
-            // Promoted pieces
-            PieceType::PromotedPawn => score += 110,
-            PieceType::PromotedLance => score += 90,
-            PieceType::PromotedKnight => score += 70,
-            PieceType::PromotedSilver => score += 50,
-            PieceType::PromotedBishop => score += 30,
-            PieceType::PromotedRook => score += 20,
-        }
-
-        score
+        use capture_ordering::score_capture_move;
+        score_capture_move(move_, self.config.weights.capture_weight)
     }
 
     /// Score a promotion move
     ///
     /// Promotions are strategic moves that can significantly change
     /// the value and capabilities of a piece.
+    /// Task 1.22: Delegates to capture_ordering module helper function
     #[allow(dead_code)] // Kept for debugging and future use
     fn score_promotion_move(&self, move_: &Move) -> i32 {
-        if !move_.is_promotion {
-            return 0;
-        }
-
-        let mut score = self.config.weights.promotion_weight;
-
-        // Add promotion value
-        score += move_.promotion_value();
-
-        // Bonus for promoting to more valuable pieces
-        match move_.piece_type {
-            PieceType::Pawn => score += 200, // Pawn to Gold is very valuable
-            PieceType::Lance => score += 180,
-            PieceType::Knight => score += 160,
-            PieceType::Silver => score += 140,
-            PieceType::Gold => score += 120,
-            PieceType::Bishop => score += 120,
-            PieceType::Rook => score += 100,
-            PieceType::King => score += 50,
-            // Promoted pieces
-            PieceType::PromotedPawn => score += 220,
-            PieceType::PromotedLance => score += 200,
-            PieceType::PromotedKnight => score += 180,
-            PieceType::PromotedSilver => score += 160,
-            PieceType::PromotedBishop => score += 140,
-            PieceType::PromotedRook => score += 120,
-        }
-
-        // Bonus for promoting in center or near enemy king
-        let center_bonus = self.score_position_value(&move_.to);
-        score += center_bonus / 2;
-
-        score
+        use capture_ordering::score_promotion_move;
+        let position_scorer = |pos: &Position| self.score_position_value(pos);
+        score_promotion_move(move_, self.config.weights.promotion_weight, position_scorer)
     }
 
     /// Score a tactical move
@@ -2945,36 +2795,22 @@ impl MoveOrdering {
     }
 
     /// Inline capture move scoring for hot path optimization
+    /// Task 1.22: Delegates to capture_ordering module inline helper function
     fn score_capture_move_inline(&self, move_: &Move) -> i32 {
-        if let Some(captured_piece) = &move_.captured_piece {
-            // MVV-LVA: Most Valuable Victim - Least Valuable Attacker
-            let victim_value = captured_piece.piece_type.base_value();
-            let attacker_value = move_.piece_type.base_value();
-
-            // Scale the score based on the exchange value
-            let exchange_value = victim_value - attacker_value;
-            self.config.weights.capture_weight + exchange_value / 10
-        } else {
-            0
-        }
+        use capture_ordering::score_capture_move_inline;
+        score_capture_move_inline(move_, self.config.weights.capture_weight)
     }
 
     /// Inline promotion move scoring for hot path optimization
+    /// Task 1.22: Delegates to capture_ordering module inline helper function
     fn score_promotion_move_inline(&self, move_: &Move) -> i32 {
-        if move_.is_promotion {
-            // Base promotion bonus
-            let mut score = self.config.weights.promotion_weight;
-
-            // Bonus for promoting to center squares
-            let center_distance = self.get_center_distance_fast(move_.to);
-            if center_distance <= 1 {
-                score += 50;
-            }
-
-            score
-        } else {
-            0
-        }
+        use capture_ordering::score_promotion_move_inline;
+        let position_scorer = |pos: &Position| {
+            // Use fast center distance calculation for inline version
+            let center_distance = self.get_center_distance_fast(*pos);
+            if center_distance <= 1 { 50 } else { 0 }
+        };
+        score_promotion_move_inline(move_, self.config.weights.promotion_weight, position_scorer)
     }
 
     /// Fast position value calculation (optimized for hot path)
@@ -3027,8 +2863,8 @@ impl MoveOrdering {
     /// Update memory usage statistics
     fn update_memory_usage(&mut self) {
         // Calculate current memory usage
-        let move_score_cache_memory =
-            self.move_score_cache.len() * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
+        // Task 1.22: Use MoveScoreCache.memory_bytes() which includes both caches
+        let move_score_cache_memory = self.move_score_cache.memory_bytes();
         let pv_cache_memory = self.pv_ordering.cache_memory_bytes(); // Task 6.0: use PVOrdering module
         let killer_moves_memory = self.killer_move_manager.memory_bytes(); // Task 6.0: use KillerMoveManager
         let history_table_memory = self.history_manager.memory_bytes(); // Task 6.0: use HistoryHeuristicManager
@@ -3388,20 +3224,10 @@ impl MoveOrdering {
     }
 
     /// Apply configuration changes to internal state
+    /// Task 1.22: Delegates cache size management to MoveScoreCache
     fn apply_configuration_changes(&mut self) {
-        // Update cache size if needed
-        if self.move_score_cache.len() > self.config.cache_config.max_cache_size {
-            // Trim cache to new size
-            let mut keys_to_remove: Vec<u64> = Vec::new();
-            for (i, key) in self.move_score_cache.keys().enumerate() {
-                if i >= self.config.cache_config.max_cache_size {
-                    keys_to_remove.push(*key);
-                }
-            }
-            for key in keys_to_remove {
-                self.move_score_cache.remove(&key);
-            }
-        }
+        // Update cache size if needed (MoveScoreCache handles trimming internally)
+        self.move_score_cache.set_max_size(self.config.cache_config.max_cache_size);
 
         // Update killer move limits if needed (Task 6.0: use KillerMoveManager)
         self.killer_move_manager
@@ -3457,22 +3283,10 @@ impl MoveOrdering {
     ///
     /// Adjusts the maximum cache size based on memory constraints
     /// and performance requirements.
+    /// Task 1.22: Delegates to MoveScoreCache
     pub fn set_cache_size(&mut self, size: usize) {
         self.config.cache_config.max_cache_size = size;
-
-        // Trim cache if it's larger than new size
-        if self.move_score_cache.len() > size {
-            let mut keys_to_remove: Vec<u64> = Vec::new();
-            for (i, key) in self.move_score_cache.keys().enumerate() {
-                if i >= size {
-                    keys_to_remove.push(*key);
-                }
-            }
-            for key in keys_to_remove {
-                self.move_score_cache.remove(&key);
-            }
-        }
-
+        self.move_score_cache.set_max_size(size);
         self.update_memory_usage();
     }
 
@@ -3520,6 +3334,7 @@ impl MoveOrdering {
     }
 
     /// Clear the move scoring cache
+    /// Task 1.22: Delegates to MoveScoreCache
     pub fn clear_cache(&mut self) {
         self.move_score_cache.clear();
         self.pv_ordering.clear_cache(); // Task 6.0: use PVOrdering module
@@ -3553,18 +3368,10 @@ impl MoveOrdering {
     }
 
     /// Set maximum cache size
+    /// Task 1.22: Delegates to MoveScoreCache
     pub fn set_max_cache_size(&mut self, max_size: usize) {
         self.config.cache_config.max_cache_size = max_size;
-
-        // Trim cache if necessary
-        if self.move_score_cache.len() > max_size {
-            let excess = self.move_score_cache.len() - max_size;
-            let keys_to_remove: Vec<u64> =
-                self.move_score_cache.keys().take(excess).copied().collect();
-            for key in keys_to_remove {
-                self.move_score_cache.remove(&key);
-            }
-        }
+        self.move_score_cache.set_max_size(max_size);
     }
 
     /// Get current cache size
@@ -3573,8 +3380,9 @@ impl MoveOrdering {
     }
 
     /// Check if cache is at maximum size
+    /// Task 1.22: Delegates to MoveScoreCache
     pub fn is_cache_full(&self) -> bool {
-        self.move_score_cache.len() >= self.config.cache_config.max_cache_size
+        self.move_score_cache.is_full()
     }
 
     // ==================== PV Move Ordering Methods ====================
@@ -4627,7 +4435,7 @@ impl MoveOrdering {
             memory_usage: self.memory_usage.clone(),
             cache_sizes: CacheSizes {
                 move_score_cache: self.move_score_cache.len(),
-                fast_cache: self.fast_score_cache.len(),
+                fast_cache: 0, // Task 1.22: Fast cache is now part of MoveScoreCache
                 pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
                 see_cache: self.see_cache.len(),         // Task 6.0: use SEECache module
                 history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
@@ -4651,7 +4459,7 @@ impl MoveOrdering {
             memory_usage: self.memory_usage.clone(),
             cache_sizes: CacheSizes {
                 move_score_cache: self.move_score_cache.len(),
-                fast_cache: self.fast_score_cache.len(),
+                fast_cache: 0, // Task 1.22: Fast cache is now part of MoveScoreCache
                 pv_cache: self.pv_ordering.cache_size(), // Task 6.0: use PVOrdering module
                 see_cache: self.see_cache.len(),         // Task 6.0: use SEECache module
                 history_table: self.history_manager.absolute_history_size(), // Task 6.0: use HistoryHeuristicManager
@@ -5383,8 +5191,7 @@ impl MoveOrdering {
     /// Clear all caches to recover from cache errors
     #[allow(dead_code)] // Kept for future use and debugging
     fn clear_all_caches(&mut self) {
-        self.move_score_cache.clear();
-        self.fast_score_cache.clear();
+        self.move_score_cache.clear(); // Task 1.22: MoveScoreCache handles both caches
         self.pv_ordering.clear_cache(); // Task 6.0: use PVOrdering module
         self.see_cache.clear(); // Task 6.0: use SEECache module
         self.cache_manager.clear(); // Task 6.0: use MoveOrderingCacheManager
@@ -5940,9 +5747,7 @@ impl MoveOrdering {
         // Clear error log
         self.error_handler.clear_errors();
 
-        // Force garbage collection by shrinking vectors
-        self.move_score_cache.shrink_to_fit();
-        self.fast_score_cache.shrink_to_fit();
+        // Task 1.22: MoveScoreCache manages its own memory (HashMap doesn't have shrink_to_fit)
         // Task 6.0: PVOrdering manages its own memory
         // Task 6.0: SEECache manages its own memory
         // Task 6.0: HistoryHeuristicManager manages its own memory (HashMap doesn't have shrink_to_fit)
@@ -6017,9 +5822,8 @@ impl MoveOrdering {
     }
 
     /// Shrink vectors to free memory
+    /// Task 1.22: MoveScoreCache manages its own memory (HashMap doesn't have shrink_to_fit)
     fn shrink_vectors(&mut self) {
-        self.move_score_cache.shrink_to_fit();
-        self.fast_score_cache.shrink_to_fit();
         // Task 6.0: PVOrdering manages its own memory
         // Task 6.0: SEECache manages its own memory
         // Task 6.0: HistoryHeuristicManager manages its own memory (HashMap doesn't have shrink_to_fit)
@@ -10973,8 +10777,8 @@ mod tests {
         let score2 = orderer.score_move(&move_);
         assert_eq!(score1, score2);
 
-        // Fast cache should have entries
-        assert!(!orderer.fast_score_cache.is_empty());
+        // Task 1.22: Fast cache is now part of MoveScoreCache - verify cache has entries
+        assert!(!orderer.move_score_cache.is_empty());
     }
 
     #[test]

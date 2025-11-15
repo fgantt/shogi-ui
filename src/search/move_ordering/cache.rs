@@ -315,3 +315,126 @@ impl Default for MoveOrderingCacheManager {
         Self::new()
     }
 }
+
+// Task 1.22: Extracted from mod.rs - Move score cache management
+
+/// Helper struct for managing move score caches
+///
+/// Manages both the main move_score_cache (HashMap) and fast_score_cache (Vec)
+/// for efficient move scoring lookups.
+#[derive(Debug, Clone)]
+pub struct MoveScoreCache {
+    /// Main cache: maps move hash -> score
+    cache: HashMap<u64, i32>,
+    /// Fast cache (L1 cache simulation): small Vec for hot scores
+    fast_cache: Vec<(u64, i32)>,
+    /// Maximum size for main cache
+    max_size: usize,
+    /// Maximum size for fast cache (typically 64)
+    fast_cache_max_size: usize,
+}
+
+impl MoveScoreCache {
+    /// Create a new move score cache
+    pub fn new(max_size: usize, fast_cache_max_size: usize) -> Self {
+        Self {
+            cache: HashMap::new(),
+            fast_cache: Vec::with_capacity(fast_cache_max_size),
+            max_size,
+            fast_cache_max_size,
+        }
+    }
+
+    /// Get a cached score, checking fast cache first, then main cache
+    ///
+    /// Returns the cached score if found, None otherwise.
+    pub fn get(&self, move_hash: u64) -> Option<i32> {
+        // Check fast cache first (L1 cache simulation)
+        for &(hash, score) in &self.fast_cache {
+            if hash == move_hash {
+                return Some(score);
+            }
+        }
+
+        // Check main cache (L2 cache simulation)
+        self.cache.get(&move_hash).copied()
+    }
+
+    /// Insert a score into the cache
+    ///
+    /// If the cache is full, the oldest entry in fast_cache is evicted.
+    /// The new entry is added to both fast_cache (if there's room) and main cache.
+    pub fn insert(&mut self, move_hash: u64, score: i32) {
+        // Add to fast cache if there's room
+        if self.fast_cache.len() < self.fast_cache_max_size {
+            self.fast_cache.push((move_hash, score));
+        }
+
+        // Add to main cache, evicting if necessary
+        if self.cache.len() < self.max_size {
+            self.cache.insert(move_hash, score);
+        } else {
+            // Cache is full - simple eviction: remove first entry
+            if let Some(&key) = self.cache.keys().next() {
+                self.cache.remove(&key);
+            }
+            self.cache.insert(move_hash, score);
+        }
+    }
+
+    /// Clear all caches
+    pub fn clear(&mut self) {
+        self.cache.clear();
+        self.fast_cache.clear();
+    }
+
+    /// Get current cache size
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    /// Check if cache is empty
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
+    /// Check if cache is full
+    pub fn is_full(&self) -> bool {
+        self.cache.len() >= self.max_size
+    }
+
+    /// Set maximum cache size and trim if necessary
+    pub fn set_max_size(&mut self, max_size: usize) {
+        self.max_size = max_size;
+
+        // Trim cache if necessary
+        if self.cache.len() > max_size {
+            let excess = self.cache.len() - max_size;
+            let keys_to_remove: Vec<u64> =
+                self.cache.keys().take(excess).copied().collect();
+            for key in keys_to_remove {
+                self.cache.remove(&key);
+            }
+        }
+    }
+
+    /// Get maximum cache size
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    /// Get memory usage estimate in bytes
+    pub fn memory_bytes(&self) -> usize {
+        let cache_bytes = self.cache.len()
+            * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
+        let fast_cache_bytes = self.fast_cache.len()
+            * (std::mem::size_of::<u64>() + std::mem::size_of::<i32>());
+        cache_bytes + fast_cache_bytes
+    }
+}
+
+impl Default for MoveScoreCache {
+    fn default() -> Self {
+        Self::new(10000, 64)
+    }
+}

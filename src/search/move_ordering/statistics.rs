@@ -5,6 +5,10 @@
 
 // Statistics structures - no external dependencies needed
 
+// Task 1.22: Import types needed for PerformanceStats and StatisticsExport
+// Note: CacheSizes, HotPathStats, and OrderingStats are already in this module
+use super::{MemoryUsage, MoveOrderingConfig};
+
 /// Performance statistics for move ordering
 ///
 /// Tracks various metrics to monitor the effectiveness and performance
@@ -934,4 +938,46 @@ pub struct StatisticsSummary {
     pub capture_percentage: f64,
     /// Overall effectiveness score (0-100)
     pub overall_effectiveness: f64,
+}
+
+// Task 1.22: Extracted from mod.rs - Performance statistics and export structures
+
+/// Comprehensive performance statistics
+///
+/// Combines ordering statistics with memory usage and cache information
+/// for comprehensive performance analysis.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PerformanceStats {
+    /// Total moves ordered
+    pub total_moves_ordered: u64,
+    /// Average ordering time per operation
+    pub avg_ordering_time_us: f64,
+    /// Cache hit rate percentage
+    pub cache_hit_rate: f64,
+    /// SEE cache hit rate percentage
+    pub see_cache_hit_rate: f64,
+    /// Hot path performance data
+    pub hot_path_stats: HotPathStats,
+    /// Memory usage information
+    pub memory_usage: MemoryUsage,
+    /// Cache size information
+    pub cache_sizes: CacheSizes,
+}
+
+/// Statistics export data structure
+///
+/// Contains all information needed to export statistics for analysis,
+/// including timestamp, statistics, configuration, and memory usage.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StatisticsExport {
+    /// Timestamp of export
+    pub timestamp: u64,
+    /// Complete ordering statistics
+    pub ordering_stats: OrderingStats,
+    /// Configuration used
+    pub config: MoveOrderingConfig,
+    /// Memory usage information
+    pub memory_usage: MemoryUsage,
+    /// Current cache sizes
+    pub cache_sizes: CacheSizes,
 }
