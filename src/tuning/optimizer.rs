@@ -9,6 +9,9 @@
 //! - Adam optimizer with adaptive learning rates
 //! - LBFGS quasi-Newton method with Armijo line search
 //! - Genetic Algorithm for non-convex optimization
+//!   * Configurable tournament selection size
+//!   * Configurable elite preservation percentage
+//!   * Configurable mutation magnitude and bounds
 //! - Regularization (L1 and L2) to prevent overfitting
 
 use super::types::{
@@ -84,6 +87,13 @@ struct LBFGSState {
 }
 
 /// Genetic algorithm state
+///
+/// The genetic algorithm uses a population-based approach to optimize weights.
+/// Key configurable parameters:
+/// - `tournament_size`: Number of candidates in tournament selection (default: 3)
+/// - `elite_percentage`: Percentage of population preserved as elite (default: 0.1 = 10%)
+/// - `mutation_magnitude`: Magnitude of mutation changes (default: 0.2)
+/// - `mutation_bounds`: Bounds for mutation values (default: (-10.0, 10.0))
 #[derive(Debug, Clone)]
 struct GeneticAlgorithmState {
     population: Vec<Vec<f64>>,
@@ -93,6 +103,9 @@ struct GeneticAlgorithmState {
     crossover_rate: f64,
     population_size: usize,
     elite_size: usize,
+    tournament_size: usize,
+    mutation_magnitude: f64,
+    mutation_bounds: (f64, f64),
 }
 
 /// Optimization engine for tuning evaluation parameters
@@ -560,6 +573,10 @@ impl GeneticAlgorithmState {
         num_weights: usize,
         mutation_rate: f64,
         crossover_rate: f64,
+        tournament_size: usize,
+        elite_percentage: f64,
+        mutation_magnitude: f64,
+        mutation_bounds: (f64, f64),
     ) -> Self {
         let mut population = Vec::with_capacity(population_size);
 
@@ -572,6 +589,9 @@ impl GeneticAlgorithmState {
             population.push(individual);
         }
 
+        // Calculate elite size from percentage
+        let elite_size = (population_size as f64 * elite_percentage).max(1.0) as usize;
+
         Self {
             population,
             fitness_scores: vec![0.0; population_size],
@@ -579,7 +599,10 @@ impl GeneticAlgorithmState {
             mutation_rate,
             crossover_rate,
             population_size,
-            elite_size: population_size / 10, // Top 10%
+            elite_size,
+            tournament_size,
+            mutation_magnitude,
+            mutation_bounds,
         }
     }
 
@@ -652,10 +675,9 @@ impl GeneticAlgorithmState {
 
     /// Tournament selection
     fn tournament_selection(&self) -> usize {
-        let tournament_size = 3;
         let mut best_idx = rand::random::<usize>() % self.population_size;
 
-        for _ in 1..tournament_size {
+        for _ in 1..self.tournament_size {
             let candidate_idx = rand::random::<usize>() % self.population_size;
             if self.fitness_scores[candidate_idx] > self.fitness_scores[best_idx] {
                 best_idx = candidate_idx;
@@ -687,8 +709,11 @@ impl GeneticAlgorithmState {
     fn mutate(&self, mut individual: Vec<f64>) -> Vec<f64> {
         for gene in &mut individual {
             if rand::random::<f64>() < self.mutation_rate {
-                *gene += rand::random::<f64>() * 0.2 - 0.1; // Small random change
-                *gene = gene.clamp(-10.0, 10.0); // Keep within bounds
+                // Apply mutation with configurable magnitude
+                let mutation = rand::random::<f64>() * self.mutation_magnitude * 2.0 - self.mutation_magnitude;
+                *gene += mutation;
+                // Clamp to configurable bounds
+                *gene = gene.clamp(self.mutation_bounds.0, self.mutation_bounds.1);
             }
         }
         individual
@@ -760,12 +785,20 @@ impl Optimizer {
                 mutation_rate,
                 crossover_rate,
                 max_generations,
+                tournament_size,
+                elite_percentage,
+                mutation_magnitude,
+                mutation_bounds,
             } => self.genetic_algorithm_optimize(
                 positions,
                 population_size,
                 mutation_rate,
                 crossover_rate,
                 max_generations,
+                tournament_size,
+                elite_percentage,
+                mutation_magnitude,
+                mutation_bounds,
                 k_factor,
             ),
         }
@@ -1062,6 +1095,13 @@ impl Optimizer {
     }
 
     /// Genetic algorithm optimizer
+    ///
+    /// Uses a population-based evolutionary approach to optimize weights.
+    /// Configurable parameters:
+    /// - `tournament_size`: Size of tournament for selection (larger = more selective)
+    /// - `elite_percentage`: Percentage of best individuals preserved (0.0 to 1.0)
+    /// - `mutation_magnitude`: Maximum change per mutation (larger = more exploration)
+    /// - `mutation_bounds`: Clamping bounds for mutated values (min, max)
     fn genetic_algorithm_optimize(
         &self,
         positions: &[TrainingPosition],
@@ -1069,6 +1109,10 @@ impl Optimizer {
         mutation_rate: f64,
         crossover_rate: f64,
         max_generations: usize,
+        tournament_size: usize,
+        elite_percentage: f64,
+        mutation_magnitude: f64,
+        mutation_bounds: (f64, f64),
         k_factor: f64,
     ) -> Result<OptimizationResults, String> {
         let start_time = Instant::now();
@@ -1077,6 +1121,10 @@ impl Optimizer {
             NUM_EVAL_FEATURES,
             mutation_rate,
             crossover_rate,
+            tournament_size,
+            elite_percentage,
+            mutation_magnitude,
+            mutation_bounds,
         );
         let mut error_history = Vec::new();
         // Use the provided max_generations parameter
@@ -1509,7 +1557,7 @@ mod tests {
 
     #[test]
     fn test_genetic_algorithm_state_creation() {
-        let state = GeneticAlgorithmState::new(50, 10, 0.1, 0.8);
+        let state = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 3, 0.1, 0.2, (-10.0, 10.0));
 
         assert_eq!(state.population.len(), 50);
         assert_eq!(state.fitness_scores.len(), 50);
@@ -1518,6 +1566,9 @@ mod tests {
         assert_eq!(state.crossover_rate, 0.8);
         assert_eq!(state.population_size, 50);
         assert_eq!(state.elite_size, 5); // 10% of 50
+        assert_eq!(state.tournament_size, 3);
+        assert_eq!(state.mutation_magnitude, 0.2);
+        assert_eq!(state.mutation_bounds, (-10.0, 10.0));
     }
 
     #[test]
@@ -1660,6 +1711,10 @@ mod tests {
             mutation_rate: 0.1,
             crossover_rate: 0.8,
             max_generations: 50,
+            tournament_size: 3,
+            elite_percentage: 0.1,
+            mutation_magnitude: 0.2,
+            mutation_bounds: (-10.0, 10.0),
         };
         let optimizer = Optimizer::new(method);
 
@@ -1670,6 +1725,82 @@ mod tests {
         assert_eq!(results.optimized_weights.len(), NUM_EVAL_FEATURES);
         assert!(results.final_error >= 0.0);
         assert!(results.iterations > 0);
+    }
+
+    #[test]
+    fn test_genetic_algorithm_tournament_size() {
+        // Test that tournament selection respects the configured tournament size
+        let state_small = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 2, 0.1, 0.2, (-10.0, 10.0));
+        let state_large = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 5, 0.1, 0.2, (-10.0, 10.0));
+
+        assert_eq!(state_small.tournament_size, 2);
+        assert_eq!(state_large.tournament_size, 5);
+
+        // Tournament selection should use the configured size
+        // (We can't easily test the selection logic directly, but we verify the parameter is stored)
+    }
+
+    #[test]
+    fn test_genetic_algorithm_elite_percentage() {
+        // Test that elite preservation respects the configured percentage
+        let state_10pct = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 3, 0.1, 0.2, (-10.0, 10.0));
+        let state_20pct = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 3, 0.2, 0.2, (-10.0, 10.0));
+        let state_5pct = GeneticAlgorithmState::new(50, 10, 0.1, 0.8, 3, 0.05, 0.2, (-10.0, 10.0));
+
+        assert_eq!(state_10pct.elite_size, 5); // 10% of 50
+        assert_eq!(state_20pct.elite_size, 10); // 20% of 50
+        assert_eq!(state_5pct.elite_size, 2); // 5% of 50 (rounded down from 2.5)
+
+        // Test minimum elite size of 1
+        let state_tiny = GeneticAlgorithmState::new(5, 10, 0.1, 0.8, 3, 0.01, 0.2, (-10.0, 10.0));
+        assert_eq!(state_tiny.elite_size, 1); // Minimum of 1
+    }
+
+    #[test]
+    fn test_genetic_algorithm_mutation_parameters() {
+        // Test that mutation respects magnitude and bounds
+        let state = GeneticAlgorithmState::new(
+            50,
+            10,
+            0.1,
+            0.8,
+            3,
+            0.1,
+            0.5, // Larger magnitude
+            (-5.0, 5.0), // Tighter bounds
+        );
+
+        assert_eq!(state.mutation_magnitude, 0.5);
+        assert_eq!(state.mutation_bounds, (-5.0, 5.0));
+
+        // Test mutation operation with custom parameters
+        let individual = vec![0.0; 10];
+        let mutated = state.mutate(individual);
+
+        // Verify all values are within bounds
+        for &value in &mutated {
+            assert!(value >= -5.0 && value <= 5.0, "Value {} is outside bounds", value);
+        }
+
+        // Test with different bounds
+        let state_wide = GeneticAlgorithmState::new(
+            50,
+            10,
+            0.1,
+            0.8,
+            3,
+            0.1,
+            1.0, // Even larger magnitude
+            (-20.0, 20.0), // Wider bounds
+        );
+
+        let individual2 = vec![0.0; 10];
+        let mutated2 = state_wide.mutate(individual2);
+
+        // Verify all values are within wider bounds
+        for &value in &mutated2 {
+            assert!(value >= -20.0 && value <= 20.0, "Value {} is outside bounds", value);
+        }
     }
 
     #[test]

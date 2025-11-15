@@ -356,6 +356,14 @@ pub enum OptimizationMethod {
         mutation_rate: f64,
         crossover_rate: f64,
         max_generations: usize,
+        /// Tournament size for tournament selection (default: 3)
+        tournament_size: usize,
+        /// Percentage of population to preserve as elite (0.0 to 1.0, default: 0.1 = 10%)
+        elite_percentage: f64,
+        /// Magnitude of mutation changes (default: 0.2)
+        mutation_magnitude: f64,
+        /// Bounds for mutation values (min, max) (default: (-10.0, 10.0))
+        mutation_bounds: (f64, f64),
     },
 }
 

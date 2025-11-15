@@ -393,6 +393,10 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
             mutation_rate: 0.1,
             crossover_rate: 0.8,
             max_generations: cli.iterations as usize,
+            tournament_size: 3,
+            elite_percentage: 0.1,
+            mutation_magnitude: 0.2,
+            mutation_bounds: (-10.0, 10.0),
         },
         _ => return Err(format!("Unknown optimization method: {}", cli.method).into()),
     };
