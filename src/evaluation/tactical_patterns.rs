@@ -601,7 +601,7 @@ impl TacticalPatternRecognizer {
         &self,
         ctx: &TacticalDetectionContext,
         origin: Position,
-        piece_type: PieceType,
+        _piece_type: PieceType,
         directions: &[(i8, i8)],
     ) -> i32 {
         let mut bonus = 0;

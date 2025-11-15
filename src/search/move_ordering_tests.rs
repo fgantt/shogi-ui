@@ -137,7 +137,7 @@ impl MoveOrderingTestSuite {
         println!("Testing transposition table integration...");
 
         let mut orderer = TranspositionMoveOrderer::new();
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
         orderer.set_transposition_table(&tt);
 
         let board = BitboardBoard::new();

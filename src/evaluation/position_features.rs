@@ -1051,7 +1051,7 @@ impl PositionFeatureEvaluator {
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> Option<TaperedScore> {
-        let (row, col) = oriented_coords(king_pos, player);
+        let (row, _col) = oriented_coords(king_pos, player);
         if row != 8 {
             return None;
         }
@@ -1270,6 +1270,7 @@ impl PositionFeatureEvaluator {
         }
     }
 
+    #[allow(dead_code)]
     fn oriented_piece(
         &self,
         board: &BitboardBoard,

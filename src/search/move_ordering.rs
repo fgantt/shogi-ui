@@ -32,14 +32,9 @@
 
 use crate::time_utils::TimeSource;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Piece, PieceType, Player, Position};
-use crate::types::evaluation::TaperedScore;
-use crate::types::search::{
-    IIDConfig, LMRConfig, NullMoveConfig, QuiescenceConfig, SearchState, TimePressure,
-    TimePressureThresholds,
-};
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::transposition::TranspositionEntry;
-use crate::types::{Bitboard, EMPTY_BITBOARD, TranspositionFlag};
+use crate::types::TranspositionFlag;
 use std::collections::HashMap;
 use std::fmt;
 use std::ptr;
@@ -3516,6 +3511,7 @@ impl MoveOrdering {
     /// Evict cache entry based on eviction policy
     /// Task 3.0: Implements LRU, depth-preferred, FIFO, and hybrid eviction policies
     /// Evict cache entry (Task 6.0: delegates to cache manager)
+    #[allow(dead_code)]
     fn evict_cache_entry(&mut self, _new_key: &(u64, u8)) -> Option<(u64, u8)> {
         self.cache_manager.evict_entry(
             self.config.cache_config.cache_eviction_policy,
@@ -4116,6 +4112,7 @@ impl MoveOrdering {
     ///
     /// This method should be called periodically to update the hit rate
     /// based on current hit/miss counts.
+    #[allow(dead_code)]
     fn update_counter_move_hit_rate(&mut self) {
         let total = self.stats.counter_move_hits + self.stats.counter_move_misses;
         if total > 0 {
@@ -4275,6 +4272,7 @@ impl MoveOrdering {
 
     /// Determine game phase based on material count
     /// Task 4.0: Helper method for phase-aware history
+    #[allow(dead_code)]
     fn determine_game_phase_from_material(
         &self,
         board: &crate::bitboards::BitboardBoard,
@@ -4286,6 +4284,7 @@ impl MoveOrdering {
 
     /// Get current timestamp for time-based aging
     /// Task 4.0: Helper method for time-based aging (now delegates to manager)
+    #[allow(dead_code)]
     fn get_current_timestamp(&mut self) -> u64 {
         // Task 6.0: Delegate to history manager
         self.history_manager.get_current_timestamp()
@@ -4315,6 +4314,7 @@ impl MoveOrdering {
 
     /// Apply time-based aging to history score if enabled
     /// Task 4.0: Helper method for time-based aging (now delegates to manager)
+    #[allow(dead_code)]
     fn apply_time_based_aging_if_enabled(&self, score: u32, last_update: u64) -> u32 {
         let current_time = self.history_manager.get_time_aging_counter();
         self.history_manager.apply_time_based_aging_if_enabled(

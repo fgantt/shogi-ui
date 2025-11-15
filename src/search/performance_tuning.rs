@@ -607,9 +607,6 @@ use crate::types::all::{
     BaselineMoveOrderingMetrics, BenchmarkPosition, EvaluationMetrics, HardwareInfo, MemoryMetrics,
     ParallelSearchMetrics, PerformanceBaseline, SearchMetrics, TTMetrics,
 };
-use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Player};
-use crate::types::evaluation::TaperedScore;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -1315,7 +1312,7 @@ impl BenchmarkAggregator {
     /// Compare benchmark result with baseline
     fn compare_with_baseline(
         &self,
-        benchmark_name: &str,
+        _benchmark_name: &str,
         current_mean_time_ns: f64,
         baseline_path: &Path,
     ) -> Result<BenchmarkBaselineComparison, String> {
@@ -2138,7 +2135,7 @@ impl TelemetryExporter {
         self.ensure_directory()?;
 
         let baseline = engine.collect_baseline_metrics();
-        let ordering_stats = engine.get_move_ordering_effectiveness_metrics();
+        let _ordering_stats = engine.get_move_ordering_effectiveness_metrics();
 
         let cache_data = serde_json::json!({
             "timestamp": chrono::Utc::now().to_rfc3339(),

@@ -106,6 +106,7 @@ impl<'a> ControlCache<'a> {
         value
     }
 
+    #[allow(dead_code)]
     fn count_all_controlled(&mut self, player: Player) -> i32 {
         let mut count = 0;
         for row in 0..9 {
@@ -118,6 +119,7 @@ impl<'a> ControlCache<'a> {
         count
     }
 
+    #[allow(dead_code)]
     fn count_subset_controlled(&mut self, player: Player, squares: &[(u8, u8)]) -> i32 {
         let mut count = 0;
         for &(row, col) in squares {
@@ -904,7 +906,7 @@ impl PositionalPatternAnalyzer {
     ) -> TaperedScore {
         let base = match piece.piece_type {
             PieceType::Knight | PieceType::PromotedKnight => TaperedScore::new_tapered(60, 40),
-            PieceType::Silver | PieceType::PromotedSilver => TaperedScore::new_tapered(58, 46),
+            PieceType::Silver => TaperedScore::new_tapered(58, 46),
             PieceType::Gold
             | PieceType::PromotedPawn
             | PieceType::PromotedLance

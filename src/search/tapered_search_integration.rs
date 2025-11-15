@@ -25,9 +25,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, PieceType, Player, Position};
-use crate::types::evaluation::TaperedScore;
+use crate::types::core::{PieceType, Position};
 use std::collections::HashMap;
 
 /// Tapered search enhancer

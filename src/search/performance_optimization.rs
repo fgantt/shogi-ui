@@ -4,9 +4,7 @@
 //! including cache line alignment, prefetching, optimized hash mapping, and hot path
 //! optimizations while maintaining cross-platform compatibility.
 
-use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Player};
-use crate::types::evaluation::TaperedScore;
+use crate::types::core::Move;
 use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::alloc::{alloc, dealloc, Layout};

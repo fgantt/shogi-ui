@@ -155,7 +155,8 @@ impl OpeningPrincipleEvaluator {
     }
 
     /// Log component contributions when they exceed threshold (Task 19.0 - Task 5.0)
-    fn log_component_contributions(&self, total_score: &TaperedScore, move_count: u32) {
+    fn log_component_contributions(&self, _total_score: &TaperedScore, _move_count: u32) {
+        #[allow(dead_code)]
         const THRESHOLD_CP: i32 = 100; // Log when component contributes > 100cp
 
         #[cfg(feature = "verbose-debug")]

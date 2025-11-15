@@ -535,7 +535,7 @@ impl KingGoldVsKingSolver {
         move_: &Move,
         _king: Position,
         defending_king: Position,
-        captured_pieces: &CapturedPieces,
+        _captured_pieces: &CapturedPieces,
     ) -> bool {
         // Check if the move gets the Gold closer to the defending King
         let current_distance = self.manhattan_distance(move_.from.unwrap(), defending_king);
@@ -562,6 +562,7 @@ impl KingGoldVsKingSolver {
     }
 
     /// Check if the defending player is stalemated
+    #[allow(dead_code)]
     fn is_stalemate(
         &self,
         board: &BitboardBoard,
@@ -600,7 +601,7 @@ impl KingGoldVsKingSolver {
             let gold_distance = self.manhattan_distance(attacking_gold, defending_king);
 
             // Better estimate: consider piece coordination
-            let min_distance = king_distance.min(gold_distance);
+            let _min_distance = king_distance.min(gold_distance);
             let avg_distance = (king_distance + gold_distance) / 2;
 
             // Estimate: need to coordinate pieces, usually takes 1.5x the average distance

@@ -15,9 +15,11 @@
 //! - Regularization (L1 and L2) to prevent overfitting
 //! - Incremental/Online Learning for streaming data updates
 
+#![allow(dead_code)]
+
 use super::types::{
     FoldResult, LineSearchType, Objective, OptimizationMethod, ParetoFront, ParetoSolution,
-    TrainingPosition, TuningConfig, ValidationResults, WeightConstraint,
+    TrainingPosition, TuningConfig, ValidationResults,
 };
 use crate::types::evaluation::NUM_EVAL_FEATURES;
 use crate::weights::WeightFile;
@@ -150,7 +152,7 @@ pub enum ConvergenceReason {
 
 /// Adam optimizer state
 #[derive(Debug, Clone)]
-struct AdamState {
+pub struct AdamState {
     m: Vec<f64>, // First moment estimates
     v: Vec<f64>, // Second moment estimates
     beta1: f64,
@@ -170,7 +172,7 @@ struct LineSearch {
 
 /// LBFGS optimizer state
 #[derive(Debug, Clone)]
-struct LBFGSState {
+pub struct LBFGSState {
     s: Vec<Vec<f64>>, // Position differences
     y: Vec<Vec<f64>>, // Gradient differences
     rho: Vec<f64>,    // Scaling factors
@@ -187,7 +189,7 @@ struct LBFGSState {
 /// - `mutation_magnitude`: Magnitude of mutation changes (default: 0.2)
 /// - `mutation_bounds`: Bounds for mutation values (default: (-10.0, 10.0))
 #[derive(Debug, Clone)]
-struct GeneticAlgorithmState {
+pub struct GeneticAlgorithmState {
     population: Vec<Vec<f64>>,
     fitness_scores: Vec<f64>,
     generation: usize,
@@ -1537,6 +1539,7 @@ impl Optimizer {
     }
 
     /// Create a Pareto solution from optimization results
+    #[allow(dead_code)]
     fn create_pareto_solution(
         &self,
         weights: Vec<f64>,
@@ -1570,6 +1573,7 @@ impl Optimizer {
     ///
     /// Processes positions in batches and maintains optimizer state across updates.
     /// This allows continuous learning from streaming data.
+    #[allow(dead_code)]
     fn optimize_incremental(
         &self,
         positions: &[TrainingPosition],

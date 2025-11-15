@@ -949,7 +949,7 @@ impl OpeningBook {
 
     /// Count positions that would hash to the same value
     /// This is an approximation since we can't access HashMap internals
-    fn count_positions_with_hash(&self, hash: u64) -> usize {
+    fn count_positions_with_hash(&self, _hash: u64) -> usize {
         // Since we can't access HashMap internals, we estimate based on
         // how many positions we've seen with this hash
         // In practice, HashMap uses open addressing, so chain length is typically 1-2
@@ -1422,7 +1422,7 @@ impl OpeningBook {
     /// 3. Evaluate the resulting position using the engine
     /// 4. Update the BookMove.evaluation field
     pub fn refresh_evaluations(&mut self) -> Result<usize, OpeningBookError> {
-        let mut updated_count = 0;
+        let updated_count = 0;
 
         // Stub implementation - would need engine integration
         // For now, just return success with 0 updates

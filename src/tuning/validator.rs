@@ -53,7 +53,6 @@ use rand::{Rng, RngCore, SeedableRng};
 use rand::rngs::StdRng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 /// Validation engine for tuning results
 pub struct Validator {
@@ -90,7 +89,7 @@ impl Validator {
         };
 
         // Prepare positions for splitting
-        let mut positions_to_split = if self.config.stratified {
+        let positions_to_split = if self.config.stratified {
             self.prepare_stratified_positions(positions, &mut *rng)
         } else {
             let mut pos = positions.to_vec();
@@ -343,7 +342,7 @@ impl Validator {
         let mut black_target = 0.0;
         let mut draw_target = 0.0;
 
-        for i in 0..total {
+        for _i in 0..total {
             // Update targets based on proportions
             white_target += white_ratio;
             black_target += black_ratio;

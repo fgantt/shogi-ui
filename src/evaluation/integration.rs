@@ -141,10 +141,9 @@ use crate::debug_utils::debug_log;
 use crate::evaluation::{
     castles::CastleRecognizer,
     component_coordinator::{
-        ComponentCoordination, ComponentContributionTracker, ConflictResolver,
+        ComponentCoordination, ComponentContributionTracker,
     },
     config::EvaluationWeights,
-    dependency_graph::DependencyValidator,
     endgame_patterns::EndgamePatternEvaluator,
     material::{MaterialEvaluationConfig, MaterialEvaluationStats, MaterialEvaluator},
     opening_principles::OpeningPrincipleEvaluator,
@@ -761,7 +760,7 @@ impl IntegratedEvaluator {
         // These are complementary and should both be enabled for comprehensive king safety evaluation.
         if self.config.components.castle_patterns {
             let castle_score = {
-                let mut castle = self.castle_recognizer.borrow_mut();
+                let castle = self.castle_recognizer.borrow_mut();
                 // Find king position for castle evaluation
                 if let Some(king_pos) = board.find_king_position(player) {
                     let eval = castle.evaluate_castle(board, player, king_pos);

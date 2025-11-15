@@ -64,7 +64,6 @@ use crate::search::shogi_hash::*;
 use crate::search::thread_safe_table::ThreadSafeTranspositionTable;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Player};
-use crate::types::evaluation::TaperedScore;
 use crate::types::search::TranspositionFlag;
 use std::collections::HashMap;
 

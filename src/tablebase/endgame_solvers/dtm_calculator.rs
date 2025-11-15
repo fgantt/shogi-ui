@@ -5,7 +5,6 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::moves::MoveGenerator;
-use crate::search::BoardTrait;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Player};
 

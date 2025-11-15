@@ -497,7 +497,7 @@ impl Move {
 
             let core_from = crate::types::core::Position::new(from.row, from.col);
             let core_to = crate::types::core::Position::new(to.row, to.col);
-            let core_player = match player {
+            let _core_player = match player {
                 Player::Black => crate::types::core::Player::Black,
                 Player::White => crate::types::core::Player::White,
             };
@@ -7872,7 +7872,7 @@ impl PruningManager {
         &self,
         base_reduction: u8,
         state: &SearchState,
-        config: &AdvancedReductionConfig,
+        _config: &AdvancedReductionConfig,
     ) -> u8 {
         // Use material balance from state if available
         // For now, use a simplified heuristic based on position classification

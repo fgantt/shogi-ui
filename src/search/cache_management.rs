@@ -5,8 +5,6 @@
 //! performance monitoring for the transposition table.
 
 use crate::search::transposition_config::TranspositionConfig;
-use crate::types::core::Move;
-use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

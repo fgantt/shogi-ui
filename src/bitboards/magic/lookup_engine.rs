@@ -153,7 +153,7 @@ impl LookupEngine {
     }
 
     /// Prefetch next likely access for better cache performance
-    fn prefetch_next_access(&self, square: u8, piece_type: PieceType) {
+    fn prefetch_next_access(&self, _square: u8, _piece_type: PieceType) {
         // Placeholder implementation
         // In a real implementation, this would prefetch the next likely
         // attack pattern based on common access patterns
@@ -237,7 +237,7 @@ impl LookupEngine {
         // Prefetch center squares (most commonly accessed)
         let center_squares = [36, 37, 38, 45, 46, 47, 54, 55, 56]; // 3x3 center
         
-        let mut lookup_cache = self.lookup_cache.borrow_mut();
+        let lookup_cache = self.lookup_cache.borrow_mut();
         for &square in &center_squares {
             if !lookup_cache.get(square, occupied).is_some() {
                 let attack = self.magic_table.get_attacks(square, piece_type, occupied);

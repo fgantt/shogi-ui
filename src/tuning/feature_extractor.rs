@@ -684,7 +684,7 @@ impl FeatureExtractor {
         &self,
         board: &BitboardBoard,
         player: Player,
-        captured_pieces: &CapturedPieces,
+        _captured_pieces: &CapturedPieces,
     ) -> f64 {
         // Find all rooks for the player
         let mut rook_positions = Vec::new();

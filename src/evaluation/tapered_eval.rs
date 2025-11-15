@@ -27,7 +27,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{PieceType, Player, Position};
+use crate::types::core::{PieceType, Position};
 use crate::types::evaluation::{GAME_PHASE_MAX, PIECE_PHASE_VALUES, TaperedEvaluationConfig, TaperedScore};
 use serde::{Deserialize, Serialize};
 use std::cmp;

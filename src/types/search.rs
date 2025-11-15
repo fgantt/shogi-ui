@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // Import from sibling modules
-use super::core::{Move, PieceType, Position};
+use super::core::{Move, Position};
 use super::board::GamePhase;
 
 // ============================================================================
@@ -2087,6 +2087,7 @@ pub struct SearchState {
     /// Best score found so far (for diagnostic purposes)
     pub best_score: i32,
     /// Number of nodes searched (for diagnostic purposes)
+    #[allow(dead_code)]
     pub nodes_searched: u64,
     /// Whether aspiration windows are enabled (for diagnostic purposes)
     pub aspiration_enabled: bool,

@@ -3,8 +3,7 @@
 /// This module provides comprehensive validation of opening book data,
 /// including duplicate detection, move legality, weight/evaluation consistency,
 /// FEN format validation, and position bounds checking.
-use super::{BookMove, OpeningBook, PositionEntry};
-use crate::types::core::Position;
+use super::OpeningBook;
 use std::collections::HashSet;
 
 /// Validator for opening book data

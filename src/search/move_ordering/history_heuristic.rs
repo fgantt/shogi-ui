@@ -8,7 +8,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::types::board::GamePhase;
-use crate::types::core::{Move, PieceType, Player, Position};
+use crate::types::core::{Move, PieceType, Position};
 use std::collections::HashMap;
 
 /// History entry for enhanced history heuristic (Task 4.0)

@@ -3,7 +3,7 @@
 /// This module provides tools to analyze the quality and completeness
 /// of an opening book, including depth analysis, opening completeness,
 /// and move quality validation.
-use super::{BookMove, OpeningBook, PositionEntry};
+use super::OpeningBook;
 use std::collections::HashMap;
 
 /// Analyzer for opening book coverage
@@ -67,13 +67,13 @@ impl CoverageAnalyzer {
     /// Calculates average moves per opening, maximum depth covered,
     /// and depth distribution.
     pub fn analyze_depth(book: &OpeningBook) -> DepthStats {
-        let mut total_moves = 0;
-        let mut opening_count = 0;
-        let mut max_depth = 0;
+        let _total_moves = 0;
+        let _opening_count = 0;
+        let _max_depth = 0;
         let mut depth_distribution = HashMap::new();
 
         // Group positions by opening name
-        let mut openings: HashMap<String, Vec<usize>> = HashMap::new();
+        let _openings: HashMap<String, Vec<usize>> = HashMap::new();
 
         // We need to access positions, but they're private
         // For now, we'll use a simplified approach based on available data
@@ -166,7 +166,7 @@ impl CoverageAnalyzer {
     /// Analyze move quality
     ///
     /// Validates weight/evaluation consistency and identifies outliers.
-    pub fn analyze_move_quality(book: &OpeningBook) -> QualityMetrics {
+    pub fn analyze_move_quality(_book: &OpeningBook) -> QualityMetrics {
         // We need access to moves to analyze quality
         // For now, return default metrics
         // In practice, this would iterate through all positions and moves

@@ -1,7 +1,7 @@
 use crate::search::RepetitionState;
 use crate::types::board::{CapturedPieces, GamePhase};
 use crate::types::core::{Move, Piece, PieceType, Player, Position};
-use crate::types::{Bitboard, EMPTY_BITBOARD, ImpasseOutcome, ImpasseResult, MagicError, MagicTable, count_bits, clear_bit, get_lsb, is_bit_set, set_bit};
+use crate::types::{Bitboard, EMPTY_BITBOARD, ImpasseOutcome, ImpasseResult, MagicError, MagicTable, clear_bit, get_lsb, is_bit_set, set_bit};
 use std::sync::{Arc, OnceLock};
 
 // Include the magic bitboard module
@@ -631,7 +631,7 @@ impl BitboardBoard {
         
         let target_idx = target_pos.to_index();
         let player_idx = if attacking_player == Player::Black { 0 } else { 1 };
-        let target_bit = 1u128 << target_idx;
+        let _target_bit = 1u128 << target_idx;
         
         // Check each piece type for the attacking player
         let piece_types = [
@@ -717,6 +717,7 @@ impl BitboardBoard {
     }
 
     // Direct attack checking without move generation
+    #[allow(dead_code)]
     fn piece_attacks_square(
         &self,
         piece: &Piece,
@@ -798,6 +799,7 @@ impl BitboardBoard {
     }
 
     // Check if a ray from from_pos in direction (dr, dc) hits target_pos
+    #[allow(dead_code)]
     fn check_ray_attack(
         &self,
         from_pos: Position,
@@ -833,6 +835,7 @@ impl BitboardBoard {
     }
 
     // Check if a king-like piece attacks target_pos
+    #[allow(dead_code)]
     fn check_king_attack(&self, from_pos: Position, target_pos: Position, _player: Player) -> bool {
         let row_diff = (from_pos.row as i8 - target_pos.row as i8).abs();
         let col_diff = (from_pos.col as i8 - target_pos.col as i8).abs();
@@ -855,6 +858,7 @@ impl BitboardBoard {
             && !self.has_legal_moves(player, captured_pieces)
     }
 
+    #[allow(dead_code)]
     pub fn is_stalemate(&self, player: Player, captured_pieces: &CapturedPieces) -> bool {
         !self.is_king_in_check(player, captured_pieces)
             && !self.has_legal_moves(player, captured_pieces)

@@ -62,6 +62,7 @@ pub struct StrategyCounters {
     popcount_debruijn: u64,
     bitscan_hardware: u64,
     bitscan_debruijn: u64,
+    #[allow(dead_code)]
     bitscan_software: u64,
     positions_4bit: u64,
     positions_debruijn: u64,
@@ -362,6 +363,7 @@ impl BitScanningOptimizer {
         low_count + high_count
     }
 
+    #[allow(dead_code)]
     fn popcount_software(&self, bb: Bitboard) -> u32 {
         // Basic software implementation
         let mut count = 0;
@@ -438,6 +440,7 @@ impl BitScanningOptimizer {
         }
     }
 
+    #[allow(dead_code)]
     fn bit_scan_forward_software(&self, bb: Bitboard) -> Option<u8> {
         // Basic software implementation
         if bb == 0 {
@@ -458,6 +461,7 @@ impl BitScanningOptimizer {
         None
     }
 
+    #[allow(dead_code)]
     fn bit_scan_reverse_software(&self, bb: Bitboard) -> Option<u8> {
         // Basic software implementation
         if bb == 0 {

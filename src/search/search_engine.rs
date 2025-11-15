@@ -8,7 +8,6 @@ use crate::search::tapered_search_integration::TaperedSearchEnhancer;
 use crate::search::{BoardTrait, ParallelSearchConfig, ParallelSearchEngine};
 use crate::search::iterative_deepening::IterativeDeepeningHelper;
 use crate::search::null_move::NullMoveHelper;
-use crate::search::pvs::PVSHelper;
 use crate::search::quiescence::QuiescenceHelper;
 use crate::search::reductions::ReductionsHelper;
 use crate::search::statistics::SearchStatistics;
@@ -17,25 +16,24 @@ use crate::tablebase::MicroTablebase;
 use crate::time_utils::TimeSource;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Piece, PieceType, Player, Position};
-use crate::types::evaluation::TaperedScore;
 use crate::types::board::GamePhase;
 use crate::types::search::{
     AspirationWindowConfig, AspirationWindowPlayingStyle, AspirationWindowStats,
     CoreSearchMetrics, EngineConfig, EnginePreset, IIDBoardState, IIDConfig, IIDOverheadStats,
     IIDStats, LMRConfig, LMRStats, NullMoveConfig, NullMoveStats, ParallelOptions,
-    PositionComplexity, PruningParameters, PruningStatistics, QuiescenceConfig, QuiescenceEntry,
-    QuiescenceStats, SearchState, TimeAllocationStrategy, TimeBudgetStats, TimeManagementConfig,
-    TimePressure, TimePressureThresholds, TranspositionFlag, TTReplacementPolicy,
+    PositionComplexity, QuiescenceConfig, QuiescenceEntry,
+    QuiescenceStats, TimeBudgetStats, TimeManagementConfig,
+    TranspositionFlag, TTReplacementPolicy,
 };
 // Types still in all.rs (temporary backward compatibility)
 use crate::types::all::{
-    AdaptiveTuningConfig, AspirationWindowPerformanceMetrics, ConfidenceLevel, DepthAnalysis,
+    AspirationWindowPerformanceMetrics, ConfidenceLevel,
     GameResult, IIDPerformanceAnalysis, IIDPerformanceBenchmark, IIDPerformanceMetrics,
     IIDProbeResult, IIDPVResult, IIDStrengthTestResult, LMRPerformanceMetrics, LMRPlayingStyle,
-    LMRProfileResult, MoveType, MultiPVAnalysis, PerformanceSummary, PositionDifficulty,
+    LMRProfileResult, MoveType, MultiPVAnalysis, PositionDifficulty,
     PositionStrengthResult, PruningManager, PromisingMove, QuiescencePerformanceMetrics,
     QuiescenceProfile, QuiescenceSample, RealTimePerformance, ResearchEfficiencyMetrics,
-    StrengthTestAnalysis, StrengthTestPosition, TacticalTheme, TuningAggressiveness,
+    StrengthTestAnalysis, StrengthTestPosition, TacticalTheme,
     WindowSizeStatistics,
 };
 use crate::types::patterns::TacticalIndicators;
@@ -240,6 +238,7 @@ pub struct SearchEngine {
     quiescence_tt_age: u64, // Age counter for LRU tracking
     history_table: [[i32; 9]; 9],
     killer_moves: [Option<Move>; 2],
+    #[allow(dead_code)]
     stop_flag: Option<Arc<AtomicBool>>,
     /// Quiescence search helper module (Task 1.8)
     quiescence_helper: QuiescenceHelper,
@@ -931,6 +930,7 @@ fn convert_time_management_config_back(config: &crate::types::search::TimeManage
     }
 }
 
+#[allow(dead_code)]
 fn convert_pruning_parameters(config: &crate::types::all::PruningParameters) -> crate::types::search::PruningParameters {
     crate::types::search::PruningParameters {
         futility_margin: config.futility_margin,
@@ -1556,7 +1556,7 @@ impl SearchEngine {
         
         // Get component estimates
         let ordering_stats = self.advanced_move_orderer.get_stats();
-        let tt_stats = self.transposition_table.get_stats();
+        let _tt_stats = self.transposition_table.get_stats();
         
         // Estimate TT memory (approximate based on table size)
         let tt_memory_bytes = (self.transposition_table.size() * 100) as u64; // Approximate entry size
@@ -2193,7 +2193,7 @@ impl SearchEngine {
         &mut self,
         base_depth: u8,
         board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
+        _captured_pieces: &CapturedPieces,
         start_time: &TimeSource,
         time_limit_ms: u32,
     ) -> u8 {
@@ -2346,7 +2346,7 @@ impl SearchEngine {
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> (i32, Option<Move>) {
         let iid_start_time = TimeSource::now();
         let initial_nodes = self.search_statistics.get_nodes_searched();
@@ -2864,7 +2864,7 @@ impl SearchEngine {
     fn update_advanced_strategy_effectiveness(
         &mut self,
         board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
+        _captured_pieces: &CapturedPieces,
         improved_alpha: bool,
         caused_cutoff: bool,
     ) {
@@ -3206,7 +3206,7 @@ impl SearchEngine {
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Option<Move> {
         if !self.iid_config.enabled || iid_depth == 0 {
             return None;
@@ -3756,7 +3756,7 @@ impl SearchEngine {
         _beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Vec<IIDPVResult> {
         if !self.iid_config.enabled || iid_depth == 0 || pv_count == 0 {
             return Vec::new();
@@ -4149,7 +4149,7 @@ impl SearchEngine {
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Option<IIDProbeResult> {
         if !self.iid_config.enabled || iid_depth == 0 {
             return None;
@@ -4228,7 +4228,7 @@ impl SearchEngine {
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Vec<PromisingMove> {
         let mut promising_moves = Vec::new();
         let mut current_alpha = alpha;
@@ -4309,7 +4309,7 @@ impl SearchEngine {
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Vec<IIDProbeResult> {
         let mut probe_results = Vec::new();
 
@@ -4861,7 +4861,7 @@ impl SearchEngine {
         player: Player,
         depth: u8,
         time_limit_ms: u32,
-        hash_history: &mut Vec<u64>,
+        _hash_history: &mut Vec<u64>,
     ) -> Option<Move> {
         let start_time = TimeSource::now();
 
@@ -6536,7 +6536,7 @@ impl SearchEngine {
                     }
 
                     // Track move ordering effectiveness (Task 10.1-10.3)
-                    let lmr_threshold = self.lmr_config.min_move_index;
+                    let _lmr_threshold = self.lmr_config.min_move_index;
                     self.lmr_stats
                         .move_ordering_stats
                         .record_cutoff(move_index);
@@ -6606,7 +6606,7 @@ impl SearchEngine {
                     break;
                 } else {
                     // Track move that didn't cause cutoff (Task 10.3)
-                    let lmr_threshold = self.lmr_config.min_move_index;
+                    let _lmr_threshold = self.lmr_config.min_move_index;
                     self.lmr_stats
                         .move_ordering_stats
                         .record_no_cutoff();
@@ -6739,7 +6739,7 @@ impl SearchEngine {
         board: &mut BitboardBoard,
         captured_pieces: &CapturedPieces,
         player: Player,
-        mut alpha: i32,
+        alpha: i32,
         beta: i32,
         start_time: &TimeSource,
         time_limit_ms: u32,
@@ -7415,7 +7415,7 @@ impl SearchEngine {
         }
 
         // If move hint is provided, prioritize it in move ordering (Task 5.11)
-        let mut ordered_moves = if let Some(hint_move) = move_hint {
+        let ordered_moves = if let Some(hint_move) = move_hint {
             // Check if hint move is in the moves list
             if let Some(pos) = moves
                 .iter()
@@ -7848,7 +7848,7 @@ impl SearchEngine {
         board: &BitboardBoard,
         captured_pieces: &CapturedPieces,
         player: Player,
-        depth: u8,
+        _depth: u8,
     ) -> Vec<Move> {
         let mut pv = Vec::new();
         let mut current_board = board.clone();
@@ -7871,7 +7871,7 @@ impl SearchEngine {
                 self.transposition_table
                     .probe_with_prefetch(position_hash, 0, next_hash)
             {
-                next_hash = None;
+                let _ = next_hash.take();
                 if let Some(move_) = &entry.best_move {
                     pv.push(move_.clone());
                     if let Some(captured) = current_board.make_move(move_) {
@@ -7924,7 +7924,7 @@ impl SearchEngine {
                         &current_captured,
                     );
                     if let Some(entry) = tt.probe_with_prefetch(position_hash, 0, next_hash) {
-                        next_hash = None;
+                        let _ = next_hash.take();
                         if let Some(move_) = &entry.best_move {
                             pv.push(move_.clone());
                             if let Some(captured) = current_board.make_move(move_) {
@@ -8494,7 +8494,7 @@ impl SearchEngine {
     fn assess_position_value_quiescence(
         &self,
         move_: &Move,
-        board: &BitboardBoard,
+        _board: &BitboardBoard,
         player: Player,
     ) -> i32 {
         let mut value = 0;
@@ -9406,6 +9406,7 @@ impl SearchEngine {
         let window_size = self.calculate_window_size(depth, previous_score, recent_failures);
 
         // Task 7.2, 7.3: Conditional statistics tracking
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production;
 
@@ -9608,6 +9609,7 @@ impl SearchEngine {
         let final_size = self.validate_window_size(comprehensive_size);
 
         // Task 7.2, 7.3, 7.4: Conditional statistics tracking with optimized updates
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production;
 
@@ -9708,6 +9710,7 @@ impl SearchEngine {
         window_size: i32,
     ) {
         // Task 7.2, 7.3: Conditional statistics tracking
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production;
 
@@ -9777,6 +9780,7 @@ impl SearchEngine {
         window_size: i32,
     ) {
         // Task 7.2, 7.3: Conditional statistics tracking
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production;
 
@@ -9840,6 +9844,7 @@ impl SearchEngine {
     /// Task 7.1, 7.2, 7.3, 7.4: Enhanced with position type tracking and conditional updates
     fn update_aspiration_stats(&mut self, had_research: bool, research_count: u8) {
         // Task 7.2, 7.3: Conditional statistics tracking
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production;
 
@@ -9879,6 +9884,7 @@ impl SearchEngine {
         self.update_aspiration_stats(had_research, research_count);
 
         // Task 7.1: Update position type specific statistics
+        #[cfg(feature = "statistics")]
         let should_track_stats = self.aspiration_config.enable_statistics
             && !self.aspiration_config.disable_statistics_in_production
             && self.aspiration_config.enable_position_type_tracking;
@@ -10214,7 +10220,7 @@ impl SearchEngine {
     // ===== PERFORMANCE MONITORING AND STATISTICS =====
 
     /// Initialize performance monitoring
-    pub fn initialize_performance_monitoring(&mut self, max_depth: u8) {
+    pub fn initialize_performance_monitoring(&mut self, _max_depth: u8) {
         self.aspiration_stats.initialize_depth_tracking();
     }
 
@@ -10226,7 +10232,7 @@ impl SearchEngine {
         had_research: bool,
         window_size: i32,
         search_time_ms: u64,
-        research_time_ms: u64,
+        _research_time_ms: u64,
     ) {
         // Update basic statistics
         self.aspiration_stats.total_searches += 1;
@@ -10877,7 +10883,7 @@ impl SearchEngine {
                 let to_center = self.is_center_move(move_);
                 if from_center && !to_center {
                     // Track heuristic detection (Task 6.8)
-                    let is_threat =
+                    let _is_threat =
                         self.is_piece_under_attack(board, captured_pieces, from, player);
                     return true;
                 }
@@ -10897,7 +10903,7 @@ impl SearchEngine {
     ) -> bool {
         // Check if any opponent piece can attack this position
         // This is a simplified check - in a full implementation, we would check all opponent pieces
-        let opponent = player.opposite();
+        let _opponent = player.opposite();
 
         // Check if the piece at this position is the king (most critical)
         if let Some(piece) = board.get_piece(position) {
@@ -10922,9 +10928,9 @@ impl SearchEngine {
     pub(crate) fn is_piece_under_attack_after_move(
         &self,
         board: &BitboardBoard,
-        captured_pieces: &CapturedPieces,
+        _captured_pieces: &CapturedPieces,
         move_: &Move,
-        player: Player,
+        _player: Player,
     ) -> bool {
         // Check if the destination square is under attack
         // This is a simplified check - in a full implementation, we would make the move and check
@@ -11238,7 +11244,7 @@ impl SearchEngine {
         }
 
         // Track tuning attempt (Task 7.9)
-        let mut tuning_successful = false;
+        let mut _tuning_successful = false;
         let mut new_config = self.lmr_config.clone();
         let old_config = new_config.clone();
 
@@ -11261,7 +11267,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("re_search_rate");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
             // Alternatively, increase min_move_index
             if new_config.min_move_index < 20 {
@@ -11272,7 +11278,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("re_search_rate");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
         } else if metrics.research_rate < 5.0 && metrics.efficiency > 25.0 {
             // Too few researches - increase aggressiveness (Task 7.7)
@@ -11285,7 +11291,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("re_search_rate");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
             // Alternatively, decrease min_move_index
             if new_config.min_move_index > adjustment {
@@ -11296,7 +11302,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("re_search_rate");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
         }
 
@@ -11312,7 +11318,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("efficiency");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
         }
 
@@ -11335,7 +11341,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("game_phase");
-                tuning_successful = true;
+                _tuning_successful = true;
             } else if phase_factor < 1.0 && new_config.base_reduction > 1 {
                 new_config.base_reduction =
                     new_config.base_reduction.saturating_sub(phase_adjustment);
@@ -11345,7 +11351,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("game_phase");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
         }
 
@@ -11368,7 +11374,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("position_type");
-                tuning_successful = true;
+                _tuning_successful = true;
             } else if position_factor < 1.0 && new_config.max_reduction > 1 {
                 new_config.max_reduction =
                     new_config.max_reduction.saturating_sub(position_adjustment);
@@ -11378,7 +11384,7 @@ impl SearchEngine {
                 self.lmr_stats
                     .adaptive_tuning_stats
                     .record_adjustment_reason("position_type");
-                tuning_successful = true;
+                _tuning_successful = true;
             }
         }
 
@@ -11389,7 +11395,7 @@ impl SearchEngine {
 
         if !config_changed {
             // No changes made, not a successful tuning
-            tuning_successful = false;
+            _tuning_successful = false;
         }
 
         // Track tuning attempt (Task 7.9)
@@ -13001,7 +13007,7 @@ impl SearchEngine {
         let phase_calc_time_ns = 0.0; // TODO: Get from evaluator if available
 
         // Get memory metrics using actual RSS (Task 26.0 - Task 4.0)
-        let current_rss = self.memory_tracker.get_current_rss();
+        let _current_rss = self.memory_tracker.get_current_rss();
         let peak_rss = self.memory_tracker.get_peak_rss();
         
         // Get component breakdown
@@ -13772,9 +13778,9 @@ impl IterativeDeepening {
             let info_sender_cancel_clone = info_sender_cancel.clone();
             let depth_clone = depth;
             let depth_start_time_instant = std::time::Instant::now(); // Capture instant for elapsed time
-            let board_clone = board.clone();
-            let captured_clone = captured_pieces.clone();
-            let player_clone = player;
+            let _board_clone = board.clone();
+            let _captured_clone = captured_pieces.clone();
+            let _player_clone = player;
 
             // Store best move/score/PV for periodic updates (shared state)
             // Initialize with previous depth's best move if available, so info sender has something to show

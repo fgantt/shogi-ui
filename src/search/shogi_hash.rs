@@ -7,8 +7,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::search::zobrist::{RepetitionState, ZobristHasher};
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Piece, PieceType, Player, Position};
-use crate::types::{Bitboard, EMPTY_BITBOARD};
+use crate::types::core::{Move, PieceType, Player};
 use std::collections::HashMap;
 
 /// Shogi-specific hash handler

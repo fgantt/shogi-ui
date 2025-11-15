@@ -44,14 +44,19 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Clone)]
 struct CachedEvaluation {
     /// King position for each player
+    #[allow(dead_code)]
     king_positions: [Option<Position>; 2],
     /// Piece positions by type (cached for common lookups)
+    #[allow(dead_code)]
     piece_positions: HashMap<(Player, PieceType), Vec<Position>>,
     /// Pawn positions for each player
+    #[allow(dead_code)]
     pawn_positions: [Vec<Position>; 2],
     /// Total piece count
+    #[allow(dead_code)]
     total_pieces: i32,
     /// Material counts (on board only, pieces in hand not cached)
+    #[allow(dead_code)]
     material_counts: [i32; 2],
 }
 
@@ -139,6 +144,7 @@ impl EndgamePatternEvaluator {
     }
 
     /// Generate a hash key for a position (simplified for caching)
+    #[allow(dead_code)]
     fn generate_position_hash(
         &self,
         board: &BitboardBoard,
@@ -180,6 +186,7 @@ impl EndgamePatternEvaluator {
     }
 
     /// Get cached evaluation or compute and cache it
+    #[allow(dead_code)]
     fn get_cached_or_compute(
         &mut self,
         board: &BitboardBoard,
@@ -1589,6 +1596,7 @@ impl EndgamePatternEvaluator {
     }
 
     /// Calculate material for a player (legacy method - calls new version with empty captured pieces)
+    #[allow(dead_code)]
     fn calculate_material_legacy(&self, board: &BitboardBoard, player: Player) -> i32 {
         let captured_pieces = CapturedPieces::new();
         self.calculate_material(board, player, &captured_pieces)

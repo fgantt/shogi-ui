@@ -45,6 +45,7 @@ enum CompressionStrategy {
     /// Store raw pattern (no compression)
     Raw,
     /// Reference to deduplicated pattern
+    #[allow(dead_code)]
     Deduplicated(usize),
     /// Run-length encoded pattern
     RleEncoded,
@@ -89,6 +90,7 @@ pub struct CompressedMagicTable {
     /// Compressed pattern storage
     compressed_patterns: Vec<CompressedPattern>,
     /// Deduplication index: pattern -> storage index
+    #[allow(dead_code)]
     dedup_index: HashMap<Bitboard, usize>,
     /// Deduplicated pattern storage
     dedup_storage: Vec<Bitboard>,
@@ -100,6 +102,7 @@ pub struct CompressedMagicTable {
     /// Cache size limit
     cache_size_limit: usize,
     /// Compression statistics per square
+    #[allow(dead_code)]
     square_stats: Vec<SquareCompressionStats>,
 }
 
@@ -174,10 +177,10 @@ impl CompressedMagicTable {
         let mut dedup_index = HashMap::new();
         let mut dedup_storage = Vec::new();
         let mut lookup_table = Vec::with_capacity(original_size);
-        let mut square_stats = Vec::new();
+        let square_stats = Vec::new();
 
         // Step 1: Build deduplication index
-        for (idx, &pattern) in table.attack_storage.iter().enumerate() {
+        for (_idx, &pattern) in table.attack_storage.iter().enumerate() {
             if let Some(&dedup_idx) = dedup_index.get(&pattern) {
                 // Pattern already exists, use deduplication
                 lookup_table.push(dedup_idx);
@@ -256,7 +259,6 @@ impl CompressedMagicTable {
         if let Some((base_idx, delta_sz)) = delta_base_idx.zip(Some(delta_size)) {
             if delta_sz < best_size {
                 best_strategy = CompressionStrategy::DeltaEncoded(base_idx);
-                best_size = delta_sz;
             }
         }
 
@@ -373,7 +375,7 @@ impl CompressedMagicTable {
     }
 
     /// Estimate delta-encoded size (XOR difference)
-    fn estimate_delta_size(delta: Bitboard) -> usize {
+    fn estimate_delta_size(_delta: Bitboard) -> usize {
         // If delta is sparse, we could use RLE, but for simplicity, just use raw size
         // In a full implementation, we'd check if delta benefits from RLE
         std::mem::size_of::<Bitboard>()

@@ -35,7 +35,6 @@
 //! ```
 
 use crate::types::core::{Move, PieceType, Player, Position};
-use crate::types::transposition::TranspositionEntry;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 

@@ -6,7 +6,7 @@
 use crate::bitboards::BitboardBoard;
 use crate::bitboards::integration::GlobalOptimizer;
 use crate::types::core::{Move, PieceType, Player, Position};
-use crate::types::{Bitboard, MagicTable};
+use crate::types::MagicTable;
 use std::sync::Arc;
 
 // Simple immutable lookup engine

@@ -250,11 +250,11 @@ fn calculate_error_and_gradients(
     let mut gradients = vec![0.0; 10]; // 10 weights
 
     // Create a temporary evaluator with the specified weights
-    if let Ok(temp_weights) = EvaluationWeights::from_vector(weights) {
+    if let Ok(_temp_weights) = EvaluationWeights::from_vector(weights) {
         // Create a new evaluator with modified weights
         // Note: This requires creating a new evaluator with the same config but different weights
         // In the full implementation, this would use a more efficient method or a setter
-        let mut temp_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
+        let temp_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
         // TODO: Add set_weights method to IntegratedEvaluator or make weights field public
         // For now, this is a placeholder that needs to be completed during integration
         // temp_evaluator.set_weights(temp_weights);
@@ -284,10 +284,10 @@ fn calculate_error_and_gradients(
                     let mut perturbed_weights = weights.to_vec();
                     perturbed_weights[i] += epsilon;
 
-                    if let Ok(perturbed_eval_weights) =
+                    if let Ok(_perturbed_eval_weights) =
                         EvaluationWeights::from_vector(&perturbed_weights)
                     {
-                        let mut perturbed_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
+                        let perturbed_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
                         // TODO: Add set_weights method
                         // perturbed_evaluator.set_weights(perturbed_eval_weights);
                         let perturbed_score = perturbed_evaluator.evaluate_with_move_count(
@@ -372,7 +372,7 @@ pub fn tune_from_telemetry(
 ///
 /// Collects telemetry from multiple positions and converts them to a tuning position set.
 pub fn telemetry_to_tuning_pipeline(
-    evaluator: &IntegratedEvaluator,
+    _evaluator: &IntegratedEvaluator,
     telemetry_positions: &[(
         BitboardBoard,
         CapturedPieces,

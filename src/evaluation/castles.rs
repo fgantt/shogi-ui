@@ -8,7 +8,6 @@ use crate::types::core::{PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use lru::LruCache;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 pub use crate::evaluation::castle_geometry::{
@@ -124,7 +123,9 @@ impl CastleEvaluation {
 
 #[derive(Clone, Copy, Debug)]
 struct CachedEvaluation {
+    #[allow(dead_code)]
     pattern_index: usize,
+    #[allow(dead_code)]
     variant_index: usize,
     evaluation: CastleEvaluation,
 }
@@ -630,7 +631,6 @@ impl CastleRecognizer {
                             CastlePieceRole::SecondaryDefender => stats.secondary_matches += 1,
                             CastlePieceRole::Buffer => stats.buffer_matches += 1,
                             CastlePieceRole::PawnShield => stats.pawn_shield_matches += 1,
-                            _ => {}
                         }
                     }
                 }
@@ -715,7 +715,6 @@ impl VariantTotals {
                 CastlePieceRole::SecondaryDefender => secondary_total += 1,
                 CastlePieceRole::Buffer => buffer_total += 1,
                 CastlePieceRole::PawnShield => shield_total += 1,
-                _ => {}
             }
         }
 

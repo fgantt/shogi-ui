@@ -4,6 +4,8 @@
 //! adjusts transposition table parameters based on real-time performance
 //! metrics, system conditions, and usage patterns.
 
+#![allow(dead_code)]
+
 use crate::search::runtime_configuration::{PerformanceMetrics as RuntimePerformanceMetrics, *};
 use crate::search::transposition_config::*;
 use serde::{Deserialize, Serialize};

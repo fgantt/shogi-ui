@@ -7,7 +7,7 @@
 use crate::bitboards::*;
 use crate::search::*;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Piece, PieceType, Player, Position};
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::thread;
@@ -549,7 +549,7 @@ impl ComprehensiveTestSuite {
     // Individual test implementations
 
     fn test_tt_basic_operations(&self) -> bool {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
         let entry = TranspositionEntry {
             hash_key: 12345,
             depth: 3,
@@ -578,7 +578,7 @@ impl ComprehensiveTestSuite {
     }
 
     fn test_entry_storage(&self) -> bool {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
         let entry = TranspositionEntry {
             hash_key: 54321,
             depth: 5,
@@ -596,7 +596,7 @@ impl ComprehensiveTestSuite {
     }
 
     fn test_replacement_policies(&self) -> bool {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
         // Fill table with entries
         for i in 0..100 {
@@ -689,7 +689,7 @@ impl ComprehensiveTestSuite {
 
     fn test_performance_optimization_integration(&self) -> bool {
         // Test that performance optimizations are working
-        let mut tt =
+        let tt =
             ThreadSafeTranspositionTable::new(TranspositionConfig::performance_optimized());
 
         // Store and retrieve operations should be fast
@@ -713,7 +713,7 @@ impl ComprehensiveTestSuite {
     }
 
     fn benchmark_tt_operations(&self) -> (f64, f64) {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
         let mut total_time = Duration::ZERO;
         let mut hit_count = 0;
         let iterations = 1000;
@@ -790,7 +790,7 @@ impl ComprehensiveTestSuite {
     }
 
     fn test_high_load_operations(&self) -> bool {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
         // Perform many operations rapidly
         for i in 0..self.config.stress_test_iterations {
@@ -819,7 +819,7 @@ impl ComprehensiveTestSuite {
 
     fn test_thread_safety(&self) -> bool {
         // Since ThreadSafeTranspositionTable is already thread-safe, we can test it directly
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
         // Test basic operations work
         let entry = TranspositionEntry {
@@ -838,7 +838,7 @@ impl ComprehensiveTestSuite {
     }
 
     fn test_memory_pressure(&self) -> bool {
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
         // Create memory pressure by storing many large entries
         for i in 0..10000 {
@@ -863,7 +863,7 @@ impl ComprehensiveTestSuite {
         let initial_size = self.get_memory_usage_mb();
 
         {
-            let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+            let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
             // Perform operations
             for i in 0..1000 {
@@ -956,7 +956,7 @@ impl ComprehensiveTestSuite {
 
     fn test_performance_regression(&self) -> bool {
         // Test that performance hasn't degraded significantly
-        let mut tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
+        let tt = ThreadSafeTranspositionTable::new(TranspositionConfig::default());
 
         let start = Instant::now();
         for i in 0..1000 {

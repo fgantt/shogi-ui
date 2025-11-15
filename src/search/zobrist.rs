@@ -1,7 +1,6 @@
 use crate::bitboards::BitboardBoard;
 use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Piece, PieceType, Player, Position};
-use crate::types::{Bitboard, EMPTY_BITBOARD};
+use crate::types::core::{Move, PieceType, Player, Position};
 use lazy_static::lazy_static;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};

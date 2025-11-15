@@ -6,8 +6,6 @@
 use crate::search::performance_optimization::*;
 use crate::search::thread_safe_table::ThreadSafeTranspositionTable;
 use crate::search::transposition_config::TranspositionConfig;
-use crate::types::board::CapturedPieces;
-use crate::types::core::{Move, Player};
 use crate::types::search::TranspositionFlag;
 use crate::types::transposition::TranspositionEntry;
 use std::time::{Duration, Instant};
@@ -153,7 +151,7 @@ impl PerformanceBenchmarks {
     /// Run thread-safe table probe benchmark
     pub fn benchmark_table_probe(&self) -> BenchmarkResults {
         let config = TranspositionConfig::debug_config();
-        let mut table = ThreadSafeTranspositionTable::new(config);
+        let table = ThreadSafeTranspositionTable::new(config);
 
         // Pre-populate table with some entries
         for i in 0..1000 {
@@ -203,7 +201,7 @@ impl PerformanceBenchmarks {
     /// Run thread-safe table store benchmark
     pub fn benchmark_table_store(&self) -> BenchmarkResults {
         let config = TranspositionConfig::debug_config();
-        let mut table = ThreadSafeTranspositionTable::new(config);
+        let table = ThreadSafeTranspositionTable::new(config);
 
         let test_entries: Vec<TranspositionEntry> = (0..self.operation_count)
             .map(|i| {

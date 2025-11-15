@@ -32,7 +32,7 @@ use crate::evaluation::phase_transition::{InterpolationMethod, PhaseTransitionCo
 use crate::evaluation::position_features::PositionFeatureConfig;
 use crate::evaluation::pst_loader::PieceSquareTableConfig;
 use crate::types::evaluation::{
-    KingSafetyConfig, NUM_EG_FEATURES, NUM_EVAL_FEATURES, NUM_MG_FEATURES, TaperedEvaluationConfig,
+    TaperedEvaluationConfig,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
