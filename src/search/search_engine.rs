@@ -249,6 +249,8 @@ pub struct SearchEngine {
     auto_profiling_sample_rate: u32,
     /// Performance profiler for hot path analysis (Task 26.0 - Task 3.0)
     performance_profiler: crate::evaluation::performance::PerformanceProfiler,
+    /// Memory tracker for RSS tracking (Task 26.0 - Task 4.0)
+    memory_tracker: crate::search::memory_tracking::MemoryTracker,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     /// Cache for tablebase move detection (Task 4.1)
@@ -624,6 +626,7 @@ impl SearchEngine {
             auto_profiling_enabled: false,
             auto_profiling_sample_rate: 100,
             performance_profiler: crate::evaluation::performance::PerformanceProfiler::new(),
+            memory_tracker: crate::search::memory_tracking::MemoryTracker::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -925,6 +928,38 @@ impl SearchEngine {
         self.performance_profiler.export_profiling_data()
     }
 
+    /// Get memory breakdown combining RSS with component estimates (Task 26.0 - Task 4.0)
+    pub fn get_memory_breakdown(&self) -> crate::search::memory_tracking::MemoryBreakdownWithRSS {
+        use crate::search::memory_tracking::MemoryBreakdown;
+        
+        // Get component estimates
+        let ordering_stats = self.advanced_move_orderer.get_stats();
+        let tt_stats = self.transposition_table.get_stats();
+        
+        // Estimate TT memory (approximate based on table size)
+        let tt_memory_bytes = (self.transposition_table.size() * 100) as u64; // Approximate entry size
+        
+        // Estimate cache memory from move ordering
+        let cache_memory_bytes = ordering_stats.memory_usage_bytes as u64;
+        
+        // Estimate move ordering memory
+        let move_ordering_memory_bytes = ordering_stats.memory_usage_bytes as u64;
+        
+        // Other memory (evaluator, etc.)
+        let other_memory_bytes = 10 * 1024 * 1024; // 10 MB estimate
+        
+        let mut breakdown = MemoryBreakdown {
+            tt_memory_bytes,
+            cache_memory_bytes,
+            move_ordering_memory_bytes,
+            other_memory_bytes,
+            total_component_bytes: 0,
+        };
+        breakdown.calculate_total();
+        
+        self.memory_tracker.get_memory_breakdown(&breakdown)
+    }
+
     /// Get best move from transposition table for PV move ordering
     /// Task 6.2: Implement TT best move retrieval for move ordering caching
     fn get_best_move_from_tt(
@@ -1010,6 +1045,7 @@ impl SearchEngine {
             auto_profiling_enabled: config.auto_profiling_enabled,
             auto_profiling_sample_rate: config.auto_profiling_sample_rate,
             performance_profiler: crate::evaluation::performance::PerformanceProfiler::with_sample_rate(config.auto_profiling_sample_rate),
+            memory_tracker: crate::search::memory_tracking::MemoryTracker::new(),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
@@ -2682,16 +2718,28 @@ impl SearchEngine {
     }
 
     /// Get current memory usage (placeholder implementation)
+    /// Get current memory usage in bytes (Task 26.0 - Task 4.0)
+    /// Returns actual RSS (Resident Set Size) from the operating system
     pub fn get_memory_usage(&self) -> usize {
-        // In a real implementation, this would track actual memory usage
-        // For now, return a placeholder
-        0
+        self.memory_tracker.get_current_rss() as usize
     }
 
-    /// Track memory usage for optimization
+    /// Track memory usage for optimization (Task 26.0 - Task 4.0)
+    /// Updates peak RSS tracking
     pub fn track_memory_usage(&mut self, _usage: usize) {
-        // In a real implementation, this would track and analyze memory usage patterns
-        // For now, this is a placeholder for the memory tracking infrastructure
+        // Update peak RSS
+        self.memory_tracker.update_peak_rss();
+        
+        // Check for memory leak
+        if self.memory_tracker.check_for_leak() {
+            // Log warning if memory leak detected
+            if self.debug_logging {
+                crate::debug_utils::debug_log(&format!(
+                    "[Memory] Potential leak detected: growth={:.2}%",
+                    self.memory_tracker.get_memory_growth_percentage()
+                ));
+            }
+        }
     }
 
     /// Monitor IID overhead in real-time and adjust thresholds automatically
@@ -4500,6 +4548,7 @@ impl SearchEngine {
 
         println!("IID move ordering tests passed!");
     }
+    /// Search at a specific depth with memory tracking (Task 26.0 - Task 4.0)
     pub fn search_at_depth(
         &mut self,
         board: &mut BitboardBoard,
@@ -4518,6 +4567,10 @@ impl SearchEngine {
             ),
         );
         crate::debug_utils::start_timing(&format!("search_at_depth_{}", depth));
+        
+        // Memory tracking at search start (Task 26.0 - Task 4.0)
+        self.memory_tracker.reset_peak();
+        
         self.tablebase_move_cache.clear();
 
         // Optimize pruning performance periodically
@@ -4955,6 +5008,11 @@ impl SearchEngine {
         }
         // Ensure buffered entries are flushed at the end of a root search
         self.flush_tt_buffer();
+        
+        // Update memory tracking at search end (Task 26.0 - Task 4.0)
+        self.memory_tracker.update_peak_rss();
+        self.track_memory_usage(0); // Update tracking
+        
         result
     }
 
@@ -12626,11 +12684,17 @@ impl SearchEngine {
         let avg_eval_time_ns = 0.0; // TODO: Get from evaluator if available
         let phase_calc_time_ns = 0.0; // TODO: Get from evaluator if available
 
-        // Get memory metrics (estimates based on data structure sizes)
-        // TT memory: estimate based on table configuration (not directly available from stats)
-        let tt_memory_mb = 16.0; // Placeholder: will be improved in Task 4.0
-        let cache_memory_mb = (ordering_stats.memory_usage_bytes) as f64 / (1024.0 * 1024.0);
-        let peak_memory_mb = (ordering_stats.peak_memory_usage_bytes) as f64 / (1024.0 * 1024.0);
+        // Get memory metrics using actual RSS (Task 26.0 - Task 4.0)
+        let current_rss = self.memory_tracker.get_current_rss();
+        let peak_rss = self.memory_tracker.get_peak_rss();
+        
+        // Get component breakdown
+        let component_breakdown = self.get_memory_breakdown();
+        
+        // Convert to MB
+        let tt_memory_mb = component_breakdown.component_breakdown.tt_memory_bytes as f64 / (1024.0 * 1024.0);
+        let cache_memory_mb = component_breakdown.component_breakdown.cache_memory_bytes as f64 / (1024.0 * 1024.0);
+        let peak_memory_mb = peak_rss as f64 / (1024.0 * 1024.0);
 
         // Parallel search metrics (default to 0 if not using parallel search)
         let parallel_speedup_4 = 0.0; // TODO: Get from parallel search if available

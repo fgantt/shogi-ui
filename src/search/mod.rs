@@ -32,6 +32,7 @@ pub mod adaptive_configuration;
 pub mod configuration_templates;
 pub mod performance_tuning;
 pub mod runtime_configuration;
+pub mod memory_tracking;
 
 // Web compatibility modules removed - no longer needed
 

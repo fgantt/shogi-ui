@@ -7009,6 +7009,12 @@ pub struct PerformanceMetrics {
     pub cache_misses: u64,
     pub memory_usage: usize,
     pub fallback_lookups: u64,
+    /// Current RSS in bytes (Task 26.0 - Task 4.0)
+    pub current_rss_bytes: u64,
+    /// Peak RSS in bytes (Task 26.0 - Task 4.0)
+    pub peak_rss_bytes: u64,
+    /// Memory growth in bytes since search start (Task 26.0 - Task 4.0)
+    pub memory_growth_bytes: u64,
 }
 
 // ============================================================================
