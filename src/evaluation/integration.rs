@@ -162,52 +162,94 @@ use crate::types::board::CapturedPieces;
 use crate::types::core::{PieceType, Player, Position};
 use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+/// Immutable evaluation result containing the final score, phase, and optional component contributions.
+///
+/// This struct is returned from `IntegratedEvaluator::evaluate()` to separate
+/// immutable evaluation results from mutable statistics tracking.
+#[derive(Debug, Clone)]
+pub struct EvaluationResult {
+    /// Final evaluation score (interpolated)
+    pub score: i32,
+    /// Game phase at evaluation time
+    pub phase: i32,
+    /// Optional component score contributions for telemetry and analysis
+    pub component_scores: HashMap<String, TaperedScore>,
+}
+
+impl EvaluationResult {
+    /// Create a new evaluation result
+    pub fn new(score: i32, phase: i32) -> Self {
+        Self {
+            score,
+            phase,
+            component_scores: HashMap::new(),
+        }
+    }
+
+    /// Create with component scores
+    pub fn with_components(
+        score: i32,
+        phase: i32,
+        component_scores: HashMap<String, TaperedScore>,
+    ) -> Self {
+        Self {
+            score,
+            phase,
+            component_scores,
+        }
+    }
+}
+
 /// Integrated tapered evaluator
+///
+/// This evaluator uses direct ownership with `&mut self` methods instead of `RefCell`
+/// for better performance and clearer ownership semantics. Evaluation results are returned
+/// as immutable `EvaluationResult` structs, and statistics are updated separately via
+/// `update_stats()`.
 pub struct IntegratedEvaluator {
     /// Configuration
     config: IntegratedEvaluationConfig,
-    /// Core tapered evaluation (uses interior mutability)
-    tapered_eval: RefCell<TaperedEvaluation>,
-    /// Material evaluator (uses interior mutability)
-    material_eval: RefCell<MaterialEvaluator>,
+    /// Core tapered evaluation
+    tapered_eval: TaperedEvaluation,
+    /// Material evaluator
+    material_eval: MaterialEvaluator,
     /// Piece-square tables
     pst: PieceSquareTables,
-    /// Phase transition (uses interior mutability)
-    phase_transition: RefCell<PhaseTransition>,
-    /// Position features (uses interior mutability)
-    position_features: RefCell<PositionFeatureEvaluator>,
+    /// Phase transition
+    phase_transition: PhaseTransition,
+    /// Position features
+    position_features: PositionFeatureEvaluator,
     /// Evaluation weighting configuration
     weights: EvaluationWeights,
-    /// Endgame patterns (uses interior mutability)
-    endgame_patterns: RefCell<EndgamePatternEvaluator>,
-    /// Opening principles (uses interior mutability)
-    opening_principles: RefCell<OpeningPrincipleEvaluator>,
+    /// Endgame patterns
+    endgame_patterns: EndgamePatternEvaluator,
+    /// Opening principles
+    opening_principles: OpeningPrincipleEvaluator,
     /// Tactical pattern recognizer (Phase 2 - Task 2.1)
-    tactical_patterns: RefCell<TacticalPatternRecognizer>,
+    tactical_patterns: TacticalPatternRecognizer,
     /// Positional pattern analyzer (Phase 2 - Task 2.2)
-    positional_patterns: RefCell<PositionalPatternAnalyzer>,
+    positional_patterns: PositionalPatternAnalyzer,
     /// Castle pattern recognizer (Task 17.0 - Task 1.0)
-    castle_recognizer: RefCell<CastleRecognizer>,
+    castle_recognizer: CastleRecognizer,
     /// Optimized evaluator (for performance mode)
     // Note: Pattern caching is handled per-module. Individual pattern recognizers
     // (CastleRecognizer, TacticalPatternRecognizer, etc.) maintain their own internal
     // caches optimized for their specific needs. A unified pattern cache was considered
     // but removed as unused - each module's cache is more efficient for its use case.
     optimized_eval: Option<OptimizedEvaluator>,
-    /// Statistics tracker (uses interior mutability)
-    statistics: RefCell<EvaluationStatistics>,
+    /// Statistics tracker
+    statistics: EvaluationStatistics,
     /// Latest telemetry snapshot
-    telemetry: RefCell<Option<EvaluationTelemetry>>,
-    /// Phase cache (uses interior mutability)
-    phase_cache: RefCell<HashMap<u64, i32>>,
-    /// Evaluation cache (uses interior mutability)
-    eval_cache: RefCell<HashMap<u64, CachedEvaluation>>,
+    telemetry: Option<EvaluationTelemetry>,
+    /// Phase cache
+    phase_cache: HashMap<u64, i32>,
+    /// Evaluation cache
+    eval_cache: HashMap<u64, CachedEvaluation>,
     /// Phase history for phase-aware validation (Task 20.0 - Task 5.14)
-    phase_history: RefCell<Vec<i32>>,
+    phase_history: Vec<i32>,
 }
 
 impl IntegratedEvaluator {
@@ -258,40 +300,59 @@ impl IntegratedEvaluator {
             None
         };
 
-        let evaluator = Self {
+        let mut evaluator = Self {
             config: config.clone(),
-            tapered_eval: RefCell::new(TaperedEvaluation::new()),
-            material_eval: RefCell::new(MaterialEvaluator::with_config(config.material.clone())),
+            tapered_eval: TaperedEvaluation::new(),
+            material_eval: MaterialEvaluator::with_config(config.material.clone()),
             pst: pst_tables,
-            phase_transition: RefCell::new(PhaseTransition::new()),
-            position_features: RefCell::new(PositionFeatureEvaluator::with_config(
+            phase_transition: PhaseTransition::new(),
+            position_features: PositionFeatureEvaluator::with_config(
                 config.position_features.clone(),
-            )),
+            ),
             weights: config.weights.clone(),
-            endgame_patterns: RefCell::new(EndgamePatternEvaluator::new()),
-            opening_principles: RefCell::new(OpeningPrincipleEvaluator::new()),
-            tactical_patterns: RefCell::new(TacticalPatternRecognizer::with_config(
-                config.tactical.clone(),
-            )),
-            positional_patterns: RefCell::new(PositionalPatternAnalyzer::new()),
-            castle_recognizer: RefCell::new(CastleRecognizer::new()),
+            endgame_patterns: EndgamePatternEvaluator::new(),
+            opening_principles: OpeningPrincipleEvaluator::new(),
+            tactical_patterns: TacticalPatternRecognizer::with_config(config.tactical.clone()),
+            positional_patterns: PositionalPatternAnalyzer::new(),
+            castle_recognizer: CastleRecognizer::new(),
             optimized_eval,
-            statistics: RefCell::new(EvaluationStatistics::new()),
-            telemetry: RefCell::new(None),
-            phase_cache: RefCell::new(HashMap::new()),
-            eval_cache: RefCell::new(HashMap::new()),
-            phase_history: RefCell::new(Vec::new()), // Task 20.0 - Task 5.14
+            statistics: EvaluationStatistics::new(),
+            telemetry: None,
+            phase_cache: HashMap::new(),
+            eval_cache: HashMap::new(),
+            phase_history: Vec::new(), // Task 20.0 - Task 5.14
         };
 
         evaluator
             .statistics
-            .borrow_mut()
             .set_collect_position_feature_stats(config.collect_position_feature_stats);
 
         evaluator
     }
 
     /// Main evaluation entry point
+    ///
+    /// Returns an immutable `EvaluationResult` containing the score, phase, and component contributions.
+    /// Statistics are not updated automatically - call `update_stats()` separately if needed.
+    ///
+    /// # Arguments
+    ///
+    /// * `board` - Current board state
+    /// * `player` - Player to evaluate for
+    /// * `captured_pieces` - Captured pieces for both players
+    pub fn evaluate(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> EvaluationResult {
+        self.evaluate_with_move_count(board, player, captured_pieces, None)
+    }
+
+    /// Evaluate with move count
+    ///
+    /// Returns an immutable `EvaluationResult` containing the score, phase, and component contributions.
+    /// Statistics are not updated automatically - call `update_stats()` separately if needed.
     ///
     /// # Arguments
     ///
@@ -300,77 +361,99 @@ impl IntegratedEvaluator {
     /// * `captured_pieces` - Captured pieces for both players
     /// * `move_count` - Optional move count (number of moves played in the game).
     ///                  If None, will be estimated from phase for opening principles evaluation.
-    pub fn evaluate(
-        &self,
-        board: &BitboardBoard,
-        player: Player,
-        captured_pieces: &CapturedPieces,
-    ) -> i32 {
-        self.evaluate_with_move_count(board, player, captured_pieces, None)
-    }
-
     pub fn evaluate_with_move_count(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
         move_count: Option<u32>,
-    ) -> i32 {
-        let start = if self.statistics.borrow().is_enabled() {
+    ) -> EvaluationResult {
+        // Check cache if enabled
+        if self.config.enable_eval_cache {
+            let hash = self.compute_position_hash(board, player, captured_pieces);
+            if let Some(cached) = self.eval_cache.get(&hash).copied() {
+                return EvaluationResult::new(cached.score, cached.phase);
+            }
+        }
+
+        // Use standard path
+        let result = self.evaluate_standard(board, player, captured_pieces, move_count);
+
+        // Cache if enabled
+        if self.config.enable_eval_cache {
+            let hash = self.compute_position_hash(board, player, captured_pieces);
+            self.eval_cache.insert(
+                hash,
+                CachedEvaluation {
+                    score: result.score,
+                    phase: result.phase,
+                },
+            );
+        }
+
+        result
+    }
+
+    /// Update statistics from an evaluation result
+    ///
+    /// This method should be called after `evaluate()` if statistics tracking is enabled.
+    /// It updates timing, evaluation count, phase history, and telemetry.
+    pub fn update_stats(&mut self, result: &EvaluationResult) {
+        if !self.statistics.is_enabled() {
+            return;
+        }
+
+        self.statistics.record_evaluation(result.score, result.phase);
+
+        // Record phase for phase-aware validation (Task 20.0 - Task 5.14)
+        self.phase_history.push(result.phase);
+        const MAX_PHASE_HISTORY: usize = 100;
+        if self.phase_history.len() > MAX_PHASE_HISTORY {
+            self.phase_history.remove(0);
+        }
+    }
+
+    /// Evaluate and update statistics in one call (convenience method)
+    ///
+    /// This is equivalent to calling `evaluate()` followed by `update_stats()`.
+    /// Use this when you need both the result and statistics updated.
+    pub fn evaluate_and_update_stats(
+        &mut self,
+        board: &BitboardBoard,
+        player: Player,
+        captured_pieces: &CapturedPieces,
+    ) -> EvaluationResult {
+        let start = if self.statistics.is_enabled() {
             Some(Instant::now())
         } else {
             None
         };
 
-        // Check cache if enabled
-        if self.config.enable_eval_cache {
-            let hash = self.compute_position_hash(board, player, captured_pieces);
-            if let Some(cached) = self.eval_cache.borrow().get(&hash).copied() {
-                if self.statistics.borrow().is_enabled() {
-                    self.statistics
-                        .borrow_mut()
-                        .record_evaluation(cached.score, cached.phase);
-                }
-                return cached.score;
-            }
-        }
+        let result = self.evaluate(board, player, captured_pieces);
 
-        // Use standard path (optimized path would require &mut self)
-        let score = self.evaluate_standard(board, player, captured_pieces, move_count);
-
-        // Record statistics
         if let Some(start_time) = start {
             let duration = start_time.elapsed().as_nanos() as u64;
-            self.statistics.borrow_mut().record_timing(duration);
-
-            if self.config.enable_phase_cache {
-                let phase = self.calculate_phase_cached(board, captured_pieces);
-                self.statistics.borrow_mut().record_evaluation(score, phase);
-
-                // Record phase for phase-aware validation (Task 20.0 - Task 5.14)
-                let mut phase_history = self.phase_history.borrow_mut();
-                phase_history.push(phase);
-                const MAX_PHASE_HISTORY: usize = 100;
-                if phase_history.len() > MAX_PHASE_HISTORY {
-                    phase_history.remove(0);
-                }
-            }
+            self.statistics.record_timing(duration);
         }
 
-        score
+        self.update_stats(&result);
+        result
     }
 
     /// Standard evaluation path (all components)
     fn evaluate_standard(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
         move_count: Option<u32>,
-    ) -> i32 {
-        let stats_enabled = { self.statistics.borrow().is_enabled() };
+    ) -> EvaluationResult {
+        let stats_enabled = self.statistics.is_enabled();
         // Calculate phase
         let phase = self.calculate_phase_cached(board, captured_pieces);
+        
+        // Track component scores for result
+        let mut component_scores = HashMap::new();
 
         // Apply phase-dependent weight scaling if enabled
         let mut weights = self.weights.clone();
@@ -409,7 +492,6 @@ impl IntegratedEvaluator {
         if self.config.components.material {
             let material_score =
                 self.material_eval
-                    .borrow_mut()
                     .evaluate_material(board, player, captured_pieces);
 
             // Task 5.0 - Task 5.5a, 5.5b: Validate zero scores from enabled components
@@ -422,6 +504,7 @@ impl IntegratedEvaluator {
             }
 
             total += material_score;
+            component_scores.insert("material".to_string(), material_score);
             // Track contribution for telemetry
             if stats_enabled {
                 let material_interp = material_score.interpolate(phase);
@@ -466,15 +549,14 @@ impl IntegratedEvaluator {
         let skip_center_control_in_features = coordination.skip_center_control_in_features;
 
         if self.config.components.position_features {
-            let mut position_features = self.position_features.borrow_mut();
-            position_features.begin_evaluation(board);
+            self.position_features.begin_evaluation(board);
 
             // Track position_features aggregate contribution for telemetry
             let mut pf_total = TaperedScore::default();
 
             // King safety
             let king_safety_score =
-                position_features.evaluate_king_safety(board, player, captured_pieces);
+                self.position_features.evaluate_king_safety(board, player, captured_pieces);
             let contribution =
                 (king_safety_score.interpolate(phase) as f32) * weights.king_safety_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
@@ -500,7 +582,7 @@ impl IntegratedEvaluator {
             pf_total += king_safety_weighted;
 
             // Pawn structure
-            let pawn_score = position_features.evaluate_pawn_structure(
+            let pawn_score = self.position_features.evaluate_pawn_structure(
                 board,
                 player,
                 captured_pieces,
@@ -522,7 +604,7 @@ impl IntegratedEvaluator {
 
             // Mobility
             let mobility_score =
-                position_features.evaluate_mobility(board, player, captured_pieces);
+                self.position_features.evaluate_mobility(board, player, captured_pieces);
             let contribution = (mobility_score.interpolate(phase) as f32) * weights.mobility_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -538,7 +620,7 @@ impl IntegratedEvaluator {
 
             // Center control (Task 20.0 - Task 1.0)
             // Skip center control in position_features if positional_patterns takes precedence
-            let center_score = position_features.evaluate_center_control(
+            let center_score = self.position_features.evaluate_center_control(
                 board,
                 player,
                 skip_center_control_in_features,
@@ -560,7 +642,7 @@ impl IntegratedEvaluator {
             // Development (Task 20.0 - Task 1.0)
             // Skip development in position_features if opening_principles is enabled in opening phase
             let dev_score =
-                position_features.evaluate_development(board, player, skip_development_in_features);
+                self.position_features.evaluate_development(board, player, skip_development_in_features);
             let contribution = (dev_score.interpolate(phase) as f32) * weights.development_weight;
             if contribution.abs() > self.config.weight_contribution_threshold {
                 debug_log(&format!(
@@ -575,9 +657,9 @@ impl IntegratedEvaluator {
             pf_total += dev_weighted;
 
             if stats_enabled && self.config.collect_position_feature_stats {
-                position_feature_stats_snapshot = Some(position_features.stats().clone());
+                position_feature_stats_snapshot = Some(self.position_features.stats().clone());
             }
-            position_features.end_evaluation();
+            self.position_features.end_evaluation();
 
             // Track position_features aggregate contribution for telemetry
             if stats_enabled {
@@ -603,7 +685,7 @@ impl IntegratedEvaluator {
                 }
             });
 
-            let mut opening_score = self.opening_principles.borrow_mut().evaluate_opening(
+            let mut opening_score = self.opening_principles.evaluate_opening(
                 board,
                 player,
                 estimated_move_count,
@@ -629,7 +711,7 @@ impl IntegratedEvaluator {
                     phase, endgame_threshold
                 ));
             } else {
-                let mut endgame_score = self.endgame_patterns.borrow_mut().evaluate_endgame(
+                let mut endgame_score = self.endgame_patterns.evaluate_endgame(
                     board,
                     player,
                     captured_pieces,
@@ -655,9 +737,8 @@ impl IntegratedEvaluator {
         // Tactical patterns (Phase 3 - Task 3.1 Integration)
         if self.config.components.tactical_patterns {
             let tactical_score = {
-                let mut tactical = self.tactical_patterns.borrow_mut();
-                let score = tactical.evaluate_tactics(board, player, captured_pieces);
-                tactical_snapshot = Some(tactical.stats().snapshot());
+                let score = self.tactical_patterns.evaluate_tactics(board, player, captured_pieces);
+                tactical_snapshot = Some(self.tactical_patterns.stats().snapshot());
                 score
             };
             let contribution = (tactical_score.interpolate(phase) as f32) * weights.tactical_weight;
@@ -695,29 +776,27 @@ impl IntegratedEvaluator {
         // When PositionFeatures precedence is used, skip center control in positional_patterns
         if self.config.components.positional_patterns {
             let positional_score = {
-                let mut positional = self.positional_patterns.borrow_mut();
-
                 // Temporarily disable center control if PositionFeatures takes precedence
-                let original_center_control = positional.config_mut().enable_center_control;
+                let original_center_control = self.positional_patterns.config_mut().enable_center_control;
                 let skip_center_control_in_positional = if self.config.components.position_features
                     && self.config.center_control_precedence
                         == CenterControlPrecedence::PositionFeatures
                 {
-                    positional.config_mut().enable_center_control = false;
+                    self.positional_patterns.config_mut().enable_center_control = false;
                     true
                 } else {
                     false
                 };
 
-                let score = positional.evaluate_position(board, player, captured_pieces);
+                let score = self.positional_patterns.evaluate_position(board, player, captured_pieces);
 
                 // Restore original center control setting
                 if skip_center_control_in_positional {
-                    positional.config_mut().enable_center_control = original_center_control;
+                    self.positional_patterns.config_mut().enable_center_control = original_center_control;
                 }
 
                 if stats_enabled {
-                    positional_snapshot = Some(positional.stats().snapshot());
+                    positional_snapshot = Some(self.positional_patterns.stats().snapshot());
                 }
                 score
             };
@@ -760,12 +839,11 @@ impl IntegratedEvaluator {
         // These are complementary and should both be enabled for comprehensive king safety evaluation.
         if self.config.components.castle_patterns {
             let castle_score = {
-                let castle = self.castle_recognizer.borrow_mut();
                 // Find king position for castle evaluation
                 if let Some(king_pos) = board.find_king_position(player) {
-                    let eval = castle.evaluate_castle(board, player, king_pos);
+                    let eval = self.castle_recognizer.evaluate_castle(board, player, king_pos);
                     if stats_enabled {
-                        castle_cache_stats = Some(castle.get_cache_stats());
+                        castle_cache_stats = Some(self.castle_recognizer.get_cache_stats());
                     }
                     eval.score()
                 } else {
@@ -803,7 +881,6 @@ impl IntegratedEvaluator {
         // Interpolate to final score
         let final_score = self
             .phase_transition
-            .borrow_mut()
             .interpolate_default(total, phase);
 
         // Calculate weight contributions for telemetry (Task 5.0 - Task 5.10)
@@ -829,26 +906,11 @@ impl IntegratedEvaluator {
             component_contributions = contributions_pct;
         }
 
-        // Cache if enabled
-        if self.config.enable_eval_cache {
-            let hash = self.compute_position_hash(board, player, captured_pieces);
-            self.eval_cache.borrow_mut().insert(
-                hash,
-                CachedEvaluation {
-                    score: final_score,
-                    phase,
-                },
-            );
-        }
+        // Update material stats (telemetry)
+        self.material_eval.stats_mut().record_phase_weighted(final_score);
 
-        let tapered_snapshot = {
-            let evaluator = self.tapered_eval.borrow();
-            evaluator.stats().snapshot()
-        };
-        let phase_snapshot = {
-            let transition = self.phase_transition.borrow();
-            transition.stats().snapshot()
-        };
+        let tapered_snapshot = self.tapered_eval.stats().snapshot();
+        let phase_snapshot = self.phase_transition.stats().snapshot();
         let performance_snapshot = self.optimized_eval.as_ref().and_then(|opt| {
             let profiler = opt.profiler();
             if profiler.enabled {
@@ -857,11 +919,7 @@ impl IntegratedEvaluator {
                 None
             }
         });
-        let material_snapshot = {
-            let mut material_eval = self.material_eval.borrow_mut();
-            material_eval.stats_mut().record_phase_weighted(final_score);
-            material_eval.stats().snapshot()
-        };
+        let material_snapshot = self.material_eval.stats().snapshot();
 
         let mut telemetry = EvaluationTelemetry::from_snapshots(
             tapered_snapshot,
@@ -877,21 +935,21 @@ impl IntegratedEvaluator {
         );
 
         // Add weight contributions to telemetry (Task 5.0 - Task 5.9, 5.10)
-        telemetry.weight_contributions = component_contributions;
-        self.telemetry.borrow_mut().replace(telemetry.clone());
+        telemetry.weight_contributions = component_contributions.clone();
+        self.telemetry = Some(telemetry.clone());
         if stats_enabled {
             if let Some(stats) = position_feature_stats_snapshot {
                 self.statistics
-                    .borrow_mut()
                     .record_position_feature_stats(stats);
             }
             if let Some(stats) = positional_snapshot {
-                self.statistics.borrow_mut().record_positional_stats(stats);
+                self.statistics.record_positional_stats(stats);
             }
-            self.statistics.borrow_mut().update_telemetry(telemetry);
+            self.statistics.update_telemetry(telemetry);
         }
 
-        final_score
+        // Return evaluation result
+        EvaluationResult::with_components(final_score, phase, component_scores)
     }
 
     /// Evaluate piece-square tables
@@ -927,28 +985,26 @@ impl IntegratedEvaluator {
 
     /// Calculate phase with caching
     fn calculate_phase_cached(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         captured_pieces: &CapturedPieces,
     ) -> i32 {
         if !self.config.enable_phase_cache {
             return self
                 .tapered_eval
-                .borrow_mut()
                 .calculate_game_phase(board, captured_pieces);
         }
 
         let hash = self.compute_phase_hash(board, captured_pieces);
 
-        if let Some(&phase) = self.phase_cache.borrow().get(&hash) {
+        if let Some(&phase) = self.phase_cache.get(&hash) {
             return phase;
         }
 
         let phase = self
             .tapered_eval
-            .borrow_mut()
             .calculate_game_phase(board, captured_pieces);
-        self.phase_cache.borrow_mut().insert(hash, phase);
+        self.phase_cache.insert(hash, phase);
         phase
     }
 
@@ -1041,35 +1097,35 @@ impl IntegratedEvaluator {
     }
 
     /// Clear all caches
-    pub fn clear_caches(&self) {
-        self.phase_cache.borrow_mut().clear();
-        self.eval_cache.borrow_mut().clear();
+    pub fn clear_caches(&mut self) {
+        self.phase_cache.clear();
+        self.eval_cache.clear();
     }
 
     /// Enable statistics tracking
-    pub fn enable_statistics(&self) {
-        self.statistics.borrow_mut().enable();
+    pub fn enable_statistics(&mut self) {
+        self.statistics.enable();
     }
 
     /// Disable statistics tracking
-    pub fn disable_statistics(&self) {
-        self.statistics.borrow_mut().disable();
+    pub fn disable_statistics(&mut self) {
+        self.statistics.disable();
     }
 
     /// Get statistics report (creates a clone)
     pub fn get_statistics(&self) -> EvaluationStatistics {
-        self.statistics.borrow().clone()
+        self.statistics.clone()
     }
 
     /// Reset statistics
-    pub fn reset_statistics(&self) {
-        self.statistics.borrow_mut().reset();
-        self.telemetry.borrow_mut().take();
+    pub fn reset_statistics(&mut self) {
+        self.statistics.reset();
+        self.telemetry = None;
     }
 
     /// Get the latest telemetry snapshot (cloned).
     pub fn telemetry_snapshot(&self) -> Option<EvaluationTelemetry> {
-        self.telemetry.borrow().clone()
+        self.telemetry.clone()
     }
 
     /// Get current configuration
@@ -1093,7 +1149,7 @@ impl IntegratedEvaluator {
 
     /// Retrieve material evaluation statistics.
     pub fn material_statistics(&self) -> MaterialEvaluationStats {
-        self.material_eval.borrow().stats().clone()
+        self.material_eval.stats().clone()
     }
 
     /// Update configuration
@@ -1101,18 +1157,15 @@ impl IntegratedEvaluator {
         self.config = config.clone();
 
         {
-            let mut material_eval = self.material_eval.borrow_mut();
-            material_eval.apply_config(config.material.clone());
+            self.material_eval.apply_config(config.material.clone());
         }
 
         {
-            let mut position_features = self.position_features.borrow_mut();
-            position_features.set_config(config.position_features.clone());
+            self.position_features.set_config(config.position_features.clone());
         }
 
         {
-            let mut tactical = self.tactical_patterns.borrow_mut();
-            tactical.set_config(config.tactical.clone());
+            self.tactical_patterns.set_config(config.tactical.clone());
         }
 
         self.weights = config.weights.clone();
@@ -1149,18 +1202,17 @@ impl IntegratedEvaluator {
 
         self.clear_caches();
         {
-            let mut stats = self.statistics.borrow_mut();
-            stats.reset();
-            stats.set_collect_position_feature_stats(config.collect_position_feature_stats);
+            self.statistics.reset();
+            self.statistics.set_collect_position_feature_stats(config.collect_position_feature_stats);
         }
-        self.telemetry.borrow_mut().take();
+        self.telemetry = None;
     }
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> CacheStatistics {
         CacheStatistics {
-            phase_cache_size: self.phase_cache.borrow().len(),
-            eval_cache_size: self.eval_cache.borrow().len(),
+            phase_cache_size: self.phase_cache.len(),
+            eval_cache_size: self.eval_cache.len(),
             phase_cache_enabled: self.config.enable_phase_cache,
             eval_cache_enabled: self.config.enable_eval_cache,
         }
@@ -1522,9 +1574,8 @@ impl IntegratedEvaluator {
         warnings.extend(config_warnings);
 
         // Phase-aware validation (Task 20.0 - Task 5.14)
-        let phase_history = self.phase_history.borrow();
-        if !phase_history.is_empty() {
-            let phase_warnings = self.config.check_phase_compatibility(&phase_history);
+        if !self.phase_history.is_empty() {
+            let phase_warnings = self.config.check_phase_compatibility(&self.phase_history);
             warnings.extend(phase_warnings);
         }
 
@@ -1619,11 +1670,11 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score =
+        let result =
             evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
 
         // Should return a valid score
-        assert!(score.abs() < 100000);
+        assert!(result.score.abs() < 100000);
     }
 
     #[test]
@@ -1633,12 +1684,12 @@ mod tests {
         let captured_pieces = CapturedPieces::new();
 
         // First evaluation
-        let score1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let result1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
         // Second evaluation (should be cached)
-        let score2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let result2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
-        assert_eq!(score1, score2);
+        assert_eq!(result1.score, result2.score);
         assert!(evaluator.eval_cache.len() > 0);
     }
 
@@ -1661,7 +1712,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let _result = evaluator.evaluate(&board, Player::Black, &captured_pieces);
         assert!(evaluator.eval_cache.len() > 0);
 
         evaluator.clear_caches();
@@ -1677,7 +1728,7 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let _result = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
         let stats = evaluator.get_statistics();
         assert_eq!(stats.count(), 1);
@@ -1739,9 +1790,9 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score =
+        let result =
             evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
-        assert!(score.abs() < 100000);
+        assert!(result.score.abs() < 100000);
     }
 
     #[test]
@@ -1755,9 +1806,9 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score =
+        let result =
             evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
-        assert!(score.abs() < 100000);
+        assert!(result.score.abs() < 100000);
     }
 
     #[test]
@@ -1790,11 +1841,11 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let result1 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
         evaluator.clear_caches();
-        let score2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
+        let result2 = evaluator.evaluate(&board, Player::Black, &captured_pieces);
 
-        assert_eq!(score1, score2);
+        assert_eq!(result1.score, result2.score);
     }
 
     #[test]
@@ -1807,9 +1858,9 @@ mod tests {
         let board = BitboardBoard::new();
         let captured_pieces = CapturedPieces::new();
 
-        let score =
+        let result =
             evaluator.evaluate_with_move_count(&board, Player::Black, &captured_pieces, None);
-        assert!(score.abs() < 100000);
+        assert!(result.score.abs() < 100000);
     }
 }
 
@@ -2087,12 +2138,13 @@ impl IntegratedEvaluator {
 
             for position in &position_set.positions {
                 // Evaluate position with current weights
-                let predicted_score = temp_evaluator.evaluate_with_move_count(
+                let result = temp_evaluator.evaluate_with_move_count(
                     &position.board,
                     position.player,
                     &position.captured_pieces,
                     None,
-                ) as f64;
+                );
+                let predicted_score = result.score as f64;
 
                 // Convert to probability using sigmoid
                 let predicted_prob = sigmoid(predicted_score * k_factor);
@@ -2115,12 +2167,13 @@ impl IntegratedEvaluator {
                         let mut perturbed_evaluator =
                             IntegratedEvaluator::with_config(self.config.clone());
                         perturbed_evaluator.weights = perturbed_eval_weights;
-                        let perturbed_score = perturbed_evaluator.evaluate_with_move_count(
+                        let perturbed_result = perturbed_evaluator.evaluate_with_move_count(
                             &position.board,
                             position.player,
                             &position.captured_pieces,
                             None,
-                        ) as f64;
+                        );
+                        let perturbed_score = perturbed_result.score as f64;
                         let perturbed_prob = sigmoid(perturbed_score * k_factor);
 
                         let gradient_contribution =
@@ -2221,8 +2274,12 @@ impl IntegratedEvaluator {
         let mut positions = Vec::new();
 
         for (board, captured_pieces, player, _telemetry, expected_score) in telemetry_positions {
-            // Calculate game phase
-            let game_phase = self.calculate_phase_cached(board, captured_pieces);
+            // Calculate game phase (requires mutable reference, but we have &self)
+            // This method needs to be updated to use evaluate() result or a separate phase calculation
+            // For now, use a temporary evaluator or extract phase calculation
+            let mut temp_evaluator = IntegratedEvaluator::new();
+            let result = temp_evaluator.evaluate_with_move_count(board, *player, captured_pieces, None);
+            let game_phase = result.phase;
 
             // Create tuning position
             let tuning_position = TuningPosition {
