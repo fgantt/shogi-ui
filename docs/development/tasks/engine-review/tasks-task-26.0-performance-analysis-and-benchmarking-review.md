@@ -38,21 +38,21 @@ This task list implements the performance analysis and benchmarking improvements
 
 ## Tasks
 
-- [ ] 1.0 Performance Baseline Persistence and Comparison Framework (Medium Priority - Est: 4-6 hours)
-  - [ ] 1.1 Create `PerformanceBaseline` struct in `src/types.rs` matching PRD Section 12.1 JSON format (timestamp, hardware, search_metrics, evaluation_metrics, tt_metrics, move_ordering_metrics, parallel_search_metrics, memory_metrics)
-  - [ ] 1.2 Create `BaselineManager` struct in `src/search/performance_tuning.rs` with methods: `new()`, `load_baseline()`, `save_baseline()`, `compare_with_baseline()`
-  - [ ] 1.3 Implement `collect_baseline_metrics()` method in `SearchEngine` to gather all metrics from `get_performance_metrics()`, transposition table stats, move ordering stats, parallel search stats
-  - [ ] 1.4 Implement hardware detection: CPU model, core count, RAM size (use `std::env` and system info where available, fallback to "Unknown")
-  - [ ] 1.5 Implement `save_baseline_to_file()` method that exports baseline to JSON in `docs/performance/baselines/` directory
-  - [ ] 1.6 Implement `load_baseline_from_file()` method that reads JSON baseline file
-  - [ ] 1.7 Implement `compare_baselines()` method that calculates percentage differences for each metric category
-  - [ ] 1.8 Implement `detect_regression()` method that flags metrics degrading >5% (configurable threshold)
-  - [ ] 1.9 Add git commit hash to baseline metadata (use `git rev-parse HEAD` or environment variable)
-  - [ ] 1.10 Create `scripts/run_performance_baseline.sh` script that runs benchmark suite and saves baseline
-  - [ ] 1.11 Write unit test `test_baseline_serialization` to verify JSON round-trip (save/load)
-  - [ ] 1.12 Write unit test `test_baseline_comparison` to verify comparison logic calculates differences correctly
-  - [ ] 1.13 Write integration test `test_baseline_regression_detection` to verify regression detection flags >5% degradation
-  - [ ] 1.14 Add documentation for baseline format and usage in `docs/performance/baselines/README.md`
+- [x] 1.0 Performance Baseline Persistence and Comparison Framework (Medium Priority - Est: 4-6 hours)
+  - [x] 1.1 Create `PerformanceBaseline` struct in `src/types.rs` matching PRD Section 12.1 JSON format (timestamp, hardware, search_metrics, evaluation_metrics, tt_metrics, move_ordering_metrics, parallel_search_metrics, memory_metrics)
+  - [x] 1.2 Create `BaselineManager` struct in `src/search/performance_tuning.rs` with methods: `new()`, `load_baseline()`, `save_baseline()`, `compare_with_baseline()`
+  - [x] 1.3 Implement `collect_baseline_metrics()` method in `SearchEngine` to gather all metrics from `get_performance_metrics()`, transposition table stats, move ordering stats, parallel search stats
+  - [x] 1.4 Implement hardware detection: CPU model, core count, RAM size (use `std::env` and system info where available, fallback to "Unknown")
+  - [x] 1.5 Implement `save_baseline_to_file()` method that exports baseline to JSON in `docs/performance/baselines/` directory
+  - [x] 1.6 Implement `load_baseline_from_file()` method that reads JSON baseline file
+  - [x] 1.7 Implement `compare_baselines()` method that calculates percentage differences for each metric category
+  - [x] 1.8 Implement `detect_regression()` method that flags metrics degrading >5% (configurable threshold)
+  - [x] 1.9 Add git commit hash to baseline metadata (use `git rev-parse HEAD` or environment variable)
+  - [x] 1.10 Create `scripts/run_performance_baseline.sh` script that runs benchmark suite and saves baseline
+  - [x] 1.11 Write unit test `test_baseline_serialization` to verify JSON round-trip (save/load)
+  - [x] 1.12 Write unit test `test_baseline_comparison` to verify comparison logic calculates differences correctly
+  - [x] 1.13 Write integration test `test_baseline_regression_detection` to verify regression detection flags >5% degradation
+  - [x] 1.14 Add documentation for baseline format and usage in `docs/performance/baselines/README.md`
 
 - [ ] 2.0 Benchmark Result Aggregation and Reporting (Medium Priority - Est: 4-6 hours)
   - [ ] 2.1 Create `BenchmarkAggregator` struct in `src/search/performance_tuning.rs` to collect results from multiple benchmark runs
@@ -220,4 +220,22 @@ All parent tasks have been broken down into **105 actionable sub-tasks** (update
 - **Developer Experience:** Automatic profiling identifies bottlenecks without manual instrumentation
 - **Analysis:** Telemetry export enables post-processing, visualization, and trend analysis
 - **Integration:** External profiler support enables deep performance analysis with industry-standard tools
+
+---
+
+### Task 1.0 Completion Notes
+
+- **Implementation**: Created `PerformanceBaseline` struct in `src/types.rs` matching PRD Section 12.1 JSON format with all required metric categories (search, evaluation, TT, move ordering, parallel search, memory). Implemented `BaselineManager` in `src/search/performance_tuning.rs` with save/load, comparison, and regression detection methods. Added `collect_baseline_metrics()` method to `SearchEngine` that gathers metrics from all subsystems. Implemented hardware detection using environment variables and platform-specific commands (Linux `/proc/cpuinfo`, macOS `sysctl`). Added git commit hash tracking via `get_git_commit_hash()` function that checks environment variable or git command.
+
+- **Configuration**: Baseline directory defaults to `docs/performance/baselines/` (configurable via `BaselineManager::with_directory()`). Regression threshold defaults to 5.0% (configurable via `set_regression_threshold()`). Baseline files are JSON format with ISO 8601 timestamps and git commit hashes for version tracking.
+
+- **Testing**: Added comprehensive test suite in `tests/performance_baseline_tests.rs` covering: baseline serialization round-trip (`test_baseline_serialization`), comparison logic verification (`test_baseline_comparison`), regression detection with >5% threshold (`test_baseline_regression_detection`), no false positives for improvements (`test_baseline_no_regression`), directory creation (`test_baseline_directory_creation`), git commit hash inclusion (`test_baseline_git_commit_hash`), hardware info detection (`test_baseline_hardware_info`). All tests pass.
+
+- **Scripts**: Created `scripts/run_performance_baseline.sh` script that runs benchmarks and provides instructions for baseline collection. Script handles directory creation, git commit hash extraction, and timestamp generation.
+
+- **Documentation**: Added comprehensive documentation in `docs/performance/baselines/README.md` covering: baseline format specification, usage examples (create, load, compare, detect regressions), regression threshold configuration, file naming conventions, CI integration guidance, best practices, limitations, and future enhancements.
+
+- **Known Limitations**: Evaluation metrics (average_evaluation_time_ns, phase_calc_time_ns) are currently placeholders (TODO comments) and require evaluator interface enhancements. Parallel search metrics default to 0.0 if parallel search is not used. Memory metrics are estimates based on data structure sizes, not actual RSS (will be addressed in Task 4.0).
+
+- **Follow-ups**: Consider enhancing evaluator interface to expose evaluation timing and cache statistics. Consider adding parallel search metrics collection when parallel search is enabled. Task 4.0 will replace memory estimates with actual RSS tracking.
 

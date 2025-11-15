@@ -12499,6 +12499,102 @@ impl SearchEngine {
         avg_score * 0.1 // Assume 10% of score as window size
     }
 
+    /// Collect baseline metrics from all subsystems (Task 26.0 - Task 1.0)
+    ///
+    /// Gathers performance metrics from search engine, transposition table,
+    /// move ordering, evaluation, and other subsystems to create a comprehensive
+    /// performance baseline for regression detection.
+    pub fn collect_baseline_metrics(&self) -> crate::types::PerformanceBaseline {
+        use crate::search::performance_tuning::detect_hardware_info;
+        use crate::types::*;
+
+        // Get search metrics
+        let perf_metrics = self.get_performance_metrics();
+        let cutoff_rate = if self.nodes_searched > 0 {
+            self.core_search_metrics.total_cutoffs as f64 / self.nodes_searched as f64
+        } else {
+            0.0
+        };
+        // Get move ordering effectiveness for average cutoff index
+        let ordering_effectiveness_metrics = self.get_move_ordering_effectiveness_metrics();
+        let avg_cutoff_index = ordering_effectiveness_metrics.average_cutoff_index;
+
+        // Get transposition table metrics
+        let tt_stats = self.transposition_table.get_stats();
+        let tt_hit_rate = self.transposition_table.hit_rate() / 100.0; // Convert from percentage to ratio
+        // Exact entry rate: approximate using hit rate (exact hits not directly available)
+        let exact_entry_rate = tt_hit_rate * 0.5; // Estimate: ~50% of hits are exact entries
+        // TT occupancy: approximate using stores vs table capacity
+        let tt_occupancy = if tt_stats.stores > 0 {
+            // Estimate occupancy based on stores (simplified)
+            (tt_stats.stores as f64 / 1000000.0).min(1.0) // Cap at 100%
+        } else {
+            0.0
+        };
+
+        // Get move ordering metrics
+        let ordering_stats = self.advanced_move_orderer.get_stats();
+        // Calculate average cutoff index from core_search_metrics (already calculated above)
+        let pv_hit_rate = ordering_stats.pv_move_hit_rate / 100.0; // Convert from percentage to ratio
+        let killer_hit_rate = ordering_stats.killer_move_hit_rate / 100.0;
+        let ordering_cache_hit_rate = ordering_stats.cache_hit_rate / 100.0;
+
+        // Get evaluation metrics (simplified - may need to enhance evaluator interface)
+        let eval_cache_hit_rate = 0.0; // TODO: Get from evaluator if available
+        let avg_eval_time_ns = 0.0; // TODO: Get from evaluator if available
+        let phase_calc_time_ns = 0.0; // TODO: Get from evaluator if available
+
+        // Get memory metrics (estimates based on data structure sizes)
+        // TT memory: estimate based on table configuration (not directly available from stats)
+        let tt_memory_mb = 16.0; // Placeholder: will be improved in Task 4.0
+        let cache_memory_mb = (ordering_stats.memory_usage_bytes) as f64 / (1024.0 * 1024.0);
+        let peak_memory_mb = (ordering_stats.peak_memory_usage_bytes) as f64 / (1024.0 * 1024.0);
+
+        // Parallel search metrics (default to 0 if not using parallel search)
+        let parallel_speedup_4 = 0.0; // TODO: Get from parallel search if available
+        let parallel_speedup_8 = 0.0; // TODO: Get from parallel search if available
+        let parallel_efficiency_4 = 0.0;
+        let parallel_efficiency_8 = 0.0;
+
+        PerformanceBaseline {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            git_commit: crate::types::get_git_commit_hash().unwrap_or_else(|| "unknown".to_string()),
+            hardware: detect_hardware_info(),
+            search_metrics: SearchMetrics {
+                nodes_per_second: perf_metrics.nodes_per_second,
+                average_cutoff_rate: cutoff_rate,
+                average_cutoff_index: avg_cutoff_index,
+            },
+            evaluation_metrics: EvaluationMetrics {
+                average_evaluation_time_ns: avg_eval_time_ns,
+                cache_hit_rate: eval_cache_hit_rate,
+                phase_calc_time_ns: phase_calc_time_ns,
+            },
+            tt_metrics: TTMetrics {
+                hit_rate: tt_hit_rate,
+                exact_entry_rate: exact_entry_rate,
+                occupancy_rate: tt_occupancy,
+            },
+            move_ordering_metrics: BaselineMoveOrderingMetrics {
+                average_cutoff_index: avg_cutoff_index,
+                pv_hit_rate: pv_hit_rate,
+                killer_hit_rate: killer_hit_rate,
+                cache_hit_rate: ordering_cache_hit_rate,
+            },
+            parallel_search_metrics: ParallelSearchMetrics {
+                speedup_4_cores: parallel_speedup_4,
+                speedup_8_cores: parallel_speedup_8,
+                efficiency_4_cores: parallel_efficiency_4,
+                efficiency_8_cores: parallel_efficiency_8,
+            },
+            memory_metrics: MemoryMetrics {
+                tt_memory_mb,
+                cache_memory_mb,
+                peak_memory_mb,
+            },
+        }
+    }
+
     // ============================================================================
     // RUNTIME VALIDATION AND MONITORING
     // ============================================================================

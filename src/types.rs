@@ -10178,3 +10178,194 @@ mod transposition_entry_tests {
         assert_eq!(min_entry.age, 0);
     }
 }
+
+// ============================================================================
+// Performance Baseline Structures (Task 26.0 - Task 1.0)
+// ============================================================================
+
+/// Hardware information for performance baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareInfo {
+    /// CPU model name
+    pub cpu: String,
+    /// Number of CPU cores
+    pub cores: u32,
+    /// RAM size in GB
+    pub ram_gb: u32,
+}
+
+impl Default for HardwareInfo {
+    fn default() -> Self {
+        Self {
+            cpu: "Unknown".to_string(),
+            cores: num_cpus::get() as u32,
+            ram_gb: 0,
+        }
+    }
+}
+
+/// Search performance metrics for baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchMetrics {
+    /// Nodes searched per second
+    pub nodes_per_second: f64,
+    /// Average cutoff rate (0.0 to 1.0)
+    pub average_cutoff_rate: f64,
+    /// Average cutoff index (lower is better)
+    pub average_cutoff_index: f64,
+}
+
+/// Evaluation performance metrics for baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationMetrics {
+    /// Average evaluation time in nanoseconds
+    pub average_evaluation_time_ns: f64,
+    /// Cache hit rate (0.0 to 1.0)
+    pub cache_hit_rate: f64,
+    /// Phase calculation time in nanoseconds
+    pub phase_calc_time_ns: f64,
+}
+
+/// Transposition table metrics for baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TTMetrics {
+    /// Hit rate (0.0 to 1.0)
+    pub hit_rate: f64,
+    /// Exact entry rate (0.0 to 1.0)
+    pub exact_entry_rate: f64,
+    /// Occupancy rate (0.0 to 1.0)
+    pub occupancy_rate: f64,
+}
+
+/// Move ordering metrics for baseline (Task 26.0 - Task 1.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BaselineMoveOrderingMetrics {
+    /// Average cutoff index (lower is better)
+    pub average_cutoff_index: f64,
+    /// PV move hit rate (0.0 to 1.0)
+    pub pv_hit_rate: f64,
+    /// Killer move hit rate (0.0 to 1.0)
+    pub killer_hit_rate: f64,
+    /// Cache hit rate (0.0 to 1.0)
+    pub cache_hit_rate: f64,
+}
+
+/// Parallel search metrics for baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParallelSearchMetrics {
+    /// Speedup on 4 cores
+    pub speedup_4_cores: f64,
+    /// Speedup on 8 cores
+    pub speedup_8_cores: f64,
+    /// Efficiency on 4 cores (0.0 to 1.0)
+    pub efficiency_4_cores: f64,
+    /// Efficiency on 8 cores (0.0 to 1.0)
+    pub efficiency_8_cores: f64,
+}
+
+/// Memory metrics for baseline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryMetrics {
+    /// Transposition table memory in MB
+    pub tt_memory_mb: f64,
+    /// Cache memory in MB
+    pub cache_memory_mb: f64,
+    /// Peak memory usage in MB
+    pub peak_memory_mb: f64,
+}
+
+/// Performance baseline for regression detection and trend analysis
+///
+/// This structure matches the JSON format specified in PRD Section 12.1
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceBaseline {
+    /// Timestamp when baseline was created (ISO 8601 format)
+    pub timestamp: String,
+    /// Git commit hash
+    pub git_commit: String,
+    /// Hardware information
+    pub hardware: HardwareInfo,
+    /// Search performance metrics
+    pub search_metrics: SearchMetrics,
+    /// Evaluation performance metrics
+    pub evaluation_metrics: EvaluationMetrics,
+    /// Transposition table metrics
+    pub tt_metrics: TTMetrics,
+    /// Move ordering metrics
+    pub move_ordering_metrics: BaselineMoveOrderingMetrics,
+    /// Parallel search metrics
+    pub parallel_search_metrics: ParallelSearchMetrics,
+    /// Memory metrics
+    pub memory_metrics: MemoryMetrics,
+}
+
+impl PerformanceBaseline {
+    /// Create a new empty baseline
+    pub fn new() -> Self {
+        Self {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            git_commit: get_git_commit_hash().unwrap_or_else(|| "unknown".to_string()),
+            hardware: HardwareInfo::default(),
+            search_metrics: SearchMetrics {
+                nodes_per_second: 0.0,
+                average_cutoff_rate: 0.0,
+                average_cutoff_index: 0.0,
+            },
+            evaluation_metrics: EvaluationMetrics {
+                average_evaluation_time_ns: 0.0,
+                cache_hit_rate: 0.0,
+                phase_calc_time_ns: 0.0,
+            },
+            tt_metrics: TTMetrics {
+                hit_rate: 0.0,
+                exact_entry_rate: 0.0,
+                occupancy_rate: 0.0,
+            },
+            move_ordering_metrics: BaselineMoveOrderingMetrics {
+                average_cutoff_index: 0.0,
+                pv_hit_rate: 0.0,
+                killer_hit_rate: 0.0,
+                cache_hit_rate: 0.0,
+            },
+            parallel_search_metrics: ParallelSearchMetrics {
+                speedup_4_cores: 0.0,
+                speedup_8_cores: 0.0,
+                efficiency_4_cores: 0.0,
+                efficiency_8_cores: 0.0,
+            },
+            memory_metrics: MemoryMetrics {
+                tt_memory_mb: 0.0,
+                cache_memory_mb: 0.0,
+                peak_memory_mb: 0.0,
+            },
+        }
+    }
+}
+
+impl Default for PerformanceBaseline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Get git commit hash from environment or git command
+pub fn get_git_commit_hash() -> Option<String> {
+    // Try environment variable first (useful for CI)
+    if let Ok(hash) = std::env::var("GIT_COMMIT") {
+        return Some(hash);
+    }
+
+    // Try git command
+    let output = std::process::Command::new("git")
+        .args(&["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        String::from_utf8(output.stdout)
+            .ok()
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    }
+}

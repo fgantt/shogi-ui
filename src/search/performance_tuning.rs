@@ -597,13 +597,376 @@ impl PerformanceProfiler {
     pub fn get_memory_snapshots(&self) -> Vec<MemorySnapshot> {
         self.memory_snapshots.clone()
     }
+}
 
-    /// Clear all profiling data
-    pub fn clear_data(&mut self) {
-        self.operation_timings.clear();
-        self.memory_snapshots.clear();
-        self.performance_counters = PerformanceCounters::default();
+// ============================================================================
+// Performance Baseline Manager (Task 26.0 - Task 1.0)
+// ============================================================================
+
+use crate::types::*;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Manager for performance baseline persistence and comparison
+pub struct BaselineManager {
+    /// Default baseline directory
+    baseline_dir: PathBuf,
+    /// Regression threshold (default: 5.0%)
+    regression_threshold: f64,
+}
+
+impl BaselineManager {
+    /// Create a new baseline manager
+    pub fn new() -> Self {
+        Self {
+            baseline_dir: PathBuf::from("docs/performance/baselines"),
+            regression_threshold: 5.0,
+        }
     }
+
+    /// Create a baseline manager with custom directory
+    pub fn with_directory<P: AsRef<Path>>(dir: P) -> Self {
+        Self {
+            baseline_dir: dir.as_ref().to_path_buf(),
+            regression_threshold: 5.0,
+        }
+    }
+
+    /// Set regression threshold (percentage)
+    pub fn set_regression_threshold(&mut self, threshold: f64) {
+        self.regression_threshold = threshold;
+    }
+
+    /// Get regression threshold
+    pub fn regression_threshold(&self) -> f64 {
+        self.regression_threshold
+    }
+
+    /// Save baseline to file
+    pub fn save_baseline(&self, baseline: &PerformanceBaseline, filename: &str) -> Result<(), String> {
+        // Ensure directory exists
+        fs::create_dir_all(&self.baseline_dir)
+            .map_err(|e| format!("Failed to create baseline directory: {}", e))?;
+
+        let file_path = self.baseline_dir.join(filename);
+        let json = serde_json::to_string_pretty(baseline)
+            .map_err(|e| format!("Failed to serialize baseline: {}", e))?;
+
+        fs::write(&file_path, json)
+            .map_err(|e| format!("Failed to write baseline file: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Load baseline from file
+    pub fn load_baseline<P: AsRef<Path>>(&self, path: P) -> Result<PerformanceBaseline, String> {
+        let file_path = if path.as_ref().is_absolute() {
+            path.as_ref().to_path_buf()
+        } else {
+            self.baseline_dir.join(path)
+        };
+
+        let content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read baseline file: {}", e))?;
+
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse baseline JSON: {}", e))
+    }
+
+    /// Compare two baselines and calculate percentage differences
+    pub fn compare_baselines(
+        &self,
+        current: &PerformanceBaseline,
+        baseline: &PerformanceBaseline,
+    ) -> BaselineComparison {
+        BaselineComparison {
+            search_metrics_diff: compare_search_metrics(&current.search_metrics, &baseline.search_metrics),
+            evaluation_metrics_diff: compare_evaluation_metrics(&current.evaluation_metrics, &baseline.evaluation_metrics),
+            tt_metrics_diff: compare_tt_metrics(&current.tt_metrics, &baseline.tt_metrics),
+            move_ordering_metrics_diff: compare_move_ordering_metrics(&current.move_ordering_metrics, &baseline.move_ordering_metrics),
+            parallel_search_metrics_diff: compare_parallel_search_metrics(&current.parallel_search_metrics, &baseline.parallel_search_metrics),
+            memory_metrics_diff: compare_memory_metrics(&current.memory_metrics, &baseline.memory_metrics),
+        }
+    }
+
+    /// Detect regressions in current baseline compared to reference baseline
+    pub fn detect_regression(
+        &self,
+        current: &PerformanceBaseline,
+        baseline: &PerformanceBaseline,
+    ) -> RegressionResult {
+        let comparison = self.compare_baselines(current, baseline);
+        let mut regressions = Vec::new();
+
+        // Check search metrics
+        if comparison.search_metrics_diff.nodes_per_second_change < -self.regression_threshold {
+            regressions.push(Regression {
+                category: "search_metrics".to_string(),
+                metric: "nodes_per_second".to_string(),
+                baseline_value: baseline.search_metrics.nodes_per_second,
+                current_value: current.search_metrics.nodes_per_second,
+                change_percent: comparison.search_metrics_diff.nodes_per_second_change,
+            });
+        }
+        if comparison.search_metrics_diff.average_cutoff_rate_change < -self.regression_threshold {
+            regressions.push(Regression {
+                category: "search_metrics".to_string(),
+                metric: "average_cutoff_rate".to_string(),
+                baseline_value: baseline.search_metrics.average_cutoff_rate,
+                current_value: current.search_metrics.average_cutoff_rate,
+                change_percent: comparison.search_metrics_diff.average_cutoff_rate_change,
+            });
+        }
+        if comparison.search_metrics_diff.average_cutoff_index_change > self.regression_threshold {
+            regressions.push(Regression {
+                category: "search_metrics".to_string(),
+                metric: "average_cutoff_index".to_string(),
+                baseline_value: baseline.search_metrics.average_cutoff_index,
+                current_value: current.search_metrics.average_cutoff_index,
+                change_percent: comparison.search_metrics_diff.average_cutoff_index_change,
+            });
+        }
+
+        // Check evaluation metrics
+        if comparison.evaluation_metrics_diff.average_evaluation_time_ns_change > self.regression_threshold {
+            regressions.push(Regression {
+                category: "evaluation_metrics".to_string(),
+                metric: "average_evaluation_time_ns".to_string(),
+                baseline_value: baseline.evaluation_metrics.average_evaluation_time_ns,
+                current_value: current.evaluation_metrics.average_evaluation_time_ns,
+                change_percent: comparison.evaluation_metrics_diff.average_evaluation_time_ns_change,
+            });
+        }
+        if comparison.evaluation_metrics_diff.cache_hit_rate_change < -self.regression_threshold {
+            regressions.push(Regression {
+                category: "evaluation_metrics".to_string(),
+                metric: "cache_hit_rate".to_string(),
+                baseline_value: baseline.evaluation_metrics.cache_hit_rate,
+                current_value: current.evaluation_metrics.cache_hit_rate,
+                change_percent: comparison.evaluation_metrics_diff.cache_hit_rate_change,
+            });
+        }
+
+        // Check TT metrics
+        if comparison.tt_metrics_diff.hit_rate_change < -self.regression_threshold {
+            regressions.push(Regression {
+                category: "tt_metrics".to_string(),
+                metric: "hit_rate".to_string(),
+                baseline_value: baseline.tt_metrics.hit_rate,
+                current_value: current.tt_metrics.hit_rate,
+                change_percent: comparison.tt_metrics_diff.hit_rate_change,
+            });
+        }
+
+        // Check move ordering metrics
+        if comparison.move_ordering_metrics_diff.average_cutoff_index_change > self.regression_threshold {
+            regressions.push(Regression {
+                category: "move_ordering_metrics".to_string(),
+                metric: "average_cutoff_index".to_string(),
+                baseline_value: baseline.move_ordering_metrics.average_cutoff_index,
+                current_value: current.move_ordering_metrics.average_cutoff_index,
+                change_percent: comparison.move_ordering_metrics_diff.average_cutoff_index_change,
+            });
+        }
+
+        RegressionResult {
+            has_regression: !regressions.is_empty(),
+            regressions,
+            threshold: self.regression_threshold,
+        }
+    }
+}
+
+impl Default for BaselineManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Baseline comparison result
+#[derive(Debug, Clone)]
+pub struct BaselineComparison {
+    pub search_metrics_diff: SearchMetricsDiff,
+    pub evaluation_metrics_diff: EvaluationMetricsDiff,
+    pub tt_metrics_diff: TTMetricsDiff,
+    pub move_ordering_metrics_diff: MoveOrderingMetricsDiff,
+    pub parallel_search_metrics_diff: ParallelSearchMetricsDiff,
+    pub memory_metrics_diff: MemoryMetricsDiff,
+}
+
+/// Search metrics difference
+#[derive(Debug, Clone)]
+pub struct SearchMetricsDiff {
+    pub nodes_per_second_change: f64,
+    pub average_cutoff_rate_change: f64,
+    pub average_cutoff_index_change: f64,
+}
+
+/// Evaluation metrics difference
+#[derive(Debug, Clone)]
+pub struct EvaluationMetricsDiff {
+    pub average_evaluation_time_ns_change: f64,
+    pub cache_hit_rate_change: f64,
+    pub phase_calc_time_ns_change: f64,
+}
+
+/// TT metrics difference
+#[derive(Debug, Clone)]
+pub struct TTMetricsDiff {
+    pub hit_rate_change: f64,
+    pub exact_entry_rate_change: f64,
+    pub occupancy_rate_change: f64,
+}
+
+/// Move ordering metrics difference
+#[derive(Debug, Clone)]
+pub struct MoveOrderingMetricsDiff {
+    pub average_cutoff_index_change: f64,
+    pub pv_hit_rate_change: f64,
+    pub killer_hit_rate_change: f64,
+    pub cache_hit_rate_change: f64,
+}
+
+/// Parallel search metrics difference
+#[derive(Debug, Clone)]
+pub struct ParallelSearchMetricsDiff {
+    pub speedup_4_cores_change: f64,
+    pub speedup_8_cores_change: f64,
+    pub efficiency_4_cores_change: f64,
+    pub efficiency_8_cores_change: f64,
+}
+
+/// Memory metrics difference
+#[derive(Debug, Clone)]
+pub struct MemoryMetricsDiff {
+    pub tt_memory_mb_change: f64,
+    pub cache_memory_mb_change: f64,
+    pub peak_memory_mb_change: f64,
+}
+
+/// Regression detection result
+#[derive(Debug, Clone)]
+pub struct RegressionResult {
+    pub has_regression: bool,
+    pub regressions: Vec<Regression>,
+    pub threshold: f64,
+}
+
+/// Individual regression
+#[derive(Debug, Clone)]
+pub struct Regression {
+    pub category: String,
+    pub metric: String,
+    pub baseline_value: f64,
+    pub current_value: f64,
+    pub change_percent: f64,
+}
+
+// Helper functions for comparing metrics
+fn calculate_percent_change(baseline: f64, current: f64) -> f64 {
+    if baseline == 0.0 {
+        if current == 0.0 {
+            0.0
+        } else {
+            100.0 // Infinite change
+        }
+    } else {
+        ((current - baseline) / baseline) * 100.0
+    }
+}
+
+fn compare_search_metrics(current: &SearchMetrics, baseline: &SearchMetrics) -> SearchMetricsDiff {
+    SearchMetricsDiff {
+        nodes_per_second_change: calculate_percent_change(baseline.nodes_per_second, current.nodes_per_second),
+        average_cutoff_rate_change: calculate_percent_change(baseline.average_cutoff_rate, current.average_cutoff_rate),
+        average_cutoff_index_change: calculate_percent_change(baseline.average_cutoff_index, current.average_cutoff_index),
+    }
+}
+
+fn compare_evaluation_metrics(current: &EvaluationMetrics, baseline: &EvaluationMetrics) -> EvaluationMetricsDiff {
+    EvaluationMetricsDiff {
+        average_evaluation_time_ns_change: calculate_percent_change(baseline.average_evaluation_time_ns, current.average_evaluation_time_ns),
+        cache_hit_rate_change: calculate_percent_change(baseline.cache_hit_rate, current.cache_hit_rate),
+        phase_calc_time_ns_change: calculate_percent_change(baseline.phase_calc_time_ns, current.phase_calc_time_ns),
+    }
+}
+
+fn compare_tt_metrics(current: &TTMetrics, baseline: &TTMetrics) -> TTMetricsDiff {
+    TTMetricsDiff {
+        hit_rate_change: calculate_percent_change(baseline.hit_rate, current.hit_rate),
+        exact_entry_rate_change: calculate_percent_change(baseline.exact_entry_rate, current.exact_entry_rate),
+        occupancy_rate_change: calculate_percent_change(baseline.occupancy_rate, current.occupancy_rate),
+    }
+}
+
+fn compare_move_ordering_metrics(current: &BaselineMoveOrderingMetrics, baseline: &BaselineMoveOrderingMetrics) -> MoveOrderingMetricsDiff {
+    MoveOrderingMetricsDiff {
+        average_cutoff_index_change: calculate_percent_change(baseline.average_cutoff_index, current.average_cutoff_index),
+        pv_hit_rate_change: calculate_percent_change(baseline.pv_hit_rate, current.pv_hit_rate),
+        killer_hit_rate_change: calculate_percent_change(baseline.killer_hit_rate, current.killer_hit_rate),
+        cache_hit_rate_change: calculate_percent_change(baseline.cache_hit_rate, current.cache_hit_rate),
+    }
+}
+
+fn compare_parallel_search_metrics(current: &ParallelSearchMetrics, baseline: &ParallelSearchMetrics) -> ParallelSearchMetricsDiff {
+    ParallelSearchMetricsDiff {
+        speedup_4_cores_change: calculate_percent_change(baseline.speedup_4_cores, current.speedup_4_cores),
+        speedup_8_cores_change: calculate_percent_change(baseline.speedup_8_cores, current.speedup_8_cores),
+        efficiency_4_cores_change: calculate_percent_change(baseline.efficiency_4_cores, current.efficiency_4_cores),
+        efficiency_8_cores_change: calculate_percent_change(baseline.efficiency_8_cores, current.efficiency_8_cores),
+    }
+}
+
+fn compare_memory_metrics(current: &MemoryMetrics, baseline: &MemoryMetrics) -> MemoryMetricsDiff {
+    MemoryMetricsDiff {
+        tt_memory_mb_change: calculate_percent_change(baseline.tt_memory_mb, current.tt_memory_mb),
+        cache_memory_mb_change: calculate_percent_change(baseline.cache_memory_mb, current.cache_memory_mb),
+        peak_memory_mb_change: calculate_percent_change(baseline.peak_memory_mb, current.peak_memory_mb),
+    }
+}
+
+/// Detect hardware information for baseline
+pub fn detect_hardware_info() -> HardwareInfo {
+    let cpu = std::env::var("CPU_MODEL")
+        .or_else(|_| std::env::var("PROCESSOR_IDENTIFIER"))
+        .unwrap_or_else(|_| {
+            // Try to get CPU info from system
+            #[cfg(target_os = "linux")]
+            {
+                if let Ok(content) = std::fs::read_to_string("/proc/cpuinfo") {
+                    for line in content.lines() {
+                        if line.starts_with("model name") {
+                            if let Some(name) = line.split(':').nth(1) {
+                                return name.trim().to_string();
+                            }
+                        }
+                    }
+                }
+            }
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(output) = std::process::Command::new("sysctl")
+                    .arg("-n")
+                    .arg("machdep.cpu.brand_string")
+                    .output()
+                {
+                    if let Ok(cpu_name) = String::from_utf8(output.stdout) {
+                        return cpu_name.trim().to_string();
+                    }
+                }
+            }
+            "Unknown".to_string()
+        });
+
+    let cores = num_cpus::get() as u32;
+
+    // Try to detect RAM (simplified - may not work on all platforms)
+    let ram_gb = std::env::var("RAM_GB")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+
+    HardwareInfo { cpu, cores, ram_gb }
 }
 
 impl Default for PerformanceTargets {
