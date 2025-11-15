@@ -969,6 +969,491 @@ pub fn detect_hardware_info() -> HardwareInfo {
     HardwareInfo { cpu, cores, ram_gb }
 }
 
+// ============================================================================
+// Benchmark Result Aggregation and Reporting (Task 26.0 - Task 2.0)
+// ============================================================================
+
+/// Benchmark report for a single benchmark
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkReport {
+    /// Benchmark name
+    pub benchmark_name: String,
+    /// Mean time in nanoseconds
+    pub mean_time_ns: f64,
+    /// Standard deviation in nanoseconds
+    pub std_dev_ns: f64,
+    /// Throughput in operations per second
+    pub throughput_ops_per_sec: f64,
+    /// Number of samples
+    pub samples: u64,
+    /// Comparison with baseline (if available)
+    pub baseline_comparison: Option<BenchmarkBaselineComparison>,
+}
+
+/// Aggregated benchmark report containing multiple benchmarks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregatedBenchmarkReport {
+    /// Timestamp when report was generated
+    pub timestamp: String,
+    /// Git commit hash
+    pub git_commit: String,
+    /// Hardware information
+    pub hardware: HardwareInfo,
+    /// Individual benchmark reports
+    pub benchmarks: Vec<BenchmarkReport>,
+    /// Summary statistics
+    pub summary: BenchmarkSummary,
+}
+
+/// Summary statistics for all benchmarks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkSummary {
+    /// Total number of benchmarks
+    pub total_benchmarks: usize,
+    /// Average mean time across all benchmarks (nanoseconds)
+    pub average_mean_time_ns: f64,
+    /// Total throughput across all benchmarks (ops/sec)
+    pub total_throughput_ops_per_sec: f64,
+    /// Benchmarks with regressions
+    pub regressions_detected: usize,
+}
+
+/// Criterion.rs estimates structure (partial, for parsing)
+#[derive(Debug, Clone, Deserialize)]
+struct CriterionEstimates {
+    mean: Option<CriterionEstimate>,
+    median: Option<CriterionEstimate>,
+    slope: Option<CriterionEstimate>,
+    throughput: Option<CriterionThroughput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CriterionEstimate {
+    point_estimate: f64,
+    standard_error: Option<f64>,
+    confidence_interval: Option<CriterionConfidenceInterval>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CriterionConfidenceInterval {
+    confidence_level: Option<f64>,
+    lower_bound: Option<f64>,
+    upper_bound: Option<f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CriterionThroughput {
+    #[serde(rename = "per_iteration")]
+    per_iteration: Option<CriterionThroughputValue>,
+    #[serde(rename = "per_second")]
+    per_second: Option<CriterionThroughputValue>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CriterionThroughputValue {
+    point_estimate: f64,
+}
+
+/// Benchmark aggregator for collecting and reporting benchmark results
+pub struct BenchmarkAggregator {
+    /// Reports directory
+    reports_dir: PathBuf,
+    /// Baseline path for comparison (optional)
+    baseline_path: Option<PathBuf>,
+    /// Regression threshold (default: 5.0%)
+    regression_threshold: f64,
+}
+
+impl BenchmarkAggregator {
+    /// Create a new benchmark aggregator
+    pub fn new() -> Self {
+        Self {
+            reports_dir: PathBuf::from("docs/performance/reports"),
+            baseline_path: std::env::var("BENCHMARK_BASELINE_PATH")
+                .ok()
+                .map(PathBuf::from),
+            regression_threshold: 5.0,
+        }
+    }
+
+    /// Create aggregator with custom directory
+    pub fn with_directory<P: AsRef<Path>>(dir: P) -> Self {
+        Self {
+            reports_dir: dir.as_ref().to_path_buf(),
+            baseline_path: std::env::var("BENCHMARK_BASELINE_PATH")
+                .ok()
+                .map(PathBuf::from),
+            regression_threshold: 5.0,
+        }
+    }
+
+    /// Set baseline path for comparison
+    pub fn set_baseline_path<P: AsRef<Path>>(&mut self, path: P) {
+        self.baseline_path = Some(path.as_ref().to_path_buf());
+    }
+
+    /// Set regression threshold
+    pub fn set_regression_threshold(&mut self, threshold: f64) {
+        self.regression_threshold = threshold;
+    }
+
+    /// Aggregate Criterion.rs results from target/criterion/ directory
+    pub fn aggregate_criterion_results<P: AsRef<Path>>(
+        &self,
+        criterion_dir: P,
+    ) -> Result<Vec<BenchmarkReport>, String> {
+        let criterion_path = criterion_dir.as_ref();
+        let mut reports = Vec::new();
+
+        // Walk through criterion directory structure
+        // Structure: target/criterion/{benchmark_name}/{id}/base/estimates.json
+        if !criterion_path.exists() {
+            return Err(format!("Criterion directory does not exist: {:?}", criterion_path));
+        }
+
+        // Find all estimates.json files
+        let estimates_files = find_estimates_files(criterion_path)?;
+
+        for estimates_file in estimates_files {
+            match self.parse_criterion_estimates(&estimates_file) {
+                Ok(report) => reports.push(report),
+                Err(e) => {
+                    eprintln!("Warning: Failed to parse {:?}: {}", estimates_file, e);
+                }
+            }
+        }
+
+        Ok(reports)
+    }
+
+    /// Parse a single Criterion.rs estimates.json file
+    fn parse_criterion_estimates<P: AsRef<Path>>(
+        &self,
+        estimates_file: P,
+    ) -> Result<BenchmarkReport, String> {
+        let content = fs::read_to_string(&estimates_file)
+            .map_err(|e| format!("Failed to read estimates file: {}", e))?;
+
+        let estimates: CriterionEstimates = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+        // Extract benchmark name from path
+        // Path format: .../criterion/{benchmark_name}/{id}/base/estimates.json
+        let benchmark_name = extract_benchmark_name(&estimates_file)
+            .unwrap_or_else(|| "unknown".to_string());
+
+        // Get mean time (in nanoseconds)
+        let mean_time_ns = estimates
+            .mean
+            .as_ref()
+            .map(|m| m.point_estimate)
+            .unwrap_or(0.0);
+
+        // Get standard deviation (from standard error or confidence interval)
+        let std_dev_ns = estimates
+            .mean
+            .as_ref()
+            .and_then(|m| m.standard_error)
+            .unwrap_or(0.0);
+
+        // Get throughput (operations per second)
+        let throughput_ops_per_sec = estimates
+            .throughput
+            .as_ref()
+            .and_then(|t| t.per_second.as_ref())
+            .map(|v| v.point_estimate)
+            .unwrap_or(0.0);
+
+        // Estimate samples (not directly available in estimates.json, use default)
+        let samples = 100; // Default estimate
+
+        // Compare with baseline if available
+        let baseline_comparison = if let Some(ref baseline_path) = self.baseline_path {
+            self.compare_with_baseline(&benchmark_name, mean_time_ns, baseline_path).ok()
+        } else {
+            None
+        };
+
+        Ok(BenchmarkReport {
+            benchmark_name,
+            mean_time_ns,
+            std_dev_ns,
+            throughput_ops_per_sec,
+            samples,
+            baseline_comparison,
+        })
+    }
+
+    /// Generate aggregated benchmark report
+    pub fn generate_benchmark_report(
+        &self,
+        reports: &[BenchmarkReport],
+    ) -> AggregatedBenchmarkReport {
+        let total_benchmarks = reports.len();
+        let average_mean_time_ns = if total_benchmarks > 0 {
+            reports.iter().map(|r| r.mean_time_ns).sum::<f64>() / total_benchmarks as f64
+        } else {
+            0.0
+        };
+        let total_throughput_ops_per_sec = reports.iter().map(|r| r.throughput_ops_per_sec).sum();
+        let regressions_detected = reports
+            .iter()
+            .filter(|r| {
+                r.baseline_comparison
+                    .as_ref()
+                    .map(|c| c.has_regression)
+                    .unwrap_or(false)
+            })
+            .count();
+
+        AggregatedBenchmarkReport {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            git_commit: crate::types::get_git_commit_hash().unwrap_or_else(|| "unknown".to_string()),
+            hardware: detect_hardware_info(),
+            benchmarks: reports.to_vec(),
+            summary: BenchmarkSummary {
+                total_benchmarks,
+                average_mean_time_ns,
+                total_throughput_ops_per_sec,
+                regressions_detected,
+            },
+        }
+    }
+
+    /// Export report to JSON
+    pub fn export_report_to_json(
+        &self,
+        report: &AggregatedBenchmarkReport,
+        filename: &str,
+    ) -> Result<(), String> {
+        // Ensure directory exists
+        fs::create_dir_all(&self.reports_dir)
+            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
+
+        let file_path = self.reports_dir.join(filename);
+        let json = serde_json::to_string_pretty(report)
+            .map_err(|e| format!("Failed to serialize report: {}", e))?;
+
+        fs::write(&file_path, json)
+            .map_err(|e| format!("Failed to write report file: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Export report to Markdown
+    pub fn export_report_to_markdown(
+        &self,
+        report: &AggregatedBenchmarkReport,
+        filename: &str,
+    ) -> Result<(), String> {
+        // Ensure directory exists
+        fs::create_dir_all(&self.reports_dir)
+            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
+
+        let file_path = self.reports_dir.join(filename);
+        let markdown = self.generate_markdown_report(report);
+
+        fs::write(&file_path, markdown)
+            .map_err(|e| format!("Failed to write markdown file: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Generate markdown report content
+    fn generate_markdown_report(&self, report: &AggregatedBenchmarkReport) -> String {
+        let mut md = String::new();
+
+        md.push_str("# Benchmark Report\n\n");
+        md.push_str(&format!("**Generated:** {}\n", report.timestamp));
+        md.push_str(&format!("**Git Commit:** {}\n", report.git_commit));
+        md.push_str(&format!("**Hardware:** {} ({} cores, {} GB RAM)\n\n", 
+            report.hardware.cpu, report.hardware.cores, report.hardware.ram_gb));
+
+        // Summary
+        md.push_str("## Summary\n\n");
+        md.push_str(&format!("- **Total Benchmarks:** {}\n", report.summary.total_benchmarks));
+        md.push_str(&format!("- **Average Mean Time:** {:.2} ns\n", report.summary.average_mean_time_ns));
+        md.push_str(&format!("- **Total Throughput:** {:.2} ops/sec\n", report.summary.total_throughput_ops_per_sec));
+        md.push_str(&format!("- **Regressions Detected:** {}\n\n", report.summary.regressions_detected));
+
+        // Benchmarks table
+        md.push_str("## Benchmarks\n\n");
+        md.push_str("| Benchmark | Mean Time (ns) | Std Dev (ns) | Throughput (ops/sec) | Samples | Regression |\n");
+        md.push_str("|-----------|----------------|--------------|----------------------|---------|------------|\n");
+
+        for bench in &report.benchmarks {
+            let regression = if let Some(ref comp) = bench.baseline_comparison {
+                if comp.has_regression {
+                    format!("⚠️ {:.1}%", comp.change_percent)
+                } else {
+                    format!("✓ {:.1}%", comp.change_percent)
+                }
+            } else {
+                "N/A".to_string()
+            };
+
+            md.push_str(&format!(
+                "| {} | {:.2} | {:.2} | {:.2} | {} | {} |\n",
+                bench.benchmark_name,
+                bench.mean_time_ns,
+                bench.std_dev_ns,
+                bench.throughput_ops_per_sec,
+                bench.samples,
+                regression
+            ));
+        }
+
+        md
+    }
+
+    /// Compare benchmark result with baseline
+    fn compare_with_baseline(
+        &self,
+        benchmark_name: &str,
+        current_mean_time_ns: f64,
+        baseline_path: &Path,
+    ) -> Result<BenchmarkBaselineComparison, String> {
+        // Load baseline
+        let manager = BaselineManager::new();
+        let baseline = manager.load_baseline(baseline_path)?;
+
+        // For now, we compare against search_metrics.nodes_per_second
+        // This is a simplified comparison - in a full implementation, we'd need
+        // to map benchmark names to specific baseline metrics
+        let baseline_time_ns = 1_000_000_000.0 / baseline.search_metrics.nodes_per_second.max(1.0);
+
+        let change_percent = if baseline_time_ns > 0.0 {
+            ((current_mean_time_ns - baseline_time_ns) / baseline_time_ns) * 100.0
+        } else {
+            0.0
+        };
+
+        let has_regression = change_percent > self.regression_threshold;
+
+        Ok(BenchmarkBaselineComparison {
+            has_regression,
+            change_percent,
+            baseline_value: baseline_time_ns,
+            current_value: current_mean_time_ns,
+        })
+    }
+}
+
+impl Default for BenchmarkAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Baseline comparison for a single benchmark
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkBaselineComparison {
+    /// Whether a regression was detected
+    pub has_regression: bool,
+    /// Percentage change from baseline
+    pub change_percent: f64,
+    /// Baseline value
+    pub baseline_value: f64,
+    /// Current value
+    pub current_value: f64,
+}
+
+impl BenchmarkReport {
+    /// Compare this benchmark report with a baseline
+    pub fn compare_with_baseline(
+        &self,
+        baseline_path: &Path,
+        regression_threshold: f64,
+    ) -> Result<BenchmarkBaselineComparison, String> {
+        let manager = BaselineManager::new();
+        let baseline = manager.load_baseline(baseline_path)?;
+
+        // Simplified comparison - compare mean time against baseline nodes_per_second
+        let baseline_time_ns = 1_000_000_000.0 / baseline.search_metrics.nodes_per_second.max(1.0);
+
+        let change_percent = if baseline_time_ns > 0.0 {
+            ((self.mean_time_ns - baseline_time_ns) / baseline_time_ns) * 100.0
+        } else {
+            0.0
+        };
+
+        let has_regression = change_percent > regression_threshold;
+
+        Ok(BenchmarkBaselineComparison {
+            has_regression,
+            change_percent,
+            baseline_value: baseline_time_ns,
+            current_value: self.mean_time_ns,
+        })
+    }
+}
+
+// Helper functions
+
+/// Find all estimates.json files in criterion directory
+fn find_estimates_files<P: AsRef<Path>>(criterion_dir: P) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+    let dir = criterion_dir.as_ref();
+
+    if !dir.is_dir() {
+        return Ok(files);
+    }
+
+    // Walk through directory structure: criterion/{benchmark}/{id}/base/estimates.json
+    for benchmark_entry in fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read criterion directory: {}", e))?
+    {
+        let benchmark_entry = benchmark_entry
+            .map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let benchmark_path = benchmark_entry.path();
+
+        if !benchmark_path.is_dir() {
+            continue;
+        }
+
+        // Look for {id}/base/estimates.json
+        for id_entry in fs::read_dir(&benchmark_path)
+            .map_err(|e| format!("Failed to read benchmark directory: {}", e))?
+        {
+            let id_entry = id_entry
+                .map_err(|e| format!("Failed to read directory entry: {}", e))?;
+            let id_path = id_entry.path();
+
+            if !id_path.is_dir() {
+                continue;
+            }
+
+            let base_path = id_path.join("base");
+            let estimates_path = base_path.join("estimates.json");
+
+            if estimates_path.exists() {
+                files.push(estimates_path);
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+/// Extract benchmark name from file path
+fn extract_benchmark_name<P: AsRef<Path>>(file_path: P) -> Option<String> {
+    let path = file_path.as_ref();
+    let components: Vec<_> = path.components().collect();
+
+    // Find "criterion" component and get the next one as benchmark name
+    for (i, component) in components.iter().enumerate() {
+        if let std::path::Component::Normal(name) = component {
+            if name.to_str() == Some("criterion") && i + 1 < components.len() {
+                if let std::path::Component::Normal(benchmark_name) = &components[i + 1] {
+                    return benchmark_name.to_str().map(|s| s.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
 impl Default for PerformanceTargets {
     fn default() -> Self {
         Self {
