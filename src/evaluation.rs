@@ -1,7 +1,8 @@
 use crate::bitboards::*;
 use crate::evaluation::piece_square_tables::PieceSquareTables;
 use crate::moves::MoveGenerator;
-use crate::types::*;
+use crate::types::board::CapturedPieces;
+use crate::types::core::Player;
 use crate::weights::{WeightError, WeightManager};
 
 // Advanced evaluation modules
@@ -38,6 +39,12 @@ pub mod pattern_search_integration;
 pub mod positional_fixtures;
 pub mod positional_patterns;
 pub mod tactical_patterns;
+
+// Newly extracted modules (Task 1.0: File Modularization)
+pub mod component_coordinator;
+pub mod dependency_graph;
+pub mod telemetry;
+pub mod weight_tuning;
 
 use advanced_integration::AdvancedIntegration;
 use eval_cache::{EvaluationCache, MultiLevelCache};

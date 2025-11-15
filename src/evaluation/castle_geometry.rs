@@ -1,4 +1,4 @@
-use crate::types::{PieceType, Player, Position};
+use crate::types::core::{PieceType, Player, Position};
 
 /// Represents a relative offset from the king's square using player-centric axes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

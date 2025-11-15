@@ -4,7 +4,7 @@ use crate::evaluation::castle_geometry::{
 use crate::evaluation::castles::{
     mirror_descriptors, CastlePattern, CastleVariant, GOLD_FAMILY, PAWN_WALL_FAMILY, SILVER_FAMILY,
 };
-use crate::types::TaperedScore;
+use crate::types::evaluation::TaperedScore;
 
 fn base_shell() -> Vec<CastlePieceDescriptor> {
     vec![

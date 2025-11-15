@@ -2,7 +2,7 @@
 
 use crate::bitboards::BitboardBoard;
 use crate::evaluation::castle_geometry::RelativeOffset;
-use crate::types::{Piece, PieceType, Player, Position};
+use crate::types::core::{Piece, PieceType, Player, Position};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CastleFixtureTheme {

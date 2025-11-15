@@ -1,5 +1,5 @@
 use crate::evaluation::piece_square_tables::{PieceSquareTableRaw, PieceSquareTables};
-use crate::types::PieceType;
+use crate::types::core::PieceType;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;

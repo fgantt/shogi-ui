@@ -27,7 +27,7 @@
 //! let score = interpolator.interpolate_multi_phase(mg, eg, phase, position_type);
 //! ```
 
-use crate::types::TaperedScore;
+use crate::types::evaluation::TaperedScore;
 use serde::{Deserialize, Serialize};
 
 /// Advanced interpolator with multiple methods

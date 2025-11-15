@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use crate::bitboards::BitboardBoard;
-use crate::types::{CapturedPieces, Piece, PieceType, Player, Position};
+use crate::types::board::CapturedPieces;
+use crate::types::core::{Piece, PieceType, Player, Position};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FixtureTheme {

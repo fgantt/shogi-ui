@@ -33,7 +33,7 @@
 use crate::evaluation::advanced_interpolation::{
     AdvancedInterpolationConfig, AdvancedInterpolator, PositionCharacteristics, PositionType,
 };
-use crate::types::*;
+use crate::types::evaluation::{GAME_PHASE_MAX, TaperedScore};
 
 use serde::{Deserialize, Serialize};
 
