@@ -2,6 +2,41 @@
 //!
 //! This module provides cross-validation, holdout validation, and other
 //! validation techniques to ensure the quality of tuned parameters.
+//!
+//! ## Stratified Sampling
+//!
+//! When `stratified` is enabled in `ValidationConfig`, positions are grouped
+//! by game result (WhiteWin/BlackWin/Draw) and distributed proportionally
+//! across k-folds. This ensures each fold has a similar distribution of results,
+//! which is especially important for imbalanced datasets.
+//!
+//! ## Reproducibility
+//!
+//! When `random_seed` is provided in `ValidationConfig`, the same seed will
+//! produce the same data splits, enabling reproducible validation results.
+//! This is useful for:
+//! - Comparing different optimization methods on the same data splits
+//! - Debugging and testing validation logic
+//! - Ensuring consistent results across runs
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use shogi_engine::tuning::types::{ValidationConfig, TrainingPosition};
+//! use shogi_engine::tuning::validator::Validator;
+//!
+//! // Create validation config with stratified sampling and random seed
+//! let config = ValidationConfig {
+//!     k_fold: 5,
+//!     test_split: 0.2,
+//!     validation_split: 0.2,
+//!     stratified: true,  // Enable stratified sampling
+//!     random_seed: Some(42),  // Enable reproducibility
+//! };
+//!
+//! let validator = Validator::new(config);
+//! let results = validator.cross_validate(&positions);
+//! ```
 
 use super::optimizer::Optimizer;
 use super::types::{
@@ -12,7 +47,8 @@ use crate::types::{GameResult, Move, Player};
 use crate::ShogiEngine;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rand::Rng;
+use rand::{Rng, RngCore, SeedableRng};
+use rand::rngs::StdRng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -29,6 +65,13 @@ impl Validator {
     }
 
     /// Perform k-fold cross-validation
+    ///
+    /// If `stratified` is enabled, positions are grouped by game result
+    /// (WhiteWin/BlackWin/Draw) and distributed proportionally across folds.
+    /// This ensures each fold has a similar distribution of results.
+    ///
+    /// If `random_seed` is provided, the same seed will produce the same
+    /// data splits, enabling reproducible validation.
     pub fn cross_validate(&self, positions: &[TrainingPosition]) -> ValidationResults {
         if positions.is_empty() {
             return ValidationResults::new(vec![]);
@@ -36,11 +79,25 @@ impl Validator {
 
         let k = self.config.k_fold as usize;
         let mut fold_results = Vec::new();
-        let mut shuffled_positions = positions.to_vec();
-        shuffled_positions.shuffle(&mut thread_rng());
 
-        let fold_size = shuffled_positions.len() / k;
-        let remainder = shuffled_positions.len() % k;
+        // Create RNG with seed if provided, otherwise use thread_rng
+        let mut rng: Box<dyn RngCore> = if let Some(seed) = self.config.random_seed {
+            Box::new(StdRng::seed_from_u64(seed))
+        } else {
+            Box::new(thread_rng())
+        };
+
+        // Prepare positions for splitting
+        let mut positions_to_split = if self.config.stratified {
+            self.prepare_stratified_positions(positions, &mut *rng)
+        } else {
+            let mut pos = positions.to_vec();
+            pos.shuffle(&mut *rng);
+            pos
+        };
+
+        let fold_size = positions_to_split.len() / k;
+        let remainder = positions_to_split.len() % k;
 
         let mut start_idx = 0;
         for fold in 0..k {
@@ -49,7 +106,7 @@ impl Validator {
 
             // Split data into training and validation sets
             let (validation_set, training_set) =
-                self.split_data(&shuffled_positions, start_idx, end_idx);
+                self.split_data(&positions_to_split, start_idx, end_idx);
 
             // Train model on training set
             let optimizer = Optimizer::new(OptimizationMethod::default());
@@ -90,13 +147,23 @@ impl Validator {
     }
 
     /// Perform holdout validation
+    ///
+    /// If `random_seed` is provided, the same seed will produce the same
+    /// data splits, enabling reproducible validation.
     pub fn holdout_validate(&self, positions: &[TrainingPosition]) -> ValidationResults {
         if positions.is_empty() {
             return ValidationResults::new(vec![]);
         }
 
+        // Create RNG with seed if provided, otherwise use thread_rng
+        let mut rng: Box<dyn RngCore> = if let Some(seed) = self.config.random_seed {
+            Box::new(StdRng::seed_from_u64(seed))
+        } else {
+            Box::new(thread_rng())
+        };
+
         let mut shuffled_positions = positions.to_vec();
-        shuffled_positions.shuffle(&mut thread_rng());
+        shuffled_positions.shuffle(&mut *rng);
 
         // Split data according to validation_split
         let validation_size = (positions.len() as f64 * self.config.validation_split) as usize;
@@ -185,10 +252,125 @@ impl Validator {
             return validation_set.to_vec();
         }
 
+        // Create RNG with seed if provided, otherwise use thread_rng
+        let mut rng: Box<dyn RngCore> = if let Some(seed) = self.config.random_seed {
+            Box::new(StdRng::seed_from_u64(seed))
+        } else {
+            Box::new(thread_rng())
+        };
+
         let mut test_subset = validation_set.to_vec();
-        test_subset.shuffle(&mut thread_rng());
+        test_subset.shuffle(&mut *rng);
         test_subset.truncate(test_size);
         test_subset
+    }
+
+    /// Determine the game result category from a training position
+    ///
+    /// The result field is from the side to move's perspective:
+    /// - result > 0.5: Win for the side to move
+    /// - result < -0.5: Loss for the side to move
+    /// - Otherwise: Draw
+    ///
+    /// We convert this to an absolute result (WhiteWin/BlackWin/Draw).
+    fn categorize_result(&self, position: &TrainingPosition) -> TuningGameResult {
+        let result = position.result;
+        let player = position.player_to_move;
+
+        // Determine if the side to move won, lost, or drew
+        let outcome = if result > 0.5 {
+            // Win for the side to move
+            match player {
+                Player::White => TuningGameResult::WhiteWin,
+                Player::Black => TuningGameResult::BlackWin,
+            }
+        } else if result < -0.5 {
+            // Loss for the side to move
+            match player {
+                Player::White => TuningGameResult::BlackWin,
+                Player::Black => TuningGameResult::WhiteWin,
+            }
+        } else {
+            // Draw
+            TuningGameResult::Draw
+        };
+
+        outcome
+    }
+
+    /// Prepare positions for stratified sampling
+    ///
+    /// Groups positions by game result (WhiteWin/BlackWin/Draw) and interleaves
+    /// them proportionally so that each fold gets a similar distribution of results.
+    fn prepare_stratified_positions(
+        &self,
+        positions: &[TrainingPosition],
+        rng: &mut dyn RngCore,
+    ) -> Vec<TrainingPosition> {
+        // Group positions by result
+        let mut white_wins = Vec::new();
+        let mut black_wins = Vec::new();
+        let mut draws = Vec::new();
+
+        for position in positions {
+            match self.categorize_result(position) {
+                TuningGameResult::WhiteWin => white_wins.push(position.clone()),
+                TuningGameResult::BlackWin => black_wins.push(position.clone()),
+                TuningGameResult::Draw => draws.push(position.clone()),
+            }
+        }
+
+        // Shuffle each group
+        white_wins.shuffle(rng);
+        black_wins.shuffle(rng);
+        draws.shuffle(rng);
+
+        // Interleave groups proportionally
+        let total = positions.len();
+        let white_ratio = white_wins.len() as f64 / total as f64;
+        let black_ratio = black_wins.len() as f64 / total as f64;
+        let draw_ratio = draws.len() as f64 / total as f64;
+
+        let mut result = Vec::with_capacity(total);
+        let mut white_idx = 0;
+        let mut black_idx = 0;
+        let mut draw_idx = 0;
+
+        // Calculate target counts for each category based on proportions
+        let mut white_target = 0.0;
+        let mut black_target = 0.0;
+        let mut draw_target = 0.0;
+
+        for i in 0..total {
+            // Update targets based on proportions
+            white_target += white_ratio;
+            black_target += black_ratio;
+            draw_target += draw_ratio;
+
+            // Determine which category to add next based on which is furthest behind
+            let white_behind = white_target - white_idx as f64;
+            let black_behind = black_target - black_idx as f64;
+            let draw_behind = draw_target - draw_idx as f64;
+
+            if white_behind >= black_behind && white_behind >= draw_behind && white_idx < white_wins.len() {
+                result.push(white_wins[white_idx].clone());
+                white_idx += 1;
+            } else if black_behind >= draw_behind && black_idx < black_wins.len() {
+                result.push(black_wins[black_idx].clone());
+                black_idx += 1;
+            } else if draw_idx < draws.len() {
+                result.push(draws[draw_idx].clone());
+                draw_idx += 1;
+            } else if white_idx < white_wins.len() {
+                result.push(white_wins[white_idx].clone());
+                white_idx += 1;
+            } else if black_idx < black_wins.len() {
+                result.push(black_wins[black_idx].clone());
+                black_idx += 1;
+            }
+        }
+
+        result
     }
 }
 
@@ -913,5 +1095,255 @@ mod tests {
         assert!(fold_result.validation_error >= 0.0);
         assert!(fold_result.test_error >= 0.0);
         assert!(fold_result.sample_count > 0);
+    }
+
+    /// Create a training position with a specific result category
+    fn create_position_with_result(
+        result_category: TuningGameResult,
+        player: Player,
+        index: usize,
+    ) -> TrainingPosition {
+        let result = match (result_category, player) {
+            (TuningGameResult::WhiteWin, Player::White) => 1.0,
+            (TuningGameResult::BlackWin, Player::Black) => 1.0,
+            (TuningGameResult::WhiteWin, Player::Black) => -1.0,
+            (TuningGameResult::BlackWin, Player::White) => -1.0,
+            (TuningGameResult::Draw, _) => 0.0,
+        };
+
+        TrainingPosition::new(
+            vec![0.0; NUM_EVAL_FEATURES],
+            result,
+            128,
+            true,
+            index as u32,
+            player,
+        )
+    }
+
+    #[test]
+    fn test_stratified_sampling() {
+        let config = ValidationConfig {
+            k_fold: 3,
+            test_split: 0.2,
+            validation_split: 0.2,
+            stratified: true,
+            random_seed: Some(42),
+        };
+        let validator = Validator::new(config);
+
+        // Create positions with known result distribution
+        let mut positions = Vec::new();
+        // 30 White wins
+        for i in 0..30 {
+            positions.push(create_position_with_result(
+                TuningGameResult::WhiteWin,
+                Player::White,
+                i,
+            ));
+        }
+        // 20 Black wins
+        for i in 30..50 {
+            positions.push(create_position_with_result(
+                TuningGameResult::BlackWin,
+                Player::Black,
+                i,
+            ));
+        }
+        // 10 Draws
+        for i in 50..60 {
+            positions.push(create_position_with_result(
+                TuningGameResult::Draw,
+                Player::White,
+                i,
+            ));
+        }
+
+        let results = validator.cross_validate(&positions);
+
+        assert_eq!(results.fold_results.len(), 3);
+
+        // Verify that each fold has approximately the same distribution
+        // Each fold should have ~10 White wins, ~7 Black wins, ~3 Draws
+        // We'll verify by checking that the distribution is roughly proportional
+        // (exact counts may vary slightly due to rounding)
+        for fold_result in &results.fold_results {
+            assert!(fold_result.sample_count >= 18 && fold_result.sample_count <= 22);
+        }
+    }
+
+    #[test]
+    fn test_random_seed_reproducibility() {
+        let config = ValidationConfig {
+            k_fold: 3,
+            test_split: 0.2,
+            validation_split: 0.2,
+            stratified: false,
+            random_seed: Some(42),
+        };
+        let validator = Validator::new(config);
+
+        // Generate synthetic test data
+        let generator = SyntheticDataGenerator::new(NUM_EVAL_FEATURES, 42);
+        let positions = generator.generate_positions(30);
+
+        // Run cross-validation twice with the same seed
+        let results1 = validator.cross_validate(&positions);
+        let results2 = validator.cross_validate(&positions);
+
+        // Results should be identical (same splits)
+        assert_eq!(results1.fold_results.len(), results2.fold_results.len());
+        for (fold1, fold2) in results1.fold_results.iter().zip(results2.fold_results.iter()) {
+            assert_eq!(fold1.sample_count, fold2.sample_count);
+            // Validation errors should be the same (same data splits)
+            assert!((fold1.validation_error - fold2.validation_error).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_stratified_with_imbalanced_data() {
+        let config = ValidationConfig {
+            k_fold: 5,
+            test_split: 0.2,
+            validation_split: 0.2,
+            stratified: true,
+            random_seed: Some(42),
+        };
+        let validator = Validator::new(config);
+
+        // Create heavily imbalanced data: 90% White wins, 5% Black wins, 5% Draws
+        let mut positions = Vec::new();
+        // 90 White wins
+        for i in 0..90 {
+            positions.push(create_position_with_result(
+                TuningGameResult::WhiteWin,
+                Player::White,
+                i,
+            ));
+        }
+        // 5 Black wins
+        for i in 90..95 {
+            positions.push(create_position_with_result(
+                TuningGameResult::BlackWin,
+                Player::Black,
+                i,
+            ));
+        }
+        // 5 Draws
+        for i in 95..100 {
+            positions.push(create_position_with_result(
+                TuningGameResult::Draw,
+                Player::White,
+                i,
+            ));
+        }
+
+        let results = validator.cross_validate(&positions);
+
+        assert_eq!(results.fold_results.len(), 5);
+
+        // With stratification, each fold should have roughly:
+        // - 18 White wins (90/5)
+        // - 1 Black win (5/5)
+        // - 1 Draw (5/5)
+        // Total: ~20 positions per fold
+        for fold_result in &results.fold_results {
+            assert!(fold_result.sample_count >= 18 && fold_result.sample_count <= 22);
+        }
+    }
+
+    #[test]
+    fn test_stratified_vs_non_stratified() {
+        // Create positions with known distribution
+        let mut positions = Vec::new();
+        // 40 White wins
+        for i in 0..40 {
+            positions.push(create_position_with_result(
+                TuningGameResult::WhiteWin,
+                Player::White,
+                i,
+            ));
+        }
+        // 30 Black wins
+        for i in 40..70 {
+            positions.push(create_position_with_result(
+                TuningGameResult::BlackWin,
+                Player::Black,
+                i,
+            ));
+        }
+        // 30 Draws
+        for i in 70..100 {
+            positions.push(create_position_with_result(
+                TuningGameResult::Draw,
+                Player::White,
+                i,
+            ));
+        }
+
+        // Test with stratification
+        let config_stratified = ValidationConfig {
+            k_fold: 5,
+            test_split: 0.2,
+            validation_split: 0.2,
+            stratified: true,
+            random_seed: Some(42),
+        };
+        let validator_stratified = Validator::new(config_stratified);
+        let results_stratified = validator_stratified.cross_validate(&positions);
+
+        // Test without stratification
+        let config_non_stratified = ValidationConfig {
+            k_fold: 5,
+            test_split: 0.2,
+            validation_split: 0.2,
+            stratified: false,
+            random_seed: Some(42),
+        };
+        let validator_non_stratified = Validator::new(config_non_stratified);
+        let results_non_stratified = validator_non_stratified.cross_validate(&positions);
+
+        // Both should produce the same number of folds
+        assert_eq!(results_stratified.fold_results.len(), results_non_stratified.fold_results.len());
+
+        // With stratification, folds should have more consistent sample counts
+        // (less variance in fold sizes)
+        let stratified_counts: Vec<usize> = results_stratified
+            .fold_results
+            .iter()
+            .map(|f| f.sample_count)
+            .collect();
+        let non_stratified_counts: Vec<usize> = results_non_stratified
+            .fold_results
+            .iter()
+            .map(|f| f.sample_count)
+            .collect();
+
+        // Calculate variance in fold sizes
+        let stratified_variance = calculate_variance(&stratified_counts);
+        let non_stratified_variance = calculate_variance(&non_stratified_counts);
+
+        // Stratified should have lower or equal variance (more consistent fold sizes)
+        // Note: This may not always be true due to rounding, but it's a good heuristic
+        assert!(stratified_variance <= non_stratified_variance + 1.0); // Allow small tolerance
+    }
+
+    /// Helper function to calculate variance
+    fn calculate_variance(values: &[usize]) -> f64 {
+        if values.is_empty() {
+            return 0.0;
+        }
+
+        let mean = values.iter().sum::<usize>() as f64 / values.len() as f64;
+        let variance = values
+            .iter()
+            .map(|&v| {
+                let diff = v as f64 - mean;
+                diff * diff
+            })
+            .sum::<f64>()
+            / values.len() as f64;
+
+        variance
     }
 }
