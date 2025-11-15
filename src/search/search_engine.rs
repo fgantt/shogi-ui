@@ -1188,6 +1188,8 @@ impl SearchEngine {
             parallel: self.parallel_options.clone(),
             auto_profiling_enabled: self.auto_profiling_enabled,
             auto_profiling_sample_rate: self.auto_profiling_sample_rate,
+            telemetry_export_enabled: false, // TODO: Add field to SearchEngine if needed
+            telemetry_export_path: "telemetry".to_string(),
         }
     }
 

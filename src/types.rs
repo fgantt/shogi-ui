@@ -6123,6 +6123,10 @@ pub struct EngineConfig {
     /// Profiling sample rate: profile every Nth call (Task 26.0 - Task 3.0)
     /// Default: 100 (profile every 100th call to reduce overhead)
     pub auto_profiling_sample_rate: u32,
+    /// Enable automatic telemetry export (Task 26.0 - Task 7.0)
+    pub telemetry_export_enabled: bool,
+    /// Telemetry export directory path (Task 26.0 - Task 7.0)
+    pub telemetry_export_path: String,
 }
 
 impl Default for EngineConfig {
@@ -6143,6 +6147,8 @@ impl Default for EngineConfig {
             parallel: ParallelOptions::default(),
             auto_profiling_enabled: false,
             auto_profiling_sample_rate: 100,
+            telemetry_export_enabled: false,
+            telemetry_export_path: "telemetry".to_string(),
         }
     }
 }
@@ -6182,6 +6188,8 @@ impl EngineConfig {
             parallel,
             auto_profiling_enabled: false,
             auto_profiling_sample_rate: 100,
+            telemetry_export_enabled: false,
+            telemetry_export_path: "telemetry".to_string(),
         }
     }
 
@@ -6346,10 +6354,14 @@ impl EngineConfig {
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
                 parallel: ParallelOptions::default(),
+                telemetry_export_enabled: false,
+                telemetry_export_path: "telemetry".to_string(),
             },
             EnginePreset::Conservative => Self {
                 auto_profiling_enabled: false,
                 auto_profiling_sample_rate: 100,
+                telemetry_export_enabled: false,
+                telemetry_export_path: "telemetry".to_string(),
                 quiescence: QuiescenceConfig {
                     max_depth: 8,
                     enable_delta_pruning: true,
@@ -6475,6 +6487,8 @@ impl EngineConfig {
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
                 parallel: ParallelOptions::default(),
+                telemetry_export_enabled: false,
+                telemetry_export_path: "telemetry".to_string(),
             },
             EnginePreset::Balanced => Self {
                 auto_profiling_enabled: false,
@@ -6492,6 +6506,8 @@ impl EngineConfig {
                 prefill_opening_book: true,
                 opening_book_prefill_depth: 8,
                 parallel: ParallelOptions::default(),
+                telemetry_export_enabled: false,
+                telemetry_export_path: "telemetry".to_string(),
             },
         }
     }
@@ -6709,6 +6725,8 @@ impl ConfigMigration {
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
             parallel: ParallelOptions::default(),
+            telemetry_export_enabled: false,
+            telemetry_export_path: "telemetry".to_string(),
         }
     }
 

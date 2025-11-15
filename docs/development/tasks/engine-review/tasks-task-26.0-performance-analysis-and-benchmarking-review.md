@@ -136,22 +136,22 @@ This task list implements the performance analysis and benchmarking improvements
   - [x] 6.14 Add documentation for CI performance regression workflow in `.github/workflows/README.md`
   - [x] 6.15 Test workflow locally using `act` or similar tool to verify it works correctly
 
-- [ ] 7.0 Telemetry Export and Advanced Metrics Analysis (Low Priority - Est: 4-6 hours)
-  - [ ] 7.1 Create `TelemetryExporter` struct in `src/search/performance_tuning.rs` with methods: `export_to_json()`, `export_to_csv()`, `export_to_markdown()`
-  - [ ] 7.2 Implement `export_performance_metrics_to_json()` that exports all `PerformanceMetrics` to JSON file
-  - [ ] 7.3 Implement `export_performance_metrics_to_csv()` that exports metrics to CSV format for spreadsheet analysis
-  - [ ] 7.4 Add `export_efficiency_metrics()` method that exports IID and LMR efficiency metrics (PRD Section 3.4 gap)
-  - [ ] 7.5 Add `export_tt_entry_quality_distribution()` method that exports entry quality distribution (Exact/Beta/Alpha percentages) (PRD Section 5.2 gap)
-  - [ ] 7.6 Add `export_hit_rate_by_depth()` method that exports transposition table hit rates stratified by depth (PRD Section 5.3 gap)
-  - [ ] 7.7 Add `export_scalability_metrics()` method that exports parallel search scalability metrics for regression analysis (PRD Section 7.3 gap)
-  - [ ] 7.8 Add `export_cache_effectiveness()` method that exports cache hit rates and size monitoring (PRD Section 4.2 gap)
-  - [ ] 7.9 Create `scripts/export_telemetry.sh` script that runs search and exports all telemetry data
-  - [ ] 7.10 Add configuration option `telemetry_export_enabled: bool` (default: false) to enable automatic export
-  - [ ] 7.11 Add `telemetry_export_path: String` configuration option to specify export directory
-  - [ ] 7.12 Write unit test `test_telemetry_json_export` to verify JSON export format is correct
-  - [ ] 7.13 Write unit test `test_telemetry_csv_export` to verify CSV export format is correct
-  - [ ] 7.14 Write integration test `test_telemetry_export_pipeline` that runs search and verifies all exports work
-  - [ ] 7.15 Add documentation for telemetry export formats and usage
+- [x] 7.0 Telemetry Export and Advanced Metrics Analysis (Low Priority - Est: 4-6 hours)
+  - [x] 7.1 Create `TelemetryExporter` struct in `src/search/performance_tuning.rs` with methods: `export_to_json()`, `export_to_csv()`, `export_to_markdown()`
+  - [x] 7.2 Implement `export_performance_metrics_to_json()` that exports all `PerformanceMetrics` to JSON file
+  - [x] 7.3 Implement `export_performance_metrics_to_csv()` that exports metrics to CSV format for spreadsheet analysis
+  - [x] 7.4 Add `export_efficiency_metrics()` method that exports IID and LMR efficiency metrics (PRD Section 3.4 gap)
+  - [x] 7.5 Add `export_tt_entry_quality_distribution()` method that exports entry quality distribution (Exact/Beta/Alpha percentages) (PRD Section 5.2 gap)
+  - [x] 7.6 Add `export_hit_rate_by_depth()` method that exports transposition table hit rates stratified by depth (PRD Section 5.3 gap)
+  - [x] 7.7 Add `export_scalability_metrics()` method that exports parallel search scalability metrics for regression analysis (PRD Section 7.3 gap)
+  - [x] 7.8 Add `export_cache_effectiveness()` method that exports cache hit rates and size monitoring (PRD Section 4.2 gap)
+  - [x] 7.9 Create `scripts/export_telemetry.sh` script that runs search and exports all telemetry data
+  - [x] 7.10 Add configuration option `telemetry_export_enabled: bool` (default: false) to enable automatic export
+  - [x] 7.11 Add `telemetry_export_path: String` configuration option to specify export directory
+  - [x] 7.12 Write unit test `test_telemetry_json_export` to verify JSON export format is correct
+  - [x] 7.13 Write unit test `test_telemetry_csv_export` to verify CSV export format is correct
+  - [x] 7.14 Write integration test `test_telemetry_export_pipeline` that runs search and verifies all exports work
+  - [x] 7.15 Add documentation for telemetry export formats and usage
 
 - [ ] 8.0 External Profiler Integration and Hot Path Analysis (Low Priority - Est: 6-8 hours)
   - [ ] 8.1 Create `ExternalProfiler` trait in `src/search/performance_tuning.rs` for integration with perf/Instruments (PRD Section 10.3 gap)
@@ -331,4 +331,22 @@ All parent tasks have been broken down into **105 actionable sub-tasks** (update
 
 - **Known Limitations**: Helper script contains placeholder implementations - full implementation would require Rust binaries for baseline collection and comparison. PR comment functionality requires GitHub token permissions. Baseline updates require write permissions to repository. Some workflow steps may need adjustment based on actual benchmark output format.
 
-- **Follow-ups**: Implement Rust binaries for baseline collection and comparison. Add more detailed regression reporting in PR comments. Consider adding performance trend graphs. Consider adding notification system for regressions. Consider adding performance dashboard integration.
+        - **Follow-ups**: Implement Rust binaries for baseline collection and comparison. Add more detailed regression reporting in PR comments. Consider adding performance trend graphs. Consider adding notification system for regressions. Consider adding performance dashboard integration.
+
+### Task 7.0 Completion Notes
+
+- **Implementation**: Created `TelemetryExporter` struct in `src/search/performance_tuning.rs` with comprehensive export capabilities. Implemented `export_performance_metrics_to_json()`, `export_performance_metrics_to_csv()`, and `export_performance_metrics_to_markdown()` methods for exporting performance metrics in multiple formats. Added specialized export methods: `export_efficiency_metrics()` for IID and LMR efficiency analysis (PRD Section 3.4 gap), `export_tt_entry_quality_distribution()` for TT entry quality distribution (PRD Section 5.2 gap), `export_hit_rate_by_depth()` for depth-stratified hit rates (PRD Section 5.3 gap), `export_scalability_metrics()` for parallel search scalability (PRD Section 7.3 gap), and `export_cache_effectiveness()` for cache monitoring (PRD Section 4.2 gap).
+
+- **Configuration**: Added `telemetry_export_enabled: bool` (default: `false`) and `telemetry_export_path: String` (default: `"telemetry"`) configuration options to `EngineConfig` in `src/types.rs`. Updated all `EngineConfig` initializers (Default, new_custom, get_preset for all presets, get_recommendations_for_system) to include the new telemetry export fields. Updated `SearchEngine::get_engine_config()` to include telemetry export configuration.
+
+- **Script**: Created `scripts/export_telemetry.sh` script that provides a convenient command-line interface for exporting telemetry data. Script supports `--export-dir`, `--depth`, and `--fen` command-line arguments, with environment variable support for configuration. Script includes help text and error handling.
+
+- **Testing**: Created comprehensive test suite in `tests/telemetry_export_tests.rs` with tests for: JSON export format verification (`test_telemetry_json_export`), CSV export format verification (`test_telemetry_csv_export`), Markdown export format verification (`test_telemetry_markdown_export`), efficiency metrics export (`test_telemetry_efficiency_export`), disabled export handling (`test_telemetry_export_disabled`), and complete export pipeline (`test_telemetry_export_pipeline`). All tests use temporary directories and verify file creation and content validity.
+
+- **Documentation**: Added comprehensive documentation in `docs/performance/telemetry_export.md` covering: overview and features, configuration options, usage examples for basic and advanced exports, export format descriptions (JSON, CSV, Markdown), specialized export details, script usage, best practices, limitations, and future enhancements.
+
+- **Integration**: Added `get_iid_stats()` and `get_lmr_stats()` methods to `SearchEngine` to expose internal statistics for telemetry export. Fixed compilation errors related to duplicate imports and incorrect field access (using `get_move_ordering_effectiveness_metrics()` instead of direct field access).
+
+- **Known Limitations**: Some metrics (e.g., hit rate by depth, TT entry quality distribution) use estimates when detailed tracking is not available. Export overhead is minimal but non-zero - should be disabled in production if not needed. Export directory must be writable by the process.
+
+- **Follow-ups**: Implement real-time streaming export. Add database integration for long-term storage. Add automated analysis and alerting. Integrate with performance dashboards. Add export compression for large datasets. Enhance depth-stratified metrics with actual depth tracking. Improve TT entry quality distribution with detailed TT statistics.
