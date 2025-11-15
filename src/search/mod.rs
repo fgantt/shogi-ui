@@ -1,8 +1,15 @@
 pub mod board_trait;
+pub mod iterative_deepening;
+pub mod null_move;
 pub mod parallel_search;
+pub mod pvs;
+pub mod quiescence;
+pub mod reductions;
 pub mod search_engine;
 pub mod shogi_hash;
 pub mod shogi_position_tests;
+pub mod statistics;
+pub mod time_management;
 pub mod transposition_table;
 pub mod zobrist;
 pub use parallel_search::{
