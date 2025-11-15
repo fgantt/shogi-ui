@@ -10392,3 +10392,56 @@ pub fn get_git_commit_hash() -> Option<String> {
         None
     }
 }
+
+// ============================================================================
+// Benchmark Position Structures (Task 26.0 - Task 5.0)
+// ============================================================================
+
+/// Position type for benchmark classification (Task 26.0 - Task 5.0)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BenchmarkPositionType {
+    /// Opening position
+    Opening,
+    /// Middlegame tactical position (check sequences, captures)
+    MiddlegameTactical,
+    /// Middlegame positional position (castle formations, piece coordination)
+    MiddlegamePositional,
+    /// Endgame king activity position
+    EndgameKingActivity,
+    /// Endgame zugzwang position
+    EndgameZugzwang,
+}
+
+/// Benchmark position for performance testing (Task 26.0 - Task 5.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkPosition {
+    /// Position name
+    pub name: String,
+    /// FEN string representation
+    pub fen: String,
+    /// Position type classification
+    pub position_type: BenchmarkPositionType,
+    /// Expected search depth for benchmarking
+    pub expected_depth: u8,
+    /// Description of the position
+    pub description: String,
+}
+
+impl BenchmarkPosition {
+    /// Create a new benchmark position
+    pub fn new(
+        name: String,
+        fen: String,
+        position_type: BenchmarkPositionType,
+        expected_depth: u8,
+        description: String,
+    ) -> Self {
+        Self {
+            name,
+            fen,
+            position_type,
+            expected_depth,
+            description,
+        }
+    }
+}

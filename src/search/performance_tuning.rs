@@ -1454,6 +1454,266 @@ fn extract_benchmark_name<P: AsRef<Path>>(file_path: P) -> Option<String> {
     None
 }
 
+// ============================================================================
+// Benchmark Runner and Regression Suite (Task 26.0 - Task 5.0)
+// ============================================================================
+
+use crate::bitboards::BitboardBoard;
+use crate::search::search_engine::SearchEngine;
+use crate::types::*;
+
+/// Load standard benchmark positions from JSON file (Task 26.0 - Task 5.0)
+pub fn load_standard_positions() -> Result<Vec<BenchmarkPosition>, String> {
+    let path = PathBuf::from("resources/benchmark_positions/standard_positions.json");
+    
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read standard positions file: {}", e))?;
+    
+    let positions: Vec<BenchmarkPosition> = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse standard positions JSON: {}", e))?;
+    
+    Ok(positions)
+}
+
+/// Regression test result for a single position (Task 26.0 - Task 5.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegressionTestResult {
+    /// Position name
+    pub position_name: String,
+    /// Baseline search time in milliseconds
+    pub baseline_time_ms: u64,
+    /// Current search time in milliseconds
+    pub current_time_ms: u64,
+    /// Whether regression was detected
+    pub regression_detected: bool,
+    /// Regression percentage (positive = slower, negative = faster)
+    pub regression_percentage: f64,
+}
+
+impl RegressionTestResult {
+    /// Create a new regression test result
+    pub fn new(
+        position_name: String,
+        baseline_time_ms: u64,
+        current_time_ms: u64,
+        regression_threshold: f64,
+    ) -> Self {
+        let regression_percentage = if baseline_time_ms > 0 {
+            ((current_time_ms as f64 - baseline_time_ms as f64) / baseline_time_ms as f64) * 100.0
+        } else {
+            0.0
+        };
+        
+        let regression_detected = regression_percentage > regression_threshold;
+        
+        Self {
+            position_name,
+            baseline_time_ms,
+            current_time_ms,
+            regression_detected,
+            regression_percentage,
+        }
+    }
+}
+
+/// Benchmark runner for standard positions (Task 26.0 - Task 5.0)
+pub struct BenchmarkRunner {
+    /// Regression threshold percentage (default: 5.0%)
+    regression_threshold: f64,
+    /// Baseline path for comparison (optional)
+    baseline_path: Option<PathBuf>,
+    /// Time limit per position in milliseconds
+    time_limit_ms: u32,
+}
+
+impl BenchmarkRunner {
+    /// Create a new benchmark runner
+    pub fn new() -> Self {
+        Self {
+            regression_threshold: 5.0,
+            baseline_path: None,
+            time_limit_ms: 10000, // 10 seconds default
+        }
+    }
+
+    /// Set regression threshold
+    pub fn with_regression_threshold(mut self, threshold: f64) -> Self {
+        self.regression_threshold = threshold;
+        self
+    }
+
+    /// Set baseline path for comparison
+    pub fn with_baseline_path(mut self, path: PathBuf) -> Self {
+        self.baseline_path = Some(path);
+        self
+    }
+
+    /// Set time limit per position
+    pub fn with_time_limit(mut self, time_limit_ms: u32) -> Self {
+        self.time_limit_ms = time_limit_ms;
+        self
+    }
+
+    /// Run benchmark on a single position (Task 26.0 - Task 5.0)
+    pub fn run_position_benchmark(
+        &self,
+        position: &BenchmarkPosition,
+        engine: &mut SearchEngine,
+    ) -> Result<PositionBenchmarkResult, String> {
+        // Parse FEN
+        let (mut board, player, captured_pieces) = BitboardBoard::from_fen(&position.fen)
+            .map_err(|e| format!("Failed to parse FEN: {}", e))?;
+
+        // Run search
+        let start_time = std::time::Instant::now();
+        let result = engine.search_at_depth(
+            &mut board,
+            &captured_pieces,
+            player,
+            position.expected_depth,
+            self.time_limit_ms,
+            i32::MIN,
+            i32::MAX,
+        );
+        let elapsed_ms = start_time.elapsed().as_millis() as u64;
+
+        // Get performance metrics
+        let metrics = engine.get_performance_metrics();
+        // Get nodes searched directly from engine
+        let nodes_searched = engine.get_nodes_searched();
+
+        Ok(PositionBenchmarkResult {
+            position_name: position.name.clone(),
+            search_time_ms: elapsed_ms,
+            nodes_searched,
+            nodes_per_second: metrics.nodes_per_second,
+            depth_searched: position.expected_depth,
+            best_move_found: result.is_some(),
+        })
+    }
+
+    /// Run regression suite on all standard positions (Task 26.0 - Task 5.0)
+    pub fn run_regression_suite(
+        &self,
+        engine: &mut SearchEngine,
+    ) -> Result<RegressionSuiteResult, String> {
+        // Load standard positions
+        let positions = load_standard_positions()?;
+
+        // Load baseline if available
+        let baseline_results = if let Some(ref baseline_path) = self.baseline_path {
+            self.load_baseline_results(baseline_path)?
+        } else {
+            None
+        };
+
+        // Run benchmarks
+        let mut results = Vec::new();
+        let mut regression_results = Vec::new();
+
+        for position in &positions {
+            let benchmark_result = self.run_position_benchmark(position, engine)?;
+            
+            // Compare with baseline if available
+            if let Some(ref baseline) = baseline_results {
+                if let Some(baseline_time) = baseline.get(&position.name) {
+                    let regression_result = RegressionTestResult::new(
+                        position.name.clone(),
+                        *baseline_time,
+                        benchmark_result.search_time_ms,
+                        self.regression_threshold,
+                    );
+                    regression_results.push(regression_result.clone());
+                    results.push((benchmark_result, Some(regression_result)));
+                } else {
+                    results.push((benchmark_result, None));
+                }
+            } else {
+                results.push((benchmark_result, None));
+            }
+        }
+
+        // Detect regressions
+        let regressions = self.detect_regressions(&regression_results);
+
+        Ok(RegressionSuiteResult {
+            total_positions: positions.len(),
+            benchmark_results: results,
+            regression_results,
+            regressions_detected: regressions.len(),
+            regressions,
+        })
+    }
+
+    /// Detect regressions from test results (Task 26.0 - Task 5.0)
+    pub fn detect_regressions(
+        &self,
+        results: &[RegressionTestResult],
+    ) -> Vec<RegressionTestResult> {
+        results
+            .iter()
+            .filter(|r| r.regression_detected)
+            .cloned()
+            .collect()
+    }
+
+    /// Load baseline results from file
+    fn load_baseline_results(
+        &self,
+        path: &PathBuf,
+    ) -> Result<Option<HashMap<String, u64>>, String> {
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read baseline file: {}", e))?;
+
+        let baseline: HashMap<String, u64> = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse baseline JSON: {}", e))?;
+
+        Ok(Some(baseline))
+    }
+}
+
+impl Default for BenchmarkRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Result of benchmarking a single position (Task 26.0 - Task 5.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PositionBenchmarkResult {
+    /// Position name
+    pub position_name: String,
+    /// Search time in milliseconds
+    pub search_time_ms: u64,
+    /// Nodes searched
+    pub nodes_searched: u64,
+    /// Nodes per second
+    pub nodes_per_second: f64,
+    /// Depth searched
+    pub depth_searched: u8,
+    /// Whether best move was found
+    pub best_move_found: bool,
+}
+
+/// Result of running regression suite (Task 26.0 - Task 5.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegressionSuiteResult {
+    /// Total number of positions tested
+    pub total_positions: usize,
+    /// Benchmark results for each position
+    pub benchmark_results: Vec<(PositionBenchmarkResult, Option<RegressionTestResult>)>,
+    /// Regression test results
+    pub regression_results: Vec<RegressionTestResult>,
+    /// Number of regressions detected
+    pub regressions_detected: usize,
+    /// List of detected regressions
+    pub regressions: Vec<RegressionTestResult>,
+}
+
 impl Default for PerformanceTargets {
     fn default() -> Self {
         Self {

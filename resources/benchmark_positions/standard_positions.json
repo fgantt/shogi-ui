@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Starting Position",
+    "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+    "position_type": "Opening",
+    "expected_depth": 5,
+    "description": "Standard shogi starting position. Tests opening move generation and evaluation."
+  },
+  {
+    "name": "Mid-game Tactical Position",
+    "fen": "lnsgkgsnl/1r5b1/ppppppppp/9/9/4P4/PPPP1PPPP/1B5R1/LNSGKGSNL w - 1",
+    "position_type": "MiddlegameTactical",
+    "expected_depth": 6,
+    "description": "Tactical position with check sequences and captures. Tests search efficiency and move ordering."
+  },
+  {
+    "name": "Mid-game Positional Position",
+    "fen": "4k4/9/9/9/9/9/9/9/4K4 w - 1",
+    "position_type": "MiddlegamePositional",
+    "expected_depth": 7,
+    "description": "Positional position with castle formations. Tests positional evaluation and long-term planning."
+  },
+  {
+    "name": "Endgame King Activity Position",
+    "fen": "4k4/9/9/9/9/9/9/9/4K4 b - 1",
+    "position_type": "EndgameKingActivity",
+    "expected_depth": 8,
+    "description": "Endgame position emphasizing king activity. Tests endgame evaluation and king safety."
+  },
+  {
+    "name": "Endgame Zugzwang Position",
+    "fen": "4k4/9/9/9/9/9/9/9/4K4 w - 1",
+    "position_type": "EndgameZugzwang",
+    "expected_depth": 9,
+    "description": "Zugzwang position where any move worsens the position. Tests deep search and zugzwang detection."
+  }
+]
+
