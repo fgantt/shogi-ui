@@ -67,6 +67,10 @@ struct Cli {
     #[arg(short, long)]
     progress: bool,
 
+    /// Path to initial weights file for warm-starting (optional)
+    #[arg(long, value_name = "FILE")]
+    initial_weights: Option<PathBuf>,
+
     /// Subcommand for specific operations
     #[command(subcommand)]
     command: Option<Commands>,
@@ -156,8 +160,8 @@ fn run_tuning(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         return Err("No training positions found in dataset".into());
     }
 
-    // Create optimizer
-    let optimizer = Optimizer::new(config.optimization_method.clone());
+    // Create optimizer with config (to support warm-starting)
+    let optimizer = Optimizer::with_config(config.optimization_method.clone(), config.clone());
 
     if cli.verbose {
         println!("Starting optimization with {} method...", cli.method);
@@ -437,6 +441,7 @@ fn create_tuning_config(cli: &Cli) -> Result<TuningConfig, Box<dyn std::error::E
         dataset_path: cli.dataset.to_string_lossy().to_string(),
         output_path: cli.output.to_string_lossy().to_string(),
         checkpoint_path: performance_config.checkpoint_path.clone(),
+        initial_weights_path: cli.initial_weights.as_ref().map(|p| p.to_string_lossy().to_string()),
         optimization_method,
         max_iterations: cli.iterations as usize,
         convergence_threshold: 1e-6,

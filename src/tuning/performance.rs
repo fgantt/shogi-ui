@@ -31,6 +31,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 use super::types::{OptimizationMethod, PerformanceConfig, TuningResults, ValidationResults};
+use super::optimizer::IncrementalState;
 
 /// Verbosity levels for logging
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +81,26 @@ pub struct CheckpointData {
     pub metrics: PerformanceMetrics,
     /// Validation results if available
     pub validation_results: Option<ValidationResults>,
+    /// Incremental learning state (if incremental learning is enabled)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incremental_state: Option<IncrementalStateCheckpoint>,
+}
+
+/// Incremental learning state for checkpointing
+///
+/// This is a serializable version of IncrementalState for checkpointing.
+/// Note: AdamState, LBFGSState, and GeneticAlgorithmState are not serialized
+/// as they can be reconstructed from the optimization method configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncrementalStateCheckpoint {
+    /// Current weights
+    pub weights: Vec<f64>,
+    /// Number of positions processed so far
+    pub positions_processed: usize,
+    /// Total number of updates performed
+    pub update_count: usize,
+    /// Error history for tracking progress
+    pub error_history: Vec<f64>,
 }
 
 /// Progress tracking information
@@ -269,6 +290,26 @@ impl TuningProfiler {
         weights: Option<Vec<f64>>,
         optimization_method: Option<OptimizationMethod>,
     ) -> Result<(), std::io::Error> {
+        self.create_checkpoint_with_incremental_state(
+            iteration,
+            error,
+            weights,
+            optimization_method,
+            None,
+        )
+    }
+
+    /// Create a checkpoint with incremental learning state
+    ///
+    /// This method allows saving incremental learning state for resume functionality.
+    pub fn create_checkpoint_with_incremental_state(
+        &mut self,
+        iteration: usize,
+        error: f64,
+        weights: Option<Vec<f64>>,
+        optimization_method: Option<OptimizationMethod>,
+        incremental_state: Option<&IncrementalState>,
+    ) -> Result<(), std::io::Error> {
         let checkpoint_data = CheckpointData {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -284,6 +325,7 @@ impl TuningProfiler {
             ),
             metrics: self.metrics.lock().unwrap().clone(),
             validation_results: None,
+            incremental_state: incremental_state.map(|s| s.to_checkpoint()),
         };
 
         // Use configured checkpoint path or default to "checkpoints/"
