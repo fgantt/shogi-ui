@@ -250,7 +250,22 @@ impl Default for OptimizedEvaluator {
     }
 }
 
-/// Performance profiler for identifying bottlenecks
+/// Hot path entry for profiling summary (Task 3.0)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct HotPathEntry {
+    /// Operation name
+    pub operation: String,
+    /// Average time in nanoseconds
+    pub average_time_ns: f64,
+    /// Maximum time in nanoseconds
+    pub max_time_ns: u64,
+    /// Minimum time in nanoseconds
+    pub min_time_ns: u64,
+    /// Number of calls profiled
+    pub call_count: usize,
+}
+
+/// Performance profiler for identifying bottlenecks (Task 26.0 - Task 3.0)
 #[derive(Debug, Clone)]
 pub struct PerformanceProfiler {
     /// Enable profiling
@@ -269,6 +284,18 @@ pub struct PerformanceProfiler {
     pub interpolation_times: Vec<u64>,
     /// Maximum samples to keep
     max_samples: usize,
+    /// Sample rate: profile every Nth call (Task 3.0)
+    sample_rate: u32,
+    /// Current call counter for sampling (Task 3.0)
+    call_counter: u32,
+    /// Operation timings for hot path analysis (Task 3.0)
+    /// Maps operation name -> Vec<timing in nanoseconds>
+    operation_timings: std::collections::HashMap<String, Vec<u64>>,
+    /// Profiling overhead tracking (Task 3.0)
+    /// Tracks time spent in profiling itself
+    profiling_overhead_ns: u64,
+    /// Number of profiling operations performed
+    profiling_operations: u64,
 }
 
 impl PerformanceProfiler {
@@ -283,7 +310,186 @@ impl PerformanceProfiler {
             pst_eg_totals: Vec::new(),
             interpolation_times: Vec::new(),
             max_samples: 10000,
+            sample_rate: 1, // Profile every call by default
+            call_counter: 0,
+            operation_timings: std::collections::HashMap::new(),
+            profiling_overhead_ns: 0,
+            profiling_operations: 0,
         }
+    }
+
+    /// Create a new profiler with sample rate (Task 3.0)
+    pub fn with_sample_rate(sample_rate: u32) -> Self {
+        Self {
+            sample_rate,
+            ..Self::new()
+        }
+    }
+
+    /// Set sample rate (Task 3.0)
+    pub fn set_sample_rate(&mut self, sample_rate: u32) {
+        self.sample_rate = sample_rate.max(1); // Minimum 1
+    }
+
+    /// Check if current call should be profiled based on sample rate (Task 3.0)
+    #[inline]
+    fn should_sample(&mut self) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        self.call_counter += 1;
+        if self.call_counter >= self.sample_rate {
+            self.call_counter = 0;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record operation timing with sampling (Task 3.0)
+    #[inline]
+    pub fn record_operation(&mut self, operation: &str, nanos: u64) {
+        if !self.should_sample() {
+            return;
+        }
+
+        let overhead_start = std::time::Instant::now();
+        
+        self.operation_timings
+            .entry(operation.to_string())
+            .or_insert_with(Vec::new)
+            .push(nanos);
+
+        // Track profiling overhead
+        let overhead_ns = overhead_start.elapsed().as_nanos() as u64;
+        self.profiling_overhead_ns += overhead_ns;
+        self.profiling_operations += 1;
+    }
+
+    /// Get hot path summary - top N slowest operations (Task 3.0)
+    pub fn get_hot_path_summary(&self, top_n: usize) -> Vec<HotPathEntry> {
+        let mut entries: Vec<HotPathEntry> = self.operation_timings
+            .iter()
+            .map(|(name, timings)| {
+                let avg = if timings.is_empty() {
+                    0.0
+                } else {
+                    timings.iter().sum::<u64>() as f64 / timings.len() as f64
+                };
+                let max = timings.iter().max().copied().unwrap_or(0);
+                let min = timings.iter().min().copied().unwrap_or(0);
+                let count = timings.len();
+
+                HotPathEntry {
+                    operation: name.clone(),
+                    average_time_ns: avg,
+                    max_time_ns: max,
+                    min_time_ns: min,
+                    call_count: count,
+                }
+            })
+            .collect();
+
+        // Sort by average time (descending)
+        entries.sort_by(|a, b| b.average_time_ns.partial_cmp(&a.average_time_ns).unwrap_or(std::cmp::Ordering::Equal));
+        
+        entries.into_iter().take(top_n).collect()
+    }
+
+    /// Export profiling data to JSON (Task 3.0)
+    pub fn export_profiling_data(&self) -> Result<String, String> {
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct ProfilingData {
+            enabled: bool,
+            sample_rate: u32,
+            total_samples: usize,
+            profiling_overhead_ns: u64,
+            profiling_operations: u64,
+            average_overhead_per_operation_ns: f64,
+            evaluation_stats: OperationStats,
+            phase_calc_stats: OperationStats,
+            pst_lookup_stats: OperationStats,
+            interpolation_stats: OperationStats,
+            hot_paths: Vec<HotPathEntry>,
+        }
+
+        #[derive(Serialize)]
+        struct OperationStats {
+            count: usize,
+            average_ns: f64,
+            max_ns: u64,
+            min_ns: u64,
+        }
+
+        let eval_stats = OperationStats {
+            count: self.evaluation_times.len(),
+            average_ns: self.avg_evaluation_time(),
+            max_ns: self.evaluation_times.iter().max().copied().unwrap_or(0),
+            min_ns: self.evaluation_times.iter().min().copied().unwrap_or(0),
+        };
+
+        let phase_stats = OperationStats {
+            count: self.phase_calc_times.len(),
+            average_ns: self.avg_phase_calc_time(),
+            max_ns: self.phase_calc_times.iter().max().copied().unwrap_or(0),
+            min_ns: self.phase_calc_times.iter().min().copied().unwrap_or(0),
+        };
+
+        let pst_stats = OperationStats {
+            count: self.pst_lookup_times.len(),
+            average_ns: self.avg_pst_lookup_time(),
+            max_ns: self.pst_lookup_times.iter().max().copied().unwrap_or(0),
+            min_ns: self.pst_lookup_times.iter().min().copied().unwrap_or(0),
+        };
+
+        let interp_stats = OperationStats {
+            count: self.interpolation_times.len(),
+            average_ns: self.avg_interpolation_time(),
+            max_ns: self.interpolation_times.iter().max().copied().unwrap_or(0),
+            min_ns: self.interpolation_times.iter().min().copied().unwrap_or(0),
+        };
+
+        let avg_overhead = if self.profiling_operations > 0 {
+            self.profiling_overhead_ns as f64 / self.profiling_operations as f64
+        } else {
+            0.0
+        };
+
+        let data = ProfilingData {
+            enabled: self.enabled,
+            sample_rate: self.sample_rate,
+            total_samples: self.evaluation_times.len(),
+            profiling_overhead_ns: self.profiling_overhead_ns,
+            profiling_operations: self.profiling_operations,
+            average_overhead_per_operation_ns: avg_overhead,
+            evaluation_stats: eval_stats,
+            phase_calc_stats: phase_stats,
+            pst_lookup_stats: pst_stats,
+            interpolation_stats: interp_stats,
+            hot_paths: self.get_hot_path_summary(10),
+        };
+
+        serde_json::to_string_pretty(&data)
+            .map_err(|e| format!("Failed to serialize profiling data: {}", e))
+    }
+
+    /// Get profiling overhead percentage (Task 3.0)
+    pub fn get_profiling_overhead_percentage(&self) -> f64 {
+        if self.profiling_operations == 0 {
+            return 0.0;
+        }
+        // Estimate total time profiled (sum of all operation times)
+        let total_profiled_time: u64 = self.operation_timings.values()
+            .flat_map(|timings| timings.iter())
+            .sum();
+        
+        if total_profiled_time == 0 {
+            return 0.0;
+        }
+
+        (self.profiling_overhead_ns as f64 / total_profiled_time as f64) * 100.0
     }
 
     /// Enable profiling
@@ -296,19 +502,21 @@ impl PerformanceProfiler {
         self.enabled = false;
     }
 
-    /// Record evaluation time
+    /// Record evaluation time (Task 3.0: with sampling support)
     #[inline]
     pub fn record_evaluation(&mut self, nanos: u64) {
-        if self.enabled && self.evaluation_times.len() < self.max_samples {
+        if self.should_sample() && self.evaluation_times.len() < self.max_samples {
             self.evaluation_times.push(nanos);
+            self.record_operation("evaluation", nanos);
         }
     }
 
-    /// Record phase calculation time
+    /// Record phase calculation time (Task 3.0: with sampling support)
     #[inline]
     pub fn record_phase_calculation(&mut self, nanos: u64) {
-        if self.enabled && self.phase_calc_times.len() < self.max_samples {
+        if self.should_sample() && self.phase_calc_times.len() < self.max_samples {
             self.phase_calc_times.push(nanos);
+            self.record_operation("phase_calculation", nanos);
         }
     }
 
@@ -329,11 +537,12 @@ impl PerformanceProfiler {
         }
     }
 
-    /// Record interpolation time
+    /// Record interpolation time (Task 3.0: with sampling support)
     #[inline]
     pub fn record_interpolation(&mut self, nanos: u64) {
-        if self.enabled && self.interpolation_times.len() < self.max_samples {
+        if self.should_sample() && self.interpolation_times.len() < self.max_samples {
             self.interpolation_times.push(nanos);
+            self.record_operation("interpolation", nanos);
         }
     }
 
@@ -434,7 +643,7 @@ impl PerformanceProfiler {
         }
     }
 
-    /// Reset profiler
+    /// Reset profiler (Task 3.0: enhanced with new fields)
     pub fn reset(&mut self) {
         self.evaluation_times.clear();
         self.phase_calc_times.clear();
@@ -442,6 +651,10 @@ impl PerformanceProfiler {
         self.pst_mg_totals.clear();
         self.pst_eg_totals.clear();
         self.interpolation_times.clear();
+        self.operation_timings.clear();
+        self.call_counter = 0;
+        self.profiling_overhead_ns = 0;
+        self.profiling_operations = 0;
     }
 
     /// Get sample count

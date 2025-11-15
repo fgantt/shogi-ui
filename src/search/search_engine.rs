@@ -243,6 +243,12 @@ pub struct SearchEngine {
     core_search_metrics: crate::types::CoreSearchMetrics,
     /// Whether verbose debug logging is enabled
     debug_logging: bool,
+    /// Automatic profiling enabled flag (Task 26.0 - Task 3.0)
+    auto_profiling_enabled: bool,
+    /// Profiling sample rate (Task 26.0 - Task 3.0)
+    auto_profiling_sample_rate: u32,
+    /// Performance profiler for hot path analysis (Task 26.0 - Task 3.0)
+    performance_profiler: crate::evaluation::performance::PerformanceProfiler,
     // Advanced Alpha-Beta Pruning
     pruning_manager: PruningManager,
     /// Cache for tablebase move detection (Task 4.1)
@@ -539,6 +545,14 @@ impl SearchEngine {
         {
             return;
         }
+        
+        // Automatic profiling for TT store (Task 26.0 - Task 3.0)
+        let tt_store_start = if self.auto_profiling_enabled {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
         if self.shared_transposition_table.is_some() {
             self.shared_tt_store_attempts += 1;
             self.tt_write_buffer.push(entry);
@@ -547,6 +561,12 @@ impl SearchEngine {
             }
         } else {
             self.transposition_table.store(entry);
+        }
+
+        // Record TT store profiling (Task 3.0)
+        if let Some(start) = tt_store_start {
+            let elapsed_ns = start.elapsed().as_nanos() as u64;
+            self.performance_profiler.record_operation("tt_store", elapsed_ns);
         }
     }
     pub fn new(stop_flag: Option<Arc<AtomicBool>>, hash_size_mb: usize) -> Self {
@@ -601,6 +621,9 @@ impl SearchEngine {
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
             debug_logging: false,
+            auto_profiling_enabled: false,
+            auto_profiling_sample_rate: 100,
+            performance_profiler: crate::evaluation::performance::PerformanceProfiler::new(),
             // Advanced Alpha-Beta Pruning
             pruning_manager: {
                 let mut pm = PruningManager::new(PruningParameters::default());
@@ -815,10 +838,17 @@ impl SearchEngine {
         iid_move: Option<&Move>,
         opponent_last_move: Option<&Move>,
     ) -> Vec<Move> {
+        // Automatic profiling integration (Task 26.0 - Task 3.0)
+        let start_time = if self.auto_profiling_enabled {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
         // Task 2.6: Added opponent_last_move parameter
         // Task 3.0: Try advanced move ordering first with IID move
         // Task 2.6: Pass opponent's last move to move ordering for counter-move heuristic
-        match self.order_moves_advanced(
+        let result = match self.order_moves_advanced(
             moves,
             board,
             captured_pieces,
@@ -858,7 +888,41 @@ impl SearchEngine {
                     iid_move,
                 )
             }
+        };
+
+        // Record profiling data if enabled (Task 3.0)
+        if let Some(start) = start_time {
+            let elapsed_ns = start.elapsed().as_nanos() as u64;
+            self.performance_profiler.record_operation("move_ordering", elapsed_ns);
         }
+
+        result
+    }
+
+    /// Enable automatic profiling for hot paths (Task 26.0 - Task 3.0)
+    ///
+    /// Enables profiling for evaluation, move ordering, and TT operations.
+    /// Profiling uses sampling to reduce overhead (configured via auto_profiling_sample_rate).
+    pub fn enable_auto_profiling(&mut self) {
+        self.auto_profiling_enabled = true;
+        self.performance_profiler.enable();
+        self.performance_profiler.set_sample_rate(self.auto_profiling_sample_rate);
+    }
+
+    /// Disable automatic profiling (Task 26.0 - Task 3.0)
+    pub fn disable_auto_profiling(&mut self) {
+        self.auto_profiling_enabled = false;
+        self.performance_profiler.disable();
+    }
+
+    /// Get hot path summary from profiler (Task 26.0 - Task 3.0)
+    pub fn get_hot_path_summary(&self, top_n: usize) -> Vec<crate::evaluation::performance::HotPathEntry> {
+        self.performance_profiler.get_hot_path_summary(top_n)
+    }
+
+    /// Export profiling data to JSON (Task 26.0 - Task 3.0)
+    pub fn export_profiling_data(&self) -> Result<String, String> {
+        self.performance_profiler.export_profiling_data()
     }
 
     /// Get best move from transposition table for PV move ordering
@@ -942,6 +1006,10 @@ impl SearchEngine {
             time_budget_stats: TimeBudgetStats::default(),
             time_pressure_thresholds: crate::types::TimePressureThresholds::default(),
             core_search_metrics: crate::types::CoreSearchMetrics::default(),
+            debug_logging: config.debug_logging,
+            auto_profiling_enabled: config.auto_profiling_enabled,
+            auto_profiling_sample_rate: config.auto_profiling_sample_rate,
+            performance_profiler: crate::evaluation::performance::PerformanceProfiler::with_sample_rate(config.auto_profiling_sample_rate),
             iid_config: config.iid,
             iid_stats: IIDStats::default(),
             iid_overhead_history: Vec::new(), // Task 8.6: Initialize overhead history
@@ -987,7 +1055,6 @@ impl SearchEngine {
             shared_tt_store_writes: 0,
             tt_buffer_flushes: 0,
             tt_buffer_entries_written: 0,
-            debug_logging: config.debug_logging,
         };
         if engine.debug_logging {
             engine.evaluator.enable_integrated_statistics();
@@ -1083,6 +1150,8 @@ impl SearchEngine {
             prefill_opening_book: self.prefill_opening_book,
             opening_book_prefill_depth: self.opening_book_prefill_depth,
             parallel: self.parallel_options.clone(),
+            auto_profiling_enabled: self.auto_profiling_enabled,
+            auto_profiling_sample_rate: self.auto_profiling_sample_rate,
         }
     }
 
@@ -5075,10 +5144,23 @@ impl SearchEngine {
         // Track TT probe (Task 5.7)
         self.core_search_metrics.total_tt_probes += 1;
 
-        if let Some(entry) =
-            self.transposition_table
-                .probe_with_prefetch(position_hash, depth, None)
-        {
+        // Automatic profiling for TT probe (Task 26.0 - Task 3.0)
+        let tt_probe_start = if self.auto_profiling_enabled {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
+        let tt_entry = self.transposition_table
+            .probe_with_prefetch(position_hash, depth, None);
+
+        // Record TT probe profiling (Task 3.0)
+        if let Some(start) = tt_probe_start {
+            let elapsed_ns = start.elapsed().as_nanos() as u64;
+            self.performance_profiler.record_operation("tt_probe", elapsed_ns);
+        }
+
+        if let Some(entry) = tt_entry {
             // Track TT hit (Task 5.7)
             self.core_search_metrics.total_tt_hits += 1;
 
@@ -12789,13 +12871,28 @@ impl SearchEngine {
 
     /// Evaluate the current position statically
     /// Automatically uses cache if enabled in evaluator (Task 3.2.2)
+    /// Task 3.0: Integrated automatic profiling
     pub fn evaluate_position(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
     ) -> i32 {
+        // Automatic profiling integration (Task 26.0 - Task 3.0)
+        let start_time = if self.auto_profiling_enabled {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
         let score = self.evaluator.evaluate(board, player, captured_pieces);
+        
+        // Record profiling data if enabled
+        if let Some(start) = start_time {
+            let elapsed_ns = start.elapsed().as_nanos() as u64;
+            self.performance_profiler.record_evaluation(elapsed_ns);
+        }
+
         if self.debug_logging {
             self.log_evaluation_telemetry();
         }

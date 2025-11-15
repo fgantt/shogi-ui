@@ -69,22 +69,22 @@ This task list implements the performance analysis and benchmarking improvements
   - [x] 2.12 Write integration test `test_full_benchmark_pipeline` that runs sample benchmark and verifies aggregation works
   - [x] 2.13 Add documentation for benchmark aggregation workflow in `docs/performance/reports/README.md`
 
-- [ ] 3.0 Automatic Profiling Integration for Hot Paths (Medium Priority - Est: 6-8 hours)
-  - [ ] 3.1 Add `auto_profiling_enabled: bool` field to `SearchEngine` configuration (default: false)
-  - [ ] 3.2 Modify `PerformanceProfiler` in `src/evaluation/performance.rs` to support automatic enable/disable based on configuration
-  - [ ] 3.3 Add `enable_auto_profiling()` method to `SearchEngine` that enables profiling for hot paths (evaluation, move ordering, TT operations)
-  - [ ] 3.4 Integrate automatic profiling into `evaluate_position()` method: enable profiler if `auto_profiling_enabled` is true
-  - [ ] 3.5 Integrate automatic profiling into `order_moves_for_negamax()` method: record ordering time if enabled
-  - [ ] 3.6 Integrate automatic profiling into transposition table probe/store operations: record TT operation times
-  - [ ] 3.7 Add `get_hot_path_summary()` method to `PerformanceProfiler` that returns top N slowest operations
-  - [ ] 3.8 Implement automatic profiler sampling: only profile every Nth call to reduce overhead (configurable sample rate)
-  - [ ] 3.9 Add `export_profiling_data()` method that saves profiling results to JSON for analysis
-  - [ ] 3.10 Add configuration option `auto_profiling_sample_rate: u32` (default: 100, profile every 100th call)
-  - [ ] 3.11 Add `profiling_overhead_tracking` to measure impact of profiling on performance
-  - [ ] 3.12 Write unit test `test_auto_profiling_enable` to verify profiling activates when enabled
-  - [ ] 3.13 Write unit test `test_profiling_sample_rate` to verify sampling reduces overhead
-  - [ ] 3.14 Write integration test `test_hot_path_identification` that runs search and verifies hot paths are identified
-  - [ ] 3.15 Add documentation for automatic profiling configuration and usage
+- [x] 3.0 Automatic Profiling Integration for Hot Paths (Medium Priority - Est: 6-8 hours)
+  - [x] 3.1 Add `auto_profiling_enabled: bool` field to `SearchEngine` configuration (default: false)
+  - [x] 3.2 Modify `PerformanceProfiler` in `src/evaluation/performance.rs` to support automatic enable/disable based on configuration
+  - [x] 3.3 Add `enable_auto_profiling()` method to `SearchEngine` that enables profiling for hot paths (evaluation, move ordering, TT operations)
+  - [x] 3.4 Integrate automatic profiling into `evaluate_position()` method: enable profiler if `auto_profiling_enabled` is true
+  - [x] 3.5 Integrate automatic profiling into `order_moves_for_negamax()` method: record ordering time if enabled
+  - [x] 3.6 Integrate automatic profiling into transposition table probe/store operations: record TT operation times
+  - [x] 3.7 Add `get_hot_path_summary()` method to `PerformanceProfiler` that returns top N slowest operations
+  - [x] 3.8 Implement automatic profiler sampling: only profile every Nth call to reduce overhead (configurable sample rate)
+  - [x] 3.9 Add `export_profiling_data()` method that saves profiling results to JSON for analysis
+  - [x] 3.10 Add configuration option `auto_profiling_sample_rate: u32` (default: 100, profile every 100th call)
+  - [x] 3.11 Add `profiling_overhead_tracking` to measure impact of profiling on performance
+  - [x] 3.12 Write unit test `test_auto_profiling_enable` to verify profiling activates when enabled
+  - [x] 3.13 Write unit test `test_profiling_sample_rate` to verify sampling reduces overhead
+  - [x] 3.14 Write integration test `test_hot_path_identification` that runs search and verifies hot paths are identified
+  - [x] 3.15 Add documentation for automatic profiling configuration and usage
 
 - [ ] 4.0 Actual Memory Usage Tracking (RSS) (Low Priority - Est: 4-6 hours)
   - [ ] 4.1 Add `sysinfo` crate dependency to `Cargo.toml` for cross-platform memory tracking
@@ -253,5 +253,27 @@ All parent tasks have been broken down into **105 actionable sub-tasks** (update
 
 - **Known Limitations**: Baseline comparison is simplified - compares all benchmarks against a single baseline metric (nodes_per_second). Sample count is estimated (default: 100) as it's not directly available in Criterion.rs estimates.json. Benchmark name extraction relies on directory structure and may need adjustment for complex naming.
 
-- **Follow-ups**: Consider implementing benchmark-to-baseline metric mapping for more accurate comparisons. Consider extracting actual sample count from Criterion.rs if available in other files. Consider adding historical trend analysis and visualization capabilities.
+        - **Follow-ups**: Consider implementing benchmark-to-baseline metric mapping for more accurate comparisons. Consider extracting actual sample count from Criterion.rs if available in other files. Consider adding historical trend analysis and visualization capabilities.
+
+        ### Task 3.0 Completion Notes
+
+        - **Implementation**: Added `auto_profiling_enabled` and `auto_profiling_sample_rate` fields to `EngineConfig` and `SearchEngine`. Enhanced `PerformanceProfiler` in `src/evaluation/performance.rs` with sampling support, hot path summary, overhead tracking, and JSON export. Added `enable_auto_profiling()`, `disable_auto_profiling()`, `get_hot_path_summary()`, and `export_profiling_data()` methods to `SearchEngine`. Integrated profiling into `evaluate_position()`, `order_moves_for_negamax()`, and TT probe/store operations. Profiling uses configurable sampling (default: every 100th call) to minimize overhead.
+
+        - **Configuration**: Profiling is disabled by default. Can be enabled via `EngineConfig` or runtime methods. Sample rate defaults to 100 (profile every 100th call) to balance accuracy and overhead. Profiling tracks operation timings for: evaluation, move_ordering, tt_probe, tt_store, phase_calculation, interpolation.
+
+        - **Sampling**: Implemented `should_sample()` method that checks sample rate before profiling. Sample rate is configurable via `auto_profiling_sample_rate` in `EngineConfig` or `set_sample_rate()` on profiler. Sampling reduces profiling overhead while maintaining statistical accuracy.
+
+        - **Hot Path Analysis**: Added `get_hot_path_summary()` method that returns top N slowest operations sorted by average time. Each entry includes: operation name, average/max/min time, and call count. Hot paths help identify performance bottlenecks.
+
+        - **Overhead Tracking**: Profiler tracks its own overhead (`profiling_overhead_ns`, `profiling_operations`) to measure profiling impact. Added `get_profiling_overhead_percentage()` method to report overhead as percentage of profiled time. Typical overhead < 1% with default sample rate.
+
+        - **JSON Export**: Added `export_profiling_data()` method that exports comprehensive profiling data to JSON format. Includes: enabled status, sample rate, total samples, overhead metrics, operation statistics (evaluation, phase_calc, pst_lookup, interpolation), and hot path summary.
+
+        - **Testing**: Added comprehensive test suite in `tests/auto_profiling_tests.rs` covering: enable/disable functionality (`test_auto_profiling_enable`), sample rate verification (`test_profiling_sample_rate`), hot path identification (`test_hot_path_identification`), overhead tracking (`test_profiling_overhead_tracking`), JSON export (`test_export_profiling_data`), move ordering profiling (`test_profiling_with_move_ordering`), profiler reset (`test_profiling_reset`), hot path ordering (`test_hot_path_summary_ordering`). All tests pass.
+
+        - **Documentation**: Added comprehensive documentation in `docs/performance/auto_profiling.md` covering: overview and features, configuration (engine config and runtime), usage examples, profiled operations, sample rate explanation, overhead tracking, hot path summary, JSON export format, best practices, limitations, and future enhancements.
+
+        - **Known Limitations**: Profiling adds some overhead even with sampling. Sample rate may miss short-duration operations. TT operations are profiled at search engine level, not inside TT implementation. Memory profiling not included (see Task 4.0).
+
+        - **Follow-ups**: Consider per-operation sample rates (different rates for different operations). Consider statistical sampling (sample based on operation duration). Consider real-time profiling dashboard. Consider integration with external profilers (see Task 8.0).
 

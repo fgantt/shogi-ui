@@ -6118,6 +6118,11 @@ pub struct EngineConfig {
     pub opening_book_prefill_depth: u8,
     /// Parallel search options
     pub parallel: ParallelOptions,
+    /// Enable automatic profiling for hot paths (Task 26.0 - Task 3.0)
+    pub auto_profiling_enabled: bool,
+    /// Profiling sample rate: profile every Nth call (Task 26.0 - Task 3.0)
+    /// Default: 100 (profile every 100th call to reduce overhead)
+    pub auto_profiling_sample_rate: u32,
 }
 
 impl Default for EngineConfig {
@@ -6136,6 +6141,8 @@ impl Default for EngineConfig {
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
             parallel: ParallelOptions::default(),
+            auto_profiling_enabled: false,
+            auto_profiling_sample_rate: 100,
         }
     }
 }
@@ -6173,6 +6180,8 @@ impl EngineConfig {
             prefill_opening_book: true,
             opening_book_prefill_depth: 8,
             parallel,
+            auto_profiling_enabled: false,
+            auto_profiling_sample_rate: 100,
         }
     }
 
@@ -6210,6 +6219,8 @@ impl EngineConfig {
         match preset {
             EnginePreset::Default => Self::default(),
             EnginePreset::Aggressive => Self {
+                auto_profiling_enabled: false,
+                auto_profiling_sample_rate: 100,
                 quiescence: QuiescenceConfig {
                     max_depth: 6,
                     enable_delta_pruning: true,
@@ -6337,6 +6348,8 @@ impl EngineConfig {
                 parallel: ParallelOptions::default(),
             },
             EnginePreset::Conservative => Self {
+                auto_profiling_enabled: false,
+                auto_profiling_sample_rate: 100,
                 quiescence: QuiescenceConfig {
                     max_depth: 8,
                     enable_delta_pruning: true,
@@ -6464,6 +6477,8 @@ impl EngineConfig {
                 parallel: ParallelOptions::default(),
             },
             EnginePreset::Balanced => Self {
+                auto_profiling_enabled: false,
+                auto_profiling_sample_rate: 100,
                 quiescence: QuiescenceConfig::default(),
                 null_move: NullMoveConfig::default(),
                 lmr: LMRConfig::default(),
@@ -6683,6 +6698,8 @@ impl ConfigMigration {
             null_move: null_move_config,
             lmr: lmr_config,
             aspiration_windows: aspiration_config,
+            auto_profiling_enabled: false,
+            auto_profiling_sample_rate: 100,
             iid: IIDConfig::default(),
             tt_size_mb,
             debug_logging: false,
