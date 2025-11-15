@@ -7,7 +7,7 @@ use super::tablebase_config::EvictionStrategy;
 use super::TablebaseResult;
 use crate::search::BoardTrait;
 use crate::time_utils::TimeSource;
-use crate::types::Player;
+use crate::types::core::Player;
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 use std::collections::HashMap;

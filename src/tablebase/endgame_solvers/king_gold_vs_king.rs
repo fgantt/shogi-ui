@@ -7,7 +7,7 @@
 use super::super::solver_traits::EndgameSolverHelper;
 use super::super::tablebase_config::KingGoldConfig;
 use super::super::{EndgameSolver, TablebaseResult};
-use crate::types::{Move, PieceType, Player, Position};
+use crate::types::core::{Move, PieceType, Player, Position};
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 

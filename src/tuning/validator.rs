@@ -43,7 +43,9 @@ use super::types::{
     FoldResult, GameResult as TuningGameResult, MatchResult, OptimizationMethod, TrainingPosition,
     ValidationConfig, ValidationResults,
 };
-use crate::types::{GameResult, Move, Player};
+use crate::types::core::{Move, Player};
+// Note: GameResult is not yet extracted to a sub-module, using root import
+use crate::types::GameResult;
 use crate::ShogiEngine;
 use rand::seq::SliceRandom;
 use rand::thread_rng;

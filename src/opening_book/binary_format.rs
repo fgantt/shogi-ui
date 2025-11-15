@@ -8,7 +8,7 @@ use super::{
     BookMove, ChunkHeader, OpeningBook, OpeningBookError, OpeningBookMetadata, Position,
     PositionEntry,
 };
-use crate::types::PieceType;
+use crate::types::core::PieceType;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::io::{Cursor, Read};

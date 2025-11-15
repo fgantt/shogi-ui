@@ -73,7 +73,7 @@
 //! - `solver_traits.rs`: Common traits for endgame solvers
 //! - `tablebase_config.rs`: Configuration management
 
-use crate::types::Move;
+use crate::types::core::Move;
 use serde::{Deserialize, Serialize};
 
 pub mod endgame_solvers;

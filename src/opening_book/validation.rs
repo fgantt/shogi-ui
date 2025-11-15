@@ -4,7 +4,7 @@
 /// including duplicate detection, move legality, weight/evaluation consistency,
 /// FEN format validation, and position bounds checking.
 use super::{BookMove, OpeningBook, PositionEntry};
-use crate::types::Position;
+use crate::types::core::Position;
 use std::collections::HashSet;
 
 /// Validator for opening book data

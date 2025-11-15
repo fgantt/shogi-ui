@@ -19,7 +19,7 @@ use super::types::{
     FoldResult, LineSearchType, Objective, OptimizationMethod, ParetoFront, ParetoSolution,
     TrainingPosition, TuningConfig, ValidationResults, WeightConstraint,
 };
-use crate::types::NUM_EVAL_FEATURES;
+use crate::types::evaluation::NUM_EVAL_FEATURES;
 use crate::weights::WeightFile;
 use serde::{Deserialize, Serialize};
 use std::fs::File;

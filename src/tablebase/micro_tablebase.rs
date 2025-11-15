@@ -10,7 +10,7 @@ use super::{
     TablebaseResult, TablebaseStats,
 };
 use crate::time_utils::TimeSource;
-use crate::types::{Player, Position};
+use crate::types::core::{Player, Position};
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 

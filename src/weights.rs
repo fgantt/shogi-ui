@@ -9,7 +9,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use crate::types::{NUM_EG_FEATURES, NUM_EVAL_FEATURES, NUM_MG_FEATURES};
+use crate::types::evaluation::{NUM_EG_FEATURES, NUM_EVAL_FEATURES, NUM_MG_FEATURES};
 
 /// Weight file format version for compatibility checking
 pub const WEIGHT_FILE_VERSION: u32 = 1;

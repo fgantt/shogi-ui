@@ -5,7 +5,7 @@
 //! modular implementation of different endgame scenarios.
 
 use super::TablebaseResult;
-use crate::types::Player;
+use crate::types::core::Player;
 use crate::BitboardBoard;
 use crate::CapturedPieces;
 

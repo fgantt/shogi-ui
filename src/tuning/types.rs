@@ -3,8 +3,8 @@
 //! This module defines all the essential types and structures used throughout
 //! the tuning process, from game records to optimization configuration.
 
-use crate::types::NUM_EVAL_FEATURES;
-use crate::types::{Move, Player};
+use crate::types::core::{Move, Player};
+use crate::types::evaluation::NUM_EVAL_FEATURES;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
