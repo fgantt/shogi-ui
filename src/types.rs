@@ -6998,13 +6998,32 @@ impl Default for MemoryPool {
 }
 
 /// Magic number generation result
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct MagicGenerationResult {
     pub magic_number: u64,
     pub mask: Bitboard,
     pub shift: u8,
     pub table_size: usize,
+    /// Generation time in nanoseconds (serialized as u64)
+    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub generation_time: std::time::Duration,
+}
+
+/// Serialize Duration as nanoseconds (u64)
+fn serialize_duration<S>(duration: &std::time::Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(duration.as_nanos() as u64)
+}
+
+/// Deserialize Duration from nanoseconds (u64)
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<std::time::Duration, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let nanos = u64::deserialize(deserializer)?;
+    Ok(std::time::Duration::from_nanos(nanos))
 }
 
 /// Attack pattern generation configuration

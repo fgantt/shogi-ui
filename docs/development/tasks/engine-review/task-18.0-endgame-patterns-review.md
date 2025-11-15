@@ -329,3 +329,4 @@ With these improvements, the endgame patterns module will provide accurate, shog
 ---
 
 
+
