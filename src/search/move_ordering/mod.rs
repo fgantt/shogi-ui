@@ -30,7 +30,7 @@
 //! println!("Total moves ordered: {}", stats.total_moves_ordered);
 //! ```
 
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, PieceType, Player, Position};
 use crate::types::transposition::TranspositionEntry;

@@ -9,7 +9,7 @@ use super::{
     EndgameSolver, PositionAnalyzer, PositionCache, TablebaseConfig, TablebaseProfiler,
     TablebaseResult, TablebaseStats,
 };
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use crate::types::core::{Player, Position};
 use crate::BitboardBoard;
 use crate::CapturedPieces;

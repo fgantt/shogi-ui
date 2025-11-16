@@ -825,7 +825,7 @@ impl PositionEvaluator {
         // Use advanced king safety evaluation if enabled
         if self.config.king_safety.enabled {
             let start_time = if self.config.enable_performance_monitoring {
-                Some(crate::time_utils::TimeSource::now())
+                Some(crate::utils::time::TimeSource::now())
             } else {
                 None
             };

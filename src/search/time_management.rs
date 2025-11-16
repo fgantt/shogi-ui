@@ -4,7 +4,7 @@
 //! calculations for the search engine. Extracted from `search_engine.rs` as part of
 //! Task 1.0: File Modularization and Structure Improvements.
 
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use crate::types::search::{
     TimeAllocationStrategy, TimeBudgetStats, TimeManagementConfig, TimePressure,
     TimePressureThresholds,

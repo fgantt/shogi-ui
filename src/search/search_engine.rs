@@ -13,7 +13,7 @@ use crate::search::reductions::ReductionsHelper;
 use crate::search::statistics::SearchStatistics;
 use crate::search::time_management::TimeManager;
 use crate::tablebase::MicroTablebase;
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Piece, PieceType, Player, Position};
 use crate::types::board::GamePhase;

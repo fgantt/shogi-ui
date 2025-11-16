@@ -24,7 +24,7 @@ use crate::moves::MoveGenerator;
 use crate::search::search_engine::SearchEngine;
 use crate::search::search_engine::GLOBAL_NODES_SEARCHED;
 use crate::search::ThreadSafeTranspositionTable;
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{Move, Player};
 use crate::types::search::ParallelOptions;

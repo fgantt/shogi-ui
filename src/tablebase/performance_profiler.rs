@@ -4,7 +4,7 @@
 //! for monitoring tablebase operations, identifying bottlenecks, and
 //! optimizing performance.
 
-use crate::time_utils::TimeSource;
+use crate::utils::time::TimeSource;
 use std::collections::HashMap;
 use std::time::Duration;
 
