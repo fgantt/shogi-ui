@@ -1,0 +1,55 @@
+# Clippy Configuration
+#
+# Aggressive linting settings for the shogi engine codebase.
+# Task 5.0 (Task 5.25)
+
+# Enable pedantic lints
+# These are lints that are designed to catch common mistakes and improve code quality
+# Task 5.0 (Task 5.25)
+pedantic = true
+
+# Enable nursery lints
+# These are new lints that are still being evaluated
+nursery = true
+
+# Enable cargo lints
+# These are lints that check Cargo.toml and dependencies
+cargo = true
+
+# Allow specific lints that may be too strict for some use cases
+# We'll add allows with rationale comments in code where needed
+# Task 5.0 (Task 5.27)
+
+# Allow module_inception - nested modules are sometimes useful for organization
+allow = ["module_inception"]
+
+# Allow too_many_lines - large modules are sometimes necessary (e.g., search_engine.rs)
+allow = ["too_many_lines"]
+
+# Allow too_many_arguments - some functions legitimately need many arguments
+allow = ["too_many_arguments"]
+
+# Allow cast_possible_truncation - we carefully handle casts where needed
+allow = ["cast_possible_truncation"]
+
+# Allow cast_sign_loss - we carefully handle casts where needed
+allow = ["cast_sign_loss"]
+
+# Allow must_use_candidate - not all function results need to be used
+allow = ["must_use_candidate"]
+
+# Allow similar_names - some similar names are acceptable (e.g., score, scores)
+allow = ["similar_names"]
+
+# Allow type_complexity - complex types are sometimes necessary
+allow = ["type_complexity"]
+
+# Allow cognitive_complexity - some functions are legitimately complex
+allow = ["cognitive_complexity"]
+
+# Allow missing_errors_doc - error documentation is nice-to-have but not always critical
+allow = ["missing_errors_doc"]
+
+# Allow missing_panics_doc - panic documentation is nice-to-have but not always critical
+allow = ["missing_panics_doc"]
+

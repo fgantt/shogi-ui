@@ -389,6 +389,23 @@ impl IntegratedEvaluator {
     /// * `board` - Current board state
     /// * `player` - Player to evaluate for
     /// * `captured_pieces` - Captured pieces for both players
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use shogi_engine::bitboards::BitboardBoard;
+    /// use shogi_engine::evaluation::integration::IntegratedEvaluator;
+    /// use shogi_engine::types::*;
+    ///
+    /// let mut evaluator = IntegratedEvaluator::new();
+    /// let board = BitboardBoard::new();
+    /// let captured = CapturedPieces::new();
+    ///
+    /// let result = evaluator.evaluate(&board, Player::Black, &captured);
+    /// println!("Score: {}, Phase: {}", result.score, result.phase);
+    /// ```
+    ///
+    /// # Task 5.0 (Task 5.15-5.17)
     pub fn evaluate(
         &mut self,
         board: &BitboardBoard,

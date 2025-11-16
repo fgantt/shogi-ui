@@ -4,6 +4,47 @@
 //! All errors use the `thiserror` crate for ergonomic error handling.
 //!
 //! # Task 4.0 (Tasks 4.1-4.7)
+//!
+//! # Examples
+//!
+//! ## Creating and handling errors
+//!
+//! ```rust,no_run
+//! use shogi_engine::error::{SearchError, ShogiEngineError, Result};
+//!
+//! fn search_with_timeout() -> Result<()> {
+//!     Err(SearchError::timeout("Search exceeded time limit").into())
+//! }
+//!
+//! match search_with_timeout() {
+//!     Ok(()) => println!("Search completed"),
+//!     Err(ShogiEngineError::Search(SearchError::Timeout { message })) => {
+//!         println!("Search timed out: {}", message);
+//!     }
+//!     Err(e) => println!("Other error: {}", e),
+//! }
+//! ```
+//!
+//! ## Error propagation
+//!
+//! ```rust,no_run
+//! use shogi_engine::error::{ConfigurationError, ShogiEngineError, Result};
+//!
+//! fn load_config(path: &str) -> Result<()> {
+//!     // Errors automatically convert to ShogiEngineError via From trait
+//!     Err(ConfigurationError::file_not_found(path).into())
+//! }
+//! ```
+//!
+//! # Error Types
+//!
+//! The error hierarchy consists of:
+//! - [`ShogiEngineError`]: Root error type for all engine operations
+//! - [`SearchError`]: Search-related errors (timeout, invalid depth, etc.)
+//! - [`EvaluationError`]: Evaluation-related errors (invalid position, component failure, etc.)
+//! - [`TranspositionTableError`]: Transposition table errors (invalid size, probe failure, etc.)
+//! - [`MoveGenerationError`]: Move generation errors
+//! - [`ConfigurationError`]: Configuration validation and loading errors
 
 use thiserror::Error;
 

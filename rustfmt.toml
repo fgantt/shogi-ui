@@ -1,0 +1,44 @@
+# Rustfmt Configuration
+#
+# Standardized formatting settings for the shogi engine codebase.
+# Task 5.0 (Task 5.28)
+
+# Maximum line width
+max_width = 100
+
+# Maximum width of chains (method chains, etc.)
+chain_width = 80
+
+# Small heuristics to use (maximize small formatting)
+use_small_heuristics = "Max"
+
+# Use tabs for indentation (false = spaces)
+hard_tabs = false
+
+# Number of spaces per tab
+tab_spaces = 4
+
+# Remove trailing whitespace
+remove_nested_parens = true
+
+# Format code in edition 2021
+edition = "2021"
+
+# Format macro definitions
+format_macro_matchers = true
+format_macro_bodies = true
+
+# Format string literals
+format_strings = true
+
+# Format comments
+format_code_in_doc_comments = true
+wrap_comments = true
+comment_width = 80
+
+# Other formatting options
+use_field_init_shorthand = true
+use_try_shorthand = true
+normalize_comments = true
+normalize_doc_attributes = true
+

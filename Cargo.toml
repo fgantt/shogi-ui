@@ -91,6 +91,25 @@ tempfile = "3.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 rand = "0.8"
 
+# Clippy lint configuration
+# Task 5.0 (Task 5.25)
+[lints.clippy]
+# Enable pedantic lints for stricter checking
+# Note: Individual allows are added in code where needed
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"
+# Allow some lints that may be too strict for this codebase
+module_inception = "allow"
+too_many_lines = "allow"
+too_many_arguments = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+type_complexity = "allow"
+cognitive_complexity = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
 [profile.release]
 opt-level = 3
 lto = true

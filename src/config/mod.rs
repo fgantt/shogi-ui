@@ -4,6 +4,52 @@
 //! nesting all module-specific configurations as fields. This is part of Task 4.0.
 //!
 //! # Task 4.0 (Tasks 4.14-4.30)
+//!
+//! # Examples
+//!
+//! ## Creating a default configuration
+//!
+//! ```rust,no_run
+//! use shogi_engine::config::EngineConfig;
+//!
+//! let config = EngineConfig::default();
+//! assert!(config.validate().is_ok());
+//! ```
+//!
+//! ## Using a performance preset
+//!
+//! ```rust,no_run
+//! use shogi_engine::config::EngineConfig;
+//!
+//! let config = EngineConfig::performance();
+//! assert!(config.search.max_depth >= 20);
+//! ```
+//!
+//! ## Loading from a file
+//!
+//! ```rust,no_run
+//! use shogi_engine::config::EngineConfig;
+//!
+//! let config = EngineConfig::from_file("config.json")?;
+//! config.validate()?;
+//! # Ok::<(), shogi_engine::error::ShogiEngineError>(())
+//! ```
+//!
+//! ## Saving to a file
+//!
+//! ```rust,no_run
+//! use shogi_engine::config::EngineConfig;
+//!
+//! let config = EngineConfig::default();
+//! config.to_file("config.json")?;
+//! # Ok::<(), shogi_engine::error::ShogiEngineError>(())
+//! ```
+//!
+//! # Errors
+//!
+//! - [`ConfigurationError`]: Returned when configuration validation fails or file I/O errors occur
+//!
+//! # Task 4.0 (Tasks 4.14-4.30)
 
 use crate::error::{ConfigurationError, Result, ShogiEngineError};
 use crate::evaluation::config::TaperedEvalConfig;
