@@ -112,3 +112,14 @@ Ready to generate detailed sub-tasks and the Relevant Files section. Reply with 
 - Time Utilities Consolidation: Standardized imports on `crate::utils::time::TimeSource` (replacing `crate::time_utils::TimeSource`) in search/tablebase/evaluation paths to route through the centralized `utils::time` surface. Existing `current_time_ms()` helper and `Stopwatch` are documented and tested.
 - Documentation: Rustdoc already present on `src/utils/telemetry.rs`; callers should favor `crate::utils::telemetry` for debug/trace logging and toggling. No external behavior changes; only import paths updated for consistency with the utilities consolidation goals.
 - Testing/Build: The change is path-only; no functional logic altered. Macro locations unchanged to preserve feature gating (`verbose-debug`). No additional configuration is required.
+
+### Task 2.0 Completion Notes
+
+- Implementation: Added `#[derive(Debug)]` for externally-consumed/public types that lacked it:
+  - `search/time_management.rs`: `TimeManager` now derives `Debug, Clone`.
+  - `tablebase/position_cache.rs`: `PositionCache` now derives `Debug, Clone` (internals already `Debug`).
+- Display Implementations: Implemented `Display` for core types to improve log/telemetry readability:
+  - `types/core.rs::Position` prints in USI-like format (e.g., `7f`).
+  - `types/core.rs::Move` delegates to `to_usi_string()`.
+- Tests/Telemetry: Existing tests remained valid; improved debug-printing aids troubleshooting without changing behavior. No sensitive data exposed via newly derived `Debug`/`Display`.
+- Documentation: Debug/Display expectations are aligned with rustdoc on the respective modules. Further `Display` can be added iteratively if new logging needs arise.

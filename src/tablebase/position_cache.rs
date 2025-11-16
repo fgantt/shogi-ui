@@ -48,6 +48,7 @@ impl Default for CacheConfig {
 ///
 /// This cache stores the results of tablebase probes to avoid
 /// repeated calculations for the same positions.
+#[derive(Debug, Clone)]
 pub struct PositionCache {
     /// The actual cache storage
     cache: HashMap<u64, CacheEntry>,

@@ -309,6 +309,15 @@ impl Position {
     }
 }
 
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // USI-like: file is 9-col, rank is 'a'+row
+        let file = 9 - self.col;
+        let rank = (b'a' + self.row) as char;
+        write!(f, "{}{}", file, rank)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Piece {
     pub piece_type: PieceType,
@@ -553,6 +562,12 @@ impl Move {
         } else {
             0
         }
+    }
+}
+
+impl std::fmt::Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_usi_string())
     }
 }
 

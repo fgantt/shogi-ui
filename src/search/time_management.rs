@@ -11,6 +11,7 @@ use crate::types::search::{
 };
 
 /// Time management functionality for search engine
+#[derive(Debug, Clone)]
 pub struct TimeManager {
     config: TimeManagementConfig,
     time_budget_stats: TimeBudgetStats,
