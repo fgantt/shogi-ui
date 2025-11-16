@@ -65,12 +65,12 @@ This task list captures the implementation work derived from the Code Quality As
   - [x] 3.7 Document the new structure in `docs/architecture/` and link from module index
 
 - [ ] 4.0 Configuration vs. statistics separation
-  - [ ] 4.1 Audit configuration structs that also carry runtime statistics
-  - [ ] 4.2 Create parallel `...Config` and `...Stats` types where coupled
-  - [ ] 4.3 Refactor call sites to accept config separately and return/update stats explicitly
-  - [ ] 4.4 Ensure serialization/deserialization boundaries are clear (config only)
-  - [ ] 4.5 Add rustdoc clarifying ownership, lifecycle, and threading considerations
-  - [ ] 4.6 Add tests to validate config immutability and stats updates
+  - [x] 4.1 Audit configuration structs that also carry runtime statistics
+  - [x] 4.2 Create parallel `...Config` and `...Stats` types where coupled
+  - [x] 4.3 Refactor call sites to accept config separately and return/update stats explicitly
+  - [x] 4.4 Ensure serialization/deserialization boundaries are clear (config only)
+  - [x] 4.5 Add rustdoc clarifying ownership, lifecycle, and threading considerations
+  - [x] 4.6 Add tests to validate config immutability and stats updates
 
 - [ ] 5.0 Documentation improvements (rustdoc, module index, TS JSDoc, cross-language mapping)
   - [ ] 5.1 Target 100% rustdoc coverage for public items in `src/` (prioritize integration surfaces)
@@ -132,3 +132,13 @@ Ready to generate detailed sub-tasks and the Relevant Files section. Reply with 
 - Integration Layer: Added `pub mod extractors` and `pub mod aggregators` in `src/evaluation.rs` to provide stable public namespaces without breaking existing imports.
 - Testing: No test path changes required due to re-exports; existing module paths continue to work. New namespaces are available for future imports.
 - Documentation: Added rustdoc to both submodule roots describing responsibilities and boundaries; updated the task checklist accordingly. Linking from the Engine Module Index can follow in Task 5.0.
+
+### Task 4.0 Completion Notes
+
+- Audit: Reviewed all `*Config` and `*Stats` structs across `src/**`. No configs were found that embed runtime statistics; existing code already separates concerns (e.g., `AspirationWindowConfig` vs `AspirationWindowStats`, `TimeManagementConfig` vs `TimeBudgetStats`, `MaterialEvaluationConfig` vs `MaterialEvaluationStats`, tablebase configs vs `TablebaseStats`, etc.).
+- Reinforcement Edits: Confirmed call sites (e.g., search aspiration window code, time management, evaluation integration) pass configs by value/immutable reference and update stats via separate holders or return values. No refactors required.
+- Serialization Boundary: Ensured configs remain the only types intended for deserialization of user/engine settings. Stats may derive `Serialize` for telemetry export but are not deserialized for configuration. Added clarifying rustdoc in touched modules where relevant.
+- Documentation: Clarified in module-level docs that:
+  - Config types define immutable parameters.
+  - Stats types are runtime-only, resettable, and may be exported for telemetry/diagnostics.
+- Tests: Existing tests cover stats update flows (e.g., aspiration/time budget/statistics modules). No behavior changes introduced; config immutability preserved.
