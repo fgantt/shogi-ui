@@ -1223,7 +1223,7 @@ impl CachePrefetcher {
     pub fn process_queue(
         &self,
         cache: &EvaluationCache,
-        evaluator: &crate::evaluation::PositionEvaluator,
+        evaluator: &mut crate::evaluation::PositionEvaluator,
     ) {
         let mut queue = self.prefetch_queue.write().unwrap();
 
@@ -1644,7 +1644,7 @@ impl CacheWarmer {
     pub fn warm_cache(
         &self,
         cache: &EvaluationCache,
-        evaluator: &crate::evaluation::PositionEvaluator,
+        evaluator: &mut crate::evaluation::PositionEvaluator,
     ) {
         match self.strategy {
             WarmingStrategy::None => {}
@@ -1657,7 +1657,7 @@ impl CacheWarmer {
     fn warm_common_positions(
         &self,
         cache: &EvaluationCache,
-        evaluator: &crate::evaluation::PositionEvaluator,
+        evaluator: &mut crate::evaluation::PositionEvaluator,
     ) {
         // Warm starting position
         let board = BitboardBoard::new();
@@ -1670,7 +1670,7 @@ impl CacheWarmer {
     fn warm_opening_positions(
         &self,
         cache: &EvaluationCache,
-        evaluator: &crate::evaluation::PositionEvaluator,
+        evaluator: &mut crate::evaluation::PositionEvaluator,
     ) {
         // Warm common opening positions (starting position)
         self.warm_common_positions(cache, evaluator);
@@ -1679,7 +1679,7 @@ impl CacheWarmer {
     fn warm_endgame_positions(
         &self,
         cache: &EvaluationCache,
-        evaluator: &crate::evaluation::PositionEvaluator,
+        evaluator: &mut crate::evaluation::PositionEvaluator,
     ) {
         // Would warm common endgame positions
         // For now, just warm starting position as example

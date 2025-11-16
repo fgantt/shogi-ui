@@ -254,7 +254,7 @@ fn calculate_error_and_gradients(
         // Create a new evaluator with modified weights
         // Note: This requires creating a new evaluator with the same config but different weights
         // In the full implementation, this would use a more efficient method or a setter
-        let temp_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
+        let mut temp_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
         // TODO: Add set_weights method to IntegratedEvaluator or make weights field public
         // For now, this is a placeholder that needs to be completed during integration
         // temp_evaluator.set_weights(temp_weights);
@@ -262,12 +262,13 @@ fn calculate_error_and_gradients(
         for position in &position_set.positions {
             // Evaluate position with current weights
             // Note: This will use default weights until set_weights is implemented
-            let predicted_score = temp_evaluator.evaluate_with_move_count(
+            let result = temp_evaluator.evaluate_with_move_count(
                 &position.board,
                 position.player,
                 &position.captured_pieces,
                 None,
-            ) as f64;
+            );
+            let predicted_score = result.score as f64;
 
                 // Convert to probability using sigmoid
                 let predicted_prob = sigmoid(predicted_score * k_factor);
@@ -287,15 +288,16 @@ fn calculate_error_and_gradients(
                     if let Ok(_perturbed_eval_weights) =
                         EvaluationWeights::from_vector(&perturbed_weights)
                     {
-                        let perturbed_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
+                        let mut perturbed_evaluator = IntegratedEvaluator::with_config(evaluator.config().clone());
                         // TODO: Add set_weights method
                         // perturbed_evaluator.set_weights(perturbed_eval_weights);
-                        let perturbed_score = perturbed_evaluator.evaluate_with_move_count(
+                        let perturbed_result = perturbed_evaluator.evaluate_with_move_count(
                             &position.board,
                             position.player,
                             &position.captured_pieces,
                             None,
-                        ) as f64;
+                        );
+                        let perturbed_score = perturbed_result.score as f64;
                         let perturbed_prob = sigmoid(perturbed_score * k_factor);
 
                         let gradient_contribution =

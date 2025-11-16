@@ -35,6 +35,55 @@
 //!   (shields, attacks, etc.), while `CastleRecognizer` evaluates specific castle formation patterns.
 //!   These are complementary and should both be enabled for comprehensive king safety evaluation.
 //!
+//! ## Pattern Recognition Responsibilities (Task 3.0 - Task 3.27)
+//!
+//! ### Tactical Patterns (Immediate Threats)
+//! - **`TacticalPatternRecognizer`** (used in `IntegratedEvaluator`): Comprehensive tactical pattern detection
+//!   - Forks (double attacks)
+//!   - Pins (pieces that cannot move without exposing valuable targets)
+//!   - Skewers (attacks through less valuable piece to more valuable)
+//!   - Discovered attacks
+//!   - Knight forks (special handling for knight's unique movement)
+//!   - Back rank threats
+//!   - Drop threats (Shogi-specific: threats from captured pieces in hand)
+//!
+//! - **`ThreatEvaluator`** (used in `KingSafetyEvaluator`): Fast king threat detection for performance
+//!   - Pins (simplified, king-focused)
+//!   - Skewers (simplified, king-focused)
+//!   - Forks (simplified, king-focused)
+//!   - Discovered attacks (simplified, king-focused)
+//!   - Note: Kept separate from `TacticalPatternRecognizer` for performance optimization in deep search nodes
+//!
+//! ### Positional Patterns (Long-term Advantages)
+//! - **`PositionalPatternAnalyzer`** (used in `IntegratedEvaluator`): Long-term positional evaluation
+//!   - Center control (with drop pressure analysis)
+//!   - Outposts (pieces on squares difficult to attack)
+//!   - Pawn structure (chains, weaknesses, passed pawns)
+//!   - Piece activity and mobility
+//!   - Space control
+//!
+//! - **`PositionFeatureEvaluator`** (used in `IntegratedEvaluator`): General position feature evaluation
+//!   - Center control (control maps)
+//!   - Piece development
+//!   - King safety (general shields, pawn cover, exposure)
+//!   - Pawn structure (general evaluation)
+//!   - Note: Center control conflict resolved via `center_control_precedence` config
+//!
+//! ### Endgame Patterns (Endgame-specific)
+//! - **`EndgamePatternEvaluator`** (used in `IntegratedEvaluator`): Endgame-specific patterns
+//!   - Passed pawn evaluation (with promotion paths)
+//!   - King activity in endgame
+//!   - Piece coordination in endgame
+//!   - Note: Evaluated only when phase < endgame_threshold (default: 64)
+//!
+//! ### Castle Patterns
+//! - **`CastleRecognizer`** (used in `IntegratedEvaluator` and `KingSafetyEvaluator`): Castle formation detection
+//!   - Specific castle patterns (Mino, Anaguma, Yagura, etc.)
+//!   - Castle quality assessment
+//!   - Missing piece detection
+//!   - Complementary to general king safety evaluation
+//!
+//!
 //! # Phase-Aware Gating and Gradual Transitions
 //!
 //! The evaluator uses phase-aware gating to conditionally evaluate patterns based on game phase:

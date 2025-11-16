@@ -10,8 +10,8 @@ use crate::types::Bitboard;
 /// Bit-scanning operations module
 ///
 /// This module provides optimized bit-scanning operations including population count,
-/// bit position finding, and bit iteration. All operations are optimized for both
-/// native and WebAssembly environments.
+/// bit position finding, and bit iteration. All operations are optimized for native
+/// platform capabilities.
 pub mod bitscan {
     use super::*;
 

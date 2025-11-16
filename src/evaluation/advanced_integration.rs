@@ -100,13 +100,13 @@ impl AdvancedIntegration {
         }
 
         // Regular tapered evaluation
-        let score = self
+        let result = self
             .evaluator
             .evaluate_with_move_count(board, player, captured_pieces, None);
-        let phase = self.estimate_phase(board);
+        let phase = result.phase;
 
         AdvancedEvaluationResult {
-            score,
+            score: result.score,
             source: EvaluationSource::TaperedEvaluation,
             confidence: 0.8,
             phase,
@@ -121,13 +121,13 @@ impl AdvancedIntegration {
         captured_pieces: &CapturedPieces,
     ) -> AnalysisEvaluation {
         // Get overall score
-        let total_score =
+        let result =
             self.evaluator
                 .evaluate_with_move_count(board, player, captured_pieces, None);
-        let phase = self.estimate_phase(board);
+        let phase = result.phase;
 
         AnalysisEvaluation {
-            total_score,
+            total_score: result.score,
             phase,
             phase_category: self.categorize_phase(phase),
             component_breakdown: ComponentBreakdown {
@@ -320,12 +320,12 @@ impl ParallelEvaluator {
             let results_clone = Arc::clone(&results);
 
             let handle = thread::spawn(move || {
-                let evaluator = IntegratedEvaluator::new();
+                let mut evaluator = IntegratedEvaluator::new();
                 let mut scores = Vec::new();
 
                 for (board, player, captured) in chunk_owned {
-                    let score = evaluator.evaluate_with_move_count(&board, player, &captured, None);
-                    scores.push(score);
+                    let result = evaluator.evaluate_with_move_count(&board, player, &captured, None);
+                    scores.push(result.score);
                 }
 
                 let mut results = results_clone.lock().unwrap();

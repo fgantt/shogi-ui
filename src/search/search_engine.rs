@@ -1556,7 +1556,7 @@ impl SearchEngine {
         
         // Get component estimates
         let ordering_stats = self.advanced_move_orderer.get_stats();
-        let _tt_stats = self.transposition_table.get_stats();
+        // Note: TT stats removed - use hit_rate() from TranspositionTableTrait if needed
         
         // Estimate TT memory (approximate based on table size)
         let tt_memory_bytes = (self.transposition_table.size() * 100) as u64; // Approximate entry size

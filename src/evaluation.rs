@@ -239,15 +239,15 @@ impl PositionEvaluator {
     }
 
     /// Enable statistics tracking in integrated evaluator
-    pub fn enable_integrated_statistics(&self) {
-        if let Some(ref integrated) = self.integrated_evaluator {
+    pub fn enable_integrated_statistics(&mut self) {
+        if let Some(ref mut integrated) = self.integrated_evaluator {
             integrated.enable_statistics();
         }
     }
 
     /// Disable statistics tracking in integrated evaluator
-    pub fn disable_integrated_statistics(&self) {
-        if let Some(ref integrated) = self.integrated_evaluator {
+    pub fn disable_integrated_statistics(&mut self) {
+        if let Some(ref mut integrated) = self.integrated_evaluator {
             integrated.disable_statistics();
         }
     }
@@ -448,7 +448,7 @@ impl PositionEvaluator {
 
     /// Evaluate the current position from the perspective of the given player
     pub fn evaluate(
-        &self,
+        &mut self,
         board: &BitboardBoard,
         player: Player,
         captured_pieces: &CapturedPieces,
@@ -468,8 +468,9 @@ impl PositionEvaluator {
 
         // Cache miss or cache disabled - evaluate normally
         let score = if self.use_integrated_eval {
-            if let Some(ref integrated) = self.integrated_evaluator {
-                integrated.evaluate_with_move_count(board, player, captured_pieces, None)
+            if let Some(ref mut integrated) = self.integrated_evaluator {
+                let result = integrated.evaluate_with_move_count(board, player, captured_pieces, None);
+                result.score
             } else {
                 self.evaluate_with_context(
                     board,

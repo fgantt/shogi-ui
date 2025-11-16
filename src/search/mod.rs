@@ -33,6 +33,8 @@ pub mod tapered_search_integration;
 pub mod test_runner;
 pub mod thread_safe_table;
 pub mod transposition_config;
+pub mod transposition_table_trait;
+pub mod transposition_table_config;
 
 // Configuration and tuning modules
 pub mod adaptive_configuration;
