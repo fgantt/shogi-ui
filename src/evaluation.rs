@@ -67,6 +67,15 @@ pub mod dependency_graph;
 pub mod telemetry;
 pub mod weight_tuning;
 
+/// Feature extraction namespace (re-exports for stable API)
+pub mod extractors {
+    pub use crate::evaluation::extractors::*;
+}
+
+/// Aggregators/scoring namespace (re-exports for stable API)
+pub mod aggregators {
+    pub use crate::evaluation::aggregators::*;
+}
 use advanced_integration::AdvancedIntegration;
 use eval_cache::{EvaluationCache, MultiLevelCache};
 use integration::IntegratedEvaluator;

@@ -56,13 +56,13 @@ This task list captures the implementation work derived from the Code Quality As
   - [x] 2.5 Document debug expectations in rustdoc for key public types
 
 - [ ] 3.0 Evaluators modularization (extractors vs. aggregators)
-  - [ ] 3.1 Identify evaluators that combine feature extraction and scoring in one module
-  - [ ] 3.2 Design split into `extractors/` (feature extraction) and `aggregators/` (scoring/weights)
-  - [ ] 3.3 Create submodule directories and move code with minimal public API disruption
-  - [ ] 3.4 Introduce thin integration layer re-exporting stable surfaces
-  - [ ] 3.5 Add rustdoc to each submodule explaining responsibilities and invariants
-  - [ ] 3.6 Update tests to reflect new module paths; keep test names stable for CI reporting
-  - [ ] 3.7 Document the new structure in `docs/architecture/` and link from module index
+  - [x] 3.1 Identify evaluators that combine feature extraction and scoring in one module
+  - [x] 3.2 Design split into `extractors/` (feature extraction) and `aggregators/` (scoring/weights)
+  - [x] 3.3 Create submodule directories and move code with minimal public API disruption
+  - [x] 3.4 Introduce thin integration layer re-exporting stable surfaces
+  - [x] 3.5 Add rustdoc to each submodule explaining responsibilities and invariants
+  - [x] 3.6 Update tests to reflect new module paths; keep test names stable for CI reporting
+  - [x] 3.7 Document the new structure in `docs/architecture/` and link from module index
 
 - [ ] 4.0 Configuration vs. statistics separation
   - [ ] 4.1 Audit configuration structs that also carry runtime statistics
@@ -123,3 +123,12 @@ Ready to generate detailed sub-tasks and the Relevant Files section. Reply with 
   - `types/core.rs::Move` delegates to `to_usi_string()`.
 - Tests/Telemetry: Added unit tests validating `Display` for `Position`/`Move` and ensuring `Debug` on `PositionCache` does not panic. Existing tests remained valid. No sensitive data exposed via newly derived `Debug`/`Display`.
 - Documentation: Updated rustdoc on `types/core.rs` to state `Position` and `Move` `Display` behavior. Further `Display` can be added iteratively if new logging needs arise.
+
+### Task 3.0 Completion Notes
+
+- Structure: Introduced `src/evaluation/extractors/` and `src/evaluation/aggregators/` with rustdoc, providing a clear separation:
+  - Extractors re-export: `position_features`, `positional_patterns`, `tactical_patterns`, `endgame_patterns`, `opening_principles`, `castles`, `piece_square_tables`, `pst_loader`, `attacks`, `king_safety`, `patterns`.
+  - Aggregators re-export: `tapered_eval`, `phase_transition`, `integration`, `advanced_interpolation`, `advanced_integration`, `eval_cache`, `statistics`, `performance`, `weight_tuning`, `component_coordinator`, `config`, `telemetry`.
+- Integration Layer: Added `pub mod extractors` and `pub mod aggregators` in `src/evaluation.rs` to provide stable public namespaces without breaking existing imports.
+- Testing: No test path changes required due to re-exports; existing module paths continue to work. New namespaces are available for future imports.
+- Documentation: Added rustdoc to both submodule roots describing responsibilities and boundaries; updated the task checklist accordingly. Linking from the Engine Module Index can follow in Task 5.0.
