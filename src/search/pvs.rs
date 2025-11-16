@@ -92,7 +92,7 @@ impl PVSHelper {
             Some((ref move_, score)) => {
                 // Validate score is within reasonable bounds
                 if !Self::is_reasonable_score(score) {
-                    crate::debug_utils::trace_log(
+                    crate::utils::telemetry::trace_log(
                         "SEARCH_VALIDATION",
                         &format!("WARNING: Score {} is outside reasonable bounds", score),
                     );
@@ -101,7 +101,7 @@ impl PVSHelper {
 
                 // Validate move is not empty
                 if move_.to_usi_string().is_empty() {
-                    crate::debug_utils::trace_log(
+                    crate::utils::telemetry::trace_log(
                         "SEARCH_VALIDATION",
                         "WARNING: Empty move string in search result",
                     );
@@ -112,7 +112,7 @@ impl PVSHelper {
                 let alpha_threshold = alpha.saturating_sub(1000);
                 let beta_threshold = beta.saturating_add(1000);
                 if score < alpha_threshold || score > beta_threshold {
-                    crate::debug_utils::trace_log(
+                    crate::utils::telemetry::trace_log(
                         "SEARCH_VALIDATION",
                         &format!(
                             "WARNING: Score {} significantly outside window [{}, {}]",
@@ -125,7 +125,7 @@ impl PVSHelper {
                 // Validate move format (basic USI format check)
                 let move_str = move_.to_usi_string();
                 if move_str.len() < 4 || move_str.len() > 6 {
-                    crate::debug_utils::trace_log(
+                    crate::utils::telemetry::trace_log(
                         "SEARCH_VALIDATION",
                         &format!("WARNING: Move string length {} is unusual", move_str.len()),
                     );

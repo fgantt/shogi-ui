@@ -255,7 +255,7 @@ impl KingSafetyEvaluator {
             // Note: This is the king safety evaluation cache, not the castle recognition cache
             // Castle recognition cache stats are tracked separately in castle_recognizer
             if self.debug_logging {
-                crate::debug_utils::trace_log(
+                crate::utils::telemetry::trace_log(
                     "KING_SAFETY",
                     &format!(
                         "Evaluation cache hit for player {:?} at depth {}",
@@ -297,7 +297,7 @@ impl KingSafetyEvaluator {
 
                     if self.debug_logging {
                         let cache_stats = self.castle_recognizer.get_cache_stats();
-                        crate::debug_utils::trace_log(
+                        crate::utils::telemetry::trace_log(
                             "KING_SAFETY",
                             &format!(
                                 "Castle eval: pattern={:?}, variant={:?}, quality={:.2}, missing_required={}, missing_primary={}, missing_shield={}, cache_hit_rate={:.1}%",

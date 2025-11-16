@@ -123,11 +123,8 @@ lazy_static::lazy_static! {
 
 /// Get current time in milliseconds
 fn get_current_time_ms() -> f64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as f64
+    // Delegate to centralized utils::time for consistency
+    crate::utils::time::current_time_ms() as f64
 }
 
 /// Enable or disable debug logging

@@ -358,7 +358,7 @@ impl EndgamePatternEvaluator {
                 // Also apply penalty for unsafe advanced king
                 eg_score -= 20;
 
-                crate::debug_utils::trace_log("KING_ACTIVITY", &format!(
+                crate::utils::telemetry::trace_log("KING_ACTIVITY", &format!(
                     "Advanced king in unsafe position: {} (row={}, col={}), penalty=-20, advancement bonus reduced by 50%",
                     if player == Player::Black { "Black" } else { "White" },
                     king_pos.row,
@@ -1109,7 +1109,7 @@ impl EndgamePatternEvaluator {
             self.stats.zugzwang_detections += 1;
             self.stats.zugzwang_benefits += 1;
 
-            crate::debug_utils::trace_log("ZUGZWANG", &format!(
+            crate::utils::telemetry::trace_log("ZUGZWANG", &format!(
                 "Zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=+80",
                 player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
             ));
@@ -1122,7 +1122,7 @@ impl EndgamePatternEvaluator {
             self.stats.zugzwang_detections += 1;
             self.stats.zugzwang_penalties += 1;
 
-            crate::debug_utils::trace_log("ZUGZWANG", &format!(
+            crate::utils::telemetry::trace_log("ZUGZWANG", &format!(
                 "Reverse zugzwang detected: player={} moves ({} regular, {} drops), opponent={} moves ({} regular, {} drops), score=-60",
                 player_total, player_moves, player_drops, opponent_total, opponent_moves, opponent_drops
             ));

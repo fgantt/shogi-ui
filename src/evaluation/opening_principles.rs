@@ -844,7 +844,7 @@ impl OpeningPrincipleEvaluator {
                     penalty += 15 * (*count - 1) as i32;
 
                     #[cfg(debug_assertions)]
-                    crate::debug_utils::debug_log(&format!(
+                    crate::utils::telemetry::debug_log(&format!(
                         "[OPENING_PRINCIPLES] Repeated piece move detected: {:?} moved {} times (penalty: {}cp)",
                         move_.piece_type,
                         *count,
@@ -1105,7 +1105,7 @@ impl OpeningPrincipleEvaluator {
                             if !self.is_castle_position(move_.to, player) {
                                 // Early king move violation
                                 #[cfg(debug_assertions)]
-                                crate::debug_utils::debug_log(&format!(
+                                crate::utils::telemetry::debug_log(&format!(
                                     "[OPENING_PRINCIPLES] Book move warning: Early king move at move {} violates opening principles",
                                     move_count
                                 ));
@@ -1129,7 +1129,7 @@ impl OpeningPrincipleEvaluator {
                                     // Major piece still on starting row - not ideal but not a violation
                                     // Just log a warning
                                     #[cfg(debug_assertions)]
-                                    crate::debug_utils::debug_log(&format!(
+                                    crate::utils::telemetry::debug_log(&format!(
                                         "[OPENING_PRINCIPLES] Book move note: {} still on starting row at move {}",
                                         format!("{:?}", piece.piece_type),
                                         move_count

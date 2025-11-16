@@ -189,7 +189,7 @@ fn get_shared_magic_table() -> Option<Arc<MagicTable>> {
                 // Try to load or generate magic table
                 let table = MagicTable::try_load_or_generate(&default_path, true)
                     .unwrap_or_else(|e| {
-                        crate::debug_utils::debug_log(&format!(
+                        crate::utils::telemetry::debug_log(&format!(
                             "[MAGIC_TABLE] Failed to load or generate magic table: {}, using default",
                             e
                         ));
@@ -358,7 +358,7 @@ impl BitboardBoard {
     pub fn place_piece(&mut self, piece: Piece, position: Position) {
         // Validate position
         if !position.is_valid() {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[PLACE_PIECE ERROR] Invalid position: row={}, col={}",
                 position.row, position.col
             ));
@@ -366,7 +366,7 @@ impl BitboardBoard {
         }
 
         // Debug: Log piece before conversion
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[PLACE_PIECE] Attempting to place {:?} {:?} at row={} col={}",
             piece.player, piece.piece_type, position.row, position.col
         ));
@@ -376,14 +376,14 @@ impl BitboardBoard {
         // Try to get piece_idx and catch any issue
         let piece_idx = piece.piece_type.to_u8() as usize;
 
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[PLACE_PIECE] Converted piece_type to index: {}",
             piece_idx
         ));
 
         // Validate piece index before array access
         if piece_idx >= 14 {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[PLACE_PIECE ERROR] Invalid piece index: {} (piece_type: {:?}, position: row={} col={})",
                 piece_idx,
                 piece.piece_type,
@@ -409,7 +409,7 @@ impl BitboardBoard {
 
         let idx = Self::square_index(position);
         if let Some(piece) = self.squares[idx] {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[REMOVE_PIECE] Removing {:?} {:?} from row={} col={}",
                 piece.player, piece.piece_type, position.row, position.col
             ));
@@ -419,7 +419,7 @@ impl BitboardBoard {
 
             // Validate piece index
             if piece_idx >= 14 {
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[REMOVE_PIECE ERROR] Invalid piece index: {} (piece_type: {:?}, position: row={} col={})",
                     piece_idx,
                     piece.piece_type,
@@ -471,7 +471,7 @@ impl BitboardBoard {
         let mut captured_piece = None;
         if let Some(from) = move_.from {
             if let Some(piece_to_move) = self.get_piece(from) {
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[MAKE_MOVE] Moving {:?} from row={} col={} to row={} col={}",
                     piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
                 ));
@@ -491,7 +491,7 @@ impl BitboardBoard {
                     piece_to_move.piece_type
                 };
 
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[MAKE_MOVE] Placing {:?} at row={} col={}",
                     final_piece_type, move_.to.row, move_.to.col
                 ));
@@ -499,7 +499,7 @@ impl BitboardBoard {
                 self.place_piece(Piece::new(final_piece_type, piece_to_move.player), move_.to);
             }
         } else {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[MAKE_MOVE] Dropping {:?} at row={} col={}",
                 move_.piece_type, move_.to.row, move_.to.col
             ));
@@ -520,7 +520,7 @@ impl BitboardBoard {
                 // Capture the original piece type before any modifications
                 original_piece_type = piece_to_move.piece_type;
 
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[MAKE_MOVE_WITH_INFO] Moving {:?} from row={} col={} to row={} col={}",
                     piece_to_move.piece_type, from.row, from.col, move_.to.row, move_.to.col
                 ));
@@ -540,7 +540,7 @@ impl BitboardBoard {
                     piece_to_move.piece_type
                 };
 
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[MAKE_MOVE_WITH_INFO] Placing {:?} at row={} col={}",
                     final_piece_type, move_.to.row, move_.to.col
                 ));
@@ -549,7 +549,7 @@ impl BitboardBoard {
             }
         } else {
             // Drop move
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[MAKE_MOVE_WITH_INFO] Dropping {:?} at row={} col={}",
                 move_.piece_type, move_.to.row, move_.to.col
             ));
@@ -570,7 +570,7 @@ impl BitboardBoard {
     /// Unmake a move, restoring the board to its previous state
     /// This reverses the operations performed by make_move()
     pub fn unmake_move(&mut self, move_info: &MoveInfo) {
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[UNMAKE_MOVE] Unmaking move from {:?} to {:?}",
             move_info.from, move_info.to
         ));
@@ -598,7 +598,7 @@ impl BitboardBoard {
     pub fn is_king_in_check(&self, player: Player, _captured_pieces: &CapturedPieces) -> bool {
         if let Some(king_pos) = self.find_king_position(player) {
             let is_attacked = self.is_square_attacked_by(king_pos, player.opposite());
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[IS_KING_IN_CHECK] Player: {:?}, King at: {}{}, Attacked: {}",
                 player,
                 (b'a' + king_pos.col) as char,
@@ -607,7 +607,7 @@ impl BitboardBoard {
             ));
             return is_attacked;
         }
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[IS_KING_IN_CHECK] Player: {:?}, No king found!",
             player
         ));

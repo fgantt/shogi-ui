@@ -822,7 +822,7 @@ impl ParallelSearchEngine {
             .stack_size(8 * 1024 * 1024)
             .panic_handler(|_| {
                 // Ensure panics in worker threads do not bring the process down; request stop
-                crate::debug_utils::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
+                crate::utils::telemetry::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
@@ -884,7 +884,7 @@ impl ParallelSearchEngine {
             .num_threads(config.num_threads)
             .stack_size(8 * 1024 * 1024)
             .panic_handler(|_| {
-                crate::debug_utils::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
+                crate::utils::telemetry::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
@@ -1138,7 +1138,7 @@ impl ParallelSearchEngine {
                     },
                     |holder, (idx, mv)| {
                         if search_stop.load(Ordering::Relaxed) {
-                            crate::debug_utils::debug_log(
+                            crate::utils::telemetry::debug_log(
                                 "Stop flag set before worker started move; skipping",
                             );
                             return;
@@ -1198,12 +1198,12 @@ impl ParallelSearchEngine {
                                 pv_string.push_str(&child.to_usi_string());
                             }
                             if search_stop.load(Ordering::Relaxed) {
-                                crate::debug_utils::debug_log("Stop flag observed after move search; reporting partial and returning");
+                                crate::utils::telemetry::debug_log("Stop flag observed after move search; reporting partial and returning");
                             }
                             let score = -score_child;
                             let _ = tx.send((mv.clone(), score, pv_string));
                         } else {
-                            crate::debug_utils::debug_log(
+                            crate::utils::telemetry::debug_log(
                                 "Search_at_depth returned None; reporting move with no PV",
                             );
                             let _ = tx.send((mv.clone(), i32::MIN / 2, mv.to_usi_string()));

@@ -41,7 +41,7 @@ impl UsiHandler {
     }
 
     fn handle_go(&mut self, parts: &[&str]) -> Vec<String> {
-        crate::debug_utils::trace_log("USI_GO", "Starting go command processing");
+        crate::utils::telemetry::trace_log("USI_GO", "Starting go command processing");
         crate::debug_utils::set_search_start_time();
         crate::debug_utils::start_timing("go_command_parsing");
 
@@ -81,7 +81,7 @@ impl UsiHandler {
         }
 
         crate::debug_utils::end_timing("go_command_parsing", "USI_GO");
-        crate::debug_utils::trace_log(
+        crate::utils::telemetry::trace_log(
             "USI_GO",
             &format!(
                 "Parsed time controls: btime={}ms wtime={}ms byoyomi={}ms",
@@ -127,13 +127,13 @@ impl UsiHandler {
         crate::debug_utils::end_timing("best_move_search", "USI_GO");
 
         if let Some(mv) = best_move {
-            crate::debug_utils::trace_log(
+            crate::utils::telemetry::trace_log(
                 "USI_GO",
                 &format!("Best move found: {}", mv.to_usi_string()),
             );
             vec![format!("bestmove {}", mv.to_usi_string())]
         } else {
-            crate::debug_utils::trace_log("USI_GO", "No legal moves found, resigning");
+            crate::utils::telemetry::trace_log("USI_GO", "No legal moves found, resigning");
             vec!["bestmove resign".to_string()]
         }
     }

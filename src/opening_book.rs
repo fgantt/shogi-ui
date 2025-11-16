@@ -803,7 +803,7 @@ impl OpeningBook {
 
                 // Debug logging
                 #[cfg(debug_assertions)]
-                crate::debug_utils::debug_log(&format!(
+                crate::utils::telemetry::debug_log(&format!(
                     "[OPENING_BOOK] Book move {} has opening principles quality score: {}",
                     book_move
                         .move_notation

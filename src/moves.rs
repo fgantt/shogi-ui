@@ -96,13 +96,13 @@ impl MoveGenerator {
     ) -> Vec<Move> {
         let is_in_check = board.is_king_in_check(player, captured_pieces);
 
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[GENERATE_LEGAL_MOVES] Player: {:?}, In check: {}",
             player, is_in_check
         ));
 
         let pseudo_legal_moves = self.generate_pseudo_legal_moves(board, player, captured_pieces);
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[GENERATE_LEGAL_MOVES] Generated {} pseudo-legal moves",
             pseudo_legal_moves.len()
         ));
@@ -121,12 +121,12 @@ impl MoveGenerator {
             })
             .collect();
 
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "[GENERATE_LEGAL_MOVES] Final legal moves: {}",
             legal_moves.len()
         ));
         if is_in_check {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[GENERATE_LEGAL_MOVES] Player was in check, found {} legal moves",
                 legal_moves.len()
             ));
@@ -991,7 +991,7 @@ fn is_legal_drop_location(
         for r in 0..9 {
             if let Some(p) = board.get_piece(Position::new(r, pos.col)) {
                 if p.piece_type == PieceType::Pawn && p.player == player {
-                    crate::debug_utils::debug_log(&format!(
+                    crate::utils::telemetry::debug_log(&format!(
                         "[NIFU] Illegal pawn drop at {}{}. Already have pawn on file {}",
                         (b'a' + pos.col) as char,
                         9 - pos.row,
@@ -1005,7 +1005,7 @@ fn is_legal_drop_location(
         // Rule 2: Cannot drop pawn to give immediate checkmate (Uchifuzume / 打ち歩詰め)
         // This rule only applies to drops that give checkmate, not just check
         if is_pawn_drop_mate(board, pos, player) {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "[UCHIFUZUME] Illegal pawn drop mate at {}{}",
                 (b'a' + pos.col) as char,
                 9 - pos.row
