@@ -230,6 +230,7 @@ impl PieceType {
     }
 }
 
+/// Board coordinate (0-based row/col). `Display` renders USI-like `"7f"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Position {
     pub row: u8,
@@ -381,6 +382,7 @@ impl Piece {
     }
 }
 
+/// A move in USI terms. `Display` delegates to `to_usi_string()`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Move {
     pub from: Option<Position>, // None for drops
@@ -574,6 +576,7 @@ impl std::fmt::Display for Move {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bitboards::BitboardBoard;
 
     #[test]
     fn test_player_opposite() {
@@ -601,6 +604,25 @@ mod tests {
         let mv = Move::new_move(from, to, PieceType::Pawn, Player::Black, false);
         assert_eq!(mv.from, Some(from));
         assert_eq!(mv.to, to);
+    }
+
+    #[test]
+    fn test_position_display_usi_like() {
+        // (row=5,col=2) => file = 9-2 = 7, rank = 'a'+5 = 'f' => "7f"
+        let pos = Position::new(5, 2);
+        assert_eq!(pos.to_string(), "7f");
+    }
+
+    #[test]
+    fn test_move_display_usi_string() {
+        let board = BitboardBoard::new();
+        let from = Position::new(6, 6);
+        let to = Position::new(5, 6);
+        let mv = Move::new_move(from, to, PieceType::Pawn, Player::Black, false);
+        // 6,6 => file 9-6=3; rank 'a'+6='g' so "3g3f"
+        assert!(mv.to_string().ends_with("3f"));
+        let parsed = Move::from_usi_string(&mv.to_string(), Player::Black, &board);
+        assert!(parsed.is_ok());
     }
 }
 

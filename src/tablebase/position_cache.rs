@@ -454,6 +454,17 @@ impl PositionCache {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn debug_does_not_panic() {
+        let cache = PositionCache::new();
+        let s = format!("{:?}", cache);
+        assert!(s.contains("PositionCache"));
+    }
+}
+
 impl Default for PositionCache {
     fn default() -> Self {
         Self::new()

@@ -121,5 +121,5 @@ Ready to generate detailed sub-tasks and the Relevant Files section. Reply with 
 - Display Implementations: Implemented `Display` for core types to improve log/telemetry readability:
   - `types/core.rs::Position` prints in USI-like format (e.g., `7f`).
   - `types/core.rs::Move` delegates to `to_usi_string()`.
-- Tests/Telemetry: Existing tests remained valid; improved debug-printing aids troubleshooting without changing behavior. No sensitive data exposed via newly derived `Debug`/`Display`.
-- Documentation: Debug/Display expectations are aligned with rustdoc on the respective modules. Further `Display` can be added iteratively if new logging needs arise.
+- Tests/Telemetry: Added unit tests validating `Display` for `Position`/`Move` and ensuring `Debug` on `PositionCache` does not panic. Existing tests remained valid. No sensitive data exposed via newly derived `Debug`/`Display`.
+- Documentation: Updated rustdoc on `types/core.rs` to state `Position` and `Move` `Display` behavior. Further `Display` can be added iteratively if new logging needs arise.
