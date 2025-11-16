@@ -663,7 +663,7 @@ impl BitboardBoard {
                     
                     // Check if this piece attacks the target square
                     if self.piece_attacks_square_bitboard(piece_type, from_pos, target_pos, attacking_player) {
-                        crate::debug_utils::debug_log(&format!(
+                        crate::utils::telemetry::debug_log(&format!(
                             "[IS_SQUARE_ATTACKED_BY] Found attacker: {:?} at {}{}",
                             piece_type,
                             (b'a' + from_pos.col) as char,

@@ -27,7 +27,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::debug_utils::debug_log;
+use crate::utils::telemetry::debug_log;
 use crate::evaluation::material_value_loader::MaterialValueLoader;
 use crate::types::board::CapturedPieces;
 use crate::types::core::{PieceType, Player, Position};

@@ -104,3 +104,10 @@ This task list captures the implementation work derived from the Code Quality As
 Ready to generate detailed sub-tasks and the Relevant Files section. Reply with "Go" to proceed.
 
 
+
+### Task 1.0 Completion Notes
+
+- Implementation: Replaced all remaining usages of `crate::debug_utils::debug_log` with `crate::utils::telemetry::debug_log` across the Rust codebase, aligning call sites with the consolidated utilities surface. Updated direct `use crate::debug_utils::debug_log;` imports to `use crate::utils::telemetry::debug_log;` where applicable. Macro-based fast logging (e.g., `debug_log_fast!`) remains under `crate::debug_utils` for feature-gated, zero-overhead compilation as intended.
+- Utilities Surface: Confirmed `src/utils/telemetry.rs` re-exports `debug_log`, `trace_log`, `is_debug_enabled`, and `set_debug_enabled` from `crate::debug_utils` and provides a lazy-format helper (`tracef`). This keeps a stable, centralized path for telemetry without forcing churn at call sites in the future.
+- Documentation: Rustdoc already present on `src/utils/telemetry.rs`; callers should favor `crate::utils::telemetry` for debug/trace logging and toggling. No external behavior changes; only import paths updated for consistency with the utilities consolidation goals.
+- Testing/Build: The change is path-only; no functional logic altered. Macro locations unchanged to preserve feature gating (`verbose-debug`). No additional configuration is required.

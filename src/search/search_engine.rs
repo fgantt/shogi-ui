@@ -9385,7 +9385,7 @@ impl SearchEngine {
 
         // Log extreme values for debugging
         if validated_size != window_size {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "Aspiration: Window size clamped from {} to {}",
                 window_size, validated_size
             ));
@@ -9430,7 +9430,7 @@ impl SearchEngine {
         // Debug logging (only in debug builds or when verbose-debug feature enabled)
         #[cfg(feature = "verbose-debug")]
         if window_size != i32::MAX {
-            crate::debug_utils::debug_log(&format!(
+            crate::utils::telemetry::debug_log(&format!(
                 "Aspiration: depth={}, previous_score={}, recent_failures={}, window_size={}",
                 depth, previous_score, recent_failures, window_size
             ));
@@ -9629,7 +9629,7 @@ impl SearchEngine {
         }
 
         // Debug logging
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "Aspiration: comprehensive window size calculation - depth={}, base={}, final={}, factors=[d:{:.2}, s:{:.2}, f:{:.2}, c:{:.2}, t:{:.2}, su:{:.2}, b:{:.2}]",
             depth, base_size, final_size, depth_factor, score_factor, failure_factor,
             complexity_factor, time_factor, success_factor, branching_factor
@@ -13374,7 +13374,7 @@ impl SearchEngine {
                     {
                         let delta_mg = last_mg - prev_mg;
                         let delta_eg = last_eg - prev_eg;
-                        crate::debug_utils::debug_log(&format!(
+                        crate::utils::telemetry::debug_log(&format!(
                             "[EvalTelemetry] pst_delta mg {} eg {}",
                             delta_mg, delta_eg
                         ));

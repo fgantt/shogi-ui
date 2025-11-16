@@ -976,7 +976,7 @@ impl ParallelSearchEngine {
             .num_threads(config.num_threads)
             .stack_size(8 * 1024 * 1024)
             .panic_handler(|_| {
-                crate::debug_utils::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
+                crate::utils::telemetry::debug_log("Parallel worker thread panicked; requesting stop and continuing on remaining threads");
             })
             .build()
             .map_err(|e| format!("Failed to create thread pool: {}", e))?;
@@ -1352,7 +1352,7 @@ impl ParallelSearchEngine {
             .snapshot()
             .map(|s| s.total_work_units)
             .unwrap_or(0);
-        crate::debug_utils::debug_log(&format!(
+        crate::utils::telemetry::debug_log(&format!(
             "PARALLEL_PROF: pushes={}, pops={}, steals={}, steal_retries={}, work_metrics_mode={:?}, total_work_units={}",
             total_pushes, total_pops, total_steals, total_steal_retries, metrics_mode, total_work_units
         ));

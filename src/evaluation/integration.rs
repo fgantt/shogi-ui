@@ -186,7 +186,7 @@
 //! ```
 
 use crate::bitboards::BitboardBoard;
-use crate::debug_utils::debug_log;
+use crate::utils::telemetry::debug_log;
 use crate::evaluation::{
     castles::CastleRecognizer,
     component_coordinator::{
