@@ -8,7 +8,9 @@ use std::sync::{
 };
 
 pub mod bitboards;
+pub mod config;
 pub mod debug_utils;
+pub mod error;
 pub mod evaluation;
 pub mod kif_parser;
 pub mod moves;
