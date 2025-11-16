@@ -48,12 +48,12 @@ This task list captures the implementation work derived from the Code Quality As
   - [x] 1.6 Add unit tests for helpers where missing; ensure no behavior regressions
   - [x] 1.7 Update docs in `docs/development/` to reference consolidated utilities
 
-- [ ] 2.0 Debug-ability improvements for public types
-  - [ ] 2.1 Identify externally-consumed structs/enums lacking `#[derive(Debug)]` in `src/**`
-  - [ ] 2.2 Add `Debug` derives where appropriate; avoid leaking sensitive data
-  - [ ] 2.3 Ensure display/log formatting is coherent; add `Display` impls if useful
-  - [ ] 2.4 Add/Update tests that rely on debug printing in integration/telemetry
-  - [ ] 2.5 Document debug expectations in rustdoc for key public types
+- [x] 2.0 Debug-ability improvements for public types
+  - [x] 2.1 Identify externally-consumed structs/enums lacking `#[derive(Debug)]` in `src/**`
+  - [x] 2.2 Add `Debug` derives where appropriate; avoid leaking sensitive data
+  - [x] 2.3 Ensure display/log formatting is coherent; add `Display` impls if useful
+  - [x] 2.4 Add/Update tests that rely on debug printing in integration/telemetry
+  - [x] 2.5 Document debug expectations in rustdoc for key public types
 
 - [ ] 3.0 Evaluators modularization (extractors vs. aggregators)
   - [ ] 3.1 Identify evaluators that combine feature extraction and scoring in one module
